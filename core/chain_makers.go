@@ -357,7 +357,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	if err != nil {
 		panic(err)
 	}
-	if genesis.Config != nil && genesis.Config.IsVerkle(genesis.ToBlock().Number(), genesis.ToBlock().Time()) {
+	if genesis.Config != nil && genesis.Config.IsPrague(genesis.ToBlock().Number(), genesis.ToBlock().Time()) {
 		blocks, receipts, _, _ := GenerateVerkleChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 		return db, blocks, receipts
 	}
@@ -372,8 +372,13 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	proofs := make([]*verkle.VerkleProof, 0, n)
 	keyvals := make([]verkle.StateDiff, 0, n)
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
-	var preStateTrie *trie.VerkleTrie
+	chainreader := &generatedLinearChainReader{
+		config: config,
+		// GenerateVerkleChain should only be called with the genesis block
+		// as parent.
+		genesis: parent,
+		chain:   blocks,
+	}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
@@ -412,48 +417,8 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
 
-			// Generate an associated verkle proof
-			tr := preState.GetTrie()
-			if !tr.IsVerkle() {
-				panic("tree should be verkle")
-			}
-
-			vtr := tr.(*trie.VerkleTrie)
-			// Make sure all keys are resolved before
-			// building the proof. Ultimately, node
-			// resolution can be done with a prefetcher
-			// or from GetCommitmentsAlongPath.
-			kvs := make(map[string][]byte)
-			keys := statedb.Witness().Keys()
-			for _, key := range keys {
-				v, err := vtr.GetWithHashedKey(key)
-				if err != nil {
-					panic(err)
-				}
-				kvs[string(key)] = v
-			}
-
-			// Initialize the preStateTrie if it is nil, this should
-			// correspond to the genesis block. This is a workaround
-			// needed until the main verkle PR is rebased on top of
-			// PBSS.
-			if preStateTrie == nil {
-				preStateTrie = vtr
-			}
-
-			vtr.Hash()
-			p, k, err := preStateTrie.ProveAndSerialize(statedb.Witness().Keys())
-			if err != nil {
-				panic(err)
-			}
-			proofs = append(proofs, p)
-			keyvals = append(keyvals, k)
-
-			// save the current state of the trie for producing the proof for the next block,
-			// since reading it from disk is broken with the intermediate PBSS-like system we
-			// have: it will read the post-state as this is the only state present on disk.
-			// This is a workaround needed until the main verkle PR is rebased on top of PBSS.
-			preStateTrie = statedb.GetTrie().(*trie.VerkleTrie)
+			proofs = append(proofs, block.ExecutionWitness().VerkleProof)
+			keyvals = append(keyvals, block.ExecutionWitness().StateDiff)
 
 			return block, b.receipts
 		}
@@ -558,3 +523,59 @@ func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header      
 func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
 func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
 func (cr *fakeChainReader) GetTd(hash common.Hash, number uint64) *big.Int          { return nil }
+
+type generatedLinearChainReader struct {
+	config  *params.ChainConfig
+	genesis *types.Block
+	chain   []*types.Block
+}
+
+func (v *generatedLinearChainReader) Config() *params.ChainConfig {
+	return v.config
+}
+
+func (v *generatedLinearChainReader) CurrentHeader() *types.Header {
+	return nil
+}
+
+func (v *generatedLinearChainReader) GetHeader(_ common.Hash, number uint64) *types.Header {
+	if number == 0 {
+		return v.genesis.Header()
+	}
+	return v.chain[number-1].Header()
+}
+
+func (v *generatedLinearChainReader) GetHeaderByNumber(number uint64) *types.Header {
+	if number == 0 {
+		return v.genesis.Header()
+	}
+	return v.chain[number-1].Header()
+}
+
+func (v *generatedLinearChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	if hash == v.genesis.Hash() {
+		return v.genesis.Header()
+	}
+
+	for _, block := range v.chain {
+		if block.Hash() == hash {
+			return block.Header()
+		}
+	}
+
+	return nil
+}
+
+func (v *generatedLinearChainReader) GetBlock(_ common.Hash, number uint64) *types.Block {
+	if number == 0 {
+		return v.genesis
+	}
+	return v.chain[number-1]
+}
+
+func (v *generatedLinearChainReader) GetTd(_ common.Hash, number uint64) *big.Int {
+	if number == 0 {
+		return v.genesis.Difficulty()
+	}
+	return v.chain[number-1].Difficulty()
+}

@@ -51,7 +51,7 @@ func TestConstantPoint(t *testing.T) {
 	verkle.FromLEBytes(&expectedPoly[0], []byte{2, 64})
 	expected := cfg.CommitToPoly(expectedPoly[:], 1)
 
-	if !verkle.Equal(expected, getTreePolyIndex0Point) {
+	if !expected.Equal(getTreePolyIndex0Point) {
 		t.Fatalf("Marshalled constant value is incorrect: %x != %x", expected.Bytes(), getTreePolyIndex0Point.Bytes())
 	}
 }

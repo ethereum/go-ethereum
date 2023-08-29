@@ -64,6 +64,8 @@ type ExecutableData struct {
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	BlobGasUsed   *uint64             `json:"blobGasUsed"`
 	ExcessBlobGas *uint64             `json:"excessBlobGas"`
+
+	ExecutionWitness *types.ExecutionWitness `json:"executionWitness"`
 }
 
 // JSON type overrides for executableData.
@@ -208,24 +210,25 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash)
 		withdrawalsRoot = &h
 	}
 	header := &types.Header{
-		ParentHash:      params.ParentHash,
-		UncleHash:       types.EmptyUncleHash,
-		Coinbase:        params.FeeRecipient,
-		Root:            params.StateRoot,
-		TxHash:          types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:     params.ReceiptsRoot,
-		Bloom:           types.BytesToBloom(params.LogsBloom),
-		Difficulty:      common.Big0,
-		Number:          new(big.Int).SetUint64(params.Number),
-		GasLimit:        params.GasLimit,
-		GasUsed:         params.GasUsed,
-		Time:            params.Timestamp,
-		BaseFee:         params.BaseFeePerGas,
-		Extra:           params.ExtraData,
-		MixDigest:       params.Random,
-		WithdrawalsHash: withdrawalsRoot,
-		ExcessBlobGas:   params.ExcessBlobGas,
-		BlobGasUsed:     params.BlobGasUsed,
+		ParentHash:       params.ParentHash,
+		UncleHash:        types.EmptyUncleHash,
+		Coinbase:         params.FeeRecipient,
+		Root:             params.StateRoot,
+		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:      params.ReceiptsRoot,
+		Bloom:            types.BytesToBloom(params.LogsBloom),
+		Difficulty:       common.Big0,
+		Number:           new(big.Int).SetUint64(params.Number),
+		GasLimit:         params.GasLimit,
+		GasUsed:          params.GasUsed,
+		Time:             params.Timestamp,
+		BaseFee:          params.BaseFeePerGas,
+		Extra:            params.ExtraData,
+		MixDigest:        params.Random,
+		WithdrawalsHash:  withdrawalsRoot,
+		ExcessBlobGas:    params.ExcessBlobGas,
+		BlobGasUsed:      params.BlobGasUsed,
+		ExecutionWitness: params.ExecutionWitness,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
@@ -238,23 +241,24 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash)
 // fields from the given block. It assumes the given block is post-merge block.
 func BlockToExecutableData(block *types.Block, fees *big.Int, blobs []kzg4844.Blob, commitments []kzg4844.Commitment, proofs []kzg4844.Proof) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
-		BlockHash:     block.Hash(),
-		ParentHash:    block.ParentHash(),
-		FeeRecipient:  block.Coinbase(),
-		StateRoot:     block.Root(),
-		Number:        block.NumberU64(),
-		GasLimit:      block.GasLimit(),
-		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee(),
-		Timestamp:     block.Time(),
-		ReceiptsRoot:  block.ReceiptHash(),
-		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        block.MixDigest(),
-		ExtraData:     block.Extra(),
-		Withdrawals:   block.Withdrawals(),
-		BlobGasUsed:   block.BlobGasUsed(),
-		ExcessBlobGas: block.ExcessBlobGas(),
+		BlockHash:        block.Hash(),
+		ParentHash:       block.ParentHash(),
+		FeeRecipient:     block.Coinbase(),
+		StateRoot:        block.Root(),
+		Number:           block.NumberU64(),
+		GasLimit:         block.GasLimit(),
+		GasUsed:          block.GasUsed(),
+		BaseFeePerGas:    block.BaseFee(),
+		Timestamp:        block.Time(),
+		ReceiptsRoot:     block.ReceiptHash(),
+		LogsBloom:        block.Bloom().Bytes(),
+		Transactions:     encodeTransactions(block.Transactions()),
+		Random:           block.MixDigest(),
+		ExtraData:        block.Extra(),
+		Withdrawals:      block.Withdrawals(),
+		BlobGasUsed:      block.BlobGasUsed(),
+		ExcessBlobGas:    block.ExcessBlobGas(),
+		ExecutionWitness: block.ExecutionWitness(),
 	}
 	blobsBundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),

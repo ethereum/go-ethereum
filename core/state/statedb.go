@@ -191,12 +191,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap == nil {
-			if db, ok := db.(*cachingDB); ok {
-				trans := db.getTranslation(root)
-				if trans != (common.Hash{}) {
-					sdb.snap = sdb.snaps.Snapshot(trans)
-				}
-			}
 		}
 	}
 	return sdb, nil

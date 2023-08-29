@@ -54,12 +54,12 @@ func NewVerkleTrie(root verkle.VerkleNode, db *Database, pointCache *utils.Point
 	}
 }
 
-func (trie *VerkleTrie) flatdbNodeResolver(path []byte) ([]byte, error) {
+func (trie *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
 	return trie.db.diskdb.Get(append(FlatDBVerkleNodeKeyPrefix, path...))
 }
 
 func (trie *VerkleTrie) InsertMigratedLeaves(leaves []verkle.LeafNode) error {
-	return trie.root.(*verkle.InternalNode).InsertMigratedLeaves(leaves, trie.flatdbNodeResolver)
+	return trie.root.(*verkle.InternalNode).InsertMigratedLeaves(leaves, trie.FlatdbNodeResolver)
 }
 
 var (
@@ -90,13 +90,13 @@ func (trie *VerkleTrie) GetKey(key []byte) []byte {
 func (trie *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	pointEval := trie.pointCache.GetTreeKeyHeader(addr[:])
 	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, key)
-	return trie.root.Get(k, trie.flatdbNodeResolver)
+	return trie.root.Get(k, trie.FlatdbNodeResolver)
 }
 
 // GetWithHashedKey returns the value, assuming that the key has already
 // been hashed.
 func (trie *VerkleTrie) GetWithHashedKey(key []byte) ([]byte, error) {
-	return trie.root.Get(key, trie.flatdbNodeResolver)
+	return trie.root.Get(key, trie.FlatdbNodeResolver)
 }
 
 func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
@@ -108,7 +108,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	)
 	switch t.root.(type) {
 	case *verkle.InternalNode:
-		values, err = t.root.(*verkle.InternalNode).GetStem(versionkey[:31], t.flatdbNodeResolver)
+		values, err = t.root.(*verkle.InternalNode).GetStem(versionkey[:31], t.FlatdbNodeResolver)
 	default:
 		return nil, errInvalidRootType
 	}
@@ -177,7 +177,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		err = root.InsertStem(stem, values, t.flatdbNodeResolver)
+		err = root.InsertStem(stem, values, t.FlatdbNodeResolver)
 	default:
 		return errInvalidRootType
 	}
@@ -192,7 +192,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 func (trie *VerkleTrie) UpdateStem(key []byte, values [][]byte) error {
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
-		return root.InsertStem(key, values, trie.flatdbNodeResolver)
+		return root.InsertStem(key, values, trie.FlatdbNodeResolver)
 	default:
 		panic("invalid root type")
 	}
@@ -210,7 +210,7 @@ func (trie *VerkleTrie) UpdateStorage(address common.Address, key, value []byte)
 	} else {
 		copy(v[32-len(value):], value[:])
 	}
-	return trie.root.Insert(k, v[:], trie.flatdbNodeResolver)
+	return trie.root.Insert(k, v[:], trie.FlatdbNodeResolver)
 }
 
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
@@ -226,7 +226,7 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		err = root.InsertStem(stem, values, t.flatdbNodeResolver)
+		err = root.InsertStem(stem, values, t.FlatdbNodeResolver)
 	default:
 		return errInvalidRootType
 	}
@@ -244,7 +244,7 @@ func (trie *VerkleTrie) DeleteStorage(addr common.Address, key []byte) error {
 	pointEval := trie.pointCache.GetTreeKeyHeader(addr[:])
 	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, key)
 	var zero [32]byte
-	return trie.root.Insert(k, zero[:], trie.flatdbNodeResolver)
+	return trie.root.Insert(k, zero[:], trie.FlatdbNodeResolver)
 }
 
 // Hash returns the root hash of the trie. It does not write to the database and
@@ -311,8 +311,9 @@ func (trie *VerkleTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 
 func (trie *VerkleTrie) Copy() *VerkleTrie {
 	return &VerkleTrie{
-		root: trie.root.Copy(),
-		db:   trie.db,
+		root:       trie.root.Copy(),
+		db:         trie.db,
+		pointCache: trie.pointCache,
 	}
 }
 
@@ -320,8 +321,12 @@ func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
-	proof, _, _, _, err := verkle.MakeVerkleMultiProof(trie.root, keys)
+func ProveAndSerialize(pretrie, posttrie *VerkleTrie, keys [][]byte, resolver verkle.NodeResolverFn) (*verkle.VerkleProof, verkle.StateDiff, error) {
+	var postroot verkle.VerkleNode
+	if posttrie != nil {
+		postroot = posttrie.root
+	}
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(pretrie.root, postroot, keys, resolver)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -342,69 +347,53 @@ func addKey(s set, key []byte) {
 
 func DeserializeAndVerifyVerkleProof(vp *verkle.VerkleProof, root []byte, statediff verkle.StateDiff) error {
 	rootC := new(verkle.Point)
-	rootC.SetBytesTrusted(root)
-	proof, cis, indices, yis, err := deserializeVerkleProof(vp, rootC, statediff)
-	if err != nil {
-		return fmt.Errorf("could not deserialize proof: %w", err)
-	}
-	cfg := verkle.GetConfig()
-	if !verkle.VerifyVerkleProof(proof, cis, indices, yis, cfg) {
-		return errInvalidProof
-	}
+	rootC.SetBytes(root)
 
-	return nil
-}
-
-func deserializeVerkleProof(vp *verkle.VerkleProof, rootC *verkle.Point, statediff verkle.StateDiff) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, error) {
 	var others set = set{} // Mark when an "other" stem has been seen
 
 	proof, err := verkle.DeserializeProof(vp, statediff)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: %w", err)
+		return fmt.Errorf("verkle proof deserialization error: %w", err)
 	}
 
 	for _, stem := range proof.PoaStems {
 		addKey(others, stem)
 	}
 
-	if len(proof.Keys) != len(proof.Values) {
-		return nil, nil, nil, nil, fmt.Errorf("keys and values are of different length %d != %d", len(proof.Keys), len(proof.Values))
-	}
-
-	tree, err := verkle.TreeFromProof(proof, rootC)
+	pretree, err := verkle.PreStateTreeFromProof(proof, rootC)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("error rebuilding the tree from proof: %w", err)
+		return fmt.Errorf("error rebuilding the pre-tree from proof: %w", err)
 	}
+	// TODO this should not be necessary, remove it
+	// after the new proof generation code has stabilized.
 	for _, stemdiff := range statediff {
 		for _, suffixdiff := range stemdiff.SuffixDiffs {
 			var key [32]byte
 			copy(key[:31], stemdiff.Stem[:])
 			key[31] = suffixdiff.Suffix
 
-			val, err := tree.Get(key[:], nil)
+			val, err := pretree.Get(key[:], nil)
 			if err != nil {
-				return nil, nil, nil, nil, fmt.Errorf("could not find key %x in tree rebuilt from proof: %w", key, err)
+				return fmt.Errorf("could not find key %x in tree rebuilt from proof: %w", key, err)
 			}
 			if len(val) > 0 {
 				if !bytes.Equal(val, suffixdiff.CurrentValue[:]) {
-					return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
+					return fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
 				}
 			} else {
 				if suffixdiff.CurrentValue != nil && len(suffixdiff.CurrentValue) != 0 {
-					return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
+					return fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", key, val, *suffixdiff.CurrentValue)
 				}
 			}
 		}
 	}
 
-	// no need to resolve as the tree has been reconstructed from the proof
-	// and must not contain any unresolved nodes.
-	pe, _, _, err := tree.GetProofItems(proof.Keys)
+	posttree, err := verkle.PostStateTreeFromStateDiff(pretree, statediff)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("could not get proof items from tree rebuilt from proof: %w", err)
+		return fmt.Errorf("error rebuilding the post-tree from proof: %w", err)
 	}
 
-	return proof, pe.Cis, pe.Zis, pe.Yis, err
+	return verkle.VerifyVerkleProofWithPreAndPostTrie(proof, pretree, posttree)
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which

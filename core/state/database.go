@@ -67,6 +67,8 @@ type Database interface {
 
 	StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, cancunTime *uint64)
 
+	ReorgThroughVerkleTransition()
+
 	EndVerkleTransition()
 
 	InTransition() bool
@@ -210,7 +212,7 @@ func (db *cachingDB) Transitioned() bool {
 }
 
 // Fork implements the fork
-func (db *cachingDB) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, cancunTime *uint64) {
+func (db *cachingDB) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, pragueTime *uint64) {
 	fmt.Println(`
 	__________.__                       .__                .__                   __       .__                               .__          ____         
 	\__    ___|  |__   ____        ____ |  |   ____ ______ |  |__ _____    _____/  |_     |  |__ _____    ______    __  _  _|__| ____   / ___\ ______
@@ -219,11 +221,18 @@ func (db *cachingDB) StartVerkleTransition(originalRoot, translatedRoot common.H
 	  |____|  |___|  /\___        \___  |____/\___  |   __/|___|  (____  |___|  |__|      |___|  (____  /_____/       \/\_/ |__|___|  /_____//_____/
                                                     |__|`)
 	db.started = true
-	db.AddTranslation(originalRoot, translatedRoot)
+	db.ended = false
+	// db.AddTranslation(originalRoot, translatedRoot)
 	db.baseRoot = originalRoot
 	// initialize so that the first storage-less accounts are processed
 	db.StorageProcessed = true
-	chainConfig.CancunTime = cancunTime
+	if pragueTime != nil {
+		chainConfig.PragueTime = pragueTime
+	}
+}
+
+func (db *cachingDB) ReorgThroughVerkleTransition() {
+	db.ended, db.started = false, false
 }
 
 func (db *cachingDB) EndVerkleTransition() {
@@ -241,25 +250,6 @@ func (db *cachingDB) EndVerkleTransition() {
 	db.ended = true
 }
 
-func (db *cachingDB) AddTranslation(orig, trans common.Hash) {
-	// TODO make this persistent
-	db.translatedRootsLock.Lock()
-	defer db.translatedRootsLock.Unlock()
-	db.translatedRoots[db.translationIndex] = trans
-	db.origRoots[db.translationIndex] = orig
-	db.translationIndex = (db.translationIndex + 1) % len(db.translatedRoots)
-}
-
-func (db *cachingDB) getTranslation(orig common.Hash) common.Hash {
-	db.translatedRootsLock.RLock()
-	defer db.translatedRootsLock.RUnlock()
-	for i, o := range db.origRoots {
-		if o == orig {
-			return db.translatedRoots[i]
-		}
-	}
-	return common.Hash{}
-}
 
 type cachingDB struct {
 	disk          ethdb.KeyValueStore
@@ -320,13 +310,8 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	// TODO separate both cases when I can be certain that it won't
 	// find a Verkle trie where is expects a Transitoion trie.
 	if db.started || db.ended {
-		var r common.Hash
-		if db.ended {
-			r = root
-		} else {
-			r = db.getTranslation(root)
-		}
-		vkt, err := db.openVKTrie(r)
+		// NOTE this is a kaustinen-only change, it will break replay
+		vkt, err := db.openVKTrie(root)
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +497,6 @@ func (db *cachingDB) GetStorageProcessed() bool {
 }
 
 func (db *cachingDB) AddRootTranslation(originalRoot, translatedRoot common.Hash) {
-	db.AddTranslation(originalRoot, translatedRoot)
 }
 
 func (db *cachingDB) SetLastMerkleRoot(root common.Hash) {

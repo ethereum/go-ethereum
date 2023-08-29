@@ -310,8 +310,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
 
-	// Declare the end of the verkle transition is need be
-	if bc.chainConfig.Rules(head.Number, false /* XXX */, head.Time).IsVerkle {
+	// Declare the end of the verkle transition if need be
+	if bc.chainConfig.Rules(head.Number, false /* XXX */, head.Time).IsPrague {
 		bc.stateCache.EndVerkleTransition()
 	}
 
@@ -411,7 +411,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			Recovery:   recover,
 			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
-			Verkle:     chainConfig.IsVerkle(head.Number, head.Time),
+			Verkle:     chainConfig.IsPrague(head.Number, head.Time),
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 	}
@@ -1347,6 +1347,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	state.Database().TrieDB().WritePreimages()
 	// Commit all cached state changes into underlying memory database.
 	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
@@ -2531,8 +2532,11 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
 
-func (bc *BlockChain) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, cancunTime *uint64) {
-	bc.stateCache.StartVerkleTransition(originalRoot, translatedRoot, chainConfig, cancunTime)
+func (bc *BlockChain) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, pragueTime *uint64) {
+	bc.stateCache.StartVerkleTransition(originalRoot, translatedRoot, chainConfig, pragueTime)
+}
+func (bc *BlockChain) ReorgThroughVerkleTransition() {
+	bc.stateCache.ReorgThroughVerkleTransition()
 }
 
 func (bc *BlockChain) EndVerkleTransition() {

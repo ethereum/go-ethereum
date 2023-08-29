@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -329,14 +330,14 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the beacon protocol. The changes are done inline.
-func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header, statedb *state.StateDB) error {
 	// Transition isn't triggered yet, use the legacy rules for preparation.
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
 		return err
 	}
 	if !reached {
-		return beacon.ethone.Prepare(chain, header)
+		return beacon.ethone.Prepare(chain, header, statedb)
 	}
 	header.Difficulty = beaconDifficulty
 	return nil
@@ -356,9 +357,17 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.AddBalance(w.Address, amount)
 
 		// The returned gas is not charged
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.VersionLeafKey)
 		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.BalanceLeafKey)
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.NonceLeafKey)
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeKeccakLeafKey)
+		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeSizeLeafKey)
 	}
-	// No block reward which is issued by consensus layer instead.
+	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.VersionLeafKey)
+	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.BalanceLeafKey)
+	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.NonceLeafKey)
+	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.CodeKeccakLeafKey)
+	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.CodeSizeLeafKey)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
@@ -384,8 +393,65 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
+	var (
+		p    *verkle.VerkleProof
+		k    verkle.StateDiff
+		keys = state.Witness().Keys()
+	)
+	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlock {
+		// Open the pre-tree to prove the pre-state against
+		parent := chain.GetHeaderByNumber(header.Number.Uint64() - 1)
+		if parent == nil {
+			return nil, fmt.Errorf("nil parent header for block %d", header.Number)
+		}
+
+		preTrie, err := state.Database().OpenTrie(parent.Root)
+		if err != nil {
+			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
+		}
+
+		var okpre, okpost bool
+		var vtrpre, vtrpost *trie.VerkleTrie
+		switch pre := preTrie.(type) {
+		case *trie.VerkleTrie:
+			vtrpre, okpre = preTrie.(*trie.VerkleTrie)
+			vtrpost, okpost = state.GetTrie().(*trie.VerkleTrie)
+		case *trie.TransitionTrie:
+			vtrpre = pre.Overlay()
+			okpre = true
+			post, _ := state.GetTrie().(*trie.TransitionTrie)
+			vtrpost = post.Overlay()
+			okpost = true
+		default:
+			panic("invalid tree type")
+		}
+		if okpre && okpost {
+			// Resolve values from the pre state, the post
+			// state should already have the values in memory.
+			// TODO: see if this can be captured at the witness
+			// level, like it used to.
+			for _, key := range keys {
+				_, err := vtrpre.GetWithHashedKey(key)
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			if len(keys) > 0 {
+				p, k, err = trie.ProveAndSerialize(vtrpre, vtrpost, keys, vtrpre.FlatdbNodeResolver)
+				if err != nil {
+					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
+				}
+			}
+		}
+	}
+
 	// Assemble and return the final block.
-	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), nil
+	block := types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil))
+	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlock {
+		block.SetVerkleProof(p, k)
+	}
+	return block, nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes

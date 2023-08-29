@@ -157,7 +157,7 @@ type Config struct {
 	OverrideCancun *uint64 `toml:",omitempty"`
 
 	// OverrideVerkle (TODO: remove after the fork)
-	OverrideVerkle *uint64 `toml:",omitempty"`
+	OverridePrague *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

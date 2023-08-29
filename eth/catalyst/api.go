@@ -528,6 +528,17 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
+	// Trigger the start of the verkle conversion if we're at the right block
+	if api.eth.BlockChain().Config().IsPrague(block.Number(), block.Time()) && !api.eth.BlockChain().Config().IsPrague(parent.Number(), parent.Time()) {
+		parent := api.eth.BlockChain().GetHeaderByNumber(block.NumberU64() - 1)
+		if !api.eth.BlockChain().Config().IsPrague(parent.Number, parent.Time) {
+			api.eth.BlockChain().StartVerkleTransition(parent.Root, common.Hash{}, api.eth.BlockChain().Config(), nil)
+		}
+	}
+	// Reset db merge state in case of a reorg
+	if !api.eth.BlockChain().Config().IsPrague(block.Number(), block.Time()) {
+		api.eth.BlockChain().ReorgThroughVerkleTransition()
+	}
 	// Another cornercase: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync

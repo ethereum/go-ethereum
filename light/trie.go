@@ -105,6 +105,10 @@ func (db *odrDatabase) StartVerkleTransition(originalRoot common.Hash, translate
 	panic("not implemented") // TODO: Implement
 }
 
+func (db *odrDatabase) ReorgThroughVerkleTransition() {
+	panic("not implemented") // TODO: Implement
+}
+
 func (db *odrDatabase) EndVerkleTransition() {
 	panic("not implemented") // TODO: Implement
 }

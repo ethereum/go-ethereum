@@ -125,7 +125,7 @@ func (ga *GenesisAlloc) deriveHash(cfg *params.ChainConfig, timestamp uint64) (c
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
-	if cfg.IsVerkle(big.NewInt(int64(0)), timestamp) {
+	if cfg.IsPrague(big.NewInt(int64(0)), timestamp) {
 		db.EndVerkleTransition()
 	}
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
@@ -289,7 +289,7 @@ func (e *GenesisMismatchError) Error() string {
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
 	OverrideCancun *uint64
-	OverrideVerkle *uint64
+	OverridePrague *uint64
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -318,8 +318,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 			if overrides != nil && overrides.OverrideCancun != nil {
 				config.CancunTime = overrides.OverrideCancun
 			}
-			if overrides != nil && overrides.OverrideVerkle != nil {
-				config.VerkleTime = overrides.OverrideVerkle
+			if overrides != nil && overrides.OverridePrague != nil {
+				config.PragueTime = overrides.OverridePrague
 			}
 		}
 	}
@@ -545,7 +545,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 // Note the state changes will be committed in hash-based scheme, use Commit
 // if path-scheme is preferred.
 func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{Verkle: g.Config != nil && g.Config.IsVerkle(big.NewInt(int64(g.Number)), g.Timestamp)})
+	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{Verkle: g.Config != nil && g.Config.IsPrague(big.NewInt(int64(g.Number)), g.Timestamp)})
 	block, err := g.Commit(db, triedb)
 	if err != nil {
 		panic(err)
