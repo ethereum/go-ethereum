@@ -670,3 +670,14 @@ func (p *rpcProgress) toSyncProgress() *ethereum.SyncProgress {
 		HealingBytecode:     uint64(p.HealingBytecode),
 	}
 }
+
+func (ec *Client) GetBlockReceipts(ctx context.Context, txHash common.Hash) (types.Receipts, error) {
+	var r types.Receipts
+	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", txHash)
+	if err == nil {
+		if r == nil {
+			return nil, ethereum.NotFound
+		}
+	}
+	return r, err
+}

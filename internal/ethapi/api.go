@@ -419,6 +419,82 @@ func (s *BundleAPI) SearchMaxWallet(ctx context.Context, args MaxWalletSearchArg
 	return lastResult, nil
 }
 
+type PackedReceipt map[string]interface{}
+type ReceiptsPackage struct {
+	Receipts []PackedReceipt
+}
+
+func (s *TransactionAPI) GetBlockReceipts(ctx context.Context, blocks_hash common.Hash) (ReceiptsPackage, error) {
+	var output ReceiptsPackage
+	receipts, err := s.b.GetReceipts(ctx, blocks_hash)
+	if err != nil {
+		return output, err
+	}
+	header, err := s.b.HeaderByHash(ctx, blocks_hash)
+	if err != nil {
+		return output, err
+	}
+	if header == nil {
+		return output, errors.New(fmt.Sprintf(("Header not found for provided block hash")))
+	}
+	output.Receipts = make([]PackedReceipt, 0, 512)
+	for i := 0; i < len(receipts); i++ {
+		// note: the body of this loop was copied from GetTransactionReceipt() function
+		receipt := receipts[i]
+		tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, receipt.TxHash)
+		if err != nil {
+			return output, err
+		}
+		if tx == nil {
+			return output, errors.New("Transaction not present in database")
+		}
+		if uint(len(receipts)) <= receipt.TransactionIndex {
+			return output, errors.New(fmt.Sprintf("Transaction index overflow for receipt %v\n", i))
+		}
+		// Derive the sender.
+		bigblock := new(big.Int).SetUint64(blockNumber)
+		signer := types.MakeSigner(s.b.ChainConfig(), bigblock, header.Time)
+		from, _ := types.Sender(signer, tx)
+
+		fields := map[string]interface{}{
+			"blockHash":         blockHash,
+			"blockNumber":       hexutil.Uint64(blockNumber),
+			"transactionHash":   receipt.TxHash,
+			"transactionIndex":  hexutil.Uint64(index),
+			"from":              from,
+			"to":                tx.To(),
+			"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+			"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+			"contractAddress":   nil,
+			"logs":              receipt.Logs,
+			"logsBloom":         receipt.Bloom,
+			"type":              hexutil.Uint(tx.Type()),
+		}
+		// Assign the effective gas price paid
+		if !s.b.ChainConfig().IsLondon(bigblock) {
+			fields["effectiveGasPrice"] = hexutil.Uint64(tx.GasPrice().Uint64())
+		} else {
+			gasPrice := new(big.Int).Add(header.BaseFee, tx.EffectiveGasTipValue(header.BaseFee))
+			fields["effectiveGasPrice"] = hexutil.Uint64(gasPrice.Uint64())
+		}
+		// Assign receipt status or post state.
+		if len(receipt.PostState) > 0 {
+			fields["root"] = hexutil.Bytes(receipt.PostState)
+		} else {
+			fields["status"] = hexutil.Uint(receipt.Status)
+		}
+		if receipt.Logs == nil {
+			fields["logs"] = [][]*types.Log{}
+		}
+		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+		if receipt.ContractAddress != (common.Address{}) {
+			fields["contractAddress"] = receipt.ContractAddress
+		}
+		output.Receipts = append(output.Receipts, fields)
+	}
+	return output, nil
+}
+
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
 	b Backend
