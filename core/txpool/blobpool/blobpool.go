@@ -714,7 +714,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		return
 	}
 	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, tx); err != nil {
+	if err = rlp.DecodeBytes(data, &tx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
