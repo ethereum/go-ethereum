@@ -21,10 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
-	"github.com/holiman/uint256"
 )
 
 // Config are the configuration options for the Interpreter
@@ -152,8 +148,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		logged  bool   // deferred EVMLogger should ignore already logged steps
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
-
-		chunkEvals [][]byte
 	)
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -175,21 +169,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}()
 	}
 
-	// Evaluate one address per group of 256, 31-byte chunks
-	if in.evm.chainRules.IsCancun && !contract.IsDeployment {
-		contract.Chunks = trie.ChunkifyCode(contract.Code)
-
-		// number of extra stems to evaluate after the header stem
-		extraEvals := (len(contract.Chunks) + 127) / verkle.NodeWidth
-
-		chunkEvals = make([][]byte, extraEvals+1)
-		for i := 1; i < extraEvals+1; i++ {
-			chunkEvals[i] = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(contract.AddressPoint(), uint256.NewInt(uint64(i)*256))
-		}
-		// Header account is already known, it's the header account
-		chunkEvals[0] = utils.GetTreeKeyVersionWithEvaluatedAddress(contract.AddressPoint())
-	}
-
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
@@ -200,10 +179,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		if contract.Chunks != nil {
+		if in.evm.chainRules.IsCancun && !contract.IsDeployment {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
 			// associated costs.
-			contract.Gas -= touchChunkOnReadAndChargeGas(contract.Chunks, pc, chunkEvals, contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
+			contractAddr := contract.Address()
+			contract.Gas -= touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], pc, 1, uint64(len(contract.Code)), in.evm.TxContext.Accesses)
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are

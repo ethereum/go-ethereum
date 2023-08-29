@@ -144,7 +144,7 @@ func GetTreeKeyVersion(address []byte) []byte {
 }
 
 func GetTreeKeyVersionWithEvaluatedAddress(addrp *verkle.Point) []byte {
-	return getTreeKeyWithEvaluatedAddess(addrp, zero, VersionLeafKey)
+	return GetTreeKeyWithEvaluatedAddess(addrp, zero, VersionLeafKey)
 }
 
 func GetTreeKeyBalance(address []byte) []byte {
@@ -182,7 +182,7 @@ func GetTreeKeyCodeChunkWithEvaluatedAddress(addressPoint *verkle.Point, chunk *
 	if len(subIndexMod) != 0 {
 		subIndex = byte(subIndexMod[0])
 	}
-	return getTreeKeyWithEvaluatedAddess(addressPoint, treeIndex, subIndex)
+	return GetTreeKeyWithEvaluatedAddess(addressPoint, treeIndex, subIndex)
 }
 
 func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
@@ -221,7 +221,7 @@ func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	return retb[:]
 }
 
-func getTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.Int, subIndex byte) []byte {
+func GetTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.Int, subIndex byte) []byte {
 	var poly [5]fr.Element
 
 	poly[0].SetZero()
@@ -269,6 +269,11 @@ func EvaluateAddressPoint(address []byte) *verkle.Point {
 }
 
 func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageKey []byte) []byte {
+	treeIndex, subIndex := GetTreeKeyStorageSlotTreeIndexes(storageKey)
+	return GetTreeKeyWithEvaluatedAddess(evaluated, treeIndex, subIndex)
+}
+
+func GetTreeKeyStorageSlotTreeIndexes(storageKey []byte) (*uint256.Int, byte) {
 	// Note that `pos` must be a big.Int and not a uint256.Int, because the subsequent
 	// arithmetics operations could overflow. (e.g: imagine if storageKey is 2^256-1)
 	pos := new(big.Int).SetBytes(storageKey)
@@ -286,5 +291,5 @@ func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageK
 	posBytes := pos.Bytes()
 	subIndex := posBytes[len(posBytes)-1]
 
-	return getTreeKeyWithEvaluatedAddess(evaluated, treeIndex, subIndex)
+	return treeIndex, subIndex
 }
