@@ -491,6 +491,8 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
+	api.SetChainConfig(params.BorUnittestChainConfig)
+
 	// Reason: Cannot specify both BlockHash and FromBlock/ToBlock)
 	testCases := []FilterCriteria{
 		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
@@ -808,6 +810,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		<-testCases[i].sub.Err()
 	}
 }
+
 // nolint:gocognit
 func TestLightFilterLogs(t *testing.T) {
 	t.Parallel()

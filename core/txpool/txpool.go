@@ -279,9 +279,10 @@ type TxPool struct {
 	eip1559  atomic.Bool // Fork indicator whether we are using EIP-1559 type transactions.
 	shanghai atomic.Bool // Fork indicator whether we are in the Shanghai stage.
 
-	currentState  *state.StateDB // Current state in the blockchain head
-	pendingNonces *noncer        // Pending state tracking virtual nonces
-	currentMaxGas atomic.Uint64  // Current gas limit for transaction caps
+	currentState      *state.StateDB // Current state in the blockchain head
+	currentStateMutex sync.Mutex     // Mutex to protect currentState
+	pendingNonces     *noncer        // Pending state tracking virtual nonces
+	currentMaxGas     atomic.Uint64  // Current gas limit for transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *journal    // Journal of local transaction to back up to disk
@@ -745,6 +746,9 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // and does not require the pool mutex to be held.
 // nolint:gocognit
 func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
+	pool.currentStateMutex.Lock()
+	defer pool.currentStateMutex.Unlock()
+
 	// Accept only legacy transactions until EIP-2718/2930 activates.
 	if !pool.eip2718.Load() && tx.Type() != types.LegacyTxType {
 		return core.ErrTxTypeNotSupported
@@ -850,6 +854,9 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, _ bool) error {
+	pool.currentStateMutex.Lock()
+	defer pool.currentStateMutex.Unlock()
+
 	// Signature has been checked already, this cannot error.
 	from, _ := types.Sender(pool.signer, tx)
 	// Ensure the transaction adheres to nonce ordering
@@ -1915,6 +1922,9 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 
 	balance := uint256.NewInt(0)
 
+	pool.currentStateMutex.Lock()
+	defer pool.currentStateMutex.Unlock()
+
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
 		list = pool.queue[addr]
@@ -2251,6 +2261,9 @@ func (pool *TxPool) demoteUnexecutables() {
 
 	// Iterate over all accounts and demote any non-executable transactions
 	pool.pendingMu.RLock()
+
+	pool.currentStateMutex.Lock()
+	defer pool.currentStateMutex.Unlock()
 
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)

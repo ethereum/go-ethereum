@@ -76,7 +76,7 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	}
 
 	c.writeSummarySum(name, fmt.Sprintf("%f", sum))
-	c.writeSummaryCounter(name, len(ps))
+	c.writeSummaryCounter(name, m.Count())
 	c.buff.WriteRune('\n')
 }
 
@@ -97,7 +97,7 @@ func (c *collector) addTimer(name string, m metrics.Timer) {
 	}
 
 	c.writeSummarySum(name, fmt.Sprintf("%f", sum))
-	c.writeSummaryCounter(name, len(ps))
+	c.writeSummaryCounter(name, m.Count())
 	c.buff.WriteRune('\n')
 }
 
