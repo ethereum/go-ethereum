@@ -1023,6 +1023,15 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
+// RemoveTx is similar to removeTx, but with locking to prevent concurrency.
+// Note: currently should only be called by miner/worker.go.
+func (pool *TxPool) RemoveTx(hash common.Hash, outofbound bool) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.removeTx(hash, outofbound)
+}
+
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
