@@ -199,7 +199,7 @@ func (t *StandardTimer) Snapshot() Timer {
 	defer t.mutex.Unlock()
 	return &TimerSnapshot{
 		histogram: t.histogram.Snapshot().(*HistogramSnapshot),
-		meter:     t.meter.Snapshot().(*MeterSnapshot),
+		meter:     t.meter.Snapshot().(*meterSnapshot),
 	}
 }
 
@@ -249,7 +249,7 @@ func (t *StandardTimer) Variance() float64 {
 // TimerSnapshot is a read-only copy of another Timer.
 type TimerSnapshot struct {
 	histogram *HistogramSnapshot
-	meter     *MeterSnapshot
+	meter     *meterSnapshot
 }
 
 // Count returns the number of events recorded at the time the snapshot was
