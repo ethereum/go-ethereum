@@ -14,6 +14,18 @@ func BenchmarkEWMA(b *testing.B) {
 	}
 }
 
+func BenchmarkEWMAParallel(b *testing.B) {
+	a := NewEWMA1()
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			a.Update(1)
+			a.Tick()
+		}
+	})
+}
+
 func TestEWMA1(t *testing.T) {
 	a := NewEWMA1()
 	a.Update(3)
