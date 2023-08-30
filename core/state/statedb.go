@@ -295,9 +295,9 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	return 0
 }
 
-// GetStateRoot retrieves the storage root from the given address or empty
+// GetStorageRoot retrieves the storage root from the given address or empty
 // if object not found.
-func (s *StateDB) GetStateRoot(addr common.Address) common.Hash {
+func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Root()

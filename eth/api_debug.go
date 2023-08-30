@@ -230,7 +230,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
-	storageRoot := statedb.GetStateRoot(address)
+	storageRoot := statedb.GetStorageRoot(address)
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}

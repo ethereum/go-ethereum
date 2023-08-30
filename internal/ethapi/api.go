@@ -692,7 +692,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	if state == nil || err != nil {
 		return nil, err
 	}
-	if storageRoot := state.GetStateRoot(address); storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
+	if storageRoot := state.GetStorageRoot(address); storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
 		id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 		tr, err := trie.NewStateTrie(id, state.Database().TrieDB())
 		if err != nil {
