@@ -442,7 +442,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			}
 
 			vtr.Hash()
-			p, k, err := preStateTrie.ProveAndSerialize(statedb.Witness().Keys(), kvs)
+			p, k, err := preStateTrie.ProveAndSerialize(statedb.Witness().Keys())
 			if err != nil {
 				panic(err)
 			}
