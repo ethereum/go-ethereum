@@ -406,6 +406,21 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 
+	if bc.logger != nil {
+		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
+			alloc, err := getGenesisState(bc.db, block.Hash())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get genesis state: %w", err)
+			}
+
+			if alloc == nil {
+				return nil, fmt.Errorf("live blockchain tracer requires genesis alloc to be set")
+			}
+
+			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+		}
+	}
+
 	// Load any existing snapshot, regenerating it if loading failed
 	if bc.cacheConfig.SnapshotLimit > 0 {
 		// If the chain was rewound past the snapshot persistent layer (causing
