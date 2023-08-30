@@ -1,4 +1,4 @@
-package tracers
+package live
 
 import (
 	"encoding/json"
@@ -8,14 +8,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+func init() {
+	register("printer", newPrinter)
+}
+
 type Printer struct{}
 
-func NewPrinter() *Printer {
-	return &Printer{}
+func newPrinter() (core.BlockchainLogger, error) {
+	return &Printer{}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -91,7 +96,7 @@ func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	fmt.Printf("OnGenesisBlock: b=%v, allocLength=%d\n", b.NumberU64(), len(alloc))
 }
 
-func (p *Printer) OnBalanceChange(a common.Address, prev, new *big.Int) {
+func (p *Printer) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
 	fmt.Printf("OnBalanceChange: a=%v, prev=%v, new=%v\n", a, prev, new)
 }
 
