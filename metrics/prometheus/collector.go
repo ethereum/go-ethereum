@@ -47,6 +47,34 @@ func newCollector() *collector {
 	}
 }
 
+// Add adds the metric i to the collector. This method returns an error if the
+// metric type is not supported/known.
+func (c *collector) Add(name string, i any) error {
+	switch m := i.(type) {
+	case metrics.Counter:
+		c.addCounter(name, m.Snapshot())
+	case metrics.CounterFloat64:
+		c.addCounterFloat64(name, m.Snapshot())
+	case metrics.Gauge:
+		c.addGauge(name, m.Snapshot())
+	case metrics.GaugeFloat64:
+		c.addGaugeFloat64(name, m.Snapshot())
+	case metrics.GaugeInfo:
+		c.addGaugeInfo(name, m.Snapshot())
+	case metrics.Histogram:
+		c.addHistogram(name, m.Snapshot())
+	case metrics.Meter:
+		c.addMeter(name, m.Snapshot())
+	case metrics.Timer:
+		c.addTimer(name, m.Snapshot())
+	case metrics.ResettingTimer:
+		c.addResettingTimer(name, m.Snapshot())
+	default:
+		return fmt.Errorf("unknown prometheus metric type %T", i)
+	}
+	return nil
+}
+
 func (c *collector) addCounter(name string, m metrics.Counter) {
 	c.writeGaugeCounter(name, m.Count())
 }
