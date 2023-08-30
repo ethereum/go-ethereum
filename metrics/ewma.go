@@ -77,16 +77,14 @@ func (NilEWMA) Update(n int64) {}
 type StandardEWMA struct {
 	uncounted atomic.Int64
 	alpha     float64
-	rate      float64
-	init      bool
+	rate      atomic.Uint64
+	init      atomic.Bool
 	mutex     sync.Mutex
 }
 
 // Rate returns the moving average rate of events per second.
 func (a *StandardEWMA) Rate() float64 {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	return a.rate * float64(time.Second)
+	return math.Float64frombits(a.rate.Load()) * float64(time.Second)
 }
 
 // Snapshot returns a read-only copy of the EWMA.
@@ -97,17 +95,36 @@ func (a *StandardEWMA) Snapshot() EWMA {
 // Tick ticks the clock to update the moving average.  It assumes it is called
 // every five seconds.
 func (a *StandardEWMA) Tick() {
-	count := a.uncounted.Load()
-	a.uncounted.Add(-count)
-	instantRate := float64(count) / float64(5*time.Second)
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	if a.init {
-		a.rate += a.alpha * (instantRate - a.rate)
-	} else {
-		a.init = true
-		a.rate = instantRate
+	// Optimization to avoid mutex locking in the hot-path.
+	if a.init.Load() {
+		a.updateRate(a.fetchInstantRate())
+		return
 	}
+	// Slow-path: this is only needed on the first Tick() and preserves transactional updating
+	// of init and rate in the else block. The first conditional is needed below because
+	// a different thread could have set a.init = 1 between the time of the first atomic load and when
+	// the lock was acquired.
+	a.mutex.Lock()
+	if a.init.Load() {
+		// The fetchInstantRate() uses atomic loading, which is unnecessary in this critical section
+		// but again, this section is only invoked on the first successful Tick() operation.
+		a.updateRate(a.fetchInstantRate())
+	} else {
+		a.init.Store(true)
+		a.rate.Store(math.Float64bits(a.fetchInstantRate()))
+	}
+	a.mutex.Unlock()
+}
+
+func (a *StandardEWMA) fetchInstantRate() float64 {
+	count := a.uncounted.Swap(0)
+	return float64(count) / float64(5*time.Second)
+}
+
+func (a *StandardEWMA) updateRate(instantRate float64) {
+	currentRate := math.Float64frombits(a.rate.Load())
+	currentRate += a.alpha * (instantRate - currentRate)
+	a.rate.Store(math.Float64bits(currentRate))
 }
 
 // Update adds n uncounted events.
