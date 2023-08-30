@@ -320,7 +320,7 @@ func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
 
-func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[string][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
+func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
 	proof, _, _, _, err := verkle.MakeVerkleMultiProof(trie.root, keys)
 	if err != nil {
 		return nil, nil, err
