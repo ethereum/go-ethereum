@@ -87,10 +87,11 @@ func BenchmarkUniformSample1028(b *testing.B) {
 }
 
 func TestExpDecaySample10(t *testing.T) {
-	s := NewExpDecaySample(100, 0.99)
+	sw := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 10; i++ {
-		s.Update(int64(i))
+		sw.Update(int64(i))
 	}
+	s := sw.Snapshot()
 	if size := s.Count(); size != 10 {
 		t.Errorf("s.Count(): 10 != %v\n", size)
 	}
@@ -108,10 +109,11 @@ func TestExpDecaySample10(t *testing.T) {
 }
 
 func TestExpDecaySample100(t *testing.T) {
-	s := NewExpDecaySample(1000, 0.01)
+	sw := NewExpDecaySample(1000, 0.01)
 	for i := 0; i < 100; i++ {
-		s.Update(int64(i))
+		sw.Update(int64(i))
 	}
+	s := sw.Snapshot()
 	if size := s.Count(); size != 100 {
 		t.Errorf("s.Count(): 100 != %v\n", size)
 	}
@@ -129,10 +131,11 @@ func TestExpDecaySample100(t *testing.T) {
 }
 
 func TestExpDecaySample1000(t *testing.T) {
-	s := NewExpDecaySample(100, 0.99)
+	sw := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 1000; i++ {
-		s.Update(int64(i))
+		sw.Update(int64(i))
 	}
+	s := sw.Snapshot()
 	if size := s.Count(); size != 1000 {
 		t.Errorf("s.Count(): 1000 != %v\n", size)
 	}
@@ -154,14 +157,15 @@ func TestExpDecaySample1000(t *testing.T) {
 // The priority becomes +Inf quickly after starting if this is done,
 // effectively freezing the set of samples until a rescale step happens.
 func TestExpDecaySampleNanosecondRegression(t *testing.T) {
-	s := NewExpDecaySample(100, 0.99)
+	sw := NewExpDecaySample(100, 0.99)
 	for i := 0; i < 100; i++ {
-		s.Update(10)
+		sw.Update(10)
 	}
 	time.Sleep(1 * time.Millisecond)
 	for i := 0; i < 100; i++ {
-		s.Update(20)
+		sw.Update(20)
 	}
+	s := sw.Snapshot()
 	v := s.Values()
 	avg := float64(0)
 	for i := 0; i < len(v); i++ {
@@ -201,14 +205,15 @@ func TestExpDecaySampleStatistics(t *testing.T) {
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
-	testExpDecaySampleStatistics(t, s)
+	testExpDecaySampleStatistics(t, s.Snapshot())
 }
 
 func TestUniformSample(t *testing.T) {
-	s := NewUniformSample(100)
+	sw := NewUniformSample(100)
 	for i := 0; i < 1000; i++ {
-		s.Update(int64(i))
+		sw.Update(int64(i))
 	}
+	s := sw.Snapshot()
 	if size := s.Count(); size != 1000 {
 		t.Errorf("s.Count(): 1000 != %v\n", size)
 	}
@@ -226,11 +231,12 @@ func TestUniformSample(t *testing.T) {
 }
 
 func TestUniformSampleIncludesTail(t *testing.T) {
-	s := NewUniformSample(100)
+	sw := NewUniformSample(100)
 	max := 100
 	for i := 0; i < max; i++ {
-		s.Update(int64(i))
+		sw.Update(int64(i))
 	}
+	s := sw.Snapshot()
 	v := s.Values()
 	sum := 0
 	exp := (max - 1) * max / 2
@@ -257,7 +263,7 @@ func TestUniformSampleStatistics(t *testing.T) {
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
-	testUniformSampleStatistics(t, s)
+	testUniformSampleStatistics(t, s.Snapshot())
 }
 
 func benchmarkSample(b *testing.B, s Sample) {
@@ -274,7 +280,7 @@ func benchmarkSample(b *testing.B, s Sample) {
 	b.Logf("GC cost: %d ns/op", int(memStats.PauseTotalNs-pauseTotalNs)/b.N)
 }
 
-func testExpDecaySampleStatistics(t *testing.T, s Sample) {
+func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}
@@ -302,7 +308,7 @@ func testExpDecaySampleStatistics(t *testing.T, s Sample) {
 	}
 }
 
-func testUniformSampleStatistics(t *testing.T, s Sample) {
+func testUniformSampleStatistics(t *testing.T, s SampleSnapshot) {
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}
@@ -356,7 +362,7 @@ func TestUniformSampleConcurrentUpdateCount(t *testing.T) {
 		}
 	}()
 	for i := 0; i < 1000; i++ {
-		s.Count()
+		s.Snapshot().Count()
 		time.Sleep(5 * time.Millisecond)
 	}
 	quit <- struct{}{}

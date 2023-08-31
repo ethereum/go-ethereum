@@ -119,7 +119,7 @@ func (exp *exp) publishCounterFloat64(name string, metric metrics.CounterFloat64
 	v.Set(metric.Count())
 }
 
-func (exp *exp) publishGauge(name string, metric metrics.Gauge) {
+func (exp *exp) publishGauge(name string, metric metrics.GaugeSnapshot) {
 	v := exp.getInt(name)
 	v.Set(metric.Value())
 }
@@ -193,7 +193,7 @@ func (exp *exp) syncToExpvar() {
 		case metrics.CounterFloat64:
 			exp.publishCounterFloat64(name, i)
 		case metrics.Gauge:
-			exp.publishGauge(name, i)
+			exp.publishGauge(name, i.Snapshot())
 		case metrics.GaugeFloat64:
 			exp.publishGaugeFloat64(name, i)
 		case metrics.GaugeInfo:

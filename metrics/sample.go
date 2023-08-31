@@ -353,8 +353,9 @@ func (s *UniformSample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
+	count := s.count
 	s.mutex.Unlock()
-	return newSampleSnapshot(s.count, s.values)
+	return newSampleSnapshot(count, values)
 }
 
 // Update samples a new value.

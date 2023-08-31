@@ -99,7 +99,7 @@ func Example() {
 	t.Update(1)
 
 	fmt.Println(c.Count())
-	fmt.Println(t.Min())
+	fmt.Println(t.Snapshot().Min())
 	// Output: 17
 	// 1
 }

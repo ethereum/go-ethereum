@@ -123,9 +123,9 @@ func (NilMeter) Stop() {}
 
 // StandardMeter is the standard implementation of a Meter.
 type StandardMeter struct {
-	count    atomic.Int64
-	temp     atomic.Int64
-	rateMean atomic.Uint64
+	count     atomic.Int64
+	uncounted atomic.Int64 // not yet added to the EWMAs
+	rateMean  atomic.Uint64
 
 	a1, a5, a15 EWMA
 	startTime   time.Time
@@ -152,13 +152,13 @@ func (m *StandardMeter) Stop() {
 
 // Mark records the occurrence of n events.
 func (m *StandardMeter) Mark(n int64) {
-	m.temp.Add(n)
+	m.uncounted.Add(n)
 }
 
 // Snapshot returns a read-only copy of the meter.
 func (m *StandardMeter) Snapshot() MeterSnapshot {
 	return &meterSnapshot{
-		count:    m.count.Load(),
+		count:    m.count.Load() + m.uncounted.Load(),
 		rate1:    m.a1.Rate(),
 		rate5:    m.a5.Rate(),
 		rate15:   m.a15.Rate(),
@@ -168,7 +168,7 @@ func (m *StandardMeter) Snapshot() MeterSnapshot {
 
 func (m *StandardMeter) tick() {
 	// Take the uncounted values, add to count
-	n := m.temp.Swap(0)
+	n := m.uncounted.Swap(0)
 	count := m.count.Add(n)
 	m.rateMean.Store(math.Float64bits(float64(count) / time.Since(m.startTime).Seconds()))
 	// Update the EWMA's internal state

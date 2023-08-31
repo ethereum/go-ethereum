@@ -70,7 +70,7 @@ func graphite(c *GraphiteConfig) error {
 		case CounterFloat64:
 			fmt.Fprintf(w, "%s.%s.count %f %d\n", c.Prefix, name, metric.Count(), now)
 		case Gauge:
-			fmt.Fprintf(w, "%s.%s.value %d %d\n", c.Prefix, name, metric.Value(), now)
+			fmt.Fprintf(w, "%s.%s.value %d %d\n", c.Prefix, name, metric.Snapshot().Value(), now)
 		case GaugeFloat64:
 			fmt.Fprintf(w, "%s.%s.value %f %d\n", c.Prefix, name, metric.Value(), now)
 		case GaugeInfo:

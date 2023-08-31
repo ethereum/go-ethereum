@@ -154,7 +154,7 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 		case CounterFloat64:
 			values["count"] = metric.Count()
 		case Gauge:
-			values["value"] = metric.Value()
+			values["value"] = metric.Snapshot().Value()
 		case GaugeFloat64:
 			values["value"] = metric.Value()
 		case Healthcheck:
