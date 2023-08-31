@@ -84,11 +84,12 @@ func TestMethodString(t *testing.T) {
 
 	for _, test := range table {
 		var got string
-		if test.method == "fallback" {
+		switch test.method {
+		case "fallback":
 			got = abi.Fallback.String()
-		} else if test.method == "receive" {
+		case "receive":
 			got = abi.Receive.String()
-		} else {
+		default:
 			got = abi.Methods[test.method].String()
 		}
 		if got != test.expectation {

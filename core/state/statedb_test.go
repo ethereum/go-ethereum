@@ -35,9 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/holiman/uint256"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -447,6 +450,43 @@ func (test *snapshotTest) run() bool {
 	return true
 }
 
+func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.Hash) bool) error {
+	so := s.getStateObject(addr)
+	if so == nil {
+		return nil
+	}
+	tr, err := so.getTrie()
+	if err != nil {
+		return err
+	}
+	trieIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(trieIt)
+
+	for it.Next() {
+		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			if !cb(key, value) {
+				return nil
+			}
+			continue
+		}
+
+		if len(it.Value) > 0 {
+			_, content, _, err := rlp.Split(it.Value)
+			if err != nil {
+				return err
+			}
+			if !cb(key, common.BytesToHash(content)) {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 // checkEqual checks that methods of state and checkstate return the same values.
 func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	for _, addr := range test.addrs {
@@ -468,10 +508,10 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
-			state.ForEachStorage(addr, func(key, value common.Hash) bool {
+			forEachStorage(state, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
-			checkstate.ForEachStorage(addr, func(key, value common.Hash) bool {
+			forEachStorage(checkstate, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 		}
@@ -1095,5 +1135,59 @@ func TestResetObject(t *testing.T) {
 	slot, _ = snap.Storage(crypto.Keccak256Hash(addr.Bytes()), crypto.Keccak256Hash(slotB.Bytes()))
 	if !bytes.Equal(slot, []byte{0x2}) {
 		t.Fatalf("Unexpected storage slot value %v", slot)
+	}
+}
+
+func TestDeleteStorage(t *testing.T) {
+	var (
+		disk     = rawdb.NewMemoryDatabase()
+		tdb      = trie.NewDatabase(disk, nil)
+		db       = NewDatabaseWithNodeDB(disk, tdb)
+		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
+		state, _ = New(types.EmptyRootHash, db, snaps)
+		addr     = common.HexToAddress("0x1")
+	)
+	// Initialize account and populate storage
+	state.SetBalance(addr, big.NewInt(1))
+	state.CreateAccount(addr)
+	for i := 0; i < 1000; i++ {
+		slot := common.Hash(uint256.NewInt(uint64(i)).Bytes32())
+		value := common.Hash(uint256.NewInt(uint64(10 * i)).Bytes32())
+		state.SetState(addr, slot, value)
+	}
+	root, _ := state.Commit(0, true)
+	// Init phase done, create two states, one with snap and one without
+	fastState, _ := New(root, db, snaps)
+	slowState, _ := New(root, db, nil)
+
+	obj := fastState.GetOrNewStateObject(addr)
+	storageRoot := obj.data.Root
+
+	_, _, fastNodes, err := fastState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, slowNodes, err := slowState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(set *trienode.NodeSet) string {
+		var a []string
+		set.ForEachWithOrder(func(path string, n *trienode.Node) {
+			if n.Hash != (common.Hash{}) {
+				t.Fatal("delete should have empty hashes")
+			}
+			if len(n.Blob) != 0 {
+				t.Fatal("delete should have have empty blobs")
+			}
+			a = append(a, fmt.Sprintf("%x", path))
+		})
+		return strings.Join(a, ",")
+	}
+	slowRes := check(slowNodes)
+	fastRes := check(fastNodes)
+	if slowRes != fastRes {
+		t.Fatalf("difference found:\nfast: %v\nslow: %v\n", fastRes, slowRes)
 	}
 }

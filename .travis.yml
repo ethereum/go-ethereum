@@ -13,7 +13,7 @@ jobs:
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - lint
       git:
@@ -28,7 +28,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - docker
       services:
@@ -45,7 +45,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - docker
       services:
@@ -63,10 +63,9 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.20.x
+      go: 1.21.x
       env:
         - azure-linux
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -97,10 +96,9 @@ jobs:
     - stage: build
       if: type = push
       os: osx
-      go: 1.20.x
+      go: 1.21.x
       env:
         - azure-osx
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -112,41 +110,34 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.20.x
-      env:
-        - GO111MODULE=on
+      go: 1.21.x
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       if: type = pull_request
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.19.x
-      env:
-        - GO111MODULE=on
+      go: 1.20.x
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
       dist: bionic
-      go: 1.19.x
-      env:
-        - GO111MODULE=on
+      go: 1.20.x
       script:
-        - go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA nightly uploads
     - stage: build
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - ubuntu-ppa
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -167,10 +158,9 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - azure-purge
-        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -181,9 +171,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.20.x
-      env:
-        - GO111MODULE=on
+      go: 1.21.x
       script:
-        - go run build/ci.go test  -race $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES
 

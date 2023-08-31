@@ -53,7 +53,7 @@ const (
 	// maxBlobsPerTransaction is the maximum number of blobs a single transaction
 	// is allowed to contain. Whilst the spec states it's unlimited, the block
 	// data slots are protocol bound, which implicitly also limit this.
-	maxBlobsPerTransaction = params.BlobTxMaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
@@ -714,7 +714,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		return
 	}
 	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, tx); err != nil {
+	if err = rlp.DecodeBytes(data, &tx); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
