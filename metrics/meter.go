@@ -7,16 +7,19 @@ import (
 	"time"
 )
 
-// Meters count events to produce exponentially-weighted moving average rates
-// at one-, five-, and fifteen-minutes and a mean rate.
-type Meter interface {
+type MeterSnapshot interface {
 	Count() int64
-	Mark(int64)
 	Rate1() float64
 	Rate5() float64
 	Rate15() float64
 	RateMean() float64
-	Snapshot() Meter
+}
+
+// Meters count events to produce exponentially-weighted moving average rates
+// at one-, five-, and fifteen-minutes and a mean rate.
+type Meter interface {
+	Mark(int64)
+	Snapshot() MeterSnapshot
 	Stop()
 }
 
@@ -75,11 +78,6 @@ type meterSnapshot struct {
 // Count returns the count of events at the time the snapshot was taken.
 func (m *meterSnapshot) Count() int64 { return m.count }
 
-// Mark panics.
-func (*meterSnapshot) Mark(n int64) {
-	panic("Mark called on a meterSnapshot")
-}
-
 // Rate1 returns the one-minute moving average rate of events per second at the
 // time the snapshot was taken.
 func (m *meterSnapshot) Rate1() float64 { return m.rate1 }
@@ -95,12 +93,6 @@ func (m *meterSnapshot) Rate15() float64 { return m.rate15 }
 // RateMean returns the meter's mean rate of events per second at the time the
 // snapshot was taken.
 func (m *meterSnapshot) RateMean() float64 { return m.rateMean }
-
-// Snapshot returns the snapshot.
-func (m *meterSnapshot) Snapshot() Meter { return m }
-
-// Stop is a no-op.
-func (m *meterSnapshot) Stop() {}
 
 // NilMeter is a no-op Meter.
 type NilMeter struct{}
@@ -124,7 +116,7 @@ func (NilMeter) Rate15() float64 { return 0.0 }
 func (NilMeter) RateMean() float64 { return 0.0 }
 
 // Snapshot is a no-op.
-func (NilMeter) Snapshot() Meter { return NilMeter{} }
+func (NilMeter) Snapshot() MeterSnapshot { return NilMeter{} }
 
 // Stop is a no-op.
 func (NilMeter) Stop() {}
@@ -158,44 +150,19 @@ func (m *StandardMeter) Stop() {
 	}
 }
 
-// Count returns the number of events recorded.
-func (m *StandardMeter) Count() int64 {
-	return m.count.Load() + m.temp.Load()
-}
-
 // Mark records the occurrence of n events.
 func (m *StandardMeter) Mark(n int64) {
 	m.temp.Add(n)
 }
 
-// Rate1 returns the one-minute moving average rate of events per second.
-func (m *StandardMeter) Rate1() float64 {
-	return m.a1.Rate()
-}
-
-// Rate5 returns the five-minute moving average rate of events per second.
-func (m *StandardMeter) Rate5() float64 {
-	return m.a5.Rate()
-}
-
-// Rate15 returns the fifteen-minute moving average rate of events per second.
-func (m *StandardMeter) Rate15() float64 {
-	return m.a15.Rate()
-}
-
-// RateMean returns the meter's mean rate of events per second.
-func (m *StandardMeter) RateMean() float64 {
-	return math.Float64frombits(m.rateMean.Load())
-}
-
 // Snapshot returns a read-only copy of the meter.
-func (m *StandardMeter) Snapshot() Meter {
+func (m *StandardMeter) Snapshot() MeterSnapshot {
 	return &meterSnapshot{
 		count:    m.count.Load(),
-		rate1:    m.Rate1(),
-		rate5:    m.Rate5(),
-		rate15:   m.Rate15(),
-		rateMean: m.RateMean(),
+		rate1:    m.a1.Rate(),
+		rate5:    m.a5.Rate(),
+		rate15:   m.a15.Rate(),
+		rateMean: math.Float64frombits(m.rateMean.Load()),
 	}
 }
 

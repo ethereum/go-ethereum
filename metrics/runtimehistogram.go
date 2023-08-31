@@ -62,7 +62,7 @@ func (h *runtimeHistogram) Sample() Sample {
 }
 
 // Snapshot returns a non-changing cop of the histogram.
-func (h *runtimeHistogram) Snapshot() Histogram {
+func (h *runtimeHistogram) Snapshot() HistogramSnapshot {
 	return h.load()
 }
 
@@ -123,7 +123,7 @@ func (h *runtimeHistogramSnapshot) Sample() Sample {
 	return NilSample{}
 }
 
-func (h *runtimeHistogramSnapshot) Snapshot() Histogram {
+func (h *runtimeHistogramSnapshot) Snapshot() HistogramSnapshot {
 	return h
 }
 

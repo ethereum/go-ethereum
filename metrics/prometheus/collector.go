@@ -95,7 +95,7 @@ func (c *collector) addGaugeInfo(name string, m metrics.GaugeInfo) {
 	c.writeGaugeInfo(name, m.Value())
 }
 
-func (c *collector) addHistogram(name string, m metrics.Histogram) {
+func (c *collector) addHistogram(name string, m metrics.HistogramSnapshot) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())
@@ -106,11 +106,11 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addMeter(name string, m metrics.Meter) {
+func (c *collector) addMeter(name string, m metrics.MeterSnapshot) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addTimer(name string, m metrics.Timer) {
+func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())
