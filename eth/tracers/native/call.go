@@ -27,13 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 //go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
 
 func init() {
-	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)
+	directory.DefaultDirectory.Register("callTracer", newCallTracer, false)
 }
 
 type callLog struct {
@@ -99,7 +99,7 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	tracers.NoopTracer
+	directory.NoopTracer
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
@@ -115,7 +115,7 @@ type callTracerConfig struct {
 
 // newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func newCallTracer(ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
 	var config callTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {

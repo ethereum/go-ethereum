@@ -28,9 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -107,6 +107,7 @@ func (s *StructLog) ErrorString() string {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
+	directory.NoopTracer
 	cfg Config
 	env *vm.EVM
 
@@ -137,10 +138,6 @@ func (l *StructLogger) Reset() {
 	l.output = make([]byte, 0)
 	l.logs = l.logs[:0]
 	l.err = nil
-}
-
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (l *StructLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -211,16 +208,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	l.logs = append(l.logs, log)
 }
 
-// CaptureFault implements the EVMLogger interface to trace an execution fault
-// while running an opcode.
-func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-}
-
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (l *StructLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-func (l *StructLogger) OnGasConsumed(gas, amount uint64) {}
-
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.output = output
@@ -231,12 +218,6 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
-}
-
-func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {
@@ -279,20 +260,6 @@ func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt, err error) {
 	}
 	l.usedGas = receipt.GasUsed
 }
-
-func (l *StructLogger) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
-}
-
-func (l *StructLogger) OnNonceChange(a common.Address, prev, new uint64) {}
-
-func (l *StructLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-}
-
-func (l *StructLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
-
-func (l *StructLogger) OnLog(log *types.Log) {}
-
-func (l *StructLogger) OnNewAccount(a common.Address) {}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
@@ -351,6 +318,7 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 }
 
 type mdLogger struct {
+	directory.NoopTracer
 	out io.Writer
 	cfg *Config
 	env *vm.EVM
@@ -408,36 +376,10 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-func (t *mdLogger) OnGasConsumed(gas, amount uint64) {}
-
 func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
-
-func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (*mdLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
-
-func (*mdLogger) CaptureTxEnd(receipt *types.Receipt, err error) {}
-
-func (*mdLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
-
-func (*mdLogger) OnNonceChange(a common.Address, prev, new uint64) {}
-
-func (*mdLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-}
-
-func (*mdLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
-
-func (*mdLogger) OnLog(log *types.Log) {}
-
-func (*mdLogger) OnNewAccount(a common.Address) {}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction

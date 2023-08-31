@@ -11,10 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 func init() {
-	register("printer", newPrinter)
+	directory.LiveDirectory.Register("printer", newPrinter)
 }
 
 type Printer struct{}
