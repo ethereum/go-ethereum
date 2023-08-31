@@ -87,7 +87,7 @@ func (c *collector) addGauge(name string, m metrics.GaugeSnapshot) {
 	c.writeGaugeCounter(name, m.Value())
 }
 
-func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64) {
+func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64Snapshot) {
 	c.writeGaugeCounter(name, m.Value())
 }
 

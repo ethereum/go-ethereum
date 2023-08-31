@@ -32,7 +32,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 				l.Printf("  value:       %9d\n", metric.Snapshot().Value())
 			case GaugeFloat64:
 				l.Printf("gauge %s\n", name)
-				l.Printf("  value:       %f\n", metric.Value())
+				l.Printf("  value:       %f\n", metric.Snapshot().Value())
 			case GaugeInfo:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %s\n", metric.Value())
