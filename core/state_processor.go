@@ -25,6 +25,8 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -170,7 +172,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		// mkv will be assiting in the collection of up to maxMovedCount key values to be migrated to the VKT.
 		// It has internal caches to do efficient MPT->VKT key calculations, which will be discarded after
 		// this function.
-		mkv := &keyValueMigrator{vktLeafData: make(map[string]*verkle.BatchNewLeafNodeData)}
+		mkv := newKeyValueMigrator()
 		// move maxCount accounts into the verkle tree, starting with the
 		// slots from the previous account.
 		count := 0
@@ -297,8 +299,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		migrdb.SetCurrentPreimageOffset(preimageSeek)
 
-		log.Info("Collected and prepared key values from base tree", "count", count, "duration", time.Since(now), "last account", statedb.Database().GetCurrentAccountHash())
+		log.Info("Collected key values from base tree", "count", count, "duration", time.Since(now), "last account", statedb.Database().GetCurrentAccountHash())
 
+		// Take all the collected key-values and prepare the new leaf values.
+		// This fires a background routine that will start doing the work that
+		// migrateCollectedKeyValues() will use to insert into the tree.
+		//
+		// TODO: Now both prepare() and migrateCollectedKeyValues() are next to each other, but
+		//       after we fix an existing bug, we can call prepare() before the block execution and
+		//       let it do the work in the background. After the block execution and finalization
+		//       finish, we can call migrateCollectedKeyValues() which should already find everything ready.
+		mkv.prepare()
 		now = time.Now()
 		if err := mkv.migrateCollectedKeyValues(tt.Overlay()); err != nil {
 			return nil, nil, 0, fmt.Errorf("could not migrate key values: %w", err)
@@ -380,30 +391,60 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }
 
-// keyValueMigrator is a helper struct that collects key-values from the base tree.
-// The walk is done in account order, so **we assume** the APIs hold this invariant. This is
-// useful to be smart about caching banderwagon.Points to make VKT key calculations faster.
-type keyValueMigrator struct {
-	currAddr      []byte
-	currAddrPoint *verkle.Point
+var zeroTreeIndex uint256.Int
 
-	vktLeafData map[string]*verkle.BatchNewLeafNodeData
+// keyValueMigrator is a helper module that collects key-values from the overlay-tree migration for Verkle Trees.
+// It assumes that the walk of the base tree is done in address-order, so it exploit that fact to
+// collect the key-values in a way that is efficient.
+type keyValueMigrator struct {
+	// leafData contains the values for the future leaf for a particular VKT branch.
+	leafData []migratedKeyValue
+
+	// When prepare() is called, it will start a background routine that will process the leafData
+	// saving the result in newLeaves to be used by migrateCollectedKeyValues(). The background
+	// routine signals that it is done by closing processingReady.
+	processingReady chan struct{}
+	newLeaves       []verkle.LeafNode
+	prepareErr      error
+}
+
+func newKeyValueMigrator() *keyValueMigrator {
+	// We do initialize the VKT config since prepare() might indirectly make multiple GetConfig() calls
+	// in different goroutines when we never called GetConfig() before, causing a race considering the way
+	// that `config` is designed in go-verkle.
+	// TODO: jsign as a fix for this in the PR where we move to a file-less precomp, since it allows safe
+	//       concurrent calls to GetConfig(). When that gets merged, we can remove this line.
+	_ = verkle.GetConfig()
+	return &keyValueMigrator{
+		processingReady: make(chan struct{}),
+		leafData:        make([]migratedKeyValue, 0, 10_000),
+	}
+}
+
+type migratedKeyValue struct {
+	branchKey    branchKey
+	leafNodeData verkle.BatchNewLeafNodeData
+}
+type branchKey struct {
+	addr      common.Address
+	treeIndex uint256.Int
+}
+
+func newBranchKey(addr []byte, treeIndex *uint256.Int) branchKey {
+	var sk branchKey
+	copy(sk.addr[:], addr)
+	sk.treeIndex = *treeIndex
+	return sk
 }
 
 func (kvm *keyValueMigrator) addStorageSlot(addr []byte, slotNumber []byte, slotValue []byte) {
-	addrPoint := kvm.getAddrPoint(addr)
-
-	vktKey := tutils.GetTreeKeyStorageSlotWithEvaluatedAddress(addrPoint, slotNumber)
-	leafNodeData := kvm.getOrInitLeafNodeData(vktKey)
-
-	leafNodeData.Values[vktKey[verkle.StemSize]] = slotValue
+	treeIndex, subIndex := tutils.GetTreeKeyStorageSlotTreeIndexes(slotNumber)
+	leafNodeData := kvm.getOrInitLeafNodeData(newBranchKey(addr, treeIndex))
+	leafNodeData.Values[subIndex] = slotValue
 }
 
 func (kvm *keyValueMigrator) addAccount(addr []byte, acc *types.StateAccount) {
-	addrPoint := kvm.getAddrPoint(addr)
-
-	vktKey := tutils.GetTreeKeyVersionWithEvaluatedAddress(addrPoint)
-	leafNodeData := kvm.getOrInitLeafNodeData(vktKey)
+	leafNodeData := kvm.getOrInitLeafNodeData(newBranchKey(addr, &zeroTreeIndex))
 
 	var version [verkle.LeafValueSize]byte
 	leafNodeData.Values[tutils.VersionLeafKey] = version[:]
@@ -419,16 +460,10 @@ func (kvm *keyValueMigrator) addAccount(addr []byte, acc *types.StateAccount) {
 	leafNodeData.Values[tutils.NonceLeafKey] = nonce[:]
 
 	leafNodeData.Values[tutils.CodeKeccakLeafKey] = acc.CodeHash[:]
-
-	// Code size is ignored here. If this isn't an EOA, the tree-walk will call
-	// addAccountCode with this information.
 }
 
 func (kvm *keyValueMigrator) addAccountCode(addr []byte, codeSize uint64, chunks []byte) {
-	addrPoint := kvm.getAddrPoint(addr)
-
-	vktKey := tutils.GetTreeKeyVersionWithEvaluatedAddress(addrPoint)
-	leafNodeData := kvm.getOrInitLeafNodeData(vktKey)
+	leafNodeData := kvm.getOrInitLeafNodeData(newBranchKey(addr, &zeroTreeIndex))
 
 	// Save the code size.
 	var codeSizeBytes [verkle.LeafValueSize]byte
@@ -442,8 +477,8 @@ func (kvm *keyValueMigrator) addAccountCode(addr []byte, codeSize uint64, chunks
 
 	// Potential further chunks, have their own leaf nodes.
 	for i := 128; i < len(chunks)/32; {
-		vktKey := tutils.GetTreeKeyCodeChunkWithEvaluatedAddress(addrPoint, uint256.NewInt(uint64(i)))
-		leafNodeData := kvm.getOrInitLeafNodeData(vktKey)
+		treeIndex, _ := tutils.GetTreeKeyCodeChunkIndices(uint256.NewInt(uint64(i)))
+		leafNodeData := kvm.getOrInitLeafNodeData(newBranchKey(addr, treeIndex))
 
 		j := i
 		for ; (j-i) < 256 && j < len(chunks)/32; j++ {
@@ -453,41 +488,79 @@ func (kvm *keyValueMigrator) addAccountCode(addr []byte, codeSize uint64, chunks
 	}
 }
 
-func (kvm *keyValueMigrator) getAddrPoint(addr []byte) *verkle.Point {
-	if bytes.Equal(addr, kvm.currAddr) {
-		return kvm.currAddrPoint
+func (kvm *keyValueMigrator) getOrInitLeafNodeData(bk branchKey) *verkle.BatchNewLeafNodeData {
+	// Remember that keyValueMigration receives actions ordered by (address, subtreeIndex).
+	// This means that we can assume that the last element of leafData is the one that we
+	// are looking for, or that we need to create a new one.
+	if len(kvm.leafData) == 0 || kvm.leafData[len(kvm.leafData)-1].branchKey != bk {
+		kvm.leafData = append(kvm.leafData, migratedKeyValue{
+			branchKey: bk,
+			leafNodeData: verkle.BatchNewLeafNodeData{
+				Stem:   nil, // It will be calculated in the prepare() phase, since it's CPU heavy.
+				Values: make(map[byte][]byte),
+			},
+		})
 	}
-	kvm.currAddr = addr
-	kvm.currAddrPoint = tutils.EvaluateAddressPoint(addr)
-	return kvm.currAddrPoint
+	return &kvm.leafData[len(kvm.leafData)-1].leafNodeData
 }
 
-func (kvm *keyValueMigrator) getOrInitLeafNodeData(stem []byte) *verkle.BatchNewLeafNodeData {
-	stemStr := string(stem)
-	if _, ok := kvm.vktLeafData[stemStr]; !ok {
-		kvm.vktLeafData[stemStr] = &verkle.BatchNewLeafNodeData{
-			Stem:   stem[:verkle.StemSize],
-			Values: make(map[byte][]byte),
+func (kvm *keyValueMigrator) prepare() {
+	// We fire a background routine to process the leafData and save the result in newLeaves.
+	// The background routine signals that it is done by closing processingReady.
+	go func() {
+		// Step 1: We split kvm.leafData in numBatches batches, and we process each batch in a separate goroutine.
+		//         This fills each leafNodeData.Stem with the correct value.
+		var wg sync.WaitGroup
+		batchNum := runtime.NumCPU()
+		batchSize := (len(kvm.leafData) + batchNum - 1) / batchNum
+		for i := 0; i < len(kvm.leafData); i += batchSize {
+			start := i
+			end := i + batchSize
+			if end > len(kvm.leafData) {
+				end = len(kvm.leafData)
+			}
+			wg.Add(1)
+
+			batch := kvm.leafData[start:end]
+			go func() {
+				defer wg.Done()
+				var currAddr common.Address
+				var currPoint *verkle.Point
+				for i := range batch {
+					if batch[i].branchKey.addr != currAddr {
+						currAddr = batch[i].branchKey.addr
+						currPoint = tutils.EvaluateAddressPoint(currAddr[:])
+					}
+					stem := tutils.GetTreeKeyWithEvaluatedAddess(currPoint, &batch[i].branchKey.treeIndex, 0)
+					stem = stem[:verkle.StemSize]
+					batch[i].leafNodeData.Stem = stem
+				}
+			}()
 		}
-	}
-	return kvm.vktLeafData[stemStr]
+		wg.Wait()
+
+		// Step 2: Now that we have all stems (i.e: tree keys) calcualted, we can create the new leaves.
+		nodeValues := make([]verkle.BatchNewLeafNodeData, len(kvm.leafData))
+		for i := range kvm.leafData {
+			nodeValues[i] = kvm.leafData[i].leafNodeData
+		}
+
+		// Create all leaves in batch mode so we can optimize cryptography operations.
+		kvm.newLeaves, kvm.prepareErr = verkle.BatchNewLeafNode(nodeValues)
+		close(kvm.processingReady)
+	}()
 }
 
 func (kvm *keyValueMigrator) migrateCollectedKeyValues(tree *trie.VerkleTrie) error {
-	// Transform the map into a slice.
-	nodeValues := make([]verkle.BatchNewLeafNodeData, 0, len(kvm.vktLeafData))
-	for _, vld := range kvm.vktLeafData {
-		nodeValues = append(nodeValues, *vld)
+	now := time.Now()
+	<-kvm.processingReady
+	if kvm.prepareErr != nil {
+		return fmt.Errorf("failed to prepare key values: %w", kvm.prepareErr)
 	}
-
-	// Create all leaves in batch mode so we can optimize cryptography operations.
-	newLeaves, err := verkle.BatchNewLeafNode(nodeValues)
-	if err != nil {
-		return fmt.Errorf("failed to batch-create new leaf nodes")
-	}
+	log.Info("Prepared key values from base tree", "duration", time.Since(now))
 
 	// Insert into the tree.
-	if err := tree.InsertMigratedLeaves(newLeaves); err != nil {
+	if err := tree.InsertMigratedLeaves(kvm.newLeaves); err != nil {
 		return fmt.Errorf("failed to insert migrated leaves: %w", err)
 	}
 
