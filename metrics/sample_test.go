@@ -367,3 +367,17 @@ func TestUniformSampleConcurrentUpdateCount(t *testing.T) {
 	}
 	quit <- struct{}{}
 }
+
+func BenchmarkCalculatePercentiles(b *testing.B) {
+	pss := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
+	var vals []int64
+	for i := 0; i < 1000; i++ {
+		vals = append(vals, int64(rand.Int31()))
+	}
+	v := make([]int64, len(vals))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		copy(v, vals)
+		_ = CalculatePercentiles(v, pss)
+	}
+}

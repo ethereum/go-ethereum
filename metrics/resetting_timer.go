@@ -1,11 +1,8 @@
 package metrics
 
 import (
-	"math"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 // Initial slice capacity for the values stored in a ResettingTimer
@@ -16,7 +13,7 @@ type ResettingTimerSnapshot interface {
 	Mean() float64
 	Max() int64
 	Min() int64
-	Percentiles([]float64) []int64
+	Percentiles([]float64) []float64
 }
 
 // ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
@@ -63,7 +60,7 @@ func (NilResettingTimer) Values() []int64                    { return nil }
 func (n NilResettingTimer) Snapshot() ResettingTimerSnapshot { return n }
 func (NilResettingTimer) Time(f func())                      { f() }
 func (NilResettingTimer) Update(time.Duration)               {}
-func (NilResettingTimer) Percentiles([]float64) []int64      { return nil }
+func (NilResettingTimer) Percentiles([]float64) []float64    { return nil }
 func (NilResettingTimer) Mean() float64                      { return 0.0 }
 func (NilResettingTimer) Max() int64                         { return 0 }
 func (NilResettingTimer) Min() int64                         { return 0 }
@@ -116,7 +113,7 @@ type resettingTimerSnapshot struct {
 	mean                float64
 	max                 int64
 	min                 int64
-	thresholdBoundaries []int64
+	thresholdBoundaries []float64
 	calculated          bool
 }
 
@@ -127,7 +124,7 @@ func (t *resettingTimerSnapshot) Count() int {
 
 // Percentiles returns the boundaries for the input percentiles.
 // note: this method is not thread safe
-func (t *resettingTimerSnapshot) Percentiles(percentiles []float64) []int64 {
+func (t *resettingTimerSnapshot) Percentiles(percentiles []float64) []float64 {
 	t.calc(percentiles)
 	return t.thresholdBoundaries
 }
@@ -148,7 +145,6 @@ func (t *resettingTimerSnapshot) Max() int64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
-
 	return t.max
 }
 
@@ -158,52 +154,20 @@ func (t *resettingTimerSnapshot) Min() int64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
-
 	return t.min
 }
 
 func (t *resettingTimerSnapshot) calc(percentiles []float64) {
-	slices.Sort(t.values)
-	count := len(t.values)
-	if count == 0 {
-		t.thresholdBoundaries = make([]int64, len(percentiles))
-		t.mean = 0
-		t.calculated = true
+	scores := CalculatePercentiles(t.values, percentiles)
+	t.thresholdBoundaries = scores
+	if len(t.values) == 0 {
 		return
 	}
 	t.min = t.values[0]
-	t.max = t.values[count-1]
-
-	cumulativeValues := make([]int64, count)
-	cumulativeValues[0] = t.min
-	for i := 1; i < count; i++ {
-		cumulativeValues[i] = t.values[i] + cumulativeValues[i-1]
+	t.max = t.values[len(t.values)-1]
+	var sum int64
+	for _, v := range t.values {
+		sum += v
 	}
-
-	t.thresholdBoundaries = make([]int64, len(percentiles))
-
-	thresholdBoundary := t.max
-
-	for i, pct := range percentiles {
-		if count > 1 {
-			var abs float64
-			if pct >= 0 {
-				abs = pct
-			} else {
-				abs = 100 + pct
-			}
-			// poor man's math.Round(x):
-			// math.Floor(x + 0.5)
-			indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-			if pct >= 0 && indexOfPerc > 0 {
-				indexOfPerc -= 1 // index offset=0
-			}
-			thresholdBoundary = t.values[indexOfPerc]
-		}
-
-		t.thresholdBoundaries[i] = thresholdBoundary
-	}
-
-	sum := cumulativeValues[count-1]
-	t.mean = float64(sum) / float64(count)
+	t.mean = float64(sum) / float64(len(t.values))
 }

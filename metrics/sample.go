@@ -176,29 +176,35 @@ func (NilSample) Values() []int64 { return []int64{} }
 // Variance is a no-op.
 func (NilSample) Variance() float64 { return 0.0 }
 
-// SamplePercentiles returns an arbitrary percentile of the slice of int64.
+// CalculatePercentiles returns an arbitrary percentile of the slice of int64.
 func SamplePercentile(values []int64, p float64) float64 {
-	return SamplePercentiles(values, []float64{p})[0]
+	return CalculatePercentiles(values, []float64{p})[0]
 }
 
-// SamplePercentiles returns a slice of arbitrary percentiles of the slice of
-// int64.
-func SamplePercentiles(values []int64, ps []float64) []float64 {
+// CalculatePercentiles returns a slice of arbitrary percentiles of the slice of
+// int64. This method returns interpolated results, so e.g if there are only two
+// values, [0, 10], a 50% percentile will land between them.
+//
+// Note: As a side-effect, this method will also sort the slice of values.
+// Note2: The input format for percentiles is NOT percent! To express 50%, use 0.5, not 50.
+func CalculatePercentiles(values []int64, ps []float64) []float64 {
 	scores := make([]float64, len(ps))
 	size := len(values)
-	if size > 0 {
-		slices.Sort(values)
-		for i, p := range ps {
-			pos := p * float64(size+1)
-			if pos < 1.0 {
-				scores[i] = float64(values[0])
-			} else if pos >= float64(size) {
-				scores[i] = float64(values[size-1])
-			} else {
-				lower := float64(values[int(pos)-1])
-				upper := float64(values[int(pos)])
-				scores[i] = lower + (pos-math.Floor(pos))*(upper-lower)
-			}
+	if size == 0 {
+		return scores
+	}
+	slices.Sort(values)
+	for i, p := range ps {
+		pos := p * float64(size+1)
+
+		if pos < 1.0 {
+			scores[i] = float64(values[0])
+		} else if pos >= float64(size) {
+			scores[i] = float64(values[size-1])
+		} else {
+			lower := float64(values[int(pos)-1])
+			upper := float64(values[int(pos)])
+			scores[i] = lower + (pos-math.Floor(pos))*(upper-lower)
 		}
 	}
 	return scores
@@ -267,7 +273,7 @@ func (s *sampleSnapshot) Percentile(p float64) float64 {
 // Percentiles returns a slice of arbitrary percentiles of values at the time
 // the snapshot was taken.
 func (s *sampleSnapshot) Percentiles(ps []float64) []float64 {
-	return SamplePercentiles(s.values, ps)
+	return CalculatePercentiles(s.values, ps)
 }
 
 // Size returns the size of the sample at the time the snapshot was taken.

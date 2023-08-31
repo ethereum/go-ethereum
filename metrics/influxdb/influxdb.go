@@ -102,7 +102,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		if t.Count() == 0 {
 			break
 		}
-		ps := t.Percentiles([]float64{50, 95, 99})
+		ps := t.Percentiles([]float64{0.50, 0.95, 0.99})
 		measurement := fmt.Sprintf("%s%s.span", namespace, name)
 		fields := map[string]interface{}{
 			"count": t.Count(),

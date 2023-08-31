@@ -125,7 +125,7 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnaps
 	if m.Count() <= 0 {
 		return
 	}
-	ps := m.Percentiles([]float64{50, 95, 99})
+	ps := m.Percentiles([]float64{0.50, 0.95, 0.99})
 	c.writeSummaryCounter(name, m.Count())
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	c.writeSummaryPercentile(name, "0.50", ps[0])
