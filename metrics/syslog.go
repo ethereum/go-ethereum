@@ -24,7 +24,7 @@ func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 			case GaugeFloat64:
 				w.Info(fmt.Sprintf("gauge %s: value: %f", name, metric.Snapshot().Value()))
 			case GaugeInfo:
-				w.Info(fmt.Sprintf("gauge %s: value: %s", name, metric.Value()))
+				w.Info(fmt.Sprintf("gauge %s: value: %s", name, metric.Snapshot().Value()))
 			case Healthcheck:
 				metric.Check()
 				w.Info(fmt.Sprintf("healthcheck %s: error: %v", name, metric.Error()))

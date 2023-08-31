@@ -127,7 +127,7 @@ func (exp *exp) publishGaugeFloat64(name string, metric metrics.GaugeFloat64Snap
 	exp.getFloat(name).Set(metric.Value())
 }
 
-func (exp *exp) publishGaugeInfo(name string, metric metrics.GaugeInfo) {
+func (exp *exp) publishGaugeInfo(name string, metric metrics.GaugeInfoSnapshot) {
 	exp.getInfo(name).Set(metric.Value().String())
 }
 
@@ -197,7 +197,7 @@ func (exp *exp) syncToExpvar() {
 		case metrics.GaugeFloat64:
 			exp.publishGaugeFloat64(name, i.Snapshot())
 		case metrics.GaugeInfo:
-			exp.publishGaugeInfo(name, i)
+			exp.publishGaugeInfo(name, i.Snapshot())
 		case metrics.Histogram:
 			exp.publishHistogram(name, i)
 		case metrics.Meter:

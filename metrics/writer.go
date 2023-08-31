@@ -41,7 +41,7 @@ func WriteOnce(r Registry, w io.Writer) {
 			fmt.Fprintf(w, "  value:       %f\n", metric.Snapshot().Value())
 		case GaugeInfo:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  value:       %s\n", metric.Value().String())
+			fmt.Fprintf(w, "  value:       %s\n", metric.Snapshot().Value().String())
 		case Healthcheck:
 			metric.Check()
 			fmt.Fprintf(w, "healthcheck %s\n", namedMetric.name)
