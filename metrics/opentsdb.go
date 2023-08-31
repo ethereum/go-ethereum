@@ -65,9 +65,9 @@ func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname str
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
 		case Counter:
-			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
 		case CounterFloat64:
-			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
 		case Gauge:
 			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
 		case GaugeFloat64:

@@ -75,11 +75,11 @@ func (c *collector) Add(name string, i any) error {
 	return nil
 }
 
-func (c *collector) addCounter(name string, m metrics.Counter) {
+func (c *collector) addCounter(name string, m metrics.CounterSnapshot) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64) {
+func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64Snapshot) {
 	c.writeGaugeCounter(name, m.Count())
 }
 

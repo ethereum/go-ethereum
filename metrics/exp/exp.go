@@ -109,12 +109,12 @@ func (exp *exp) getInfo(name string) *expvar.String {
 	return v
 }
 
-func (exp *exp) publishCounter(name string, metric metrics.Counter) {
+func (exp *exp) publishCounter(name string, metric metrics.CounterSnapshot) {
 	v := exp.getInt(name)
 	v.Set(metric.Count())
 }
 
-func (exp *exp) publishCounterFloat64(name string, metric metrics.CounterFloat64) {
+func (exp *exp) publishCounterFloat64(name string, metric metrics.CounterFloat64Snapshot) {
 	v := exp.getFloat(name)
 	v.Set(metric.Count())
 }
@@ -189,9 +189,9 @@ func (exp *exp) syncToExpvar() {
 	exp.registry.Each(func(name string, i interface{}) {
 		switch i := i.(type) {
 		case metrics.Counter:
-			exp.publishCounter(name, i)
+			exp.publishCounter(name, i.Snapshot())
 		case metrics.CounterFloat64:
-			exp.publishCounterFloat64(name, i)
+			exp.publishCounterFloat64(name, i.Snapshot())
 		case metrics.Gauge:
 			exp.publishGauge(name, i.Snapshot())
 		case metrics.GaugeFloat64:

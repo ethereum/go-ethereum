@@ -29,10 +29,10 @@ func WriteOnce(r Registry, w io.Writer) {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  count:       %9d\n", metric.Count())
+			fmt.Fprintf(w, "  count:       %9d\n", metric.Snapshot().Count())
 		case CounterFloat64:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  count:       %f\n", metric.Count())
+			fmt.Fprintf(w, "  count:       %f\n", metric.Snapshot().Count())
 		case Gauge:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  value:       %9d\n", metric.Snapshot().Value())

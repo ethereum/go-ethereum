@@ -150,9 +150,9 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 		values := make(map[string]interface{})
 		switch metric := i.(type) {
 		case Counter:
-			values["count"] = metric.Count()
+			values["count"] = metric.Snapshot().Count()
 		case CounterFloat64:
-			values["count"] = metric.Count()
+			values["count"] = metric.Snapshot().Count()
 		case Gauge:
 			values["value"] = metric.Snapshot().Value()
 		case GaugeFloat64:
