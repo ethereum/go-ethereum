@@ -121,7 +121,7 @@ func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
+func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnapshot) {
 	if len(m.Values()) <= 0 {
 		return
 	}

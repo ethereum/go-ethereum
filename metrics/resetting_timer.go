@@ -11,12 +11,15 @@ import (
 // Initial slice capacity for the values stored in a ResettingTimer
 const InitialResettingTimerSliceCap = 10
 
+type ResettingTimerSnapshot interface {
+	Values() []int64
+	Mean() float64
+	Percentiles([]float64) []int64
+}
+
 // ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
 type ResettingTimer interface {
-	Values() []int64
-	Snapshot() ResettingTimer
-	Percentiles([]float64) []int64
-	Mean() float64
+	Snapshot() ResettingTimerSnapshot
 	Time(func())
 	Update(time.Duration)
 	UpdateSince(time.Time)
@@ -52,37 +55,15 @@ func NewResettingTimer() ResettingTimer {
 }
 
 // NilResettingTimer is a no-op ResettingTimer.
-type NilResettingTimer struct {
-}
+type NilResettingTimer struct{}
 
-// Values is a no-op.
-func (NilResettingTimer) Values() []int64 { return nil }
-
-// Snapshot is a no-op.
-func (NilResettingTimer) Snapshot() ResettingTimer {
-	return &ResettingTimerSnapshot{
-		values: []int64{},
-	}
-}
-
-// Time is a no-op.
-func (NilResettingTimer) Time(f func()) { f() }
-
-// Update is a no-op.
-func (NilResettingTimer) Update(time.Duration) {}
-
-// Percentiles panics.
-func (NilResettingTimer) Percentiles([]float64) []int64 {
-	panic("Percentiles called on a NilResettingTimer")
-}
-
-// Mean panics.
-func (NilResettingTimer) Mean() float64 {
-	panic("Mean called on a NilResettingTimer")
-}
-
-// UpdateSince is a no-op.
-func (NilResettingTimer) UpdateSince(time.Time) {}
+func (NilResettingTimer) Values() []int64                    { return nil }
+func (n NilResettingTimer) Snapshot() ResettingTimerSnapshot { return n }
+func (NilResettingTimer) Time(f func())                      { f() }
+func (NilResettingTimer) Update(time.Duration)               {}
+func (NilResettingTimer) Percentiles([]float64) []int64      { return nil }
+func (NilResettingTimer) Mean() float64                      { return 0.0 }
+func (NilResettingTimer) UpdateSince(time.Time)              {}
 
 // StandardResettingTimer is the standard implementation of a ResettingTimer.
 // and Meter.
@@ -91,31 +72,21 @@ type StandardResettingTimer struct {
 	mutex  sync.Mutex
 }
 
-// Values returns a slice with all measurements.
-func (t *StandardResettingTimer) Values() []int64 {
-	return t.values
-}
+//// Values returns a slice with all measurements.
+//func (t *StandardResettingTimer) Values() []int64 {
+//	return t.values
+//}
 
 // Snapshot resets the timer and returns a read-only copy of its contents.
-func (t *StandardResettingTimer) Snapshot() ResettingTimer {
+func (t *StandardResettingTimer) Snapshot() ResettingTimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	currentValues := t.values
 	t.values = make([]int64, 0, InitialResettingTimerSliceCap)
 
-	return &ResettingTimerSnapshot{
+	return &resettingTimerSnapshot{
 		values: currentValues,
 	}
-}
-
-// Percentiles panics.
-func (t *StandardResettingTimer) Percentiles([]float64) []int64 {
-	panic("Percentiles called on a StandardResettingTimer")
-}
-
-// Mean panics.
-func (t *StandardResettingTimer) Mean() float64 {
-	panic("Mean called on a StandardResettingTimer")
 }
 
 // Record the duration of the execution of the given function.
@@ -139,46 +110,29 @@ func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
 	t.values = append(t.values, int64(time.Since(ts)))
 }
 
-// ResettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
-type ResettingTimerSnapshot struct {
+// resettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
+type resettingTimerSnapshot struct {
 	values              []int64
 	mean                float64
 	thresholdBoundaries []int64
 	calculated          bool
 }
 
-// Snapshot returns the snapshot.
-func (t *ResettingTimerSnapshot) Snapshot() ResettingTimer { return t }
-
-// Time panics.
-func (*ResettingTimerSnapshot) Time(func()) {
-	panic("Time called on a ResettingTimerSnapshot")
-}
-
-// Update panics.
-func (*ResettingTimerSnapshot) Update(time.Duration) {
-	panic("Update called on a ResettingTimerSnapshot")
-}
-
-// UpdateSince panics.
-func (*ResettingTimerSnapshot) UpdateSince(time.Time) {
-	panic("UpdateSince called on a ResettingTimerSnapshot")
-}
-
 // Values returns all values from snapshot.
-func (t *ResettingTimerSnapshot) Values() []int64 {
+func (t *resettingTimerSnapshot) Values() []int64 {
 	return t.values
 }
 
 // Percentiles returns the boundaries for the input percentiles.
-func (t *ResettingTimerSnapshot) Percentiles(percentiles []float64) []int64 {
+// note: this method is not thread safe
+func (t *resettingTimerSnapshot) Percentiles(percentiles []float64) []int64 {
 	t.calc(percentiles)
-
 	return t.thresholdBoundaries
 }
 
 // Mean returns the mean of the snapshotted values
-func (t *ResettingTimerSnapshot) Mean() float64 {
+// note: this method is not thread safe
+func (t *resettingTimerSnapshot) Mean() float64 {
 	if !t.calculated {
 		t.calc([]float64{})
 	}
@@ -186,50 +140,48 @@ func (t *ResettingTimerSnapshot) Mean() float64 {
 	return t.mean
 }
 
-func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
+func (t *resettingTimerSnapshot) calc(percentiles []float64) {
 	slices.Sort(t.values)
-
 	count := len(t.values)
-	if count > 0 {
-		min := t.values[0]
-		max := t.values[count-1]
-
-		cumulativeValues := make([]int64, count)
-		cumulativeValues[0] = min
-		for i := 1; i < count; i++ {
-			cumulativeValues[i] = t.values[i] + cumulativeValues[i-1]
-		}
-
-		t.thresholdBoundaries = make([]int64, len(percentiles))
-
-		thresholdBoundary := max
-
-		for i, pct := range percentiles {
-			if count > 1 {
-				var abs float64
-				if pct >= 0 {
-					abs = pct
-				} else {
-					abs = 100 + pct
-				}
-				// poor man's math.Round(x):
-				// math.Floor(x + 0.5)
-				indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-				if pct >= 0 && indexOfPerc > 0 {
-					indexOfPerc -= 1 // index offset=0
-				}
-				thresholdBoundary = t.values[indexOfPerc]
-			}
-
-			t.thresholdBoundaries[i] = thresholdBoundary
-		}
-
-		sum := cumulativeValues[count-1]
-		t.mean = float64(sum) / float64(count)
-	} else {
+	if count == 0 {
 		t.thresholdBoundaries = make([]int64, len(percentiles))
 		t.mean = 0
+		t.calculated = true
+		return
+	}
+	min := t.values[0]
+	max := t.values[count-1]
+
+	cumulativeValues := make([]int64, count)
+	cumulativeValues[0] = min
+	for i := 1; i < count; i++ {
+		cumulativeValues[i] = t.values[i] + cumulativeValues[i-1]
 	}
 
-	t.calculated = true
+	t.thresholdBoundaries = make([]int64, len(percentiles))
+
+	thresholdBoundary := max
+
+	for i, pct := range percentiles {
+		if count > 1 {
+			var abs float64
+			if pct >= 0 {
+				abs = pct
+			} else {
+				abs = 100 + pct
+			}
+			// poor man's math.Round(x):
+			// math.Floor(x + 0.5)
+			indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
+			if pct >= 0 && indexOfPerc > 0 {
+				indexOfPerc -= 1 // index offset=0
+			}
+			thresholdBoundary = t.values[indexOfPerc]
+		}
+
+		t.thresholdBoundaries[i] = thresholdBoundary
+	}
+
+	sum := cumulativeValues[count-1]
+	t.mean = float64(sum) / float64(count)
 }
