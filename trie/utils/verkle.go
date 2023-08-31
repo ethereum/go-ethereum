@@ -17,7 +17,7 @@
 package utils
 
 import (
-	"math/big"
+	"encoding/binary"
 	"sync"
 
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
@@ -34,18 +34,14 @@ const (
 )
 
 var (
-	zero                = uint256.NewInt(0)
-	HeaderStorageOffset = uint256.NewInt(64)
-	CodeOffset          = uint256.NewInt(128)
-	MainStorageOffset   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
-	VerkleNodeWidth     = uint256.NewInt(256)
-	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
-
-	// BigInt versions of the above.
-	headerStorageOffsetBig = HeaderStorageOffset.ToBig()
-	mainStorageOffsetBig   = MainStorageOffset.ToBig()
-	verkleNodeWidthBig     = VerkleNodeWidth.ToBig()
-	codeStorageDeltaBig    = codeStorageDelta.ToBig()
+	zero                                = uint256.NewInt(0)
+	VerkleNodeWidthLog2                 = 8
+	HeaderStorageOffset                 = uint256.NewInt(64)
+	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(256), 31-uint(VerkleNodeWidthLog2))
+	CodeOffset                          = uint256.NewInt(128)
+	MainStorageOffset                   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
+	VerkleNodeWidth                     = uint256.NewInt(256)
+	codeStorageDelta                    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 
 	getTreePolyIndex0Point *verkle.Point
 )
@@ -164,6 +160,11 @@ func GetTreeKeyCodeSize(address []byte) []byte {
 }
 
 func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
+	treeIndex, subIndex := GetTreeKeyCodeChunkIndices(chunk)
+	return GetTreeKey(address, treeIndex, subIndex)
+}
+
+func GetTreeKeyCodeChunkIndices(chunk *uint256.Int) (*uint256.Int, byte) {
 	chunkOffset := new(uint256.Int).Add(CodeOffset, chunk)
 	treeIndex := new(uint256.Int).Div(chunkOffset, VerkleNodeWidth)
 	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth)
@@ -171,7 +172,7 @@ func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
 	if len(subIndexMod) != 0 {
 		subIndex = byte(subIndexMod[0])
 	}
-	return GetTreeKey(address, treeIndex, subIndex)
+	return treeIndex, subIndex
 }
 
 func GetTreeKeyCodeChunkWithEvaluatedAddress(addressPoint *verkle.Point, chunk *uint256.Int) []byte {
@@ -230,8 +231,8 @@ func GetTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.I
 
 	// little-endian, 32-byte aligned treeIndex
 	var index [32]byte
-	for i, b := range treeIndex.Bytes() {
-		index[len(treeIndex.Bytes())-1-i] = b
+	for i := 0; i < len(treeIndex); i++ {
+		binary.LittleEndian.PutUint64(index[i*8:(i+1)*8], treeIndex[i])
 	}
 	verkle.FromLEBytes(&poly[3], index[:16])
 	verkle.FromLEBytes(&poly[4], index[16:])
@@ -274,22 +275,27 @@ func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageK
 }
 
 func GetTreeKeyStorageSlotTreeIndexes(storageKey []byte) (*uint256.Int, byte) {
-	// Note that `pos` must be a big.Int and not a uint256.Int, because the subsequent
-	// arithmetics operations could overflow. (e.g: imagine if storageKey is 2^256-1)
-	pos := new(big.Int).SetBytes(storageKey)
-	if pos.Cmp(codeStorageDeltaBig) < 0 {
-		pos.Add(headerStorageOffsetBig, pos)
-	} else {
-		pos.Add(mainStorageOffsetBig, pos)
-	}
-	treeIndex, overflow := uint256.FromBig(big.NewInt(0).Div(pos, verkleNodeWidthBig))
-	if overflow { // Must never happen considering the EIP definition.
-		panic("tree index overflow")
-	}
-	// calculate the sub_index, i.e. the index in the stem tree.
-	// Because the modulus is 256, it's the last byte of treeIndex
-	posBytes := pos.Bytes()
-	subIndex := posBytes[len(posBytes)-1]
+	var pos uint256.Int
+	pos.SetBytes(storageKey)
 
-	return treeIndex, subIndex
+	// If the storage slot is in the header, we need to add the header offset.
+	if pos.Cmp(codeStorageDelta) < 0 {
+		// This addition is always safe; it can't ever overflow since pos<codeStorageDelta.
+		pos.Add(HeaderStorageOffset, &pos)
+
+		// In this branch, the tree-index is zero since we're in the account header,
+		// and the sub-index is the LSB of the modified storage key.
+		return zero, byte(pos[0] & 0xFF)
+
+	}
+	// If the storage slot is in the main storage, we need to add the main storage offset.
+
+	// We first divide by VerkleNodeWidth to create room to avoid an overflow next.
+	pos.Rsh(&pos, uint(VerkleNodeWidthLog2))
+	// We add mainStorageOffset/VerkleNodeWidth which can't overflow.
+	pos.Add(&pos, mainStorageOffsetLshVerkleNodeWidth)
+
+	// The sub-index is the LSB of the original storage key, since mainStorageOffset
+	// doesn't affect this byte, so we can avoid masks or shifts.
+	return &pos, storageKey[len(storageKey)-1]
 }
