@@ -264,15 +264,20 @@ func (s *stateObject) finalise(prefetch bool) {
 	}
 }
 
-// updateTrie writes cached storage modifications to the object's storage trie.
-// If the storage trie hasn't been loaded, it will be loaded automatically. If
-// there's a problem with loading or updating the trie properly, an error will
-// be returned to handle the situation.
-//
-// This function assumes that there are cached storage modifications present;
-// otherwise, calling it would be unnecessary due to the additional overhead
-// of loading the trie.
-func (s *stateObject) updateTrie() error {
+// updateTrie is responsible for persisting cached storage changes into the
+// object's storage trie. In case the storage trie is not yet loaded, this
+// function will load the trie automatically. If any issues arise during the
+// loading or updating of the trie, an error will be returned. Furthermore,
+// this function will return the mutated storage trie, or nil if there is no
+// storage change at all.
+func (s *stateObject) updateTrie() (Trie, error) {
+	// Make sure all dirty slots are finalized into the pending storage area
+	s.finalise(false)
+
+	// Short circuit if nothing changed, don't bother with hashing anything
+	if len(s.pendingStorage) == 0 {
+		return s.trie, nil
+	}
 	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
@@ -285,7 +290,7 @@ func (s *stateObject) updateTrie() error {
 	tr, err := s.getTrie()
 	if err != nil {
 		s.db.setError(err)
-		return err
+		return nil, err
 	}
 	// Insert all the pending storage updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
@@ -301,7 +306,7 @@ func (s *stateObject) updateTrie() error {
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
-				return err
+				return nil, err
 			}
 			s.db.StorageDeleted += 1
 		} else {
@@ -310,7 +315,7 @@ func (s *stateObject) updateTrie() error {
 			encoded, _ = rlp.EncodeToBytes(trimmed)
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
-				return err
+				return nil, err
 			}
 			s.db.StorageUpdated += 1
 		}
@@ -348,28 +353,23 @@ func (s *stateObject) updateTrie() error {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
 	}
 	s.pendingStorage = make(Storage) // reset pending map
-	return nil
+	return tr, nil
 }
 
 // updateRoot flushes all cached storage mutations to trie, recalculating the
 // new storage trie root.
 func (s *stateObject) updateRoot() {
-	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise(false)
-
-	// Short circuit if nothing changed, don't bother with hashing anything
-	if len(s.pendingStorage) == 0 {
-		return
-	}
-	// Flush cached storage mutations into trie.
-	if err := s.updateTrie(); err != nil {
+	// Flush cached storage mutations into trie, short circuit if any error
+	// is occurred or there is not change in the trie.
+	tr, err := s.updateTrie()
+	if err != nil || tr == nil {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
-	s.data.Root = s.trie.Hash() // the trie must be loaded.
+	s.data.Root = tr.Hash()
 }
 
 // commit obtains a set of dirty storage trie nodes and updates the account data.
