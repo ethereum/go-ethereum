@@ -7,7 +7,7 @@ type HistogramSnapshot interface {
 	Min() int64
 	Percentile(float64) float64
 	Percentiles([]float64) []float64
-	Sample() Sample
+	Sample() SampleSnapshot
 	StdDev() float64
 	Sum() int64
 	Variance() float64
@@ -59,7 +59,7 @@ func NewRegisteredHistogram(name string, r Registry, s Sample) Histogram {
 
 // histogramSnapshot is a read-only copy of another Histogram.
 type histogramSnapshot struct {
-	sample *SampleSnapshot
+	sample *sampleSnapshot
 }
 
 // Count returns the number of samples recorded at the time the snapshot was
@@ -91,7 +91,7 @@ func (h *histogramSnapshot) Percentiles(ps []float64) []float64 {
 }
 
 // Sample returns the Sample underlying the histogram.
-func (h *histogramSnapshot) Sample() Sample { return h.sample }
+func (h *histogramSnapshot) Sample() SampleSnapshot { return h.sample }
 
 // Snapshot returns the snapshot.
 func (h *histogramSnapshot) Snapshot() HistogramSnapshot { return h }
@@ -133,7 +133,7 @@ func (NilHistogram) Percentiles(ps []float64) []float64 {
 }
 
 // Sample is a no-op.
-func (NilHistogram) Sample() Sample { return NilSample{} }
+func (NilHistogram) Sample() SampleSnapshot { return NilSample{} }
 
 // Snapshot is a no-op.
 func (NilHistogram) Snapshot() HistogramSnapshot { return NilHistogram{} }
@@ -161,7 +161,7 @@ func (h *StandardHistogram) Clear() { h.sample.Clear() }
 
 // Snapshot returns a read-only copy of the histogram.
 func (h *StandardHistogram) Snapshot() HistogramSnapshot {
-	return &histogramSnapshot{sample: h.sample.Snapshot().(*SampleSnapshot)}
+	return &histogramSnapshot{sample: h.sample.Snapshot().(*sampleSnapshot)}
 }
 
 // Update samples a new value.

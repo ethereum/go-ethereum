@@ -57,69 +57,15 @@ func (h *runtimeHistogram) Clear() {
 func (h *runtimeHistogram) Update(int64) {
 	panic("runtimeHistogram does not support Update")
 }
-func (h *runtimeHistogram) Sample() Sample {
-	return NilSample{}
-}
 
 // Snapshot returns a non-changing cop of the histogram.
 func (h *runtimeHistogram) Snapshot() HistogramSnapshot {
 	return h.load()
 }
 
-// Count returns the sample count.
-func (h *runtimeHistogram) Count() int64 {
-	return h.load().Count()
-}
-
-// Mean returns an approximation of the mean.
-func (h *runtimeHistogram) Mean() float64 {
-	return h.load().Mean()
-}
-
-// StdDev approximates the standard deviation of the histogram.
-func (h *runtimeHistogram) StdDev() float64 {
-	return h.load().StdDev()
-}
-
-// Variance approximates the variance of the histogram.
-func (h *runtimeHistogram) Variance() float64 {
-	return h.load().Variance()
-}
-
-// Percentile computes the p'th percentile value.
-func (h *runtimeHistogram) Percentile(p float64) float64 {
-	return h.load().Percentile(p)
-}
-
-// Percentiles computes all requested percentile values.
-func (h *runtimeHistogram) Percentiles(ps []float64) []float64 {
-	return h.load().Percentiles(ps)
-}
-
-// Max returns the highest sample value.
-func (h *runtimeHistogram) Max() int64 {
-	return h.load().Max()
-}
-
-// Min returns the lowest sample value.
-func (h *runtimeHistogram) Min() int64 {
-	return h.load().Min()
-}
-
-// Sum returns the sum of all sample values.
-func (h *runtimeHistogram) Sum() int64 {
-	return h.load().Sum()
-}
-
 type runtimeHistogramSnapshot metrics.Float64Histogram
 
-func (h *runtimeHistogramSnapshot) Clear() {
-	panic("runtimeHistogram does not support Clear")
-}
-func (h *runtimeHistogramSnapshot) Update(int64) {
-	panic("runtimeHistogram does not support Update")
-}
-func (h *runtimeHistogramSnapshot) Sample() Sample {
+func (h *runtimeHistogramSnapshot) Sample() SampleSnapshot {
 	return NilSample{}
 }
 

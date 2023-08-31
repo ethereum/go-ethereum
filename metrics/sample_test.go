@@ -14,22 +14,29 @@ import (
 // computation for small samples and only slightly less for large samples.
 func BenchmarkCompute1000(b *testing.B) {
 	s := make([]int64, 1000)
+	var sum int64
 	for i := 0; i < len(s); i++ {
 		s[i] = int64(i)
+		sum += int64(i)
 	}
+	mean := float64(sum) / float64(len(s))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		SampleVariance(s)
+		SampleVariance(mean, s)
 	}
 }
 func BenchmarkCompute1000000(b *testing.B) {
 	s := make([]int64, 1000000)
+	var sum int64
 	for i := 0; i < len(s); i++ {
 		s[i] = int64(i)
+		sum += int64(i)
+
 	}
+	mean := float64(sum) / float64(len(s))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		SampleVariance(s)
+		SampleVariance(mean, s)
 	}
 }
 func BenchmarkCopy1000(b *testing.B) {
