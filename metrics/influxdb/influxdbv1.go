@@ -79,7 +79,7 @@ func InfluxDBWithTagsOnce(r metrics.Registry, url, database, username, password,
 		return fmt.Errorf("unable to make InfluxDB client. err: %v", err)
 	}
 
-	if err := rep.send(); err != nil {
+	if err := rep.send(0); err != nil {
 		return fmt.Errorf("unable to send to InfluxDB. err: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func (r *reporter) run() {
 	for {
 		select {
 		case <-intervalTicker.C:
-			if err := r.send(); err != nil {
+			if err := r.send(0); err != nil {
 				log.Warn("Unable to send to InfluxDB", "err", err)
 			}
 		case <-pingTicker.C:
@@ -123,7 +123,9 @@ func (r *reporter) run() {
 	}
 }
 
-func (r *reporter) send() error {
+// send sends the measurements. If provided tstamp is >0, it is used. Otherwise,
+// a 'fresh' timestamp is used.
+func (r *reporter) send(tstamp int64) error {
 	bps, err := client.NewBatchPoints(
 		client.BatchPointsConfig{
 			Database: r.database,
@@ -132,7 +134,12 @@ func (r *reporter) send() error {
 		return err
 	}
 	r.reg.Each(func(name string, i interface{}) {
-		now := time.Now()
+		var now time.Time
+		if tstamp <= 0 {
+			now = time.Now()
+		} else {
+			now = time.Unix(tstamp, 0)
+		}
 		measurement, fields := readMeter(r.namespace, name, i)
 		if fields == nil {
 			return

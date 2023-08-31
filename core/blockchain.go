@@ -60,6 +60,8 @@ var (
 	headFinalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
 	headSafeBlockGauge      = metrics.NewRegisteredGauge("chain/head/safe", nil)
 
+	chainInfoGauge = metrics.NewRegisteredGaugeInfo("chain/info", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -321,6 +323,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.currentSnapBlock.Store(nil)
 	bc.currentFinalBlock.Store(nil)
 	bc.currentSafeBlock.Store(nil)
+
+	// Update chain info data metrics
+	chainInfoGauge.Update(metrics.GaugeInfoValue{"chain_id": bc.chainConfig.ChainID.String()})
 
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash
