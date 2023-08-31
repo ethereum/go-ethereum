@@ -144,13 +144,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
-  // Reset to CurrentBlock in case of the chain was rewound
+	// Reset to CurrentBlock in case of the chain was rewound
 	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
-  var random [32]byte
+	var random [32]byte
 	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
