@@ -95,6 +95,11 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
+// PeerCount implements Backend.
+func (*testWorkerBackend) PeerCount() int {
+	panic("unimplemented")
+}
+
 func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
 	var gspec = core.Genesis{
 		Config:   chainConfig,

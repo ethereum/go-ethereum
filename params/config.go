@@ -229,7 +229,7 @@ var (
 
 	// BorTestChainConfig contains the chain parameters to run a node on the Test network.
 	BorTestChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(80001),
+		ChainID:             big.NewInt(80002),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -264,7 +264,7 @@ var (
 		},
 	}
 	BorUnittestChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(80001),
+		ChainID:             big.NewInt(80003),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,

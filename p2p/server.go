@@ -356,6 +356,10 @@ func (srv *Server) SetMaxPeers(maxPeers int) {
 
 // PeerCount returns the number of connected peers.
 func (srv *Server) PeerCount() int {
+	if !srv.running {
+		return 0
+	}
+
 	var count int
 
 	srv.doPeerOp(func(ps map[enode.ID]*Peer) {

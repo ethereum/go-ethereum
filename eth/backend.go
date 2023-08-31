@@ -351,6 +351,10 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
+func (s *Ethereum) PeerCount() int {
+	return s.p2pServer.PeerCount()
+}
+
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
