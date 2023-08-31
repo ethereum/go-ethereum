@@ -20,7 +20,7 @@ require (
 	github.com/cosmos/cosmos-sdk v0.46.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
-	github.com/docker/docker v1.6.2
+	github.com/docker/docker v24.0.5+incompatible
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/emirpasic/gods v1.18.1
@@ -226,6 +226,7 @@ require (
 	github.com/xdg-go/stringprep v1.0.2 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	golang.org/x/oauth2 v0.3.0 // indirect
+	gotest.tools/v3 v3.5.0 // indirect
 )
 
 require (
