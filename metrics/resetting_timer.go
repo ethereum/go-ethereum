@@ -12,8 +12,10 @@ import (
 const InitialResettingTimerSliceCap = 10
 
 type ResettingTimerSnapshot interface {
-	Values() []int64
+	Count() int
 	Mean() float64
+	Max() int64
+	Min() int64
 	Percentiles([]float64) []int64
 }
 
@@ -63,7 +65,10 @@ func (NilResettingTimer) Time(f func())                      { f() }
 func (NilResettingTimer) Update(time.Duration)               {}
 func (NilResettingTimer) Percentiles([]float64) []int64      { return nil }
 func (NilResettingTimer) Mean() float64                      { return 0.0 }
+func (NilResettingTimer) Max() int64                         { return 0 }
+func (NilResettingTimer) Min() int64                         { return 0 }
 func (NilResettingTimer) UpdateSince(time.Time)              {}
+func (NilResettingTimer) Count() int                         { return 0 }
 
 // StandardResettingTimer is the standard implementation of a ResettingTimer.
 // and Meter.
@@ -71,11 +76,6 @@ type StandardResettingTimer struct {
 	values []int64
 	mutex  sync.Mutex
 }
-
-//// Values returns a slice with all measurements.
-//func (t *StandardResettingTimer) Values() []int64 {
-//	return t.values
-//}
 
 // Snapshot resets the timer and returns a read-only copy of its contents.
 func (t *StandardResettingTimer) Snapshot() ResettingTimerSnapshot {
@@ -114,13 +114,15 @@ func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
 type resettingTimerSnapshot struct {
 	values              []int64
 	mean                float64
+	max                 int64
+	min                 int64
 	thresholdBoundaries []int64
 	calculated          bool
 }
 
-// Values returns all values from snapshot.
-func (t *resettingTimerSnapshot) Values() []int64 {
-	return t.values
+// Count return the length of the values from snapshot.
+func (t *resettingTimerSnapshot) Count() int {
+	return len(t.values)
 }
 
 // Percentiles returns the boundaries for the input percentiles.
@@ -134,10 +136,30 @@ func (t *resettingTimerSnapshot) Percentiles(percentiles []float64) []int64 {
 // note: this method is not thread safe
 func (t *resettingTimerSnapshot) Mean() float64 {
 	if !t.calculated {
-		t.calc([]float64{})
+		t.calc(nil)
 	}
 
 	return t.mean
+}
+
+// Max returns the max of the snapshotted values
+// note: this method is not thread safe
+func (t *resettingTimerSnapshot) Max() int64 {
+	if !t.calculated {
+		t.calc(nil)
+	}
+
+	return t.max
+}
+
+// Min returns the min of the snapshotted values
+// note: this method is not thread safe
+func (t *resettingTimerSnapshot) Min() int64 {
+	if !t.calculated {
+		t.calc(nil)
+	}
+
+	return t.min
 }
 
 func (t *resettingTimerSnapshot) calc(percentiles []float64) {
@@ -149,18 +171,18 @@ func (t *resettingTimerSnapshot) calc(percentiles []float64) {
 		t.calculated = true
 		return
 	}
-	min := t.values[0]
-	max := t.values[count-1]
+	t.min = t.values[0]
+	t.max = t.values[count-1]
 
 	cumulativeValues := make([]int64, count)
-	cumulativeValues[0] = min
+	cumulativeValues[0] = t.min
 	for i := 1; i < count; i++ {
 		cumulativeValues[i] = t.values[i] + cumulativeValues[i-1]
 	}
 
 	t.thresholdBoundaries = make([]int64, len(percentiles))
 
-	thresholdBoundary := max
+	thresholdBoundary := t.max
 
 	for i, pct := range percentiles {
 		if count > 1 {

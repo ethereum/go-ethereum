@@ -75,16 +75,12 @@ func TestResettingTimer(t *testing.T) {
 
 		ps := snap.Percentiles([]float64{50, 95, 99})
 
-		val := snap.Values()
+		if tt.wantMin != snap.Min() {
+			t.Fatalf("%d: min: got %d, want %d", ind, snap.Min(), tt.wantMin)
+		}
 
-		if len(val) > 0 {
-			if tt.wantMin != val[0] {
-				t.Fatalf("%d: min: got %d, want %d", ind, val[0], tt.wantMin)
-			}
-
-			if tt.wantMax != val[len(val)-1] {
-				t.Fatalf("%d: max: got %d, want %d", ind, val[len(val)-1], tt.wantMax)
-			}
+		if tt.wantMax != snap.Max() {
+			t.Fatalf("%d: max: got %d, want %d", ind, snap.Max(), tt.wantMax)
 		}
 
 		if tt.wantMean != snap.Mean() {
@@ -177,16 +173,12 @@ func TestResettingTimerWithFivePercentiles(t *testing.T) {
 
 		ps := snap.Percentiles([]float64{5, 20, 50, 95, 99})
 
-		val := snap.Values()
+		if tt.wantMin != snap.Min() {
+			t.Fatalf("%d: min: got %d, want %d", ind, snap.Min(), tt.wantMin)
+		}
 
-		if len(val) > 0 {
-			if tt.wantMin != val[0] {
-				t.Fatalf("%d: min: got %d, want %d", ind, val[0], tt.wantMin)
-			}
-
-			if tt.wantMax != val[len(val)-1] {
-				t.Fatalf("%d: max: got %d, want %d", ind, val[len(val)-1], tt.wantMax)
-			}
+		if tt.wantMax != snap.Max() {
+			t.Fatalf("%d: max: got %d, want %d", ind, snap.Max(), tt.wantMax)
 		}
 
 		if tt.wantMean != snap.Mean() {

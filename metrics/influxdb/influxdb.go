@@ -99,17 +99,16 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		return measurement, fields
 	case metrics.ResettingTimer:
 		t := metric.Snapshot()
-		if len(t.Values()) == 0 {
+		if t.Count() == 0 {
 			break
 		}
 		ps := t.Percentiles([]float64{50, 95, 99})
-		val := t.Values()
 		measurement := fmt.Sprintf("%s%s.span", namespace, name)
 		fields := map[string]interface{}{
-			"count": len(val),
-			"max":   val[len(val)-1],
+			"count": t.Count(),
+			"max":   t.Max(),
 			"mean":  t.Mean(),
-			"min":   val[0],
+			"min":   t.Min(),
 			"p50":   ps[0],
 			"p95":   ps[1],
 			"p99":   ps[2],

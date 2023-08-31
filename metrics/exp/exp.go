@@ -177,7 +177,7 @@ func (exp *exp) publishTimer(name string, metric metrics.Timer) {
 func (exp *exp) publishResettingTimer(name string, metric metrics.ResettingTimer) {
 	t := metric.Snapshot()
 	ps := t.Percentiles([]float64{50, 75, 95, 99})
-	exp.getInt(name + ".count").Set(int64(len(t.Values())))
+	exp.getInt(name + ".count").Set(int64(t.Count()))
 	exp.getFloat(name + ".mean").Set(t.Mean())
 	exp.getInt(name + ".50-percentile").Set(ps[0])
 	exp.getInt(name + ".75-percentile").Set(ps[1])
