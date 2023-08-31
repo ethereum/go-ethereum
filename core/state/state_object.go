@@ -352,9 +352,11 @@ func (s *stateObject) updateTrie() error {
 }
 
 // updateRoot flushes all cached storage mutations to trie, recalculating the
-// new storage trie root. This function assumes all storage mutations have
-// already been moved to pendingStorage map by finalise.
+// new storage trie root.
 func (s *stateObject) updateRoot() {
+	// Make sure all dirty slots are finalized into the pending storage area
+	s.finalise(false)
+
 	// Short circuit if nothing changed, don't bother with hashing anything
 	if len(s.pendingStorage) == 0 {
 		return
