@@ -83,13 +83,26 @@ func (s *ExpDecaySample) Clear() {
 // Snapshot returns a read-only copy of the sample.
 func (s *ExpDecaySample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	vals := s.values.Values()
 	values := make([]int64, len(vals))
-	for i, v := range vals {
-		values[i] = v.v
+	var (
+		max int64 = math.MinInt64
+		min int64 = math.MaxInt64
+		sum int64
+	)
+	for i, item := range vals {
+		v := item.v
+		values[i] = v
+		sum += v
+		if v > max {
+			max = v
+		}
+		if v < min {
+			min = v
+		}
 	}
-	s.mutex.Unlock()
-	return newSampleSnapshot(s.count, values)
+	return newSampleSnapshotPrecalculated(s.count, values, min, max, sum)
 }
 
 // Update samples a new value.
@@ -221,16 +234,29 @@ type sampleSnapshot struct {
 	sum  int64
 }
 
+// newSampleSnapshotPrecalculated creates a read-only sampleSnapShot, using
+// precalculated sums to avoid iterating the values
+func newSampleSnapshotPrecalculated(count int64, values []int64,
+	min, max, sum int64) *sampleSnapshot {
+	if len(values) == 0 {
+		return &sampleSnapshot{
+			count:  count,
+			values: values,
+		}
+	}
+	return &sampleSnapshot{
+		count:  count,
+		values: values,
+		max:    max,
+		min:    min,
+		mean:   float64(sum) / float64(len(values)),
+		sum:    sum,
+	}
+}
+
 // newSampleSnapshot creates a read-only sampleSnapShot, and calculates some
 // numbers.
 func newSampleSnapshot(count int64, values []int64) *sampleSnapshot {
-	s := &sampleSnapshot{
-		count:  count,
-		values: values,
-	}
-	if len(values) == 0 {
-		return s
-	}
 	var (
 		max int64 = math.MinInt64
 		min int64 = math.MaxInt64
@@ -245,11 +271,7 @@ func newSampleSnapshot(count int64, values []int64) *sampleSnapshot {
 			min = v
 		}
 	}
-	s.min = min
-	s.max = max
-	s.mean = float64(sum) / float64(len(values))
-	s.sum = sum
-	return s
+	return newSampleSnapshotPrecalculated(count, values, min, max, sum)
 }
 
 // Count returns the count of inputs at the time the snapshot was taken.
