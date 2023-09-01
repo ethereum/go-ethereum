@@ -24,12 +24,12 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 )
 
@@ -42,16 +42,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	type ctorFn = func(*tracers.Context, json.RawMessage) (tracers.Tracer, error)
+	type ctorFn = func(*directory.Context, json.RawMessage) (directory.Tracer, error)
 	lookup := func(code string) ctorFn {
-		return func(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+		return func(ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
 			return newJsTracer(code, ctx, cfg)
 		}
 	}
 	for name, code := range assetTracers {
-		tracers.DefaultDirectory.Register(name, lookup(code), true)
+		directory.DefaultDirectory.Register(name, lookup(code), true)
 	}
-	tracers.DefaultDirectory.RegisterJSEval(newJsTracer)
+	directory.DefaultDirectory.RegisterJSEval(newJsTracer)
 }
 
 // bigIntProgram is compiled once and the exported function mostly invoked to convert
@@ -96,7 +96,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 // jsTracer is an implementation of the Tracer interface which evaluates
 // JS functions on the relevant EVM hooks. It uses Goja as its JS engine.
 type jsTracer struct {
-	tracers.NoopTracer
+	directory.NoopTracer
 
 	vm                *goja.Runtime
 	env               *vm.EVM
@@ -136,7 +136,7 @@ type jsTracer struct {
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
-func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
@@ -145,7 +145,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (tracer
 		ctx: make(map[string]goja.Value),
 	}
 	if ctx == nil {
-		ctx = new(tracers.Context)
+		ctx = new(directory.Context)
 	}
 	if ctx.BlockHash != (common.Hash{}) {
 		t.ctx["blockHash"] = vm.ToValue(ctx.BlockHash.Bytes())
@@ -576,7 +576,7 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end < begin || begin < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
-	slice, err := tracers.GetMemoryCopyPadded(mo.memory, begin, end-begin)
+	slice, err := directory.GetMemoryCopyPadded(mo.memory, begin, end-begin)
 	if err != nil {
 		return nil, err
 	}

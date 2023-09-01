@@ -19,15 +19,16 @@ package logger
 import (
 	"encoding/json"
 	"io"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 type JSONLogger struct {
+	directory.NoopTracer
 	encoder *json.Encoder
 	cfg     *Config
 	env     *vm.EVM
@@ -41,9 +42,6 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 		l.cfg = &Config{}
 	}
 	return l
-}
-
-func (l *JSONLogger) CaptureStart(from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
@@ -78,11 +76,6 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	l.encoder.Encode(log)
 }
 
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (l *JSONLogger) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-func (l *JSONLogger) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}
-
 // CaptureEnd is triggered at end of execution.
 func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	type endLog struct {
@@ -97,26 +90,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
 func (l *JSONLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 	l.env = env
 }
-
-func (l *JSONLogger) CaptureTxEnd(receipt *types.Receipt, err error) {}
-
-func (*JSONLogger) OnBalanceChange(a common.Address, prev, new *big.Int) {}
-
-func (*JSONLogger) OnNonceChange(a common.Address, prev, new uint64) {}
-
-func (*JSONLogger) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-}
-
-func (*JSONLogger) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
-
-func (*JSONLogger) OnLog(log *types.Log) {}
-
-func (*JSONLogger) OnNewAccount(a common.Address) {}
