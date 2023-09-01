@@ -67,8 +67,8 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// the internal junks created by tracing will be persisted into the disk.
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
-			database = state.NewDatabaseWithConfig(eth.chainDb, trie.HashDefaults)
-			if statedb, err = state.New(block.Root(), database, nil); err == nil {
+			tdb := trie.NewDatabase(eth.chainDb, trie.HashDefaults)
+			if statedb, err = state.New(block.Root(), state.NewDatabase(state.NewCodeDB(eth.chainDb), tdb), nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -85,7 +85,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		triedb = trie.NewDatabase(eth.chainDb, trie.HashDefaults)
-		database = state.NewDatabaseWithNodeDB(eth.chainDb, triedb)
+		database = state.NewDatabase(state.NewCodeDB(eth.chainDb), triedb)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is

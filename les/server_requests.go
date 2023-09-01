@@ -22,9 +22,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -310,7 +310,7 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				p.bumpInvalid()
 				continue
 			}
-			code, err := bc.StateCache().ContractCode(address, common.BytesToHash(account.CodeHash))
+			code, err := bc.CodeDB().ReadCode(address, common.BytesToHash(account.CodeHash))
 			if err != nil {
 				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", address, "codehash", common.BytesToHash(account.CodeHash), "err", err)
 				continue
@@ -409,14 +409,12 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				continue
 			}
 			// Open the account or storage trie for the request
-			statedb := bc.StateCache()
-
-			var trie state.Trie
+			var tr *trie.StateTrie
 			switch len(request.AccountAddress) {
 			case 0:
 				// No account key specified, open an account trie
-				trie, err = statedb.OpenTrie(root)
-				if trie == nil || err != nil {
+				tr, err = trie.NewStateTrie(trie.StateTrieID(root), bc.TrieDB())
+				if err != nil {
 					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "root", root, "err", err)
 					continue
 				}
@@ -429,14 +427,14 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 					p.bumpInvalid()
 					continue
 				}
-				trie, err = statedb.OpenStorageTrie(root, address, account.Root)
-				if trie == nil || err != nil {
+				tr, err = trie.NewStateTrie(trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), account.Root), bc.TrieDB())
+				if err != nil {
 					p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", address, "root", account.Root, "err", err)
 					continue
 				}
 			}
 			// Prove the user's request from the account or storage trie
-			if err := trie.Prove(request.Key, nodes); err != nil {
+			if err := tr.Prove(request.Key, nodes); err != nil {
 				p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
 				continue
 			}

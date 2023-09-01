@@ -278,7 +278,7 @@ func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.stateCache.OpenTrie(hash)
+	_, err := bc.StateAt(hash)
 	return err == nil
 }
 
@@ -311,12 +311,9 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 // If the code doesn't exist in the in-memory cache, check the storage with
 // new code scheme.
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
-	type codeReader interface {
-		ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error)
-	}
 	// TODO(rjl493456442) The associated account address is also required
 	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
-	return bc.stateCache.(codeReader).ContractCodeWithPrefix(common.Address{}, hash)
+	return bc.codedb.ReadCodeWithPrefix(common.Address{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -326,7 +323,7 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.stateCache, bc.snaps)
+	return state.New(root, state.NewDatabase(bc.codedb, bc.triedb), bc.snaps)
 }
 
 // Config retrieves the chain's fork configuration.
@@ -348,11 +345,6 @@ func (bc *BlockChain) Validator() Validator {
 // Processor returns the current processor.
 func (bc *BlockChain) Processor() Processor {
 	return bc.processor
-}
-
-// StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
-	return bc.stateCache
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -385,6 +377,11 @@ func (bc *BlockChain) TxLookupLimit() uint64 {
 // TrieDB retrieves the low level trie database used for data storage.
 func (bc *BlockChain) TrieDB() *trie.Database {
 	return bc.triedb
+}
+
+// CodeDB retrieves the low level code database used for contract code storage.
+func (bc *BlockChain) CodeDB() *state.CodeDB {
+	return bc.codedb
 }
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.

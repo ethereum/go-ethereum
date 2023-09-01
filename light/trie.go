@@ -72,7 +72,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	}
 }
 
-func (db *odrDatabase) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+func (db *odrDatabase) ReadCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	if codeHash == sha3Nil {
 		return nil, nil
 	}
@@ -87,17 +87,17 @@ func (db *odrDatabase) ContractCode(addr common.Address, codeHash common.Hash) (
 	return req.Data, err
 }
 
-func (db *odrDatabase) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	code, err := db.ContractCode(addr, codeHash)
+func (db *odrDatabase) ReadCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	code, err := db.ReadCode(addr, codeHash)
 	return len(code), err
+}
+
+func (db *odrDatabase) WriteCodes(addresses []common.Address, hashes []common.Hash, codes [][]byte) error {
+	panic("not implemented")
 }
 
 func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
-}
-
-func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
-	panic("not implemented")
 }
 
 type odrTrie struct {

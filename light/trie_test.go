@@ -52,10 +52,10 @@ func TestNodeIterator(t *testing.T) {
 
 	gspec.MustCommit(lightdb, trie.NewDatabase(lightdb, trie.HashDefaults))
 	ctx := context.Background()
-	odr := &testOdr{sdb: fulldb, ldb: lightdb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: fulldb, ldb: lightdb, triedb: blockchain.TrieDB(), indexerConfig: TestClientIndexerConfig}
 	head := blockchain.CurrentHeader()
 	lightTrie, _ := NewStateDatabase(ctx, head, odr).OpenTrie(head.Root)
-	fullTrie, _ := blockchain.StateCache().OpenTrie(head.Root)
+	fullTrie, _ := trie.NewStateTrie(trie.StateTrieID(head.Root), blockchain.TrieDB())
 	if err := diffTries(fullTrie, lightTrie); err != nil {
 		t.Fatal(err)
 	}

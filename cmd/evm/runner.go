@@ -149,7 +149,7 @@ func runCmd(ctx *cli.Context) error {
 		})
 		defer triedb.Close()
 		genesis := gen.MustCommit(db, triedb)
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
+		sdb := state.NewDatabase(state.NewCodeDB(db), triedb)
 		statedb, _ = state.New(genesis.Root(), sdb, nil)
 		chainConfig = gen.Config
 	} else {
@@ -159,7 +159,7 @@ func runCmd(ctx *cli.Context) error {
 			HashDB:    hashdb.Defaults,
 		})
 		defer triedb.Close()
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
+		sdb := state.NewDatabase(state.NewCodeDB(db), triedb)
 		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
 		genesisConfig = new(core.Genesis)
 	}

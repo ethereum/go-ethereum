@@ -57,7 +57,7 @@ type testOdr struct {
 	OdrBackend
 	indexerConfig *IndexerConfig
 	sdb, ldb      ethdb.Database
-	serverState   state.Database
+	triedb        *trie.Database
 	disable       bool
 }
 
@@ -88,9 +88,9 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			t   state.Trie
 		)
 		if len(req.Id.AccountAddress) > 0 {
-			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToAddress(req.Id.AccountAddress), req.Id.Root)
+			t, err = trie.NewStateTrie(trie.StorageTrieID(req.Id.StateRoot, crypto.Keccak256Hash(req.Id.AccountAddress), req.Id.Root), odr.triedb)
 		} else {
-			t, err = odr.serverState.OpenTrie(req.Id.Root)
+			t, err = trie.NewStateTrie(trie.StateTrieID(req.Id.StateRoot), odr.triedb)
 		}
 		if err != nil {
 			panic(err)
@@ -162,7 +162,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 		st = NewState(ctx, header, lc.Odr())
 	} else {
 		header := bc.GetHeaderByHash(bhash)
-		st, _ = state.New(header.Root, bc.StateCache(), nil)
+		st, _ = state.New(header.Root, state.NewDatabase(bc.CodeDB(), bc.TrieDB()), nil)
 	}
 
 	var res []byte
@@ -196,7 +196,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		} else {
 			chain = bc
 			header = bc.GetHeaderByHash(bhash)
-			st, _ = state.New(header.Root, bc.StateCache(), nil)
+			st, _ = state.New(header.Root, state.NewDatabase(bc.CodeDB(), bc.TrieDB()), nil)
 		}
 
 		// Perform read-only call.
@@ -284,7 +284,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	gspec.MustCommit(ldb, trie.NewDatabase(ldb, trie.HashDefaults))
-	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb, triedb: blockchain.TrieDB(), indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)

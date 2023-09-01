@@ -98,7 +98,7 @@ func TestTxPool(t *testing.T) {
 	}
 
 	gspec.MustCommit(ldb, trie.NewDatabase(ldb, trie.HashDefaults))
-	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb, triedb: blockchain.TrieDB(), indexerConfig: TestClientIndexerConfig}
 	relay := &testTxRelay{
 		send:    make(chan int, 1),
 		discard: make(chan int, 1),
