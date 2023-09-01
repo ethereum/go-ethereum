@@ -17,13 +17,10 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -32,13 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
-const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 100000
-
-	// Cache size granted for caching clean code.
-	codeCacheSize = 64 * 1024 * 1024
-
+var (
 	// commitmentSize is the size of commitment stored in cache.
 	commitmentSize = banderwagon.UncompressedSize
 
@@ -46,8 +37,35 @@ const (
 	commitmentCacheItems = 64 * 1024 * 1024 / (commitmentSize + common.AddressLength)
 )
 
-// Database wraps access to tries and contract code.
+// CodeReader wraps the ReadCode and ReadCodeSize methods of a backing contract
+// code store, providing an interface for retrieving contract code and its size.
+type CodeReader interface {
+	// ReadCode retrieves a particular contract's code.
+	ReadCode(addr common.Address, codeHash common.Hash) ([]byte, error)
+
+	// ReadCodeSize retrieves a particular contracts code's size.
+	ReadCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+}
+
+// CodeWriter wraps the WriteCodes method of a backing contract code store,
+// providing an interface for writing contract codes back to database.
+type CodeWriter interface {
+	// WriteCodes persists the provided a batch of contract codes.
+	WriteCodes(addresses []common.Address, codeHashes []common.Hash, codes [][]byte) error
+}
+
+// CodeStore defines the essential methods for reading and writing contract codes,
+// providing a comprehensive interface for code management.
+type CodeStore interface {
+	CodeReader
+	CodeWriter
+}
+
+// Database defines the essential methods for reading and writing ethereum states,
+// providing a comprehensive interface for ethereum state management.
 type Database interface {
+	CodeStore
+
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
 
@@ -57,20 +75,12 @@ type Database interface {
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
-	// ContractCode retrieves a particular contract's code.
-	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
-
-	// ContractCodeSize retrieves a particular contracts code's size.
-	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
-
-	// DiskDB returns the underlying key-value disk database.
-	DiskDB() ethdb.KeyValueStore
-
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *trie.Database
 }
 
-// Trie is a Ethereum Merkle Patricia trie.
+// Trie is a Ethereum state trie interface, defining the essential methods
+// to read and write states via trie.
 type Trie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
@@ -140,40 +150,27 @@ type Trie interface {
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 }
 
-// NewDatabase creates a backing store for state. The returned database is safe for
-// concurrent use, but does not retain any recent trie nodes in memory. To keep some
-// historical state in memory, use the NewDatabaseWithConfig constructor.
-func NewDatabase(db ethdb.Database) Database {
-	return NewDatabaseWithConfig(db, nil)
-}
-
-// NewDatabaseWithConfig creates a backing store for state. The returned database
-// is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
-// large memory cache.
-func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
+// NewDatabase creates a state database with the provided contract code store
+// and trie node database.
+func NewDatabase(codedb *CodeDB, triedb *trie.Database) Database {
 	return &cachingDB{
-		disk:          db,
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        trie.NewDatabase(db, config),
+		codedb: codedb,
+		triedb: triedb,
 	}
 }
 
-// NewDatabaseWithNodeDB creates a state database with an already initialized node database.
-func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
-	return &cachingDB{
-		disk:          db,
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        triedb,
-	}
+// NewDatabaseForTesting is similar to NewDatabase, but it sets up a local code
+// store and trie database with default config by using the provided database,
+// specifically intended for testing.
+func NewDatabaseForTesting(db ethdb.Database) Database {
+	return NewDatabase(NewCodeDB(db), trie.NewDatabase(db, nil))
 }
 
+// cachingDB is the implementation of Database interface, designed for providing
+// functionalities to read and write states.
 type cachingDB struct {
-	disk          ethdb.KeyValueStore
-	codeSizeCache *lru.Cache[common.Hash, int]
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	triedb        *trie.Database
+	codedb *CodeDB
+	triedb *trie.Database
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -181,11 +178,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
 		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
 	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
+	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 }
 
 // OpenStorageTrie opens the storage trie of an account.
@@ -196,11 +189,7 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	if db.triedb.IsVerkle() {
 		return self, nil
 	}
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
+	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -213,50 +202,21 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 	}
 }
 
-// ContractCode retrieves a particular contract's code.
-func (db *cachingDB) ContractCode(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCode(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
+// ReadCode implements CodeReader, retrieving a particular contract's code.
+func (db *cachingDB) ReadCode(address common.Address, codeHash common.Hash) ([]byte, error) {
+	return db.codedb.ReadCode(address, codeHash)
 }
 
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *cachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
+// ReadCodeSize implements CodeReader, retrieving a particular contracts
+// code's size.
+func (db *cachingDB) ReadCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	return db.codedb.ReadCodeSize(addr, codeHash)
 }
 
-// ContractCodeSize retrieves a particular contracts code's size.
-func (db *cachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := db.ContractCode(addr, codeHash)
-	return len(code), err
-}
-
-// DiskDB returns the underlying key-value disk database.
-func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
-	return db.disk
+// WriteCodes implements CodeWriter, writing the provided a list of contract
+// codes into database.
+func (db *cachingDB) WriteCodes(addresses []common.Address, hashes []common.Hash, codes [][]byte) error {
+	return db.codedb.WriteCodes(addresses, hashes, codes)
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.

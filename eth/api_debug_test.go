@@ -36,7 +36,7 @@ import (
 
 var dumper = spew.ConfigState{Indent: "    "}
 
-func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
+func accountRangeTest(t *testing.T, statedb *state.StateDB, start common.Hash, requestedNum int, expectedNum int) state.Dump {
 	result := statedb.RawDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
@@ -63,11 +63,13 @@ func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
-		sdb, _  = state.New(types.EmptyRootHash, statedb, nil)
-		addrs   = [AccountRangeMaxResults * 2]common.Address{}
-		m       = map[common.Address]bool{}
+		disk   = rawdb.NewMemoryDatabase()
+		tdb    = trie.NewDatabase(disk, &trie.Config{Preimages: true})
+		sdb, _ = state.New(types.EmptyRootHash, state.NewDatabase(state.NewCodeDB(disk), tdb), nil)
+		addrs  = [AccountRangeMaxResults * 2]common.Address{}
+		m      = map[common.Address]bool{}
 	)
+	defer tdb.Close()
 
 	for i := range addrs {
 		hash := common.HexToHash(fmt.Sprintf("%x", i))
@@ -81,16 +83,12 @@ func TestAccountRange(t *testing.T) {
 		}
 	}
 	root, _ := sdb.Commit(0, true)
-	sdb, _ = state.New(root, statedb, nil)
+	sdb, _ = state.New(root, state.NewDatabase(state.NewCodeDB(disk), tdb), nil)
 
-	trie, err := statedb.OpenTrie(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	accountRangeTest(t, &trie, sdb, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
+	accountRangeTest(t, sdb, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
 	// test pagination
-	firstResult := accountRangeTest(t, &trie, sdb, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
-	secondResult := accountRangeTest(t, &trie, sdb, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
+	firstResult := accountRangeTest(t, sdb, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
+	secondResult := accountRangeTest(t, sdb, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
 
 	hList := make([]common.Hash, 0)
 	for addr1, acc := range firstResult.Accounts {
@@ -108,7 +106,7 @@ func TestAccountRange(t *testing.T) {
 	// set and get an even split between the first and second sets.
 	slices.SortFunc(hList, common.Hash.Cmp)
 	middleH := hList[AccountRangeMaxResults/2]
-	middleResult := accountRangeTest(t, &trie, sdb, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
+	middleResult := accountRangeTest(t, sdb, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
 	missing, infirst, insecond := 0, 0, 0
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
@@ -134,7 +132,7 @@ func TestEmptyAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabase(rawdb.NewMemoryDatabase())
+		statedb = state.NewDatabaseForTesting(rawdb.NewMemoryDatabase())
 		st, _   = state.New(types.EmptyRootHash, statedb, nil)
 	)
 	// Commit(although nothing to flush) and re-init the statedb
@@ -160,8 +158,9 @@ func TestStorageRangeAt(t *testing.T) {
 
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
-		sdb, _ = state.New(types.EmptyRootHash, db, nil)
+		disk   = rawdb.NewMemoryDatabase()
+		tdb    = trie.NewDatabase(disk, &trie.Config{Preimages: true})
+		sdb, _ = state.New(types.EmptyRootHash, state.NewDatabase(state.NewCodeDB(disk), tdb), nil)
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),
@@ -176,11 +175,13 @@ func TestStorageRangeAt(t *testing.T) {
 			keys[3]: {Key: &common.Hash{0x03}, Value: common.Hash{0x04}},
 		}
 	)
+	defer tdb.Close()
+
 	for _, entry := range storage {
 		sdb.SetState(addr, *entry.Key, entry.Value)
 	}
 	root, _ := sdb.Commit(0, false)
-	sdb, _ = state.New(root, db, nil)
+	sdb, _ = state.New(root, state.NewDatabase(state.NewCodeDB(disk), tdb), nil)
 
 	// Check a few combinations of limit and start/end.
 	tests := []struct {

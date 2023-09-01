@@ -136,7 +136,7 @@ func (it *nodeIterator) step() error {
 	}
 	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.db.ContractCode(address, common.BytesToHash(account.CodeHash))
+		it.code, err = it.state.db.ReadCode(address, common.BytesToHash(account.CodeHash))
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}

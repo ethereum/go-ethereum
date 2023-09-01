@@ -182,7 +182,7 @@ func (test *stateTest) run() bool {
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
-		sdb       = NewDatabaseWithNodeDB(disk, tdb)
+		sdb       = NewDatabase(NewCodeDB(disk), tdb)
 		byzantium = rand.Intn(2) == 0
 	)
 	defer disk.Close()

@@ -154,7 +154,8 @@ func runCmd(ctx *cli.Context) error {
 	})
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
+
+	sdb := state.NewDatabase(state.NewCodeDB(db), triedb)
 	statedb, _ = state.New(genesis.Root(), sdb, nil)
 	chainConfig = genesisConfig.Config
 
