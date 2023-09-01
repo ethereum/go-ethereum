@@ -109,9 +109,9 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"max":   t.Max(),
 			"mean":  t.Mean(),
 			"min":   t.Min(),
-			"p50":   ps[0],
-			"p95":   ps[1],
-			"p99":   ps[2],
+			"p50":   int(ps[0]),
+			"p95":   int(ps[1]),
+			"p99":   int(ps[2]),
 		}
 		return measurement, fields
 	}

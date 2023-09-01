@@ -71,19 +71,22 @@ func (NilResettingTimer) Count() int                         { return 0 }
 // and Meter.
 type StandardResettingTimer struct {
 	values []int64
-	mutex  sync.Mutex
+	sum    int64 // sum is a running count of the total sum, used later to calculate mean
+
+	mutex sync.Mutex
 }
 
 // Snapshot resets the timer and returns a read-only copy of its contents.
 func (t *StandardResettingTimer) Snapshot() ResettingTimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	currentValues := t.values
-	t.values = make([]int64, 0, InitialResettingTimerSliceCap)
-
-	return &resettingTimerSnapshot{
-		values: currentValues,
+	snapshot := &resettingTimerSnapshot{
+		values: t.values,
+		mean:   float64(t.sum) / float64(len(t.values)),
 	}
+	t.values = make([]int64, 0, InitialResettingTimerSliceCap)
+	t.sum = 0
+	return snapshot
 }
 
 // Record the duration of the execution of the given function.
@@ -98,13 +101,12 @@ func (t *StandardResettingTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.values = append(t.values, int64(d))
+	t.sum += int64(d)
 }
 
 // Record the duration of an event that started at a time and ends now.
 func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	t.values = append(t.values, int64(time.Since(ts)))
+	t.Update(time.Since(ts))
 }
 
 // resettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
@@ -165,9 +167,4 @@ func (t *resettingTimerSnapshot) calc(percentiles []float64) {
 	}
 	t.min = t.values[0]
 	t.max = t.values[len(t.values)-1]
-	var sum int64
-	for _, v := range t.values {
-		sum += v
-	}
-	t.mean = float64(sum) / float64(len(t.values))
 }
