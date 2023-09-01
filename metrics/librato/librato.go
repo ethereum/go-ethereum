@@ -98,7 +98,7 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 		switch m := metric.(type) {
 		case metrics.Counter:
 			ms := m.Snapshot()
-			if m.Count() > 0 {
+			if ms.Count() > 0 {
 				measurement[Name] = fmt.Sprintf("%s.%s", name, "count")
 				measurement[Value] = float64(ms.Count())
 				measurement[Attributes] = map[string]interface{}{
@@ -129,7 +129,7 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 			snapshot.Gauges = append(snapshot.Gauges, measurement)
 		case metrics.GaugeInfo:
 			measurement[Name] = name
-			measurement[Value] = m.Value()
+			measurement[Value] = m.Snapshot().Value()
 			snapshot.Gauges = append(snapshot.Gauges, measurement)
 		case metrics.Histogram:
 			ms := m.Snapshot()

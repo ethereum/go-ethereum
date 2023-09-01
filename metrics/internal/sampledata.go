@@ -38,7 +38,15 @@ func ExampleMetrics() metrics.Registry {
 			"commit":            "7caa2d8163ae3132c1c2d6978c76610caee2d949",
 			"protocol_versions": "64 65 66",
 		})
-	metrics.NewRegisteredHistogram("test/histogram", registry, metrics.NewSampleSnapshot(3, []int64{1, 2, 3}))
+
+	{
+		s := metrics.NewUniformSample(3)
+		s.Update(1)
+		s.Update(2)
+		s.Update(3)
+		//metrics.NewRegisteredHistogram("test/histogram", registry, metrics.NewSampleSnapshot(3, []int64{1, 2, 3}))
+		metrics.NewRegisteredHistogram("test/histogram", registry, s)
+	}
 	registry.Register("test/meter", metrics.NewInactiveMeter())
 	{
 		timer := metrics.NewRegisteredResettingTimer("test/resetting_timer", registry)
