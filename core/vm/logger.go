@@ -48,47 +48,47 @@ type EVMLogger interface {
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
+//
+// There is essentially two types of gas changes, those that can be emitted once per transaction
+// and those that can be emitted on a call basis, so possibly multiple times per transaction.
+//
+// They can be recognized easily by their name, those that start with `GasChangeTx` are emitted
+// once per transaction, while those that start with `GasChangeCall` are emitted on a call basis.
 type GasChangeReason byte
 
 const (
 	GasChangeUnspecified GasChangeReason = iota
 
-	// GasInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call
-	GasInitialBalance
-	// GasRefunded is the amount of gas that will be refunded to the caller for data returned to the chain
-	// PR Review: Is that the right description? Called in core/state_transition.go#StateTransition.refundGas
-	GasRefunded
-	// GasBuyBack is the amount of gas that will be bought back by the chain and returned in Wei to the caller
-	GasBuyBack
-	// GasChangeIntrinsicGas is the amount of gas that will be charged for the intrinsic cost of the transaction, there is
+	// GasChangeTxInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
+	// one such gas change per transaction.
+	GasChangeTxInitialBalance
+	// GasChangeTxIntrinsicGas is the amount of gas that will be charged for the intrinsic cost of the transaction, there is
 	// always exactly one of those per transaction
-	GasChangeIntrinsicGas
+	GasChangeTxIntrinsicGas
+	// GasChangeTxRefunds is the sum of all refunds which happened during the tx execution (e.g. storage slot being cleared)
+	// this generates an increase in gas. There is only one such gas change per transaction.
+	GasChangeTxRefunds
+	// GasChangeTxBuyBack is the amount of gas that will be bought back by the chain and returned in Wei to the caller at the very
+	// end of the transaction's execution. There is only one such gas change per transaction.
+	GasChangeTxBuyBack
 
-	// PR Review: `GasChangeContractCreation/2` are actually the EIP150 burn cost of CREATE/CREATE2 respectively.
-	// I think our old name `GasChangeContractCreation/2` is not really accurate. I don't
-	// think that using EIP150 as a name is a good idea as rules can change in the future. So
-	// maybe we can just call them `GasChangeCreateBurn/GasChangeCreate2Burn`? Burn might
-	// feels like the wrong term, `Stipend` came to mind also but I'm unsure.
-	//
-	// I would like also to keep the distinction between CREATE and CREATE2 however, it's an
-	// important thing IMO as they are different and could use different rules in the future.
-
-	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE, today controlled by EIP150 rules
-	GasChangeContractCreation
+	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE, today controlled by EIP150 rules
+	GasChangeCallContractCreation
 	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2, today controlled by EIP150 rules
-	GasChangeContractCreation2
-	// GasChangeCodeStorage is the amount of gas that will be charged for code storage
-	GasChangeCodeStorage
-	// GasChangeOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
+	GasChangeCallContractCreation2
+	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage
+	GasChangeCallCodeStorage
+	// GasChangeCallOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
 	// performed can be check by `CaptureState` handling
-	GasChangeOpCode
-	// GasChangePrecompiledContract is the amount of gas that will be charged for a precompiled contract execution
-	GasChangePrecompiledContract
-	// GasChangeStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules
-	GasChangeStorageColdAccess
-
-	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the caller after the execution of the call, if there is left over at the end of execution
+	GasChangeCallOpCode
+	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution
+	GasChangeCallPrecompiledContract
+	// GasChangeCallStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules
+	GasChangeCallStorageColdAccess
+	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the caller after the execution of the call, if
+	// there is left over at the end of call's execution. This can change can happen multiple times within a single transaction as
+	// each call is independent of each other.
 	GasChangeCallLeftOverRefunded
-	// GasChangeFailedExecution is the burning of the remaining gas when the execution failed without a revert
-	GasChangeFailedExecution
+	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert
+	GasChangeCallFailedExecution
 )
