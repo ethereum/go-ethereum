@@ -23,7 +23,6 @@ func TestGaugeInfoJsonString(t *testing.T) {
 	if have, want := g.Snapshot().Value().String(), `{"value":"updated"}`; have != want {
 		t.Errorf("\nhave: %v\nwant: %v\n", have, want)
 	}
-
 }
 
 func TestGetOrRegisterGaugeInfo(t *testing.T) {

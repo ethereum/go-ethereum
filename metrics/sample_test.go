@@ -31,7 +31,6 @@ func BenchmarkCompute1000000(b *testing.B) {
 	for i := 0; i < len(s); i++ {
 		s[i] = int64(i)
 		sum += int64(i)
-
 	}
 	mean := float64(sum) / float64(len(s))
 	b.ResetTimer()
