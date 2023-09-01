@@ -33,7 +33,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee               *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash       common.Hash                         `json:"parentUncleHash"`
-		ExcessBlobGas         *math.HexOrDecimal64                `json:"excessBlobGas,omitempty"`
+		ExcessBlobGas         *math.HexOrDecimal64                `json:"currentExcessBlobGas,omitempty"`
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
@@ -81,7 +81,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 		BaseFee               *math.HexOrDecimal256               `json:"currentBaseFee,omitempty"`
 		ParentUncleHash       *common.Hash                        `json:"parentUncleHash"`
-		ExcessBlobGas         *math.HexOrDecimal64                `json:"excessBlobGas,omitempty"`
+		ExcessBlobGas         *math.HexOrDecimal64                `json:"currentExcessBlobGas,omitempty"`
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`

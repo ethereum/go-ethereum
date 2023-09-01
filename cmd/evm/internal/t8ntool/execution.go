@@ -59,7 +59,7 @@ type ExecutionResult struct {
 	BaseFee              *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
 	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
-	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"currentBlobGasUsed,omitempty"`
+	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 }
 
 type ommer struct {
@@ -85,7 +85,7 @@ type stEnv struct {
 	Withdrawals           []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 	BaseFee               *big.Int                            `json:"currentBaseFee,omitempty"`
 	ParentUncleHash       common.Hash                         `json:"parentUncleHash"`
-	ExcessBlobGas         *uint64                             `json:"excessBlobGas,omitempty"`
+	ExcessBlobGas         *uint64                             `json:"currentExcessBlobGas,omitempty"`
 	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
 	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
@@ -178,6 +178,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 		}
 	}
+	if vmContext.ExcessBlobGas != nil {
+		vmContext.BlobFee = eip4844.CalcBlobFee(*vmContext.ExcessBlobGas)
+	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
@@ -196,6 +199,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
+		}
+		if tx.Type() == types.BlobTxType {
+			blobGasUsed += uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
 		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
@@ -225,9 +231,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
 			continue
-		}
-		if tx.Type() == types.BlobTxType {
-			blobGasUsed += params.BlobTxBlobGasPerBlob
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
