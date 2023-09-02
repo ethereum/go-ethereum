@@ -65,10 +65,6 @@ func (h *runtimeHistogram) Snapshot() HistogramSnapshot {
 
 type runtimeHistogramSnapshot metrics.Float64Histogram
 
-func (h *runtimeHistogramSnapshot) Sample() SampleSnapshot {
-	return NilSample{}
-}
-
 func (h *runtimeHistogramSnapshot) Snapshot() HistogramSnapshot {
 	return h
 }

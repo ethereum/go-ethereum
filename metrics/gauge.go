@@ -52,22 +52,11 @@ func (g gaugeSnapshot) Value() int64 { return int64(g) }
 // NilGauge is a no-op Gauge.
 type NilGauge struct{}
 
-// Snapshot is a no-op.
-func (NilGauge) Snapshot() GaugeSnapshot { return NilGauge{} }
-
-// Update is a no-op.
-func (NilGauge) Update(v int64) {}
-
-func (NilGauge) UpdateIfGt(v int64) {}
-
-// Dec is a no-op.
-func (NilGauge) Dec(i int64) {}
-
-// Inc is a no-op.
-func (NilGauge) Inc(i int64) {}
-
-// Value is a no-op.
-func (NilGauge) Value() int64 { return 0 }
+func (NilGauge) Snapshot() GaugeSnapshot { return (*emptySnapshot)(nil) }
+func (NilGauge) Update(v int64)          {}
+func (NilGauge) UpdateIfGt(v int64)      {}
+func (NilGauge) Dec(i int64)             {}
+func (NilGauge) Inc(i int64)             {}
 
 // StandardGauge is the standard implementation of a Gauge and uses the
 // sync/atomic package to manage a single int64 value.

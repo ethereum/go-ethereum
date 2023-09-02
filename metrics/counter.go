@@ -83,19 +83,10 @@ func (c counterSnapshot) Count() int64 { return int64(c) }
 type NilCounter struct{}
 
 // Clear is a no-op.
-func (NilCounter) Clear() {}
-
-// Count is a no-op.
-func (NilCounter) Count() int64 { return 0 }
-
-// Dec is a no-op.
-func (NilCounter) Dec(i int64) {}
-
-// Inc is a no-op.
-func (NilCounter) Inc(i int64) {}
-
-// Snapshot is a no-op.
-func (NilCounter) Snapshot() CounterSnapshot { return NilCounter{} }
+func (NilCounter) Clear()                    {}
+func (NilCounter) Dec(i int64)               {}
+func (NilCounter) Inc(i int64)               {}
+func (NilCounter) Snapshot() CounterSnapshot { return (*emptySnapshot)(nil) }
 
 // StandardCounter is the standard implementation of a Counter and uses the
 // sync/atomic package to manage a single int64 value.

@@ -97,29 +97,10 @@ func (m *meterSnapshot) RateMean() float64 { return m.rateMean }
 // NilMeter is a no-op Meter.
 type NilMeter struct{}
 
-// Count is a no-op.
-func (NilMeter) Count() int64 { return 0 }
-
-// Mark is a no-op.
-func (NilMeter) Mark(n int64) {}
-
-// Rate1 is a no-op.
-func (NilMeter) Rate1() float64 { return 0.0 }
-
-// Rate5 is a no-op.
-func (NilMeter) Rate5() float64 { return 0.0 }
-
-// Rate15 is a no-op.
-func (NilMeter) Rate15() float64 { return 0.0 }
-
-// RateMean is a no-op.
-func (NilMeter) RateMean() float64 { return 0.0 }
-
-// Snapshot is a no-op.
-func (NilMeter) Snapshot() MeterSnapshot { return NilMeter{} }
-
-// Stop is a no-op.
-func (NilMeter) Stop() {}
+func (NilMeter) Count() int64            { return 0 }
+func (NilMeter) Mark(n int64)            {}
+func (NilMeter) Snapshot() MeterSnapshot { return (*emptySnapshot)(nil) }
+func (NilMeter) Stop()                   {}
 
 // StandardMeter is the standard implementation of a Meter.
 type StandardMeter struct {
@@ -159,9 +140,9 @@ func (m *StandardMeter) Mark(n int64) {
 func (m *StandardMeter) Snapshot() MeterSnapshot {
 	return &meterSnapshot{
 		count:    m.count.Load() + m.uncounted.Load(),
-		rate1:    m.a1.Rate(),
-		rate5:    m.a5.Rate(),
-		rate15:   m.a15.Rate(),
+		rate1:    m.a1.Snapshot().Rate(),
+		rate5:    m.a5.Snapshot().Rate(),
+		rate15:   m.a15.Snapshot().Rate(),
 		rateMean: math.Float64frombits(m.rateMean.Load()),
 	}
 }

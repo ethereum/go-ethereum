@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const epsilonPercentile = .00000000001
+
 // Benchmark{Compute,Copy}{1000,1000000} demonstrate that, even for relatively
 // expensive computations like Variance, the cost of copying the Sample, as
 // approximated by a make and copy, is much greater than the cost of the

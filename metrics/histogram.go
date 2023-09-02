@@ -7,7 +7,6 @@ type HistogramSnapshot interface {
 	Min() int64
 	Percentile(float64) float64
 	Percentiles([]float64) []float64
-	Sample() SampleSnapshot
 	StdDev() float64
 	Sum() int64
 	Variance() float64
@@ -90,9 +89,6 @@ func (h *histogramSnapshot) Percentiles(ps []float64) []float64 {
 	return h.sample.Percentiles(ps)
 }
 
-// Sample returns the Sample underlying the histogram.
-func (h *histogramSnapshot) Sample() SampleSnapshot { return h.sample }
-
 // Snapshot returns the snapshot.
 func (h *histogramSnapshot) Snapshot() HistogramSnapshot { return h }
 
@@ -109,46 +105,9 @@ func (h *histogramSnapshot) Variance() float64 { return h.sample.Variance() }
 // NilHistogram is a no-op Histogram.
 type NilHistogram struct{}
 
-// Clear is a no-op.
-func (NilHistogram) Clear() {}
-
-// Count is a no-op.
-func (NilHistogram) Count() int64 { return 0 }
-
-// Max is a no-op.
-func (NilHistogram) Max() int64 { return 0 }
-
-// Mean is a no-op.
-func (NilHistogram) Mean() float64 { return 0.0 }
-
-// Min is a no-op.
-func (NilHistogram) Min() int64 { return 0 }
-
-// Percentile is a no-op.
-func (NilHistogram) Percentile(p float64) float64 { return 0.0 }
-
-// Percentiles is a no-op.
-func (NilHistogram) Percentiles(ps []float64) []float64 {
-	return make([]float64, len(ps))
-}
-
-// Sample is a no-op.
-func (NilHistogram) Sample() SampleSnapshot { return NilSample{} }
-
-// Snapshot is a no-op.
-func (NilHistogram) Snapshot() HistogramSnapshot { return NilHistogram{} }
-
-// StdDev is a no-op.
-func (NilHistogram) StdDev() float64 { return 0.0 }
-
-// Sum is a no-op.
-func (NilHistogram) Sum() int64 { return 0 }
-
-// Update is a no-op.
-func (NilHistogram) Update(v int64) {}
-
-// Variance is a no-op.
-func (NilHistogram) Variance() float64 { return 0.0 }
+func (NilHistogram) Clear()                      {}
+func (NilHistogram) Snapshot() HistogramSnapshot { return (*emptySnapshot)(nil) }
+func (NilHistogram) Update(v int64)              {}
 
 // StandardHistogram is the standard implementation of a Histogram and uses a
 // Sample to bound its memory use.

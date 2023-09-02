@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const epsilon = 0.0000000000000001
+
 func BenchmarkEWMA(b *testing.B) {
 	a := NewEWMA1()
 	b.ResetTimer()

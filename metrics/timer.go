@@ -6,19 +6,8 @@ import (
 )
 
 type TimerSnapshot interface {
-	Count() int64
-	Max() int64
-	Mean() float64
-	Min() int64
-	Percentile(float64) float64
-	Percentiles([]float64) []float64
-	Rate1() float64
-	Rate5() float64
-	Rate15() float64
-	RateMean() float64
-	Sum() int64
-	Variance() float64
-	StdDev() float64
+	HistogramSnapshot
+	MeterSnapshot
 }
 
 // Timers capture the duration and rate of events.
@@ -81,61 +70,11 @@ func NewTimer() Timer {
 // NilTimer is a no-op Timer.
 type NilTimer struct{}
 
-// Count is a no-op.
-func (NilTimer) Count() int64 { return 0 }
-
-// Max is a no-op.
-func (NilTimer) Max() int64 { return 0 }
-
-// Mean is a no-op.
-func (NilTimer) Mean() float64 { return 0.0 }
-
-// Min is a no-op.
-func (NilTimer) Min() int64 { return 0 }
-
-// Percentile is a no-op.
-func (NilTimer) Percentile(p float64) float64 { return 0.0 }
-
-// Percentiles is a no-op.
-func (NilTimer) Percentiles(ps []float64) []float64 {
-	return make([]float64, len(ps))
-}
-
-// Rate1 is a no-op.
-func (NilTimer) Rate1() float64 { return 0.0 }
-
-// Rate5 is a no-op.
-func (NilTimer) Rate5() float64 { return 0.0 }
-
-// Rate15 is a no-op.
-func (NilTimer) Rate15() float64 { return 0.0 }
-
-// RateMean is a no-op.
-func (NilTimer) RateMean() float64 { return 0.0 }
-
-// Snapshot is a no-op.
-func (NilTimer) Snapshot() TimerSnapshot { return NilTimer{} }
-
-// StdDev is a no-op.
-func (NilTimer) StdDev() float64 { return 0.0 }
-
-// Stop is a no-op.
-func (NilTimer) Stop() {}
-
-// Sum is a no-op.
-func (NilTimer) Sum() int64 { return 0 }
-
-// Time is a no-op.
-func (NilTimer) Time(f func()) { f() }
-
-// Update is a no-op.
-func (NilTimer) Update(time.Duration) {}
-
-// UpdateSince is a no-op.
-func (NilTimer) UpdateSince(time.Time) {}
-
-// Variance is a no-op.
-func (NilTimer) Variance() float64 { return 0.0 }
+func (NilTimer) Snapshot() TimerSnapshot { return (*emptySnapshot)(nil) }
+func (NilTimer) Stop()                   {}
+func (NilTimer) Time(f func())           { f() }
+func (NilTimer) Update(time.Duration)    {}
+func (NilTimer) UpdateSince(time.Time)   {}
 
 // StandardTimer is the standard implementation of a Timer and uses a Histogram
 // and Meter.
