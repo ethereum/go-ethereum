@@ -289,7 +289,6 @@ type websocketCodec struct {
 	pongReceived chan struct{}
 }
 
-
 func newWebsocketCodec(conn *websocket.Conn, host string, req http.Header, messageSizeLimit int64) ServerCodec {
 	conn.SetReadLimit(messageSizeLimit)
 	encode := func(v interface{}, isErrorResponse bool) error {
