@@ -80,11 +80,12 @@ type StandardResettingTimer struct {
 func (t *StandardResettingTimer) Snapshot() ResettingTimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	snapshot := &resettingTimerSnapshot{
-		values: t.values,
-		mean:   float64(t.sum) / float64(len(t.values)),
+	snapshot := &resettingTimerSnapshot{}
+	if len(t.values) > 0 {
+		snapshot.mean = float64(t.sum) / float64(len(t.values))
+		snapshot.values = t.values
+		t.values = make([]int64, 0, InitialResettingTimerSliceCap)
 	}
-	t.values = make([]int64, 0, InitialResettingTimerSliceCap)
 	t.sum = 0
 	return snapshot
 }
