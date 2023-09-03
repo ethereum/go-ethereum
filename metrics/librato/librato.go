@@ -61,7 +61,7 @@ func (rep *Reporter) Run() {
 
 // calculate sum of squares from data provided by metrics.Histogram
 // see http://en.wikipedia.org/wiki/Standard_deviation#Rapid_calculation_methods
-func sumSquares(icount, mean, stDev) float64 {
+func sumSquares(icount int64, mean, stDev float64) float64 {
 	count := float64(icount)
 	sumSquared := math.Pow(count*mean, 2)
 	sumSquares := math.Pow(count*stDev, 2) + sumSquared/count
@@ -145,7 +145,7 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 				for i, p := range rep.Percentiles {
 					gauges[i+1] = Measurement{
 						Name:   fmt.Sprintf("%s.%.2f", measurement[Name], p),
-						Value:  s.Percentile(p),
+						Value:  ms.Percentile(p),
 						Period: measurement[Period],
 					}
 				}
