@@ -69,10 +69,10 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(parentExcessBlobGas uint64, parentBlobGasUsed uint64) uint64 {
 	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	if excessBlobGas < params.TargetBlobGasPerBlock {
+	if excessBlobGas < params.BlobTxTargetBlobGasPerBlock {
 		return 0
 	}
-	return excessBlobGas - params.TargetBlobGasPerBlock
+	return excessBlobGas - params.BlobTxTargetBlobGasPerBlock
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
