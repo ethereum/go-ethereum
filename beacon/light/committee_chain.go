@@ -19,6 +19,7 @@ package light
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -27,24 +28,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
-	ErrNotInitialized     = errors.New("sync committee chain not initialized")
 	ErrNeedCommittee      = errors.New("sync committee required")
 	ErrInvalidUpdate      = errors.New("invalid committee update")
 	ErrInvalidPeriod      = errors.New("invalid update period")
 	ErrWrongCommitteeRoot = errors.New("wrong committee root")
 	ErrCannotReorg        = errors.New("can not reorg committee chain")
-)
-
-var (
-	bestUpdateKey    = []byte("update-")    // bigEndian64(syncPeriod) -> RLP(types.LightClientUpdate)  (nextCommittee only referenced by root hash)
-	fixedRootKey     = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
-	syncCommitteeKey = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 )
 
 // CommitteeChain is a passive data structure that can validate, hold and update
@@ -67,15 +62,16 @@ var (
 // Once synced to the current sync period, CommitteeChain can also validate
 // signed beacon headers.
 type CommitteeChain struct {
-	lock               sync.RWMutex
+	chainmu            sync.RWMutex // locks database, cache and canonicalStore access
 	db                 ethdb.KeyValueStore
-	sigVerifier        committeeSigVerifier
-	clock              mclock.Clock
 	updates            *canonicalStore[*types.LightClientUpdate]
 	committees         *canonicalStore[*types.SerializedSyncCommittee]
 	fixedRoots         *canonicalStore[common.Hash]
 	syncCommitteeCache *lru.Cache[uint64, syncCommittee] // cache deserialized committees
-	unixNano           func() int64
+
+	clock       mclock.Clock         // monotonic clock (simulated clock in tests)
+	unixNano    func() int64         // system clock (simulated clock in tests)
+	sigVerifier committeeSigVerifier // BLS sig verifier (dummy verifier in tests)
 
 	config             *types.ChainConfig
 	signerThreshold    int
@@ -86,17 +82,15 @@ type CommitteeChain struct {
 // NewCommitteeChain creates a new CommitteeChain.
 func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
-		fixedRoots: newCanonicalStore[common.Hash](db, fixedRootKey, func(root common.Hash) ([]byte, error) {
+		fixedRoots: newCanonicalStore[common.Hash](db, rawdb.FixedRootKey, func(root common.Hash) ([]byte, error) {
 			return root[:], nil
 		}, func(enc []byte) (root common.Hash, err error) {
-			if len(enc) == len(root) {
-				copy(root[:], enc)
-			} else {
-				err = errors.New("Incorrect length for committee root entry in the database")
+			if len(enc) != common.HashLength {
+				return common.Hash{}, errors.New("incorrect length for committee root entry in the database")
 			}
-			return
+			return common.BytesToHash(enc), nil
 		}),
-		committees: newCanonicalStore[*types.SerializedSyncCommittee](db, syncCommitteeKey, func(committee *types.SerializedSyncCommittee) ([]byte, error) {
+		committees: newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, func(committee *types.SerializedSyncCommittee) ([]byte, error) {
 			return committee[:], nil
 		}, func(enc []byte) (*types.SerializedSyncCommittee, error) {
 			if len(enc) == types.SerializedSyncCommitteeSize {
@@ -104,9 +98,9 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 				copy(committee[:], enc)
 				return committee, nil
 			}
-			return nil, errors.New("Incorrect length for serialized committee entry in the database")
+			return nil, errors.New("incorrect length for serialized committee entry in the database")
 		}),
-		updates: newCanonicalStore[*types.LightClientUpdate](db, bestUpdateKey, func(update *types.LightClientUpdate) ([]byte, error) {
+		updates: newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, func(update *types.LightClientUpdate) ([]byte, error) {
 			return rlp.EncodeToBytes(update)
 		}, func(enc []byte) (*types.LightClientUpdate, error) {
 			update := new(types.LightClientUpdate)
@@ -130,38 +124,38 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 
 	// check validity constraints
-	if !s.updates.IsEmpty() {
-		if s.fixedRoots.IsEmpty() || s.updates.First < s.fixedRoots.First ||
-			s.updates.First >= s.fixedRoots.AfterLast {
-			log.Crit("Inconsistent database error: first update is not in the fixed roots range")
+	if !s.updates.periods.IsEmpty() {
+		if s.fixedRoots.periods.IsEmpty() || s.updates.periods.First < s.fixedRoots.periods.First ||
+			s.updates.periods.First >= s.fixedRoots.periods.AfterLast {
+			log.Error("Inconsistent database error: first update is not in the fixed roots range")
 		}
-		if s.committees.First > s.updates.First || s.committees.AfterLast <= s.updates.AfterLast {
-			log.Crit("Inconsistent database error: missing committees in update range")
+		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.AfterLast <= s.updates.periods.AfterLast {
+			log.Error("Inconsistent database error: missing committees in update range")
 		}
 	}
-	if !s.committees.IsEmpty() {
-		if s.fixedRoots.IsEmpty() || s.committees.First < s.fixedRoots.First ||
-			s.committees.First >= s.fixedRoots.AfterLast {
-			log.Crit("Inconsistent database error: first committee is not in the fixed roots range")
+	if !s.committees.periods.IsEmpty() {
+		if s.fixedRoots.periods.IsEmpty() || s.committees.periods.First < s.fixedRoots.periods.First ||
+			s.committees.periods.First >= s.fixedRoots.periods.AfterLast {
+			log.Error("Inconsistent database error: first committee is not in the fixed roots range")
 		}
-		if s.committees.AfterLast > s.fixedRoots.AfterLast && s.committees.AfterLast > s.updates.AfterLast+1 {
-			log.Crit("Inconsistent database error: last committee is neither in the fixed roots range nor proven by updates")
+		if s.committees.periods.AfterLast > s.fixedRoots.periods.AfterLast && s.committees.periods.AfterLast > s.updates.periods.AfterLast+1 {
+			log.Error("Inconsistent database error: last committee is neither in the fixed roots range nor proven by updates")
 		}
-		log.Trace("Sync committee chain loaded", "first period", s.committees.First, "last period", s.committees.AfterLast-1)
+		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.AfterLast-1)
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	var batch ethdb.Batch
-	for !s.updates.IsEmpty() {
-		if update := s.updates.get(s.updates.AfterLast - 1); update == nil || s.verifyUpdate(update) {
+	for !s.updates.periods.IsEmpty() {
+		if update, ok := s.updates.get(s.updates.periods.AfterLast - 1); !ok || s.verifyUpdate(update) {
 			if update == nil {
-				log.Crit("Sync committee update missing", "period", s.updates.AfterLast-1)
+				log.Error("Sync committee update missing", "period", s.updates.periods.AfterLast-1)
 			}
 			break
 		}
 		if batch == nil {
 			batch = s.db.NewBatch()
 		}
-		s.rollback(batch, s.updates.AfterLast)
+		s.rollback(batch, s.updates.periods.AfterLast)
 	}
 	if batch != nil {
 		if err := batch.Write(); err != nil {
@@ -173,8 +167,8 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 
 // Reset resets the committee chain.
 func (s *CommitteeChain) Reset() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
 
 	batch := s.db.NewBatch()
 	s.rollback(batch, 0)
@@ -187,24 +181,40 @@ func (s *CommitteeChain) Reset() {
 // Note that the period where the first committee is added has to have a fixed
 // root which can either come from a CheckpointData or a trusted source.
 func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)
-	if !s.fixedRoots.CanExpand(period) {
+	if !s.fixedRoots.periods.CanExpand(period) {
+		// Note: the fixed committee root range should always be continuous and
+		// therefore the expected syncing method is to forward sync and optionally
+		// backward sync periods one by one, starting from a checkpoint. The only
+		// case when a root that is not adjacent to the already fixed ones can be
+		// fixed is when the same root has already been proven by an update chain.
+		// In this case the all roots in between can and should be fixed.
+		// This scenario makes sense when a new trusted checkpoint is added to an
+		// existing chain, ensuring that it will not be rolled back (might be
+		// important in case of low signer participation rate).
 		if root != oldRoot {
 			return ErrInvalidPeriod
 		}
-		for p := s.fixedRoots.AfterLast; p <= period; p++ {
-			s.fixedRoots.add(batch, p, s.getCommitteeRoot(p))
+		// if the old root exists and matches the new one then it is guaranteed
+		// that the given period is after the existing fixed range and the roots
+		// in between can also be fixed.
+		for p := s.fixedRoots.periods.AfterLast; p < period; p++ {
+			if err := s.fixedRoots.add(batch, p, s.getCommitteeRoot(p)); err != nil {
+				return err
+			}
 		}
 	}
 	if oldRoot != (common.Hash{}) && (oldRoot != root) {
 		// existing old root was different, we have to reorg the chain
 		s.rollback(batch, period)
 	}
-	s.fixedRoots.add(batch, period, root)
+	if err := s.fixedRoots.add(batch, period, root); err != nil {
+		return err
+	}
 	if err := batch.Write(); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 		return err
@@ -216,21 +226,29 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 // It also maintains chain consistency, meaning that it also deletes updates and
 // committees if they are no longer supported by a valid update chain.
 func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
 
-	if period >= s.fixedRoots.AfterLast {
+	if period >= s.fixedRoots.periods.AfterLast {
 		return nil
 	}
 	batch := s.db.NewBatch()
 	s.fixedRoots.deleteFrom(batch, period)
-	if s.updates.IsEmpty() || period <= s.updates.First {
+	if s.updates.periods.IsEmpty() || period <= s.updates.periods.First {
+		// Note: the first period of the update chain should always be fixed so if
+		// the fixed root at the first update is removed then the entire update chain
+		// and the proven committees have to be removed. Earlier committees in the
+		// remaining fixed root range can stay.
 		s.updates.deleteFrom(batch, period)
 		s.deleteCommitteesFrom(batch, period)
 	} else {
-		fromPeriod := s.updates.AfterLast + 1
+		// The update chain stays intact, some previously fixed committee roots might
+		// get unfixed but are still proven by the update chain. If there were
+		// committees present after the range proven by updates, those should be
+		// removed if the belonging fixed roots are also removed.
+		fromPeriod := s.updates.periods.AfterLast + 1 // not proven by updates
 		if period > fromPeriod {
-			fromPeriod = period
+			fromPeriod = period // also not justified by fixed roots
 		}
 		s.deleteCommitteesFrom(batch, fromPeriod)
 	}
@@ -250,16 +268,18 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 }
 
 // GetCommittee returns the committee at the given period.
+// Note: GetCommittee can be called either with locked or unlocked chain mutex.
 func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedSyncCommittee {
-	return s.committees.get(period)
+	committee, _ := s.committees.get(period)
+	return committee
 }
 
 // AddCommittee adds a committee at the given period if possible.
 func (s *CommitteeChain) AddCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
 
-	if !s.committees.CanExpand(period) {
+	if !s.committees.periods.CanExpand(period) {
 		return ErrInvalidPeriod
 	}
 	root := s.getCommitteeRoot(period)
@@ -269,25 +289,29 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 	if root != committee.Root() {
 		return ErrWrongCommitteeRoot
 	}
-	if !s.committees.Includes(period) {
-		s.committees.add(nil, period, committee)
+	if !s.committees.periods.Includes(period) {
+		if err := s.committees.add(s.db, period, committee); err != nil {
+			return err
+		}
 		s.syncCommitteeCache.Remove(period)
 	}
 	return nil
 }
 
 // GetUpdate returns the update at the given period.
+// Note: GetUpdate can be called either with locked or unlocked chain mutex.
 func (s *CommitteeChain) GetUpdate(period uint64) *types.LightClientUpdate {
-	return s.updates.get(period)
+	update, _ := s.updates.get(period)
+	return update
 }
 
 // InsertUpdate adds a new update if possible.
 func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
 
 	period := update.AttestedHeader.Header.SyncPeriod()
-	if !s.updates.CanExpand(period) || !s.committees.Includes(period) {
+	if !s.updates.periods.CanExpand(period) || !s.committees.periods.Includes(period) {
 		return ErrInvalidPeriod
 	}
 	if s.minimumUpdateScore.BetterThan(update.Score()) {
@@ -295,20 +319,20 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	}
 	oldRoot := s.getCommitteeRoot(period + 1)
 	reorg := oldRoot != (common.Hash{}) && oldRoot != update.NextSyncCommitteeRoot
-	if oldUpdate := s.updates.get(period); oldUpdate != nil && !update.Score().BetterThan(oldUpdate.Score()) {
+	if oldUpdate, ok := s.updates.get(period); ok && !update.Score().BetterThan(oldUpdate.Score()) {
 		// a better or equal update already exists; no changes, only fail if new one tried to reorg
 		if reorg {
 			return ErrCannotReorg
 		}
 		return nil
 	}
-	if s.fixedRoots.Includes(period+1) && reorg {
+	if s.fixedRoots.periods.Includes(period+1) && reorg {
 		return ErrCannotReorg
 	}
 	if !s.verifyUpdate(update) {
 		return ErrInvalidUpdate
 	}
-	addCommittee := !s.committees.Includes(period+1) || reorg
+	addCommittee := !s.committees.periods.Includes(period+1) || reorg
 	if addCommittee {
 		if nextCommittee == nil {
 			return ErrNeedCommittee
@@ -322,10 +346,14 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		s.rollback(batch, period+1)
 	}
 	if addCommittee {
-		s.committees.add(batch, period+1, nextCommittee)
+		if err := s.committees.add(batch, period+1, nextCommittee); err != nil {
+			return err
+		}
 		s.syncCommitteeCache.Remove(period + 1)
 	}
-	s.updates.add(batch, period, update)
+	if err := s.updates.add(batch, period, update); err != nil {
+		return err
+	}
 	if err := batch.Write(); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 		return err
@@ -337,16 +365,16 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 // NextSyncPeriod returns the next period where an update can be added and also
 // whether the chain is initialized at all.
 func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	s.chainmu.RLock()
+	defer s.chainmu.RUnlock()
 
-	if s.committees.IsEmpty() {
+	if s.committees.periods.IsEmpty() {
 		return 0, false
 	}
-	if !s.updates.IsEmpty() {
-		return s.updates.AfterLast, true
+	if !s.updates.periods.IsEmpty() {
+		return s.updates.periods.AfterLast, true
 	}
-	return s.committees.AfterLast - 1, true
+	return s.committees.periods.AfterLast - 1, true
 }
 
 // rollback removes all committees and fixed roots from the given period and updates
@@ -364,10 +392,10 @@ func (s *CommitteeChain) rollback(batch ethdb.Batch, period uint64) {
 // proven by a previous update or both. It returns an empty hash if the committee
 // root is unknown.
 func (s *CommitteeChain) getCommitteeRoot(period uint64) common.Hash {
-	if root := s.fixedRoots.get(period); root != (common.Hash{}) || period == 0 {
+	if root, ok := s.fixedRoots.get(period); ok || period == 0 {
 		return root
 	}
-	if update := s.updates.get(period - 1); update != nil {
+	if update, ok := s.updates.get(period - 1); ok {
 		return update.NextSyncCommitteeRoot
 	}
 	return common.Hash{}
@@ -378,7 +406,7 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) syncCommittee {
 	if c, ok := s.syncCommitteeCache.Get(period); ok {
 		return c
 	}
-	if sc := s.committees.get(period); sc != nil {
+	if sc, ok := s.committees.get(period); ok {
 		c, err := s.sigVerifier.deserializeSyncCommittee(sc)
 		if err != nil {
 			log.Error("Sync committee deserialization error", "error", err)
@@ -399,17 +427,20 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) syncCommittee {
 // of the given slot, according to the local system clock). If enforceTime is
 // true then negative age (future) headers are rejected.
 func (s *CommitteeChain) VerifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	s.chainmu.RLock()
+	defer s.chainmu.RUnlock()
 
 	return s.verifySignedHeader(head)
 }
 
 func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
-	var (
-		slotTime = int64(time.Second) * int64(s.config.GenesisTime+head.Header.Slot*12)
-		age      = time.Duration(s.unixNano() - slotTime)
-	)
+	var age time.Duration
+	now := s.unixNano()
+	if head.Header.Slot < (uint64(now-math.MinInt64)/uint64(time.Second)-s.config.GenesisTime)/12 {
+		age = time.Duration(now - int64(time.Second)*int64(s.config.GenesisTime+head.Header.Slot*12))
+	} else {
+		age = time.Duration(math.MinInt64)
+	}
 	if s.enforceTime && age < 0 {
 		return false, age
 	}
@@ -441,9 +472,9 @@ func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
 // canonicalStore stores instances of the given type in a database and caches
 // them in memory, associated with a continuous range of period numbers.
 type canonicalStore[T any] struct {
-	Range
 	db        ethdb.KeyValueStore
 	keyPrefix []byte
+	periods   Range
 	cache     *lru.Cache[uint64, T]
 	encode    func(T) ([]byte, error)
 	decode    func([]byte) (T, error)
@@ -464,23 +495,27 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 		kl   = len(keyPrefix)
 	)
 	for iter.Next() {
+		if len(iter.Key()) != kl+8 {
+			log.Error("Invalid key length in the canonical chain database")
+			continue
+		}
 		period := binary.BigEndian.Uint64(iter.Key()[kl : kl+8])
-		if cs.First == 0 {
-			cs.First = period
-		} else if cs.AfterLast != period {
+		if cs.periods.First == 0 {
+			cs.periods.First = period
+		} else if cs.periods.AfterLast != period {
 			if iter.Next() {
 				log.Error("Gap in the canonical chain database")
 			}
 			break // continuity guaranteed
 		}
-		cs.AfterLast = period + 1
+		cs.periods.AfterLast = period + 1
 	}
 	iter.Release()
 	return cs
 }
 
-// getDbKey returns the database key belonging to the given period.
-func (cs *canonicalStore[T]) getDbKey(period uint64) []byte {
+// databaseKey returns the database key belonging to the given period.
+func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
 	var (
 		kl  = len(cs.keyPrefix)
 		key = make([]byte, kl+8)
@@ -491,65 +526,62 @@ func (cs *canonicalStore[T]) getDbKey(period uint64) []byte {
 }
 
 // add adds the given item to the database. It also ensures that the range remains
-// continuous. Can be used both in batch mode and as a standalone operation.
-func (cs *canonicalStore[T]) add(batch ethdb.Batch, period uint64, value T) {
-	if !cs.CanExpand(period) {
-		log.Error("Cannot expand canonical store", "range.first", cs.First, "range.afterLast", cs.AfterLast, "new period", period)
-		return
+// continuous. Can be used either with a batch or database backend.
+func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, value T) error {
+	if !cs.periods.CanExpand(period) {
+		log.Error("Cannot expand canonical store", "range.first", cs.periods.First, "range.afterLast", cs.periods.AfterLast, "new period", period)
+		return errors.New("Cannot expand canonical store")
 	}
 	enc, err := cs.encode(value)
 	if err != nil {
 		log.Error("Error encoding canonical store value", "error", err)
-		return
+		return err
 	}
-	key := cs.getDbKey(period)
-	if batch != nil {
-		err = batch.Put(key, enc)
-	} else {
-		err = cs.db.Put(key, enc)
-	}
-	if err != nil {
+	if err := backend.Put(cs.databaseKey(period), enc); err != nil {
 		log.Error("Error writing into canonical store value database", "error", err)
+		return err
 	}
 	cs.cache.Add(period, value)
-	cs.Expand(period)
+	cs.periods.Expand(period)
+	return nil
 }
 
-// deleteFrom removes items starting from the given period. Can only be used in
-// batch mode.
-func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
-	if fromPeriod >= cs.AfterLast {
+// deleteFrom removes items starting from the given period. Should be used with a
+// batch backend.
+func (cs *canonicalStore[T]) deleteFrom(backend ethdb.KeyValueWriter, fromPeriod uint64) (deleted Range) {
+	if fromPeriod >= cs.periods.AfterLast {
 		return
 	}
-	if fromPeriod < cs.First {
-		fromPeriod = cs.First
+	if fromPeriod < cs.periods.First {
+		fromPeriod = cs.periods.First
 	}
-	deleted = Range{First: fromPeriod, AfterLast: cs.AfterLast}
-	for period := fromPeriod; period < cs.AfterLast; period++ {
-		batch.Delete(cs.getDbKey(period))
+	deleted = Range{First: fromPeriod, AfterLast: cs.periods.AfterLast}
+	for period := fromPeriod; period < cs.periods.AfterLast; period++ {
+		backend.Delete(cs.databaseKey(period))
 		cs.cache.Remove(period)
 	}
-	if fromPeriod > cs.First {
-		cs.AfterLast = fromPeriod
+	if fromPeriod > cs.periods.First {
+		cs.periods.AfterLast = fromPeriod
 	} else {
-		cs.Range = Range{}
+		cs.periods = Range{}
 	}
 	return
 }
 
 // get returns the item at the given period or the null value of the given type
 // if no item is present.
-func (cs *canonicalStore[T]) get(period uint64) T {
-	if value, ok := cs.cache.Get(period); ok {
-		return value
+// Note: get is thread safe in itself and therefore can be called either with
+// locked or unlocked chain mutex.
+func (cs *canonicalStore[T]) get(period uint64) (value T, ok bool) {
+	if value, ok = cs.cache.Get(period); ok {
+		return
 	}
-	var value T
-	if enc, err := cs.db.Get(cs.getDbKey(period)); err == nil {
+	if enc, err := cs.db.Get(cs.databaseKey(period)); err == nil {
 		if v, err := cs.decode(enc); err == nil {
-			value = v
+			value, ok = v, true
 		} else {
 			log.Error("Error decoding canonical store value", "error", err)
 		}
 	}
-	return value
+	return
 }

@@ -32,8 +32,9 @@ func (a Range) Includes(period uint64) bool {
 	return period >= a.First && period < a.AfterLast
 }
 
-// CanExpand returns true if the range can be expanded with the given period
-// (either the range is empty or the new period is right before or after the range).
+// CanExpand returns true if the range includes or can be expanded with the given
+// period (either the range is empty or the given period is inside, right before or
+// right after the range).
 func (a Range) CanExpand(period uint64) bool {
 	return a.IsEmpty() || (period+1 >= a.First && period <= a.AfterLast)
 }

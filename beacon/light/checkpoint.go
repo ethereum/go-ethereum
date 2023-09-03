@@ -49,7 +49,7 @@ func (c *CheckpointData) Validate() error {
 func (c *CheckpointData) InitChain(chain *CommitteeChain) {
 	must := func(err error) {
 		if err != nil {
-			log.Crit("Error initializing committee chain with checkpoint", "error", err)
+			log.Error("Error initializing committee chain with checkpoint", "error", err)
 		}
 	}
 	period := c.Header.SyncPeriod()
