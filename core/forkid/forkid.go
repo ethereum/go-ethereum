@@ -289,10 +289,7 @@ func gatherForks(config *params.ChainConfig, genesis uint64) ([]uint64, []uint64
 	if len(forksByBlock) > 0 && forksByBlock[0] == 0 {
 		forksByBlock = forksByBlock[1:]
 	}
-	if len(forksByTime) > 0 && forksByTime[0] == 0 {
-		forksByTime = forksByTime[1:]
-	}
-	// Skip any forks by time that are non-zero, but before genesis.
+	// Skip any forks before genesis.
 	for len(forksByTime) > 0 && forksByTime[0] <= genesis {
 		forksByTime = forksByTime[1:]
 	}
