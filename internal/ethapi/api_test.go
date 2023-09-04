@@ -712,7 +712,6 @@ func TestMulticallV1(t *testing.T) {
 		Logs        []types.Log
 		GasUsed     string
 		Status      string
-		Transfers   []transfer
 	}
 	type blockRes struct {
 		Number string
@@ -1010,6 +1009,7 @@ func TestMulticallV1(t *testing.T) {
 						Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
 						BlockNumber: 11,
 						Data:        []byte{},
+						BlockHash:   hex2Hash(n11hash),
 					}},
 					GasUsed: "0x5508",
 					Status:  "0x1",
@@ -1175,18 +1175,28 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd984",
-					Transfers: []transfer{
-						{
-							From:  accounts[0].addr,
-							To:    randomAccounts[0].addr,
-							Value: big.NewInt(50),
-						}, {
-							From:  randomAccounts[0].addr,
-							To:    randomAccounts[1].addr,
-							Value: big.NewInt(100),
+					Logs: []types.Log{{
+						Address: common.Address{},
+						Topics: []common.Hash{
+							transferTopic,
+							accounts[0].addr.Hash(),
+							randomAccounts[0].addr.Hash(),
 						},
-					},
-					Logs:   []types.Log{},
+						Data:        common.BigToHash(big.NewInt(50)).Bytes(),
+						BlockNumber: 11,
+						BlockHash:   hex2Hash(n11hash),
+					}, {
+						Address: common.Address{},
+						Topics: []common.Hash{
+							transferTopic,
+							randomAccounts[0].addr.Hash(),
+							randomAccounts[1].addr.Hash(),
+						},
+						Data:        common.BigToHash(big.NewInt(100)).Bytes(),
+						BlockNumber: 11,
+						BlockHash:   hex2Hash(n11hash),
+						Index:       1,
+					}},
 					Status: "0x1",
 				}},
 			}},
@@ -1531,4 +1541,8 @@ func TestRPCMarshalBlock(t *testing.T) {
 			t.Errorf("test %d: want: %s have: %s", i, tc.want, have)
 		}
 	}
+}
+
+func hex2Hash(s string) common.Hash {
+	return common.BytesToHash(common.FromHex(s))
 }

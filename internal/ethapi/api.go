@@ -1199,7 +1199,6 @@ type blockResult struct {
 type callResult struct {
 	ReturnValue hexutil.Bytes  `json:"return"`
 	Logs        []*types.Log   `json:"logs"`
-	Transfers   []transfer     `json:"transfers,omitempty"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
 	Status      hexutil.Uint64 `json:"status"`
 	Error       string         `json:"error,omitempty"`
@@ -1278,12 +1277,9 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		}
 		gasUsed := uint64(0)
 		for i, call := range block.Calls {
-			// Hack to get logs from statedb which stores logs by txhash.
-			txhash := common.BigToHash(big.NewInt(int64(i)))
-			state.SetTxContext(txhash, i)
-			vmConfig := &vm.Config{NoBaseFee: true}
-			if opts.TraceTransfers {
-				vmConfig.Tracer = newTracer()
+			vmConfig := &vm.Config{
+				NoBaseFee: true,
+				Tracer:    newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), hash, common.Hash{}, uint(i)),
 			}
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
@@ -1294,16 +1290,8 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			if len(result.Revert()) > 0 {
 				result.Err = newRevertError(result)
 			}
-			logs := state.GetLogs(txhash, blockContext.BlockNumber.Uint64(), common.Hash{})
-			// Clear the garbage txhash that was filled in.
-			for _, l := range logs {
-				l.TxHash = common.Hash{}
-			}
-			var transfers []transfer
-			if opts.TraceTransfers {
-				transfers = vmConfig.Tracer.(*tracer).Transfers()
-			}
-			callRes := callResult{ReturnValue: result.Return(), Logs: logs, Transfers: transfers, GasUsed: hexutil.Uint64(result.UsedGas)}
+			logs := vmConfig.Tracer.(*tracer).Logs()
+			callRes := callResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 			if result.Failed() {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 				callRes.Error = result.Err.Error()
