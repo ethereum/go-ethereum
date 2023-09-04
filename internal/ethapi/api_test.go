@@ -848,8 +848,8 @@ func TestMulticallV1(t *testing.T) {
 			tag:  latest,
 			blocks: []CallBatch{{
 				BlockOverrides: &BlockOverrides{
-					Number:   (*hexutil.Big)(big.NewInt(11)),
-					Coinbase: &cac,
+					Number:       (*hexutil.Big)(big.NewInt(11)),
+					FeeRecipient: &cac,
 				},
 				Calls: []TransactionArgs{
 					{

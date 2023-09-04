@@ -999,13 +999,13 @@ func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.P
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number     *hexutil.Big
-	Difficulty *hexutil.Big // No-op if we're simulating post-merge calls.
-	Time       *hexutil.Uint64
-	GasLimit   *hexutil.Uint64
-	Coinbase   *common.Address
-	Random     *common.Hash
-	BaseFee    *hexutil.Big
+	Number        *hexutil.Big
+	Difficulty    *hexutil.Big // No-op if we're simulating post-merge calls.
+	Time          *hexutil.Uint64
+	GasLimit      *hexutil.Uint64
+	FeeRecipient  *common.Address
+	PrevRandao    *common.Hash
+	BaseFeePerGas *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1025,14 +1025,14 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if diff.GasLimit != nil {
 		blockCtx.GasLimit = uint64(*diff.GasLimit)
 	}
-	if diff.Coinbase != nil {
-		blockCtx.Coinbase = *diff.Coinbase
+	if diff.FeeRecipient != nil {
+		blockCtx.Coinbase = *diff.FeeRecipient
 	}
-	if diff.Random != nil {
-		blockCtx.Random = diff.Random
+	if diff.PrevRandao != nil {
+		blockCtx.Random = diff.PrevRandao
 	}
-	if diff.BaseFee != nil {
-		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	if diff.BaseFeePerGas != nil {
+		blockCtx.BaseFee = diff.BaseFeePerGas.ToInt()
 	}
 }
 
