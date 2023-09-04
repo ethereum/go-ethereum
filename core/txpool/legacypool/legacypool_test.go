@@ -210,8 +210,8 @@ func validatePoolInternals(pool *LegacyPool) error {
 	}
 
 	// Ensure the next nonce to assign is the correct one
-	pool.pendingMu.RLock()
-	defer pool.pendingMu.RUnlock()
+	// pool.pendingMu.RLock()
+	// defer pool.pendingMu.RUnlock()
 
 	for addr, txs := range pool.pending {
 		// Find the last transaction

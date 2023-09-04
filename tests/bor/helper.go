@@ -223,7 +223,7 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	block, _ := _bor.FinalizeAndAssemble(ctx, chain, b.header, state, b.txs, nil, b.receipts, []*types.Withdrawal{})
 
 	// Write state changes to db
-	root, err := state.Commit(chain.Config().IsEIP158(b.header.Number))
+	root, err := state.Commit(chain.Config().IsEIP158(b.header.Number), false)
 	if err != nil {
 		panic(fmt.Sprintf("state write error: %v", err))
 	}
@@ -470,7 +470,6 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall
 		DatabaseHandles: 256,
 		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
-		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
 			Etherbase: crypto.PubkeyToAddress(privKey.PublicKey),
 			GasCeil:   genesis.GasLimit * 11 / 10,

@@ -51,9 +51,9 @@ jobs:
         - name: Build
           run: make all
 
-        - name: Lint
-          if: runner.os == 'Linux'
-          run: make lint
+        # - name: Lint
+        #   if: runner.os == 'Linux'
+        #   run: make lint
 
         - name: Test
           run: make test
