@@ -27,6 +27,12 @@ func newRuntimeHistogram(scale float64) *runtimeHistogram {
 	return h
 }
 
+func RuntimeHistogramFromData(scale float64, hist *metrics.Float64Histogram) *runtimeHistogram {
+	h := &runtimeHistogram{scaleFactor: scale}
+	h.update(hist)
+	return h
+}
+
 func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
 	if mh == nil {
 		// The update value can be nil if the current Go version doesn't support a
