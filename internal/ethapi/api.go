@@ -1247,31 +1247,26 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
+	blockContexts, err := makeBlockContexts(ctx, s.b, blocks, header)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		results = make([]blockResult, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		globalGasCap = s.b.RPCGasCap()
 		gp           = new(core.GasPool).AddGas(globalGasCap)
-		prevNumber   = header.Number.Uint64()
 		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
 		rules        = s.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
 	)
 	for bi, block := range blocks {
-		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
-		if block.BlockOverrides != nil {
-			block.BlockOverrides.Apply(&blockContext)
-		}
-		// TODO: Consider hoisting this check up
-		if blockContext.BlockNumber.Uint64() < prevNumber {
-			return nil, fmt.Errorf("block numbers must be in order")
-		}
-		prevNumber = blockContext.BlockNumber.Uint64()
+		blockContext = blockContexts[bi]
+		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		// State overrides are applied prior to execution of a block
 		if err := block.StateOverrides.ApplyMulticall(state, precompiles); err != nil {
 			return nil, err
 		}
-		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		results[bi] = blockResult{
 			Number:       hexutil.Uint64(blockContext.BlockNumber.Uint64()),
 			Hash:         hash,
@@ -1322,6 +1317,39 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		results[bi].GasUsed = hexutil.Uint64(gasUsed)
 	}
 	return results, nil
+}
+
+func makeBlockContexts(ctx context.Context, b Backend, blocks []CallBatch, header *types.Header) ([]vm.BlockContext, error) {
+	res := make([]vm.BlockContext, len(blocks))
+	var (
+		prevNumber    = header.Number.Uint64()
+		prevTimestamp = header.Time
+	)
+	for bi, block := range blocks {
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+		if block.BlockOverrides == nil {
+			block.BlockOverrides = new(BlockOverrides)
+		}
+		if block.BlockOverrides.Number == nil {
+			n := new(big.Int).Add(big.NewInt(int64(prevNumber)), big.NewInt(1))
+			block.BlockOverrides.Number = (*hexutil.Big)(n)
+		}
+		if block.BlockOverrides.Time == nil {
+			t := prevTimestamp + 1
+			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
+		}
+		block.BlockOverrides.Apply(&blockContext)
+		if blockContext.BlockNumber.Uint64() <= prevNumber {
+			return nil, fmt.Errorf("block numbers must be in order")
+		}
+		prevNumber = blockContext.BlockNumber.Uint64()
+		if blockContext.Time <= prevTimestamp {
+			return nil, fmt.Errorf("timestamps must be in order")
+		}
+		prevTimestamp = blockContext.Time
+		res[bi] = blockContext
+	}
+	return res, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
