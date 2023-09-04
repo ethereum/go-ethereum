@@ -21,7 +21,6 @@ type SampleSnapshot interface {
 	Size() int
 	StdDev() float64
 	Sum() int64
-	Values() []int64
 	Variance() float64
 }
 

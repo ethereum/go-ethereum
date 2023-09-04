@@ -89,8 +89,8 @@ func (t *StandardTimer) Snapshot() TimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	return &timerSnapshot{
-		histogram: t.histogram.Snapshot().(*histogramSnapshot),
-		meter:     t.meter.Snapshot().(*meterSnapshot),
+		histogram: t.histogram.Snapshot(),
+		meter:     t.meter.Snapshot(),
 	}
 }
 
@@ -124,8 +124,8 @@ func (t *StandardTimer) UpdateSince(ts time.Time) {
 
 // timerSnapshot is a read-only copy of another Timer.
 type timerSnapshot struct {
-	histogram *histogramSnapshot
-	meter     *meterSnapshot
+	histogram HistogramSnapshot
+	meter     MeterSnapshot
 }
 
 // Count returns the number of events recorded at the time the snapshot was
@@ -134,6 +134,9 @@ func (t *timerSnapshot) Count() int64 { return t.histogram.Count() }
 
 // Max returns the maximum value at the time the snapshot was taken.
 func (t *timerSnapshot) Max() int64 { return t.histogram.Max() }
+
+// Size returns the size of the sample at the time the snapshot was taken.
+func (t *timerSnapshot) Size() int { return t.histogram.Size() }
 
 // Mean returns the mean value at the time the snapshot was taken.
 func (t *timerSnapshot) Mean() float64 { return t.histogram.Mean() }

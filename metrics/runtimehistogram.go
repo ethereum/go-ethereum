@@ -78,6 +78,11 @@ func (h *runtimeHistogramSnapshot) Count() int64 {
 	return count
 }
 
+// Size returns the size of the sample at the time the snapshot was taken.
+func (h *runtimeHistogramSnapshot) Size() int {
+	return len(h.Counts)
+}
+
 // Mean returns an approximation of the mean.
 func (h *runtimeHistogramSnapshot) Mean() float64 {
 	if len(h.Counts) == 0 {
