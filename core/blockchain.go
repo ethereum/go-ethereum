@@ -165,7 +165,7 @@ var DefaultCacheConfig = &CacheConfig{
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 	SnapshotWait:   true,
-	TriesInMemory:  128,
+	TriesInMemory:  1024,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -1940,8 +1940,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 	if !isValid {
 		// The chain to be imported is invalid as the blocks doesn't match with
-		// the whitelisted checkpoints.
-		return it.index, whitelist.ErrCheckpointMismatch
+		// the whitelisted block number.
+		return it.index, whitelist.ErrMismatch
 	}
 
 	// Left-trim all the known blocks that don't need to build snapshot
@@ -3081,6 +3081,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	_, err := bc.hc.InsertHeaderChain(chain, start, bc.forker)
 
 	return 0, err
+}
+
+func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
+	return bc.chainConfig
 }
 
 // SetBlockValidatorAndProcessorForTesting sets the current validator and processor.

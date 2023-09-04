@@ -65,22 +65,21 @@ ls
 ```
 ./dretesteth.sh -t GeneralStateTests/stExample --  --testpath /home/ubuntu/retestethBuild/tests --datadir /tests/config
 ```
-This will create the config files for the different clients in ~/tests/config
-Eventually. these config needs to be adapted according to the following doc  
-https://ethereum-tests.readthedocs.io/en/latest/retesteth-tutorial.html
-Specifically:  
-``` 
-f you look inside ~/tests/config, you’ll see a directory for each configured client. Typically this directory has these files:
+This will create the config files for the different clients in `~/tests/config`
+Eventually, these configuration files need to be adapted according to the following document:
 
-config, which contains the configuration for the client:
-The communication protocol to use with the client (typically TCP)
-The address(es) to use with that protocol
-The forks the client supports
-The exceptions the client can throw, and how retesteth should interpret them. This is particularly important when testing the client’s behavior when given invalid blocks.
-start.sh, which starts the client inside the docker image
-stop.sh, which stops the client instance(s)
-genesis, a directory which includes the genesis blocks for various forks the client supports. If this directory does not exist for a client, it uses the genesis blocks for the default client.
-```
+https://ethereum-tests.readthedocs.io/en/latest/retesteth-tutorial.html
+
+Specifically, if you look inside `~/tests/config`, you'll see a directory for each configured client. Typically this directory contains the following:
+
+* `config`: Contains the test configuration for the client
+    * The communication protocol to use with the client (typically TCP).
+    * The address(es) to use with that protocol.
+    * The forks supported by the client.
+    * The exceptions the client can throw, and how retesteth should interpret them. This is particularly important when testing the client's behavior when given invalid blocks.
+* `start.sh`: Starts the client inside the Docker image
+* `stop.sh`: Stops the client instance(s)
+* `genesis`: A directory which includes the genesis blocks for the various forks supported by the cient. If this directory does not exist for a client, it uses the genesis blocks for the default client.
 
 We replaced geth inside docker by using https://ethereum-tests.readthedocs.io/en/latest/retesteth-tutorial.html#replace-geth-inside-the-docker  
 Theoretically, we would not need any additional config change  

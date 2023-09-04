@@ -157,6 +157,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
+
+	// checker := whitelist.NewService(chainDb)
+
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, nil); err != nil {
 		return nil, err
 	}

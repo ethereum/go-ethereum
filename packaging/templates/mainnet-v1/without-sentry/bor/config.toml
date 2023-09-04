@@ -6,6 +6,7 @@ chain = "mainnet"
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
+# db.engine = "leveldb"
 # keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000

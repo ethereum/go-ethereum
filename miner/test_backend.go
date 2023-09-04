@@ -1,7 +1,5 @@
 package miner
 
-// TODO - Fix this - Arpit
-
 // import (
 // 	"context"
 // 	"crypto/rand"
@@ -18,7 +16,6 @@ package miner
 // 	"github.com/ethereum/go-ethereum/consensus/ethash"
 // 	"github.com/ethereum/go-ethereum/core/state"
 // 	"github.com/ethereum/go-ethereum/core/txpool"
-// 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 // 	"github.com/ethereum/go-ethereum/crypto"
 // 	"github.com/ethereum/go-ethereum/ethdb"
 
@@ -54,7 +51,7 @@ package miner
 
 // func init() {
 
-// 	testTxPoolConfig = legacypool.DefaultConfig
+// 	testTxPoolConfig = txpool.DefaultConfig
 // 	testTxPoolConfig.Journal = ""
 // 	ethashChainConfig = new(params.ChainConfig)
 // 	*ethashChainConfig = *params.TestChainConfig
@@ -64,7 +61,6 @@ package miner
 // 		Period: 10,
 // 		Epoch:  30000,
 // 	}
-// 	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 
 // 	signer := types.LatestSigner(params.TestChainConfig)
 
@@ -97,6 +93,11 @@ package miner
 // 	chain      *core.BlockChain
 // 	Genesis    *core.Genesis
 // 	uncleBlock *types.Block
+// }
+
+// // PeerCount implements Backend.
+// func (*testWorkerBackend) PeerCount() int {
+// 	panic("unimplemented")
 // }
 
 // func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
@@ -277,6 +278,9 @@ package miner
 // 		mux:                 mux,
 // 		chain:               eth.BlockChain(),
 // 		isLocalBlock:        isLocalBlock,
+// 		localUncles:         make(map[common.Hash]*types.Block),
+// 		remoteUncles:        make(map[common.Hash]*types.Block),
+// 		unconfirmed:         newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
 // 		pendingTasks:        make(map[common.Hash]*task),
 // 		txsCh:               make(chan core.NewTxsEvent, txChanSize),
 // 		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),

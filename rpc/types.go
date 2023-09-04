@@ -68,6 +68,11 @@ const (
 	LatestBlockNumber    = BlockNumber(-2)
 	PendingBlockNumber   = BlockNumber(-1)
 	EarliestBlockNumber  = BlockNumber(0)
+
+	latest    = "latest"
+	earliest  = "earliest"
+	pending   = "pending"
+	finalized = "finalized"
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
@@ -84,13 +89,13 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	}
 
 	switch input {
-	case "earliest":
+	case earliest:
 		*bn = EarliestBlockNumber
 		return nil
-	case "latest":
+	case latest:
 		*bn = LatestBlockNumber
 		return nil
-	case "pending":
+	case pending:
 		*bn = PendingBlockNumber
 		return nil
 	case "finalized":
@@ -179,23 +184,20 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 	}
 
 	switch input {
-	case "earliest":
+	case earliest:
 		bn := EarliestBlockNumber
 		bnh.BlockNumber = &bn
 
 		return nil
-	case "latest":
+
+	case latest:
 		bn := LatestBlockNumber
 		bnh.BlockNumber = &bn
 
 		return nil
-	case "pending":
-		bn := PendingBlockNumber
-		bnh.BlockNumber = &bn
 
-		return nil
-	case "finalized":
-		bn := FinalizedBlockNumber
+	case pending:
+		bn := PendingBlockNumber
 		bnh.BlockNumber = &bn
 
 		return nil
@@ -204,6 +206,13 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		bnh.BlockNumber = &bn
 
 		return nil
+
+	case finalized:
+		bn := FinalizedBlockNumber
+		bnh.BlockNumber = &bn
+
+		return nil
+
 	default:
 		if len(input) == 66 {
 			hash := common.Hash{}

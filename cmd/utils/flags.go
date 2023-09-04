@@ -2040,10 +2040,14 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
 
+	filterAPI := filters.NewFilterAPI(filterSystem, isLightClient, ethconfig.Defaults.BorLogs)
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, isLightClient, ethconfig.Defaults.BorLogs),
+		Service:   filterAPI,
 	}})
+
+	// avoiding constructor changed by introducing new method to set genesis
+	filterAPI.SetChainConfig(ethcfg.Genesis.Config)
 
 	return filterSystem
 }

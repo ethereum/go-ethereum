@@ -162,3 +162,95 @@ package miner
 
 // 	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
 // }
+
+// type mockBackend struct {
+// 	bc     *core.BlockChain
+// 	txPool *txpool.TxPool
+// }
+
+// // PeerCount implements Backend.
+// func (*mockBackend) PeerCount() int {
+// 	panic("unimplemented")
+// }
+
+// func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
+// 	return &mockBackend{
+// 		bc:     bc,
+// 		txPool: txPool,
+// 	}
+// }
+
+// func (m *mockBackend) BlockChain() *core.BlockChain {
+// 	return m.bc
+// }
+
+// func (m *mockBackend) TxPool() *txpool.TxPool {
+// 	return m.txPool
+// }
+
+// func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
+// 	return nil, errors.New("not supported")
+// }
+
+// type testBlockChain struct {
+// 	statedb       *state.StateDB
+// 	gasLimit      uint64
+// 	chainHeadFeed *event.Feed
+// }
+
+// func (bc *testBlockChain) CurrentBlock() *types.Header {
+// 	return &types.Header{
+// 		GasLimit: bc.gasLimit,
+// 		Number:   new(big.Int),
+// 	}
+// }
+
+// func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+// 	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
+// }
+
+// func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+// 	return bc.statedb, nil
+// }
+
+// func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+// 	return bc.chainHeadFeed.Subscribe(ch)
+// }
+
+// var (
+// 	// Test chain configurations
+// 	testTxPoolConfig  txpool.Config
+// 	ethashChainConfig *params.ChainConfig
+// 	cliqueChainConfig *params.ChainConfig
+
+// 	// Test accounts
+// 	testBankKey, _  = crypto.GenerateKey()
+// 	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+// 	testBankFunds   = big.NewInt(9000000000000000000)
+
+// 	testUserKey, _  = crypto.GenerateKey()
+// 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
+
+// 	// Test transactions
+// 	pendingTxs []*types.Transaction
+// 	newTxs     []*types.Transaction
+
+// 	testConfig = &Config{
+// 		Recommit:            time.Second,
+// 		GasCeil:             params.GenesisGasLimit,
+// 		CommitInterruptFlag: true,
+// 	}
+// )
+
+// func init() {
+// 	testTxPoolConfig = txpool.DefaultConfig
+// 	testTxPoolConfig.Journal = ""
+// 	ethashChainConfig = new(params.ChainConfig)
+// 	*ethashChainConfig = *params.TestChainConfig
+// 	cliqueChainConfig = new(params.ChainConfig)
+// 	*cliqueChainConfig = *params.TestChainConfig
+// 	cliqueChainConfig.Clique = &params.CliqueConfig{
+// 		Period: 10,
+// 		Epoch:  30000,
+// 	}
+// }

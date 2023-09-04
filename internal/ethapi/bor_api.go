@@ -21,6 +21,10 @@ func (s *BlockChainAPI) GetBorBlockReceipt(ctx context.Context, hash common.Hash
 	return s.b.GetBorBlockReceipt(ctx, hash)
 }
 
+func (s *BlockChainAPI) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	return s.b.GetVoteOnHash(ctx, starBlockNr, endBlockNr, hash, milestoneId)
+}
+
 //
 // Bor transaction utils
 //

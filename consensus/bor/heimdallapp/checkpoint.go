@@ -4,13 +4,10 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/cosmos/cosmos-sdk/types"
-
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 	"github.com/ethereum/go-ethereum/log"
 
 	hmTypes "github.com/maticnetwork/heimdall/types"
-	abci "github.com/tendermint/tendermint/abci/types"
 )
 
 func (h *HeimdallAppClient) FetchCheckpointCount(_ context.Context) (int64, error) {
@@ -34,10 +31,6 @@ func (h *HeimdallAppClient) FetchCheckpoint(_ context.Context, number int64) (*c
 	log.Info("Fetched checkpoint", "number", number)
 
 	return toBorCheckpoint(res), nil
-}
-
-func (h *HeimdallAppClient) NewContext() types.Context {
-	return h.hApp.NewContext(true, abci.Header{Height: h.hApp.LastBlockHeight()})
 }
 
 func toBorCheckpoint(hdCheckpoint hmTypes.Checkpoint) *checkpoint.Checkpoint {

@@ -17,6 +17,8 @@
 package eth
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -49,4 +51,28 @@ func (api *EthereumAPI) Hashrate() hexutil.Uint64 {
 // Mining returns an indication if this node is currently mining.
 func (api *EthereumAPI) Mining() bool {
 	return api.e.IsMining()
+}
+
+func getFinalizedBlockNumber(eth *Ethereum) (uint64, error) {
+	currentBlockNum := eth.BlockChain().CurrentBlock()
+
+	doExist, number, hash := eth.Downloader().GetWhitelistedMilestone()
+	if doExist && number <= currentBlockNum.Number.Uint64() {
+		block := eth.BlockChain().GetBlockByNumber(number)
+
+		if block.Hash() == hash {
+			return number, nil
+		}
+	}
+
+	doExist, number, hash = eth.Downloader().GetWhitelistedCheckpoint()
+	if doExist && number <= currentBlockNum.Number.Uint64() {
+		block := eth.BlockChain().GetBlockByNumber(number)
+
+		if block.Hash() == hash {
+			return number, nil
+		}
+	}
+
+	return 0, fmt.Errorf("No finalized block")
 }

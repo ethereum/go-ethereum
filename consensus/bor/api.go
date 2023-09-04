@@ -341,6 +341,10 @@ func (api *API) GetRootHash(start uint64, end uint64) (string, error) {
 	return root, nil
 }
 
+func (api *API) GetVoteOnHash(starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	return false, nil
+}
+
 func (api *API) initializeRootHashCache() error {
 	var err error
 	if api.rootHashCache == nil {

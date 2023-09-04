@@ -495,6 +495,8 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
+	api.SetChainConfig(params.BorUnittestChainConfig)
+
 	// Reason: Cannot specify both BlockHash and FromBlock/ToBlock)
 	testCases := []FilterCriteria{
 		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
