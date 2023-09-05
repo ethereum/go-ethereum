@@ -179,7 +179,7 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 			l1msg := it.L1Message()
 			skippedTx := types.NewTx(&l1msg)
 			log.Debug("Skipped L1 message", "queueIndex", index, "tx", skippedTx.Hash().String(), "block", blockHash.String())
-			rawdb.WriteSkippedTransaction(v.db, skippedTx, "unknown", block.NumberU64(), &blockHash)
+			rawdb.WriteSkippedTransaction(v.db, skippedTx, nil, "unknown", block.NumberU64(), &blockHash)
 		}
 
 		queueIndex = txQueueIndex + 1

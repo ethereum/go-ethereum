@@ -491,6 +491,10 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+	MinerStoreSkippedTxTracesFlag = cli.BoolFlag{
+		Name:  "miner.storeskippedtxtraces",
+		Usage: "Store the wrapped traces when storing a skipped tx",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1487,6 +1491,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerifyFlag.Name) {
 		cfg.Noverify = ctx.GlobalBool(MinerNoVerifyFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerStoreSkippedTxTracesFlag.Name) {
+		cfg.StoreSkippedTxTraces = ctx.GlobalBool(MinerStoreSkippedTxTracesFlag.Name)
 	}
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
