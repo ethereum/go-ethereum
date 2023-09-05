@@ -328,7 +328,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.
-	statedb, err = state.New(root, statedb.Database(), nil)
+	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
@@ -337,8 +337,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
 	tdb := trie.NewDatabase(db, &trie.Config{Preimages: true})
-	sdb := state.NewDatabase(state.NewCodeDB(db), tdb)
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	sdb := state.NewDatabase(state.NewCodeDB(db), tdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -349,7 +349,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	}
 	// Commit and re-open to start with a clean state.
 	root, _ := statedb.Commit(0, false)
-	statedb, _ = state.New(root, sdb, nil)
+	statedb, _ = state.New(root, sdb)
 	return statedb
 }
 

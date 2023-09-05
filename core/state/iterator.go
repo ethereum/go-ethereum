@@ -76,9 +76,12 @@ func (it *nodeIterator) step() error {
 		return nil
 	}
 	// Initialize the iterator if we've just started
-	var err error
+	tr, err := it.state.accountTrie()
+	if err != nil {
+		return err
+	}
 	if it.stateIt == nil {
-		it.stateIt, err = it.state.trie.NodeIterator(nil)
+		it.stateIt, err = tr.NodeIterator(nil)
 		if err != nil {
 			return err
 		}
@@ -116,7 +119,7 @@ func (it *nodeIterator) step() error {
 		return err
 	}
 	// Lookup the preimage of account hash
-	preimage := it.state.trie.GetKey(it.stateIt.LeafKey())
+	preimage := tr.GetKey(it.stateIt.LeafKey())
 	if preimage == nil {
 		return errors.New("account address is not available")
 	}

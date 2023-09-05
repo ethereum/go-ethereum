@@ -346,7 +346,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	codedb := state.NewCodeDB(db)
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(codedb, triedb), nil)
+		statedb, err := state.New(parent.Root(), state.NewDatabase(codedb, triedb, nil))
 		if err != nil {
 			panic(err)
 		}

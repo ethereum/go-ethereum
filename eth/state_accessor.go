@@ -68,7 +68,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			tdb := trie.NewDatabase(eth.chainDb, trie.HashDefaults)
-			if statedb, err = state.New(block.Root(), state.NewDatabase(state.NewCodeDB(eth.chainDb), tdb), nil); err == nil {
+			if statedb, err = state.New(block.Root(), state.NewDatabase(state.NewCodeDB(eth.chainDb), tdb, nil)); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -85,13 +85,13 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		triedb = trie.NewDatabase(eth.chainDb, trie.HashDefaults)
-		database = state.NewDatabase(state.NewCodeDB(eth.chainDb), triedb)
+		database = state.NewDatabase(state.NewCodeDB(eth.chainDb), triedb, nil)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database)
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -110,7 +110,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database)
 			if err == nil {
 				break
 			}
@@ -155,7 +155,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil)
+		statedb, err = state.New(root, database)
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -37,7 +38,7 @@ var (
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
-	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), nil)
+	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr))
 	return state
 }
 
@@ -45,20 +46,96 @@ func NewStateDatabase(ctx context.Context, head *types.Header, odr OdrBackend) s
 	return &odrDatabase{ctx, StateTrieID(head), odr}
 }
 
+// odrStateReader implements interface state.StateReader, providing the methods
+// to read accounts and storage slots.
+type odrStateReader struct {
+	root         common.Hash                   // The specific state root the reader belongs to
+	db           *odrDatabase                  // The associated odr database
+	accountTrie  state.Trie                    // The cached account trie
+	storageTries map[common.Address]state.Trie // The group of storage tries cached
+}
+
+// newOdrStateReader constructs the state reader with specific state root.
+func newOdrStateReader(root common.Hash, db *odrDatabase) *odrStateReader {
+	return &odrStateReader{
+		root:         root,
+		db:           db,
+		storageTries: make(map[common.Address]state.Trie),
+	}
+}
+
+// Account implements StateReader, retrieving the account specified by the address
+// from the associated state.
+func (r *odrStateReader) Account(addr common.Address) (*types.StateAccount, error) {
+	if r.accountTrie == nil {
+		r.accountTrie, _ = r.db.OpenTrie(r.root)
+	}
+	return r.accountTrie.GetAccount(addr)
+}
+
+// storageTrie returns the associated storage trie with the provided account
+// address. The trie will be opened and cached locally if it's not loaded yet.
+func (r *odrStateReader) storageTrie(addr common.Address) (state.Trie, error) {
+	if t, ok := r.storageTries[addr]; ok {
+		return t, nil
+	}
+	acct, err := r.Account(addr)
+	if err != nil {
+		return nil, err
+	}
+	var t state.Trie
+	if acct == nil {
+		t, err = r.db.OpenStorageTrie(r.root, addr, types.EmptyRootHash)
+	} else {
+		t, err = r.db.OpenStorageTrie(r.root, addr, acct.Root)
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.storageTries[addr] = t
+	return t, nil
+}
+
+// Storage implements StateReader, retrieving the storage slot specified by the
+// address and slot key from the associated state.
+func (r *odrStateReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+	t, err := r.storageTrie(addr)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	ret, err := t.GetStorage(addr, key.Bytes())
+	if err != nil {
+		return common.Hash{}, err
+	}
+	var slot common.Hash
+	slot.SetBytes(ret)
+	return slot, nil
+}
+
+// merkleDB is the implementation of state.Database interface, designed for
+// providing functionalities to read and write states in light client.
 type odrDatabase struct {
 	ctx     context.Context
 	id      *TrieID
 	backend OdrBackend
 }
 
+// StateReader constructs a reader for the specific state.
+func (db *odrDatabase) StateReader(root common.Hash) (state.StateReader, error) {
+	return newOdrStateReader(root, db), nil
+}
+
+// OpenTrie opens the main account trie at a specific root hash.
 func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
+// OpenStorageTrie opens the storage trie of an account.
 func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 
+// CopyTrie returns an independent copy of the given trie.
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	switch t := t.(type) {
 	case *odrTrie:
@@ -72,6 +149,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	}
 }
 
+// ReadCode implements CodeReader, retrieving a particular contract's code.
 func (db *odrDatabase) ReadCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	if codeHash == sha3Nil {
 		return nil, nil
@@ -87,16 +165,26 @@ func (db *odrDatabase) ReadCode(addr common.Address, codeHash common.Hash) ([]by
 	return req.Data, err
 }
 
+// ReadCodeSize implements CodeReader, retrieving a particular contracts
+// code's size.
 func (db *odrDatabase) ReadCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	code, err := db.ReadCode(addr, codeHash)
 	return len(code), err
 }
 
+// WriteCodes implements CodeWriter, writing the provided a list of contract
+// codes into database.
 func (db *odrDatabase) WriteCodes(addresses []common.Address, hashes []common.Hash, codes [][]byte) error {
 	panic("not implemented")
 }
 
+// TrieDB returns the associated trie database.
 func (db *odrDatabase) TrieDB() *trie.Database {
+	return nil
+}
+
+// Snapshot returns the associated state snapshot, it may be nil if not configured.
+func (db *odrDatabase) Snapshot() *snapshot.Tree {
 	return nil
 }
 

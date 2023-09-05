@@ -147,8 +147,9 @@ func (b *SimulatedBackend) Rollback() {
 func (b *SimulatedBackend) rollback(parent *types.Block) {
 	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
 
+	sdb := state.NewDatabase(b.blockchain.CodeDB(), b.blockchain.TrieDB(), b.blockchain.Snapshots())
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.blockchain.CodeDB(), b.blockchain.TrieDB()), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), sdb)
 }
 
 // Fork creates a side-chain that can be used to simulate reorgs.
@@ -703,7 +704,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database())
 	b.pendingReceipts = receipts[0]
 	return nil
 }
@@ -810,7 +811,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	defer b.mu.Unlock()
 
 	if len(b.pendingBlock.Transactions()) != 0 {
-		return errors.New("Could not adjust time on non-empty block")
+		return errors.New("could not adjust time on non-empty block")
 	}
 	// Get the last block
 	block := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())
@@ -824,8 +825,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
-
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database())
 	return nil
 }
 

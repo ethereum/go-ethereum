@@ -67,8 +67,10 @@ type stateObject struct {
 	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
-	// Write caches.
-	trie Trie // storage trie, which becomes non-nil on first access
+	// trie represents the associated storage trie, initially nil and set
+	// upon first access. It's reset to nil when state object is committed
+	// to ensure a reload with the new root after the commit.
+	trie Trie
 	code Code // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites
@@ -134,22 +136,24 @@ func (s *stateObject) touch() {
 	}
 }
 
-// getTrie returns the associated storage trie. The trie will be opened
+// storageTrie returns the associated storage trie. The trie will be opened
 // if it's not loaded previously. An error will be returned if trie can't
 // be loaded.
-func (s *stateObject) getTrie() (Trie, error) {
+func (s *stateObject) storageTrie() (Trie, error) {
 	if s.trie == nil {
-		// Try fetching from prefetcher first
+		// Attempt to load the storage trie from the prefetcher if enabled,
+		// benefiting from cached hot data.
 		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil {
-			// When the miner is creating the pending state, there is no prefetcher
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
+		// Load the storage trie from database as the fallback if it's not
+		// available in prefetcher.
 		if s.trie == nil {
-			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
+			t, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
 			if err != nil {
 				return nil, err
 			}
-			s.trie = tr
+			s.trie = t
 		}
 	}
 	return s.trie, nil
@@ -184,43 +188,11 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
 		return common.Hash{}
 	}
-	// If no live objects are available, attempt to use snapshots
-	var (
-		enc   []byte
-		err   error
-		value common.Hash
-	)
-	if s.db.snap != nil {
-		start := time.Now()
-		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
-		if metrics.EnabledExpensive {
-			s.db.SnapshotStorageReads += time.Since(start)
-		}
-		if len(enc) > 0 {
-			_, content, _, err := rlp.Split(enc)
-			if err != nil {
-				s.db.setError(err)
-			}
-			value.SetBytes(content)
-		}
-	}
-	// If the snapshot is unavailable or reading from it fails, load from the database.
-	if s.db.snap == nil || err != nil {
-		start := time.Now()
-		tr, err := s.getTrie()
-		if err != nil {
-			s.db.setError(err)
-			return common.Hash{}
-		}
-		val, err := tr.GetStorage(s.address, key.Bytes())
-		if metrics.EnabledExpensive {
-			s.db.StorageReads += time.Since(start)
-		}
-		if err != nil {
-			s.db.setError(err)
-			return common.Hash{}
-		}
-		value.SetBytes(val)
+	// If no live objects are available, attempt to read from database.
+	value, err := s.db.reader.Storage(s.address, key)
+	if err != nil {
+		s.db.setError(err)
+		return common.Hash{}
 	}
 	s.originStorage[key] = value
 	return value
@@ -286,10 +258,10 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	var (
 		storage map[common.Hash][]byte
 		origin  map[common.Hash][]byte
+		hasher  = crypto.NewKeccakState()
 	)
-	tr, err := s.getTrie()
+	tr, err := s.storageTrie()
 	if err != nil {
-		s.db.setError(err)
 		return nil, err
 	}
 	// Insert all the pending storage updates into the trie
@@ -305,7 +277,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		var encoded []byte // rlp-encoded value to be used by the snapshot
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
-				s.db.setError(err)
 				return nil, err
 			}
 			s.db.StorageDeleted += 1
@@ -314,7 +285,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			trimmed := common.TrimLeftZeroes(value[:])
 			encoded, _ = rlp.EncodeToBytes(trimmed)
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
-				s.db.setError(err)
 				return nil, err
 			}
 			s.db.StorageUpdated += 1
@@ -326,7 +296,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 				s.db.storages[s.addrHash] = storage
 			}
 		}
-		khash := crypto.HashData(s.db.hasher, key[:])
+		khash := crypto.HashData(hasher, key[:])
 		storage[khash] = encoded // encoded will be nil if it's deleted
 
 		// Cache the original value of mutated storage slots
@@ -360,9 +330,13 @@ func (s *stateObject) updateTrie() (Trie, error) {
 // new storage trie root.
 func (s *stateObject) updateRoot() {
 	// Flush cached storage mutations into trie, short circuit if any error
-	// is occurred or there is not change in the trie.
+	// is occurred or there is no change in the trie.
 	tr, err := s.updateTrie()
-	if err != nil || tr == nil {
+	if err != nil {
+		s.db.setError(err)
+		return
+	}
+	if tr == nil {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
@@ -395,7 +369,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	s.data.Root = root
 
 	// Update original account data after commit
-	s.origin = s.data.Copy()
+	s.origin, s.trie = s.data.Copy(), nil
 	return nodes, nil
 }
 
@@ -434,16 +408,16 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
+func (s *stateObject) deepCopy() *stateObject {
 	obj := &stateObject{
-		db:       db,
+		db:       s.db,
 		address:  s.address,
 		addrHash: s.addrHash,
 		origin:   s.origin,
 		data:     s.data,
 	}
 	if s.trie != nil {
-		obj.trie = db.db.CopyTrie(s.trie)
+		obj.trie = s.db.db.CopyTrie(s.trie)
 	}
 	obj.code = s.code
 	obj.dirtyStorage = s.dirtyStorage.Copy()

@@ -182,7 +182,6 @@ func (test *stateTest) run() bool {
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
-		sdb       = NewDatabase(NewCodeDB(disk), tdb)
 		byzantium = rand.Intn(2) == 0
 	)
 	defer disk.Close()
@@ -197,12 +196,14 @@ func (test *stateTest) run() bool {
 			AsyncBuild: false,
 		}, disk, tdb, types.EmptyRootHash)
 	}
+	sdb := NewDatabase(NewCodeDB(disk), tdb, snaps)
+
 	for i, actions := range test.actions {
 		root := types.EmptyRootHash
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snaps)
+		state, err := New(root, sdb)
 		if err != nil {
 			panic(err)
 		}

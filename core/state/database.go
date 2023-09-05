@@ -17,11 +17,9 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -40,6 +38,7 @@ type CodeReader interface {
 // CodeWriter wraps the WriteCodes method of a backing contract code store,
 // providing an interface for writing contract codes back to database.
 type CodeWriter interface {
+	// WriteCodes writes the provided a list of contract codes into database.
 	WriteCodes(addresses []common.Address, codeHashes []common.Hash, codes [][]byte) error
 }
 
@@ -50,12 +49,26 @@ type CodeStore interface {
 	CodeWriter
 }
 
+// StateReader defines the interface for accessing accounts or storage slots
+// associated with a specific state.
+type StateReader interface {
+	// Account retrieves the account associated with a particular address.
+	Account(addr common.Address) (*types.StateAccount, error)
+
+	// Storage retrieves the storage slot associated with a particular account
+	// address and slot key.
+	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
+}
+
 // Database defines the essential methods for reading and writing ethereum states,
 // providing a comprehensive interface for ethereum state management.
 type Database interface {
 	CodeStore
 
-	// OpenTrie opens the main account trie.
+	// StateReader returns a state reader interface with the specified state root.
+	StateReader(stateRoot common.Hash) (StateReader, error)
+
+	// OpenTrie opens the main account trie at a specific root hash.
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
@@ -66,6 +79,9 @@ type Database interface {
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *trie.Database
+
+	// Snapshot returns the associated state snapshot; it may be nil if not configured.
+	Snapshot() *snapshot.Tree
 }
 
 // Trie is a Ethereum state trie interface, defining the essential methods
@@ -137,69 +153,4 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
-}
-
-// NewDatabase creates a state database with the provided contract code store
-// and trie node database.
-func NewDatabase(codedb *CodeDB, triedb *trie.Database) Database {
-	return &cachingDB{
-		codedb: codedb,
-		triedb: triedb,
-	}
-}
-
-// NewDatabaseForTesting is similar to NewDatabase, but it sets up a local code
-// store and trie database with default config by using the provided database,
-// specifically intended for testing.
-func NewDatabaseForTesting(db ethdb.Database) Database {
-	return NewDatabase(NewCodeDB(db), trie.NewDatabase(db, nil))
-}
-
-// cachingDB is the implementation of Database interface, designed for providing
-// functionalities to read and write states.
-type cachingDB struct {
-	codedb *CodeDB
-	triedb *trie.Database
-}
-
-// OpenTrie opens the main account trie at a specific root hash.
-func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
-	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
-}
-
-// CopyTrie returns an independent copy of the given trie.
-func (db *cachingDB) CopyTrie(t Trie) Trie {
-	switch t := t.(type) {
-	case *trie.StateTrie:
-		return t.Copy()
-	default:
-		panic(fmt.Errorf("unknown trie type %T", t))
-	}
-}
-
-// ReadCode implements CodeReader, retrieving a particular contract's code.
-func (db *cachingDB) ReadCode(address common.Address, codeHash common.Hash) ([]byte, error) {
-	return db.codedb.ReadCode(address, codeHash)
-}
-
-// ReadCodeSize implements CodeReader, retrieving a particular contracts
-// code's size.
-func (db *cachingDB) ReadCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	return db.codedb.ReadCodeSize(addr, codeHash)
-}
-
-// WriteCodes implements CodeWriter, writing the provided a list of contract
-// codes into database.
-func (db *cachingDB) WriteCodes(addresses []common.Address, hashes []common.Hash, codes [][]byte) error {
-	return db.codedb.WriteCodes(addresses, hashes, codes)
-}
-
-// TrieDB retrieves any intermediate trie-node caching layer.
-func (db *cachingDB) TrieDB() *trie.Database {
-	return db.triedb
 }

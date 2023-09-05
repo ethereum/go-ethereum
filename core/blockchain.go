@@ -1781,7 +1781,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, state.NewDatabase(bc.codedb, bc.triedb), bc.snaps)
+		statedb, err := state.New(parent.Root, state.NewDatabase(bc.codedb, bc.triedb, bc.snaps))
 		if err != nil {
 			return it.index, err
 		}
@@ -1794,7 +1794,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, state.NewDatabase(bc.codedb, bc.triedb), bc.snaps)
+				throwaway, _ := state.New(parent.Root, state.NewDatabase(bc.codedb, bc.triedb, bc.snaps))
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
