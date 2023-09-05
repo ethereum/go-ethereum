@@ -45,7 +45,10 @@ var transferTopic = common.HexToHash("ddf252ad1be2c89b69c2b068fc378daa952ba7f163
 //
 // TODO: embed noopTracer
 type tracer struct {
-	logs           []*types.Log
+	// logs keeps logs for all open call frames.
+	// This lets us clear logs for failed logs.
+	logs           [][]*types.Log
+	count          int
 	traceTransfers bool
 	// TODO: replace with tracers.Context once extended tracer PR is merged.
 	blockNumber uint64
@@ -56,7 +59,7 @@ type tracer struct {
 
 func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common.Hash, txIdx uint) *tracer {
 	return &tracer{
-		logs:           make([]*types.Log, 0),
+		logs:           make([][]*types.Log, 1),
 		traceTransfers: traceTransfers,
 		blockNumber:    blockNumber,
 		blockHash:      blockHash,
@@ -72,6 +75,9 @@ func (t *tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addres
 }
 
 func (t *tracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+	if err != nil {
+		t.logs[0] = nil
+	}
 }
 
 func (t *tracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
@@ -109,6 +115,7 @@ func (t *tracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *
 }
 
 func (t *tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.logs = append(t.logs, make([]*types.Log, 0))
 	toCopy := to
 	if value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, toCopy, value)
@@ -117,14 +124,29 @@ func (t *tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Addr
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *tracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (t *tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	size := len(t.logs)
+	if size <= 1 {
+		return
+	}
+	// pop call
+	call := t.logs[size-1]
+	t.logs = t.logs[:size-1]
+	size--
+
+	// Clear logs if call failed.
+	if err == nil {
+		t.logs[size-1] = append(t.logs[size-1], call...)
+	}
+}
 
 func (t *tracer) CaptureTxStart(gasLimit uint64) {}
 
-func (t *tracer) CaptureTxEnd(restGas uint64) {}
+func (t *tracer) CaptureTxEnd(restGas uint64) {
+}
 
 func (t *tracer) captureLog(address common.Address, topics []common.Hash, data []byte) {
-	t.logs = append(t.logs, &types.Log{
+	t.logs[len(t.logs)-1] = append(t.logs[len(t.logs)-1], &types.Log{
 		Address:     address,
 		Topics:      topics,
 		Data:        data,
@@ -132,8 +154,9 @@ func (t *tracer) captureLog(address common.Address, topics []common.Hash, data [
 		BlockHash:   t.blockHash,
 		TxHash:      t.txHash,
 		TxIndex:     t.txIdx,
-		Index:       uint(len(t.logs)),
+		Index:       uint(t.count),
 	})
+	t.count++
 }
 
 func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
@@ -149,7 +172,7 @@ func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
 }
 
 func (t *tracer) Logs() []*types.Log {
-	return t.logs
+	return t.logs[0]
 }
 
 // TODO: remove once extended tracer PR is merged.
