@@ -22,8 +22,10 @@ import (
 	"io"
 )
 
-// ErrNotFound is the errorcode if the requested key does not exist.
-var ErrNotFound = errors.New("not found")
+var (
+	// ErrNotFound is the errorcode if the requested key does not exist.
+	ErrNotFound = errors.New("not found")
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
