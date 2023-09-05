@@ -125,38 +125,52 @@ func TestWebsocketLargeRead(t *testing.T) {
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	testLimit := func(limit int64) {
+	testLimit := func(limit *int64) {
 		opts := []ClientOption{}
-		if limit >= 0 {
-			opts = append(opts, WithWebsocketMessageSizeLimit(limit))
-		} else {
-			limit = wsMessageSizeLimit
+		expLimit := int64(wsDefaultReadLimit)
+		if limit != nil && *limit >= 0 {
+			opts = append(opts, WithWebsocketMessageSizeLimit(*limit))
+			if *limit > 0 {
+				expLimit = *limit // 0 means infinite
+			}
 		}
 		client, err := DialOptions(context.Background(), wsURL, opts...)
 		if err != nil {
 			t.Fatalf("can't dial: %v", err)
 		}
 		defer client.Close()
-
 		// Remove some bytes for json encoding overhead.
-		underLimit := int(limit - 128)
+		underLimit := int(expLimit - 128)
+		overLimit := expLimit + 1
+		if expLimit == wsDefaultReadLimit {
+			// No point trying the full 32MB in tests. Just sanity-check that
+			// it's not obviously limited.
+			underLimit = 1024
+			overLimit = -1
+		}
 		var res string
-		err = client.Call(&res, "test_repeat", "A", underLimit)
-		if err != nil {
-			t.Fatalf("unexpected error with limit %d: %v", limit, err)
+		// Check under limit
+		if err = client.Call(&res, "test_repeat", "A", underLimit); err != nil {
+			t.Fatalf("unexpected error with limit %d: %v", expLimit, err)
 		}
 		if len(res) != underLimit || strings.Count(res, "A") != underLimit {
 			t.Fatal("incorrect data")
 		}
-
-		err = client.Call(&res, "test_repeat", "A", limit+1)
-		if err == nil || err != websocket.ErrReadLimit {
-			t.Fatalf("wrong error with limit %d: %v expecting %v", limit, err, websocket.ErrReadLimit)
+		// Check over limit
+		if overLimit > 0 {
+			err = client.Call(&res, "test_repeat", "A", expLimit+1)
+			if err == nil || err != websocket.ErrReadLimit {
+				t.Fatalf("wrong error with limit %d: %v expecting %v", expLimit, err, websocket.ErrReadLimit)
+			}
 		}
 	}
+	ptr := func(v int64) *int64 { return &v }
 
-	testLimit(-1)
-	testLimit(wsMessageSizeLimit * 2)
+	testLimit(ptr(-1)) // Should be ignored (use default)
+	testLimit(ptr(0))  // Should be ignored (use default)
+	testLimit(nil)     // Should be ignored (use default)
+	testLimit(ptr(200))
+	testLimit(ptr(wsDefaultReadLimit * 2))
 }
 
 func TestWebsocketPeerInfo(t *testing.T) {
@@ -252,7 +266,7 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	respLength := wsMessageSizeLimit - 50
+	respLength := wsDefaultReadLimit - 50
 	srv.RegisterName("test", largeRespService{respLength})
 
 	c, err := DialWebsocket(context.Background(), wsURL, "")

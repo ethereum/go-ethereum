@@ -35,7 +35,7 @@ type clientConfig struct {
 
 	// WebSocket options
 	wsDialer           *websocket.Dialer
-	wsMessageSizeLimit *int64
+	wsMessageSizeLimit *int64 // wsMessageSizeLimit nil = default, 0 = no limit
 
 	// RPC handler options
 	idgen              func() ID
