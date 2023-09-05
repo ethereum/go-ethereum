@@ -32,6 +32,10 @@ var (
 	// invocation of a data access operation.
 	errMemorydbClosed = errors.New("database closed")
 
+	// errMemorydbNotFound is returned if a key is requested that is not found in
+	// the provided memory database.
+	errMemorydbNotFound = errors.New("not found")
+
 	// errSnapshotReleased is returned if callers want to retrieve data from a
 	// released snapshot.
 	errSnapshotReleased = errors.New("snapshot released")
@@ -94,7 +98,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, ethdb.ErrNotFound
+	return nil, errMemorydbNotFound
 }
 
 // Put inserts the given value into the key-value store.
@@ -373,7 +377,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if entry, ok := snap.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, ethdb.ErrNotFound
+	return nil, errMemorydbNotFound
 }
 
 // Release releases associated resources. Release should always succeed and can

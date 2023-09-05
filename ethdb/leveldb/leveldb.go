@@ -191,9 +191,6 @@ func (db *Database) Has(key []byte) (bool, error) {
 func (db *Database) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
-		if err == leveldb.ErrNotFound {
-			return nil, ethdb.ErrNotFound
-		}
 		return nil, err
 	}
 	return dat, nil
@@ -472,11 +469,7 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 // Get retrieves the given key if it's present in the snapshot backing by
 // key-value data store.
 func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	val, err := snap.db.Get(key, nil)
-	if err == leveldb.ErrNotFound {
-		return nil, ethdb.ErrNotFound
-	}
-	return val, err
+	return snap.db.Get(key, nil)
 }
 
 // Release releases associated resources. Release should always succeed and can

@@ -267,9 +267,6 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	}
 	dat, closer, err := d.db.Get(key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, ethdb.ErrNotFound
-		}
 		return nil, err
 	}
 	ret := make([]byte, len(dat))
@@ -353,9 +350,6 @@ func (snap *snapshot) Has(key []byte) (bool, error) {
 func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	dat, closer, err := snap.db.Get(key)
 	if err != nil {
-		if err == pebble.ErrNotFound {
-			return nil, ethdb.ErrNotFound
-		}
 		return nil, err
 	}
 	ret := make([]byte, len(dat))
