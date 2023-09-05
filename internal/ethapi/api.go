@@ -1193,6 +1193,7 @@ type blockResult struct {
 	GasUsed      hexutil.Uint64 `json:"gasUsed"`
 	FeeRecipient common.Address `json:"feeRecipient"`
 	BaseFee      *hexutil.Big   `json:"baseFeePerGas"`
+	PrevRandao   common.Hash    `json:"prevRandao"`
 	Calls        []callResult   `json:"calls"`
 }
 
@@ -1274,6 +1275,9 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			FeeRecipient: blockContext.Coinbase,
 			BaseFee:      (*hexutil.Big)(blockContext.BaseFee),
 			Calls:        make([]callResult, len(block.Calls)),
+		}
+		if blockContext.Random != nil {
+			results[bi].PrevRandao = *blockContext.Random
 		}
 		gasUsed := uint64(0)
 		for i, call := range block.Calls {
