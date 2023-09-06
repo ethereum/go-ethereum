@@ -17,7 +17,7 @@ The local machine's firewall settings should:
 
 ## API security {#api-security}
 
-Geh has a number of API endpoints; the legacy json-rpc, the new trusted "beacon" json-rpc API, as well as graphql endpoint. Neither of these
+Geth has a number of API endpoints; the legacy json-rpc, the new trusted "beacon" json-rpc API, as well as graphql endpoint. Neither of these
 endpoints are designed to withstand attacks by hostile clients, nor handle huge amounts of clients/traffic. 
 
 Exposing API endpoints towards "the internet", or any untrusted/hostile network, 
