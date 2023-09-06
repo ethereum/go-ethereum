@@ -72,23 +72,28 @@ const (
 	// end of the transaction's execution. There is only one such gas change per transaction.
 	GasChangeTxBuyBack
 
-	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE, today controlled by EIP150 rules
+	// GasChangeCallInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
+	// one such gas change per call.
+	GasChangeCallInitialBalance
+	// GasChangeCallLeftOverReturned is the amount of gas left over that will be returned to the caller, this change will always
+	// be a negative change as we "drain" left over gas towards 0.
+	GasChangeCallLeftOverReturned
+	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the call after the child call execution it
+	// executed completed. This value is always positive as we are giving gas back to the you, the left over gas of the child.
+	GasChangeCallLeftOverRefunded
+	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE, today controlled by EIP150 rules.
 	GasChangeCallContractCreation
-	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2, today controlled by EIP150 rules
+	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2, today controlled by EIP150 rules.
 	GasChangeCallContractCreation2
-	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage
+	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
 	GasChangeCallCodeStorage
 	// GasChangeCallOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
-	// performed can be check by `CaptureState` handling
+	// performed can be check by `CaptureState` handling.
 	GasChangeCallOpCode
-	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution
+	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution.
 	GasChangeCallPrecompiledContract
-	// GasChangeCallStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules
+	// GasChangeCallStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules.
 	GasChangeCallStorageColdAccess
-	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the caller after the execution of the call, if
-	// there is left over at the end of call's execution. This can change can happen multiple times within a single transaction as
-	// each call is independent of each other.
-	GasChangeCallLeftOverRefunded
-	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert
+	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution
 )

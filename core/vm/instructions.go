@@ -614,7 +614,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	scope.Stack.push(&stackvalue)
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
@@ -659,7 +659,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	scope.Stack.push(&stackvalue)
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
@@ -709,7 +709,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
@@ -749,7 +749,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
@@ -782,7 +782,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	}
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
@@ -815,7 +815,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	}
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
+		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverReturned)
 	}
 
 	scope.Contract.Gas += returnGas
