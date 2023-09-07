@@ -738,9 +738,11 @@ func (api *ScrollAPI) GetSkippedTransaction(ctx context.Context, hash common.Has
 	rpcTx.SkipBlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(stx.BlockNumber))
 	rpcTx.SkipBlockHash = stx.BlockHash
 	if len(stx.TracesBytes) != 0 {
-		if err := json.Unmarshal(stx.TracesBytes, rpcTx.Traces); err != nil {
+		traces := &types.BlockTrace{}
+		if err := json.Unmarshal(stx.TracesBytes, traces); err != nil {
 			return nil, fmt.Errorf("fail to Unmarshal traces for skipped tx, hash: %s, err: %w", hash.String(), err)
 		}
+		rpcTx.Traces = traces
 	}
 	return &rpcTx, nil
 }
