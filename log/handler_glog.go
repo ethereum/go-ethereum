@@ -172,7 +172,8 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 
 	h.location = location
 	h.backtrace.Store(len(location) > 0)
-
+	// Enable location storage (globally)
+	locationEnabled.Store(true)
 	return nil
 }
 

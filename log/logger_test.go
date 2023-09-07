@@ -25,40 +25,21 @@ func (n notimeHandler) Log(r *Record) error {
 	return n.next.Log(r)
 }
 
-func TestLoggingNoTrace(t *testing.T) {
-	out := new(bytes.Buffer)
-	logger := New()
-	{
-		glog := NewGlogHandler(StreamHandler(out, TerminalFormat(false)))
-		glog.Verbosity(LvlTrace)
-		if err := glog.BacktraceAt("logger_test.go:38"); err != nil {
-			t.Fatal(err)
-		}
-		logger.SetHandler(notimeHandler{glog})
-	}
-	logger.Trace("a message", "foo", "bar")
-	have := out.String()
-	want := `TRACE[01-01|01:00:00.000] a message                                foo=bar
-`
-	if have != want {
-		t.Errorf("\nhave: '%v'\nwant: '%v'\n", have, want)
-	}
-}
-
+// TestLoggingWithTrace checks that if BackTraceAt is set, then the
+// gloghandler is capable of spitting out a stacktrace
 func TestLoggingWithTrace(t *testing.T) {
-	PrintOrigins(true)
-	defer PrintOrigins(false)
+	defer locationEnabled.Store(locationEnabled.Load())
 	out := new(bytes.Buffer)
 	logger := New()
 	{
 		glog := NewGlogHandler(StreamHandler(out, TerminalFormat(false)))
 		glog.Verbosity(LvlTrace)
-		if err := glog.BacktraceAt("logger_test.go:59"); err != nil {
+		if err := glog.BacktraceAt("logger_test.go:42"); err != nil {
 			t.Fatal(err)
 		}
 		logger.SetHandler(notimeHandler{glog})
 	}
-	logger.Trace("a message", "foo", "bar")
+	logger.Trace("a message", "foo", "bar") // Will be bumped to INFO
 	have := out.String()
 	wantPrefix := `INFO [01-01|01:00:00.000|log/logger_test.go:59] a message
         
