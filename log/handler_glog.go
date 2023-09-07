@@ -139,7 +139,10 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	h.patterns = filter
 	h.siteCache = make(map[uintptr]Lvl)
 	h.override.Store(len(filter) != 0)
-
+	// Enable location storage (globally)
+	if len(h.patterns) > 0 {
+		locationEnabled.Store(true)
+	}
 	return nil
 }
 
