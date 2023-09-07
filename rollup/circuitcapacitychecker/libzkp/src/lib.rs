@@ -4,13 +4,15 @@ pub mod checker {
     use crate::utils::{c_char_to_str, c_char_to_vec, vec_to_c_char};
     use anyhow::{anyhow, Error};
     use libc::c_char;
-    use prover::zkevm::{CircuitCapacityChecker, RowUsage};
+    use prover::{
+        types::eth::BlockTrace,
+        zkevm::{CircuitCapacityChecker, RowUsage},
+    };
     use serde_derive::{Deserialize, Serialize};
     use std::cell::OnceCell;
     use std::collections::HashMap;
     use std::panic;
     use std::ptr::null;
-    use types::eth::BlockTrace;
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct RowUsageResult {
