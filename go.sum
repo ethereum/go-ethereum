@@ -117,10 +117,16 @@ github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f h1:o/kfcElHqOi
 github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f/go.mod h1:i/u985jwjWRlyHXQbwatDASoW0RMlZ/3i9yJHE2xLkI=
 github.com/cockroachdb/pebble v0.0.0-20230906160148-46873a6a7a06 h1:T+Np/xtzIjYM/P5NAw0e2Rf1FGvzDau1h54MKvx8G7w=
 github.com/cockroachdb/pebble v0.0.0-20230906160148-46873a6a7a06/go.mod h1:bynZ3gvVyhlvjLI7PT6dmZ7g76xzJ7HpxfjgkzCGz6s=
+github.com/cockroachdb/pebble v0.0.0-20230821143352-55b44ac08de8 h1:2fNOyQqrHSjFdqnKqSLj9W7eGTcqKujJPA8vAuT1zN8=
+github.com/cockroachdb/pebble v0.0.0-20230821143352-55b44ac08de8/go.mod h1:bynZ3gvVyhlvjLI7PT6dmZ7g76xzJ7HpxfjgkzCGz6s=
+github.com/cockroachdb/pebble v0.0.0-20230906203007-2129a6e99d0f h1:s4IOGZ82V0XFPU+NS51ue3ebDrTmUsDak4ZMLStYJFI=
+github.com/cockroachdb/pebble v0.0.0-20230906203007-2129a6e99d0f/go.mod h1:nindLFinxeDPjP4qI9LtVHAwDef57/0s5KMfWgdktQc=
 github.com/cockroachdb/redact v1.0.8 h1:8QG/764wK+vmEYoOlfobpe12EQcS81ukx/a4hdVMxNw=
 github.com/cockroachdb/redact v1.0.8/go.mod h1:BVNblN9mBWFyMyqK1k3AAiSxhvhfK2oOZZ2lK+dpvRg=
 github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 h1:IKgmqgMQlVJIZj19CdocBeSfSaiCbEBZGKODaixqtHM=
 github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2/go.mod h1:8BT+cPK6xvFOcRlk0R8eg+OTkcqI6baNH4xAkpiYVvQ=
+github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 h1:zuQyyAKVxetITBuuhv3BI9cMrmStnpT18zmgmTxunpo=
+github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06/go.mod h1:7nc4anLGjupUW/PeY5qiNYsdNXj7zopG+eqsS7To5IQ=
 github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0/go.mod h1:4Zcjuz89kmFXt9morQgcfYZAYZ5n8WHjt81YYWIwtTM=
 github.com/consensys/bavard v0.1.13 h1:oLhMLOFGTLdlda/kma4VOJazblc7IM5y5QPd2A/YjhQ=
 github.com/consensys/bavard v0.1.13/go.mod h1:9ItSMtA/dXMAiL7BG6bqW2m3NdSEObYWoH223nGHukI=
