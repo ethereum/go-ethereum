@@ -15,6 +15,21 @@ The local machine's firewall settings should:
 - Allow traffic on `TCP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows the node to connect to peers.
 - Allow traffic on `UDP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows node discovery.
 
+## API security {#api-security}
+
+Geth has a number of API endpoints; the legacy json-rpc, the new trusted "beacon" json-rpc API, as well as graphql endpoint. Neither of these
+endpoints are designed to withstand attacks by hostile clients, nor handle huge amounts of clients/traffic. 
+
+Exposing API endpoints towards "the internet", or any untrusted/hostile network, 
+
+- Increase the risk of crashes due to OOM, 
+- Increase the risk of not keeping up with chain progression, due to resource starvation (IO or CPU),
+- Increase the risk of attemps to steal funds via spurious signing-requests (depending on what namespaces are exposed).
+
+We do not recommend exposing API endpoints publically, and any user who wishes to do so should carefully consider setting up  
+proxies, WAFs, application level filtering, rate limiting, logging, tls terminator and monitoring to improve resilience. 
+
+
 ## Account security {#account-security}
 
 Account security comes down to keeping private keys and account passwords backed up and inaccessible to adversaries. This is something that users take responsibility for. Geth provides an encrypted store for keys that are unlocked using an account password. If the key files or the passwords are lost, the account is impossible to access and the funds are effectively lost forever. If access to the unencrypted keys is obtained by an adversary they gain control of any funds associated with the account.
