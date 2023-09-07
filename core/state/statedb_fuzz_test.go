@@ -181,7 +181,7 @@ func (test *stateTest) run() bool {
 			storageList = append(storageList, copy2DSet(states.Storages))
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = trie.NewDatabase(disk, &trie.Config{OnCommit: onCommit, PathDB: pathdb.Defaults})
+		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
@@ -206,6 +206,8 @@ func (test *stateTest) run() bool {
 		if err != nil {
 			panic(err)
 		}
+		state.onCommit = onCommit
+
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
