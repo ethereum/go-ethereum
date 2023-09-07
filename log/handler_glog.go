@@ -141,7 +141,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	h.override.Store(len(filter) != 0)
 	// Enable location storage (globally)
 	if len(h.patterns) > 0 {
-		locationEnabled.Store(true)
+		stackEnabled.Store(true)
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	h.location = location
 	h.backtrace.Store(len(location) > 0)
 	// Enable location storage (globally)
-	locationEnabled.Store(true)
+	stackEnabled.Store(true)
 	return nil
 }
 

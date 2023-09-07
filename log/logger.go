@@ -189,7 +189,7 @@ func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
 			Ctx:  ctxKey,
 		},
 	}
-	if locationEnabled.Load() {
+	if stackEnabled.Load() {
 		record.Call = stack.Caller(skip)
 	}
 	l.h.Log(record)

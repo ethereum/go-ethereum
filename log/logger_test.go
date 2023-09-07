@@ -28,7 +28,7 @@ func (n notimeHandler) Log(r *Record) error {
 // TestLoggingWithTrace checks that if BackTraceAt is set, then the
 // gloghandler is capable of spitting out a stacktrace
 func TestLoggingWithTrace(t *testing.T) {
-	defer locationEnabled.Store(locationEnabled.Load())
+	defer stackEnabled.Store(stackEnabled.Load())
 	out := new(bytes.Buffer)
 	logger := New()
 	{
@@ -41,10 +41,28 @@ func TestLoggingWithTrace(t *testing.T) {
 	}
 	logger.Trace("a message", "foo", "bar") // Will be bumped to INFO
 	have := out.String()
-	wantPrefix := `INFO [01-01|01:00:00.000|log/logger_test.go:59] a message
-        
-        goroutine`
-	if len(have) < len(wantPrefix) || strings.HasPrefix(have, wantPrefix) {
-		t.Errorf("\nhave: '%v'\nwant: '%v'\n", have, wantPrefix)
+	wantPrefix := "INFO [01-01|01:00:00.000] a message\n\ngoroutine"
+	if len(have) < len(wantPrefix) || !strings.HasPrefix(have, wantPrefix) {
+		t.Errorf("\nhave: %q\nwant: %q\n", have, wantPrefix)
+	}
+}
+
+// TestLoggingWithVmodule checks that vmodule works.
+func TestLoggingWithVmodule(t *testing.T) {
+	defer stackEnabled.Store(stackEnabled.Load())
+	out := new(bytes.Buffer)
+	logger := New()
+	{
+		glog := NewGlogHandler(StreamHandler(out, TerminalFormat(false)))
+		glog.Verbosity(LvlCrit)
+		logger.SetHandler(notimeHandler{glog})
+		logger.Warn("This should not be seen", "ignored", "true")
+		glog.Vmodule("logger_test.go=5")
+	}
+	logger.Trace("a message", "foo", "bar")
+	have := out.String()
+	want := "TRACE[01-01|01:00:00.000] a message                                foo=bar\n"
+	if have != want {
+		t.Errorf("\nhave: %q\nwant: %q\n", have, want)
 	}
 }
