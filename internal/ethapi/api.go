@@ -1281,9 +1281,27 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		}
 		gasUsed := uint64(0)
 		for i, call := range block.Calls {
+			// setDefaults will consult txpool's nonce tracker. Work around that.
+			if call.Nonce == nil {
+				nonce := state.GetNonce(*call.From)
+				call.Nonce = (*hexutil.Uint64)(&nonce)
+			}
+			// Let the call run wild unless explicitly specified.
+			if call.Gas == nil {
+				leftGas := gp.Gas()
+				call.Gas = (*hexutil.Uint64)(&leftGas)
+			}
+			if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
+				call.GasPrice = (*hexutil.Big)(big.NewInt(0))
+			}
+			// TODO: Tx and message used for executing will probably have different values.
+			if err := call.setDefaults(ctx, s.b); err != nil {
+				return nil, err
+			}
+			tx := call.ToTransaction()
 			vmConfig := &vm.Config{
 				NoBaseFee: true,
-				Tracer:    newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), hash, common.Hash{}, uint(i)),
+				Tracer:    newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), hash, tx.Hash(), uint(i)),
 			}
 			result, err := doCall(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {

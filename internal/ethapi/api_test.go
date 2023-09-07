@@ -241,7 +241,7 @@ func (b testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types
 func (b testBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	panic("implement me")
 }
-func (b testBackend) CurrentHeader() *types.Header { panic("implement me") }
+func (b testBackend) CurrentHeader() *types.Header { return b.chain.CurrentHeader() }
 func (b testBackend) CurrentBlock() *types.Header  { panic("implement me") }
 func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber {
@@ -706,10 +706,21 @@ func TestMulticallV1(t *testing.T) {
 		includeTransfers = true
 		validation       = true
 	)
+	type log struct {
+		Address     common.Address `json:"address"`
+		Topics      []common.Hash  `json:"topics"`
+		Data        hexutil.Bytes  `json:"data"`
+		BlockNumber hexutil.Uint64 `json:"blockNumber"`
+		// Skip txHash
+		//TxHash common.Hash `json:"transactionHash" gencodec:"required"`
+		TxIndex   hexutil.Uint `json:"transactionIndex"`
+		BlockHash common.Hash  `json:"blockHash"`
+		Index     hexutil.Uint `json:"logIndex"`
+	}
 	type callRes struct {
 		ReturnValue string `json:"return"`
 		Error       string
-		Logs        []types.Log
+		Logs        []log
 		GasUsed     string
 		Status      string
 	}
@@ -761,12 +772,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -814,12 +825,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}, {
@@ -831,12 +842,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x0",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x0",
 					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
 				}},
@@ -882,7 +893,7 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}, {
@@ -894,7 +905,7 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -963,12 +974,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xaacc",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
 					GasUsed:     "0x5bb7",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -1004,11 +1015,11 @@ func TestMulticallV1(t *testing.T) {
 				FeeRecipient: coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
-					Logs: []types.Log{{
+					Logs: []log{{
 						Address:     randomAccounts[2].addr,
 						Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
-						BlockNumber: 11,
-						Data:        []byte{},
+						BlockNumber: hexutil.Uint64(11),
+						Data:        hexutil.Bytes{},
 						BlockHash:   hex2Hash(n11hash),
 					}},
 					GasUsed: "0x5508",
@@ -1076,7 +1087,7 @@ func TestMulticallV1(t *testing.T) {
 					// Caller is in this case the contract that invokes ecrecover.
 					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
 					GasUsed:     "0x52f6",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -1126,12 +1137,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
 					GasUsed:     "0x52dc",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000001",
 					GasUsed:     "0x52b0",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -1175,15 +1186,15 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd984",
-					Logs: []types.Log{{
+					Logs: []log{{
 						Address: common.Address{},
 						Topics: []common.Hash{
 							transferTopic,
 							accounts[0].addr.Hash(),
 							randomAccounts[0].addr.Hash(),
 						},
-						Data:        common.BigToHash(big.NewInt(50)).Bytes(),
-						BlockNumber: 11,
+						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(50)).Bytes()),
+						BlockNumber: hexutil.Uint64(11),
 						BlockHash:   hex2Hash(n11hash),
 					}, {
 						Address: common.Address{},
@@ -1192,10 +1203,10 @@ func TestMulticallV1(t *testing.T) {
 							randomAccounts[0].addr.Hash(),
 							randomAccounts[1].addr.Hash(),
 						},
-						Data:        common.BigToHash(big.NewInt(100)).Bytes(),
-						BlockNumber: 11,
+						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(100)).Bytes()),
+						BlockNumber: hexutil.Uint64(11),
 						BlockHash:   hex2Hash(n11hash),
-						Index:       1,
+						Index:       hexutil.Uint(1),
 					}},
 					Status: "0x1",
 				}},
@@ -1244,12 +1255,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd166",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0xe6d9",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}, {
@@ -1261,7 +1272,7 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xe6d9",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
@@ -1287,7 +1298,7 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x0",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x0",
 					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 10000000)", accounts[2].addr),
 				}},
@@ -1341,12 +1352,12 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x0000000000000000000000000000000200000000000000000000000000000003",
 					GasUsed:     "0x62a1",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}, {
 					ReturnValue: "0x0000000000000000000000000000000100000000000000000000000000000000",
 					GasUsed:     "0x62a1",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}, {
@@ -1358,7 +1369,7 @@ func TestMulticallV1(t *testing.T) {
 				Calls: []callRes{{
 					ReturnValue: "0x0000000000000000000000000000000500000000000000000000000000000000",
 					GasUsed:     "0x62a1",
-					Logs:        []types.Log{},
+					Logs:        []log{},
 					Status:      "0x1",
 				}},
 			}},
