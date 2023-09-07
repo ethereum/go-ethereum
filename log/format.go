@@ -38,7 +38,7 @@ func PrintOrigins(print bool) {
 	}
 }
 
-// storeStackRecords is an atomic flag controlling whether the log handler needs
+// stackEnabled is an atomic flag controlling whether the log handler needs
 // to store the callsite stack. This is needed in case any handler wants to
 // print locations (locationEnabled), use vmodule, or print full stacks (BacktraceAt).
 var stackEnabled atomic.Bool
