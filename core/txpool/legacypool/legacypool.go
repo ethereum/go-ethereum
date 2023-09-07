@@ -883,6 +883,16 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 		pendingDiscardMeter.Mark(1)
 		return false
 	}
+
+	//Check balance for Overdraft
+	balance := pool.currentState.GetBalance(addr)
+	if list.totalcost.Cmp(balance) > 0 {
+		pool.all.Remove(hash)
+		pool.priced.Removed(1)
+		pendingDiscardMeter.Mark(1)
+		return false
+	}
+	
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
