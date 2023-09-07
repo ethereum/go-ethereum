@@ -2788,7 +2788,7 @@ dependencies = [
 [[package]]
 name = "prover"
 version = "0.8.1"
-source = "git+https://github.com/scroll-tech/scroll-prover?tag=v0.8.1#5b94df914877aa7f20f7c37fabf80d73f1c8cf2c"
+source = "git+https://github.com/scroll-tech/scroll-prover?tag=v0.8.2#02b68773531eec81355ee713c0155bf76aa968b6"
 dependencies = [
  "aggregator",
  "anyhow",
@@ -3177,7 +3177,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d470e29e933dac4101180fd6574971892315c414cf2961a192729089687cc9b"
 dependencies = [
  "derive_more",
- "primitive-types 0.11.1",
+ "primitive-types 0.12.1",
  "rlp",
  "ruint-macro",
  "rustc_version",

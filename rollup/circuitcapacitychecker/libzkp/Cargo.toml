@@ -20,7 +20,7 @@ maingate = { git = "https://github.com/scroll-tech/halo2wrong", branch = "halo2-
 halo2curves = { git = "https://github.com/scroll-tech/halo2curves.git", branch = "0.3.1-derive-serde" }
 
 [dependencies]
-prover = { git = "https://github.com/scroll-tech/scroll-prover", tag = "v0.8.1" }
+prover = { git = "https://github.com/scroll-tech/scroll-prover", tag = "v0.8.2" }
 
 anyhow = "1.0"
 log = "0.4"
