@@ -24,7 +24,7 @@ Exposing API endpoints towards "the internet", or any untrusted/hostile network,
 
 - Increase the risk of crashes due to OOM, 
 - Increase the risk of not keeping up with chain progression, due to resource starvation (IO or CPU),
-- Increase the risk of attemps to steal funds via spurious signing-requests (depending on what namespaces are exposed).
+- Increase the risk of attempts to steal funds via spurious signing-requests (depending on what namespaces are exposed).
 
 We do not recommend exposing API endpoints publically, and any user who wishes to do so should carefully consider setting up  
 proxies, WAFs, application level filtering, rate limiting, logging, tls terminator and monitoring to improve resilience. 
