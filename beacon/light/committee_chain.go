@@ -135,25 +135,9 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 		},
 	}
 
-	// check validity constraints
-	if !s.updates.periods.IsEmpty() {
-		if s.fixedRoots.periods.IsEmpty() || s.updates.periods.First < s.fixedRoots.periods.First ||
-			s.updates.periods.First >= s.fixedRoots.periods.AfterLast {
-			log.Error("First update is not in the fixed roots range")
-		}
-		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.AfterLast <= s.updates.periods.AfterLast {
-			log.Error("Missing committees in update range")
-		}
-	}
-	if !s.committees.periods.IsEmpty() {
-		if s.fixedRoots.periods.IsEmpty() || s.committees.periods.First < s.fixedRoots.periods.First ||
-			s.committees.periods.First >= s.fixedRoots.periods.AfterLast {
-			log.Error("First committee is not in the fixed roots range")
-		}
-		if s.committees.periods.AfterLast > s.fixedRoots.periods.AfterLast && s.committees.periods.AfterLast > s.updates.periods.AfterLast+1 {
-			log.Error("Last committee is neither in the fixed roots range nor proven by updates")
-		}
-		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.AfterLast-1)
+	if !s.checkConstraints() {
+		log.Info("Resetting invalid committee chain")
+		s.Reset()
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	batch := s.db.NewBatch()
@@ -169,7 +153,38 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	if err := batch.Write(); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 	}
+	if !s.committees.periods.IsEmpty() {
+		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.AfterLast-1)
+	}
 	return s
+}
+
+// checkConstraints checks committee chain validity constraints
+func (s *CommitteeChain) checkConstraints() bool {
+	valid := true
+	if !s.updates.periods.IsEmpty() {
+		if s.fixedRoots.periods.IsEmpty() || s.updates.periods.First < s.fixedRoots.periods.First ||
+			s.updates.periods.First >= s.fixedRoots.periods.AfterLast {
+			log.Error("First update is not in the fixed roots range")
+			valid = false
+		}
+		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.AfterLast <= s.updates.periods.AfterLast {
+			log.Error("Missing committees in update range")
+			valid = false
+		}
+	}
+	if !s.committees.periods.IsEmpty() {
+		if s.fixedRoots.periods.IsEmpty() || s.committees.periods.First < s.fixedRoots.periods.First ||
+			s.committees.periods.First >= s.fixedRoots.periods.AfterLast {
+			log.Error("First committee is not in the fixed roots range")
+			valid = false
+		}
+		if s.committees.periods.AfterLast > s.fixedRoots.periods.AfterLast && s.committees.periods.AfterLast > s.updates.periods.AfterLast+1 {
+			log.Error("Last committee is neither in the fixed roots range nor proven by updates")
+			valid = false
+		}
+	}
+	return valid
 }
 
 // Reset resets the committee chain.
