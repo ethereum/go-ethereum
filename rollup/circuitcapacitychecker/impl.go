@@ -11,6 +11,7 @@ import "C" //nolint:typecheck
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"unsafe"
 
@@ -147,7 +148,7 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 }
 
 // CheckTxNum compares whether the tx_count in ccc match the expected
-func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, unit64, error) {
+func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error) {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -159,14 +160,12 @@ func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, unit64, error
 	log.Debug("ccc get_tx_num end", "id", ccc.ID)
 
 	result := &WrappedTxNum{}
-	if err = json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
-		log.Error("fail to json unmarshal get_tx_num result", "id", ccc.ID, "err", err)
-		return false, 0, ErrUnknown
+	if err := json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
+		return false, 0, fmt.Errorf("fail to json unmarshal get_tx_num result, id: %d, err: %w", ccc.ID, err)
 	}
 	if result.Error != "" {
-		log.Error("fail to get_tx_num in CircuitCapacityChecker", "id", ccc.ID, "err", result.Error)
-		return false, 0, ErrUnknown
+		return false, 0, fmt.Errorf("fail to get_tx_num in CircuitCapacityChecker, id: %d, err: %w", ccc.ID, result.Error)
 	}
 
-	return result.TxNum == unit64(expected), result.TxNum, nil
+	return result.TxNum == uint64(expected), result.TxNum, nil
 }
