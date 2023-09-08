@@ -63,10 +63,10 @@ var (
 // Once synced to the current sync period, CommitteeChain can also validate
 // signed beacon headers.
 type CommitteeChain struct {
-	chainmu sync.RWMutex
-	// Note: chainmu avoids concurrent access to the canonicalStore structures
+	// chainmu guards against concurrent access to the canonicalStore structures
 	// (updates, committees, fixedRoots) and ensures that they stay consistent
 	// with each other and with committeeCache.
+	chainmu        sync.RWMutex
 	db             ethdb.KeyValueStore
 	updates        *canonicalStore[*types.LightClientUpdate]
 	committees     *canonicalStore[*types.SerializedSyncCommittee]
@@ -140,7 +140,6 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 		s.Reset()
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
-	batch := s.db.NewBatch()
 	for !s.updates.periods.IsEmpty() {
 		if update, ok := s.updates.get(s.updates.periods.AfterLast - 1); !ok || s.verifyUpdate(update) {
 			if update == nil {
@@ -148,10 +147,9 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 			}
 			break
 		}
-		s.rollback(batch, s.updates.periods.AfterLast)
-	}
-	if err := batch.Write(); err != nil {
-		log.Error("Error writing batch into chain database", "error", err)
+		if err := s.rollback(s.updates.periods.AfterLast); err != nil {
+			log.Error("Error writing batch into chain database", "error", err)
+		}
 	}
 	if !s.committees.periods.IsEmpty() {
 		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.AfterLast-1)
@@ -192,9 +190,7 @@ func (s *CommitteeChain) Reset() {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	batch := s.db.NewBatch()
-	s.rollback(batch, 0)
-	if err := batch.Write(); err != nil {
+	if err := s.rollback(0); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 	}
 }
@@ -232,7 +228,9 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 	}
 	if oldRoot != (common.Hash{}) && (oldRoot != root) {
 		// existing old root was different, we have to reorg the chain
-		s.rollback(batch, period)
+		if err := s.rollback(period); err != nil {
+			return err
+		}
 	}
 	if err := s.fixedRoots.add(batch, period, root); err != nil {
 		return err
@@ -363,10 +361,12 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 			return ErrWrongCommitteeRoot
 		}
 	}
-	batch := s.db.NewBatch()
 	if reorg {
-		s.rollback(batch, period+1)
+		if err := s.rollback(period + 1); err != nil {
+			return err
+		}
 	}
+	batch := s.db.NewBatch()
 	if addCommittee {
 		if err := s.committees.add(batch, period+1, nextCommittee); err != nil {
 			return err
@@ -401,13 +401,28 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 
 // rollback removes all committees and fixed roots from the given period and updates
 // starting from the previous period.
-func (s *CommitteeChain) rollback(batch ethdb.Batch, period uint64) {
-	s.deleteCommitteesFrom(batch, period)
-	s.fixedRoots.deleteFrom(batch, period)
-	if period > 0 {
-		period--
+func (s *CommitteeChain) rollback(period uint64) error {
+	max := s.updates.periods.AfterLast + 1
+	if s.committees.periods.AfterLast > max {
+		max = s.committees.periods.AfterLast
 	}
-	s.updates.deleteFrom(batch, period)
+	if s.fixedRoots.periods.AfterLast > max {
+		max = s.fixedRoots.periods.AfterLast
+	}
+	for max > period {
+		max--
+		batch := s.db.NewBatch()
+		s.deleteCommitteesFrom(batch, max)
+		s.fixedRoots.deleteFrom(batch, max)
+		if max > 0 {
+			s.updates.deleteFrom(batch, max-1)
+		}
+		if err := batch.Write(); err != nil {
+			log.Error("Error writing batch into chain database", "error", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // getCommitteeRoot returns the committee root at the given period, either fixed,
