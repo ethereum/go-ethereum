@@ -281,6 +281,9 @@ func TestEthClient(t *testing.T) {
 		"CallContractAtHash": {
 			func(t *testing.T) { testCallContractAtHash(t, client) },
 		},
+		"CodeAtHash": {
+			func(t *testing.T) { testCodeAtHash(t, client) },
+		},
 		"AtFunctions": {
 			func(t *testing.T) { testAtFunctions(t, client) },
 		},
@@ -549,6 +552,19 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 	}
 	// CallContract
 	if _, err := ec.CallContractAtHash(context.Background(), msg, block.Hash()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func testCodeAtHash(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+
+	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
+	if err != nil {
+		t.Fatalf("BlockByNumber error: %v", err)
+	}
+	// CodeAtHash
+	if _, err := ec.CodeAtHash(context.Background(), common.Address{}, block.Hash()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
