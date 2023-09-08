@@ -60,14 +60,14 @@ func TestCommitteeChainFixedRoots(t *testing.T) {
 		c.addFixedRoot(tcBase, 4, nil)
 		c.addFixedRoot(tcBase, 5, nil)
 		c.addFixedRoot(tcBase, 6, nil)
-		c.addFixedRoot(tcBase, 8, ErrInvalidPeriod) // range has to be continuoous
+		c.addFixedRoot(tcBase, 8, ErrInvalidPeriod) // range has to be continuous
 		c.addFixedRoot(tcBase, 3, nil)
 		c.addFixedRoot(tcBase, 2, nil)
 		if reload {
 			c.reloadChain()
 		}
 		c.addCommittee(tcBase, 4, nil)
-		c.addCommittee(tcBase, 6, ErrInvalidPeriod) // range has to be continuoous
+		c.addCommittee(tcBase, 6, ErrInvalidPeriod) // range has to be continuous
 		c.addCommittee(tcBase, 5, nil)
 		c.addCommittee(tcBase, 6, nil)
 		c.addCommittee(tcAnotherGenesis, 3, ErrWrongCommitteeRoot)

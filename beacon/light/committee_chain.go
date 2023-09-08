@@ -141,18 +141,18 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	for !s.updates.periods.IsEmpty() {
-		if update, ok := s.updates.get(s.updates.periods.AfterLast - 1); !ok || s.verifyUpdate(update) {
+		if update, ok := s.updates.get(s.updates.periods.Next - 1); !ok || s.verifyUpdate(update) {
 			if update == nil {
-				log.Error("Sync committee update missing", "period", s.updates.periods.AfterLast-1)
+				log.Error("Sync committee update missing", "period", s.updates.periods.Next-1)
 			}
 			break
 		}
-		if err := s.rollback(s.updates.periods.AfterLast); err != nil {
+		if err := s.rollback(s.updates.periods.Next); err != nil {
 			log.Error("Error writing batch into chain database", "error", err)
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
-		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.AfterLast-1)
+		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.Next-1)
 	}
 	return s
 }
@@ -162,22 +162,22 @@ func (s *CommitteeChain) checkConstraints() bool {
 	valid := true
 	if !s.updates.periods.IsEmpty() {
 		if s.fixedRoots.periods.IsEmpty() || s.updates.periods.First < s.fixedRoots.periods.First ||
-			s.updates.periods.First >= s.fixedRoots.periods.AfterLast {
+			s.updates.periods.First >= s.fixedRoots.periods.Next {
 			log.Error("First update is not in the fixed roots range")
 			valid = false
 		}
-		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.AfterLast <= s.updates.periods.AfterLast {
+		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.Next <= s.updates.periods.Next {
 			log.Error("Missing committees in update range")
 			valid = false
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
 		if s.fixedRoots.periods.IsEmpty() || s.committees.periods.First < s.fixedRoots.periods.First ||
-			s.committees.periods.First >= s.fixedRoots.periods.AfterLast {
+			s.committees.periods.First >= s.fixedRoots.periods.Next {
 			log.Error("First committee is not in the fixed roots range")
 			valid = false
 		}
-		if s.committees.periods.AfterLast > s.fixedRoots.periods.AfterLast && s.committees.periods.AfterLast > s.updates.periods.AfterLast+1 {
+		if s.committees.periods.Next > s.fixedRoots.periods.Next && s.committees.periods.Next > s.updates.periods.Next+1 {
 			log.Error("Last committee is neither in the fixed roots range nor proven by updates")
 			valid = false
 		}
@@ -220,7 +220,7 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 		// if the old root exists and matches the new one then it is guaranteed
 		// that the given period is after the existing fixed range and the roots
 		// in between can also be fixed.
-		for p := s.fixedRoots.periods.AfterLast; p < period; p++ {
+		for p := s.fixedRoots.periods.Next; p < period; p++ {
 			if err := s.fixedRoots.add(batch, p, s.getCommitteeRoot(p)); err != nil {
 				return err
 			}
@@ -249,7 +249,7 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	if period >= s.fixedRoots.periods.AfterLast {
+	if period >= s.fixedRoots.periods.Next {
 		return nil
 	}
 	batch := s.db.NewBatch()
@@ -266,7 +266,7 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 		// get unfixed but are still proven by the update chain. If there were
 		// committees present after the range proven by updates, those should be
 		// removed if the belonging fixed roots are also removed.
-		fromPeriod := s.updates.periods.AfterLast + 1 // not proven by updates
+		fromPeriod := s.updates.periods.Next + 1 // not proven by updates
 		if period > fromPeriod {
 			fromPeriod = period // also not justified by fixed roots
 		}
@@ -282,7 +282,7 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 // deleteCommitteesFrom deletes committees starting from the given period.
 func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) {
 	deleted := s.committees.deleteFrom(batch, period)
-	for period := deleted.First; period < deleted.AfterLast; period++ {
+	for period := deleted.First; period < deleted.Next; period++ {
 		s.committeeCache.Remove(period)
 	}
 }
@@ -394,20 +394,20 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 		return 0, false
 	}
 	if !s.updates.periods.IsEmpty() {
-		return s.updates.periods.AfterLast, true
+		return s.updates.periods.Next, true
 	}
-	return s.committees.periods.AfterLast - 1, true
+	return s.committees.periods.Next - 1, true
 }
 
 // rollback removes all committees and fixed roots from the given period and updates
 // starting from the previous period.
 func (s *CommitteeChain) rollback(period uint64) error {
-	max := s.updates.periods.AfterLast + 1
-	if s.committees.periods.AfterLast > max {
-		max = s.committees.periods.AfterLast
+	max := s.updates.periods.Next + 1
+	if s.committees.periods.Next > max {
+		max = s.committees.periods.Next
 	}
-	if s.fixedRoots.periods.AfterLast > max {
-		max = s.fixedRoots.periods.AfterLast
+	if s.fixedRoots.periods.Next > max {
+		max = s.fixedRoots.periods.Next
 	}
 	for max > period {
 		max--
@@ -541,11 +541,11 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 		period := binary.BigEndian.Uint64(iter.Key()[kl : kl+8])
 		if cs.periods.First == 0 {
 			cs.periods.First = period
-		} else if cs.periods.AfterLast != period {
+		} else if cs.periods.Next != period {
 			log.Warn("Gap in the canonical chain database")
 			break // continuity guaranteed
 		}
-		cs.periods.AfterLast = period + 1
+		cs.periods.Next = period + 1
 	}
 	iter.Release()
 	return cs
@@ -566,7 +566,7 @@ func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
 // continuous. Can be used either with a batch or database backend.
 func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, value T) error {
 	if !cs.periods.CanExpand(period) {
-		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.First, cs.periods.AfterLast, period)
+		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.First, cs.periods.Next, period)
 	}
 	enc, err := cs.encode(value)
 	if err != nil {
@@ -582,19 +582,19 @@ func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, va
 
 // deleteFrom removes items starting from the given period.
 func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
-	if fromPeriod >= cs.periods.AfterLast {
+	if fromPeriod >= cs.periods.Next {
 		return
 	}
 	if fromPeriod < cs.periods.First {
 		fromPeriod = cs.periods.First
 	}
-	deleted = Range{First: fromPeriod, AfterLast: cs.periods.AfterLast}
-	for period := fromPeriod; period < cs.periods.AfterLast; period++ {
+	deleted = Range{First: fromPeriod, Next: cs.periods.Next}
+	for period := fromPeriod; period < cs.periods.Next; period++ {
 		batch.Delete(cs.databaseKey(period))
 		cs.cache.Remove(period)
 	}
 	if fromPeriod > cs.periods.First {
-		cs.periods.AfterLast = fromPeriod
+		cs.periods.Next = fromPeriod
 	} else {
 		cs.periods = Range{}
 	}

@@ -18,31 +18,30 @@ package light
 
 // Range represents a (possibly zero-length) range of integers (sync periods).
 type Range struct {
-	First     uint64
-	AfterLast uint64
+	First, Next uint64
 }
 
 // IsEmpty returns true if the length of the range is zero.
 func (a Range) IsEmpty() bool {
-	return a.AfterLast == a.First
+	return a.Next == a.First
 }
 
 // Includes returns true if the range includes the given period.
 func (a Range) Includes(period uint64) bool {
-	return period >= a.First && period < a.AfterLast
+	return period >= a.First && period < a.Next
 }
 
 // CanExpand returns true if the range includes or can be expanded with the given
 // period (either the range is empty or the given period is inside, right before or
 // right after the range).
 func (a Range) CanExpand(period uint64) bool {
-	return a.IsEmpty() || (period+1 >= a.First && period <= a.AfterLast)
+	return a.IsEmpty() || (period+1 >= a.First && period <= a.Next)
 }
 
 // Expand expands the range with the given period (assumes that CanExpand returned true).
 func (a *Range) Expand(period uint64) {
 	if a.IsEmpty() {
-		a.First, a.AfterLast = period, period+1
+		a.First, a.Next = period, period+1
 		return
 	}
 	if a.Includes(period) {
@@ -52,8 +51,8 @@ func (a *Range) Expand(period uint64) {
 		a.First--
 		return
 	}
-	if a.AfterLast == period {
-		a.AfterLast++
+	if a.Next == period {
+		a.Next++
 		return
 	}
 }
