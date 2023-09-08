@@ -283,7 +283,7 @@ func (c *committeeChainTest) insertUpdate(tc *testCommitteeChain, period uint64,
 func (c *committeeChainTest) verifySignedHeader(tc *testCommitteeChain, period float64, expOk bool) {
 	slot := uint64(period * float64(params.SyncPeriodLength))
 	signedHead := GenerateTestSignedHeader(types.Header{Slot: slot}, &tc.config, tc.periods[types.SyncPeriod(slot)].committee, slot+1, 400)
-	if ok, _ := c.chain.VerifySignedHeader(signedHead); ok != expOk {
+	if ok, _, _ := c.chain.VerifySignedHeader(signedHead); ok != expOk {
 		c.t.Errorf("Incorrect output from VerifySignedHeader at period %f (expected %v, got %v)", period, expOk, ok)
 	}
 }

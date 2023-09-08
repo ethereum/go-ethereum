@@ -141,10 +141,15 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	for !s.updates.periods.IsEmpty() {
-		if update, ok := s.updates.get(s.updates.periods.Next - 1); !ok || s.verifyUpdate(update) {
-			if update == nil {
-				log.Error("Sync committee update missing", "period", s.updates.periods.Next-1)
-			}
+		update, ok := s.updates.get(s.updates.periods.Next - 1)
+		if !ok {
+			log.Error("Sync committee update missing", "period", s.updates.periods.Next-1)
+			s.Reset()
+			break
+		}
+		if valid, err := s.verifyUpdate(update); err != nil {
+			log.Error("Error validating update", "period", s.updates.periods.Next-1, "error", err)
+		} else if valid {
 			break
 		}
 		if err := s.rollback(s.updates.periods.Next); err != nil {
@@ -349,7 +354,9 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	if s.fixedRoots.periods.Includes(period+1) && reorg {
 		return ErrCannotReorg
 	}
-	if !s.verifyUpdate(update) {
+	if ok, err := s.verifyUpdate(update); err != nil {
+		return err
+	} else if !ok {
 		return ErrInvalidUpdate
 	}
 	addCommittee := !s.committees.periods.Includes(period+1) || reorg
@@ -439,21 +446,19 @@ func (s *CommitteeChain) getCommitteeRoot(period uint64) common.Hash {
 }
 
 // getSyncCommittee returns the deserialized sync committee at the given period.
-func (s *CommitteeChain) getSyncCommittee(period uint64) syncCommittee {
+func (s *CommitteeChain) getSyncCommittee(period uint64) (syncCommittee, error) {
 	if c, ok := s.committeeCache.Get(period); ok {
-		return c
+		return c, nil
 	}
 	if sc, ok := s.committees.get(period); ok {
 		c, err := s.sigVerifier.deserializeSyncCommittee(sc)
 		if err != nil {
-			log.Error("Sync committee deserialization error", "error", err)
-			return nil
+			return nil, fmt.Errorf("Sync committee #%d deserialization error: %v", period, err)
 		}
 		s.committeeCache.Add(period, c)
-		return c
+		return c, nil
 	}
-	log.Error("Missing serialized sync committee", "period", period)
-	return nil
+	return nil, fmt.Errorf("Missing serialized sync committee #%d", period)
 }
 
 // VerifySignedHeader returns true if the given signed header has a valid signature
@@ -463,14 +468,14 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) syncCommittee {
 // The age of the header is also returned (the time elapsed since the beginning
 // of the given slot, according to the local system clock). If enforceTime is
 // true then negative age (future) headers are rejected.
-func (s *CommitteeChain) VerifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
+func (s *CommitteeChain) VerifySignedHeader(head types.SignedHeader) (bool, time.Duration, error) {
 	s.chainmu.RLock()
 	defer s.chainmu.RUnlock()
 
 	return s.verifySignedHeader(head)
 }
 
-func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time.Duration) {
+func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time.Duration, error) {
 	var age time.Duration
 	now := s.unixNano()
 	if head.Header.Slot < (uint64(now-math.MinInt64)/uint64(time.Second)-s.config.GenesisTime)/12 {
@@ -479,31 +484,34 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 		age = time.Duration(math.MinInt64)
 	}
 	if s.enforceTime && age < 0 {
-		return false, age
+		return false, age, nil
 	}
-	committee := s.getSyncCommittee(types.SyncPeriod(head.SignatureSlot))
+	committee, err := s.getSyncCommittee(types.SyncPeriod(head.SignatureSlot))
+	if err != nil {
+		return false, 0, err
+	}
 	if committee == nil {
-		return false, age
+		return false, age, nil
 	}
 	if signingRoot, err := s.config.Forks.SigningRoot(head.Header); err == nil {
-		return s.sigVerifier.verifySignature(committee, signingRoot, &head.Signature), age
+		return s.sigVerifier.verifySignature(committee, signingRoot, &head.Signature), age, nil
 	}
-	return false, age
+	return false, age, nil
 }
 
 // verifyUpdate checks whether the header signature is correct and the update
 // fits into the specified constraints (assumes that the update has been
 // successfully validated previously)
-func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) bool {
+func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) (bool, error) {
 	// Note: SignatureSlot determines the sync period of the committee used for signature
 	// verification. Though in reality SignatureSlot is always bigger than update.Header.Slot,
 	// setting them as equal here enforces the rule that they have to be in the same sync
 	// period in order for the light client update proof to be meaningful.
-	ok, age := s.verifySignedHeader(update.AttestedHeader)
+	ok, age, err := s.verifySignedHeader(update.AttestedHeader)
 	if age < 0 {
 		log.Warn("Future committee update received", "age", age)
 	}
-	return ok
+	return ok, err
 }
 
 // canonicalStore stores instances of the given type in a database and caches
