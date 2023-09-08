@@ -14,13 +14,17 @@ type CircuitCapacityChecker struct {
 	nextError *error
 }
 
+// NewCircuitCapacityChecker creates a new CircuitCapacityChecker
 func NewCircuitCapacityChecker() *CircuitCapacityChecker {
 	return &CircuitCapacityChecker{ID: rand.Uint64()}
 }
 
+// Reset resets a ccc, but need to do nothing in mock_ccc.
 func (ccc *CircuitCapacityChecker) Reset() {
 }
 
+// ApplyTransaction appends a tx's wrapped BlockTrace into the ccc, and return the accumulated RowConsumption.
+// Will only return a dummy value in mock_ccc.
 func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*types.RowConsumption, error) {
 	if ccc.nextError != nil {
 		ccc.countdown--
@@ -36,6 +40,8 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	}}, nil
 }
 
+// ApplyBlock gets a block's RowConsumption.
+// Will only return a dummy value in mock_ccc.
 func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.RowConsumption, error) {
 	return &types.RowConsumption{types.SubCircuitRowUsage{
 		Name:      "mock",
@@ -43,6 +49,13 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 	}}, nil
 }
 
+// CheckTxNum compares whether the tx_count in ccc match the expected.
+// Will alway return true in mock_ccc.
+func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error) {
+	return true, uint64(expected), nil
+}
+
+// ScheduleError schedules an error for a tx (see `ApplyTransaction`), only used in tests.
 func (ccc *CircuitCapacityChecker) ScheduleError(cnt int, err error) {
 	ccc.countdown = cnt
 	ccc.nextError = &err

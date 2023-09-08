@@ -15,3 +15,8 @@ type WrappedRowUsage struct {
 	AccRowUsage *types.RowUsage `json:"acc_row_usage,omitempty"`
 	Error       string          `json:"error,omitempty"`
 }
+
+type WrappedTxNum struct {
+	TxNum uint64 `json:"tx_num"`
+	Error string `json:"error,omitempty"`
+}

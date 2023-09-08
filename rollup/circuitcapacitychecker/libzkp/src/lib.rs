@@ -20,6 +20,12 @@ pub mod checker {
         pub error: Option<String>,
     }
 
+    #[derive(Debug, Clone, Deserialize, Serialize)]
+    pub struct TxNumResult {
+        pub tx_num: u64,
+        pub error: Option<String>,
+    }
+
     static mut CHECKERS: OnceCell<HashMap<u64, CircuitCapacityChecker>> = OnceCell::new();
 
     /// # Safety
@@ -175,6 +181,50 @@ pub mod checker {
                 ))
             }
         }
+    }
+
+    /// # Safety
+    #[no_mangle]
+    pub unsafe extern "C" fn get_tx_num(id: u64) -> *const c_char {
+        let result = get_tx_num_inner(id);
+        let r = match result {
+            Ok(tx_num) => {
+                log::debug!("id: {id}, tx_num: {tx_num}");
+                TxNumResult {
+                    tx_num,
+                    error: None,
+                }
+            }
+            Err(e) => TxNumResult {
+                tx_num: 0,
+                error: Some(format!("{e:?}")),
+            },
+        };
+        serde_json::to_vec(&r).map_or(null(), vec_to_c_char)
+    }
+
+    unsafe fn get_tx_num_inner(id: u64) -> Result<u64, Error> {
+        log::debug!("ccc get_tx_num raw input, id: {id}");
+        panic::catch_unwind(|| {
+            Ok(CHECKERS
+                .get_mut()
+                .ok_or(anyhow!(
+                    "fail to get circuit capacity checkers map in get_tx_num"
+                ))?
+                .get_mut(&id)
+                .ok_or(anyhow!(
+                    "fail to get circuit capacity checker (id: {id}) in get_tx_num"
+                ))?
+                .get_tx_num() as u64)
+        })
+        .map_or_else(
+            |e| {
+                Err(anyhow!(
+                    "circuit capacity checker (id: {id}) error in get_tx_num: {e:?}"
+                ))
+            },
+            |result| result,
+        )
     }
 }
 
