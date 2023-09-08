@@ -76,6 +76,7 @@ type receiptMarshaling struct {
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
+	EffectiveGasPrice *hexutil.Big
 	GasUsed           hexutil.Uint64
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
