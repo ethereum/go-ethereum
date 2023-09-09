@@ -36,7 +36,7 @@ func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
 		return fmt.Errorf("invalid gas limit: have %d, want %d +-= %d", headerGasLimit, parentGasLimit, limit-1)
 	}
 	if headerGasLimit < params.MinGasLimit {
-		return errors.New("invalid gas limit below 5000")
+		return errors.New(fmt.Sprint("invalid gas limit below ", params.MinGasLimit))
 	}
 	return nil
 }
