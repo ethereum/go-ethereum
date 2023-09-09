@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -272,7 +273,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
-					txctx := &Context{
+					txctx := &directory.Context{
 						BlockHash:   task.block.Hash(),
 						BlockNumber: task.block.Number(),
 						TxIndex:     i,
@@ -591,7 +592,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// process that generates states in one thread and traces txes
 	// in separate worker threads.
 	if config != nil && config.Tracer != nil && *config.Tracer != "" {
-		if isJS := DefaultDirectory.IsJS(*config.Tracer); isJS {
+		if isJS := directory.DefaultDirectory.IsJS(*config.Tracer); isJS {
 			return api.traceBlockParallel(ctx, block, statedb, config)
 		}
 	}
@@ -607,7 +608,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txctx := &Context{
+		txctx := &directory.Context{
 			BlockHash:   blockHash,
 			BlockNumber: block.Number(),
 			TxIndex:     i,
@@ -650,7 +651,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				msg, _ := core.TransactionToMessage(txs[task.index], signer, block.BaseFee())
-				txctx := &Context{
+				txctx := &directory.Context{
 					BlockHash:   blockHash,
 					BlockNumber: block.Number(),
 					TxIndex:     task.index,
@@ -859,7 +860,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 
-	txctx := &Context{
+	txctx := &directory.Context{
 		BlockHash:   blockHash,
 		BlockNumber: block.Number(),
 		TxIndex:     int(index),
@@ -927,15 +928,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, tx, msg, new(Context), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, tx, msg, new(directory.Context), vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
-		tracer    Tracer
+		tracer    directory.Tracer
 		err       error
 		timeout   = defaultTraceTimeout
 		txContext = core.NewEVMTxContext(message)
@@ -946,7 +947,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	// Default tracer is the struct logger
 	tracer = logger.NewStructLogger(config.Config)
 	if config.Tracer != nil {
-		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
+		tracer, err = directory.DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {
 			return nil, err
 		}

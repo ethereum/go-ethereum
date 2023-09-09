@@ -56,6 +56,8 @@ func (n *proofList) Delete(key []byte) error {
 
 // StateLogger is used to collect state update traces from  EVM transaction
 // execution.
+// The following hooks are invoked post execution. I.e. looking up state
+// after the hook should reflect the new value.
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type StateLogger interface {

@@ -17,11 +17,10 @@
 package logger
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM
@@ -103,6 +102,7 @@ func (al accessList) accessList() types.AccessList {
 // AccessListTracer is a tracer that accumulates touched accounts and storage
 // slots into an internal set.
 type AccessListTracer struct {
+	directory.NoopTracer
 	excl map[common.Address]struct{} // Set of account to exclude from the list
 	list accessList                  // Set of accounts and storage slots touched
 }
@@ -132,9 +132,6 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-}
-
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
 func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
@@ -157,37 +154,6 @@ func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 		}
 	}
 }
-
-func (*AccessListTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-}
-
-func (*AccessListTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-func (*AccessListTracer) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}
-
-func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {}
-
-func (*AccessListTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (*AccessListTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {}
-
-func (*AccessListTracer) CaptureTxEnd(receipt *types.Receipt, err error) {}
-
-func (*AccessListTracer) OnBalanceChange(a common.Address, prev, new *big.Int) {}
-
-func (*AccessListTracer) OnNonceChange(a common.Address, prev, new uint64) {}
-
-func (*AccessListTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-}
-
-func (*AccessListTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
-
-func (*AccessListTracer) OnLog(log *types.Log) {}
-
-func (*AccessListTracer) OnNewAccount(a common.Address) {}
 
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {

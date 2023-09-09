@@ -25,11 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("4byteTracer", newFourByteTracer, false)
+	directory.DefaultDirectory.Register("4byteTracer", newFourByteTracer, false)
 }
 
 // fourByteTracer searches for 4byte-identifiers, and collects them for post-processing.
@@ -47,7 +47,7 @@ func init() {
 //	  0xc281d19e-0: 1
 //	}
 type fourByteTracer struct {
-	tracers.NoopTracer
+	directory.NoopTracer
 	env               *vm.EVM
 	ids               map[string]int   // ids aggregates the 4byte ids found
 	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
@@ -57,7 +57,7 @@ type fourByteTracer struct {
 
 // newFourByteTracer returns a native go tracer which collects
 // 4 byte-identifiers of a tx, and implements vm.EVMLogger.
-func newFourByteTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
+func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (directory.Tracer, error) {
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/rlp"
 	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"golang.org/x/exp/maps"
@@ -29,6 +30,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var _ core.BlockchainLogger = (*Firehose)(nil)
 
 var firehoseTracerLogLevel = strings.ToLower(os.Getenv("GETH_FIREHOSE_TRACER_LOG_LEVEL"))
 var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
@@ -41,6 +44,13 @@ var emptyCommonHash = common.Hash{}
 
 func init() {
 	staticFirehoseChainValidationOnInit()
+
+	directory.LiveDirectory.Register("firehose", newFirehoseTracer)
+}
+
+func newFirehoseTracer() (core.BlockchainLogger, error) {
+	firehoseDebug("New firehose tracer")
+	return NewFirehoseLogger(), nil
 }
 
 type Firehose struct {
@@ -759,7 +769,7 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 		return
 	}
 
-	if reason == vm.GasChangeOpCode {
+	if reason == vm.GasChangeCallOpCode {
 		// We ignore those because we track OpCode gas consumption manually by tracking the gas value at `CaptureState` call
 		return
 	}
@@ -770,7 +780,7 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 	// For new chain, this code should be remove so that they are included and useful to user.
 	//
 	// Ref eb1916a67d9bea03df16a7a3e2cfac72
-	if reason == vm.GasInitialBalance || reason == vm.GasRefunded || reason == vm.GasBuyBack {
+	if reason == vm.GasChangeTxInitialBalance || reason == vm.GasChangeTxRefunds || reason == vm.GasChangeTxBuyBack {
 		return
 	}
 
@@ -1111,24 +1121,26 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	//
 	// New chain should uncomment the code below and remove the same assigments to UNKNOWN
 	//
-	// vm.GasInitialBalance: pbeth.GasChange_REASON_INITIAL_BALANCE,
-	// vm.GasRefunded:       pbeth.GasChange_REASON_REFUND,
-	// vm.GasBuyBack:        pbeth.GasChange_REASON_BUYBACK,
-	vm.GasInitialBalance: pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasRefunded:       pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasBuyBack:        pbeth.GasChange_REASON_UNKNOWN,
+	// vm.GasChangeTxInitialBalance: pbeth.GasChange_REASON_INITIAL_BALANCE,
+	// vm.GasChangeTxRefunds: pbeth.GasChange_REASON_REFUND,
+	// vm.GasChangeTxBuyBack: pbeth.GasChange_REASON_BUYBACK,
+	// vm.GasChangeCallInitialBalance: pbeth.GasChange_REASON_BUYBACK,
+	vm.GasChangeTxInitialBalance:   pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxRefunds:          pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxBuyBack:          pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeCallInitialBalance: pbeth.GasChange_REASON_UNKNOWN,
 
-	vm.GasChangeIntrinsicGas:         pbeth.GasChange_REASON_INTRINSIC_GAS,
-	vm.GasChangeContractCreation:     pbeth.GasChange_REASON_CONTRACT_CREATION,
-	vm.GasChangeContractCreation2:    pbeth.GasChange_REASON_CONTRACT_CREATION2,
-	vm.GasChangeCodeStorage:          pbeth.GasChange_REASON_CODE_STORAGE,
-	vm.GasChangePrecompiledContract:  pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
-	vm.GasChangeStorageColdAccess:    pbeth.GasChange_REASON_STATE_COLD_ACCESS,
-	vm.GasChangeCallLeftOverRefunded: pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
-	vm.GasChangeFailedExecution:      pbeth.GasChange_REASON_FAILED_EXECUTION,
+	vm.GasChangeTxIntrinsicGas:          pbeth.GasChange_REASON_INTRINSIC_GAS,
+	vm.GasChangeCallContractCreation:    pbeth.GasChange_REASON_CONTRACT_CREATION,
+	vm.GasChangeCallContractCreation2:   pbeth.GasChange_REASON_CONTRACT_CREATION2,
+	vm.GasChangeCallCodeStorage:         pbeth.GasChange_REASON_CODE_STORAGE,
+	vm.GasChangeCallPrecompiledContract: pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
+	vm.GasChangeCallStorageColdAccess:   pbeth.GasChange_REASON_STATE_COLD_ACCESS,
+	vm.GasChangeCallLeftOverRefunded:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	vm.GasChangeCallFailedExecution:     pbeth.GasChange_REASON_FAILED_EXECUTION,
 
 	// Ignored, we track them manually, newGasChange ensure that we panic if we see Unknown
-	vm.GasChangeOpCode: pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeCallOpCode: pbeth.GasChange_REASON_UNKNOWN,
 }
 
 func gasChangeReasonFromChain(reason vm.GasChangeReason) pbeth.GasChange_Reason {
@@ -1178,6 +1190,10 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 	}
 
 	panic(errUnhandledTransactionType("gasPrice", tx.Type()))
+}
+
+func FirehoseDebug(msg string, args ...interface{}) {
+	firehoseDebug(msg, args...)
 }
 
 func firehoseDebug(msg string, args ...interface{}) {

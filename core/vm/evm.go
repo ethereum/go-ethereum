@@ -189,9 +189,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		} else {
 			// Handle tracer events for entering and exiting a call frame
 			evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
-			evm.Config.Tracer.OnGasChange(0, gas, GasInitialBalance)
+			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) {
-				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasBuyBack)
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverRefunded)
 				evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 			}(gas)
 		}
@@ -241,7 +241,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeFailedExecution)
+				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -264,9 +264,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.Config.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
-		evm.Config.Tracer.OnGasChange(0, gas, GasInitialBalance)
+		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasBuyBack)
+			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverRefunded)
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
@@ -299,7 +299,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeFailedExecution)
+				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -321,9 +321,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		parent := caller.(*Contract)
 		// DELEGATECALL inherits value from parent call
 		evm.Config.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
-		evm.Config.Tracer.OnGasChange(0, gas, GasInitialBalance)
+		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasBuyBack)
+			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverRefunded)
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
@@ -348,7 +348,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeFailedExecution)
+				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -365,9 +365,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
-		evm.Config.Tracer.OnGasChange(0, gas, GasInitialBalance)
+		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasBuyBack)
+			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverRefunded)
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
 		}(gas)
 	}
@@ -409,7 +409,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeFailedExecution)
+				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -440,9 +440,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			}()
 		} else {
 			evm.Config.Tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
-			evm.Config.Tracer.OnGasChange(0, gas, GasInitialBalance)
+			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func() {
-				evm.Config.Tracer.OnGasChange(leftoverGas, 0, GasBuyBack)
+				evm.Config.Tracer.OnGasChange(leftoverGas, 0, GasChangeCallLeftOverRefunded)
 				evm.Config.Tracer.CaptureExit(ret, gas-leftoverGas, err)
 			}()
 		}
@@ -469,7 +469,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		if evm.Config.Tracer != nil {
-			evm.Config.Tracer.OnGasChange(gas, 0, GasChangeFailedExecution)
+			evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 		}
 
 		return nil, common.Address{}, 0, ErrContractAddressCollision
@@ -505,7 +505,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// by the error checking condition below.
 	if err == nil {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
-		if contract.UseGas(createDataGas, evm.Config.Tracer, GasChangeCodeStorage) {
+		if contract.UseGas(createDataGas, evm.Config.Tracer, GasChangeCallCodeStorage) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
@@ -518,7 +518,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer, GasChangeFailedExecution)
+			contract.UseGas(contract.Gas, evm.Config.Tracer, GasChangeCallFailedExecution)
 		}
 	}
 

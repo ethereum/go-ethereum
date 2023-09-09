@@ -317,6 +317,7 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	if err != nil {
 		return nil, err
 	}
+
 	log.Info("Using LevelDB as the backing database")
 	return NewDatabase(db), nil
 }
