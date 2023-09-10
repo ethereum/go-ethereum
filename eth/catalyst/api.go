@@ -161,7 +161,7 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 
 // GetInclusionListV1 returns an inclusion list which contains summary + list of transactions
 // which are valid for the current slot.
-func (api *ConsensusAPI) GetInclusionListV1() (*engine.InclusionListV1, error) {
+func (api *ConsensusAPI) GetInclusionListV1() (*types.InclusionList, error) {
 	// TODO(manav): Do we check here if we're on correct fork or are fully synced? If not
 	// we might end up delivering wrong IL. Other will reject it though but do we want to
 	// risk it?
@@ -171,8 +171,30 @@ func (api *ConsensusAPI) GetInclusionListV1() (*engine.InclusionListV1, error) {
 
 // NewInclusionListV1 validates whether an inclusion list (summary + txs) is
 // correct for the current state or not.
-func (api *ConsensusAPI) NewInclusionListV1() bool {
-	return false
+func (api *ConsensusAPI) NewInclusionListV1(params engine.VerifiableInclusionList) bool {
+	log.Trace("Engine API request received", "method", "NewInclusionListV1")
+	if params.ParentHash == (common.Hash{}) {
+		log.Warn("Inclusion list verification requested with zero parent hash")
+		return false
+	}
+
+	// Check if we have parent block available or not. If not, reject the
+	// inclusion list.
+	// (TODO): Do we need to trigger a sync here? I believe not.
+	parent := api.eth.BlockChain().GetBlockByHash(params.ParentHash)
+	if parent == nil {
+		log.Warn("Inclusion list verification requested with unknown parent", "hash", params.ParentHash)
+		return false
+	}
+
+	// Fetch the parent state to verify the inclusion list.
+	state, err := api.eth.BlockChain().StateAt(parent.Root())
+	if err != nil {
+		log.Warn("Unable to fetch parent block state, skipping verification", "err", err)
+		return false
+	}
+
+	return api.eth.BlockChain().VerifyInclusionList(params.InclusionList, parent.Header(), state.Copy())
 }
 
 // TODO: update/define executable params
