@@ -780,7 +780,11 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 	// For new chain, this code should be remove so that they are included and useful to user.
 	//
 	// Ref eb1916a67d9bea03df16a7a3e2cfac72
-	if reason == vm.GasChangeTxInitialBalance || reason == vm.GasChangeTxRefunds || reason == vm.GasChangeTxBuyBack {
+	if reason == vm.GasChangeTxInitialBalance ||
+		reason == vm.GasChangeTxRefunds ||
+		reason == vm.GasChangeTxBuyBack ||
+		reason == vm.GasChangeCallInitialBalance ||
+		reason == vm.GasChangeCallLeftOverRefunded {
 		return
 	}
 
@@ -799,6 +803,7 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 func (f *Firehose) newGasChange(tag string, oldValue, newValue uint64, reason pbeth.GasChange_Reason) *pbeth.GasChange {
 	firehoseTrace("gas consumed tag=%s before=%d after=%d reason=%s", tag, oldValue, newValue, reason)
 
+	// Should already be checked by the caller, but we keep it here for safety if the code ever change
 	if reason == pbeth.GasChange_REASON_UNKNOWN {
 		panic(fmt.Errorf("received unknown gas change reason %s", reason))
 	}
@@ -1125,10 +1130,11 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	// vm.GasChangeTxRefunds: pbeth.GasChange_REASON_REFUND,
 	// vm.GasChangeTxBuyBack: pbeth.GasChange_REASON_BUYBACK,
 	// vm.GasChangeCallInitialBalance: pbeth.GasChange_REASON_BUYBACK,
-	vm.GasChangeTxInitialBalance:   pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasChangeTxRefunds:          pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasChangeTxBuyBack:          pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasChangeCallInitialBalance: pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxInitialBalance:     pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxRefunds:            pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxBuyBack:            pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeCallInitialBalance:   pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeCallLeftOverRefunded: pbeth.GasChange_REASON_UNKNOWN,
 
 	vm.GasChangeTxIntrinsicGas:          pbeth.GasChange_REASON_INTRINSIC_GAS,
 	vm.GasChangeCallContractCreation:    pbeth.GasChange_REASON_CONTRACT_CREATION,
@@ -1136,7 +1142,7 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	vm.GasChangeCallCodeStorage:         pbeth.GasChange_REASON_CODE_STORAGE,
 	vm.GasChangeCallPrecompiledContract: pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
 	vm.GasChangeCallStorageColdAccess:   pbeth.GasChange_REASON_STATE_COLD_ACCESS,
-	vm.GasChangeCallLeftOverRefunded:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	vm.GasChangeCallLeftOverReturned:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
 	vm.GasChangeCallFailedExecution:     pbeth.GasChange_REASON_FAILED_EXECUTION,
 
 	// Ignored, we track them manually, newGasChange ensure that we panic if we see Unknown
@@ -1145,6 +1151,10 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 
 func gasChangeReasonFromChain(reason vm.GasChangeReason) pbeth.GasChange_Reason {
 	if r, ok := gasChangeReasonToPb[reason]; ok {
+		if r == pbeth.GasChange_REASON_UNKNOWN {
+			panic(fmt.Errorf("tracer gas change reason value '%d' mapped to %s which is not accepted", reason, r))
+		}
+
 		return r
 	}
 
