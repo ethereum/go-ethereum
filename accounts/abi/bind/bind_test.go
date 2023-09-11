@@ -2058,7 +2058,7 @@ var bindTests = []struct {
 		`,
 		tester: `
 			if b, err := NewNumericMethodName(common.Address{}, nil); b == nil || err != nil {
-				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, nil)
+				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, err)
 			}
 		`,
 	}, {
