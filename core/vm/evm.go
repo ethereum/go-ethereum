@@ -178,8 +178,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) { // Lazy evaluation of the parameters
-				evm.Config.Tracer.CaptureEnd(ret, startGas-gas, err)
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				evm.Config.Tracer.CaptureEnd(ret, startGas-leftOverGas, err)
 			}(gas)
 		} else {
 			// Handle tracer events for entering and exiting a call frame
@@ -187,7 +189,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) {
 				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
-				evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
+				evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 			}(gas)
 		}
 	}
@@ -262,7 +264,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
-			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
+			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -319,7 +321,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
-			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
+			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -363,7 +365,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
-			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
+			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -426,20 +428,22 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftoverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
-			defer func() {
-				evm.Config.Tracer.CaptureEnd(ret, gas-leftoverGas, err)
-			}()
+			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
+			defer func(startGas uint64) {
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				evm.Config.Tracer.CaptureEnd(ret, startGas-leftOverGas, err)
+			}(gas)
 		} else {
 			evm.Config.Tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
-			defer func() {
-				evm.Config.Tracer.OnGasChange(leftoverGas, 0, GasChangeCallLeftOverReturned)
-				evm.Config.Tracer.CaptureExit(ret, gas-leftoverGas, err)
-			}()
+			defer func(startGas uint64) {
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
+			}(gas)
 		}
 	}
 	// Depth check execution. Fail if we're trying to execute above the
