@@ -76,7 +76,6 @@ func (c *Command) extractFlags(args []string) error {
 	// read if config file is provided, this will overwrite the cli flags, if provided
 	if c.configFile != "" {
 		log.Warn("Config File provided, this will overwrite the cli flags", "path", c.configFile)
-
 		cfg, err := readConfigFile(c.configFile)
 		if err != nil {
 			c.UI.Error(err.Error())
@@ -84,7 +83,6 @@ func (c *Command) extractFlags(args []string) error {
 
 			return err
 		}
-
 		if err := config.Merge(cfg); err != nil {
 			c.UI.Error(err.Error())
 			c.config = &config
@@ -105,14 +103,12 @@ func (c *Command) extractFlags(args []string) error {
 		}
 	} else {
 		tempFlag := 0
-
 		for _, val := range args {
 			if (strings.HasPrefix(val, "-verbosity") || strings.HasPrefix(val, "--verbosity")) && config.LogLevel != "" {
 				tempFlag = 1
 				break
 			}
 		}
-
 		if tempFlag == 1 {
 			log.Warn("Both, verbosity and log-level flags are provided, log-level will be deprecated soon. Use verbosity only.", "using", config.Verbosity)
 		} else if tempFlag == 0 && config.LogLevel != "" {
@@ -148,7 +144,6 @@ func (c *Command) Run(args []string) int {
 		c.UI.Error(err.Error())
 		return 1
 	}
-
 	c.srv = srv
 
 	return c.handleSignals()
@@ -177,7 +172,6 @@ func (c *Command) handleSignals() int {
 			return 0
 		}
 	}
-
 	return 1
 }
 

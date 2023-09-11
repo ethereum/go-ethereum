@@ -35,9 +35,7 @@ func TCPPipe() (net.Conn, net.Conn, error) {
 	defer l.Close()
 
 	var aconn net.Conn
-
 	aerr := make(chan error, 1)
-
 	go func() {
 		var err error
 		aconn, err = l.Accept()
@@ -49,11 +47,9 @@ func TCPPipe() (net.Conn, net.Conn, error) {
 		<-aerr
 		return nil, nil, err
 	}
-
 	if err := <-aerr; err != nil {
 		dconn.Close()
 		return nil, nil, err
 	}
-
 	return aconn, dconn, nil
 }

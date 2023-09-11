@@ -28,7 +28,7 @@ import (
 )
 
 // The ABI holds information about a contract's context and available
-// invocable methods. It will allow you to type check function calls and
+// invokable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
 	Constructor Method
@@ -51,7 +51,6 @@ func JSON(reader io.Reader) (ABI, error) {
 	if err := dec.Decode(&abi); err != nil {
 		return ABI{}, err
 	}
-
 	return abi, nil
 }
 
@@ -68,15 +67,12 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return arguments, nil
 	}
-
 	method, exist := abi.Methods[name]
 	if !exist {
 		return nil, fmt.Errorf("method '%s' not found", name)
 	}
-
 	arguments, err := method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
@@ -89,23 +85,18 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	var args Arguments
-
 	if method, ok := abi.Methods[name]; ok {
 		if len(data)%32 != 0 {
-			return nil, fmt.Errorf("abi: improperly formatted output: %q - Bytes: %+v", data, data)
+			return nil, fmt.Errorf("abi: improperly formatted output: %s - Bytes: [%+v]", string(data), data)
 		}
-
 		args = method.Outputs
 	}
-
 	if event, ok := abi.Events[name]; ok {
 		args = event.Inputs
 	}
-
 	if args == nil {
-		return nil, fmt.Errorf("abi: could not locate named method or event: %s", name)
+		return nil, errors.New("abi: could not locate named method or event")
 	}
-
 	return args, nil
 }
 
@@ -115,7 +106,6 @@ func (abi ABI) Unpack(name string, data []byte) ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return args.Unpack(data)
 }
 
@@ -127,12 +117,10 @@ func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte) erro
 	if err != nil {
 		return err
 	}
-
 	unpacked, err := args.Unpack(data)
 	if err != nil {
 		return err
 	}
-
 	return args.Copy(v, unpacked)
 }
 
@@ -142,7 +130,6 @@ func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte)
 	if err != nil {
 		return err
 	}
-
 	return args.UnpackIntoMap(v, data)
 }
 
@@ -166,21 +153,18 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		// declared as anonymous.
 		Anonymous bool
 	}
-
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
-
 	abi.Methods = make(map[string]Method)
 	abi.Events = make(map[string]Event)
 	abi.Errors = make(map[string]Error)
-
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
 			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		case "function":
-			name := ResolveNameConflict(field.Name, func(s string) bool { _, ok := abi.Methods[s]; return ok })
+			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Methods[s]; return ok })
 			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
@@ -188,7 +172,6 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if abi.HasFallback() {
 				return errors.New("only single fallback is allowed")
 			}
-
 			abi.Fallback = NewMethod("", "", Fallback, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
@@ -196,24 +179,19 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if abi.HasReceive() {
 				return errors.New("only single receive is allowed")
 			}
-
 			if field.StateMutability != "payable" {
 				return errors.New("the statemutability of receive can only be payable")
 			}
-
 			abi.Receive = NewMethod("", "", Receive, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "event":
-			name := ResolveNameConflict(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
+			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		case "error":
-			// Errors cannot be overloaded or overridden but are inherited,
-			// no need to resolve the name conflict here.
 			abi.Errors[field.Name] = NewError(field.Name, field.Inputs)
 		default:
 			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
 		}
 	}
-
 	return nil
 }
 
@@ -223,13 +201,11 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 	if len(sigdata) < 4 {
 		return nil, fmt.Errorf("data too short (%d bytes) for abi method lookup", len(sigdata))
 	}
-
 	for _, method := range abi.Methods {
 		if bytes.Equal(method.ID, sigdata[:4]) {
 			return &method, nil
 		}
 	}
-
 	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
 }
 
@@ -241,7 +217,6 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 			return &event, nil
 		}
 	}
-
 	return nil, fmt.Errorf("no event with id: %#x", topic.Hex())
 }
 
@@ -266,21 +241,30 @@ func UnpackRevert(data []byte) (string, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
 	}
-
 	if !bytes.Equal(data[:4], revertSelector) {
 		return "", errors.New("invalid data for unpacking")
 	}
-
-	typ, err := NewType("string", "", nil)
-
-	if err != nil {
-		return "", err
-	}
-
+	typ, _ := NewType("string", "", nil)
 	unpacked, err := (Arguments{{Type: typ}}).Unpack(data[4:])
 	if err != nil {
 		return "", err
 	}
-
 	return unpacked[0].(string), nil
+}
+
+// overloadedName returns the next available name for a given thing.
+// Needed since solidity allows for overloading.
+//
+// e.g. if the abi contains Methods send, send1
+// overloadedName would return send2 for input send.
+//
+// overloadedName works for methods, events and errors.
+func overloadedName(rawName string, isAvail func(string) bool) string {
+	name := rawName
+	ok := isAvail(name)
+	for idx := 0; ok; idx++ {
+		name = fmt.Sprintf("%s%d", rawName, idx)
+		ok = isAvail(name)
+	}
+	return name
 }

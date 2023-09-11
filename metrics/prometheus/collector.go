@@ -50,10 +50,6 @@ func (c *collector) addCounter(name string, m metrics.Counter) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64) {
-	c.writeGaugeCounter(name, m.Count())
-}
-
 func (c *collector) addGauge(name string, m metrics.Gauge) {
 	c.writeGaugeCounter(name, m.Value())
 }
@@ -67,16 +63,14 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	ps := m.Percentiles(pv)
 
 	var sum float64 = 0
-
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
-
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
 		sum += ps[i]
 	}
 
 	c.writeSummarySum(name, fmt.Sprintf("%f", sum))
-	c.writeSummaryCounter(name, m.Count())
+	c.writeSummaryCounter(name, len(ps))
 	c.buff.WriteRune('\n')
 }
 
@@ -90,14 +84,13 @@ func (c *collector) addTimer(name string, m metrics.Timer) {
 
 	var sum float64 = 0
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
-
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
 		sum += ps[i]
 	}
 
 	c.writeSummarySum(name, fmt.Sprintf("%f", sum))
-	c.writeSummaryCounter(name, m.Count())
+	c.writeSummaryCounter(name, len(ps))
 	c.buff.WriteRune('\n')
 }
 
@@ -105,10 +98,8 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 	if len(m.Values()) <= 0 {
 		return
 	}
-
 	ps := m.Percentiles([]float64{50, 95, 99})
 	val := m.Values()
-
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	c.writeSummaryPercentile(name, "0.50", ps[0])
 	c.writeSummaryPercentile(name, "0.95", ps[1])
@@ -147,5 +138,5 @@ func (c *collector) writeSummarySum(name string, value string) {
 }
 
 func mutateKey(key string) string {
-	return strings.ReplaceAll(key, "/", "_")
+	return strings.Replace(key, "/", "_", -1)
 }

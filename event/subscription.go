@@ -53,16 +53,13 @@ func NewSubscription(producer func(<-chan struct{}) error) Subscription {
 		err := producer(s.unsub)
 		s.mu.Lock()
 		defer s.mu.Unlock()
-
 		if !s.unsubscribed {
 			if err != nil {
 				s.err <- err
 			}
-
 			s.unsubscribed = true
 		}
 	}()
-
 	return s
 }
 
@@ -79,7 +76,6 @@ func (s *funcSub) Unsubscribe() {
 		s.mu.Unlock()
 		return
 	}
-
 	s.unsubscribed = true
 	close(s.unsub)
 	s.mu.Unlock()
@@ -127,7 +123,6 @@ func ResubscribeErr(backoffMax time.Duration, fn ResubscribeErrFunc) Subscriptio
 		unsub:      make(chan struct{}),
 	}
 	go s.loop()
-
 	return s
 }
 
@@ -159,14 +154,12 @@ func (s *resubscribeSub) Err() <-chan error {
 
 func (s *resubscribeSub) loop() {
 	defer close(s.err)
-
 	var done bool
 	for !done {
 		sub := s.subscribe()
 		if sub == nil {
 			break
 		}
-
 		done = s.waitForError(sub)
 		sub.Unsubscribe()
 	}
@@ -174,13 +167,10 @@ func (s *resubscribeSub) loop() {
 
 func (s *resubscribeSub) subscribe() Subscription {
 	subscribed := make(chan error)
-
 	var sub Subscription
-
 	for {
 		s.lastTry = mclock.Now()
 		ctx, cancel := context.WithCancel(context.Background())
-
 		go func() {
 			rsub, err := s.fn(ctx, s.lastSubErr)
 			sub = rsub
@@ -189,12 +179,10 @@ func (s *resubscribeSub) subscribe() Subscription {
 		select {
 		case err := <-subscribed:
 			cancel()
-
 			if err == nil {
 				if sub == nil {
 					panic("event: ResubscribeFunc returned nil subscription and no error")
 				}
-
 				return sub
 			}
 			// Subscribing failed, wait before launching the next try.
@@ -204,7 +192,6 @@ func (s *resubscribeSub) subscribe() Subscription {
 		case <-s.unsub:
 			cancel()
 			<-subscribed // avoid leaking the s.fn goroutine.
-
 			return nil
 		}
 	}
@@ -265,18 +252,14 @@ type scopeSub struct {
 func (sc *SubscriptionScope) Track(s Subscription) Subscription {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-
 	if sc.closed {
 		return nil
 	}
-
 	if sc.subs == nil {
 		sc.subs = make(map[*scopeSub]struct{})
 	}
-
 	ss := &scopeSub{sc, s}
 	sc.subs[ss] = struct{}{}
-
 	return ss
 }
 
@@ -285,16 +268,13 @@ func (sc *SubscriptionScope) Track(s Subscription) Subscription {
 func (sc *SubscriptionScope) Close() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-
 	if sc.closed {
 		return
 	}
-
 	sc.closed = true
 	for s := range sc.subs {
 		s.s.Unsubscribe()
 	}
-
 	sc.subs = nil
 }
 
@@ -303,7 +283,6 @@ func (sc *SubscriptionScope) Close() {
 func (sc *SubscriptionScope) Count() int {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-
 	return len(sc.subs)
 }
 

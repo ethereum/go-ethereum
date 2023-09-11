@@ -75,7 +75,7 @@ Example:
     },
     {
       "type": "Info",
-      "message": "User should see this as well"
+      "message": "User should see this aswell"
     }
   ],
   "meta": {

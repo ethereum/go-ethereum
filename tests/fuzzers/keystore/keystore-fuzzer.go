@@ -32,8 +32,6 @@ func Fuzz(input []byte) int {
 	if err := ks.Unlock(a, string(input)); err != nil {
 		panic(err)
 	}
-
 	os.Remove(a.URL.Path)
-
 	return 1
 }

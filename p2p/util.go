@@ -48,7 +48,6 @@ func (h expHeap) contains(item string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -71,8 +70,6 @@ func (h *expHeap) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
-	old[n-1] = expItem{}
 	*h = old[0 : n-1]
-
 	return x
 }

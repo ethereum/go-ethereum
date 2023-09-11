@@ -37,6 +37,12 @@ type ExecVersionView struct {
 	sender common.Address
 }
 
+var NumSpeculativeProcs int = 8
+
+func SetProcs(specProcs int) {
+	NumSpeculativeProcs = specProcs
+}
+
 func (ev *ExecVersionView) Execute() (er ExecResult) {
 	er.ver = ev.ver
 	if er.err = ev.et.Execute(ev.mvh, ev.ver.Incarnation); er.err != nil {
@@ -174,9 +180,6 @@ type ParallelExecutor struct {
 	// Stores the execution statistics for the last incarnation of each task
 	stats map[int]ExecutionStat
 
-	// Number of workers that execute transactions speculatively
-	numSpeculativeProcs int
-
 	statsMutex sync.Mutex
 
 	// Channel for tasks that should be prioritized
@@ -252,7 +255,7 @@ type ExecutionStat struct {
 	Worker      int
 }
 
-func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool, numProcs int) *ParallelExecutor {
+func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool) *ParallelExecutor {
 	numTasks := len(tasks)
 
 	var resultQueue SafeQueue
@@ -268,28 +271,27 @@ func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool, numProcs
 	}
 
 	pe := &ParallelExecutor{
-		tasks:               tasks,
-		numSpeculativeProcs: numProcs,
-		stats:               make(map[int]ExecutionStat, numTasks),
-		chTasks:             make(chan ExecVersionView, numTasks),
-		chSpeculativeTasks:  make(chan struct{}, numTasks),
-		chSettle:            make(chan int, numTasks),
-		chResults:           make(chan struct{}, numTasks),
-		specTaskQueue:       specTaskQueue,
-		resultQueue:         resultQueue,
-		lastSettled:         -1,
-		skipCheck:           make(map[int]bool),
-		execTasks:           makeStatusManager(numTasks),
-		validateTasks:       makeStatusManager(0),
-		diagExecSuccess:     make([]int, numTasks),
-		diagExecAbort:       make([]int, numTasks),
-		mvh:                 MakeMVHashMap(),
-		lastTxIO:            MakeTxnInputOutput(numTasks),
-		txIncarnations:      make([]int, numTasks),
-		estimateDeps:        make(map[int][]int),
-		preValidated:        make(map[int]bool),
-		begin:               time.Now(),
-		profile:             profile,
+		tasks:              tasks,
+		stats:              make(map[int]ExecutionStat, numTasks),
+		chTasks:            make(chan ExecVersionView, numTasks),
+		chSpeculativeTasks: make(chan struct{}, numTasks),
+		chSettle:           make(chan int, numTasks),
+		chResults:          make(chan struct{}, numTasks),
+		specTaskQueue:      specTaskQueue,
+		resultQueue:        resultQueue,
+		lastSettled:        -1,
+		skipCheck:          make(map[int]bool),
+		execTasks:          makeStatusManager(numTasks),
+		validateTasks:      makeStatusManager(0),
+		diagExecSuccess:    make([]int, numTasks),
+		diagExecAbort:      make([]int, numTasks),
+		mvh:                MakeMVHashMap(),
+		lastTxIO:           MakeTxnInputOutput(numTasks),
+		txIncarnations:     make([]int, numTasks),
+		estimateDeps:       make(map[int][]int),
+		preValidated:       make(map[int]bool),
+		begin:              time.Now(),
+		profile:            profile,
 	}
 
 	return pe
@@ -327,10 +329,10 @@ func (pe *ParallelExecutor) Prepare() error {
 		}
 	}
 
-	pe.workerWg.Add(pe.numSpeculativeProcs + numGoProcs)
+	pe.workerWg.Add(NumSpeculativeProcs + numGoProcs)
 
 	// Launch workers that execute transactions
-	for i := 0; i < pe.numSpeculativeProcs+numGoProcs; i++ {
+	for i := 0; i < NumSpeculativeProcs+numGoProcs; i++ {
 		go func(procNum int) {
 			defer pe.workerWg.Done()
 
@@ -364,7 +366,7 @@ func (pe *ParallelExecutor) Prepare() error {
 				}
 			}
 
-			if procNum < pe.numSpeculativeProcs {
+			if procNum < NumSpeculativeProcs {
 				for range pe.chSpeculativeTasks {
 					doWork(pe.specTaskQueue.Pop().(ExecVersionView))
 				}
@@ -446,14 +448,11 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 			if len(pe.estimateDeps[tx]) > 0 {
 				estimate = pe.estimateDeps[tx][len(pe.estimateDeps[tx])-1]
 			}
-
 			addedDependencies = pe.execTasks.addDependencies(estimate, tx)
-
 			newEstimate := estimate + (estimate+tx)/2
 			if newEstimate >= tx {
 				newEstimate = tx - 1
 			}
-
 			pe.estimateDeps[tx] = append(pe.estimateDeps[tx], newEstimate)
 		}
 
@@ -462,7 +461,6 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 		if !addedDependencies {
 			pe.execTasks.pushPending(tx)
 		}
-
 		pe.txIncarnations[tx]++
 		pe.diagExecAbort[tx]++
 		pe.cntAbort++
@@ -499,7 +497,6 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 		pe.validateTasks.pushPending(tx)
 		pe.execTasks.markComplete(tx)
-
 		pe.diagExecSuccess[tx]++
 		pe.cntSuccess++
 
@@ -524,7 +521,6 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 			pe.validateTasks.markComplete(tx)
 		} else {
 			pe.cntValidationFail++
-
 			pe.diagExecAbort[tx]++
 			for _, v := range pe.lastTxIO.AllWriteSet(tx) {
 				pe.mvh.MarkEstimate(v.Path, tx)
@@ -601,12 +597,12 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 type PropertyCheck func(*ParallelExecutor) error
 
-func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck, metadata bool, numProcs int, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
+func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck, metadata bool, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
 	if len(tasks) == 0 {
 		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil, nil}, nil
 	}
 
-	pe := NewParallelExecutor(tasks, profile, metadata, numProcs)
+	pe := NewParallelExecutor(tasks, profile, metadata)
 	err = pe.Prepare()
 
 	if err != nil {
@@ -640,6 +636,6 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	return
 }
 
-func ExecuteParallel(tasks []ExecTask, profile bool, metadata bool, numProcs int, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
-	return executeParallelWithCheck(tasks, profile, nil, metadata, numProcs, interruptCtx)
+func ExecuteParallel(tasks []ExecTask, profile bool, metadata bool, interruptCtx context.Context) (result ParallelExecutionResult, err error) {
+	return executeParallelWithCheck(tasks, profile, nil, metadata, interruptCtx)
 }

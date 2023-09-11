@@ -136,7 +136,6 @@ func confirmAndRemoveDB(ui cli.Ui, database string, kind string) {
 					if !info.IsDir() {
 						return os.Remove(path)
 					}
-
 					return filepath.SkipDir
 				})
 

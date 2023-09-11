@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -54,11 +53,9 @@ type OdrRequest interface {
 
 // TrieID identifies a state or account storage trie
 type TrieID struct {
-	BlockHash   common.Hash
-	BlockNumber uint64
-	StateRoot   common.Hash
-	Root        common.Hash
-	AccKey      []byte
+	BlockHash, Root common.Hash
+	BlockNumber     uint64
+	AccKey          []byte
 }
 
 // StateTrieID returns a TrieID for a state trie belonging to a certain block
@@ -67,9 +64,8 @@ func StateTrieID(header *types.Header) *TrieID {
 	return &TrieID{
 		BlockHash:   header.Hash(),
 		BlockNumber: header.Number.Uint64(),
-		StateRoot:   header.Root,
-		Root:        header.Root,
 		AccKey:      nil,
+		Root:        header.Root,
 	}
 }
 
@@ -80,7 +76,6 @@ func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
 	return &TrieID{
 		BlockHash:   state.BlockHash,
 		BlockNumber: state.BlockNumber,
-		StateRoot:   state.StateRoot,
 		AccKey:      addrHash[:],
 		Root:        root,
 	}
@@ -183,7 +178,7 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 
 // TxStatus describes the status of a transaction
 type TxStatus struct {
-	Status txpool.TxStatus
+	Status core.TxStatus
 	Lookup *rawdb.LegacyTxLookupEntry `rlp:"nil"`
 	Error  string
 }

@@ -1,29 +1,10 @@
-// Copyright 2022 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package rlp
 
 import (
-	"encoding/binary"
 	"io"
 	"math/big"
 	"reflect"
 	"sync"
-
-	"github.com/holiman/uint256"
 )
 
 type encBuffer struct {
@@ -41,7 +22,6 @@ var encBufferPool = sync.Pool{
 func getEncBuffer() *encBuffer {
 	buf := encBufferPool.Get().(*encBuffer)
 	buf.reset()
-
 	return buf
 }
 
@@ -60,14 +40,12 @@ func (buf *encBuffer) size() int {
 func (w *encBuffer) makeBytes() []byte {
 	out := make([]byte, w.size())
 	w.copyTo(out)
-
 	return out
 }
 
 func (w *encBuffer) copyTo(dst []byte) {
 	strpos := 0
 	pos := 0
-
 	for _, head := range w.lheads {
 		// write string data before header
 		n := copy(dst[pos:], w.str[strpos:head.offset])
@@ -89,7 +67,6 @@ func (buf *encBuffer) writeTo(w io.Writer) (err error) {
 		if head.offset-strpos > 0 {
 			n, err := w.Write(buf.str[strpos:head.offset])
 			strpos += n
-
 			if err != nil {
 				return err
 			}
@@ -100,12 +77,10 @@ func (buf *encBuffer) writeTo(w io.Writer) (err error) {
 			return err
 		}
 	}
-
 	if strpos < len(buf.str) {
 		// write string data after the last list header
 		_, err = w.Write(buf.str[strpos:])
 	}
-
 	return err
 }
 
@@ -169,7 +144,6 @@ func (w *encBuffer) writeBigInt(i *big.Int) {
 	w.str = append(w.str, make([]byte, length)...)
 	index := length
 	buf := w.str[len(w.str)-length:]
-
 	for _, d := range i.Bits() {
 		for j := 0; j < wordBytes && index > 0; j++ {
 			index--
@@ -177,26 +151,6 @@ func (w *encBuffer) writeBigInt(i *big.Int) {
 			d >>= 8
 		}
 	}
-}
-
-// writeUint256 writes z as an integer.
-func (w *encBuffer) writeUint256(z *uint256.Int) {
-	bitlen := z.BitLen()
-	if bitlen <= 64 {
-		w.writeUint64(z.Uint64())
-		return
-	}
-
-	nBytes := byte((bitlen + 7) / 8)
-
-	var b [33]byte
-
-	binary.BigEndian.PutUint64(b[1:9], z[3])
-	binary.BigEndian.PutUint64(b[9:17], z[2])
-	binary.BigEndian.PutUint64(b[17:25], z[1])
-	binary.BigEndian.PutUint64(b[25:33], z[0])
-	b[32-nBytes] = 0x80 + nBytes
-	w.str = append(w.str, b[32-nBytes:]...)
 }
 
 // list adds a new list header to the header stack. It returns the index of the header.
@@ -209,7 +163,6 @@ func (buf *encBuffer) list() int {
 func (buf *encBuffer) listEnd(index int) {
 	lh := &buf.lheads[index]
 	lh.size = buf.size() - lh.offset - lh.size
-
 	if lh.size < 56 {
 		buf.lhsize++ // length encoded into kind tag
 	} else {
@@ -219,12 +172,10 @@ func (buf *encBuffer) listEnd(index int) {
 
 func (buf *encBuffer) encode(val interface{}) error {
 	rval := reflect.ValueOf(val)
-
 	writer, err := cachedWriter(rval.Type())
 	if err != nil {
 		return err
 	}
-
 	return writer(rval, buf)
 }
 
@@ -257,19 +208,15 @@ func (r *encReader) Read(b []byte) (n int, err error) {
 				encBufferPool.Put(r.buf)
 				r.buf = nil
 			}
-
 			return n, io.EOF
 		}
-
 		nn := copy(b[n:], r.piece)
 		n += nn
-
 		if nn < len(r.piece) {
 			// piece didn't fit, see you next time.
 			r.piece = r.piece[nn:]
 			return n, nil
 		}
-
 		r.piece = nil
 	}
 }
@@ -289,24 +236,19 @@ func (r *encReader) next() []byte {
 		// We're before the last list header.
 		head := r.buf.lheads[r.lhpos]
 		sizebefore := head.offset - r.strpos
-
 		if sizebefore > 0 {
 			// String data before header.
 			p := r.buf.str[r.strpos:head.offset]
 			r.strpos += sizebefore
-
 			return p
 		}
-
 		r.lhpos++
-
 		return head.encode(r.buf.sizebuf[:])
 
 	case r.strpos < len(r.buf.str):
 		// String data at the end, after all list headers.
 		p := r.buf.str[r.strpos:]
 		r.strpos = len(r.buf.str)
-
 		return p
 
 	default:
@@ -341,9 +283,7 @@ type EncoderBuffer struct {
 // NewEncoderBuffer creates an encoder buffer.
 func NewEncoderBuffer(dst io.Writer) EncoderBuffer {
 	var w EncoderBuffer
-
 	w.Reset(dst)
-
 	return w
 }
 
@@ -367,7 +307,6 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 		w.buf = encBufferPool.Get().(*encBuffer)
 		w.ownBuffer = true
 	}
-
 	w.buf.reset()
 	w.dst = dst
 }
@@ -383,9 +322,7 @@ func (w *EncoderBuffer) Flush() error {
 	if w.ownBuffer {
 		encBufferPool.Put(w.buf)
 	}
-
 	*w = EncoderBuffer{}
-
 	return err
 }
 
@@ -399,7 +336,6 @@ func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
 	size := w.buf.size()
 	out := append(dst, make([]byte, size)...)
 	w.buf.copyTo(out[len(dst):])
-
 	return out
 }
 
@@ -424,17 +360,12 @@ func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 	w.buf.writeBigInt(i)
 }
 
-// WriteUint256 encodes uint256.Int as an RLP string.
-func (w EncoderBuffer) WriteUint256(i *uint256.Int) {
-	w.buf.writeUint256(i)
-}
-
 // WriteBytes encodes b as an RLP string.
 func (w EncoderBuffer) WriteBytes(b []byte) {
 	w.buf.writeBytes(b)
 }
 
-// WriteString encodes s as an RLP string.
+// WriteBytes encodes s as an RLP string.
 func (w EncoderBuffer) WriteString(s string) {
 	w.buf.writeString(s)
 }

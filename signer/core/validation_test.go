@@ -38,6 +38,7 @@ func TestPasswordValidation(t *testing.T) {
 		if err == nil && test.shouldFail {
 			t.Errorf("password '%v' should fail validation", test.pw)
 		} else if err != nil && !test.shouldFail {
+
 			t.Errorf("password '%v' shound not fail validation, but did: %v", test.pw, err)
 		}
 	}

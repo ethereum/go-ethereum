@@ -17,7 +17,6 @@
 package core
 
 import (
-	"encoding/json"
 	"math/big"
 	"reflect"
 	"testing"
@@ -29,15 +28,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
-	db := rawdb.NewMemoryDatabase()
-
-	if _, err := block.Commit(db, trie.NewDatabase(db)); err == nil {
+	if _, err := block.Commit(nil); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
 }
@@ -53,7 +49,6 @@ func TestSetupGenesis(t *testing.T) {
 		}
 		oldcustomg = customg
 	)
-
 	oldcustomg.Config = &params.ChainConfig{HomesteadBlock: big.NewInt(2)}
 	tests := []struct {
 		name       string
@@ -65,7 +60,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "genesis without ChainConfig",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, trie.NewDatabase(db), new(Genesis))
+				return SetupGenesisBlock(db, new(Genesis))
 			},
 			wantErr:    errGenesisNoConfig,
 			wantConfig: params.AllEthashProtocolChanges,
@@ -73,7 +68,7 @@ func TestSetupGenesis(t *testing.T) {
 		{
 			name: "no block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, trie.NewDatabase(db), nil)
+				return SetupGenesisBlock(db, nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
 			wantConfig: params.MainnetChainConfig,
@@ -82,7 +77,7 @@ func TestSetupGenesis(t *testing.T) {
 			name: "mainnet block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				DefaultGenesisBlock().MustCommit(db)
-				return SetupGenesisBlock(db, trie.NewDatabase(db), nil)
+				return SetupGenesisBlock(db, nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
 			wantConfig: params.MainnetChainConfig,
@@ -91,26 +86,26 @@ func TestSetupGenesis(t *testing.T) {
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				customg.MustCommit(db)
-				return SetupGenesisBlock(db, trie.NewDatabase(db), nil)
+				return SetupGenesisBlock(db, nil)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
 		},
 		{
-			name: "custom block in DB, genesis == goerli",
+			name: "custom block in DB, genesis == ropsten",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				customg.MustCommit(db)
-				return SetupGenesisBlock(db, trie.NewDatabase(db), DefaultGoerliGenesisBlock())
+				return SetupGenesisBlock(db, DefaultRopstenGenesisBlock())
 			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.GoerliGenesisHash},
-			wantHash:   params.GoerliGenesisHash,
-			wantConfig: params.GoerliChainConfig,
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.RopstenGenesisHash},
+			wantHash:   params.RopstenGenesisHash,
+			wantConfig: params.RopstenChainConfig,
 		},
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				oldcustomg.MustCommit(db)
-				return SetupGenesisBlock(db, trie.NewDatabase(db), &customg)
+				return SetupGenesisBlock(db, &customg)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -122,22 +117,22 @@ func TestSetupGenesis(t *testing.T) {
 				// Advance to block #4, past the homestead transition block of customg.
 				genesis := oldcustomg.MustCommit(db)
 
-				bc, _ := NewBlockChain(db, nil, &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil, nil)
+				bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{}, nil, nil, nil)
 				defer bc.Stop()
 
 				blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), db, 4, nil)
 				bc.InsertChain(blocks)
-
+				bc.CurrentBlock()
 				// This should return a compatibility error.
-				return SetupGenesisBlock(db, trie.NewDatabase(db), &customg)
+				return SetupGenesisBlock(db, &customg)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
 			wantErr: &params.ConfigCompatError{
-				What:          "Homestead fork block",
-				StoredBlock:   big.NewInt(2),
-				NewBlock:      big.NewInt(3),
-				RewindToBlock: 1,
+				What:         "Homestead fork block",
+				StoredConfig: big.NewInt(2),
+				NewConfig:    big.NewInt(3),
+				RewindTo:     1,
 			},
 		},
 	}
@@ -150,11 +145,9 @@ func TestSetupGenesis(t *testing.T) {
 			spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
 			t.Errorf("%s: returned error %#v, want %#v", test.name, spew.NewFormatter(err), spew.NewFormatter(test.wantErr))
 		}
-
 		if !reflect.DeepEqual(config, test.wantConfig) {
 			t.Errorf("%s:\nreturned %v\nwant     %v", test.name, config, test.wantConfig)
 		}
-
 		if hash != test.wantHash {
 			t.Errorf("%s: returned hash %s, want %s", test.name, hash.Hex(), test.wantHash.Hex())
 		} else if err == nil {
@@ -176,6 +169,7 @@ func TestGenesisHashes(t *testing.T) {
 	}{
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
 		{DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
+		{DefaultRopstenGenesisBlock(), params.RopstenGenesisHash},
 		{DefaultRinkebyGenesisBlock(), params.RinkebyGenesisHash},
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 	} {
@@ -184,7 +178,7 @@ func TestGenesisHashes(t *testing.T) {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
-		if have := c.genesis.ToBlock().Hash(); have != c.want {
+		if have := c.genesis.ToBlock(nil).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 	}
@@ -198,7 +192,10 @@ func TestGenesis_Commit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	genesisBlock := genesis.MustCommit(db)
+	genesisBlock, err := genesis.Commit(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if genesis.Difficulty != nil {
 		t.Fatalf("assumption wrong")
@@ -224,30 +221,23 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
 		}
-		hash, _ = alloc.deriveHash()
+		hash = common.HexToHash("0xdeadbeef")
 	)
-
-	// nolint : errchkjson
-	blob, _ := json.Marshal(alloc)
-	rawdb.WriteGenesisStateSpec(db, hash, blob)
+	alloc.write(db, hash)
 
 	var reload GenesisAlloc
-
-	err := reload.UnmarshalJSON(rawdb.ReadGenesisStateSpec(db, hash))
+	err := reload.UnmarshalJSON(rawdb.ReadGenesisState(db, hash))
 	if err != nil {
 		t.Fatalf("Failed to load genesis state %v", err)
 	}
-
 	if len(reload) != len(*alloc) {
 		t.Fatal("Unexpected genesis allocation")
 	}
-
 	for addr, account := range reload {
 		want, ok := (*alloc)[addr]
 		if !ok {
 			t.Fatal("Account is not found")
 		}
-
 		if !reflect.DeepEqual(want, account) {
 			t.Fatal("Unexpected account")
 		}

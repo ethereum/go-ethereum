@@ -3,6 +3,7 @@ package filters
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -21,12 +22,11 @@ func (es *EventSystem) SubscribeNewDeposits(data chan *types.StateSyncData) *Sub
 		typ:           StateSyncSubscription,
 		created:       time.Now(),
 		logs:          make(chan []*types.Log),
-		txs:           make(chan []*types.Transaction),
+		hashes:        make(chan []common.Hash),
 		headers:       make(chan *types.Header),
 		stateSyncData: data,
 		installed:     make(chan struct{}),
 		err:           make(chan error),
 	}
-
 	return es.subscribe(sub)
 }

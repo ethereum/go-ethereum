@@ -35,24 +35,19 @@ type Iterator interface {
 // sequences, this function calls Next at most n times.
 func ReadNodes(it Iterator, n int) []*Node {
 	seen := make(map[ID]*Node, n)
-
 	for i := 0; i < n && it.Next(); i++ {
 		// Remove duplicates, keeping the node with higher seq.
 		node := it.Node()
 		prevNode, ok := seen[node.ID()]
-
 		if ok && prevNode.Seq() > node.Seq() {
 			continue
 		}
-
 		seen[node.ID()] = node
 	}
-
 	result := make([]*Node, 0, len(seen))
 	for _, node := range seen {
 		result = append(result, node)
 	}
-
 	return result
 }
 
@@ -80,7 +75,6 @@ func (it *sliceIter) Next() bool {
 	if len(it.nodes) == 0 {
 		return false
 	}
-
 	it.index++
 	if it.index == len(it.nodes) {
 		if it.cycle {
@@ -90,18 +84,15 @@ func (it *sliceIter) Next() bool {
 			return false
 		}
 	}
-
 	return true
 }
 
 func (it *sliceIter) Node() *Node {
 	it.mu.Lock()
 	defer it.mu.Unlock()
-
 	if len(it.nodes) == 0 {
 		return nil
 	}
-
 	return it.nodes[it.index]
 }
 
@@ -129,7 +120,6 @@ func (f *filterIter) Next() bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -173,7 +163,6 @@ func NewFairMix(timeout time.Duration) *FairMix {
 		closed:  make(chan struct{}),
 		timeout: timeout,
 	}
-
 	return m
 }
 
@@ -185,11 +174,9 @@ func (m *FairMix) AddSource(it Iterator) {
 	if m.closed == nil {
 		return
 	}
-
 	m.wg.Add(1)
 	source := &mixSource{it, make(chan *Node), m.timeout}
 	m.sources = append(m.sources, source)
-
 	go m.runSource(m.closed, source)
 }
 
@@ -202,11 +189,9 @@ func (m *FairMix) Close() {
 	if m.closed == nil {
 		return
 	}
-
 	for _, s := range m.sources {
 		s.it.Close()
 	}
-
 	close(m.closed)
 	m.wg.Wait()
 	close(m.fromAny)
@@ -218,36 +203,27 @@ func (m *FairMix) Close() {
 func (m *FairMix) Next() bool {
 	m.cur = nil
 
+	var timeout <-chan time.Time
+	if m.timeout >= 0 {
+		timer := time.NewTimer(m.timeout)
+		timeout = timer.C
+		defer timer.Stop()
+	}
 	for {
 		source := m.pickSource()
 		if source == nil {
 			return m.nextFromAny()
 		}
-
-		var timeout <-chan time.Time
-		if source.timeout >= 0 {
-			timer := time.NewTimer(source.timeout)
-			timeout = timer.C
-
-			defer timer.Stop()
-		}
-
 		select {
 		case n, ok := <-source.next:
 			if ok {
-				// Here, the timeout is reset to the configured value
-				// because the source delivered a node.
-				source.timeout = m.timeout
 				m.cur = n
-
+				source.timeout = m.timeout
 				return true
 			}
 			// This source has ended.
 			m.deleteSource(source)
 		case <-timeout:
-			// The selected source did not deliver a node within the timeout, so the
-			// timeout duration is halved for next time. This is supposed to improve
-			// latency with stuck sources.
 			source.timeout /= 2
 			return m.nextFromAny()
 		}
@@ -266,7 +242,6 @@ func (m *FairMix) nextFromAny() bool {
 	if ok {
 		m.cur = n
 	}
-
 	return ok
 }
 
@@ -278,9 +253,7 @@ func (m *FairMix) pickSource() *mixSource {
 	if len(m.sources) == 0 {
 		return nil
 	}
-
 	m.last = (m.last + 1) % len(m.sources)
-
 	return m.sources[m.last]
 }
 
@@ -294,7 +267,6 @@ func (m *FairMix) deleteSource(s *mixSource) {
 			copy(m.sources[i:], m.sources[i+1:])
 			m.sources[len(m.sources)-1] = nil
 			m.sources = m.sources[:len(m.sources)-1]
-
 			break
 		}
 	}
@@ -304,7 +276,6 @@ func (m *FairMix) deleteSource(s *mixSource) {
 func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
 	defer m.wg.Done()
 	defer close(s.next)
-
 	for s.it.Next() {
 		n := s.it.Node()
 		select {

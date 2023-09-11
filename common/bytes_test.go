@@ -28,7 +28,6 @@ func TestCopyBytes(t *testing.T) {
 	if !bytes.Equal(v, []byte{1, 2, 3, 4}) {
 		t.Fatal("not equal after copy")
 	}
-
 	v[0] = 99
 	if bytes.Equal(v, input) {
 		t.Fatal("result is not a copy")
@@ -42,7 +41,6 @@ func TestLeftPadBytes(t *testing.T) {
 	if r := LeftPadBytes(val, 8); !bytes.Equal(r, padded) {
 		t.Fatalf("LeftPadBytes(%v, 8) == %v", val, r)
 	}
-
 	if r := LeftPadBytes(val, 2); !bytes.Equal(r, val) {
 		t.Fatalf("LeftPadBytes(%v, 2) == %v", val, r)
 	}
@@ -55,7 +53,6 @@ func TestRightPadBytes(t *testing.T) {
 	if r := RightPadBytes(val, 8); !bytes.Equal(r, padded) {
 		t.Fatalf("RightPadBytes(%v, 8) == %v", val, r)
 	}
-
 	if r := RightPadBytes(val, 2); !bytes.Equal(r, val) {
 		t.Fatalf("RightPadBytes(%v, 2) == %v", val, r)
 	}
@@ -65,7 +62,6 @@ func TestFromHex(t *testing.T) {
 	input := "0x01"
 	expected := []byte{1}
 	result := FromHex(input)
-
 	if !bytes.Equal(expected, result) {
 		t.Errorf("Expected %x got %x", expected, result)
 	}
@@ -96,7 +92,6 @@ func TestFromHexOddLength(t *testing.T) {
 	input := "0x1"
 	expected := []byte{1}
 	result := FromHex(input)
-
 	if !bytes.Equal(expected, result) {
 		t.Errorf("Expected %x got %x", expected, result)
 	}
@@ -106,7 +101,6 @@ func TestNoPrefixShortHexOddLength(t *testing.T) {
 	input := "1"
 	expected := []byte{1}
 	result := FromHex(input)
-
 	if !bytes.Equal(expected, result) {
 		t.Errorf("Expected %x got %x", expected, result)
 	}

@@ -66,7 +66,6 @@ var DefaultConfig = Config{
 		NAT:           nat.Any(),
 		TxArrivalWait: 500 * time.Millisecond,
 	},
-	DBEngine: "",
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other
@@ -84,11 +83,9 @@ func DefaultDataDir() string {
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
 			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
 			appdata := windowsAppData()
-
 			if appdata == "" || isNonEmptyDir(fallback) {
 				return fallback
 			}
-
 			return filepath.Join(appdata, "Ethereum")
 		default:
 			return filepath.Join(home, ".ethereum")
@@ -106,7 +103,6 @@ func windowsAppData() string {
 		// other issues.
 		panic("environment variable LocalAppData is undefined")
 	}
-
 	return v
 }
 
@@ -115,10 +111,8 @@ func isNonEmptyDir(dir string) bool {
 	if err != nil {
 		return false
 	}
-
 	names, _ := f.Readdir(1)
 	f.Close()
-
 	return len(names) > 0
 }
 
@@ -126,10 +120,8 @@ func homeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
-
 	if usr, err := user.Current(); err == nil {
 		return usr.HomeDir
 	}
-
 	return ""
 }

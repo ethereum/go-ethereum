@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -32,9 +33,10 @@ import (
 
 func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 	var (
-		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		// Generate a canonical chain to act as the main dataset
 		engine = ethash.NewFaker()
-
+		db     = rawdb.NewMemoryDatabase()
 		// A sender who makes transactions, has some funds
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
@@ -43,9 +45,11 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 			Config: params.TestChainConfig,
 			Alloc:  GenesisAlloc{address: {Balance: funds}},
 		}
+		genesis = gspec.MustCommit(db)
 	)
+
 	// We need to generate as many blocks +1 as uncles
-	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, uncles+1,
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, uncles+1,
 		func(n int, b *BlockGen) {
 			if n == uncles {
 				// Add transactions and stuff on the last block
@@ -54,14 +58,12 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.HomesteadSigner{}, key)
 					b.AddTx(tx)
 				}
-
 				for i := 0; i < uncles; i++ {
 					b.AddUncle(&types.Header{ParentHash: b.PrevBlock(n - 1 - i).Hash(), Number: big.NewInt(int64(n - i))})
 				}
 			}
 		})
 	block := blocks[len(blocks)-1]
-
 	return block
 }
 
@@ -86,7 +88,6 @@ func TestRlpIterator(t *testing.T) {
 func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	desc := fmt.Sprintf("%d txs [%d datasize] and %d uncles", txs, datasize, uncles)
 	bodyRlp, _ := rlp.EncodeToBytes(getBlock(txs, uncles, datasize).Body())
-
 	it, err := rlp.NewListIterator(bodyRlp)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +96,6 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	if !it.Next() {
 		t.Fatal("expected two elems, got zero")
 	}
-
 	txdata := it.Value()
 	// Check that uncles exist
 	if !it.Next() {
@@ -105,31 +105,24 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	if it.Next() {
 		t.Fatal("expected only two elems, got more")
 	}
-
 	txIt, err := rlp.NewListIterator(txdata)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	var gotHashes []common.Hash
-
 	var expHashes []common.Hash
-
 	for txIt.Next() {
 		gotHashes = append(gotHashes, crypto.Keccak256Hash(txIt.Value()))
 	}
 
 	var expBody types.Body
-
 	err = rlp.DecodeBytes(bodyRlp, &expBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	for _, tx := range expBody.Transactions {
 		expHashes = append(expHashes, tx.Hash())
 	}
-
 	if gotLen, expLen := len(gotHashes), len(expHashes); gotLen != expLen {
 		t.Fatalf("testcase %v: length wrong, got %d exp %d", desc, gotLen, expLen)
 	}
@@ -137,7 +130,6 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	if gotLen := len(gotHashes); gotLen != txs {
 		t.Fatalf("testcase %v: length wrong, got %d exp %d", desc, gotLen, txs)
 	}
-
 	for i, got := range gotHashes {
 		if exp := expHashes[i]; got != exp {
 			t.Errorf("testcase %v: hash wrong, got %x, exp %x", desc, got, exp)
@@ -158,30 +150,22 @@ func BenchmarkHashing(b *testing.B) {
 		bodyRlp, _ = rlp.EncodeToBytes(block.Body())
 		blockRlp, _ = rlp.EncodeToBytes(block)
 	}
-
 	var got common.Hash
-
 	var hasher = sha3.NewLegacyKeccak256()
-
 	b.Run("iteratorhashing", func(b *testing.B) {
 		b.ResetTimer()
-
 		for i := 0; i < b.N; i++ {
 			var hash common.Hash
-
 			it, err := rlp.NewListIterator(bodyRlp)
 			if err != nil {
 				b.Fatal(err)
 			}
-
 			it.Next()
 			txs := it.Value()
-
 			txIt, err := rlp.NewListIterator(txs)
 			if err != nil {
 				b.Fatal(err)
 			}
-
 			for txIt.Next() {
 				hasher.Reset()
 				hasher.Write(txIt.Value())
@@ -190,17 +174,12 @@ func BenchmarkHashing(b *testing.B) {
 			}
 		}
 	})
-
 	var exp common.Hash
-
 	b.Run("fullbodyhashing", func(b *testing.B) {
 		b.ResetTimer()
-
 		for i := 0; i < b.N; i++ {
 			var body types.Body
-
 			rlp.DecodeBytes(bodyRlp, &body)
-
 			for _, tx := range body.Transactions {
 				exp = tx.Hash()
 			}
@@ -208,18 +187,14 @@ func BenchmarkHashing(b *testing.B) {
 	})
 	b.Run("fullblockhashing", func(b *testing.B) {
 		b.ResetTimer()
-
 		for i := 0; i < b.N; i++ {
 			var block types.Block
-
 			rlp.DecodeBytes(blockRlp, &block)
-
 			for _, tx := range block.Transactions() {
 				tx.Hash()
 			}
 		}
 	})
-
 	if got != exp {
 		b.Fatalf("hash wrong, got %x exp %x", got, exp)
 	}

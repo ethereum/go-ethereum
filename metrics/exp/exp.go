@@ -25,16 +25,12 @@ func (exp *exp) expHandler(w http.ResponseWriter, r *http.Request) {
 	// now just run the official expvar handler code (which is not publicly callable, so pasted inline)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, "{\n")
-
 	first := true
-
 	expvar.Do(func(kv expvar.KeyValue) {
 		if !first {
 			fmt.Fprintf(w, ",\n")
 		}
-
 		first = false
-
 		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
 	})
 	fmt.Fprintf(w, "\n}\n")
@@ -64,7 +60,6 @@ func Setup(address string) {
 	m.Handle("/debug/metrics", ExpHandler(metrics.DefaultRegistry))
 	m.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 	log.Info("Starting metrics server", "addr", fmt.Sprintf("http://%s/debug/metrics", address))
-
 	go func() {
 		if err := http.ListenAndServe(address, m); err != nil {
 			log.Error("Failure in running metrics server", "err", err)
@@ -74,9 +69,7 @@ func Setup(address string) {
 
 func (exp *exp) getInt(name string) *expvar.Int {
 	var v *expvar.Int
-
 	exp.expvarLock.Lock()
-
 	p := expvar.Get(name)
 	if p != nil {
 		v = p.(*expvar.Int)
@@ -85,15 +78,12 @@ func (exp *exp) getInt(name string) *expvar.Int {
 		expvar.Publish(name, v)
 	}
 	exp.expvarLock.Unlock()
-
 	return v
 }
 
 func (exp *exp) getFloat(name string) *expvar.Float {
 	var v *expvar.Float
-
 	exp.expvarLock.Lock()
-
 	p := expvar.Get(name)
 	if p != nil {
 		v = p.(*expvar.Float)
@@ -102,17 +92,11 @@ func (exp *exp) getFloat(name string) *expvar.Float {
 		expvar.Publish(name, v)
 	}
 	exp.expvarLock.Unlock()
-
 	return v
 }
 
 func (exp *exp) publishCounter(name string, metric metrics.Counter) {
 	v := exp.getInt(name)
-	v.Set(metric.Count())
-}
-
-func (exp *exp) publishCounterFloat64(name string, metric metrics.CounterFloat64) {
-	v := exp.getFloat(name)
 	v.Set(metric.Count())
 }
 
@@ -183,8 +167,6 @@ func (exp *exp) syncToExpvar() {
 		switch i := i.(type) {
 		case metrics.Counter:
 			exp.publishCounter(name, i)
-		case metrics.CounterFloat64:
-			exp.publishCounterFloat64(name, i)
 		case metrics.Gauge:
 			exp.publishGauge(name, i)
 		case metrics.GaugeFloat64:

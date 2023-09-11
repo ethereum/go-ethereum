@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 )
@@ -112,24 +111,22 @@ func (h peerByTxHistory) Less(i, j int) bool {
 	if h[i].txHistory == txIndexUnlimited {
 		return false
 	}
-
 	if h[j].txHistory == txIndexUnlimited {
 		return true
 	}
-
 	return h[i].txHistory < h[j].txHistory
 }
 func (h peerByTxHistory) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 const (
-	maxTxStatusRetry      = 3 // The maximum retries will be made for tx status request.
+	maxTxStatusRetry      = 3 // The maximum retrys will be made for tx status request.
 	maxTxStatusCandidates = 5 // The maximum les servers the tx status requests will be sent to.
 )
 
 // RetrieveTxStatus retrieves the transaction status from the LES network.
 // There is no guarantee in the LES protocol that the mined transaction will
 // be retrieved back for sure because of different reasons(the transaction
-// is unindexed, the malicious server doesn't reply it deliberately, etc).
+// is unindexed, the malicous server doesn't reply it deliberately, etc).
 // Therefore, unretrieved transactions(UNKNOWN) will receive a certain number
 // of retries, thus giving a weak guarantee.
 func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequest) error {
@@ -142,17 +139,13 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		result  = make([]light.TxStatus, len(req.Hashes))
 		canSend = make(map[string]bool)
 	)
-
 	for _, peer := range odr.peers.allPeers() {
 		if peer.txHistory == txIndexDisabled {
 			continue
 		}
-
 		peers = append(peers, peer)
 	}
-
 	sort.Sort(sort.Reverse(peerByTxHistory(peers)))
-
 	for i := 0; i < maxTxStatusCandidates && i < len(peers); i++ {
 		canSend[peers[i].id] = true
 	}
@@ -161,7 +154,6 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		if retries >= maxTxStatusRetry || len(canSend) == 0 {
 			break
 		}
-
 		var (
 			// Deep copy the request, so that the partial result won't be mixed.
 			req     = &TxStatusRequest{Hashes: req.Hashes}
@@ -177,7 +169,6 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 				},
 			}
 		)
-
 		if err := odr.retriever.retrieve(ctx, id, distreq, func(p distPeer, msg *Msg) error { return req.Validate(odr.db, msg) }, odr.stop); err != nil {
 			return err
 		}
@@ -185,26 +176,21 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		// All the response is not verifiable, so always pick the first
 		// one we get.
 		for index, status := range req.Status {
-			if result[index].Status != txpool.TxStatusUnknown {
+			if result[index].Status != core.TxStatusUnknown {
 				continue
 			}
-
-			if status.Status == txpool.TxStatusUnknown {
+			if status.Status == core.TxStatusUnknown {
 				continue
 			}
-
 			result[index], missing = status, missing-1
 		}
 		// Abort the procedure if all the status are retrieved
 		if missing == 0 {
 			break
 		}
-
 		retries += 1
 	}
-
 	req.Status = result
-
 	return nil
 }
 
@@ -239,15 +225,12 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		if err != nil {
 			return
 		}
-
 		requestRTT.Update(time.Duration(mclock.Now() - sent))
 	}(mclock.Now())
 
 	if err := odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err != nil {
 		return err
 	}
-
 	req.StoreResult(odr.db)
-
 	return nil
 }

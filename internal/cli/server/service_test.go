@@ -14,11 +14,9 @@ func TestGatherBlocks(t *testing.T) {
 		ABlock *big.Int
 		BBlock *big.Int
 	}
-
 	type d struct {
 		DBlock uint64
 	}
-
 	val := &c{
 		BBlock: new(big.Int).SetInt64(1),
 	}

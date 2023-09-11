@@ -20,12 +20,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -42,7 +43,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -53,9 +54,6 @@ type Database interface {
 	// ContractCodeSize retrieves a particular contracts code's size.
 	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
 
-	// DiskDB returns the underlying key-value disk database.
-	DiskDB() ethdb.KeyValueStore
-
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
 }
@@ -65,51 +63,34 @@ type Trie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
 	//
-	// TODO(fjl): remove this when StateTrie is removed
+	// TODO(fjl): remove this when SecureTrie is removed
 	GetKey([]byte) []byte
 
-	// GetStorage returns the value for key stored in the trie. The value bytes
-	// must not be modified by the caller. If a node was not found in the database,
-	// a trie.MissingNodeError is returned.
-	GetStorage(addr common.Address, key []byte) ([]byte, error)
+	// TryGet returns the value for key stored in the trie. The value bytes must
+	// not be modified by the caller. If a node was not found in the database, a
+	// trie.MissingNodeError is returned.
+	TryGet(key []byte) ([]byte, error)
 
-	// GetAccount abstracts an account read from the trie. It retrieves the
-	// account blob from the trie with provided account address and decodes it
-	// with associated decoding algorithm. If the specified account is not in
-	// the trie, nil will be returned. If the trie is corrupted(e.g. some nodes
-	// are missing or the account blob is incorrect for decoding), an error will
-	// be returned.
-	GetAccount(address common.Address) (*types.StateAccount, error)
+	// TryUpdateAccount abstract an account write in the trie.
+	TryUpdateAccount(key []byte, account *types.StateAccount) error
 
-	// UpdateStorage associates key with value in the trie. If value has length zero,
-	// any existing value is deleted from the trie. The value bytes must not be modified
+	// TryUpdate associates key with value in the trie. If value has length zero, any
+	// existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
-	UpdateStorage(addr common.Address, key, value []byte) error
+	TryUpdate(key, value []byte) error
 
-	// UpdateAccount abstracts an account write to the trie. It encodes the
-	// provided account object with associated algorithm and then updates it
-	// in the trie with provided address.
-	UpdateAccount(address common.Address, account *types.StateAccount) error
-
-	// DeleteStorage removes any existing value for key from the trie. If a node
-	// was not found in the database, a trie.MissingNodeError is returned.
-	DeleteStorage(addr common.Address, key []byte) error
-
-	// DeleteAccount abstracts an account deletion from the trie.
-	DeleteAccount(address common.Address) error
+	// TryDelete removes any existing value for key from the trie. If a node was not
+	// found in the database, a trie.MissingNodeError is returned.
+	TryDelete(key []byte) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and
 	// can be used even if the trie doesn't have one.
 	Hash() common.Hash
 
-	// Commit collects all dirty nodes in the trie and replace them with the
-	// corresponding node hash. All collected nodes(including dirty leaves if
-	// collectLeaf is true) will be encapsulated into a nodeset for return.
-	// The returned nodeset can be nil if the trie is clean(nothing to commit).
-	// Once the trie is committed, it's not usable anymore. A new trie must
-	// be created with new root and updated trie database for following usage
-	Commit(collectLeaf bool) (common.Hash, *trie.NodeSet)
+	// Commit writes all nodes to the trie's memory database, tracking the internal
+	// and external (for account tries) references.
+	Commit(onleaf trie.LeafCallback) (common.Hash, int, error)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key.
@@ -136,55 +117,42 @@ func NewDatabase(db ethdb.Database) Database {
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
+	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		disk:          db,
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        trie.NewDatabaseWithConfig(db, config),
-	}
-}
-
-// NewDatabaseWithNodeDB creates a state database with an already initialized node database.
-func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
-	return &cachingDB{
-		disk:          db,
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        triedb,
+		db:            trie.NewDatabaseWithConfig(db, config),
+		codeSizeCache: csc,
+		codeCache:     fastcache.New(codeCacheSize),
 	}
 }
 
 type cachingDB struct {
-	disk          ethdb.KeyValueStore
-	codeSizeCache *lru.Cache[common.Hash, int]
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	triedb        *trie.Database
+	db            *trie.Database
+	codeSizeCache *lru.Cache
+	codeCache     *fastcache.Cache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	tr, err := trie.NewSecure(root, db.db)
 	if err != nil {
 		return nil, err
 	}
-
 	return tr, nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.triedb)
+func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
+	tr, err := trie.NewSecure(root, db.db)
 	if err != nil {
 		return nil, err
 	}
-
 	return tr, nil
 }
 
 // CopyTrie returns an independent copy of the given trie.
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
-	case *trie.StateTrie:
+	case *trie.SecureTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
@@ -193,20 +161,15 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
-
-	code = rawdb.ReadCode(db.disk, codeHash)
-
+	code := rawdb.ReadCode(db.db.DiskDB(), codeHash)
 	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
+		db.codeCache.Set(codeHash.Bytes(), code)
 		db.codeSizeCache.Add(codeHash, len(code))
-
 		return code, nil
 	}
-
 	return nil, errors.New("not found")
 }
 
@@ -214,40 +177,28 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 // code can't be found in the cache, then check the existence with **new**
 // db scheme.
 func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
+	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
-
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-
+	code := rawdb.ReadCodeWithPrefix(db.db.DiskDB(), codeHash)
 	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
+		db.codeCache.Set(codeHash.Bytes(), code)
 		db.codeSizeCache.Add(codeHash, len(code))
-
 		return code, nil
 	}
-
 	return nil, errors.New("not found")
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.
 func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
+		return cached.(int), nil
 	}
-
 	code, err := db.ContractCode(addrHash, codeHash)
-
 	return len(code), err
-}
-
-// DiskDB returns the underlying key-value disk database.
-func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
-	return db.disk
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {
-	return db.triedb
+	return db.db
 }

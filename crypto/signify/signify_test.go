@@ -20,9 +20,11 @@
 package signify
 
 import (
-	"crypto/rand"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jedisct1/go-minisign"
 )
@@ -33,13 +35,14 @@ var (
 )
 
 func TestSignify(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "")
+	tmpFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)
@@ -70,20 +73,20 @@ func TestSignify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if !valid {
 		t.Fatal("invalid signature")
 	}
 }
 
 func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "")
+	tmpFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)
@@ -101,13 +104,14 @@ func TestSignifyTrustedCommentTooManyLines(t *testing.T) {
 }
 
 func TestSignifyTrustedCommentTooManyLinesLF(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "")
+	tmpFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)
@@ -125,13 +129,14 @@ func TestSignifyTrustedCommentTooManyLinesLF(t *testing.T) {
 }
 
 func TestSignifyTrustedCommentEmpty(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "")
+	tmpFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
+
+	rand.Seed(time.Now().UnixNano())
 
 	data := make([]byte, 1024)
 	rand.Read(data)

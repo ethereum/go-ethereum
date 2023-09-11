@@ -42,11 +42,9 @@ func testQueueIterator(t *testing.T, fifo bool) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	qi := NewQueueIterator(ns, sfTest2, sfTest3.Or(sfTest4), fifo, nil)
 	ns.Start()
-
 	for i := 1; i <= iterTestNodeCount; i++ {
 		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
 	}
-
 	next := func() int {
 		ch := make(chan struct{})
 		go func() {
@@ -58,10 +56,8 @@ func testQueueIterator(t *testing.T, fifo bool) {
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Iterator.Next() timeout")
 		}
-
 		node := qi.Node()
 		ns.SetState(node, sfTest4, nodestate.Flags{}, 0)
-
 		return testNodeIndex(node.ID())
 	}
 	exp := func(i int) {

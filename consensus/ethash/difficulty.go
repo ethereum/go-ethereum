@@ -51,6 +51,7 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 		- time = block.timestamp
 		- num = block.number
 	*/
+
 	pDiff, _ := uint256.FromBig(parent.Difficulty) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
@@ -60,7 +61,6 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 	} else {
 		pDiff.Sub(pDiff, adjust)
 	}
-
 	if pDiff.LtUint64(minimumDifficulty) {
 		pDiff.SetUint64(minimumDifficulty)
 	}
@@ -73,7 +73,6 @@ func CalcDifficultyFrontierU256(time uint64, parent *types.Header) *big.Int {
 		expDiff.Lsh(expDiff, uint(periodCount-2)) // expdiff: 2 ^ (periodCount -2)
 		pDiff.Add(pDiff, expDiff)
 	}
-
 	return pDiff.ToBig()
 }
 
@@ -95,14 +94,13 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 		- time = block.timestamp
 		- num = block.number
 	*/
+
 	pDiff, _ := uint256.FromBig(parent.Difficulty) // pDiff: pdiff
 	adjust := pDiff.Clone()
 	adjust.Rsh(adjust, difficultyBoundDivisor) // adjust: pDiff / 2048
 
 	x := (time - parent.Time) / 10 // (time - ptime) / 10)
-
 	var neg = true
-
 	if x == 0 {
 		x = 1
 		neg = false
@@ -111,16 +109,13 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 	} else {
 		x = x - 1
 	}
-
 	z := new(uint256.Int).SetUint64(x)
 	adjust.Mul(adjust, z) // adjust: (pdiff / 2048) * max((time - ptime) / 10 - 1, 99)
-
 	if neg {
 		pDiff.Sub(pDiff, adjust) // pdiff - pdiff / 2048 * max((time - ptime) / 10 - 1, 99)
 	} else {
 		pDiff.Add(pDiff, adjust) // pdiff + pdiff / 2048 * max((time - ptime) / 10 - 1, 99)
 	}
-
 	if pDiff.LtUint64(minimumDifficulty) {
 		pDiff.SetUint64(minimumDifficulty)
 	}
@@ -130,7 +125,6 @@ func CalcDifficultyHomesteadU256(time uint64, parent *types.Header) *big.Int {
 		expFactor := adjust.Lsh(adjust.SetOne(), uint(periodCount-2))
 		pDiff.Add(pDiff, expFactor)
 	}
-
 	return pDiff.ToBig()
 }
 
@@ -141,7 +135,6 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 	// Note, the calculations below looks at the parent number, which is 1 below
 	// the block number. Thus we remove one from the delay given
 	bombDelayFromParent := bombDelay.Uint64() - 1
-
 	return func(time uint64, parent *types.Header) *big.Int {
 		/*
 			https://github.com/ethereum/EIPs/issues/100
@@ -152,12 +145,10 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 			child_diff = max(a,b )
 		*/
 		x := (time - parent.Time) / 9 // (block_timestamp - parent_timestamp) // 9
-
-		c := uint64(1) // if parent.unclehash == emptyUncleHashHash
+		c := uint64(1)                // if parent.unclehash == emptyUncleHashHash
 		if parent.UncleHash != types.EmptyUncleHash {
 			c = 2
 		}
-
 		xNeg := x >= c
 		if xNeg {
 			// x is now _negative_ adjustment factor
@@ -165,7 +156,6 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		} else {
 			x = c - x // (2 or 1) - (t-p)/9
 		}
-
 		if x > 99 {
 			x = 99 // max(x, 99)
 		}
@@ -174,9 +164,8 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		y.SetFromBig(parent.Difficulty)    // y: p_diff
 		pDiff := y.Clone()                 // pdiff: p_diff
 		z := new(uint256.Int).SetUint64(x) //z : +-adj_factor (either pos or negative)
-
-		y.Rsh(y, difficultyBoundDivisor) // y: p__diff / 2048
-		z.Mul(y, z)                      // z: (p_diff / 2048 ) * (+- adj_factor)
+		y.Rsh(y, difficultyBoundDivisor)   // y: p__diff / 2048
+		z.Mul(y, z)                        // z: (p_diff / 2048 ) * (+- adj_factor)
 
 		if xNeg {
 			y.Sub(pDiff, z) // y: parent_diff + parent_diff/2048 * adjustment_factor
@@ -197,7 +186,6 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 				y.Add(z, y)
 			}
 		}
-
 		return y.ToBig()
 	}
 }

@@ -123,7 +123,6 @@ func newMeteredMsgWriter(rw p2p.MsgReadWriter, version int) p2p.MsgReadWriter {
 	if !metrics.Enabled {
 		return rw
 	}
-
 	return &meteredMsgReadWriter{MsgReadWriter: rw, version: version}
 }
 

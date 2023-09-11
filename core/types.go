@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -42,7 +41,7 @@ type Prefetcher interface {
 	// Prefetch processes the state changes according to the Ethereum rules by running
 	// the transaction messages using the statedb, but any changes are discarded. The
 	// only goal is to pre-cache transaction signatures and state trie nodes.
-	Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *atomic.Bool)
+	Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32)
 }
 
 // Processor is an interface for processing blocks using a given initial state.

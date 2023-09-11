@@ -38,7 +38,6 @@ func Profile(profile string, debug, gc int) ([]byte, map[string]string, error) {
 		headers["Content-Type"] = "application/octet-stream"
 		headers["Content-Disposition"] = fmt.Sprintf(`attachment; filename="%s"`, profile)
 	}
-
 	return buf.Bytes(), headers, nil
 }
 

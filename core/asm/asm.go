@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package asm provides support for dealing with EVM assembly instructions (e.g., disassembling them).
+// Provides support for dealing with EVM assembly instructions (e.g., disassembling them).
 package asm
 
 import (
@@ -34,15 +34,14 @@ type instructionIterator struct {
 	started bool
 }
 
-// NewInstructionIterator create a new instruction iterator.
+// Create a new instruction iterator.
 func NewInstructionIterator(code []byte) *instructionIterator {
 	it := new(instructionIterator)
 	it.code = code
-
 	return it
 }
 
-// Next returns true if there is a next instruction and moves on.
+// Returns true if there is a next instruction and moves on.
 func (it *instructionIterator) Next() bool {
 	if it.error != nil || uint64(len(it.code)) <= it.pc {
 		// We previously reached an error or the end.
@@ -54,7 +53,6 @@ func (it *instructionIterator) Next() bool {
 		if it.arg != nil {
 			it.pc += uint64(len(it.arg))
 		}
-
 		it.pc++
 	} else {
 		// We start the iteration from the first instruction.
@@ -69,42 +67,39 @@ func (it *instructionIterator) Next() bool {
 	it.op = vm.OpCode(it.code[it.pc])
 	if it.op.IsPush() {
 		a := uint64(it.op) - uint64(vm.PUSH1) + 1
-
 		u := it.pc + 1 + a
 		if uint64(len(it.code)) <= it.pc || uint64(len(it.code)) < u {
 			it.error = fmt.Errorf("incomplete push instruction at %v", it.pc)
 			return false
 		}
-
 		it.arg = it.code[it.pc+1 : u]
 	} else {
 		it.arg = nil
 	}
-
 	return true
 }
 
-// Error returns any error that may have been encountered.
+// Returns any error that may have been encountered.
 func (it *instructionIterator) Error() error {
 	return it.error
 }
 
-// PC returns the PC of the current instruction.
+// Returns the PC of the current instruction.
 func (it *instructionIterator) PC() uint64 {
 	return it.pc
 }
 
-// Op returns the opcode of the current instruction.
+// Returns the opcode of the current instruction.
 func (it *instructionIterator) Op() vm.OpCode {
 	return it.op
 }
 
-// Arg returns the argument of the current instruction.
+// Returns the argument of the current instruction.
 func (it *instructionIterator) Arg() []byte {
 	return it.arg
 }
 
-// PrintDisassembled pretty-print all disassembled EVM instructions to stdout.
+// Pretty-print all disassembled EVM instructions to stdout.
 func PrintDisassembled(code string) error {
 	script, err := hex.DecodeString(code)
 	if err != nil {
@@ -114,31 +109,28 @@ func PrintDisassembled(code string) error {
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			fmt.Printf("%05x: %v %#x\n", it.PC(), it.Op(), it.Arg())
+			fmt.Printf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg())
 		} else {
 			fmt.Printf("%05x: %v\n", it.PC(), it.Op())
 		}
 	}
-
 	return it.Error()
 }
 
-// Disassemble returns all disassembled EVM instructions in human-readable format.
+// Return all disassembled EVM instructions in human-readable format.
 func Disassemble(script []byte) ([]string, error) {
 	instrs := make([]string, 0)
 
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			instrs = append(instrs, fmt.Sprintf("%05x: %v %#x\n", it.PC(), it.Op(), it.Arg()))
+			instrs = append(instrs, fmt.Sprintf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg()))
 		} else {
 			instrs = append(instrs, fmt.Sprintf("%05x: %v\n", it.PC(), it.Op()))
 		}
 	}
-
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
-
 	return instrs, nil
 }

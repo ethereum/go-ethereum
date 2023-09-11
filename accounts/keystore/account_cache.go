@@ -27,8 +27,7 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
-
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -60,7 +59,6 @@ func (err *AmbiguousAddrError) Error() string {
 			files += ", "
 		}
 	}
-
 	return fmt.Sprintf("multiple keys match address (%s)", files)
 }
 
@@ -81,10 +79,9 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC:  fileCache{all: mapset.NewThreadUnsafeSet[string]()},
+		fileC:  fileCache{all: mapset.NewThreadUnsafeSet()},
 	}
 	ac.watcher = newWatcher(ac)
-
 	return ac, ac.notify
 }
 
@@ -94,7 +91,6 @@ func (ac *accountCache) accounts() []accounts.Account {
 	defer ac.mu.Unlock()
 	cpy := make([]accounts.Account, len(ac.all))
 	copy(cpy, ac.all)
-
 	return cpy
 }
 
@@ -102,7 +98,6 @@ func (ac *accountCache) hasAddress(addr common.Address) bool {
 	ac.maybeReload()
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
-
 	return len(ac.byAddr[addr]) > 0
 }
 
@@ -143,7 +138,6 @@ func (ac *accountCache) deleteByFile(path string) {
 	if i < len(ac.all) && ac.all[i].URL.Path == path {
 		removed := ac.all[i]
 		ac.all = append(ac.all[:i], ac.all[i+1:]...)
-
 		if ba := removeAccount(ac.byAddr[removed.Address], removed); len(ba) == 0 {
 			delete(ac.byAddr, removed.Address)
 		} else {
@@ -152,22 +146,12 @@ func (ac *accountCache) deleteByFile(path string) {
 	}
 }
 
-// watcherStarted returns true if the watcher loop started running (even if it
-// has since also ended).
-func (ac *accountCache) watcherStarted() bool {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	return ac.watcher.running || ac.watcher.runEnded
-}
-
 func removeAccount(slice []accounts.Account, elem accounts.Account) []accounts.Account {
 	for i := range slice {
 		if slice[i] == elem {
 			return append(slice[:i], slice[i+1:]...)
 		}
 	}
-
 	return slice
 }
 
@@ -180,24 +164,20 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	if (a.Address != common.Address{}) {
 		matches = ac.byAddr[a.Address]
 	}
-
 	if a.URL.Path != "" {
 		// If only the basename is specified, complete the path.
 		if !strings.ContainsRune(a.URL.Path, filepath.Separator) {
 			a.URL.Path = filepath.Join(ac.keydir, a.URL.Path)
 		}
-
 		for i := range matches {
 			if matches[i].URL == a.URL {
 				return matches[i], nil
 			}
 		}
-
 		if (a.Address == common.Address{}) {
 			return accounts.Account{}, ErrNoMatch
 		}
 	}
-
 	switch len(matches) {
 	case 1:
 		return matches[0], nil
@@ -207,7 +187,6 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 		err := &AmbiguousAddrError{Addr: a.Address, Matches: make([]accounts.Account, len(matches))}
 		copy(err.Matches, matches)
 		sort.Sort(accountsByURL(err.Matches))
-
 		return accounts.Account{}, err
 	}
 }
@@ -219,7 +198,6 @@ func (ac *accountCache) maybeReload() {
 		ac.mu.Unlock()
 		return // A watcher is running and will keep the cache up-to-date.
 	}
-
 	if ac.throttle == nil {
 		ac.throttle = time.NewTimer(0)
 	} else {
@@ -240,11 +218,9 @@ func (ac *accountCache) maybeReload() {
 func (ac *accountCache) close() {
 	ac.mu.Lock()
 	ac.watcher.close()
-
 	if ac.throttle != nil {
 		ac.throttle.Stop()
 	}
-
 	if ac.notify != nil {
 		close(ac.notify)
 		ac.notify = nil
@@ -261,7 +237,6 @@ func (ac *accountCache) scanAccounts() error {
 		log.Debug("Failed to reload keystore contents", "err", err)
 		return err
 	}
-
 	if creates.Cardinality() == 0 && deletes.Cardinality() == 0 && updates.Cardinality() == 0 {
 		return nil
 	}
@@ -272,21 +247,18 @@ func (ac *accountCache) scanAccounts() error {
 			Address string `json:"address"`
 		}
 	)
-
 	readAccount := func(path string) *accounts.Account {
 		fd, err := os.Open(path)
 		if err != nil {
 			log.Trace("Failed to open keystore file", "path", path, "err", err)
 			return nil
 		}
-
 		defer fd.Close()
 		buf.Reset(fd)
 		// Parse the address.
 		key.Address = ""
 		err = json.NewDecoder(buf).Decode(&key)
 		addr := common.HexToAddress(key.Address)
-
 		switch {
 		case err != nil:
 			log.Debug("Failed to decode keystore key", "path", path, "err", err)
@@ -298,30 +270,26 @@ func (ac *accountCache) scanAccounts() error {
 				URL:     accounts.URL{Scheme: KeyStoreScheme, Path: path},
 			}
 		}
-
 		return nil
 	}
 	// Process all the file diffs
 	start := time.Now()
 
-	for _, path := range creates.ToSlice() {
+	for _, p := range creates.ToSlice() {
+		if a := readAccount(p.(string)); a != nil {
+			ac.add(*a)
+		}
+	}
+	for _, p := range deletes.ToSlice() {
+		ac.deleteByFile(p.(string))
+	}
+	for _, p := range updates.ToSlice() {
+		path := p.(string)
+		ac.deleteByFile(path)
 		if a := readAccount(path); a != nil {
 			ac.add(*a)
 		}
 	}
-
-	for _, path := range deletes.ToSlice() {
-		ac.deleteByFile(path)
-	}
-
-	for _, path := range updates.ToSlice() {
-		ac.deleteByFile(path)
-
-		if a := readAccount(path); a != nil {
-			ac.add(*a)
-		}
-	}
-
 	end := time.Now()
 
 	select {
@@ -329,6 +297,5 @@ func (ac *accountCache) scanAccounts() error {
 	default:
 	}
 	log.Trace("Handled keystore changes", "time", end.Sub(start))
-
 	return nil
 }

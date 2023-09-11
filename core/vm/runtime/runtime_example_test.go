@@ -28,7 +28,6 @@ func ExampleExecute() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
 	fmt.Println(ret)
 	// Output:
 	// [96 96 96 64 82 96 8 86 91 0]
