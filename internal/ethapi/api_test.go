@@ -18,7 +18,6 @@ package ethapi
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 
@@ -26,10 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/stretchr/testify/require"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
+	t.Helper()
 	t.Parallel()
+
 	var (
 		signer = types.LatestSigner(config)
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -37,6 +39,7 @@ func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainCo
 
 	for i, tt := range tests {
 		var tx2 types.Transaction
+
 		tx, err := types.SignNewTx(key, signer, tt.Tx)
 		if err != nil {
 			t.Fatalf("test %d: signing failed: %v", i, err)
