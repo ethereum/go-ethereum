@@ -2105,7 +2105,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
-	if fields["effectiveGasPrice"] == nil {
+	if receipt.EffectiveGasPrice == nil {
 		fields["effectiveGasPrice"] = new(hexutil.Big)
 	}
 
