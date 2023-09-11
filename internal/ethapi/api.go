@@ -868,100 +868,35 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 // if statDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
-	Nonce     *hexutil.Uint64              `json:"nonce"`
-	Code      *hexutil.Bytes               `json:"code"`
-	Balance   **hexutil.Big                `json:"balance"`
-	State     *map[common.Hash]common.Hash `json:"state"`
-	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
-	MoveTo    *common.Address              `json:"moveToAddress"`
+	Nonce            *hexutil.Uint64              `json:"nonce"`
+	Code             *hexutil.Bytes               `json:"code"`
+	Balance          **hexutil.Big                `json:"balance"`
+	State            *map[common.Hash]common.Hash `json:"state"`
+	StateDiff        *map[common.Hash]common.Hash `json:"stateDiff"`
+	MovePrecompileTo *common.Address              `json:"movePrecompileToAddress"`
 }
 
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
 
 // Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(state *state.StateDB) error {
-	if diff == nil {
-		return nil
-	}
-	for addr, account := range *diff {
-		// Override account nonce.
-		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce))
-		}
-		// Override account(contract) code.
-		if account.Code != nil {
-			state.SetCode(addr, *account.Code)
-		}
-		// Override account balance.
-		if account.Balance != nil {
-			state.SetBalance(addr, (*big.Int)(*account.Balance))
-		}
-		if account.State != nil && account.StateDiff != nil {
-			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
-		}
-		// Replace entire state if caller requires.
-		if account.State != nil {
-			state.SetStorage(addr, *account.State)
-		}
-		// Apply state diff into specified accounts.
-		if account.StateDiff != nil {
-			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value)
-			}
-		}
-	}
-	// Now finalize the changes. Finalize is normally performed between transactions.
-	// By using finalize, the overrides are semantically behaving as
-	// if they were created in a transaction just before the tracing occur.
-	state.Finalise(false)
-	return nil
-}
-
-// ApplyMulticall overrides the fields of specified accounts into the given state.
-// TODO: consider MoveTo by address mapping
-func (diff *StateOverride) ApplyMulticall(state *state.StateDB, precompiles vm.PrecompiledContracts) error {
+func (diff *StateOverride) Apply(state *state.StateDB, precompiles vm.PrecompiledContracts) error {
 	if diff == nil {
 		return nil
 	}
 	for addr, account := range *diff {
 		p, isPrecompile := precompiles[addr]
-		// The MoveTo feature makes it possible to replace precompiles and EVM
-		// contracts in all the following configurations:
-		// 1. Precompile -> Precompile
-		// 2. Precompile -> EVM contract
-		// 3. EVM contract -> Precompile
-		// 4. EVM contract -> EVM contract
-		if account.MoveTo != nil {
-			if isPrecompile {
-				// Clear destination account which may be an EVM contract.
-				if !state.Empty(*account.MoveTo) {
-					state.SetCode(*account.MoveTo, nil)
-					state.SetNonce(*account.MoveTo, 0)
-					state.SetBalance(*account.MoveTo, big.NewInt(0))
-					state.SetStorage(*account.MoveTo, map[common.Hash]common.Hash{})
-				}
-				// If destination is a precompile, it will be simply replaced.
-				precompiles[*account.MoveTo] = p
-			} else {
-				state.SetBalance(*account.MoveTo, state.GetBalance(addr))
-				state.SetNonce(*account.MoveTo, state.GetNonce(addr))
-				state.SetCode(*account.MoveTo, state.GetCode(addr))
-				// Copy storage over
-				// TODO: Use snaps
-				state.ForEachStorage(addr, func(key, value common.Hash) bool {
-					state.SetState(*account.MoveTo, key, value)
-					return true
-				})
-				// Clear source storage
-				state.SetStorage(addr, map[common.Hash]common.Hash{})
-				if precompiles[*account.MoveTo] != nil {
-					delete(precompiles, *account.MoveTo)
-				}
+		// The MoveTo feature makes it possible to move a precompile
+		// code to another address. If the target address is another precompile
+		// the code for the latter is lost for this session.
+		// Note the destination account is not cleared upon move.
+		if account.MovePrecompileTo != nil {
+			if !isPrecompile {
+				return fmt.Errorf("account %s is not a precompile", addr.Hex())
 			}
+			precompiles[*account.MovePrecompileTo] = p
 		}
 		if isPrecompile {
-			// Now that the contract is moved it can be deleted.
 			delete(precompiles, addr)
 		}
 		// Override account nonce.
@@ -1075,13 +1010,16 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if state == nil || err != nil {
 		return nil, err
 	}
-	if err := overrides.Apply(state); err != nil {
-		return nil, err
-	}
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
+	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+	precompiles := vm.ActivePrecompiledContracts(rules).Copy()
+	if err := overrides.Apply(state, precompiles); err != nil {
+		return nil, err
+	}
+
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1264,7 +1202,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		blockContext = blockContexts[bi]
 		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		// State overrides are applied prior to execution of a block
-		if err := block.StateOverrides.ApplyMulticall(state, precompiles); err != nil {
+		if err := block.StateOverrides.Apply(state, precompiles); err != nil {
 			return nil, err
 		}
 		results[bi] = blockResult{

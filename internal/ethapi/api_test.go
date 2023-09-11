@@ -1114,8 +1114,8 @@ func TestMulticallV1(t *testing.T) {
 						//        return(memPtr, size)
 						//    }
 						// }
-						Code:   hex2Bytes("365981600082378181f3"),
-						MoveTo: &randomAccounts[2].addr,
+						Code:             hex2Bytes("365981600082378181f3"),
+						MovePrecompileTo: &randomAccounts[2].addr,
 					},
 				},
 				Calls: []TransactionArgs{{
