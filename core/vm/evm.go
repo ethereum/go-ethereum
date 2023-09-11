@@ -180,7 +180,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.Config.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) { // Lazy evaluation of the parameters
-				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				if leftOverGas != 0 {
+					evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				}
 				evm.Config.Tracer.CaptureEnd(ret, startGas-leftOverGas, err)
 			}(gas)
 		} else {
@@ -188,7 +190,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			evm.Config.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) {
-				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				if leftOverGas != 0 {
+					evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				}
 				evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 			}(gas)
 		}
@@ -263,7 +267,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.Config.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			if leftOverGas != 0 {
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			}
 			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -320,7 +326,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		evm.Config.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			if leftOverGas != 0 {
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			}
 			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -364,7 +372,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
 		evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 		defer func(startGas uint64) {
-			evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			if leftOverGas != 0 {
+				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+			}
 			evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 		}(gas)
 	}
@@ -434,14 +444,18 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			evm.Config.Tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) {
-				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				if leftOverGas != 0 {
+					evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				}
 				evm.Config.Tracer.CaptureEnd(ret, startGas-leftOverGas, err)
 			}(gas)
 		} else {
 			evm.Config.Tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
 			evm.Config.Tracer.OnGasChange(0, gas, GasChangeCallInitialBalance)
 			defer func(startGas uint64) {
-				evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				if leftOverGas != 0 {
+					evm.Config.Tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+				}
 				evm.Config.Tracer.CaptureExit(ret, startGas-leftOverGas, err)
 			}(gas)
 		}
