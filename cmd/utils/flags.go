@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -172,6 +173,12 @@ var (
 		Usage:    "Initial block gas limit",
 		Value:    11500000,
 		Category: flags.DevCategory,
+	}
+	DeveloperAllocFlag = &cli.PathFlag{
+		Name:      "dev.alloc",
+		Usage:     "Genesis account allocation file to use in developer mode",
+		TakesFile: true,
+		Category:  flags.DevCategory,
 	}
 
 	IdentityFlag = &cli.StringFlag{
@@ -1876,8 +1883,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
+		var alloc core.GenesisAlloc
+		if allocPath := ctx.Path(DeveloperAllocFlag.Name); allocPath != "" {
+			data, err := os.ReadFile(allocPath)
+			if err != nil {
+				Fatalf("Failed to read developer genesis alloc file: %v", err)
+			}
+			if err := json.Unmarshal(data, &alloc); err != nil {
+				Fatalf("Failed to parse developer genesis alloc file: %v", err)
+			}
+		}
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
+		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address, &alloc)
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
