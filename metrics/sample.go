@@ -187,10 +187,11 @@ type sampleSnapshot struct {
 	count  int64
 	values []int64
 
-	max  int64
-	min  int64
-	mean float64
-	sum  int64
+	max      int64
+	min      int64
+	mean     float64
+	sum      int64
+	variance float64
 }
 
 // newSampleSnapshotPrecalculated creates a read-only sampleSnapShot, using
@@ -265,7 +266,12 @@ func (s *sampleSnapshot) Snapshot() SampleSnapshot { return s }
 
 // StdDev returns the standard deviation of values at the time the snapshot was
 // taken.
-func (s *sampleSnapshot) StdDev() float64 { return SampleStdDev(s.mean, s.values) }
+func (s *sampleSnapshot) StdDev() float64 {
+	if s.variance == 0.0 {
+		s.variance = SampleVariance(s.mean, s.values)
+	}
+	return math.Sqrt(s.variance)
+}
 
 // Sum returns the sum of values at the time the snapshot was taken.
 func (s *sampleSnapshot) Sum() int64 { return s.sum }
@@ -278,11 +284,11 @@ func (s *sampleSnapshot) Values() []int64 {
 }
 
 // Variance returns the variance of values at the time the snapshot was taken.
-func (s *sampleSnapshot) Variance() float64 { return SampleVariance(s.mean, s.values) }
-
-// SampleStdDev returns the standard deviation of the slice of int64.
-func SampleStdDev(mean float64, values []int64) float64 {
-	return math.Sqrt(SampleVariance(mean, values))
+func (s *sampleSnapshot) Variance() float64 {
+	if s.variance == 0.0 {
+		s.variance = SampleVariance(s.mean, s.values)
+	}
+	return s.variance
 }
 
 // SampleVariance returns the variance of the slice of int64.

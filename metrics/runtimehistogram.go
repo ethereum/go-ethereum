@@ -102,8 +102,7 @@ func (h *runtimeHistogramSnapshot) calc() {
 		if c == 0 {
 			continue
 		}
-
-		if c > 0 && !minSet {
+		if !minSet {
 			minSet = true
 			min = int64(math.Floor(h.internal.Buckets[i]))
 		}
