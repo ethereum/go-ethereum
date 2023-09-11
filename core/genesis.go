@@ -611,14 +611,10 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, genesisAlloc 
 	}
 
 	if genesisAlloc != nil {
-		precompiled := map[common.Address]struct{}{}
-		for addr := range alloc {
-			precompiled[addr] = struct{}{}
-		}
 		for addr, account := range *genesisAlloc {
-			// Don't overwrite the precompiled accounts
-			if _, ok := precompiled[addr]; ok {
-				log.Crit("DeveloperGenesisBlock: can't overwrite precompiled account", "address", addr)
+			// Don't allow overwriting the predefined accounts (precompiles)
+			if _, ok := alloc[addr]; ok {
+				log.Crit("Overwriting precompiles disallowed", "address", addr)
 			}
 			alloc[addr] = account
 		}
