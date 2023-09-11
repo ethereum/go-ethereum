@@ -1067,6 +1067,30 @@ func (b *Block) Withdrawals(ctx context.Context) (*[]*Withdrawal, error) {
 	return &ret, nil
 }
 
+func (b *Block) BlobGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.BlobGasUsed == nil {
+		return nil, nil
+	}
+	ret := hexutil.Uint64(*header.BlobGasUsed)
+	return &ret, nil
+}
+
+func (b *Block) ExcessBlobGas(ctx context.Context) (*hexutil.Uint64, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.ExcessBlobGas == nil {
+		return nil, nil
+	}
+	ret := hexutil.Uint64(*header.ExcessBlobGas)
+	return &ret, nil
+}
+
 // BlockFilterCriteria encapsulates criteria passed to a `logs` accessor inside
 // a block.
 type BlockFilterCriteria struct {
