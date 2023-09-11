@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -90,7 +90,7 @@ type Backend interface {
 // TxPool defines the methods needed by the protocol handler to serve transactions.
 type TxPool interface {
 	// Get retrieves the transaction from the local txpool with the given hash.
-	Get(hash common.Hash) *txpool.Transaction
+	Get(hash common.Hash) *types.Transaction
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.

@@ -17,10 +17,14 @@
 package types
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -38,10 +42,54 @@ type BlobTx struct {
 	BlobFeeCap *uint256.Int // a.k.a. maxFeePerBlobGas
 	BlobHashes []common.Hash
 
+	// A blob transaction can optionally contain blobs. This field must be set when BlobTx
+	// is used to create a transaction for sigining.
+	Sidecar *BlobTxSidecar `rlp:"-"`
+
 	// Signature values
 	V *uint256.Int `json:"v" gencodec:"required"`
 	R *uint256.Int `json:"r" gencodec:"required"`
 	S *uint256.Int `json:"s" gencodec:"required"`
+}
+
+// BlobTxSidecar contains the blobs of a blob transaction.
+type BlobTxSidecar struct {
+	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
+	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
+	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
+}
+
+// BlobHashes computes the blob hashes of the given blobs.
+func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
+	h := make([]common.Hash, len(sc.Commitments))
+	for i := range sc.Blobs {
+		h[i] = blobHash(&sc.Commitments[i])
+	}
+	return h
+}
+
+// encodedSize computes the RLP size of the sidecar elements. This does NOT return the
+// encoded size of the BlobTxSidecar, it's just a helper for tx.Size().
+func (sc *BlobTxSidecar) encodedSize() uint64 {
+	var blobs, commitments, proofs uint64
+	for i := range sc.Blobs {
+		blobs += rlp.BytesSize(sc.Blobs[i][:])
+	}
+	for i := range sc.Commitments {
+		commitments += rlp.BytesSize(sc.Commitments[i][:])
+	}
+	for i := range sc.Proofs {
+		proofs += rlp.BytesSize(sc.Proofs[i][:])
+	}
+	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+}
+
+// blobTxWithBlobs is used for encoding of transactions when blobs are present.
+type blobTxWithBlobs struct {
+	BlobTx      *BlobTx
+	Blobs       []kzg4844.Blob
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -90,24 +138,29 @@ func (tx *BlobTx) copy() TxData {
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
+	if tx.Sidecar != nil {
+		cpy.Sidecar = &BlobTxSidecar{
+			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
+			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
+			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
+		}
+	}
 	return cpy
 }
 
 // accessors for innerTx.
-func (tx *BlobTx) txType() byte              { return BlobTxType }
-func (tx *BlobTx) chainID() *big.Int         { return tx.ChainID.ToBig() }
-func (tx *BlobTx) accessList() AccessList    { return tx.AccessList }
-func (tx *BlobTx) data() []byte              { return tx.Data }
-func (tx *BlobTx) gas() uint64               { return tx.Gas }
-func (tx *BlobTx) gasFeeCap() *big.Int       { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) gasTipCap() *big.Int       { return tx.GasTipCap.ToBig() }
-func (tx *BlobTx) gasPrice() *big.Int        { return tx.GasFeeCap.ToBig() }
-func (tx *BlobTx) value() *big.Int           { return tx.Value.ToBig() }
-func (tx *BlobTx) nonce() uint64             { return tx.Nonce }
-func (tx *BlobTx) to() *common.Address       { tmp := tx.To; return &tmp }
-func (tx *BlobTx) blobGas() uint64           { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
-func (tx *BlobTx) blobGasFeeCap() *big.Int   { return tx.BlobFeeCap.ToBig() }
-func (tx *BlobTx) blobHashes() []common.Hash { return tx.BlobHashes }
+func (tx *BlobTx) txType() byte           { return BlobTxType }
+func (tx *BlobTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
+func (tx *BlobTx) accessList() AccessList { return tx.AccessList }
+func (tx *BlobTx) data() []byte           { return tx.Data }
+func (tx *BlobTx) gas() uint64            { return tx.Gas }
+func (tx *BlobTx) gasFeeCap() *big.Int    { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) gasTipCap() *big.Int    { return tx.GasTipCap.ToBig() }
+func (tx *BlobTx) gasPrice() *big.Int     { return tx.GasFeeCap.ToBig() }
+func (tx *BlobTx) value() *big.Int        { return tx.Value.ToBig() }
+func (tx *BlobTx) nonce() uint64          { return tx.Nonce }
+func (tx *BlobTx) to() *common.Address    { tmp := tx.To; return &tmp }
+func (tx *BlobTx) blobGas() uint64        { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
 
 func (tx *BlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {
@@ -129,4 +182,65 @@ func (tx *BlobTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.V.SetFromBig(v)
 	tx.R.SetFromBig(r)
 	tx.S.SetFromBig(s)
+}
+
+func (tx *BlobTx) withoutSidecar() *BlobTx {
+	cpy := *tx
+	cpy.Sidecar = nil
+	return &cpy
+}
+
+func (tx *BlobTx) encode(b *bytes.Buffer) error {
+	if tx.Sidecar == nil {
+		return rlp.Encode(b, tx)
+	}
+	inner := &blobTxWithBlobs{
+		BlobTx:      tx,
+		Blobs:       tx.Sidecar.Blobs,
+		Commitments: tx.Sidecar.Commitments,
+		Proofs:      tx.Sidecar.Proofs,
+	}
+	return rlp.Encode(b, inner)
+}
+
+func (tx *BlobTx) decode(input []byte) error {
+	// Here we need to support two formats: the network protocol encoding of the tx (with
+	// blobs) or the canonical encoding without blobs.
+	//
+	// The two encodings can be distinguished by checking whether the first element of the
+	// input list is itself a list.
+
+	outerList, _, err := rlp.SplitList(input)
+	if err != nil {
+		return err
+	}
+	firstElemKind, _, _, err := rlp.Split(outerList)
+	if err != nil {
+		return err
+	}
+
+	if firstElemKind != rlp.List {
+		return rlp.DecodeBytes(input, tx)
+	}
+	// It's a tx with blobs.
+	var inner blobTxWithBlobs
+	if err := rlp.DecodeBytes(input, &inner); err != nil {
+		return err
+	}
+	*tx = *inner.BlobTx
+	tx.Sidecar = &BlobTxSidecar{
+		Blobs:       inner.Blobs,
+		Commitments: inner.Commitments,
+		Proofs:      inner.Proofs,
+	}
+	return nil
+}
+
+func blobHash(commit *kzg4844.Commitment) common.Hash {
+	hasher := sha256.New()
+	hasher.Write(commit[:])
+	var vhash common.Hash
+	hasher.Sum(vhash[:0])
+	vhash[0] = params.BlobTxHashVersion
+	return vhash
 }

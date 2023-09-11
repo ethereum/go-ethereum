@@ -249,7 +249,7 @@ func (p *TxPool) Has(hash common.Hash) bool {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-func (p *TxPool) Get(hash common.Hash) *Transaction {
+func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 	for _, subpool := range p.subpools {
 		if tx := subpool.Get(hash); tx != nil {
 			return tx
@@ -261,14 +261,14 @@ func (p *TxPool) Get(hash common.Hash) *Transaction {
 // Add enqueues a batch of transactions into the pool if they are valid. Due
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.
-func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
+func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.
 	//
 	// We also need to track how the transactions were split across the subpools,
 	// so we can piece back the returned errors into the original order.
-	txsets := make([][]*Transaction, len(p.subpools))
+	txsets := make([][]*types.Transaction, len(p.subpools))
 	splits := make([]int, len(txs))
 
 	for i, tx := range txs {
@@ -277,7 +277,7 @@ func (p *TxPool) Add(txs []*Transaction, local bool, sync bool) []error {
 
 		// Try to find a subpool that accepts the transaction
 		for j, subpool := range p.subpools {
-			if subpool.Filter(tx.Tx) {
+			if subpool.Filter(tx) {
 				txsets[j] = append(txsets[j], tx)
 				splits[i] = j
 				break

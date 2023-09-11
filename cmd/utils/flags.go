@@ -1719,7 +1719,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
 	} else if ctx.IsSet(TxLookupLimitFlag.Name) {
 		log.Warn("The flag --txlookuplimit is deprecated and will be removed, please use --history.transactions")
-		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
+		cfg.TransactionHistory = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
 	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
 		cfg.TransactionHistory = 0

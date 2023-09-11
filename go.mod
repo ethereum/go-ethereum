@@ -18,7 +18,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/docker/docker v1.6.2
-	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
+	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127
 	github.com/ethereum/c-kzg-4844 v0.3.1
 	github.com/fatih/color v1.7.0
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e

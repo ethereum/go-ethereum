@@ -1085,19 +1085,30 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		ancientReceipts, liveReceipts []types.Receipts
 	)
 	// Do a sanity check that the provided chain is actually ordered and linked
-	for i := 0; i < len(blockChain); i++ {
+	for i, block := range blockChain {
 		if i != 0 {
-			if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
-				log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
-					"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
-				return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, blockChain[i-1].NumberU64(),
-					blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
+			prev := blockChain[i-1]
+			if block.NumberU64() != prev.NumberU64()+1 || block.ParentHash() != prev.Hash() {
+				log.Error("Non contiguous receipt insert",
+					"number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash(),
+					"prevnumber", prev.Number(), "prevhash", prev.Hash())
+				return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])",
+					i-1, prev.NumberU64(), prev.Hash().Bytes()[:4],
+					i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 			}
 		}
-		if blockChain[i].NumberU64() <= ancientLimit {
-			ancientBlocks, ancientReceipts = append(ancientBlocks, blockChain[i]), append(ancientReceipts, receiptChain[i])
+		if block.NumberU64() <= ancientLimit {
+			ancientBlocks, ancientReceipts = append(ancientBlocks, block), append(ancientReceipts, receiptChain[i])
 		} else {
-			liveBlocks, liveReceipts = append(liveBlocks, blockChain[i]), append(liveReceipts, receiptChain[i])
+			liveBlocks, liveReceipts = append(liveBlocks, block), append(liveReceipts, receiptChain[i])
+		}
+
+		// Here we also validate that blob transactions in the block do not contain a sidecar.
+		// While the sidecar does not affect the block hash / tx hash, sending blobs within a block is not allowed.
+		for txIndex, tx := range block.Transactions() {
+			if tx.Type() == types.BlobTxType && tx.BlobTxSidecar() != nil {
+				return 0, fmt.Errorf("block #%d contains unexpected blob sidecar in tx at index %d", block.NumberU64(), txIndex)
+			}
 		}
 	}
 
