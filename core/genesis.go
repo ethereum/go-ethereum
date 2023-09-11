@@ -613,7 +613,10 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, genesisAlloc 
 
 	if genesisAlloc != nil {
 		for addr, account := range *genesisAlloc {
-			alloc[addr] = account
+			// Don't overwrite the precompiled accounts
+			if _, ok := alloc[addr]; !ok {
+				alloc[addr] = account
+			}
 		}
 	}
 
