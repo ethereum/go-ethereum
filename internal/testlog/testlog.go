@@ -77,6 +77,7 @@ func Logger(t *testing.T, level log.Lvl) log.Logger {
 		h:  &bufHandler{fmt: log.TerminalFormat(false)},
 	}
 	l.l.SetHandler(log.LvlFilterHandler(level, l.h))
+
 	return l
 }
 
@@ -143,9 +144,11 @@ func (l *logger) SetHandler(h log.Handler) {
 // flush writes all buffered messages and clears the buffer.
 func (l *logger) flush() {
 	l.t.Helper()
+
 	for _, r := range l.h.buf {
 		l.t.Logf("%s", l.h.fmt.Format(r))
 	}
+
 	l.h.buf = nil
 }
 

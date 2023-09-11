@@ -49,6 +49,7 @@ func (s *EphemeralStorage) Put(key, value string) {
 	if len(key) == 0 {
 		return
 	}
+
 	s.data[key] = value
 }
 
@@ -58,9 +59,11 @@ func (s *EphemeralStorage) Get(key string) (string, error) {
 	if len(key) == 0 {
 		return "", ErrZeroKey
 	}
+
 	if v, ok := s.data[key]; ok {
 		return v, nil
 	}
+
 	return "", ErrNotFound
 }
 
@@ -73,6 +76,7 @@ func NewEphemeralStorage() Storage {
 	s := &EphemeralStorage{
 		data: make(map[string]string),
 	}
+
 	return s
 }
 

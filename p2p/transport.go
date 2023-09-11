@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -60,7 +60,9 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	defer t.rmu.Unlock()
 
 	var msg Msg
+
 	t.conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
+
 	code, data, wireSize, err := t.conn.Read()
 	if err == nil {
 		// Protocol messages are dispatched to subprotocol handlers asynchronously,
@@ -75,6 +77,7 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 			Payload:    bytes.NewReader(data),
 		}
 	}
+
 	return msg, err
 }
 
@@ -84,12 +87,14 @@ func (t *rlpxTransport) WriteMsg(msg Msg) error {
 
 	// Copy message data to write buffer.
 	t.wbuf.Reset()
+
 	if _, err := io.CopyN(&t.wbuf, msg.Payload, int64(msg.Size)); err != nil {
 		return err
 	}
 
 	// Write the message.
 	t.conn.SetWriteDeadline(time.Now().Add(frameWriteTimeout))
+
 	size, err := t.conn.Write(msg.Code, t.wbuf.Bytes())
 	if err != nil {
 		return err
@@ -102,6 +107,7 @@ func (t *rlpxTransport) WriteMsg(msg Msg) error {
 		metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
 		metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
 	}
+
 	return nil
 }
 
@@ -123,6 +129,7 @@ func (t *rlpxTransport) close(err error) {
 			}
 		}
 	}
+
 	t.conn.Close()
 }
 
@@ -138,10 +145,12 @@ func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHands
 	// as the error so it can be tracked elsewhere.
 	werr := make(chan error, 1)
 	go func() { werr <- Send(t, handshakeMsg, our) }()
+
 	if their, err = readProtocolHandshake(t); err != nil {
 		<-werr // make sure the write terminates too
 		return nil, err
 	}
+
 	if err := <-werr; err != nil {
 		return nil, fmt.Errorf("write error: %v", err)
 	}
@@ -156,27 +165,35 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if msg.Size > baseProtocolMaxMsgSize {
 		return nil, fmt.Errorf("message too big")
 	}
+
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
 		// spec and we send it ourself if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
 		var reason [1]DiscReason
+
 		rlp.Decode(msg.Payload, &reason)
+
 		return nil, reason[0]
 	}
+
 	if msg.Code != handshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
 	}
+
 	var hs protoHandshake
 	if err := msg.Decode(&hs); err != nil {
 		return nil, err
 	}
+
 	if len(hs.ID) != 64 || !bitutil.TestBytes(hs.ID) {
 		return nil, DiscInvalidIdentity
 	}
+
 	return &hs, nil
 }

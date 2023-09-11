@@ -53,13 +53,16 @@ var discard = Protocol{
 // uintID encodes i into a node ID.
 func uintID(i uint16) enode.ID {
 	var id enode.ID
+
 	binary.BigEndian.PutUint16(id[:], i)
+
 	return id
 }
 
 // newNode creates a node record with the given address.
 func newNode(id enode.ID, addr string) *enode.Node {
 	var r enr.Record
+
 	if addr != "" {
 		// Set the port if present.
 		if strings.Contains(addr, ":") {
@@ -67,12 +70,15 @@ func newNode(id enode.ID, addr string) *enode.Node {
 			if err != nil {
 				panic(fmt.Errorf("invalid address %q", addr))
 			}
+
 			port, err := strconv.Atoi(ps)
 			if err != nil {
 				panic(fmt.Errorf("invalid port in %q", addr))
 			}
+
 			r.Set(enr.TCP(port))
 			r.Set(enr.UDP(port))
+
 			addr = hs
 		}
 		// Set the IP.
@@ -80,8 +86,10 @@ func newNode(id enode.ID, addr string) *enode.Node {
 		if ip == nil {
 			panic(fmt.Errorf("invalid IP %q", addr))
 		}
+
 		r.Set(enr.IP(ip))
 	}
+
 	return enode.SignNull(&r, id)
 }
 
@@ -95,6 +103,7 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 
 	c1 := &conn{fd: fd1, node: newNode(uintID(1), ""), transport: t1}
 	c2 := &conn{fd: fd2, node: newNode(uintID(2), ""), transport: t2}
+
 	for _, p := range protos {
 		c1.caps = append(c1.caps, p.cap())
 		c2.caps = append(c2.caps, p.cap())
@@ -102,12 +111,14 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 
 	peer := newPeer(log.Root(), c1, protos)
 	errc := make(chan error, 1)
+
 	go func() {
 		_, err := peer.run()
 		errc <- err
 	}()
 
 	closer := func() { c2.close(errors.New("close func called")) }
+
 	return closer, c2, peer, errc
 }
 
@@ -160,6 +171,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			return nil
 		},
 	}
+
 	closer, rw, _, _ := testPeer([]Protocol{proto})
 	defer closer()
 
@@ -171,9 +183,11 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 func TestPeerPing(t *testing.T) {
 	closer, rw, _, _ := testPeer(nil)
 	defer closer()
+
 	if err := SendItems(rw, pingMsg); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := ExpectMsg(rw, pongMsg, nil); err != nil {
 		t.Error(err)
 	}
@@ -253,12 +267,15 @@ func TestNewPeer(t *testing.T) {
 	caps := []Cap{{"foo", 2}, {"bar", 3}}
 	id := randomID()
 	p := NewPeer(id, name, caps)
+
 	if p.ID() != id {
 		t.Errorf("ID mismatch: got %v, expected %v", p.ID(), id)
 	}
+
 	if p.Name() != name {
 		t.Errorf("Name mismatch: got %v, expected %v", p.Name(), name)
 	}
+
 	if !reflect.DeepEqual(p.Caps(), caps) {
 		t.Errorf("Caps mismatch: got %v, expected %v", p.Caps(), caps)
 	}
@@ -341,12 +358,15 @@ func TestMatchProtocols(t *testing.T) {
 				t.Errorf("test %d, proto '%s': negotiated but shouldn't have", i, name)
 				continue
 			}
+
 			if proto.Name != match.Name {
 				t.Errorf("test %d, proto '%s': name mismatch: have %v, want %v", i, name, proto.Name, match.Name)
 			}
+
 			if proto.Version != match.Version {
 				t.Errorf("test %d, proto '%s': version mismatch: have %v, want %v", i, name, proto.Version, match.Version)
 			}
+
 			if proto.offset-baseProtocolLength != match.offset {
 				t.Errorf("test %d, proto '%s': offset mismatch: have %v, want %v", i, name, proto.offset-baseProtocolLength, match.offset)
 			}

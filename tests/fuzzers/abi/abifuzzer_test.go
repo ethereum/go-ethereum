@@ -36,7 +36,7 @@ func TestGenerateCorpus(t *testing.T) {
 		data := common.FromHex(corpusHex)
 		checksum := sha1.Sum(data)
 		outf := fmt.Sprintf("corpus/%x", checksum)
-		if err := ioutil.WriteFile(outf, data, 0777); err != nil {
+		if err := os.WriteFile(outf, data, 0777); err != nil {
 			panic(err)
 		}
 	*/

@@ -14,6 +14,7 @@ func TestMetricsSorting(t *testing.T) {
 	}
 
 	sort.Sort(namedMetrics)
+
 	for i, name := range []string{"bbb", "fff", "ggg", "zzz"} {
 		if namedMetrics[i].name != name {
 			t.Fail()

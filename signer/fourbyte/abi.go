@@ -50,6 +50,7 @@ func (arg decodedArgument) String() string {
 	default:
 		value = fmt.Sprintf("%v", val)
 	}
+
 	return fmt.Sprintf("%v: %v", arg.soltype.Type.String(), value)
 }
 
@@ -59,6 +60,7 @@ func (cd decodedCallData) String() string {
 	for i, arg := range cd.inputs {
 		args[i] = arg.String()
 	}
+
 	return fmt.Sprintf("%s(%s)", cd.name, strings.Join(args, ","))
 }
 
@@ -92,6 +94,7 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 	if len(calldata) < 4 {
 		return nil, fmt.Errorf("invalid call data, incomplete method signature (%d bytes < 4)", len(calldata))
 	}
+
 	sigdata := calldata[:4]
 
 	argdata := calldata[4:]
@@ -103,10 +106,12 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid method signature (%q): %v", unescapedAbidata, err)
 	}
+
 	method, err := abispec.MethodById(sigdata)
 	if err != nil {
 		return nil, err
 	}
+
 	values, err := method.Inputs.UnpackValues(argdata)
 	if err != nil {
 		return nil, fmt.Errorf("signature %q matches, but arguments mismatch: %v", method.String(), err)
@@ -127,10 +132,13 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 	if err != nil {
 		return nil, err
 	}
+
 	if !bytes.Equal(encoded, argdata) {
 		was := common.Bytes2Hex(encoded)
 		exp := common.Bytes2Hex(argdata)
+
 		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", exp, was, method.Sig)
 	}
+
 	return &decoded, nil
 }

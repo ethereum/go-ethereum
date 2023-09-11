@@ -157,7 +157,9 @@ func TestUPNP_DDWRT(t *testing.T) {
 	if err := dev.listen(); err != nil {
 		t.Skipf("cannot listen: %v", err)
 	}
+
 	dev.serve()
+
 	defer dev.close()
 
 	// Attempt to discover the fake device.
@@ -169,10 +171,12 @@ func TestUPNP_DDWRT(t *testing.T) {
 			t.Skipf("UPnP not discovered (known issue, see https://github.com/ethereum/go-ethereum/issues/21476)")
 		}
 	}
+
 	upnp, _ := discovered.(*upnp)
 	if upnp.service != "IGDv1-IP1" {
 		t.Errorf("upnp.service mismatch: got %q, want %q", upnp.service, "IGDv1-IP1")
 	}
+
 	wantURL := "http://" + dev.listener.Addr().String() + "/InternetGatewayDevice.xml"
 	if upnp.dev.URLBaseStr != wantURL {
 		t.Errorf("upnp.dev.URLBaseStr mismatch: got %q, want %q", upnp.dev.URLBaseStr, wantURL)
@@ -202,11 +206,13 @@ type fakeIGD struct {
 // httpu.Handler
 func (dev *fakeIGD) ServeMessage(r *http.Request) {
 	dev.t.Logf(`HTTPU request %s %s`, r.Method, r.RequestURI)
+
 	conn, err := net.Dial("udp4", r.RemoteAddr)
 	if err != nil {
 		fmt.Printf("reply Dial error: %v", err)
 		return
 	}
+
 	defer conn.Close()
 	io.WriteString(conn, dev.replaceListenAddr(dev.ssdpResp))
 }
@@ -223,18 +229,20 @@ func (dev *fakeIGD) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (dev *fakeIGD) replaceListenAddr(resp string) string {
-	return strings.Replace(resp, "{{listenAddr}}", dev.listener.Addr().String(), -1)
+	return strings.ReplaceAll(resp, "{{listenAddr}}", dev.listener.Addr().String())
 }
 
 func (dev *fakeIGD) listen() (err error) {
 	if dev.listener, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
 		return err
 	}
+
 	laddr := &net.UDPAddr{IP: net.ParseIP("239.255.255.250"), Port: 1900}
 	if dev.mcastListener, err = net.ListenMulticastUDP("udp", nil, laddr); err != nil {
 		dev.listener.Close()
 		return err
 	}
+
 	return nil
 }
 

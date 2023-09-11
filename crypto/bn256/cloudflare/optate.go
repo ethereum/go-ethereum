@@ -70,6 +70,7 @@ func lineFunctionDouble(r *twistPoint, q *curvePoint) (a, b, c *gfP2, rOut *twis
 	rOut.z.Add(&r.y, &r.z).Square(&rOut.z).Sub(&rOut.z, B).Sub(&rOut.z, &r.t)
 
 	rOut.y.Sub(D, &rOut.x).Mul(&rOut.y, E)
+
 	t := (&gfP2{}).Add(C, C)
 	t.Add(t, t).Add(t, t)
 	rOut.y.Sub(&rOut.y, t)
@@ -140,11 +141,13 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 
 	for i := len(sixuPlus2NAF) - 1; i > 0; i-- {
 		a, b, c, newR := lineFunctionDouble(r, bAffine)
+
 		if i != len(sixuPlus2NAF)-1 {
 			ret.Square(ret)
 		}
 
 		mulLine(ret, a, b, c)
+
 		r = newR
 
 		switch sixuPlus2NAF[i-1] {
@@ -157,6 +160,7 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 		}
 
 		mulLine(ret, a, b, c)
+
 		r = newR
 	}
 
@@ -196,11 +200,13 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 	r2.Square(&q1.y)
 	a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
 	mulLine(ret, a, b, c)
+
 	r = newR
 
 	r2.Square(&minusQ2.y)
 	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
 	mulLine(ret, a, b, c)
+
 	r = newR
 
 	return ret
@@ -242,6 +248,7 @@ func finalExponentiation(in *gfP12) *gfP12 {
 	y1 := (&gfP12{}).Conjugate(t1)
 	y5 := (&gfP12{}).Conjugate(fu2)
 	y3.Conjugate(y3)
+
 	y4 := (&gfP12{}).Mul(fu, fu2p)
 	y4.Conjugate(y4)
 
@@ -267,5 +274,6 @@ func optimalAte(a *twistPoint, b *curvePoint) *gfP12 {
 	if a.IsInfinity() || b.IsInfinity() {
 		ret.SetOne()
 	}
+
 	return ret
 }

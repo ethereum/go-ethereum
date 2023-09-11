@@ -76,9 +76,12 @@ func TestHashJsonValidation(t *testing.T) {
 		{"0x", 64, ""},
 		{"0X", 64, ""},
 	}
+
 	for _, test := range tests {
 		input := `"` + test.Prefix + strings.Repeat("0", test.Size) + `"`
+
 		var v Hash
+
 		err := json.Unmarshal([]byte(input), &v)
 		if err == nil {
 			if test.Error != "" {
@@ -106,16 +109,20 @@ func TestAddressUnmarshalJSON(t *testing.T) {
 		{`"0x0000000000000000000000000000000000000000"`, false, big.NewInt(0)},
 		{`"0x0000000000000000000000000000000000000010"`, false, big.NewInt(16)},
 	}
+
 	for i, test := range tests {
 		var v Address
+
 		err := json.Unmarshal([]byte(test.Input), &v)
 		if err != nil && !test.ShouldErr {
 			t.Errorf("test #%d: unexpected error: %v", i, err)
 		}
+
 		if err == nil {
 			if test.ShouldErr {
 				t.Errorf("test #%d: expected error, got none", i)
 			}
+
 			if got := new(big.Int).SetBytes(v.Bytes()); got.Cmp(test.Output) != 0 {
 				t.Errorf("test #%d: address mismatch: have %v, want %v", i, got, test.Output)
 			}
@@ -139,6 +146,7 @@ func TestAddressHexChecksum(t *testing.T) {
 		{"0x00a", "0x000000000000000000000000000000000000000A"},
 		{"0x000000000000000000000000000000000000000a", "0x000000000000000000000000000000000000000A"},
 	}
+
 	for i, test := range tests {
 		output := HexToAddress(test.Input).Hex()
 		if output != test.Output {
@@ -154,15 +162,49 @@ func BenchmarkAddressHex(b *testing.B) {
 	}
 }
 
-func TestMixedcaseAccount_Address(t *testing.T) {
+// Test checks if the customized json marshaller of MixedcaseAddress object
+// is invoked correctly. In golang the struct pointer will inherit the
+// non-pointer receiver methods, the reverse is not true. In the case of
+// MixedcaseAddress, it must define the MarshalJSON method in the object
+// but not the pointer level, so that this customized marshalled can be used
+// for both MixedcaseAddress object and pointer.
+func TestMixedcaseAddressMarshal(t *testing.T) {
+	t.Parallel()
 
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
-	// Note: 0X{checksum_addr} is not valid according to spec above
+	var (
+		output string
+		input  = "0xae967917c465db8578ca9024c205720b1a3651A9"
+	)
+
+	addr, err := NewMixedcaseAddressFromString(input)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blob, err := json.Marshal(*addr)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = json.Unmarshal(blob, &output)
+
+	if output != input {
+		t.Fatal("Failed to marshal/unmarshal MixedcaseAddress object")
+	}
+}
+
+func TestMixedcaseAccount_Address(t *testing.T) {
+	t.Parallel()
 
 	var res []struct {
 		A     MixedcaseAddress
 		Valid bool
 	}
+
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
+	// Note: 0X{checksum_addr} is not valid according to spec above
 	if err := json.Unmarshal([]byte(`[
 		{"A" : "0xae967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
 		{"A" : "0xAe967917c465db8578ca9024c205720b1a3651A9", "Valid": true},
@@ -178,7 +220,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		}
 	}
 
-	//These should throw exceptions:
+	// These should throw exceptions:
 	var r2 []MixedcaseAddress
 	for _, r := range []string{
 		`["0x11111111111111111111122222222222233333"]`,     // Too short
@@ -192,15 +234,14 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		if err := json.Unmarshal([]byte(r), &r2); err == nil {
 			t.Errorf("Expected failure, input %v", r)
 		}
-
 	}
-
 }
 
 func TestHash_Scan(t *testing.T) {
 	type args struct {
 		src interface{}
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -259,8 +300,11 @@ func TestHash_Value(t *testing.T) {
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 		0x10, 0x00,
 	}
+
 	var usedH Hash
+
 	usedH.SetBytes(b)
+
 	tests := []struct {
 		name    string
 		h       Hash
@@ -281,6 +325,7 @@ func TestHash_Value(t *testing.T) {
 				t.Errorf("Hash.Value() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Hash.Value() = %v, want %v", got, tt.want)
 			}
@@ -292,6 +337,7 @@ func TestAddress_Scan(t *testing.T) {
 	type args struct {
 		src interface{}
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -345,8 +391,11 @@ func TestAddress_Value(t *testing.T) {
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
+
 	var usedA Address
+
 	usedA.SetBytes(b)
+
 	tests := []struct {
 		name    string
 		a       Address
@@ -367,6 +416,7 @@ func TestAddress_Value(t *testing.T) {
 				t.Errorf("Address.Value() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Address.Value() = %v, want %v", got, tt.want)
 			}
@@ -379,7 +429,9 @@ func TestAddress_Format(t *testing.T) {
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
+
 	var addr Address
+
 	addr.SetBytes(b)
 
 	tests := []struct {
@@ -455,6 +507,7 @@ func TestAddress_Format(t *testing.T) {
 
 func TestHash_Format(t *testing.T) {
 	var hash Hash
+
 	hash.SetBytes([]byte{
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,

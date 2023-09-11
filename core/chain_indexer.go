@@ -75,7 +75,7 @@ type ChainIndexer struct {
 	backend  ChainIndexerBackend // Background processor generating the index data content
 	children []*ChainIndexer     // Child indexers to cascade chain updates to
 
-	active    uint32          // Flag whether the event loop was started
+	active    atomic.Bool     // Flag whether the event loop was started
 	update    chan struct{}   // Notification channel that headers should be processed
 	quit      chan chan error // Quit channel to tear down running goroutines
 	ctx       context.Context
@@ -135,6 +135,7 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 	if c.checkpointSections >= section+1 || section < c.storedSections {
 		return
 	}
+
 	c.checkpointSections = section + 1
 	c.checkpointHead = shead
 
@@ -162,12 +163,14 @@ func (c *ChainIndexer) Close() error {
 	// Tear down the primary update loop
 	errc := make(chan error)
 	c.quit <- errc
+
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
 	// If needed, tear down the secondary event loop
-	if atomic.LoadUint32(&c.active) != 0 {
+	if c.active.Load() {
 		c.quit <- errc
+
 		if err := <-errc; err != nil {
 			errs = append(errs, err)
 		}
@@ -196,7 +199,7 @@ func (c *ChainIndexer) Close() error {
 // queue.
 func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
-	atomic.StoreUint32(&c.active, 1)
+	c.active.Store(true)
 
 	defer sub.Unsubscribe()
 
@@ -207,6 +210,7 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 		prevHeader = currentHeader
 		prevHash   = currentHeader.Hash()
 	)
+
 	for {
 		select {
 		case errc := <-c.quit:
@@ -219,19 +223,21 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 			if !ok {
 				errc := <-c.quit
 				errc <- nil
+
 				return
 			}
+
 			header := ev.Block.Header()
 			if header.ParentHash != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
-
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
 					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
 						c.newHead(h.Number.Uint64(), true)
 					}
 				}
 			}
+
 			c.newHead(header.Number.Uint64(), false)
 
 			prevHeader, prevHash = header, header.Hash()
@@ -249,12 +255,15 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		// Revert the known section number to the reorg point
 		known := (head + 1) / c.sectionSize
 		stored := known
+
 		if known < c.checkpointSections {
 			known = 0
 		}
+
 		if stored < c.checkpointSections {
 			stored = c.checkpointSections
 		}
+
 		if known < c.knownSections {
 			c.knownSections = known
 		}
@@ -271,6 +280,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 				child.newHead(c.cascadedHead, true)
 			}
 		}
+
 		return
 	}
 	// No reorg, calculate the number of newly known sections and update if high enough
@@ -280,6 +290,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		if sections < c.checkpointSections {
 			sections = 0
 		}
+
 		if sections > c.knownSections {
 			if c.knownSections < c.checkpointSections {
 				// syncing reached the checkpoint, verify section head
@@ -289,6 +300,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 					return
 				}
 			}
+
 			c.knownSections = sections
 
 			select {
@@ -322,19 +334,24 @@ func (c *ChainIndexer) updateLoop() {
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
+
 						c.log.Info("Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
 					}
+
 					updated = time.Now()
 				}
 				// Cache the current section count and head to allow unlocking the mutex
 				c.verifyLastHead()
 				section := c.storedSections
+
 				var oldHead common.Hash
+
 				if section > 0 {
 					oldHead = c.SectionHead(section - 1)
 				}
 				// Process the newly defined section in the background
 				c.lock.Unlock()
+
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
 					select {
@@ -345,16 +362,20 @@ func (c *ChainIndexer) updateLoop() {
 					}
 					c.log.Error("Section processing failed", "error", err)
 				}
+
 				c.lock.Lock()
 
 				// If processing succeeded and no reorgs occurred, mark the section completed
 				if err == nil && (section == 0 || oldHead == c.SectionHead(section-1)) {
 					c.setSectionHead(section, newHead)
 					c.setValidSections(section + 1)
+
 					if c.storedSections == c.knownSections && updating {
 						updating = false
+
 						c.log.Info("Finished upgrading chain index")
 					}
+
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
 						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
@@ -399,20 +420,25 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
+
 		header := rawdb.ReadHeader(c.chainDb, hash, number)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
 		} else if header.ParentHash != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
+
 		if err := c.backend.Process(c.ctx, header); err != nil {
 			return common.Hash{}, err
 		}
+
 		lastHead = header.Hash()
 	}
+
 	if err := c.backend.Commit(); err != nil {
 		return common.Hash{}, err
 	}
+
 	return lastHead, nil
 }
 
@@ -424,6 +450,7 @@ func (c *ChainIndexer) verifyLastHead() {
 		if c.SectionHead(c.storedSections-1) == rawdb.ReadCanonicalHash(c.chainDb, c.storedSections*c.sectionSize-1) {
 			return
 		}
+
 		c.setValidSections(c.storedSections - 1)
 	}
 }
@@ -436,6 +463,7 @@ func (c *ChainIndexer) Sections() (uint64, uint64, common.Hash) {
 	defer c.lock.Unlock()
 
 	c.verifyLastHead()
+
 	return c.storedSections, c.storedSections*c.sectionSize - 1, c.SectionHead(c.storedSections - 1)
 }
 
@@ -444,6 +472,7 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 	if indexer == c {
 		panic("can't add indexer as a child of itself")
 	}
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -456,6 +485,7 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 		// available chain data so we should not cascade it yet
 		sections = c.knownSections
 	}
+
 	if sections > 0 {
 		indexer.newHead(sections*c.sectionSize-1, false)
 	}
@@ -479,6 +509,7 @@ func (c *ChainIndexer) loadValidSections() {
 func (c *ChainIndexer) setValidSections(sections uint64) {
 	// Set the current number of valid sections in the database
 	var data [8]byte
+
 	binary.BigEndian.PutUint64(data[:], sections)
 	c.indexDb.Put([]byte("count"), data[:])
 
@@ -487,6 +518,7 @@ func (c *ChainIndexer) setValidSections(sections uint64) {
 		c.storedSections--
 		c.removeSectionHead(c.storedSections)
 	}
+
 	c.storedSections = sections // needed if new > old
 }
 
@@ -494,12 +526,14 @@ func (c *ChainIndexer) setValidSections(sections uint64) {
 // index database.
 func (c *ChainIndexer) SectionHead(section uint64) common.Hash {
 	var data [8]byte
+
 	binary.BigEndian.PutUint64(data[:], section)
 
 	hash, _ := c.indexDb.Get(append([]byte("shead"), data[:]...))
 	if len(hash) == len(common.Hash{}) {
 		return common.BytesToHash(hash)
 	}
+
 	return common.Hash{}
 }
 
@@ -507,6 +541,7 @@ func (c *ChainIndexer) SectionHead(section uint64) common.Hash {
 // database.
 func (c *ChainIndexer) setSectionHead(section uint64, hash common.Hash) {
 	var data [8]byte
+
 	binary.BigEndian.PutUint64(data[:], section)
 
 	c.indexDb.Put(append([]byte("shead"), data[:]...), hash.Bytes())
@@ -516,6 +551,7 @@ func (c *ChainIndexer) setSectionHead(section uint64, hash common.Hash) {
 // database.
 func (c *ChainIndexer) removeSectionHead(section uint64) {
 	var data [8]byte
+
 	binary.BigEndian.PutUint64(data[:], section)
 
 	c.indexDb.Delete(append([]byte("shead"), data[:]...))

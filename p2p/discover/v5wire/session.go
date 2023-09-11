@@ -22,10 +22,10 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 const handshakeTimeout = time.Second
@@ -33,7 +33,7 @@ const handshakeTimeout = time.Second
 // The SessionCache keeps negotiated encryption keys and
 // state for in-progress handshakes in the Discovery v5 wire protocol.
 type SessionCache struct {
-	sessions   *simplelru.LRU
+	sessions   lru.BasicLRU[sessionID, *session]
 	handshakes map[sessionID]*Whoareyou
 	clock      mclock.Clock
 
@@ -62,12 +62,8 @@ func (s *session) keysFlipped() *session {
 }
 
 func NewSessionCache(maxItems int, clock mclock.Clock) *SessionCache {
-	cache, err := simplelru.NewLRU(maxItems, nil)
-	if err != nil {
-		panic("can't create session cache")
-	}
 	return &SessionCache{
-		sessions:        cache,
+		sessions:        lru.NewBasicLRU[sessionID, *session](maxItems),
 		handshakes:      make(map[sessionID]*Whoareyou),
 		clock:           clock,
 		nonceGen:        generateNonce,
@@ -79,6 +75,7 @@ func NewSessionCache(maxItems int, clock mclock.Clock) *SessionCache {
 func generateNonce(counter uint32) (n Nonce, err error) {
 	binary.BigEndian.PutUint32(n[:4], counter)
 	_, err = crand.Read(n[4:])
+
 	return n, err
 }
 
@@ -95,11 +92,8 @@ func (sc *SessionCache) nextNonce(s *session) (Nonce, error) {
 
 // session returns the current session for the given node, if any.
 func (sc *SessionCache) session(id enode.ID, addr string) *session {
-	item, ok := sc.sessions.Get(sessionID{id, addr})
-	if !ok {
-		return nil
-	}
-	return item.(*session)
+	item, _ := sc.sessions.Get(sessionID{id, addr})
+	return item
 }
 
 // readKey returns the current read key for the given node.
@@ -107,6 +101,7 @@ func (sc *SessionCache) readKey(id enode.ID, addr string) []byte {
 	if s := sc.session(id, addr); s != nil {
 		return s.readKey
 	}
+
 	return nil
 }
 

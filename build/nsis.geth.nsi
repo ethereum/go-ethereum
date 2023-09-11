@@ -20,7 +20,7 @@
 # - NSIS Large Strings build, http://nsis.sourceforge.net/Special_Builds
 # - SFP, http://nsis.sourceforge.net/NSIS_Simple_Firewall_Plugin (put dll in NSIS\Plugins\x86-ansi)
 #
-# After intalling NSIS extra the NSIS Large Strings build zip and replace the makensis.exe and the
+# After installing NSIS extra the NSIS Large Strings build zip and replace the makensis.exe and the
 # files found in Stub.
 #
 # based on: http://nsis.sourceforge.net/A_simple_installer_with_start_menu_shortcut_and_uninstaller

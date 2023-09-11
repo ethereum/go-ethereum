@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -59,8 +58,10 @@ func TestPeerSubscription(t *testing.T) {
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}
+
 		sort.Strings(given)
 		sort.Strings(expect)
+
 		if !reflect.DeepEqual(given, expect) {
 			t.Fatalf("all peer ids mismatch, want %v, given %v", expect, given)
 		}
@@ -77,6 +78,7 @@ func TestPeerSubscription(t *testing.T) {
 		case <-time.NewTimer(10 * time.Millisecond).C:
 		}
 	}
+
 	checkIds([]string{})
 
 	sub := newTestServerPeerSub()
@@ -84,6 +86,7 @@ func TestPeerSubscription(t *testing.T) {
 
 	// Generate a random id and create the peer
 	var id enode.ID
+
 	rand.Read(id[:])
 	peer := newServerPeer(2, NetworkId, false, p2p.NewPeer(id, "name", nil), nil)
 	peers.register(peer)
@@ -100,7 +103,7 @@ type fakeChain struct{}
 
 func (f *fakeChain) Config() *params.ChainConfig { return params.MainnetChainConfig }
 func (f *fakeChain) Genesis() *types.Block {
-	return core.DefaultGenesisBlock().ToBlock(rawdb.NewMemoryDatabase())
+	return core.DefaultGenesisBlock().ToBlock()
 }
 func (f *fakeChain) CurrentHeader() *types.Header { return &types.Header{Number: big.NewInt(10000000)} }
 
@@ -110,6 +113,7 @@ func TestHandshake(t *testing.T) {
 
 	// Generate a random id and create the peer
 	var id enode.ID
+
 	rand.Read(id[:])
 
 	peer1 := newClientPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), net)
@@ -125,8 +129,8 @@ func TestHandshake(t *testing.T) {
 		genesis = common.HexToHash("cafebabe")
 
 		chain1, chain2   = &fakeChain{}, &fakeChain{}
-		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64())
-		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64())
+		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64(), chain1.CurrentHeader().Time)
+		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64(), chain2.CurrentHeader().Time)
 		filter1, filter2 = forkid.NewFilter(chain1), forkid.NewFilter(chain2)
 	)
 

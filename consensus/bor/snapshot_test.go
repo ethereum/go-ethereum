@@ -29,6 +29,7 @@ func TestGetSignerSuccessionNumber_ProposerIsSigner(t *testing.T) {
 
 	// proposer is signer
 	signerTest := validatorSet.Proposer.Address
+
 	successionNumber, err := snap.GetSignerSuccessionNumber(signerTest)
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -55,6 +56,7 @@ func TestGetSignerSuccessionNumber_SignerIndexIsLarger(t *testing.T) {
 
 	// choose a signer at an index greater than proposer index
 	signerTest := snap.ValidatorSet.Validators[signerIndex].Address
+
 	successionNumber, err := snap.GetSignerSuccessionNumber(signerTest)
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -77,6 +79,7 @@ func TestGetSignerSuccessionNumber_SignerIndexIsSmaller(t *testing.T) {
 
 	// choose a signer at an index greater than proposer index
 	signerTest := snap.ValidatorSet.Validators[signerIndex].Address
+
 	successionNumber, err := snap.GetSignerSuccessionNumber(signerTest)
 	if err != nil {
 		t.Fatalf("%s", err)

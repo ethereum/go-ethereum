@@ -59,11 +59,13 @@ func TestCompiler(t *testing.T) {
 		ch := Lex([]byte(test.input), false)
 		c := NewCompiler(false)
 		c.Feed(ch)
+
 		output, err := c.Compile()
 		if len(err) != 0 {
 			t.Errorf("compile error: %v\ninput: %s", err, test.input)
 			continue
 		}
+
 		if output != test.output {
 			t.Errorf("incorrect output\ninput: %sgot:  %s\nwant: %s\n", test.input, output, test.output)
 		}

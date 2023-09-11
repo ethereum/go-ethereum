@@ -20,6 +20,7 @@ package bls12381
 // follows the implementation at draft-irtf-cfrg-hash-to-curve-06.
 func swuMapG1(u *fe) (*fe, *fe) {
 	var params = swuParamsForG1
+
 	var tv [4]*fe
 	for i := 0; i < 4; i++ {
 		tv[i] = new(fe)
@@ -27,28 +28,35 @@ func swuMapG1(u *fe) (*fe, *fe) {
 	square(tv[0], u)
 	mul(tv[0], tv[0], params.z)
 	square(tv[1], tv[0])
+
 	x1 := new(fe)
 	add(x1, tv[0], tv[1])
 	inverse(x1, x1)
 	e1 := x1.isZero()
 	one := new(fe).one()
 	add(x1, x1, one)
+
 	if e1 {
 		x1.set(params.zInv)
 	}
+
 	mul(x1, x1, params.minusBOverA)
+
 	gx1 := new(fe)
 	square(gx1, x1)
 	add(gx1, gx1, params.a)
 	mul(gx1, gx1, x1)
 	add(gx1, gx1, params.b)
+
 	x2 := new(fe)
 	mul(x2, tv[0], x1)
 	mul(tv[1], tv[0], tv[1])
+
 	gx2 := new(fe)
 	mul(gx2, gx1, tv[1])
 	e2 := !isQuadraticNonResidue(gx1)
 	x, y2 := new(fe), new(fe)
+
 	if e2 {
 		x.set(x1)
 		y2.set(gx1)
@@ -56,11 +64,14 @@ func swuMapG1(u *fe) (*fe, *fe) {
 		x.set(x2)
 		y2.set(gx2)
 	}
+
 	y := new(fe)
 	sqrt(y, y2)
+
 	if y.sign() != u.sign() {
 		neg(y, y)
 	}
+
 	return x, y
 }
 
@@ -70,7 +81,9 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 	if e == nil {
 		e = newFp2()
 	}
+
 	params := swuParamsForG2
+
 	var tv [4]*fe2
 	for i := 0; i < 4; i++ {
 		tv[i] = e.new()
@@ -83,9 +96,11 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 	e.inverse(x1, x1)
 	e1 := x1.isZero()
 	e.add(x1, x1, e.one())
+
 	if e1 {
 		x1.set(params.zInv)
 	}
+
 	e.mul(x1, x1, params.minusBOverA)
 	gx1 := e.new()
 	e.square(gx1, x1)
@@ -99,6 +114,7 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 	e.mul(gx2, gx1, tv[1])
 	e2 := !e.isQuadraticNonResidue(gx1)
 	x, y2 := e.new(), e.new()
+
 	if e2 {
 		x.set(x1)
 		y2.set(gx1)
@@ -106,11 +122,14 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 		x.set(x2)
 		y2.set(gx2)
 	}
+
 	y := e.new()
 	e.sqrt(y, y2)
+
 	if y.sign() != u.sign() {
 		e.neg(y, y)
 	}
+
 	return x, y
 }
 

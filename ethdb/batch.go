@@ -62,6 +62,7 @@ func (b HookedBatch) Put(key []byte, value []byte) error {
 	if b.OnPut != nil {
 		b.OnPut(key, value)
 	}
+
 	return b.Batch.Put(key, value)
 }
 
@@ -70,5 +71,6 @@ func (b HookedBatch) Delete(key []byte) error {
 	if b.OnDelete != nil {
 		b.OnDelete(key)
 	}
+
 	return b.Batch.Delete(key)
 }

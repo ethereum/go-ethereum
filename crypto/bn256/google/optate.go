@@ -7,7 +7,6 @@ package bn256
 func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2, pool *bnPool) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the mixed addition algorithm from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
-
 	B := newGFp2(pool).Mul(p.x, r.t, pool)
 
 	D := newGFp2(pool).Add(p.y, r.z)
@@ -55,6 +54,7 @@ func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2, pool *bnPool) (a
 
 	t2.Mul(L1, p.x, pool)
 	t2.Add(t2, t2)
+
 	a = newGFp2(pool)
 	a.Sub(t2, t)
 
@@ -85,7 +85,6 @@ func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2, pool *bnPool) (a
 func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the doubling algorithm for a=0 from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
-
 	A := newGFp2(pool).Square(r.x, pool)
 	B := newGFp2(pool).Square(r.y, pool)
 	C_ := newGFp2(pool).Square(B, pool)
@@ -121,6 +120,7 @@ func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gf
 
 	t.Mul(E, r.t, pool)
 	t.Add(t, t)
+
 	b = newGFp2(pool)
 	b.SetZero()
 	b.Sub(b, t)
@@ -161,6 +161,7 @@ func mulLine(ret *gfP12, a, b, c *gfP2, pool *bnPool) {
 
 	t := newGFp2(pool)
 	t.Add(b, c)
+
 	t2 := newGFp6(pool)
 	t2.x.SetZero()
 	t2.y.Set(a)
@@ -212,6 +213,7 @@ func miller(q *twistPoint, p *curvePoint, pool *bnPool) *gfP12 {
 
 	for i := len(sixuPlus2NAF) - 1; i > 0; i-- {
 		a, b, c, newR := lineFunctionDouble(r, bAffine, pool)
+
 		if i != len(sixuPlus2NAF)-1 {
 			ret.Square(ret, pool)
 		}
@@ -393,5 +395,6 @@ func optimalAte(a *twistPoint, b *curvePoint, pool *bnPool) *gfP12 {
 	if a.IsInfinity() || b.IsInfinity() {
 		ret.SetOne()
 	}
+
 	return ret
 }

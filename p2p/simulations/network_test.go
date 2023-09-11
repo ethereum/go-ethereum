@@ -36,10 +36,8 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
-
 	// PART I
 	// create snapshot from ring network
-
 	// this is a minimal service, whose protocol will take exactly one message OR close of connection before quitting
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"noopwoop": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
@@ -62,26 +60,32 @@ func TestSnapshot(t *testing.T) {
 	// create and start nodes
 	nodeCount := 20
 	ids := make([]enode.ID, nodeCount)
+
 	for i := 0; i < nodeCount; i++ {
 		conf := adapters.RandomNodeConfig()
+
 		node, err := network.NewNodeWithConfig(conf)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
 		}
+
 		if err := network.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node: %s", err)
 		}
+
 		ids[i] = node.ID()
 	}
 
 	// subscribe to peer events
 	evC := make(chan *Event)
+
 	sub := network.Events().Subscribe(evC)
 	defer sub.Unsubscribe()
 
 	// connect nodes in a ring
 	// spawn separate thread to avoid deadlock in the event listeners
 	connectErr := make(chan error, 1)
+
 	go func() {
 		for i, id := range ids {
 			peerID := ids[(i+1)%len(ids)]
@@ -95,6 +99,7 @@ func TestSnapshot(t *testing.T) {
 	// collect connection events up to expected number
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
 	defer cancel()
+
 	checkIds := make(map[enode.ID][]enode.ID)
 	connEventCount := nodeCount
 OUTER:
@@ -126,10 +131,12 @@ OUTER:
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	j, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	log.Debug("snapshot taken", "nodes", len(snap.Nodes), "conns", len(snap.Conns), "json", string(j))
 
 	// verify that the snap element numbers check out
@@ -139,6 +146,7 @@ OUTER:
 
 	// shut down sim network
 	runningOne = false
+
 	sub.Unsubscribe()
 	network.Shutdown()
 
@@ -146,6 +154,7 @@ OUTER:
 	for nodid, nodConns := range checkIds {
 		for _, nodConn := range nodConns {
 			var match bool
+
 			for _, snapConn := range snap.Conns {
 				if snapConn.One == nodid && snapConn.Other == nodConn {
 					match = true
@@ -155,11 +164,13 @@ OUTER:
 					break
 				}
 			}
+
 			if !match {
 				t.Fatalf("snapshot missing conn %v -> %v", nodid, nodConn)
 			}
 		}
 	}
+
 	log.Info("snapshot checked")
 
 	// PART II
@@ -173,6 +184,7 @@ OUTER:
 	network = NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "noopwoop",
 	})
+
 	defer func() {
 		network.Shutdown()
 	}()
@@ -181,6 +193,7 @@ OUTER:
 	// every node up and conn up event will generate one additional control event
 	// therefore multiply the count by two
 	evC = make(chan *Event, (len(snap.Conns)*2)+(len(snap.Nodes)*2))
+
 	sub = network.Events().Subscribe(evC)
 	defer sub.Unsubscribe()
 
@@ -204,7 +217,6 @@ OuterTwo:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
@@ -224,6 +236,7 @@ OuterTwo:
 	// check that we have all expected connections in the network
 	for _, snapConn := range snap.Conns {
 		var match bool
+
 		for nodid, nodConns := range checkIds {
 			for _, nodConn := range nodConns {
 				if snapConn.One == nodid && snapConn.Other == nodConn {
@@ -235,6 +248,7 @@ OuterTwo:
 				}
 			}
 		}
+
 		if !match {
 			t.Fatalf("network missing conn %v -> %v", snapConn.One, snapConn.Other)
 		}
@@ -291,21 +305,27 @@ func TestNetworkSimulation(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
+
 	nodeCount := 20
 	ids := make([]enode.ID, nodeCount)
+
 	for i := 0; i < nodeCount; i++ {
 		conf := adapters.RandomNodeConfig()
+
 		node, err := network.NewNodeWithConfig(conf)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
 		}
+
 		if err := network.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node: %s", err)
 		}
+
 		ids[i] = node.ID()
 	}
 
@@ -319,6 +339,7 @@ func TestNetworkSimulation(t *testing.T) {
 				return err
 			}
 		}
+
 		return nil
 	}
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
@@ -340,10 +361,12 @@ func TestNetworkSimulation(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
+
 		var peerCount int64
 		if err := client.CallContext(ctx, &peerCount, "test_peerCount"); err != nil {
 			return false, err
 		}
+
 		switch {
 		case peerCount < 2:
 			return false, nil
@@ -355,6 +378,7 @@ func TestNetworkSimulation(t *testing.T) {
 	}
 
 	timeout := 30 * time.Second
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -379,17 +403,21 @@ func TestNetworkSimulation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(snap.Nodes) != nodeCount {
 		t.Fatalf("expected snapshot to contain %d nodes, got %d", nodeCount, len(snap.Nodes))
 	}
+
 	if len(snap.Conns) != nodeCount {
 		t.Fatalf("expected snapshot to contain %d connections, got %d", nodeCount, len(snap.Conns))
 	}
+
 	for i, id := range ids {
 		conn := snap.Conns[i]
 		if conn.One != id {
 			t.Fatalf("expected conn[%d].One to be %s, got %s", i, id, conn.One)
 		}
+
 		peerID := ids[(i+1)%len(ids)]
 		if conn.Other != peerID {
 			t.Fatalf("expected conn[%d].Other to be %s, got %s", i, peerID, conn.Other)
@@ -400,10 +428,12 @@ func TestNetworkSimulation(t *testing.T) {
 func createTestNodes(count int, network *Network) (nodes []*Node, err error) {
 	for i := 0; i < count; i++ {
 		nodeConf := adapters.RandomNodeConfig()
+
 		node, err := network.NewNodeWithConfig(nodeConf)
 		if err != nil {
 			return nil, err
 		}
+
 		if err := network.Start(node.ID()); err != nil {
 			return nil, err
 		}
@@ -423,6 +453,7 @@ func createTestNodesWithProperty(property string, count int, network *Network) (
 		if err != nil {
 			return nil, err
 		}
+
 		if err := network.Start(node.ID()); err != nil {
 			return nil, err
 		}
@@ -440,15 +471,17 @@ func TestGetNodeIDs(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
 
 	numNodes := 5
+
 	nodes, err := createTestNodes(numNodes, network)
 	if err != nil {
-		t.Fatalf("Could not creat test nodes %v", err)
+		t.Fatalf("Could not create test nodes %v", err)
 	}
 
 	gotNodeIDs := network.GetNodeIDs()
@@ -458,6 +491,7 @@ func TestGetNodeIDs(t *testing.T) {
 
 	for _, node1 := range nodes {
 		match := false
+
 		for _, node2ID := range gotNodeIDs {
 			if bytes.Equal(node1.ID().Bytes(), node2ID.Bytes()) {
 				match = true
@@ -471,10 +505,12 @@ func TestGetNodeIDs(t *testing.T) {
 	}
 
 	excludeNodeID := nodes[3].ID()
+
 	gotNodeIDsExcl := network.GetNodeIDs(excludeNodeID)
 	if len(gotNodeIDsExcl) != numNodes-1 {
 		t.Fatalf("Expected one less node ID to be returned")
 	}
+
 	for _, nodeID := range gotNodeIDsExcl {
 		if bytes.Equal(excludeNodeID.Bytes(), nodeID.Bytes()) {
 			t.Fatalf("GetNodeIDs returned the node ID we excluded, ID: %s", nodeID.String())
@@ -489,15 +525,17 @@ func TestGetNodes(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
 
 	numNodes := 5
+
 	nodes, err := createTestNodes(numNodes, network)
 	if err != nil {
-		t.Fatalf("Could not creat test nodes %v", err)
+		t.Fatalf("Could not create test nodes %v", err)
 	}
 
 	gotNodes := network.GetNodes()
@@ -507,6 +545,7 @@ func TestGetNodes(t *testing.T) {
 
 	for _, node1 := range nodes {
 		match := false
+
 		for _, node2 := range gotNodes {
 			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
 				match = true
@@ -520,10 +559,12 @@ func TestGetNodes(t *testing.T) {
 	}
 
 	excludeNodeID := nodes[3].ID()
+
 	gotNodesExcl := network.GetNodes(excludeNodeID)
 	if len(gotNodesExcl) != numNodes-1 {
 		t.Fatalf("Expected one less node to be returned")
 	}
+
 	for _, node := range gotNodesExcl {
 		if bytes.Equal(excludeNodeID.Bytes(), node.ID().Bytes()) {
 			t.Fatalf("GetNodes returned the node we excluded, ID: %s", node.ID().String())
@@ -537,12 +578,14 @@ func TestGetNodesByID(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
 
 	numNodes := 5
+
 	nodes, err := createTestNodes(numNodes, network)
 	if err != nil {
 		t.Fatalf("Could not create test nodes: %v", err)
@@ -550,7 +593,9 @@ func TestGetNodesByID(t *testing.T) {
 
 	numSubsetNodes := 2
 	subsetNodes := nodes[0:numSubsetNodes]
+
 	var subsetNodeIDs []enode.ID
+
 	for _, node := range subsetNodes {
 		subsetNodeIDs = append(subsetNodeIDs, node.ID())
 	}
@@ -562,6 +607,7 @@ func TestGetNodesByID(t *testing.T) {
 
 	for _, node1 := range subsetNodes {
 		match := false
+
 		for _, node2 := range gotNodesByID {
 			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
 				match = true
@@ -582,12 +628,14 @@ func TestGetNodesByProperty(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
 
 	numNodes := 3
+
 	_, err := createTestNodes(numNodes, network)
 	if err != nil {
 		t.Fatalf("Failed to create nodes: %v", err)
@@ -595,6 +643,7 @@ func TestGetNodesByProperty(t *testing.T) {
 
 	numPropertyNodes := 3
 	propertyTest := "test"
+
 	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
 	if err != nil {
 		t.Fatalf("Failed to create nodes with property: %v", err)
@@ -607,6 +656,7 @@ func TestGetNodesByProperty(t *testing.T) {
 
 	for _, node1 := range propertyNodes {
 		match := false
+
 		for _, node2 := range gotNodesByProperty {
 			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
 				match = true
@@ -627,12 +677,14 @@ func TestGetNodeIDsByProperty(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
+
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
 	defer network.Shutdown()
 
 	numNodes := 3
+
 	_, err := createTestNodes(numNodes, network)
 	if err != nil {
 		t.Fatalf("Failed to create nodes: %v", err)
@@ -640,6 +692,7 @@ func TestGetNodeIDsByProperty(t *testing.T) {
 
 	numPropertyNodes := 3
 	propertyTest := "test"
+
 	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
 	if err != nil {
 		t.Fatalf("Failed to created nodes with property: %v", err)
@@ -652,6 +705,7 @@ func TestGetNodeIDsByProperty(t *testing.T) {
 
 	for _, node1 := range propertyNodes {
 		match := false
+
 		id1 := node1.ID()
 		for _, id2 := range gotNodeIDsByProperty {
 			if bytes.Equal(id1.Bytes(), id2.Bytes()) {
@@ -669,6 +723,7 @@ func TestGetNodeIDsByProperty(t *testing.T) {
 func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
+
 	for {
 		select {
 		case <-tick.C:
@@ -693,9 +748,9 @@ func BenchmarkMinimalService(b *testing.B) {
 }
 
 func benchmarkMinimalServiceTmp(b *testing.B) {
-
 	// stop timer to discard setup time pollution
 	args := strings.Split(b.Name(), "/")
+
 	nodeCount, err := strconv.ParseInt(args[2], 10, 16)
 	if err != nil {
 		b.Fatal(err)
@@ -721,15 +776,19 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 
 		// create and start nodes
 		ids := make([]enode.ID, nodeCount)
+
 		for i := 0; i < int(nodeCount); i++ {
 			conf := adapters.RandomNodeConfig()
+
 			node, err := network.NewNodeWithConfig(conf)
 			if err != nil {
 				b.Fatalf("error creating node: %s", err)
 			}
+
 			if err := network.Start(node.ID()); err != nil {
 				b.Fatalf("error starting node: %s", err)
 			}
+
 			ids[i] = node.ID()
 		}
 
@@ -747,6 +806,7 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 		// wait for all protocols to signal to close down
 		ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
 		defer cancel()
+
 		for nodid, peers := range protoCMap {
 			for peerid, peerC := range peers {
 				log.Debug("getting ", "node", nodid, "peer", peerid)
@@ -771,13 +831,16 @@ func TestNode_UnmarshalJSON(t *testing.T) {
 
 func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
 	t.Helper()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got *Node
 			if err := json.Unmarshal([]byte(tt.marshaled), &got); err != nil {
 				expectErrorMessageToContain(t, err, tt.wantErr)
+
 				got = nil
 			}
+
 			expectNodeEquality(t, got, tt.want)
 		})
 	}
@@ -792,6 +855,7 @@ type nodeUnmarshalTestCase struct {
 
 func expectErrorMessageToContain(t *testing.T, got error, want string) {
 	t.Helper()
+
 	if got == nil && want == "" {
 		return
 	}
@@ -812,6 +876,7 @@ func expectErrorMessageToContain(t *testing.T, got error, want string) {
 
 func expectNodeEquality(t *testing.T, got, want *Node) {
 	t.Helper()
+
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Node.UnmarshalJSON() = %v, want %v", got, want)
 	}

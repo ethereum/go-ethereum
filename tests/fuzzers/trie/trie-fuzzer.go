@@ -21,8 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -51,9 +50,8 @@ const (
 	opUpdate = iota
 	opDelete
 	opGet
-	opCommit
 	opHash
-	opReset
+	opCommit
 	opItercheckhash
 	opProve
 	opMax // boundary value, not an actual op
@@ -84,16 +82,16 @@ func (ds *dataSource) Ended() bool {
 }
 
 func Generate(input []byte) randTest {
-
 	var allKeys [][]byte
+
 	r := newDataSource(input)
 	genKey := func() []byte {
-
 		if len(allKeys) < 2 || r.readByte() < 0x0f {
 			// new key
 			key := make([]byte, r.readByte()%50)
 			r.Read(key)
 			allKeys = append(allKeys, key)
+
 			return key
 		}
 		// use existing key
@@ -103,7 +101,6 @@ func Generate(input []byte) randTest {
 	var steps randTest
 
 	for i := 0; !r.Ended(); i++ {
-
 		step := randTestStep{op: int(r.readByte()) % opMax}
 		switch step.op {
 		case opUpdate:
@@ -113,6 +110,7 @@ func Generate(input []byte) randTest {
 		case opGet, opDelete, opProve:
 			step.key = genKey()
 		}
+
 		steps = append(steps, step)
 		if len(steps) > 500 {
 			break
@@ -122,65 +120,74 @@ func Generate(input []byte) randTest {
 	return steps
 }
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
-// 1 if the fuzzer should increase priority of the
-//    given input during subsequent fuzzing (for example, the input is lexically
-//    correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0  otherwise
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
 // other values are reserved for future use.
 func Fuzz(input []byte) int {
 	program := Generate(input)
 	if len(program) == 0 {
 		return 0
 	}
+
 	if err := runRandTest(program); err != nil {
 		panic(err)
 	}
+
 	return 1
 }
 
 func runRandTest(rt randTest) error {
+	triedb := trie.NewDatabase(rawdb.NewMemoryDatabase())
 
-	triedb := trie.NewDatabase(memorydb.New())
-
-	tr, _ := trie.New(common.Hash{}, triedb)
+	tr := trie.NewEmpty(triedb)
 	values := make(map[string]string) // tracks content of the trie
 
 	for i, step := range rt {
 		switch step.op {
 		case opUpdate:
-			tr.Update(step.key, step.value)
+			tr.MustUpdate(step.key, step.value)
 			values[string(step.key)] = string(step.value)
 		case opDelete:
-			tr.Delete(step.key)
+			tr.MustDelete(step.key)
 			delete(values, string(step.key))
 		case opGet:
-			v := tr.Get(step.key)
+			v := tr.MustGet(step.key)
 			want := values[string(step.key)]
+
 			if string(v) != want {
-				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
+				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
-		case opCommit:
-			_, _, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
-		case opReset:
-			hash, _, err := tr.Commit(nil)
+		case opCommit:
+			hash, nodes := tr.Commit(false)
+			if nodes != nil {
+				if err := triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
+					return err
+				}
+			}
+
+			newtr, err := trie.New(trie.TrieID(hash), triedb)
 			if err != nil {
 				return err
 			}
-			newtr, err := trie.New(hash, triedb)
-			if err != nil {
-				return err
-			}
+
 			tr = newtr
 		case opItercheckhash:
-			checktr, _ := trie.New(common.Hash{}, triedb)
+			checktr := trie.NewEmpty(triedb)
 			it := trie.NewIterator(tr.NodeIterator(nil))
+
 			for it.Next() {
-				checktr.Update(it.Key, it.Value)
+				checktr.MustUpdate(it.Key, it.Value)
 			}
+
 			if tr.Hash() != checktr.Hash() {
 				return fmt.Errorf("hash mismatch in opItercheckhash")
 			}
@@ -192,5 +199,6 @@ func runRandTest(rt randTest) error {
 			return rt[i].err
 		}
 	}
+
 	return nil
 }

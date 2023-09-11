@@ -17,53 +17,85 @@
 package state
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
-	db, root, _ := makeTestState()
-	db.TrieDB().Commit(root, false, nil)
+	db, sdb, root, _ := makeTestState()
+	_ = sdb.TrieDB().Commit(root, false)
 
-	state, err := New(root, db, nil)
+	state, err := New(root, sdb, nil)
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
+
 	for it := NewNodeIterator(state); it.Next(); {
 		if it.Hash != (common.Hash{}) {
 			hashes[it.Hash] = struct{}{}
 		}
 	}
-	// Cross check the iterated hashes and the database/nodepool content
-	for hash := range hashes {
-		if _, err = db.TrieDB().Node(hash); err != nil {
-			_, err = db.ContractCode(common.Hash{}, hash)
+	// Check in-disk nodes
+	var (
+		seenNodes = make(map[common.Hash]struct{})
+		seenCodes = make(map[common.Hash]struct{})
+	)
+
+	it := db.NewIterator(nil, nil)
+
+	for it.Next() {
+		ok, hash := isTrieNode(sdb.TrieDB().Scheme(), it.Key(), it.Value())
+		if !ok {
+			continue
 		}
-		if err != nil {
+
+		seenNodes[hash] = struct{}{}
+	}
+	it.Release()
+
+	// Check in-disk codes
+	it = db.NewIterator(nil, nil)
+	for it.Next() {
+		ok, hash := rawdb.IsCodeKey(it.Key())
+		if !ok {
+			continue
+		}
+
+		if _, ok := hashes[common.BytesToHash(hash)]; !ok {
+			t.Errorf("state entry not reported %x", it.Key())
+		}
+
+		seenCodes[common.BytesToHash(hash)] = struct{}{}
+	}
+	it.Release()
+
+	// Cross-check the iterated hashes and the database/nodepool content
+	for hash := range hashes {
+		_, ok := seenNodes[hash]
+		if !ok {
+			_, ok = seenCodes[hash]
+		}
+
+		if !ok {
 			t.Errorf("failed to retrieve reported node %x", hash)
 		}
 	}
-	for _, hash := range db.TrieDB().Nodes() {
-		if _, ok := hashes[hash]; !ok {
-			t.Errorf("state entry not reported %x", hash)
+}
+
+// isTrieNode is a helper function which reports if the provided
+// database entry belongs to a trie node or not.
+func isTrieNode(scheme string, key, _ []byte) (bool, common.Hash) {
+	if scheme == rawdb.HashScheme {
+		if len(key) == common.HashLength {
+			return true, common.BytesToHash(key)
 		}
 	}
-	it := db.TrieDB().DiskDB().(ethdb.Database).NewIterator(nil, nil)
-	for it.Next() {
-		key := it.Key()
-		if bytes.HasPrefix(key, []byte("secure-key-")) {
-			continue
-		}
-		if _, ok := hashes[common.BytesToHash(key)]; !ok {
-			t.Errorf("state entry not reported %x", key)
-		}
-	}
-	it.Release()
+
+	return false, common.Hash{}
 }

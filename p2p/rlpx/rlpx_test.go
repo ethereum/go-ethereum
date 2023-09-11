@@ -91,6 +91,7 @@ func createPeers(t *testing.T) (peer1, peer2 *Conn) {
 	peer1 = NewConn(conn1, &key2.PublicKey) // dialer
 	peer2 = NewConn(conn2, nil)             // listener
 	doHandshake(t, peer1, peer2, key1, key2)
+
 	return peer1, peer2
 }
 
@@ -108,6 +109,7 @@ func doHandshake(t *testing.T, peer1, peer2 *Conn, key1, key2 *ecdsa.PrivateKey)
 	if err != nil {
 		t.Errorf("peer1 could not do handshake: %v", err)
 	}
+
 	pubKey1 := <-keyChan
 
 	// Confirm the handshake was successful.
@@ -126,6 +128,7 @@ func TestFrameReadWrite(t *testing.T) {
 		IngressMAC: hash,
 		EgressMAC:  hash,
 	})
+
 	h := conn.session
 
 	golden := unhex(`
@@ -143,6 +146,7 @@ func TestFrameReadWrite(t *testing.T) {
 	if err := h.writeFrame(buf, msgCode, msgEnc); err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
+
 	if !bytes.Equal(buf.Bytes(), golden) {
 		t.Fatalf("output mismatch:\n  got:  %x\n  want: %x", buf.Bytes(), golden)
 	}
@@ -152,6 +156,7 @@ func TestFrameReadWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadMsg error: %v", err)
 	}
+
 	wantContent := unhex("08C401020304")
 	if !bytes.Equal(content, wantContent) {
 		t.Errorf("frame content mismatch:\ngot  %x\nwant %x", content, wantContent)
@@ -280,33 +285,40 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 		authSignature = unhex("299ca6acfd35e3d72d8ba3d1e2b60b5561d5af5218eb5bc182045769eb4226910a301acae3b369fffc4a4899d6b02531e89fd4fe36a2cf0d93607ba470b50f7800")
 		_             = authSignature
 	)
+
 	makeAuth := func(test handshakeAuthTest) *authMsgV4 {
 		msg := &authMsgV4{Version: test.wantVersion, Rest: test.wantRest}
 		copy(msg.Signature[:], authSignature)
 		copy(msg.InitiatorPubkey[:], pubA)
 		copy(msg.Nonce[:], nonceA)
+
 		return msg
 	}
 	makeAck := func(test handshakeAckTest) *authRespV4 {
 		msg := &authRespV4{Version: test.wantVersion, Rest: test.wantRest}
 		copy(msg.RandomPubkey[:], ephPubB)
 		copy(msg.Nonce[:], nonceB)
+
 		return msg
 	}
 
 	// check auth msg parsing
 	for _, test := range eip8HandshakeAuthTests {
 		var h handshakeState
+
 		r := bytes.NewReader(unhex(test.input))
 		msg := new(authMsgV4)
+
 		ciphertext, err := h.readMsg(msg, keyB, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", unhex(test.input), err)
 			continue
 		}
+
 		if !bytes.Equal(ciphertext, unhex(test.input)) {
 			t.Errorf("wrong ciphertext for input %x:\n  %x", unhex(test.input), ciphertext)
 		}
+
 		want := makeAuth(test)
 		if !reflect.DeepEqual(msg, want) {
 			t.Errorf("wrong msg for input %x:\ngot %s\nwant %s", unhex(test.input), spew.Sdump(msg), spew.Sdump(want))
@@ -316,17 +328,21 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	// check auth resp parsing
 	for _, test := range eip8HandshakeRespTests {
 		var h handshakeState
+
 		input := unhex(test.input)
 		r := bytes.NewReader(input)
 		msg := new(authRespV4)
+
 		ciphertext, err := h.readMsg(msg, keyA, r)
 		if err != nil {
 			t.Errorf("error for input %x:\n  %v", input, err)
 			continue
 		}
+
 		if !bytes.Equal(ciphertext, input) {
 			t.Errorf("wrong ciphertext for input %x:\n  %x", input, err)
 		}
+
 		want := makeAck(test)
 		if !reflect.DeepEqual(msg, want) {
 			t.Errorf("wrong msg for input %x:\ngot %s\nwant %s", input, spew.Sdump(msg), spew.Sdump(want))
@@ -347,20 +363,26 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 		wantMAC            = unhex("2ea74ec5dae199227dff1af715362700e989d889d7a493cb0639691efb8e5f98")
 		wantFooIngressHash = unhex("0c7ec6340062cc46f5e9f1e3cf86f8c8c403c5a0964f5df0ebd34a75ddc86db5")
 	)
+
 	if err := hs.handleAuthMsg(authMsg, keyB); err != nil {
 		t.Fatalf("handleAuthMsg: %v", err)
 	}
+
 	derived, err := hs.secrets(authCiphertext, authRespCiphertext)
 	if err != nil {
 		t.Fatalf("secrets: %v", err)
 	}
+
 	if !bytes.Equal(derived.AES, wantAES) {
 		t.Errorf("aes-secret mismatch:\ngot %x\nwant %x", derived.AES, wantAES)
 	}
+
 	if !bytes.Equal(derived.MAC, wantMAC) {
 		t.Errorf("mac-secret mismatch:\ngot %x\nwant %x", derived.MAC, wantMAC)
 	}
+
 	io.WriteString(derived.IngressMAC, "foo")
+
 	fooIngressHash := derived.IngressMAC.Sum(nil)
 	if !bytes.Equal(fooIngressHash, wantFooIngressHash) {
 		t.Errorf("ingress-mac('foo') mismatch:\ngot %x\nwant %x", fooIngressHash, wantFooIngressHash)
@@ -376,6 +398,7 @@ func BenchmarkHandshakeRead(b *testing.B) {
 			r   = bytes.NewReader(input)
 			msg = new(authMsgV4)
 		)
+
 		if _, err := h.readMsg(msg, keyB, r); err != nil {
 			b.Fatal(err)
 		}
@@ -394,6 +417,7 @@ func BenchmarkThroughput(b *testing.B) {
 		msgdata       = make([]byte, 1024)
 		rand          = rand.New(rand.NewSource(1337))
 	)
+
 	rand.Read(msgdata)
 
 	// Server side.
@@ -402,9 +426,11 @@ func BenchmarkThroughput(b *testing.B) {
 		// Perform handshake.
 		_, err := conn1.Handshake(keyA)
 		handshakeDone <- err
+
 		if err != nil {
 			return
 		}
+
 		conn1.SetSnappy(true)
 		// Keep sending messages until connection closed.
 		for {
@@ -416,10 +442,13 @@ func BenchmarkThroughput(b *testing.B) {
 
 	// Set up client side.
 	defer conn2.Close()
+
 	if _, err := conn2.Handshake(keyB); err != nil {
 		b.Fatal("client handshake error:", err)
 	}
+
 	conn2.SetSnappy(true)
+
 	if err := <-handshakeDone; err != nil {
 		b.Fatal("server hanshake error:", err)
 	}
@@ -427,6 +456,7 @@ func BenchmarkThroughput(b *testing.B) {
 	// Read N messages.
 	b.SetBytes(int64(len(msgdata)))
 	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		_, _, _, err := conn2.Read()
 		if err != nil {
@@ -437,10 +467,12 @@ func BenchmarkThroughput(b *testing.B) {
 
 func unhex(str string) []byte {
 	r := strings.NewReplacer("\t", "", " ", "", "\n", "")
+
 	b, err := hex.DecodeString(r.Replace(str))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}
+
 	return b
 }
 
@@ -449,5 +481,6 @@ func newkey() *ecdsa.PrivateKey {
 	if err != nil {
 		panic("couldn't generate key: " + err.Error())
 	}
+
 	return key
 }

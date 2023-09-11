@@ -91,7 +91,7 @@ func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, erro
 	return t.db.ModifyAncients(fn)
 }
 
-func (t *table) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
 	return t.db.ReadAncients(fn)
 }
 
@@ -119,6 +119,11 @@ func (t *table) MigrateTable(kind string, convert convertLegacyFn) error {
 	return t.db.MigrateTable(kind, convert)
 }
 
+// AncientDatadir returns the ancient datadir of the underlying database.
+func (t *table) AncientDatadir() (string, error) {
+	return t.db.AncientDatadir()
+}
+
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {
@@ -136,6 +141,7 @@ func (t *table) Delete(key []byte) error {
 func (t *table) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	innerPrefix := append([]byte(t.prefix), prefix...)
 	iter := t.db.NewIterator(innerPrefix, start)
+
 	return &tableIterator{
 		iter:   iter,
 		prefix: t.prefix,
@@ -285,6 +291,7 @@ func (iter *tableIterator) Key() []byte {
 	if key == nil {
 		return nil
 	}
+
 	return key[len(iter.prefix):]
 }
 

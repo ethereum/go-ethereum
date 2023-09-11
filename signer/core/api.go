@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -133,6 +135,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
 	)
+
 	if lightKDF {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
@@ -140,12 +143,14 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	if len(ksLocation) > 0 {
 		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
 	}
+
 	if !nousb {
 		// Start a USB hub for Ledger hardware wallets
 		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
 			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
 		} else {
 			backends = append(backends, ledgerhub)
+
 			log.Debug("Ledger support enabled")
 		}
 		// Start a USB hub for Trezor hardware wallets (HID version)
@@ -153,6 +158,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 			log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
 		} else {
 			backends = append(backends, trezorhub)
+
 			log.Debug("Trezor support enabled via HID")
 		}
 		// Start a USB hub for Trezor hardware wallets (WebUSB version)
@@ -160,6 +166,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 			log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
 		} else {
 			backends = append(backends, trezorhub)
+
 			log.Debug("Trezor support enabled via WebUSB")
 		}
 	}
@@ -197,16 +204,21 @@ func MetadataFromContext(ctx context.Context) Metadata {
 		if info.Transport == "http" {
 			m.Scheme = info.HTTP.Version
 		}
+
 		m.Scheme = info.Transport
 	}
+
 	if info.RemoteAddr != "" {
 		m.Remote = info.RemoteAddr
 	}
+
 	if info.HTTP.Host != "" {
 		m.Local = info.HTTP.Host
 	}
+
 	m.Origin = info.HTTP.Origin
 	m.UserAgent = info.HTTP.UserAgent
+
 	return m
 }
 
@@ -216,6 +228,7 @@ func (m Metadata) String() string {
 	if err == nil {
 		return string(s)
 	}
+
 	return err.Error()
 }
 
@@ -285,10 +298,12 @@ func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAP
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
+
 	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, credentials}
 	if !noUSB {
 		signer.startUSBListener()
 	}
+
 	return signer
 }
 func (api *SignerAPI) openTrezor(url accounts.URL) {
@@ -314,12 +329,12 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 		log.Warn("wallet unavailable", "url", url)
 		return
 	}
+
 	err = w.Open(resp.Text)
 	if err != nil {
 		log.Warn("failed to open wallet", "wallet", url, "err", err)
 		return
 	}
-
 }
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
@@ -331,11 +346,13 @@ func (api *SignerAPI) startUSBListener() {
 	for _, wallet := range am.Wallets() {
 		if err := wallet.Open(""); err != nil {
 			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+
 			if err == usbwallet.ErrTrezorPINNeeded {
 				go api.openTrezor(wallet.URL())
 			}
 		}
 	}
+
 	go api.derivationLoop(eventCh)
 }
 
@@ -347,6 +364,7 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 		case accounts.WalletArrived:
 			if err := event.Wallet.Open(""); err != nil {
 				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
+
 				if err == usbwallet.ErrTrezorPINNeeded {
 					go api.openTrezor(event.Wallet.URL())
 				}
@@ -354,6 +372,7 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 		case accounts.WalletOpened:
 			status, _ := event.Wallet.Status()
 			log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+
 			var derive = func(limit int, next func() accounts.DerivationPath) {
 				// Derive first N accounts, hardcoded for now
 				for i := 0; i < limit; i++ {
@@ -365,8 +384,10 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 					}
 				}
 			}
+
 			log.Info("Deriving default paths")
 			derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.DefaultBaseDerivationPath))
+
 			if event.Wallet.URL().Scheme == "ledger" {
 				log.Info("Deriving ledger legacy paths")
 				derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.LegacyLedgerBaseDerivationPath))
@@ -394,32 +415,38 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	for _, wallet := range api.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
+
 	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
 	}
+
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
 	}
+
 	addresses := make([]common.Address, 0)
 	for _, acc := range result.Accounts {
 		addresses = append(addresses, acc.Address)
 	}
+
 	return addresses, nil
 }
 
 // New creates a new password protected Account. The private key is protected with
 // the given password. Users are responsible to backup the private key that is stored
-// in the keystore location thas was specified when this API was created.
+// in the keystore location that was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 	if be := api.am.Backends(keystore.KeyStoreType); len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
+
 	if resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)}); err != nil {
 		return common.Address{}, err
 	} else if !resp.Approved {
 		return common.Address{}, ErrRequestDenied
 	}
+
 	return api.newAccount()
 }
 
@@ -440,6 +467,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			log.Warn("error obtaining password", "attempt", i, "error", err)
 			continue
 		}
+
 		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
@@ -448,6 +476,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			log.Info("Your new key was generated", "address", acc.Address)
 			log.Warn("Please backup your key file!", "path", acc.URL.Path)
 			log.Warn("Please remember your password!")
+
 			return acc.Address, err
 		}
 	}
@@ -470,52 +499,74 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	}
 
 	modified := false
+
 	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
+
 		modified = true
 	}
+
 	if t0, t1 := original.Transaction.To, new.Transaction.To; !reflect.DeepEqual(t0, t1) {
 		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
+
 		modified = true
 	}
+
 	if g0, g1 := original.Transaction.Gas, new.Transaction.Gas; g0 != g1 {
 		modified = true
+
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
+
 	if a, b := original.Transaction.GasPrice, new.Transaction.GasPrice; intPtrModified(a, b) {
 		log.Info("GasPrice changed by UI", "was", a, "is", b)
+
 		modified = true
 	}
+
 	if a, b := original.Transaction.MaxPriorityFeePerGas, new.Transaction.MaxPriorityFeePerGas; intPtrModified(a, b) {
 		log.Info("maxPriorityFeePerGas changed by UI", "was", a, "is", b)
+
 		modified = true
 	}
+
 	if a, b := original.Transaction.MaxFeePerGas, new.Transaction.MaxFeePerGas; intPtrModified(a, b) {
 		log.Info("maxFeePerGas changed by UI", "was", a, "is", b)
+
 		modified = true
 	}
+
 	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
 		modified = true
+
 		log.Info("Value changed by UI", "was", v0, "is", v1)
 	}
+
 	if d0, d1 := original.Transaction.Data, new.Transaction.Data; d0 != d1 {
 		d0s := ""
 		d1s := ""
+
 		if d0 != nil {
 			d0s = hexutil.Encode(*d0)
 		}
+
 		if d1 != nil {
 			d1s = hexutil.Encode(*d1)
 		}
+
 		if d1s != d0s {
 			modified = true
+
 			log.Info("Data changed by UI", "was", d0s, "is", d1s)
 		}
 	}
+
 	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
 		modified = true
+
 		log.Info("Nonce changed by UI", "was", n0, "is", n1)
 	}
+
 	return modified
 }
 
@@ -536,6 +587,7 @@ func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, promp
 		// which could leak the password if it was malformed json or something
 		return "", errors.New("internal error")
 	}
+
 	return pwResp.Text, nil
 }
 
@@ -545,6 +597,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		err    error
 		result SignTxResponse
 	)
+
 	msgs, err := api.validator.ValidateTransaction(methodSelector, &args)
 	if err != nil {
 		return nil, err
@@ -555,6 +608,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 			return nil, err
 		}
 	}
+
 	if args.ChainID != nil {
 		requestedChainId := (*big.Int)(args.ChainID)
 		if api.chainID.Cmp(requestedChainId) != 0 {
@@ -563,6 +617,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 				requestedChainId)
 		}
 	}
+
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
@@ -573,16 +628,20 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	if err != nil {
 		return nil, err
 	}
+
 	if !result.Approved {
 		return nil, ErrRequestDenied
 	}
 	// Log changes made by the UI to the signing-request
 	logDiff(&req, &result)
+
 	var (
 		acc    accounts.Account
 		wallet accounts.Wallet
 	)
+
 	acc = accounts.Account{Address: result.Transaction.From.Address()}
+
 	wallet, err = api.am.Find(acc)
 	if err != nil {
 		return nil, err
@@ -606,18 +665,19 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	if err != nil {
 		return nil, err
 	}
+
 	response := ethapi.SignTransactionResult{Raw: data, Tx: signedTx}
 
 	// Finally, send the signed tx to the UI
 	api.UI.OnApprovedTx(response)
 	// ...and to the external caller
 	return &response, nil
-
 }
 
 func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
 	// Do the usual validations, but on the last-stage transaction
 	args := gnosisTx.ArgsForValidation()
+
 	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
 	if err != nil {
 		return nil, err
@@ -628,16 +688,40 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 			return nil, err
 		}
 	}
+
 	typedData := gnosisTx.ToTypedData()
-	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
+	// might aswell error early.
+	// we are expected to sign. If our calculated hash does not match what they want,
+	// The gnosis safetx input contains a 'safeTxHash' which is the expected safeTxHash that
+	sighash, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return nil, err
 	}
+
+	if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+		// It might be the case that the json is missing chain id.
+		if gnosisTx.ChainId == nil {
+			gnosisTx.ChainId = (*math.HexOrDecimal256)(api.chainID)
+			typedData = gnosisTx.ToTypedData()
+
+			sighash, _, _ = apitypes.TypedDataAndHash(typedData)
+			if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+				return nil, fmt.Errorf("mismatched safeTxHash; have %#x want %#x", sighash, gnosisTx.InputExpHash[:])
+			}
+		}
+	}
+
+	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
+
+	if err != nil {
+		return nil, err
+	}
+
 	checkSummedSender, _ := common.NewMixedcaseAddressFromString(signerAddress.Address().Hex())
 
 	gnosisTx.Signature = signature
 	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
-	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
+	gnosisTx.Sender = *checkSummedSender // Must be checksummed to be accepted by relay
 
 	return &gnosisTx, nil
 }

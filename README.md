@@ -88,10 +88,10 @@ them using your favourite package manager. Once the dependencies are installed, 
 
 ### Submit your PR
 
-- After your changes are commited to your GitHub fork, submit a pull request (PR) to the `master` branch of the `maticnetwork/bor` repo
+- After your changes are committed to your GitHub fork, submit a pull request (PR) to the `master` branch of the `maticnetwork/bor` repo
 - In your PR description, reference the issue it resolves (see [linking a pull request to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword))
   - ex. `Updates out of date content [Fixes #1234]`
-- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/zdwkdvMNY2)?
+- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/0xpolygon)?
 
 ### Wait for review
 
@@ -113,7 +113,7 @@ The go-ethereum library (i.e. all code outside of the `cmd` directory) is licens
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html),
 also included in our repository in the `COPYING.LESSER` file.
 
-The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+The go-ethereum binaries (i.e. all code inside of the `cmd` directory) are licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also
 included in our repository in the `COPYING` file.
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,11 +30,13 @@ type Error struct {
 	Name   string
 	Inputs Arguments
 	str    string
+
 	// Sig contains the string signature according to the ABI spec.
-	// e.g.	 event foo(uint32 a, int b) = "foo(uint32,int256)"
+	// e.g.	 error foo(uint32 a, int b) = "foo(uint32,int256)"
 	// Please note that "int" is substitute for its canonical representation "int256"
 	Sig string
-	// ID returns the canonical representation of the event's signature used by the
+
+	// ID returns the canonical representation of the error's signature used by the
 	// abi definition to identify event names and types.
 	ID common.Hash
 }
@@ -44,6 +46,7 @@ func NewError(name string, inputs Arguments) Error {
 	// and precompute string and sig representation.
 	names := make([]string, len(inputs))
 	types := make([]string, len(inputs))
+
 	for i, input := range inputs {
 		if input.Name == "" {
 			inputs[i] = Argument{
@@ -84,8 +87,10 @@ func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
 		return "", errors.New("invalid data for unpacking")
 	}
+
 	if !bytes.Equal(data[:4], e.ID[:4]) {
 		return "", errors.New("invalid data for unpacking")
 	}
+
 	return e.Inputs.Unpack(data[4:])
 }

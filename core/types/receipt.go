@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//go:generate go run github.com/fjl/gencodec@latest -type Receipt -field-override receiptMarshaling -out gen_receipt_json.go
+//go:generate go run github.com/fjl/gencodec -type Receipt -field-override receiptMarshaling -out gen_receipt_json.go
 
 var (
 	receiptStatusFailedRLP     = []byte{}
@@ -59,10 +59,10 @@ type Receipt struct {
 	Logs              []*Log `json:"logs"              gencodec:"required"`
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
-	// They are stored in the chain database.
-	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
-	ContractAddress common.Address `json:"contractAddress"`
-	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
+	ContractAddress   common.Address `json:"contractAddress"`
+	GasUsed           uint64         `json:"gasUsed" gencodec:"required"`
+	EffectiveGasPrice *big.Int       `json:"effectiveGasPrice"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
@@ -93,28 +93,7 @@ type receiptRLP struct {
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
-	Logs              []*LogForStorage
-}
-
-// v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
-type v4StoredReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	Logs              []*LogForStorage
-	GasUsed           uint64
-}
-
-// v3StoredReceiptRLP is the original storage encoding of a receipt including some unnecessary fields.
-type v3StoredReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
-	Bloom             Bloom
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	Logs              []*LogForStorage
-	GasUsed           uint64
+	Logs              []*Log
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
@@ -130,6 +109,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	} else {
 		r.Status = ReceiptStatusSuccessful
 	}
+
 	return r
 }
 
@@ -140,12 +120,15 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	if r.Type == LegacyTxType {
 		return rlp.Encode(w, data)
 	}
+
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
+
 	if err := r.encodeTyped(data, buf); err != nil {
 		return err
 	}
+
 	return rlp.Encode(w, buf.Bytes())
 }
 
@@ -160,9 +143,12 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 	if r.Type == LegacyTxType {
 		return rlp.EncodeToBytes(r)
 	}
+
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+
 	var buf bytes.Buffer
 	err := r.encodeTyped(data, &buf)
+
 	return buf.Bytes(), err
 }
 
@@ -170,6 +156,7 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	kind, _, err := s.Kind()
+
 	switch {
 	case err != nil:
 		return err
@@ -179,7 +166,9 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err := s.Decode(&dec); err != nil {
 			return err
 		}
+
 		r.Type = LegacyTxType
+
 		return r.setFromRLP(dec)
 	default:
 		// It's an EIP-2718 typed tx receipt.
@@ -187,6 +176,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
+
 		return r.decodeTyped(b)
 	}
 }
@@ -197,11 +187,14 @@ func (r *Receipt) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy receipt decode the RLP
 		var data receiptRLP
+
 		err := rlp.DecodeBytes(b, &data)
 		if err != nil {
 			return err
 		}
+
 		r.Type = LegacyTxType
+
 		return r.setFromRLP(data)
 	}
 	// It's an EIP2718 typed transaction envelope.
@@ -213,14 +206,18 @@ func (r *Receipt) decodeTyped(b []byte) error {
 	if len(b) <= 1 {
 		return errShortTypedReceipt
 	}
+
 	switch b[0] {
 	case DynamicFeeTxType, AccessListTxType:
 		var data receiptRLP
+
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
 			return err
 		}
+
 		r.Type = b[0]
+
 		return r.setFromRLP(data)
 	default:
 		return ErrTxTypeNotSupported
@@ -243,6 +240,7 @@ func (r *Receipt) setStatus(postStateOrStatus []byte) error {
 	default:
 		return fmt.Errorf("invalid receipt status %x", postStateOrStatus)
 	}
+
 	return nil
 }
 
@@ -251,8 +249,10 @@ func (r *Receipt) statusEncoding() []byte {
 		if r.Status == ReceiptStatusFailed {
 			return receiptStatusFailedRLP
 		}
+
 		return receiptStatusSuccessfulRLP
 	}
+
 	return r.PostState
 }
 
@@ -261,14 +261,16 @@ func (r *Receipt) statusEncoding() []byte {
 func (r *Receipt) Size() common.StorageSize {
 	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
+
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
 	}
+
 	return size
 }
 
-// ReceiptForStorage is a wrapper around a Receipt that flattens and parses the
-// entire content of a receipt, as opposed to only the consensus fields originally.
+// ReceiptForStorage is a wrapper around a Receipt with RLP serialization
+// that omits the Bloom field and deserialization that re-computes it.
 type ReceiptForStorage Receipt
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
@@ -279,92 +281,35 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes((*Receipt)(r).statusEncoding())
 	w.WriteUint64(r.CumulativeGasUsed)
 	logList := w.List()
+
 	for _, log := range r.Logs {
 		if err := rlp.Encode(w, log); err != nil {
 			return err
 		}
 	}
+
 	w.ListEnd(logList)
 	w.ListEnd(outerList)
+
 	return w.Flush()
 }
 
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	// Retrieve the entire receipt blob as we need to try multiple decoders
-	blob, err := s.Raw()
-	if err != nil {
-		return err
-	}
-	// Try decoding from the newest format for future proofness, then the older one
-	// for old nodes that just upgraded. V4 was an intermediate unreleased format so
-	// we do need to decode it, but it's not common (try last).
-	if err := decodeStoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	if err := decodeV3StoredReceiptRLP(r, blob); err == nil {
-		return nil
-	}
-	return decodeV4StoredReceiptRLP(r, blob)
-}
-
-func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	var stored storedReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+	if err := s.Decode(&stored); err != nil {
 		return err
 	}
+
 	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
 		return err
 	}
+
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
+	r.Logs = stored.Logs
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
-	return nil
-}
-
-func decodeV4StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
-	var stored v4StoredReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.TxHash = stored.TxHash
-	r.ContractAddress = stored.ContractAddress
-	r.GasUsed = stored.GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
-
-	return nil
-}
-
-func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
-	var stored v3StoredReceiptRLP
-	if err := rlp.DecodeBytes(blob, &stored); err != nil {
-		return err
-	}
-	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed = stored.CumulativeGasUsed
-	r.Bloom = stored.Bloom
-	r.TxHash = stored.TxHash
-	r.ContractAddress = stored.ContractAddress
-	r.GasUsed = stored.GasUsed
-	r.Logs = make([]*Log, len(stored.Logs))
-	for i, log := range stored.Logs {
-		r.Logs[i] = (*Log)(log)
-	}
 	return nil
 }
 
@@ -378,6 +323,7 @@ func (rs Receipts) Len() int { return len(rs) }
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+
 	switch r.Type {
 	case LegacyTxType:
 		rlp.Encode(w, data)
@@ -396,17 +342,21 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, txs Transactions) error {
+func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, baseFee *big.Int, txs []*Transaction) error {
 	signer := MakeSigner(config, new(big.Int).SetUint64(number))
 
 	logIndex := uint(0)
+
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
+
 	for i := 0; i < len(rs); i++ {
 		// The transaction type and hash can be retrieved from the transaction itself
 		rs[i].Type = txs[i].Type()
 		rs[i].TxHash = txs[i].Hash()
+
+		rs[i].EffectiveGasPrice = txs[i].inner.effectiveGasPrice(new(big.Int), baseFee)
 
 		// block location fields
 		rs[i].BlockHash = hash
@@ -418,13 +368,17 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			// Deriving the signer is expensive, only do if it's actually needed
 			from, _ := Sender(signer, txs[i])
 			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+		} else {
+			rs[i].ContractAddress = common.Address{}
 		}
+
 		// The used gas can be calculated based on previous r
 		if i == 0 {
 			rs[i].GasUsed = rs[i].CumulativeGasUsed
 		} else {
 			rs[i].GasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
 		}
+
 		// The derived log fields can simply be set from the block and transaction
 		for j := 0; j < len(rs[i].Logs); j++ {
 			rs[i].Logs[j].BlockNumber = number
@@ -435,5 +389,6 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			logIndex++
 		}
 	}
+
 	return nil
 }

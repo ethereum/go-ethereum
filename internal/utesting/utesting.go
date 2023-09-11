@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"regexp"
 	"runtime"
 	"sync"
@@ -49,15 +48,18 @@ type Result struct {
 // MatchTests returns the tests whose name matches a regular expression.
 func MatchTests(tests []Test, expr string) []Test {
 	var results []Test
+
 	re, err := regexp.Compile(expr)
 	if err != nil {
 		return nil
 	}
+
 	for _, test := range tests {
 		if re.MatchString(test.Name) {
 			results = append(results, test)
 		}
 	}
+
 	return results
 }
 
@@ -65,11 +67,13 @@ func MatchTests(tests []Test, expr string) []Test {
 // If the report writer is non-nil, a test report is written to it in real time.
 func RunTests(tests []Test, report io.Writer) []Result {
 	if report == nil {
-		report = ioutil.Discard
+		report = io.Discard
 	}
+
 	results := run(tests, newConsoleOutput(report))
 	fails := CountFailures(results)
 	fmt.Fprintf(report, "%v/%v tests passed.\n", len(tests)-fails, len(tests))
+
 	return results
 }
 
@@ -81,11 +85,13 @@ func RunTAP(tests []Test, report io.Writer) []Result {
 
 func run(tests []Test, output testOutput) []Result {
 	var results = make([]Result, len(tests))
+
 	for i, test := range tests {
 		buffer := new(bytes.Buffer)
 		logOutput := io.MultiWriter(buffer, output)
 
 		output.testStart(test.Name)
+
 		start := time.Now()
 		results[i].Name = test.Name
 		results[i].Failed = runTest(test, logOutput)
@@ -93,6 +99,7 @@ func run(tests []Test, output testOutput) []Result {
 		results[i].Output = buffer.String()
 		output.testResult(results[i])
 	}
+
 	return results
 }
 
@@ -131,12 +138,14 @@ func (c *consoleOutput) Write(b []byte) (int, error) {
 		fmt.Fprintln(c.out, "-- RUN", c.curTest)
 		c.wroteHeader = true
 	}
+
 	return c.indented.Write(b)
 }
 
 // testResult prints the final test result line.
 func (c *consoleOutput) testResult(r Result) {
 	c.indented.flush()
+
 	pd := r.Duration.Truncate(100 * time.Microsecond)
 	if r.Failed {
 		fmt.Fprintf(c.out, "-- FAIL %s (%v)\n", r.Name, pd)
@@ -154,6 +163,7 @@ type tapOutput struct {
 
 func newTAP(out io.Writer, numTests int) *tapOutput {
 	fmt.Fprintf(out, "1..%d\n", numTests)
+
 	return &tapOutput{
 		out:      out,
 		indented: newIndentWriter("# ", out),
@@ -174,6 +184,7 @@ func (t *tapOutput) testResult(r Result) {
 	if r.Failed {
 		status = "not ok"
 	}
+
 	fmt.Fprintln(t.out, status, t.counter, r.Name)
 	t.indented.Write([]byte(r.Output))
 	t.indented.flush()
@@ -196,6 +207,7 @@ func (w *indentWriter) Write(b []byte) (n int, err error) {
 			if _, err = io.WriteString(w.out, w.indent); err != nil {
 				return n, err
 			}
+
 			w.inLine = true
 		}
 
@@ -203,18 +215,22 @@ func (w *indentWriter) Write(b []byte) (n int, err error) {
 		if end == -1 {
 			nn, err := w.out.Write(b)
 			n += nn
+
 			return n, err
 		}
 
 		line := b[:end+1]
 		nn, err := w.out.Write(line)
 		n += nn
+
 		if err != nil {
 			return n, err
 		}
+
 		b = b[end+1:]
 		w.inLine = false
 	}
+
 	return n, err
 }
 
@@ -229,11 +245,13 @@ func (w *indentWriter) flush() {
 // CountFailures returns the number of failed tests in the result slice.
 func CountFailures(rr []Result) int {
 	count := 0
+
 	for _, r := range rr {
 		if r.Failed {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -241,12 +259,14 @@ func CountFailures(rr []Result) int {
 func Run(test Test) (bool, string) {
 	output := new(bytes.Buffer)
 	failed := runTest(test, output)
+
 	return failed, output.String()
 }
 
 func runTest(test Test, output io.Writer) bool {
 	t := &T{output: output}
 	done := make(chan struct{})
+
 	go func() {
 		defer close(done)
 		defer func() {
@@ -260,6 +280,7 @@ func runTest(test Test, output io.Writer) bool {
 		test.Fn(t)
 	}()
 	<-done
+
 	return t.failed
 }
 
@@ -292,6 +313,7 @@ func (t *T) Fail() {
 func (t *T) Failed() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	return t.failed
 }
 
@@ -308,9 +330,11 @@ func (t *T) Log(vs ...interface{}) {
 func (t *T) Logf(format string, vs ...interface{}) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	if len(format) == 0 || format[len(format)-1] != '\n' {
 		format += "\n"
 	}
+
 	fmt.Fprintf(t.output, format, vs...)
 }
 

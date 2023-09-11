@@ -30,10 +30,12 @@ func DialInProc(handler *Server) *Client {
 		//nolint:contextcheck
 		handler.executionPool.Submit(initctx, func() error {
 			handler.ServeCodec(NewCodec(p1), 0)
+			handler.executionPool.processed.Add(1)
 			return nil
 		})
 
 		return NewCodec(p2), nil
 	})
+
 	return c
 }

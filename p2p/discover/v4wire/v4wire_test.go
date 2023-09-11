@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -105,14 +105,17 @@ func TestForwardCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invalid hex: %s", test.input)
 		}
+
 		packet, nodekey, _, err := Decode(input)
 		if err != nil {
 			t.Errorf("did not accept packet %s\n%v", test.input, err)
 			continue
 		}
+
 		if !reflect.DeepEqual(packet, test.wantPacket) {
 			t.Errorf("got %s\nwant %s", spew.Sdump(packet), spew.Sdump(test.wantPacket))
 		}
+
 		if nodekey != wantNodeKey {
 			t.Errorf("got id %v\nwant id %v", nodekey, wantNodeKey)
 		}
@@ -124,9 +127,12 @@ func hexPubkey(h string) (ret Pubkey) {
 	if err != nil {
 		panic(err)
 	}
+
 	if len(b) != len(ret) {
 		panic("invalid length")
 	}
+
 	copy(ret[:], b)
+
 	return ret
 }

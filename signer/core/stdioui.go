@@ -33,7 +33,9 @@ func NewStdIOUI() *StdIOUI {
 	if err != nil {
 		log.Crit("Could not create stdio client", "err", err)
 	}
+
 	ui := &StdIOUI{client: *client}
+
 	return ui
 }
 
@@ -47,40 +49,47 @@ func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interf
 	if err != nil {
 		log.Info("Error", "exc", err.Error())
 	}
+
 	return err
 }
 
 // notify sends a request over the stdio, and does not listen for a response
 func (ui *StdIOUI) notify(serviceMethod string, args interface{}) error {
 	ctx := context.Background()
+
 	err := ui.client.Notify(ctx, serviceMethod, args)
 	if err != nil {
 		log.Info("Error", "exc", err.Error())
 	}
+
 	return err
 }
 
 func (ui *StdIOUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 	var result SignTxResponse
 	err := ui.dispatch("ui_approveTx", request, &result)
+
 	return result, err
 }
 
 func (ui *StdIOUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
 	var result SignDataResponse
 	err := ui.dispatch("ui_approveSignData", request, &result)
+
 	return result, err
 }
 
 func (ui *StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 	var result ListResponse
 	err := ui.dispatch("ui_approveListing", request, &result)
+
 	return result, err
 }
 
 func (ui *StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
 	var result NewAccountResponse
 	err := ui.dispatch("ui_approveNewAccount", request, &result)
+
 	return result, err
 }
 
@@ -112,9 +121,11 @@ func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
 }
 func (ui *StdIOUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
 	var result UserInputResponse
+
 	err := ui.dispatch("ui_onInputRequired", info, &result)
 	if err != nil {
 		log.Info("Error calling 'ui_onInputRequired'", "exc", err.Error(), "info", info)
 	}
+
 	return result, err
 }

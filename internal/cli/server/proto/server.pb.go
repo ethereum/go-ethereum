@@ -46,6 +46,7 @@ var (
 func (x DebugPprofRequest_Type) Enum() *DebugPprofRequest_Type {
 	p := new(DebugPprofRequest_Type)
 	*p = x
+
 	return p
 }
 
@@ -80,6 +81,7 @@ type TraceRequest struct {
 
 func (x *TraceRequest) Reset() {
 	*x = TraceRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -95,13 +97,16 @@ func (*TraceRequest) ProtoMessage() {}
 
 func (x *TraceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[0]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -114,6 +119,7 @@ func (x *TraceRequest) GetNumber() int64 {
 	if x != nil {
 		return x.Number
 	}
+
 	return 0
 }
 
@@ -125,6 +131,7 @@ type TraceResponse struct {
 
 func (x *TraceResponse) Reset() {
 	*x = TraceResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -140,13 +147,16 @@ func (*TraceResponse) ProtoMessage() {}
 
 func (x *TraceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[1]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -163,6 +173,7 @@ type ChainWatchRequest struct {
 
 func (x *ChainWatchRequest) Reset() {
 	*x = ChainWatchRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -178,13 +189,16 @@ func (*ChainWatchRequest) ProtoMessage() {}
 
 func (x *ChainWatchRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[2]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -205,6 +219,7 @@ type ChainWatchResponse struct {
 
 func (x *ChainWatchResponse) Reset() {
 	*x = ChainWatchResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -220,13 +235,16 @@ func (*ChainWatchResponse) ProtoMessage() {}
 
 func (x *ChainWatchResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[3]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -239,6 +257,7 @@ func (x *ChainWatchResponse) GetOldchain() []*BlockStub {
 	if x != nil {
 		return x.Oldchain
 	}
+
 	return nil
 }
 
@@ -246,6 +265,7 @@ func (x *ChainWatchResponse) GetNewchain() []*BlockStub {
 	if x != nil {
 		return x.Newchain
 	}
+
 	return nil
 }
 
@@ -253,6 +273,7 @@ func (x *ChainWatchResponse) GetType() string {
 	if x != nil {
 		return x.Type
 	}
+
 	return ""
 }
 
@@ -267,6 +288,7 @@ type BlockStub struct {
 
 func (x *BlockStub) Reset() {
 	*x = BlockStub{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -282,13 +304,16 @@ func (*BlockStub) ProtoMessage() {}
 
 func (x *BlockStub) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[4]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -301,6 +326,7 @@ func (x *BlockStub) GetHash() string {
 	if x != nil {
 		return x.Hash
 	}
+
 	return ""
 }
 
@@ -308,6 +334,7 @@ func (x *BlockStub) GetNumber() uint64 {
 	if x != nil {
 		return x.Number
 	}
+
 	return 0
 }
 
@@ -322,6 +349,7 @@ type PeersAddRequest struct {
 
 func (x *PeersAddRequest) Reset() {
 	*x = PeersAddRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -337,13 +365,16 @@ func (*PeersAddRequest) ProtoMessage() {}
 
 func (x *PeersAddRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[5]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -356,6 +387,7 @@ func (x *PeersAddRequest) GetEnode() string {
 	if x != nil {
 		return x.Enode
 	}
+
 	return ""
 }
 
@@ -363,6 +395,7 @@ func (x *PeersAddRequest) GetTrusted() bool {
 	if x != nil {
 		return x.Trusted
 	}
+
 	return false
 }
 
@@ -374,6 +407,7 @@ type PeersAddResponse struct {
 
 func (x *PeersAddResponse) Reset() {
 	*x = PeersAddResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -389,13 +423,16 @@ func (*PeersAddResponse) ProtoMessage() {}
 
 func (x *PeersAddResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[6]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -415,6 +452,7 @@ type PeersRemoveRequest struct {
 
 func (x *PeersRemoveRequest) Reset() {
 	*x = PeersRemoveRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -430,13 +468,16 @@ func (*PeersRemoveRequest) ProtoMessage() {}
 
 func (x *PeersRemoveRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[7]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -449,6 +490,7 @@ func (x *PeersRemoveRequest) GetEnode() string {
 	if x != nil {
 		return x.Enode
 	}
+
 	return ""
 }
 
@@ -456,6 +498,7 @@ func (x *PeersRemoveRequest) GetTrusted() bool {
 	if x != nil {
 		return x.Trusted
 	}
+
 	return false
 }
 
@@ -467,6 +510,7 @@ type PeersRemoveResponse struct {
 
 func (x *PeersRemoveResponse) Reset() {
 	*x = PeersRemoveResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -482,13 +526,16 @@ func (*PeersRemoveResponse) ProtoMessage() {}
 
 func (x *PeersRemoveResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[8]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -505,6 +552,7 @@ type PeersListRequest struct {
 
 func (x *PeersListRequest) Reset() {
 	*x = PeersListRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -520,13 +568,16 @@ func (*PeersListRequest) ProtoMessage() {}
 
 func (x *PeersListRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[9]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -545,6 +596,7 @@ type PeersListResponse struct {
 
 func (x *PeersListResponse) Reset() {
 	*x = PeersListResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -560,13 +612,16 @@ func (*PeersListResponse) ProtoMessage() {}
 
 func (x *PeersListResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[10]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -579,6 +634,7 @@ func (x *PeersListResponse) GetPeers() []*Peer {
 	if x != nil {
 		return x.Peers
 	}
+
 	return nil
 }
 
@@ -592,6 +648,7 @@ type PeersStatusRequest struct {
 
 func (x *PeersStatusRequest) Reset() {
 	*x = PeersStatusRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -607,13 +664,16 @@ func (*PeersStatusRequest) ProtoMessage() {}
 
 func (x *PeersStatusRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[11]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -626,6 +686,7 @@ func (x *PeersStatusRequest) GetEnode() string {
 	if x != nil {
 		return x.Enode
 	}
+
 	return ""
 }
 
@@ -639,6 +700,7 @@ type PeersStatusResponse struct {
 
 func (x *PeersStatusResponse) Reset() {
 	*x = PeersStatusResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -654,13 +716,16 @@ func (*PeersStatusResponse) ProtoMessage() {}
 
 func (x *PeersStatusResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[12]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -673,6 +738,7 @@ func (x *PeersStatusResponse) GetPeer() *Peer {
 	if x != nil {
 		return x.Peer
 	}
+
 	return nil
 }
 
@@ -692,6 +758,7 @@ type Peer struct {
 
 func (x *Peer) Reset() {
 	*x = Peer{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -707,13 +774,16 @@ func (*Peer) ProtoMessage() {}
 
 func (x *Peer) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[13]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -726,6 +796,7 @@ func (x *Peer) GetId() string {
 	if x != nil {
 		return x.Id
 	}
+
 	return ""
 }
 
@@ -733,6 +804,7 @@ func (x *Peer) GetEnode() string {
 	if x != nil {
 		return x.Enode
 	}
+
 	return ""
 }
 
@@ -740,6 +812,7 @@ func (x *Peer) GetEnr() string {
 	if x != nil {
 		return x.Enr
 	}
+
 	return ""
 }
 
@@ -747,6 +820,7 @@ func (x *Peer) GetCaps() []string {
 	if x != nil {
 		return x.Caps
 	}
+
 	return nil
 }
 
@@ -754,6 +828,7 @@ func (x *Peer) GetName() string {
 	if x != nil {
 		return x.Name
 	}
+
 	return ""
 }
 
@@ -761,6 +836,7 @@ func (x *Peer) GetTrusted() bool {
 	if x != nil {
 		return x.Trusted
 	}
+
 	return false
 }
 
@@ -768,6 +844,7 @@ func (x *Peer) GetStatic() bool {
 	if x != nil {
 		return x.Static
 	}
+
 	return false
 }
 
@@ -781,6 +858,7 @@ type ChainSetHeadRequest struct {
 
 func (x *ChainSetHeadRequest) Reset() {
 	*x = ChainSetHeadRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -796,13 +874,16 @@ func (*ChainSetHeadRequest) ProtoMessage() {}
 
 func (x *ChainSetHeadRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[14]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -815,6 +896,7 @@ func (x *ChainSetHeadRequest) GetNumber() uint64 {
 	if x != nil {
 		return x.Number
 	}
+
 	return 0
 }
 
@@ -826,6 +908,7 @@ type ChainSetHeadResponse struct {
 
 func (x *ChainSetHeadResponse) Reset() {
 	*x = ChainSetHeadResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -841,13 +924,16 @@ func (*ChainSetHeadResponse) ProtoMessage() {}
 
 func (x *ChainSetHeadResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[15]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -866,6 +952,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -881,13 +968,16 @@ func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[16]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -900,6 +990,7 @@ func (x *StatusRequest) GetWait() bool {
 	if x != nil {
 		return x.Wait
 	}
+
 	return false
 }
 
@@ -918,6 +1009,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -933,13 +1025,16 @@ func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[17]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -952,6 +1047,7 @@ func (x *StatusResponse) GetCurrentBlock() *Header {
 	if x != nil {
 		return x.CurrentBlock
 	}
+
 	return nil
 }
 
@@ -959,6 +1055,7 @@ func (x *StatusResponse) GetCurrentHeader() *Header {
 	if x != nil {
 		return x.CurrentHeader
 	}
+
 	return nil
 }
 
@@ -966,6 +1063,7 @@ func (x *StatusResponse) GetNumPeers() int64 {
 	if x != nil {
 		return x.NumPeers
 	}
+
 	return 0
 }
 
@@ -973,6 +1071,7 @@ func (x *StatusResponse) GetSyncMode() string {
 	if x != nil {
 		return x.SyncMode
 	}
+
 	return ""
 }
 
@@ -980,6 +1079,7 @@ func (x *StatusResponse) GetSyncing() *StatusResponse_Syncing {
 	if x != nil {
 		return x.Syncing
 	}
+
 	return nil
 }
 
@@ -987,6 +1087,7 @@ func (x *StatusResponse) GetForks() []*StatusResponse_Fork {
 	if x != nil {
 		return x.Forks
 	}
+
 	return nil
 }
 
@@ -1001,6 +1102,7 @@ type Header struct {
 
 func (x *Header) Reset() {
 	*x = Header{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1016,13 +1118,16 @@ func (*Header) ProtoMessage() {}
 
 func (x *Header) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[18]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1035,6 +1140,7 @@ func (x *Header) GetHash() string {
 	if x != nil {
 		return x.Hash
 	}
+
 	return ""
 }
 
@@ -1042,6 +1148,7 @@ func (x *Header) GetNumber() uint64 {
 	if x != nil {
 		return x.Number
 	}
+
 	return 0
 }
 
@@ -1057,6 +1164,7 @@ type DebugPprofRequest struct {
 
 func (x *DebugPprofRequest) Reset() {
 	*x = DebugPprofRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1072,13 +1180,16 @@ func (*DebugPprofRequest) ProtoMessage() {}
 
 func (x *DebugPprofRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[19]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1091,6 +1202,7 @@ func (x *DebugPprofRequest) GetType() DebugPprofRequest_Type {
 	if x != nil {
 		return x.Type
 	}
+
 	return DebugPprofRequest_LOOKUP
 }
 
@@ -1098,6 +1210,7 @@ func (x *DebugPprofRequest) GetProfile() string {
 	if x != nil {
 		return x.Profile
 	}
+
 	return ""
 }
 
@@ -1105,6 +1218,7 @@ func (x *DebugPprofRequest) GetSeconds() int64 {
 	if x != nil {
 		return x.Seconds
 	}
+
 	return 0
 }
 
@@ -1118,6 +1232,7 @@ type DebugBlockRequest struct {
 
 func (x *DebugBlockRequest) Reset() {
 	*x = DebugBlockRequest{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[20]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1133,13 +1248,16 @@ func (*DebugBlockRequest) ProtoMessage() {}
 
 func (x *DebugBlockRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[20]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1152,6 +1270,7 @@ func (x *DebugBlockRequest) GetNumber() int64 {
 	if x != nil {
 		return x.Number
 	}
+
 	return 0
 }
 
@@ -1170,6 +1289,7 @@ type DebugFileResponse struct {
 
 func (x *DebugFileResponse) Reset() {
 	*x = DebugFileResponse{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1185,13 +1305,16 @@ func (*DebugFileResponse) ProtoMessage() {}
 
 func (x *DebugFileResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[21]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1204,6 +1327,7 @@ func (m *DebugFileResponse) GetEvent() isDebugFileResponse_Event {
 	if m != nil {
 		return m.Event
 	}
+
 	return nil
 }
 
@@ -1211,6 +1335,7 @@ func (x *DebugFileResponse) GetOpen() *DebugFileResponse_Open {
 	if x, ok := x.GetEvent().(*DebugFileResponse_Open_); ok {
 		return x.Open
 	}
+
 	return nil
 }
 
@@ -1218,6 +1343,7 @@ func (x *DebugFileResponse) GetInput() *DebugFileResponse_Input {
 	if x, ok := x.GetEvent().(*DebugFileResponse_Input_); ok {
 		return x.Input
 	}
+
 	return nil
 }
 
@@ -1225,6 +1351,7 @@ func (x *DebugFileResponse) GetEof() *emptypb.Empty {
 	if x, ok := x.GetEvent().(*DebugFileResponse_Eof); ok {
 		return x.Eof
 	}
+
 	return nil
 }
 
@@ -1262,6 +1389,7 @@ type StatusResponse_Fork struct {
 
 func (x *StatusResponse_Fork) Reset() {
 	*x = StatusResponse_Fork{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1277,13 +1405,16 @@ func (*StatusResponse_Fork) ProtoMessage() {}
 
 func (x *StatusResponse_Fork) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[22]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1296,6 +1427,7 @@ func (x *StatusResponse_Fork) GetName() string {
 	if x != nil {
 		return x.Name
 	}
+
 	return ""
 }
 
@@ -1303,6 +1435,7 @@ func (x *StatusResponse_Fork) GetBlock() int64 {
 	if x != nil {
 		return x.Block
 	}
+
 	return 0
 }
 
@@ -1310,6 +1443,7 @@ func (x *StatusResponse_Fork) GetDisabled() bool {
 	if x != nil {
 		return x.Disabled
 	}
+
 	return false
 }
 
@@ -1325,6 +1459,7 @@ type StatusResponse_Syncing struct {
 
 func (x *StatusResponse_Syncing) Reset() {
 	*x = StatusResponse_Syncing{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1340,13 +1475,16 @@ func (*StatusResponse_Syncing) ProtoMessage() {}
 
 func (x *StatusResponse_Syncing) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[23]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1359,6 +1497,7 @@ func (x *StatusResponse_Syncing) GetStartingBlock() int64 {
 	if x != nil {
 		return x.StartingBlock
 	}
+
 	return 0
 }
 
@@ -1366,6 +1505,7 @@ func (x *StatusResponse_Syncing) GetHighestBlock() int64 {
 	if x != nil {
 		return x.HighestBlock
 	}
+
 	return 0
 }
 
@@ -1373,6 +1513,7 @@ func (x *StatusResponse_Syncing) GetCurrentBlock() int64 {
 	if x != nil {
 		return x.CurrentBlock
 	}
+
 	return 0
 }
 
@@ -1386,6 +1527,7 @@ type DebugFileResponse_Open struct {
 
 func (x *DebugFileResponse_Open) Reset() {
 	*x = DebugFileResponse_Open{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1401,13 +1543,16 @@ func (*DebugFileResponse_Open) ProtoMessage() {}
 
 func (x *DebugFileResponse_Open) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[24]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1420,6 +1565,7 @@ func (x *DebugFileResponse_Open) GetHeaders() map[string]string {
 	if x != nil {
 		return x.Headers
 	}
+
 	return nil
 }
 
@@ -1433,6 +1579,7 @@ type DebugFileResponse_Input struct {
 
 func (x *DebugFileResponse_Input) Reset() {
 	*x = DebugFileResponse_Input{}
+
 	if protoimpl.UnsafeEnabled {
 		mi := &file_internal_cli_server_proto_server_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1448,13 +1595,16 @@ func (*DebugFileResponse_Input) ProtoMessage() {}
 
 func (x *DebugFileResponse_Input) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_cli_server_proto_server_proto_msgTypes[25]
+
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
 			ms.StoreMessageInfo(mi)
 		}
+
 		return ms
 	}
+
 	return mi.MessageOf(x)
 }
 
@@ -1467,6 +1617,7 @@ func (x *DebugFileResponse_Input) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
+
 	return nil
 }
 
@@ -1654,6 +1805,7 @@ func file_internal_cli_server_proto_server_proto_rawDescGZIP() []byte {
 	file_internal_cli_server_proto_server_proto_rawDescOnce.Do(func() {
 		file_internal_cli_server_proto_server_proto_rawDescData = protoimpl.X.CompressGZIP(file_internal_cli_server_proto_server_proto_rawDescData)
 	})
+
 	return file_internal_cli_server_proto_server_proto_rawDescData
 }
 
@@ -1734,6 +1886,7 @@ func file_internal_cli_server_proto_server_proto_init() {
 	if File_internal_cli_server_proto_server_proto != nil {
 		return
 	}
+
 	if !protoimpl.UnsafeEnabled {
 		file_internal_cli_server_proto_server_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*TraceRequest); i {
@@ -2048,12 +2201,15 @@ func file_internal_cli_server_proto_server_proto_init() {
 			}
 		}
 	}
+
 	file_internal_cli_server_proto_server_proto_msgTypes[21].OneofWrappers = []interface{}{
 		(*DebugFileResponse_Open_)(nil),
 		(*DebugFileResponse_Input_)(nil),
 		(*DebugFileResponse_Eof)(nil),
 	}
+
 	type x struct{}
+
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),

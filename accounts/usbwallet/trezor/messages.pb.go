@@ -22,7 +22,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-//*
+// *
 // Mapping between TREZOR wire identifier (uint) and a protobuf message
 type MessageType int32
 
@@ -636,6 +636,7 @@ var MessageType_value = map[string]int32{
 func (x MessageType) Enum() *MessageType {
 	p := new(MessageType)
 	*p = x
+
 	return p
 }
 
@@ -648,7 +649,9 @@ func (x *MessageType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = MessageType(value)
+
 	return nil
 }
 

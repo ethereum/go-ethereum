@@ -17,7 +17,7 @@
 package client
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 	"time"
 
@@ -37,7 +37,9 @@ func (i *testIter) Next() bool {
 	if _, ok := <-i.waitCh; !ok {
 		return false
 	}
+
 	i.node = <-i.nodeCh
+
 	return true
 }
 
@@ -51,6 +53,7 @@ func (i *testIter) Close() {
 
 func (i *testIter) push() {
 	var id enode.ID
+
 	rand.Read(id[:])
 	i.nodeCh <- enode.SignNull(new(enr.Record), id)
 }
@@ -78,6 +81,7 @@ func TestFillSet(t *testing.T) {
 			if !iter.waiting(time.Second * 10) {
 				t.Fatalf("FillSet not waiting for new nodes")
 			}
+
 			if push {
 				iter.push()
 			}
@@ -104,7 +108,7 @@ func TestFillSet(t *testing.T) {
 	fs.SetTarget(10)
 	expWaiting(4, true)
 	expNotWaiting()
-	// remove all previosly set flags
+	// remove all previously set flags
 	ns.ForEach(sfTest1, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		ns.SetState(node, nodestate.Flags{}, sfTest1, 0)
 	})

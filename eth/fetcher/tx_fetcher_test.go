@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -815,6 +815,7 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 	for i := 0; i < maxTxAnnounces+1; i++ {
 		hashesA = append(hashesA, common.Hash{0x01, byte(i / 256), byte(i % 256)})
 	}
+
 	var hashesB []common.Hash
 	for i := 0; i < maxTxAnnounces+1; i++ {
 		hashesB = append(hashesB, common.Hash{0x02, byte(i / 256), byte(i % 256)})
@@ -885,9 +886,9 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
 						if i%2 == 0 {
-							errs[i] = core.ErrUnderpriced
+							errs[i] = txpool.ErrUnderpriced
 						} else {
-							errs[i] = core.ErrReplaceUnderpriced
+							errs[i] = txpool.ErrReplaceUnderpriced
 						}
 					}
 					return errs
@@ -926,6 +927,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 	for i := 0; i < maxTxUnderpricedSetSize+1; i++ {
 		txs = append(txs, types.NewTransaction(rand.Uint64(), common.Address{byte(rand.Intn(256))}, new(big.Int), 0, new(big.Int), nil))
 	}
+
 	hashes := make([]common.Hash, len(txs))
 	for i, tx := range txs {
 		hashes[i] = tx.Hash()
@@ -958,7 +960,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 				func(txs []*types.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
-						errs[i] = core.ErrUnderpriced
+						errs[i] = txpool.ErrUnderpriced
 					}
 					return errs
 				},
@@ -1030,7 +1032,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 }
 
 // Tests that dropping a peer cleans out all internal data structures in all the
-// live or danglng stages.
+// live or dangling stages.
 func TestTransactionFetcherDrop(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
@@ -1142,7 +1144,7 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 }
 
 // This test reproduces a crash caught by the fuzzer. The root cause was a
-// dangling transaction timing out and clashing on readd with a concurrently
+// dangling transaction timing out and clashing on re-add with a concurrently
 // announced one.
 func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
@@ -1170,7 +1172,7 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 }
 
 // This test reproduces a crash caught by the fuzzer. The root cause was a
-// dangling transaction getting peer-dropped and clashing on readd with a
+// dangling transaction getting peer-dropped and clashing on re-add with a
 // concurrently announced one.
 func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
@@ -1287,6 +1289,16 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 	fetcher.Start()
 	defer fetcher.Stop()
 
+	defer func() { // drain the wait chan on exit
+		for {
+			select {
+			case <-wait:
+			default:
+				return
+			}
+		}
+	}()
+
 	// Crunch through all the test steps and execute them
 	for i, step := range tt.steps {
 		switch step := step.(type) {
@@ -1294,6 +1306,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			if err := fetcher.Notify(step.peer, step.hashes); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
+
 			<-wait // Fetcher needs to process this, wait until it's done
 			select {
 			case <-wait:
@@ -1305,10 +1318,12 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			if err := fetcher.Enqueue(step.peer, step.txs, step.direct); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
+
 			<-wait // Fetcher needs to process this, wait until it's done
 
 		case doWait:
 			clock.Run(step.time)
+
 			if step.step {
 				<-wait // Fetcher supposed to do something, wait until it's done
 			}
@@ -1317,6 +1332,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			if err := fetcher.Drop(string(step)); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
+
 			<-wait // Fetcher needs to process this, wait until it's done
 
 		case doFunc:
@@ -1332,17 +1348,20 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					t.Errorf("step %d: peer %s missing from waitslots", i, peer)
 					continue
 				}
+
 				for _, hash := range hashes {
 					if _, ok := waiting[hash]; !ok {
 						t.Errorf("step %d, peer %s: hash %x missing from waitslots", i, peer, hash)
 					}
 				}
+
 				for hash := range waiting {
 					if !containsHash(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in waitslots", i, peer, hash)
 					}
 				}
 			}
+
 			for peer := range fetcher.waitslots {
 				if _, ok := step[peer]; !ok {
 					t.Errorf("step %d: peer %s extra in waitslots", i, peer)
@@ -1354,29 +1373,35 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					if _, ok := fetcher.waitlist[hash][peer]; !ok {
 						t.Errorf("step %d, hash %x: peer %s missing from waitlist", i, hash, peer)
 					}
+
 					if _, ok := fetcher.waittime[hash]; !ok {
 						t.Errorf("step %d: hash %x missing from waittime", i, hash)
 					}
 				}
 			}
+
 			for hash, peers := range fetcher.waitlist {
 				if len(peers) == 0 {
 					t.Errorf("step %d, hash %x: empty peerset in waitlist", i, hash)
 				}
+
 				for peer := range peers {
 					if !containsHash(step[peer], hash) {
 						t.Errorf("step %d, hash %x: peer %s extra in waitlist", i, hash, peer)
 					}
 				}
 			}
+
 			for hash := range fetcher.waittime {
 				var found bool
+
 				for _, hashes := range step {
 					if containsHash(hashes, hash) {
 						found = true
 						break
 					}
 				}
+
 				if !found {
 					t.Errorf("step %d,: hash %x extra in waittime", i, hash)
 				}
@@ -1391,17 +1416,20 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					t.Errorf("step %d: peer %s missing from announces", i, peer)
 					continue
 				}
+
 				for _, hash := range hashes {
 					if _, ok := scheduled[hash]; !ok {
 						t.Errorf("step %d, peer %s: hash %x missing from announces", i, peer, hash)
 					}
 				}
+
 				for hash := range scheduled {
 					if !containsHash(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in announces", i, peer, hash)
 					}
 				}
 			}
+
 			for peer := range fetcher.announces {
 				if _, ok := step.tracking[peer]; !ok {
 					t.Errorf("step %d: peer %s extra in announces", i, peer)
@@ -1415,17 +1443,20 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					t.Errorf("step %d: peer %s missing from requests", i, peer)
 					continue
 				}
+
 				for _, hash := range hashes {
 					if !containsHash(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
+
 				for _, hash := range request.hashes {
 					if !containsHash(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
 					}
 				}
 			}
+
 			for peer := range fetcher.requests {
 				if _, ok := step.fetching[peer]; !ok {
 					if _, ok := step.dangling[peer]; !ok {
@@ -1433,6 +1464,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					}
 				}
 			}
+
 			for peer, hashes := range step.fetching {
 				for _, hash := range hashes {
 					if _, ok := fetcher.fetching[hash]; !ok {
@@ -1440,18 +1472,22 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					}
 				}
 			}
+
 			for hash := range fetcher.fetching {
 				var found bool
+
 				for _, req := range fetcher.requests {
 					if containsHash(req.hashes, hash) {
 						found = true
 						break
 					}
 				}
+
 				if !found {
 					t.Errorf("step %d: hash %x extra in fetching", i, hash)
 				}
 			}
+
 			for _, hashes := range step.fetching {
 				for _, hash := range hashes {
 					alternates := fetcher.alternates[hash]
@@ -1459,16 +1495,19 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 						t.Errorf("step %d: hash %x missing from alternates", i, hash)
 						continue
 					}
+
 					for peer := range alternates {
 						if _, ok := fetcher.announces[peer]; !ok {
 							t.Errorf("step %d: peer %s extra in alternates", i, peer)
 							continue
 						}
+
 						if _, ok := fetcher.announces[peer][hash]; !ok {
 							t.Errorf("step %d, peer %s: hash %x extra in alternates", i, hash, peer)
 							continue
 						}
 					}
+
 					for p := range fetcher.announced[hash] {
 						if _, ok := alternates[p]; !ok {
 							t.Errorf("step %d, hash %x: peer %s missing from alternates", i, hash, p)
@@ -1477,17 +1516,20 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					}
 				}
 			}
+
 			for peer, hashes := range step.dangling {
 				request := fetcher.requests[peer]
 				if request == nil {
 					t.Errorf("step %d: peer %s missing from requests", i, peer)
 					continue
 				}
+
 				for _, hash := range hashes {
 					if !containsHash(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
+
 				for _, hash := range request.hashes {
 					if !containsHash(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
@@ -1498,25 +1540,30 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			// retrieval but not actively being downloaded are tracked only
 			// in the stage 2 `announced` map.
 			var queued []common.Hash
+
 			for _, hashes := range step.tracking {
 				for _, hash := range hashes {
 					var found bool
+
 					for _, hs := range step.fetching {
 						if containsHash(hs, hash) {
 							found = true
 							break
 						}
 					}
+
 					if !found {
 						queued = append(queued, hash)
 					}
 				}
 			}
+
 			for _, hash := range queued {
 				if _, ok := fetcher.announced[hash]; !ok {
 					t.Errorf("step %d: hash %x missing from announced", i, hash)
 				}
 			}
+
 			for hash := range fetcher.announced {
 				if !containsHash(queued, hash) {
 					t.Errorf("step %d: hash %x extra in announced", i, hash)
@@ -1548,5 +1595,6 @@ func containsHash(slice []common.Hash, hash common.Hash) bool {
 			return true
 		}
 	}
+
 	return false
 }

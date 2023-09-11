@@ -87,6 +87,7 @@ func newTerminalPrompter() *terminalPrompter {
 	// Turn on liner. It switches to raw mode.
 	p.State = liner.NewLiner()
 	rawMode, err := liner.TerminalMode()
+
 	if err != nil || !liner.TerminalSupported() {
 		p.supported = false
 	} else {
@@ -96,9 +97,11 @@ func newTerminalPrompter() *terminalPrompter {
 		// Switch back to normal mode while we're not prompting.
 		normalMode.ApplyMode()
 	}
+
 	p.SetCtrlCAborts(true)
 	p.SetTabCompletionStyle(liner.TabPrints)
 	p.SetMultiLineMode(true)
+
 	return p
 }
 
@@ -116,6 +119,7 @@ func (p *terminalPrompter) PromptInput(prompt string) (string, error) {
 		prompt = ""
 		defer fmt.Println()
 	}
+
 	return p.State.Prompt(prompt)
 }
 
@@ -126,16 +130,22 @@ func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err err
 	if p.supported {
 		p.rawMode.ApplyMode()
 		defer p.normalMode.ApplyMode()
+
 		return p.State.PasswordPrompt(prompt)
 	}
+
 	if !p.warned {
 		fmt.Println("!! Unsupported terminal, password will be echoed.")
+
 		p.warned = true
 	}
 	// Just as in Prompt, handle printing the prompt here instead of relying on liner.
 	fmt.Print(prompt)
+
 	passwd, err = p.State.Prompt("")
+
 	fmt.Println()
+
 	return passwd, err
 }
 
@@ -143,9 +153,10 @@ func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err err
 // choice to be made, returning that choice.
 func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
 	input, err := p.Prompt(prompt + " [y/n] ")
-	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
+	if len(input) > 0 && strings.EqualFold(input[:1], "y") {
 		return true, nil
 	}
+
 	return false, err
 }
 

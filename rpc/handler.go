@@ -47,7 +47,7 @@ import (
 // Now send the request, then wait for the reply to be delivered through handleMsg:
 //
 //	if err := op.wait(...); err != nil {
-//	    h.removeRequestOp(op) // timeout, etc.
+//		h.removeRequestOp(op) // timeout, etc.
 //	}
 type handler struct {
 	reg            *serviceRegistry
@@ -75,6 +75,7 @@ type callProc struct {
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, pool *SafePool) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
+
 	h := &handler{
 		reg:            reg,
 		idgen:          idgen,
@@ -91,9 +92,85 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
 	}
+
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 
 	return h
+}
+
+// batchCallBuffer manages in progress call messages and their responses during a batch
+// call. Calls need to be synchronized between the processing and timeout-triggering
+// goroutines.
+type batchCallBuffer struct {
+	mutex sync.Mutex
+	calls []*jsonrpcMessage
+	resp  []*jsonrpcMessage
+	wrote bool
+}
+
+// nextCall returns the next unprocessed message.
+func (b *batchCallBuffer) nextCall() *jsonrpcMessage {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if len(b.calls) == 0 {
+		return nil
+	}
+	// The popping happens in `pushAnswer`. The in progress call is kept
+	// so we can return an error for it in case of timeout.
+	msg := b.calls[0]
+
+	return msg
+}
+
+// pushResponse adds the response to last call returned by nextCall.
+func (b *batchCallBuffer) pushResponse(answer *jsonrpcMessage) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if answer != nil {
+		b.resp = append(b.resp, answer)
+	}
+
+	b.calls = b.calls[1:]
+}
+
+// write sends the responses.
+func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	b.doWrite(ctx, conn, false)
+}
+
+// timeout sends the responses added so far. For the remaining unanswered call
+// messages, it sends a timeout error response.
+func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	for _, msg := range b.calls {
+		if !msg.isNotification() {
+			resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+			b.resp = append(b.resp, resp)
+		}
+	}
+
+	b.doWrite(ctx, conn, true)
+}
+
+// doWrite actually writes the response.
+// This assumes b.mutex is held.
+func (b *batchCallBuffer) doWrite(ctx context.Context, conn jsonWriter, isErrorResponse bool) {
+	if b.wrote {
+		return
+	}
+
+	b.wrote = true // can only write once
+
+	if len(b.resp) > 0 {
+		_ = conn.writeJSON(ctx, b.resp, isErrorResponse)
+	}
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
@@ -101,33 +178,68 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
 	if len(msgs) == 0 {
 		h.startCallProc(func(cp *callProc) {
-			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
+			resp := errorMessage(&invalidRequestError{"empty batch"})
+			_ = h.conn.writeJSON(cp.ctx, resp, true)
 		})
+
 		return
 	}
 
 	// Handle non-call messages first:
 	calls := make([]*jsonrpcMessage, 0, len(msgs))
+
 	for _, msg := range msgs {
 		if handled := h.handleImmediate(msg); !handled {
 			calls = append(calls, msg)
 		}
 	}
+
 	if len(calls) == 0 {
 		return
 	}
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
-		answers := make([]*jsonrpcMessage, 0, len(msgs))
-		for _, msg := range calls {
-			if answer := h.handleCallMsg(cp, msg); answer != nil {
-				answers = append(answers, answer)
+		var (
+			timer      *time.Timer
+			cancel     context.CancelFunc
+			callBuffer = &batchCallBuffer{calls: calls, resp: make([]*jsonrpcMessage, 0, len(calls))}
+		)
+
+		cp.ctx, cancel = context.WithCancel(cp.ctx)
+		defer cancel()
+
+		// Cancel the request context after timeout and send an error response. Since the
+		// currently-running method might not return immediately on timeout, we must wait
+		// for the timeout concurrently with processing the request.
+		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
+			timer = time.AfterFunc(timeout, func() {
+				cancel()
+				callBuffer.timeout(cp.ctx, h.conn)
+			})
+		}
+
+		for {
+			// No need to handle rest of calls if timed out.
+			if cp.ctx.Err() != nil {
+				break
 			}
+
+			msg := callBuffer.nextCall()
+			if msg == nil {
+				break
+			}
+
+			resp := h.handleCallMsg(cp, msg)
+			callBuffer.pushResponse(resp)
 		}
+
+		if timer != nil {
+			timer.Stop()
+		}
+
+		callBuffer.write(cp.ctx, h.conn)
 		h.addSubscriptions(cp.notifiers)
-		if len(answers) > 0 {
-			h.conn.writeJSON(cp.ctx, answers)
-		}
+
 		for _, n := range cp.notifiers {
 			n.activate()
 		}
@@ -139,14 +251,46 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	if ok := h.handleImmediate(msg); ok {
 		return
 	}
+
 	h.startCallProc(func(cp *callProc) {
-		answer := h.handleCallMsg(cp, msg)
-		h.addSubscriptions(cp.notifiers)
-		if answer != nil {
-			h.conn.writeJSON(cp.ctx, answer)
+		var (
+			responded sync.Once
+			timer     *time.Timer
+			cancel    context.CancelFunc
+		)
+
+		cp.ctx, cancel = context.WithCancel(cp.ctx)
+		defer cancel()
+
+		// Cancel the request context after timeout and send an error response. Since the
+		// running method might not return immediately on timeout, we must wait for the
+		// timeout concurrently with processing the request.
+		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
+			timer = time.AfterFunc(timeout, func() {
+				cancel()
+				responded.Do(func() {
+					resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+					_ = h.conn.writeJSON(cp.ctx, resp, true)
+				})
+			})
 		}
+
+		answer := h.handleCallMsg(cp, msg)
+
+		if timer != nil {
+			timer.Stop()
+		}
+
+		h.addSubscriptions(cp.notifiers)
+
+		if answer != nil {
+			responded.Do(func() {
+				_ = h.conn.writeJSON(cp.ctx, answer, false)
+			})
+		}
+
 		for _, n := range cp.notifiers {
-			n.activate()
+			_ = n.activate()
 		}
 	})
 }
@@ -188,9 +332,11 @@ func (h *handler) cancelAllRequests(err error, inflightReq *requestOp) {
 		if !didClose[op] {
 			op.err = err
 			close(op.resp)
+
 			didClose[op] = true
 		}
 	}
+
 	for id, sub := range h.clientSubs {
 		delete(h.clientSubs, id)
 		sub.close(err)
@@ -231,6 +377,8 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 		defer cancel()
 		fn(&callProc{ctx: ctx})
 
+		h.executionPool.processed.Add(1)
+
 		return nil
 	})
 }
@@ -239,16 +387,19 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 // call or requires a reply.
 func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 	start := time.Now()
+
 	switch {
 	case msg.isNotification():
 		if strings.HasSuffix(msg.Method, notificationMethodSuffix) {
 			h.handleSubscriptionResult(msg)
 			return true
 		}
+
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
 		h.log.Trace("Handled RPC response", "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+
 		return true
 	default:
 		return false
@@ -262,6 +413,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 		h.log.Debug("Dropping invalid subscription message")
 		return
 	}
+
 	if h.clientSubs[result.ID] != nil {
 		h.clientSubs[result.ID].deliver(result.Result)
 	}
@@ -269,12 +421,12 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 
 // handleResponse processes method call responses.
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
-
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
 		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
 		return
 	}
+
 	delete(h.respWait, string(msg.ID))
 	// For normal responses, just forward the reply to Call/BatchCall.
 	if op.sub == nil {
@@ -285,13 +437,16 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	// indicates success. EthSubscribe gets unblocked in either case through
 	// the op.resp channel.
 	defer close(op.resp)
+
 	if msg.Error != nil {
 		op.err = msg.Error
 		return
 	}
+
 	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
 		h.executionPool.Submit(context.Background(), func() error {
 			op.sub.run()
+			h.executionPool.processed.Add(1)
 			return nil
 		})
 
@@ -302,24 +457,30 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 // handleCallMsg executes a call message and returns the answer.
 func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	start := time.Now()
+
 	switch {
 	case msg.isNotification():
 		h.handleCall(ctx, msg)
 		h.log.Debug("Served "+msg.Method, "duration", time.Since(start))
+
 		return nil
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
+
 		var ctx []interface{}
+
 		ctx = append(ctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
 			ctx = append(ctx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
+
 			h.log.Warn("Served "+msg.Method, ctx...)
 		} else {
 			h.log.Debug("Served "+msg.Method, ctx...)
 		}
+
 		return resp
 	case msg.hasValidID():
 		return msg.errorResponse(&invalidRequestError{"invalid request"})
@@ -333,41 +494,50 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
+
 	var callb *callback
 	if msg.isUnsubscribe() {
 		callb = h.unsubscribeCb
 	} else {
 		callb = h.reg.callback(msg.Method)
 	}
+
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
+
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
+
 	start := time.Now()
 	answer := h.runMethod(cp.ctx, msg, callb, args)
-
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
 	if callb != h.unsubscribeCb {
 		rpcRequestGauge.Inc(1)
+
 		if answer.Error != nil {
-			failedReqeustGauge.Inc(1)
+			failedRequestGauge.Inc(1)
 		} else {
 			successfulRequestGauge.Inc(1)
 		}
+
 		rpcServingTimer.UpdateSince(start)
-		newRPCServingTimer(msg.Method, answer.Error == nil).UpdateSince(start)
+		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 	}
+
 	return answer
 }
 
 // handleSubscribe processes *_subscribe method calls.
 func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	if !h.allowSubscribe {
-		return msg.errorResponse(ErrNotificationsUnsupported)
+		return msg.errorResponse(&internalServerError{
+			code:    errcodeNotificationsUnsupported,
+			message: ErrNotificationsUnsupported.Error(),
+		})
 	}
 
 	// Subscription method name is first argument.
@@ -375,18 +545,22 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
+
 	namespace := msg.namespace()
 	callb := h.reg.subscription(namespace, name)
+
 	if callb == nil {
 		return msg.errorResponse(&subscriptionNotFoundError{namespace, name})
 	}
 
 	// Parse subscription name arg too, but remove it before calling the callback.
 	argTypes := append([]reflect.Type{stringType}, callb.argTypes...)
+
 	args, err := parsePositionalArguments(msg.Params, argTypes)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
+
 	args = args[1:]
 
 	// Install notifier in context so the subscription handler can find it.
@@ -403,6 +577,7 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	if err != nil {
 		return msg.errorResponse(err)
 	}
+
 	return msg.response(result)
 }
 
@@ -415,8 +590,10 @@ func (h *handler) unsubscribe(ctx context.Context, id ID) (bool, error) {
 	if s == nil {
 		return false, ErrSubscriptionNotFound
 	}
+
 	close(s.err)
 	delete(h.serverSubs, id)
+
 	return true, nil
 }
 
@@ -426,5 +603,6 @@ func (id idForLog) String() string {
 	if s, err := strconv.Unquote(string(id.RawMessage)); err == nil {
 		return s
 	}
+
 	return string(id.RawMessage)
 }

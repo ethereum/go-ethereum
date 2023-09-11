@@ -33,6 +33,7 @@ func init() {
 		if name == "node.example.org" {
 			return []net.IP{{33, 44, 55, 66}}, nil
 		}
+
 		return nil, errors.New("no such host")
 	}
 }
@@ -162,6 +163,7 @@ func hexPubkey(h string) *ecdsa.PublicKey {
 	if err != nil {
 		panic(err)
 	}
+
 	return k
 }
 
@@ -181,6 +183,7 @@ func TestParseNode(t *testing.T) {
 				t.Errorf("test %q:\n  unexpected error: %v", test.input, err)
 				continue
 			}
+
 			if !reflect.DeepEqual(n, test.wantResult) {
 				t.Errorf("test %q:\n  result mismatch:\ngot:  %#v\nwant: %#v", test.input, n, test.wantResult)
 			}

@@ -27,6 +27,7 @@ import (
 
 func TestNewID(t *testing.T) {
 	hexchars := "0123456789ABCDEFabcdef"
+
 	for i := 0; i < 100; i++ {
 		id := string(NewID())
 		if !strings.HasPrefix(id, "0x") {
@@ -48,12 +49,12 @@ func TestNewID(t *testing.T) {
 
 func TestSubscriptions(t *testing.T) {
 	var (
-		namespaces        = []string{"eth", "shh", "bzz"}
+		namespaces        = []string{"eth", "bzz"}
 		service           = &notificationTestService{}
 		subCount          = len(namespaces)
 		notificationCount = 3
 
-		server                 = NewServer(0, 0)
+		server                 = NewServer("test", 0, 0)
 		clientConn, serverConn = net.Pipe()
 		out                    = json.NewEncoder(clientConn)
 		in                     = json.NewDecoder(clientConn)
@@ -68,7 +69,9 @@ func TestSubscriptions(t *testing.T) {
 			t.Fatalf("unable to register test service %v", err)
 		}
 	}
+
 	go server.ServeCodec(NewCodec(serverConn), 0)
+
 	defer server.Stop()
 
 	// wait for message and write them to the given channels
@@ -79,7 +82,7 @@ func TestSubscriptions(t *testing.T) {
 		request := map[string]interface{}{
 			"id":      i,
 			"method":  fmt.Sprintf("%s_subscribe", namespace),
-			"version": "2.0",
+			"jsonrpc": "2.0",
 			"params":  []interface{}{"someSubscription", notificationCount, i},
 		}
 		if err := out.Encode(&request); err != nil {
@@ -90,13 +93,16 @@ func TestSubscriptions(t *testing.T) {
 	timeout := time.After(30 * time.Second)
 	subids := make(map[string]string, subCount)
 	count := make(map[string]int, subCount)
+
 	allReceived := func() bool {
 		done := len(count) == subCount
+
 		for _, c := range count {
 			if c < notificationCount {
 				done = false
 			}
 		}
+
 		return done
 	}
 	for !allReceived() {
@@ -114,10 +120,12 @@ func TestSubscriptions(t *testing.T) {
 					t.Errorf("subscription for %q not created", namespace)
 					continue
 				}
+
 				if count, found := count[subid]; !found || count < notificationCount {
 					t.Errorf("didn't receive all notifications (%d<%d) in time for namespace %q", count, notificationCount, namespace)
 				}
 			}
+
 			t.Fatal("timed out")
 		}
 	}
@@ -132,6 +140,7 @@ func TestServerUnsubscribe(t *testing.T) {
 	server := newTestServer()
 	service := &notificationTestService{unsubscribed: make(chan string, 1)}
 	server.RegisterName("nftest2", service)
+
 	go server.ServeCodec(NewCodec(p1), 0)
 
 	// Subscribe.
@@ -144,6 +153,7 @@ func TestServerUnsubscribe(t *testing.T) {
 		notifications = make(chan subscriptionResult)
 		errors        = make(chan error, 1)
 	)
+
 	go waitForMessages(json.NewDecoder(p2), resps, notifications, errors)
 
 	// Receive the subscription ID.
@@ -156,12 +166,14 @@ func TestServerUnsubscribe(t *testing.T) {
 
 	// Unsubscribe and check that it is handled on the server side.
 	p2.Write([]byte(`{"jsonrpc":"2.0","method":"nftest2_unsubscribe","params":["` + sub.subid + `"]}`))
+
 	for {
 		select {
 		case id := <-service.unsubscribed:
 			if id != string(sub.subid) {
 				t.Errorf("wrong subscription ID unsubscribed")
 			}
+
 			return
 		case err := <-errors:
 			t.Fatal(err)
@@ -197,15 +209,18 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 	if err := in.Decode(&msg); err != nil {
 		return nil, nil, fmt.Errorf("decode error: %v", err)
 	}
+
 	switch {
 	case msg.isNotification():
 		var res subscriptionResult
 		if err := json.Unmarshal(msg.Params, &res); err != nil {
 			return nil, nil, fmt.Errorf("invalid subscription result: %v", err)
 		}
+
 		return nil, &res, nil
 	case msg.isResponse():
 		var c subConfirmation
+
 		if msg.Error != nil {
 			return nil, nil, msg.Error
 		} else if err := json.Unmarshal(msg.Result, &c.subid); err != nil {

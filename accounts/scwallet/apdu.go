@@ -36,26 +36,33 @@ func (ca commandAPDU) serialize() ([]byte, error) {
 	if err := binary.Write(buf, binary.BigEndian, ca.Cla); err != nil {
 		return nil, err
 	}
+
 	if err := binary.Write(buf, binary.BigEndian, ca.Ins); err != nil {
 		return nil, err
 	}
+
 	if err := binary.Write(buf, binary.BigEndian, ca.P1); err != nil {
 		return nil, err
 	}
+
 	if err := binary.Write(buf, binary.BigEndian, ca.P2); err != nil {
 		return nil, err
 	}
+
 	if len(ca.Data) > 0 {
 		if err := binary.Write(buf, binary.BigEndian, uint8(len(ca.Data))); err != nil {
 			return nil, err
 		}
+
 		if err := binary.Write(buf, binary.BigEndian, ca.Data); err != nil {
 			return nil, err
 		}
 	}
+
 	if err := binary.Write(buf, binary.BigEndian, ca.Le); err != nil {
 		return nil, err
 	}
+
 	return buf.Bytes(), nil
 }
 
@@ -77,11 +84,14 @@ func (ra *responseAPDU) deserialize(data []byte) error {
 	if err := binary.Read(buf, binary.BigEndian, &ra.Data); err != nil {
 		return err
 	}
+
 	if err := binary.Read(buf, binary.BigEndian, &ra.Sw1); err != nil {
 		return err
 	}
+
 	if err := binary.Read(buf, binary.BigEndian, &ra.Sw2); err != nil {
 		return err
 	}
+
 	return nil
 }

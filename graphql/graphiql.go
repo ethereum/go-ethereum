@@ -44,14 +44,16 @@ func respond(w http.ResponseWriter, body []byte, code int) {
 func errorJSON(msg string) []byte {
 	buf := bytes.Buffer{}
 	fmt.Fprintf(&buf, `{"error": "%s"}`, msg)
+
 	return buf.Bytes()
 }
 
 func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
 		return
 	}
+
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(graphiql)
 }

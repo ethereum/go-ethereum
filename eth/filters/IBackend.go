@@ -14,6 +14,7 @@ import (
 	types "github.com/ethereum/go-ethereum/core/types"
 	ethdb "github.com/ethereum/go-ethereum/ethdb"
 	event "github.com/ethereum/go-ethereum/event"
+	params "github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -56,6 +57,20 @@ func (mr *MockBackendMockRecorder) BloomStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BloomStatus", reflect.TypeOf((*MockBackend)(nil).BloomStatus))
 }
 
+// ChainConfig mocks base method.
+func (m *MockBackend) ChainConfig() *params.ChainConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChainConfig")
+	ret0, _ := ret[0].(*params.ChainConfig)
+	return ret0
+}
+
+// ChainConfig indicates an expected call of ChainConfig.
+func (mr *MockBackendMockRecorder) ChainConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainConfig", reflect.TypeOf((*MockBackend)(nil).ChainConfig))
+}
+
 // ChainDb mocks base method.
 func (m *MockBackend) ChainDb() ethdb.Database {
 	m.ctrl.T.Helper()
@@ -68,6 +83,35 @@ func (m *MockBackend) ChainDb() ethdb.Database {
 func (mr *MockBackendMockRecorder) ChainDb() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainDb", reflect.TypeOf((*MockBackend)(nil).ChainDb))
+}
+
+// CurrentHeader mocks base method.
+func (m *MockBackend) CurrentHeader() *types.Header {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentHeader")
+	ret0, _ := ret[0].(*types.Header)
+	return ret0
+}
+
+// CurrentHeader indicates an expected call of CurrentHeader.
+func (mr *MockBackendMockRecorder) CurrentHeader() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentHeader", reflect.TypeOf((*MockBackend)(nil).CurrentHeader))
+}
+
+// GetBody mocks base method.
+func (m *MockBackend) GetBody(arg0 context.Context, arg1 common.Hash, arg2 rpc.BlockNumber) (*types.Body, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBody", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*types.Body)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBody indicates an expected call of GetBody.
+func (mr *MockBackendMockRecorder) GetBody(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBody", reflect.TypeOf((*MockBackend)(nil).GetBody), arg0, arg1, arg2)
 }
 
 // GetBorBlockLogs mocks base method.
@@ -101,18 +145,18 @@ func (mr *MockBackendMockRecorder) GetBorBlockReceipt(arg0, arg1 interface{}) *g
 }
 
 // GetLogs mocks base method.
-func (m *MockBackend) GetLogs(arg0 context.Context, arg1 common.Hash) ([][]*types.Log, error) {
+func (m *MockBackend) GetLogs(arg0 context.Context, arg1 common.Hash, arg2 uint64) ([][]*types.Log, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLogs", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetLogs", arg0, arg1, arg2)
 	ret0, _ := ret[0].([][]*types.Log)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetLogs indicates an expected call of GetLogs.
-func (mr *MockBackendMockRecorder) GetLogs(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) GetLogs(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogs", reflect.TypeOf((*MockBackend)(nil).GetLogs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogs", reflect.TypeOf((*MockBackend)(nil).GetLogs), arg0, arg1, arg2)
 }
 
 // GetReceipts mocks base method.
@@ -158,6 +202,21 @@ func (m *MockBackend) HeaderByNumber(arg0 context.Context, arg1 rpc.BlockNumber)
 func (mr *MockBackendMockRecorder) HeaderByNumber(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockBackend)(nil).HeaderByNumber), arg0, arg1)
+}
+
+// PendingBlockAndReceipts mocks base method.
+func (m *MockBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PendingBlockAndReceipts")
+	ret0, _ := ret[0].(*types.Block)
+	ret1, _ := ret[1].(types.Receipts)
+	return ret0, ret1
+}
+
+// PendingBlockAndReceipts indicates an expected call of PendingBlockAndReceipts.
+func (mr *MockBackendMockRecorder) PendingBlockAndReceipts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PendingBlockAndReceipts", reflect.TypeOf((*MockBackend)(nil).PendingBlockAndReceipts))
 }
 
 // ServiceFilter mocks base method.

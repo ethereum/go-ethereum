@@ -74,6 +74,7 @@ var Failure_FailureType_value = map[string]int32{
 func (x Failure_FailureType) Enum() *Failure_FailureType {
 	p := new(Failure_FailureType)
 	*p = x
+
 	return p
 }
 
@@ -86,7 +87,9 @@ func (x *Failure_FailureType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = Failure_FailureType(value)
+
 	return nil
 }
 
@@ -94,7 +97,7 @@ func (Failure_FailureType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{1, 0}
 }
 
-//*
+// *
 // Type of button request
 type ButtonRequest_ButtonRequestType int32
 
@@ -155,6 +158,7 @@ var ButtonRequest_ButtonRequestType_value = map[string]int32{
 func (x ButtonRequest_ButtonRequestType) Enum() *ButtonRequest_ButtonRequestType {
 	p := new(ButtonRequest_ButtonRequestType)
 	*p = x
+
 	return p
 }
 
@@ -167,7 +171,9 @@ func (x *ButtonRequest_ButtonRequestType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	*x = ButtonRequest_ButtonRequestType(value)
+
 	return nil
 }
 
@@ -175,7 +181,7 @@ func (ButtonRequest_ButtonRequestType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{2, 0}
 }
 
-//*
+// *
 // Type of PIN request
 type PinMatrixRequest_PinMatrixRequestType int32
 
@@ -200,6 +206,7 @@ var PinMatrixRequest_PinMatrixRequestType_value = map[string]int32{
 func (x PinMatrixRequest_PinMatrixRequestType) Enum() *PinMatrixRequest_PinMatrixRequestType {
 	p := new(PinMatrixRequest_PinMatrixRequestType)
 	*p = x
+
 	return p
 }
 
@@ -212,7 +219,9 @@ func (x *PinMatrixRequest_PinMatrixRequestType) UnmarshalJSON(data []byte) error
 	if err != nil {
 		return err
 	}
+
 	*x = PinMatrixRequest_PinMatrixRequestType(value)
+
 	return nil
 }
 
@@ -220,7 +229,7 @@ func (PinMatrixRequest_PinMatrixRequestType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aaf30d059fdbc38d, []int{4, 0}
 }
 
-//*
+// *
 // Response: Success of the previous request
 // @end
 type Success struct {
@@ -259,10 +268,11 @@ func (m *Success) GetMessage() string {
 	if m != nil && m.Message != nil {
 		return *m.Message
 	}
+
 	return ""
 }
 
-//*
+// *
 // Response: Failure of the previous request
 // @end
 type Failure struct {
@@ -302,6 +312,7 @@ func (m *Failure) GetCode() Failure_FailureType {
 	if m != nil && m.Code != nil {
 		return *m.Code
 	}
+
 	return Failure_Failure_UnexpectedMessage
 }
 
@@ -309,10 +320,11 @@ func (m *Failure) GetMessage() string {
 	if m != nil && m.Message != nil {
 		return *m.Message
 	}
+
 	return ""
 }
 
-//*
+// *
 // Response: Device is waiting for HW button press.
 // @auxstart
 // @next ButtonAck
@@ -353,6 +365,7 @@ func (m *ButtonRequest) GetCode() ButtonRequest_ButtonRequestType {
 	if m != nil && m.Code != nil {
 		return *m.Code
 	}
+
 	return ButtonRequest_ButtonRequest_Other
 }
 
@@ -360,10 +373,11 @@ func (m *ButtonRequest) GetData() string {
 	if m != nil && m.Data != nil {
 		return *m.Data
 	}
+
 	return ""
 }
 
-//*
+// *
 // Request: Computer agrees to wait for HW button press
 // @auxend
 type ButtonAck struct {
@@ -397,7 +411,7 @@ func (m *ButtonAck) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ButtonAck proto.InternalMessageInfo
 
-//*
+// *
 // Response: Device is asking computer to show PIN matrix and awaits PIN encoded using this matrix scheme
 // @auxstart
 // @next PinMatrixAck
@@ -437,10 +451,11 @@ func (m *PinMatrixRequest) GetType() PinMatrixRequest_PinMatrixRequestType {
 	if m != nil && m.Type != nil {
 		return *m.Type
 	}
+
 	return PinMatrixRequest_PinMatrixRequestType_Current
 }
 
-//*
+// *
 // Request: Computer responds with encoded PIN
 // @auxend
 type PinMatrixAck struct {
@@ -479,10 +494,11 @@ func (m *PinMatrixAck) GetPin() string {
 	if m != nil && m.Pin != nil {
 		return *m.Pin
 	}
+
 	return ""
 }
 
-//*
+// *
 // Response: Device awaits encryption passphrase
 // @auxstart
 // @next PassphraseAck
@@ -522,10 +538,11 @@ func (m *PassphraseRequest) GetOnDevice() bool {
 	if m != nil && m.OnDevice != nil {
 		return *m.OnDevice
 	}
+
 	return false
 }
 
-//*
+// *
 // Request: Send passphrase back
 // @next PassphraseStateRequest
 type PassphraseAck struct {
@@ -565,6 +582,7 @@ func (m *PassphraseAck) GetPassphrase() string {
 	if m != nil && m.Passphrase != nil {
 		return *m.Passphrase
 	}
+
 	return ""
 }
 
@@ -572,10 +590,11 @@ func (m *PassphraseAck) GetState() []byte {
 	if m != nil {
 		return m.State
 	}
+
 	return nil
 }
 
-//*
+// *
 // Response: Device awaits passphrase state
 // @next PassphraseStateAck
 type PassphraseStateRequest struct {
@@ -614,10 +633,11 @@ func (m *PassphraseStateRequest) GetState() []byte {
 	if m != nil {
 		return m.State
 	}
+
 	return nil
 }
 
-//*
+// *
 // Request: Send passphrase state back
 // @auxend
 type PassphraseStateAck struct {
@@ -651,7 +671,7 @@ func (m *PassphraseStateAck) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PassphraseStateAck proto.InternalMessageInfo
 
-//*
+// *
 // Structure representing BIP32 (hierarchical deterministic) node
 // Used for imports of private key into the device and exporting public key out of device
 // @embed
@@ -696,6 +716,7 @@ func (m *HDNodeType) GetDepth() uint32 {
 	if m != nil && m.Depth != nil {
 		return *m.Depth
 	}
+
 	return 0
 }
 
@@ -703,6 +724,7 @@ func (m *HDNodeType) GetFingerprint() uint32 {
 	if m != nil && m.Fingerprint != nil {
 		return *m.Fingerprint
 	}
+
 	return 0
 }
 
@@ -710,6 +732,7 @@ func (m *HDNodeType) GetChildNum() uint32 {
 	if m != nil && m.ChildNum != nil {
 		return *m.ChildNum
 	}
+
 	return 0
 }
 
@@ -717,6 +740,7 @@ func (m *HDNodeType) GetChainCode() []byte {
 	if m != nil {
 		return m.ChainCode
 	}
+
 	return nil
 }
 
@@ -724,6 +748,7 @@ func (m *HDNodeType) GetPrivateKey() []byte {
 	if m != nil {
 		return m.PrivateKey
 	}
+
 	return nil
 }
 
@@ -731,6 +756,7 @@ func (m *HDNodeType) GetPublicKey() []byte {
 	if m != nil {
 		return m.PublicKey
 	}
+
 	return nil
 }
 

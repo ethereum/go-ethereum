@@ -73,6 +73,7 @@ func (r *StandardRegistry) Each(f func(string, interface{})) {
 func (r *StandardRegistry) Get(name string) interface{} {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	return r.metrics[name]
 }
 
@@ -83,13 +84,17 @@ func (r *StandardRegistry) Get(name string) interface{} {
 func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{} {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	if metric, ok := r.metrics[name]; ok {
 		return metric
 	}
+
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
 		i = v.Call(nil)[0].Interface()
 	}
+
 	r.register(name, i)
+
 	return i
 }
 
@@ -98,6 +103,7 @@ func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{}
 func (r *StandardRegistry) Register(name string, i interface{}) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	return r.register(name, i)
 }
 
@@ -105,6 +111,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 func (r *StandardRegistry) RunHealthchecks() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	for _, i := range r.metrics {
 		if h, ok := i.(Healthcheck); ok {
 			h.Check()
@@ -115,10 +122,13 @@ func (r *StandardRegistry) RunHealthchecks() {
 // GetAll metrics in the Registry
 func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
+
 	r.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})
 		switch metric := i.(type) {
 		case Counter:
+			values["count"] = metric.Count()
+		case CounterFloat64:
 			values["count"] = metric.Count()
 		case Gauge:
 			values["value"] = metric.Value()
@@ -126,7 +136,9 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["value"] = metric.Value()
 		case Healthcheck:
 			values["error"] = nil
+
 			metric.Check()
+
 			if err := metric.Error(); nil != err {
 				values["error"] = metric.Error().Error()
 			}
@@ -168,8 +180,10 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["15m.rate"] = t.Rate15()
 			values["mean.rate"] = t.RateMean()
 		}
+
 		data[name] = values
 	})
+
 	return data
 }
 
@@ -185,6 +199,7 @@ func (r *StandardRegistry) Unregister(name string) {
 func (r *StandardRegistry) UnregisterAll() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	for name := range r.metrics {
 		r.stop(name)
 		delete(r.metrics, name)
@@ -195,20 +210,24 @@ func (r *StandardRegistry) register(name string, i interface{}) error {
 	if _, ok := r.metrics[name]; ok {
 		return DuplicateMetric(name)
 	}
+
 	switch i.(type) {
-	case Counter, Gauge, GaugeFloat64, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
+	case Counter, CounterFloat64, Gauge, GaugeFloat64, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
 		r.metrics[name] = i
 	}
+
 	return nil
 }
 
 func (r *StandardRegistry) registered() map[string]interface{} {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
 	metrics := make(map[string]interface{}, len(r.metrics))
 	for name, i := range r.metrics {
 		metrics[name] = i
 	}
+
 	return metrics
 }
 
@@ -267,6 +286,7 @@ func findPrefix(registry Registry, prefix string) (Registry, string) {
 	case *StandardRegistry:
 		return r, prefix
 	}
+
 	return nil, ""
 }
 

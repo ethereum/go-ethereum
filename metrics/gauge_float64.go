@@ -1,6 +1,9 @@
 package metrics
 
-import "sync"
+import (
+	"math"
+	"sync/atomic"
+)
 
 // GaugeFloat64s hold a float64 value that can be set arbitrarily.
 type GaugeFloat64 interface {
@@ -15,6 +18,7 @@ func GetOrRegisterGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewGaugeFloat64()).(GaugeFloat64)
 }
 
@@ -23,18 +27,20 @@ func NewGaugeFloat64() GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
 	}
-	return &StandardGaugeFloat64{
-		value: 0.0,
-	}
+
+	return &StandardGaugeFloat64{}
 }
 
 // NewRegisteredGaugeFloat64 constructs and registers a new StandardGaugeFloat64.
 func NewRegisteredGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	c := NewGaugeFloat64()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -43,16 +49,20 @@ func NewFunctionalGaugeFloat64(f func() float64) GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
 	}
+
 	return &FunctionalGaugeFloat64{value: f}
 }
 
 // NewRegisteredFunctionalGauge constructs and registers a new StandardGauge.
 func NewRegisteredFunctionalGaugeFloat64(name string, r Registry, f func() float64) GaugeFloat64 {
 	c := NewFunctionalGaugeFloat64(f)
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -83,10 +93,9 @@ func (NilGaugeFloat64) Update(v float64) {}
 func (NilGaugeFloat64) Value() float64 { return 0.0 }
 
 // StandardGaugeFloat64 is the standard implementation of a GaugeFloat64 and uses
-// sync.Mutex to manage a single float64 value.
+// atomic to manage a single float64 value.
 type StandardGaugeFloat64 struct {
-	mutex sync.Mutex
-	value float64
+	floatBits atomic.Uint64
 }
 
 // Snapshot returns a read-only copy of the gauge.
@@ -96,16 +105,12 @@ func (g *StandardGaugeFloat64) Snapshot() GaugeFloat64 {
 
 // Update updates the gauge's value.
 func (g *StandardGaugeFloat64) Update(v float64) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	g.value = v
+	g.floatBits.Store(math.Float64bits(v))
 }
 
 // Value returns the gauge's current value.
 func (g *StandardGaugeFloat64) Value() float64 {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	return g.value
+	return math.Float64frombits(g.floatBits.Load())
 }
 
 // FunctionalGaugeFloat64 returns value from given function

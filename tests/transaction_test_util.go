@@ -50,19 +50,23 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		if err := rlp.DecodeBytes(rlpData, tx); err != nil {
 			return nil, nil, err
 		}
+
 		sender, err := types.Sender(signer, tx)
 		if err != nil {
 			return nil, nil, err
 		}
 		// Intrinsic gas
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isHomestead, isIstanbul)
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isHomestead, isIstanbul, false)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		if requiredGas > tx.Gas() {
 			return nil, nil, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
+
 		h := tx.Hash()
+
 		return &sender, &h, nil
 	}
 
@@ -87,24 +91,30 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			if err == nil {
 				return fmt.Errorf("expected error, got none (address %v)[%v]", sender.String(), testcase.name)
 			}
+
 			continue
 		}
 		// Should resolve the right address
 		if err != nil {
 			return fmt.Errorf("got error, expected none: %v", err)
 		}
+
 		if sender == nil {
 			return fmt.Errorf("sender was nil, should be %x", common.Address(testcase.fork.Sender))
 		}
+
 		if *sender != common.Address(testcase.fork.Sender) {
 			return fmt.Errorf("sender mismatch: got %x, want %x", sender, testcase.fork.Sender)
 		}
+
 		if txhash == nil {
 			return fmt.Errorf("txhash was nil, should be %x", common.Hash(testcase.fork.Hash))
 		}
+
 		if *txhash != common.Hash(testcase.fork.Hash) {
 			return fmt.Errorf("hash mismatch: got %x, want %x", *txhash, testcase.fork.Hash)
 		}
 	}
+
 	return nil
 }

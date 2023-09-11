@@ -19,7 +19,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -203,8 +202,13 @@ type Config struct {
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
 
-	// JWTSecret is the hex-encoded jwt secret.
+	// JWTSecret is the path to the hex-encoded jwt secret.
 	JWTSecret string `toml:",omitempty"`
+
+	// EnablePersonal enables the deprecated personal namespace.
+	EnablePersonal bool `toml:"-"`
+
+	DBEngine string `toml:",omitempty"`
 
 	// Maximum number of messages in a batch
 	RPCBatchLimit uint64 `toml:",omitempty"`
@@ -228,6 +232,7 @@ func (c *Config) IPCEndpoint() string {
 		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
 			return c.IPCPath
 		}
+
 		return `\\.\pipe\` + c.IPCPath
 	}
 	// Resolve names into the data directory full paths otherwise
@@ -235,8 +240,10 @@ func (c *Config) IPCEndpoint() string {
 		if c.DataDir == "" {
 			return filepath.Join(os.TempDir(), c.IPCPath)
 		}
+
 		return filepath.Join(c.DataDir, c.IPCPath)
 	}
+
 	return c.IPCPath
 }
 
@@ -245,6 +252,7 @@ func (c *Config) NodeDB() string {
 	if c.DataDir == "" {
 		return "" // ephemeral
 	}
+
 	return c.ResolvePath(datadirNodeDatabase)
 }
 
@@ -256,7 +264,9 @@ func DefaultIPCEndpoint(clientIdentifier string) string {
 			panic("empty executable name")
 		}
 	}
+
 	config := &Config{DataDir: DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
+
 	return config.IPCEndpoint()
 }
 
@@ -266,6 +276,7 @@ func (c *Config) HTTPEndpoint() string {
 	if c.HTTPHost == "" {
 		return ""
 	}
+
 	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
 }
 
@@ -281,6 +292,7 @@ func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {
 		return ""
 	}
+
 	return fmt.Sprintf("%s:%d", c.WSHost, c.WSPort)
 }
 
@@ -303,14 +315,18 @@ func (c *Config) NodeName() string {
 	if name == "geth" || name == "geth-testnet" {
 		name = "Geth"
 	}
+
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
 	}
+
 	if c.Version != "" {
 		name += "/v" + c.Version
 	}
+
 	name += "/" + runtime.GOOS + "-" + runtime.GOARCH
 	name += "/" + runtime.Version()
+
 	return name
 }
 
@@ -320,8 +336,10 @@ func (c *Config) name() string {
 		if progname == "" {
 			panic("empty executable name, set Config.Name")
 		}
+
 		return progname
 	}
+
 	return c.Name
 }
 
@@ -339,6 +357,7 @@ func (c *Config) ResolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
+
 	if c.DataDir == "" {
 		return ""
 	}
@@ -349,59 +368,19 @@ func (c *Config) ResolvePath(path string) string {
 		if c.name() == "geth" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
+
 		if oldpath != "" && common.FileExist(oldpath) {
-			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+			if warn && !c.oldGethResourceWarning {
+				c.oldGethResourceWarning = true
+
+				log.Warn("Using deprecated resource file, please move this file to the 'geth' subdirectory of datadir.", "file", oldpath)
 			}
+
 			return oldpath
 		}
 	}
+
 	return filepath.Join(c.instanceDir(), path)
-}
-
-func (c *Config) instanceDir() string {
-	if c.DataDir == "" {
-		return ""
-	}
-	return filepath.Join(c.DataDir, c.name())
-}
-
-// NodeKey retrieves the currently configured private key of the node, checking
-// first any manually set key, falling back to the one found in the configured
-// data folder. If no key can be found, a new one is generated.
-func (c *Config) NodeKey() *ecdsa.PrivateKey {
-	// Use any specifically configured key.
-	if c.P2P.PrivateKey != nil {
-		return c.P2P.PrivateKey
-	}
-	// Generate ephemeral key if no datadir is being used.
-	if c.DataDir == "" {
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
-		}
-		return key
-	}
-
-	keyfile := c.ResolvePath(datadirPrivateKey)
-	if key, err := crypto.LoadECDSA(keyfile); err == nil {
-		return key
-	}
-	// No persistent key found, generate and store a new one.
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
-	}
-	instanceDir := filepath.Join(c.DataDir, c.name())
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
-		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
-		return key
-	}
-	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
-	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
-	}
-	return key
 }
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
@@ -421,9 +400,11 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	if c.DataDir == "" {
 		return nil
 	}
+
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
+
 	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
 
 	// Load the nodes from the config file.
@@ -432,20 +413,109 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
 		return nil
 	}
+
 	// Interpret the list as a discovery node array
-	var nodes []*enode.Node
+	nodes := make([]*enode.Node, 0, len(nodelist))
+
 	for _, url := range nodelist {
 		if url == "" {
 			continue
 		}
+
 		node, err := enode.Parse(enode.ValidSchemes, url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
 		}
+
 		nodes = append(nodes, node)
 	}
+
 	return nodes
+}
+
+func (c *Config) instanceDir() string {
+	if c.DataDir == "" {
+		return ""
+	}
+
+	return filepath.Join(c.DataDir, c.name())
+}
+
+// NodeKey retrieves the currently configured private key of the node, checking
+// first any manually set key, falling back to the one found in the configured
+// data folder. If no key can be found, a new one is generated.
+func (c *Config) NodeKey() *ecdsa.PrivateKey {
+	// Use any specifically configured key.
+	if c.P2P.PrivateKey != nil {
+		return c.P2P.PrivateKey
+	}
+	// Generate ephemeral key if no datadir is being used.
+	if c.DataDir == "" {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
+		}
+
+		return key
+	}
+
+	keyfile := c.ResolvePath(datadirPrivateKey)
+	if key, err := crypto.LoadECDSA(keyfile); err == nil {
+		return key
+	}
+	// No persistent key found, generate and store a new one.
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
+	}
+
+	instanceDir := filepath.Join(c.DataDir, c.name())
+	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+		return key
+	}
+
+	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+	if err := crypto.SaveECDSA(keyfile, key); err != nil {
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+	}
+
+	return key
+}
+
+// CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
+// and trusted-nodes files. If they exist it raises an error.
+func (c *Config) checkLegacyFiles() {
+	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
+	c.checkLegacyFile(c.ResolvePath(datadirTrustedNodes))
+}
+
+// checkLegacyFile will only raise an error if a file at the given path exists.
+func (c *Config) checkLegacyFile(path string) {
+	// Short circuit if no node config is present
+	if c.DataDir == "" {
+		return
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		return
+	}
+
+	logger := c.Logger
+	if logger == nil {
+		logger = log.Root()
+	}
+
+	switch fname := filepath.Base(path); fname {
+	case "static-nodes.json":
+		logger.Error("The static-nodes.json file is deprecated and ignored. Use P2P.StaticNodes in config.toml instead.")
+	case "trusted-nodes.json":
+		logger.Error("The trusted-nodes.json file is deprecated and ignored. Use P2P.TrustedNodes in config.toml instead.")
+	default:
+		// We shouldn't wind up here, but better print something just in case.
+		logger.Error("Ignoring deprecated file.", "file", path)
+	}
 }
 
 // KeyDirConfig determines the settings for keydirectory
@@ -454,6 +524,7 @@ func (c *Config) KeyDirConfig() (string, error) {
 		keydir string
 		err    error
 	)
+
 	switch {
 	case filepath.IsAbs(c.KeyStoreDir):
 		keydir = c.KeyStoreDir
@@ -466,6 +537,7 @@ func (c *Config) KeyDirConfig() (string, error) {
 	case c.KeyStoreDir != "":
 		keydir, err = filepath.Abs(c.KeyStoreDir)
 	}
+
 	return keydir, err
 }
 
@@ -476,16 +548,19 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
+
 	isEphemeral := false
+
 	if keydir == "" {
 		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		keydir, err = os.MkdirTemp("", "go-ethereum-keystore")
 		isEphemeral = true
 	}
 
 	if err != nil {
 		return "", false, err
 	}
+
 	if err := os.MkdirAll(keydir, 0700); err != nil {
 		return "", false, err
 	}
@@ -502,10 +577,13 @@ func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
 	if *w {
 		return
 	}
+
 	l := c.Logger
 	if l == nil {
 		l = log.Root()
 	}
+
 	l.Warn(fmt.Sprintf(format, args...))
+
 	*w = true
 }

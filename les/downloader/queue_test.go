@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,15 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-)
-
-var (
-	testdb  = rawdb.NewMemoryDatabase()
-	genesis = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -43,18 +37,21 @@ var (
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// Add one tx to every secondblock
 		if !empty && i%2 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
+
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
+
 			block.AddTx(tx)
 		}
 	})
+
 	return blocks, receipts
 }
 
@@ -69,10 +66,10 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, _ := makeChain(targetBlocks, 0, genesis, false)
+	blocks, _ := makeChain(targetBlocks, 0, testGenesis, false)
 	chain = &chainData{blocks, 0}
 
-	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
+	blocks, _ = makeChain(targetBlocks, 0, testGenesis, true)
 	emptyChain = &chainData{blocks, 0}
 }
 
@@ -81,6 +78,7 @@ func (chain *chainData) headers() []*types.Header {
 	for i, b := range chain.blocks {
 		hdrs[i] = b.Header()
 	}
+
 	return hdrs
 }
 
@@ -93,6 +91,7 @@ func dummyPeer(id string) *peerConnection {
 		id:      id,
 		lacking: make(map[common.Hash]struct{}),
 	}
+
 	return p
 }
 
@@ -104,16 +103,20 @@ func TestBasics(t *testing.T) {
 	if !q.Idle() {
 		t.Errorf("new queue should be idle")
 	}
+
 	q.Prepare(1, FastSync)
+
 	if res := q.Results(false); len(res) != 0 {
 		t.Fatal("new queue should have 0 results")
 	}
 
 	// Schedule a batch of headers
 	q.Schedule(chain.headers(), 1)
+
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
+
 	if got, exp := q.PendingBlocks(), chain.Len(); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
 	}
@@ -125,6 +128,7 @@ func TestBasics(t *testing.T) {
 	// queue that a certain peer will deliver them for us
 	{
 		peer := dummyPeer("peer-1")
+
 		fetchReq, _, throttle := q.ReserveBodies(peer, 50)
 		if !throttle {
 			// queue size is only 10, so throttling should occur
@@ -134,13 +138,16 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
+
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
 	}
+
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
 	}
+
 	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
 		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
 	}
@@ -150,16 +157,18 @@ func TestBasics(t *testing.T) {
 
 		// The second peer should hit throttling
 		if !throttle {
-			t.Fatalf("should not throttle")
+			t.Fatalf("should throttle")
 		}
 		// And not get any fetches at all, since it was throttled to begin with
 		if fetchReq != nil {
 			t.Fatalf("should have no fetches, got %d", len(fetchReq.Headers))
 		}
 	}
+
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
 	}
+
 	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts; exp != got {
 		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
 	}
@@ -167,6 +176,7 @@ func TestBasics(t *testing.T) {
 		// The receipt delivering peer should not be affected
 		// by the throttling of body deliveries
 		peer := dummyPeer("peer-3")
+
 		fetchReq, _, throttle := q.ReserveReceipts(peer, 50)
 		if !throttle {
 			// queue size is only 10, so throttling should occur
@@ -176,17 +186,20 @@ func TestBasics(t *testing.T) {
 		if got, exp := len(fetchReq.Headers), 5; got != exp {
 			t.Fatalf("expected %d requests, got %d", exp, got)
 		}
+
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
-
 	}
+
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
 	}
+
 	if exp, got := q.receiptTaskQueue.Size(), numOfReceipts-5; exp != got {
 		t.Errorf("expected receipt task queue to be %d, got %d", exp, got)
 	}
+
 	if got, exp := q.resultCache.countCompleted(), 0; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
 	}
@@ -200,12 +213,15 @@ func TestEmptyBlocks(t *testing.T) {
 	q.Prepare(1, FastSync)
 	// Schedule a batch of headers
 	q.Schedule(emptyChain.headers(), 1)
+
 	if q.Idle() {
 		t.Errorf("queue should not be idle")
 	}
+
 	if got, exp := q.PendingBlocks(), len(emptyChain.blocks); got != exp {
 		t.Errorf("wrong pending block count, got %d, exp %d", got, exp)
 	}
+
 	if got, exp := q.PendingReceipts(), 0; got != exp {
 		t.Errorf("wrong pending receipt count, got %d, exp %d", got, exp)
 	}
@@ -227,11 +243,12 @@ func TestEmptyBlocks(t *testing.T) {
 		if fetchReq != nil {
 			t.Fatal("there should be no body fetch tasks remaining")
 		}
-
 	}
+
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
 		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
 	}
+
 	if q.receiptTaskQueue.Size() != 0 {
 		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
 	}
@@ -241,15 +258,18 @@ func TestEmptyBlocks(t *testing.T) {
 
 		// there should be nothing to fetch, blocks are empty
 		if fetchReq != nil {
-			t.Fatal("there should be no body fetch tasks remaining")
+			t.Fatal("there should be no receipt fetch tasks remaining")
 		}
 	}
+
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
 		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
 	}
+
 	if q.receiptTaskQueue.Size() != 0 {
 		t.Errorf("expected receipt task queue to be %d, got %d", 0, q.receiptTaskQueue.Size())
 	}
+
 	if got, exp := q.resultCache.countCompleted(), 10; got != exp {
 		t.Errorf("wrong processable count, got %d, exp %d", got, exp)
 	}
@@ -261,23 +281,29 @@ func TestEmptyBlocks(t *testing.T) {
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, genesis, false)
+	blo, rec := makeChain(128, 0, testGenesis, false)
 	world := newNetwork()
 	world.receipts = rec
 	world.chain = blo
 	world.progress(10)
+
 	if false {
 		log.Root().SetHandler(log.StdoutHandler)
-
 	}
+
 	q := newQueue(10, 10)
+
 	var wg sync.WaitGroup
+
 	q.Prepare(1, FastSync)
 	wg.Add(1)
+
 	go func() {
 		// deliver headers
 		defer wg.Done()
+
 		c := 1
+
 		for {
 			//fmt.Printf("getting headers from %d\n", c)
 			hdrs := world.headers(c)
@@ -289,43 +315,54 @@ func XTestDelivery(t *testing.T) {
 		}
 	}()
 	wg.Add(1)
+
 	go func() {
 		// collect results
 		defer wg.Done()
+
 		tot := 0
+
 		for {
 			res := q.Results(true)
 			tot += len(res)
 			fmt.Printf("got %d results, %d tot\n", len(res), tot)
 			// Now we can forget about these
 			world.forget(res[len(res)-1].Header.Number.Uint64())
-
 		}
 	}()
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 		// reserve body fetch
 		i := 4
+
 		for {
 			peer := dummyPeer(fmt.Sprintf("peer-%d", i))
+
 			f, _, _ := q.ReserveBodies(peer, rand.Intn(30))
 			if f != nil {
 				var emptyList []*types.Header
+
 				var txs [][]*types.Transaction
+
 				var uncles [][]*types.Header
+
 				numToSkip := rand.Intn(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
 					txs = append(txs, world.getTransactions(hdr.Number.Uint64()))
 					uncles = append(uncles, emptyList)
 				}
+
 				time.Sleep(100 * time.Millisecond)
+
 				_, err := q.DeliverBodies(peer.id, txs, uncles)
 				if err != nil {
 					fmt.Printf("delivered %d bodies %v\n", len(txs), err)
 				}
 			} else {
 				i++
+
 				time.Sleep(200 * time.Millisecond)
 			}
 		}
@@ -334,6 +371,7 @@ func XTestDelivery(t *testing.T) {
 		defer wg.Done()
 		// reserve receiptfetch
 		peer := dummyPeer("peer-3")
+
 		for {
 			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
 			if f != nil {
@@ -341,10 +379,12 @@ func XTestDelivery(t *testing.T) {
 				for _, hdr := range f.Headers {
 					rcs = append(rcs, world.getReceipts(hdr.Number.Uint64()))
 				}
+
 				_, err := q.DeliverReceipts(peer.id, rcs)
 				if err != nil {
 					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
 				}
+
 				time.Sleep(100 * time.Millisecond)
 			} else {
 				time.Sleep(200 * time.Millisecond)
@@ -352,22 +392,26 @@ func XTestDelivery(t *testing.T) {
 		}
 	}()
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for i := 0; i < 50; i++ {
 			time.Sleep(300 * time.Millisecond)
 			//world.tick()
 			//fmt.Printf("trying to progress\n")
 			world.progress(rand.Intn(100))
 		}
+
 		for i := 0; i < 50; i++ {
 			time.Sleep(2990 * time.Millisecond)
-
 		}
 	}()
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		for {
 			time.Sleep(990 * time.Millisecond)
 			fmt.Printf("world block tip is %d\n",
@@ -380,6 +424,7 @@ func XTestDelivery(t *testing.T) {
 
 func newNetwork() *network {
 	var l sync.RWMutex
+
 	return &network{
 		cond:   sync.NewCond(&l),
 		offset: 1, // block 1 is at blocks[0]
@@ -405,6 +450,7 @@ func (n *network) getReceipts(blocknum uint64) types.Receipts {
 		fmt.Printf("Err, got %d exp %d\n", got, blocknum)
 		panic("sd")
 	}
+
 	return n.receipts[index]
 }
 
@@ -413,10 +459,8 @@ func (n *network) forget(blocknum uint64) {
 	n.chain = n.chain[index:]
 	n.receipts = n.receipts[index:]
 	n.offset = int(blocknum)
-
 }
 func (n *network) progress(numBlocks int) {
-
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	//fmt.Printf("progressing...\n")
@@ -424,12 +468,13 @@ func (n *network) progress(numBlocks int) {
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()
-
 }
 
 func (n *network) headers(from int) []*types.Header {
 	numHeaders := 128
+
 	var hdrs []*types.Header
+
 	index := from - n.offset
 
 	for index >= len(n.chain) {
@@ -442,11 +487,14 @@ func (n *network) headers(from int) []*types.Header {
 	}
 	n.lock.RLock()
 	defer n.lock.RUnlock()
+
 	for i, b := range n.chain[index:] {
 		hdrs = append(hdrs, b.Header())
+
 		if i >= numHeaders {
 			break
 		}
 	}
+
 	return hdrs
 }

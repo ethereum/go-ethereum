@@ -54,21 +54,46 @@ func TestCountValues(t *testing.T) {
 		if count != test.count {
 			t.Errorf("test %d: count mismatch, got %d want %d\ninput: %s", i, count, test.count, test.input)
 		}
+
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: err mismatch, got %q want %q\ninput: %s", i, err, test.err, test.input)
 		}
 	}
 }
 
-func TestSplitTypes(t *testing.T) {
-	if _, _, err := SplitString(unhex("C100")); err != ErrExpectedString {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedString)
+func TestSplitString(t *testing.T) {
+	t.Parallel()
+
+	for i, test := range []string{
+		"C0",
+		"C100",
+		"C3010203",
+		"C88363617483646F67",
+		"F8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitString(unhex(test)); !errors.Is(err, ErrExpectedString) {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedString)
+		}
 	}
-	if _, _, err := SplitList(unhex("01")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
-	}
-	if _, _, err := SplitList(unhex("81FF")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+}
+
+func TestSplitList(t *testing.T) {
+	t.Parallel()
+
+	for i, test := range []string{
+		"80",
+		"00",
+		"01",
+		"8180",
+		"81FF",
+		"820400",
+		"83636174",
+		"83646F67",
+		"B8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitList(unhex(test)); !errors.Is(err, ErrExpectedList) {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedList)
+		}
 	}
 }
 
@@ -106,9 +131,11 @@ func TestSplitUint64(t *testing.T) {
 		if val != test.val {
 			t.Errorf("test %d: val mismatch: got %x, want %x (input %q)", i, val, test.val, test.input)
 		}
+
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s (input %q)", i, rest, test.rest, test.input)
 		}
+
 		if err != test.err {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
@@ -187,12 +214,15 @@ func TestSplit(t *testing.T) {
 		if kind != test.kind {
 			t.Errorf("test %d: kind mismatch: got %v, want %v", i, kind, test.kind)
 		}
+
 		if !bytes.Equal(val, unhex(test.val)) {
 			t.Errorf("test %d: val mismatch: got %x, want %s", i, val, test.val)
 		}
+
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s", i, rest, test.rest)
 		}
+
 		if err != test.err {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
@@ -235,6 +265,7 @@ func TestReadSize(t *testing.T) {
 			t.Errorf("readSize(%s, %d): error mismatch: got %q, want %q", test.input, test.slen, err, test.err)
 			continue
 		}
+
 		if size != test.size {
 			t.Errorf("readSize(%s, %d): size mismatch: got %#x, want %#x", test.input, test.slen, size, test.size)
 		}
@@ -276,10 +307,49 @@ func TestAppendUint64Random(t *testing.T) {
 	fn := func(i uint64) bool {
 		enc, _ := EncodeToBytes(i)
 		encAppend := AppendUint64(nil, i)
+
 		return bytes.Equal(enc, encAppend)
 	}
 	config := quick.Config{MaxCountScale: 50}
+
 	if err := quick.Check(fn, &config); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBytesSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		v    []byte
+		size uint64
+	}{
+		{v: []byte{}, size: 1},
+		{v: []byte{0x1}, size: 1},
+		{v: []byte{0x7E}, size: 1},
+		{v: []byte{0x7F}, size: 1},
+		{v: []byte{0x80}, size: 2},
+		{v: []byte{0xFF}, size: 2},
+		{v: []byte{0xFF, 0xF0}, size: 3},
+		{v: make([]byte, 55), size: 56},
+		{v: make([]byte, 56), size: 58},
+	}
+
+	for _, test := range tests {
+		s := BytesSize(test.v)
+		if s != test.size {
+			t.Errorf("BytesSize(%#x) -> %d, want %d", test.v, s, test.size)
+		}
+
+		s = StringSize(string(test.v))
+
+		if s != test.size {
+			t.Errorf("StringSize(%#x) -> %d, want %d", test.v, s, test.size)
+		}
+		// Sanity check:
+		enc, _ := EncodeToBytes(test.v)
+		if uint64(len(enc)) != test.size {
+			t.Errorf("len(EncodeToBytes(%#x)) -> %d, test says %d", test.v, len(enc), test.size)
+		}
 	}
 }

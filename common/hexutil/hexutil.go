@@ -18,7 +18,7 @@
 Package hexutil implements hex encoding with 0x prefix.
 This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
 
-Encoding Rules
+# Encoding Rules
 
 All hex data must have prefix "0x".
 
@@ -61,13 +61,16 @@ func Decode(input string) ([]byte, error) {
 	if len(input) == 0 {
 		return nil, ErrEmptyString
 	}
+
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
+
 	b, err := hex.DecodeString(input[2:])
 	if err != nil {
 		err = mapError(err)
 	}
+
 	return b, err
 }
 
@@ -77,6 +80,7 @@ func MustDecode(input string) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return dec
 }
 
@@ -85,6 +89,7 @@ func Encode(b []byte) string {
 	enc := make([]byte, len(b)*2+2)
 	copy(enc, "0x")
 	hex.Encode(enc[2:], b)
+
 	return string(enc)
 }
 
@@ -94,10 +99,12 @@ func DecodeUint64(input string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	dec, err := strconv.ParseUint(raw, 16, 64)
 	if err != nil {
 		err = mapError(err)
 	}
+
 	return dec, err
 }
 
@@ -108,6 +115,7 @@ func MustDecodeUint64(input string) uint64 {
 	if err != nil {
 		panic(err)
 	}
+
 	return dec
 }
 
@@ -115,6 +123,7 @@ func MustDecodeUint64(input string) uint64 {
 func EncodeUint64(i uint64) string {
 	enc := make([]byte, 2, 10)
 	copy(enc, "0x")
+
 	return string(strconv.AppendUint(enc, i, 16))
 }
 
@@ -141,27 +150,35 @@ func DecodeBig(input string) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(raw) > 64 {
 		return nil, ErrBig256Range
 	}
+
 	words := make([]big.Word, len(raw)/bigWordNibbles+1)
 	end := len(raw)
+
 	for i := range words {
 		start := end - bigWordNibbles
 		if start < 0 {
 			start = 0
 		}
+
 		for ri := start; ri < end; ri++ {
 			nib := decodeNibble(raw[ri])
 			if nib == badNibble {
 				return nil, ErrSyntax
 			}
+
 			words[i] *= 16
 			words[i] += big.Word(nib)
 		}
+
 		end = start
 	}
+
 	dec := new(big.Int).SetBits(words)
+
 	return dec, nil
 }
 
@@ -172,6 +189,7 @@ func MustDecodeBig(input string) *big.Int {
 	if err != nil {
 		panic(err)
 	}
+
 	return dec
 }
 
@@ -194,16 +212,20 @@ func checkNumber(input string) (raw string, err error) {
 	if len(input) == 0 {
 		return "", ErrEmptyString
 	}
+
 	if !has0xPrefix(input) {
 		return "", ErrMissingPrefix
 	}
+
 	input = input[2:]
 	if len(input) == 0 {
 		return "", ErrEmptyNumber
 	}
+
 	if len(input) > 1 && input[0] == '0' {
 		return "", ErrLeadingZero
 	}
+
 	return input, nil
 }
 
@@ -231,11 +253,14 @@ func mapError(err error) error {
 			return ErrSyntax
 		}
 	}
+
 	if _, ok := err.(hex.InvalidByteError); ok {
 		return ErrSyntax
 	}
+
 	if err == hex.ErrLength {
 		return ErrOddLength
 	}
+
 	return err
 }

@@ -114,11 +114,13 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	if err := tab.setFallbackNodes(bootnodes); err != nil {
 		return nil, err
 	}
+
 	for i := range tab.buckets {
 		tab.buckets[i] = &bucket{
 			ips: netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
 		}
 	}
+
 	tab.seedRand()
 	tab.loadSeedNodes()
 
@@ -131,6 +133,7 @@ func (tab *Table) self() *enode.Node {
 
 func (tab *Table) seedRand() {
 	var b [8]byte
+
 	crand.Read(b[:])
 
 	tab.mutex.Lock()
@@ -144,10 +147,12 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 	if !tab.isInitDone() {
 		return 0
 	}
+
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
 	var nodes []*enode.Node
+
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			nodes = append(nodes, unwrapNode(n))
@@ -158,6 +163,7 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 		j := tab.rand.Intn(len(nodes))
 		nodes[i], nodes[j] = nodes[j], nodes[i]
 	}
+
 	return copy(buf, nodes)
 }
 
@@ -172,6 +178,7 @@ func (tab *Table) getNode(id enode.ID) *enode.Node {
 			return unwrapNode(e)
 		}
 	}
+
 	return nil
 }
 
@@ -190,7 +197,9 @@ func (tab *Table) setFallbackNodes(nodes []*enode.Node) error {
 			return fmt.Errorf("bad bootstrap node %q: %v", n, err)
 		}
 	}
+
 	tab.nursery = wrapNodes(nodes)
+
 	return nil
 }
 
@@ -211,6 +220,7 @@ func (tab *Table) refresh() <-chan struct{} {
 	case <-tab.closeReq:
 		close(done)
 	}
+
 	return done
 }
 
@@ -224,6 +234,7 @@ func (tab *Table) loop() {
 		revalidateDone chan struct{}                   // where doRevalidate reports completion
 		waiting        = []chan struct{}{tab.initDone} // holds waiting callers while doRefresh runs
 	)
+
 	defer refresh.Stop()
 	defer revalidate.Stop()
 	defer copyNodes.Stop()
@@ -267,12 +278,15 @@ loop:
 	if refreshDone != nil {
 		<-refreshDone
 	}
+
 	for _, ch := range waiting {
 		close(ch)
 	}
+
 	if revalidateDone != nil {
 		<-revalidateDone
 	}
+
 	close(tab.closed)
 }
 
@@ -303,6 +317,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 func (tab *Table) loadSeedNodes() {
 	seeds := wrapNodes(tab.db.QuerySeeds(seedCount, seedMaxAge))
 	seeds = append(seeds, tab.nursery...)
+
 	for i := range seeds {
 		seed := seeds[i]
 		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
@@ -338,11 +353,13 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 	b := tab.buckets[bi]
+
 	if err == nil {
 		// The node responded, move it to the front.
 		last.livenessChecks++
 		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
 		tab.bumpInBucket(b, last)
+
 		return
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
@@ -366,6 +383,7 @@ func (tab *Table) nodeToRevalidate() (n *node, bi int) {
 			return last, bi
 		}
 	}
+
 	return nil, 0
 }
 
@@ -383,6 +401,7 @@ func (tab *Table) copyLiveNodes() {
 	defer tab.mutex.Unlock()
 
 	now := time.Now()
+
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			if n.livenessChecks > 0 && now.Sub(n.addedAt) >= seedMinTableTime {
@@ -408,9 +427,11 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	// is O(tab.len() * nresults).
 	nodes := &nodesByDistance{target: target}
 	liveNodes := &nodesByDistance{target: target}
+
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			nodes.push(n, nresults)
+
 			if preferLive && n.livenessChecks > 0 {
 				liveNodes.push(n, nresults)
 			}
@@ -420,6 +441,7 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	if preferLive && len(liveNodes.entries) > 0 {
 		return liveNodes
 	}
+
 	return nodes
 }
 
@@ -431,6 +453,7 @@ func (tab *Table) len() (n int) {
 	for _, b := range &tab.buckets {
 		n += len(b.entries)
 	}
+
 	return n
 }
 
@@ -452,6 +475,7 @@ func (tab *Table) bucketAtDistance(d int) *bucket {
 	if d <= bucketMinDistance {
 		return tab.buckets[0]
 	}
+
 	return tab.buckets[d-bucketMinDistance-1]
 }
 
@@ -467,16 +491,19 @@ func (tab *Table) addSeenNode(n *node) {
 
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
+
 	b := tab.bucket(n.ID())
 	if contains(b.entries, n.ID()) {
 		// Already in bucket, don't add.
 		return
 	}
+
 	if len(b.entries) >= bucketSize {
 		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, n)
 		return
 	}
+
 	if !tab.addIP(b, n.IP()) {
 		// Can't add: IP limit reached.
 		return
@@ -484,6 +511,7 @@ func (tab *Table) addSeenNode(n *node) {
 	// Add to end of bucket:
 	b.entries = append(b.entries, n)
 	b.replacements = deleteNode(b.replacements, n)
+
 	n.addedAt = time.Now()
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(n)
@@ -503,22 +531,26 @@ func (tab *Table) addVerifiedNode(n *node) {
 	if !tab.isInitDone() {
 		return
 	}
+
 	if n.ID() == tab.self().ID() {
 		return
 	}
 
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
+
 	b := tab.bucket(n.ID())
 	if tab.bumpInBucket(b, n) {
 		// Already in bucket, moved to front.
 		return
 	}
+
 	if len(b.entries) >= bucketSize {
 		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, n)
 		return
 	}
+
 	if !tab.addIP(b, n.IP()) {
 		// Can't add: IP limit reached.
 		return
@@ -526,6 +558,7 @@ func (tab *Table) addVerifiedNode(n *node) {
 	// Add to front of bucket.
 	b.entries, _ = pushNode(b.entries, n, bucketSize)
 	b.replacements = deleteNode(b.replacements, n)
+
 	n.addedAt = time.Now()
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(n)
@@ -544,18 +577,23 @@ func (tab *Table) addIP(b *bucket, ip net.IP) bool {
 	if len(ip) == 0 {
 		return false // Nodes without IP cannot be added.
 	}
+
 	if netutil.IsLAN(ip) {
 		return true
 	}
+
 	if !tab.ips.Add(ip) {
 		tab.log.Debug("IP exceeds table limit", "ip", ip)
 		return false
 	}
+
 	if !b.ips.Add(ip) {
 		tab.log.Debug("IP exceeds bucket limit", "ip", ip)
 		tab.ips.Remove(ip)
+
 		return false
 	}
+
 	return true
 }
 
@@ -563,6 +601,7 @@ func (tab *Table) removeIP(b *bucket, ip net.IP) {
 	if netutil.IsLAN(ip) {
 		return
 	}
+
 	tab.ips.Remove(ip)
 	b.ips.Remove(ip)
 }
@@ -573,10 +612,13 @@ func (tab *Table) addReplacement(b *bucket, n *node) {
 			return // already in list
 		}
 	}
+
 	if !tab.addIP(b, n.IP()) {
 		return
 	}
+
 	var removed *node
+
 	b.replacements, removed = pushNode(b.replacements, n, maxReplacements)
 	if removed != nil {
 		tab.removeIP(b, removed.IP())
@@ -596,10 +638,12 @@ func (tab *Table) replace(b *bucket, last *node) *node {
 		tab.deleteInBucket(b, last)
 		return nil
 	}
+
 	r := b.replacements[tab.rand.Intn(len(b.replacements))]
 	b.replacements = deleteNode(b.replacements, r)
 	b.entries[len(b.entries)-1] = r
 	tab.removeIP(b, last.IP())
+
 	return r
 }
 
@@ -611,6 +655,7 @@ func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 			if !n.IP().Equal(b.entries[i].IP()) {
 				// Endpoint has changed, ensure that the new IP fits into table limits.
 				tab.removeIP(b, b.entries[i].IP())
+
 				if !tab.addIP(b, n.IP()) {
 					// It doesn't, put the previous one back.
 					tab.addIP(b, b.entries[i].IP())
@@ -620,9 +665,11 @@ func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 			// Move it to the front.
 			copy(b.entries[1:], b.entries[:i])
 			b.entries[0] = n
+
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -637,6 +684,7 @@ func contains(ns []*node, id enode.ID) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -645,9 +693,11 @@ func pushNode(list []*node, n *node, max int) ([]*node, *node) {
 	if len(list) < max {
 		list = append(list, nil)
 	}
+
 	removed := list[len(list)-1]
 	copy(list[1:], list)
 	list[0] = n
+
 	return list, removed
 }
 
@@ -658,6 +708,7 @@ func deleteNode(list []*node, n *node) []*node {
 			return append(list[:i], list[i+1:]...)
 		}
 	}
+
 	return list
 }
 
@@ -672,15 +723,16 @@ func (h *nodesByDistance) push(n *node, maxElems int) {
 	ix := sort.Search(len(h.entries), func(i int) bool {
 		return enode.DistCmp(h.target, h.entries[i].ID(), n.ID()) > 0
 	})
+
+	end := len(h.entries)
+
 	if len(h.entries) < maxElems {
 		h.entries = append(h.entries, n)
 	}
-	if ix == len(h.entries) {
-		// farther away than all nodes we already have.
-		// if there was room for it, the node is now the last element.
-	} else {
-		// slide existing entries down to make room
-		// this will overwrite the entry we just appended.
+
+	if ix < end {
+		// Slide existing entries down to make room.
+		// This will overwrite the entry we just appended.
 		copy(h.entries[ix+1:], h.entries[ix:])
 		h.entries[ix] = n
 	}

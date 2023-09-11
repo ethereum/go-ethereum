@@ -28,6 +28,7 @@ func lexAll(src string) []token {
 	for i := range ch {
 		tokens = append(tokens, i)
 	}
+
 	return tokens
 }
 

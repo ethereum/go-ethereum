@@ -19,24 +19,24 @@ package main
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common"
-	"gopkg.in/urfave/cli.v1"
 )
 
-var commandStatus = cli.Command{
+var commandStatus = &cli.Command{
 	Name:  "status",
 	Usage: "Fetches the signers and checkpoint status of the oracle contract",
 	Flags: []cli.Flag{
 		nodeURLFlag,
 	},
-	Action: utils.MigrateFlags(status),
+	Action: status,
 }
 
 // status fetches the admin list of specified registrar contract.
 func status(ctx *cli.Context) error {
 	// Create a wrapper around the checkpoint oracle contract
-	addr, oracle := newContract(newRPCClient(ctx.GlobalString(nodeURLFlag.Name)))
+	addr, oracle := newContract(newRPCClient(ctx.String(nodeURLFlag.Name)))
 	fmt.Printf("Oracle => %s\n", addr.Hex())
 	fmt.Println()
 
@@ -45,9 +45,11 @@ func status(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	for i, admin := range admins {
 		fmt.Printf("Admin %d => %s\n", i+1, admin.Hex())
 	}
+
 	fmt.Println()
 
 	// Retrieve the latest checkpoint
@@ -55,6 +57,7 @@ func status(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Checkpoint (published at #%d) %d => %s\n", height, index, common.Hash(checkpoint).Hex())
 
 	return nil

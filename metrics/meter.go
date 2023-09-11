@@ -27,6 +27,7 @@ func GetOrRegisterMeter(name string, r Registry) Meter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewMeter).(Meter)
 }
 
@@ -38,6 +39,7 @@ func GetOrRegisterMeterForced(name string, r Registry) Meter {
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	return r.GetOrRegister(name, NewMeterForced).(Meter)
 }
 
@@ -47,14 +49,18 @@ func NewMeter() Meter {
 	if !Enabled {
 		return NilMeter{}
 	}
+
 	m := newStandardMeter()
+
 	arbiter.Lock()
 	defer arbiter.Unlock()
+
 	arbiter.meters[m] = struct{}{}
 	if !arbiter.started {
 		arbiter.started = true
 		go arbiter.tick()
 	}
+
 	return m
 }
 
@@ -63,13 +69,16 @@ func NewMeter() Meter {
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.
 func NewMeterForced() Meter {
 	m := newStandardMeter()
+
 	arbiter.Lock()
 	defer arbiter.Unlock()
+
 	arbiter.meters[m] = struct{}{}
 	if !arbiter.started {
 		arbiter.started = true
 		go arbiter.tick()
 	}
+
 	return m
 }
 
@@ -79,10 +88,13 @@ func NewMeterForced() Meter {
 // allow for garbage collection.
 func NewRegisteredMeter(name string, r Registry) Meter {
 	c := NewMeter()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
@@ -92,20 +104,19 @@ func NewRegisteredMeter(name string, r Registry) Meter {
 // allow for garbage collection.
 func NewRegisteredMeterForced(name string, r Registry) Meter {
 	c := NewMeterForced()
+
 	if nil == r {
 		r = DefaultRegistry
 	}
+
 	r.Register(name, c)
+
 	return c
 }
 
 // MeterSnapshot is a read-only copy of another Meter.
 type MeterSnapshot struct {
-	// WARNING: The `temp` field is accessed atomically.
-	// On 32 bit platforms, only 64-bit aligned fields can be atomic. The struct is
-	// guaranteed to be so aligned, so take advantage of that. For more information,
-	// see https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
-	temp                           int64
+	temp                           atomic.Int64
 	count                          int64
 	rate1, rate5, rate15, rateMean float64
 }
@@ -173,7 +184,7 @@ type StandardMeter struct {
 	snapshot    *MeterSnapshot
 	a1, a5, a15 EWMA
 	startTime   time.Time
-	stopped     uint32
+	stopped     atomic.Bool
 }
 
 func newStandardMeter() *StandardMeter {
@@ -188,8 +199,8 @@ func newStandardMeter() *StandardMeter {
 
 // Stop stops the meter, Mark() will be a no-op if you use it after being stopped.
 func (m *StandardMeter) Stop() {
-	stopped := atomic.SwapUint32(&m.stopped, 1)
-	if stopped != 1 {
+	stopped := m.stopped.Swap(true)
+	if !stopped {
 		arbiter.Lock()
 		delete(arbiter.meters, m)
 		arbiter.Unlock()
@@ -202,18 +213,20 @@ func (m *StandardMeter) Count() int64 {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.updateMeter()
+
 	return m.snapshot.count
 }
 
 // Mark records the occurrence of n events.
 func (m *StandardMeter) Mark(n int64) {
-	atomic.AddInt64(&m.snapshot.temp, n)
+	m.snapshot.temp.Add(n)
 }
 
 // Rate1 returns the one-minute moving average rate of events per second.
 func (m *StandardMeter) Rate1() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate1
 }
 
@@ -221,6 +234,7 @@ func (m *StandardMeter) Rate1() float64 {
 func (m *StandardMeter) Rate5() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate5
 }
 
@@ -228,6 +242,7 @@ func (m *StandardMeter) Rate5() float64 {
 func (m *StandardMeter) Rate15() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rate15
 }
 
@@ -235,14 +250,23 @@ func (m *StandardMeter) Rate15() float64 {
 func (m *StandardMeter) RateMean() float64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
 	return m.snapshot.rateMean
 }
 
 // Snapshot returns a read-only copy of the meter.
 func (m *StandardMeter) Snapshot() Meter {
 	m.lock.RLock()
-	snapshot := *m.snapshot
+	snapshot := MeterSnapshot{
+		count:    m.snapshot.count,
+		rate1:    m.snapshot.rate1,
+		rate5:    m.snapshot.rate5,
+		rate15:   m.snapshot.rate15,
+		rateMean: m.snapshot.rateMean,
+	}
+	snapshot.temp.Store(m.snapshot.temp.Load())
 	m.lock.RUnlock()
+
 	return &snapshot
 }
 
@@ -257,7 +281,7 @@ func (m *StandardMeter) updateSnapshot() {
 
 func (m *StandardMeter) updateMeter() {
 	// should only run with write lock held on m.lock
-	n := atomic.SwapInt64(&m.snapshot.temp, 0)
+	n := m.snapshot.temp.Swap(0)
 	m.snapshot.count += n
 	m.a1.Update(n)
 	m.a5.Update(n)
@@ -295,6 +319,7 @@ func (ma *meterArbiter) tick() {
 func (ma *meterArbiter) tickMeters() {
 	ma.RLock()
 	defer ma.RUnlock()
+
 	for meter := range ma.meters {
 		meter.tick()
 	}

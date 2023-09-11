@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package dnsdisc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -26,12 +27,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
@@ -40,7 +41,7 @@ import (
 type Client struct {
 	cfg          Config
 	clock        mclock.Clock
-	entries      *lru.Cache
+	entries      *lru.Cache[string, entry]
 	ratelimit    *rate.Limiter
 	singleflight singleflight.Group
 }
@@ -68,41 +69,46 @@ func (cfg Config) withDefaults() Config {
 		defaultRateLimit = 3
 		defaultCache     = 1000
 	)
+
 	if cfg.Timeout == 0 {
 		cfg.Timeout = defaultTimeout
 	}
+
 	if cfg.RecheckInterval == 0 {
 		cfg.RecheckInterval = defaultRecheck
 	}
+
 	if cfg.CacheLimit == 0 {
 		cfg.CacheLimit = defaultCache
 	}
+
 	if cfg.RateLimit == 0 {
 		cfg.RateLimit = defaultRateLimit
 	}
+
 	if cfg.ValidSchemes == nil {
 		cfg.ValidSchemes = enode.ValidSchemes
 	}
+
 	if cfg.Resolver == nil {
 		cfg.Resolver = new(net.Resolver)
 	}
+
 	if cfg.Logger == nil {
 		cfg.Logger = log.Root()
 	}
+
 	return cfg
 }
 
 // NewClient creates a client.
 func NewClient(cfg Config) *Client {
 	cfg = cfg.withDefaults()
-	cache, err := lru.New(cfg.CacheLimit)
-	if err != nil {
-		panic(err)
-	}
 	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
+
 	return &Client{
 		cfg:       cfg,
-		entries:   cache,
+		entries:   lru.NewCache[string, entry](cfg.CacheLimit),
 		clock:     mclock.System{},
 		ratelimit: rlimit,
 	}
@@ -114,12 +120,16 @@ func (c *Client) SyncTree(url string) (*Tree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid enrtree URL: %v", err)
 	}
+
 	ct := newClientTree(c, new(linkCache), le)
 	t := &Tree{entries: make(map[string]entry)}
+
 	if err := ct.syncAll(t.entries); err != nil {
 		return nil, err
 	}
+
 	t.root = ct.root
+
 	return t, nil
 }
 
@@ -132,6 +142,7 @@ func (c *Client) NewIterator(urls ...string) (enode.Iterator, error) {
 			return nil, err
 		}
 	}
+
 	return it, nil
 }
 
@@ -140,16 +151,20 @@ func (c *Client) resolveRoot(ctx context.Context, loc *linkEntry) (rootEntry, er
 	e, err, _ := c.singleflight.Do(loc.str, func() (interface{}, error) {
 		txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
 		c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
+
 		if err != nil {
 			return rootEntry{}, err
 		}
+
 		for _, txt := range txts {
 			if strings.HasPrefix(txt, rootPrefix) {
 				return parseAndVerifyRoot(txt, loc)
 			}
 		}
+
 		return rootEntry{}, nameError{loc.domain, errNoRoot}
 	})
+
 	return e.(rootEntry), err
 }
 
@@ -158,9 +173,11 @@ func parseAndVerifyRoot(txt string, loc *linkEntry) (rootEntry, error) {
 	if err != nil {
 		return e, err
 	}
+
 	if !e.verifySignature(loc.pubkey) {
 		return e, entryError{typ: "root", err: errInvalidSig}
 	}
+
 	return e, nil
 }
 
@@ -173,9 +190,10 @@ func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, 
 	if err := c.ratelimit.Wait(ctx); err != nil {
 		return nil, err
 	}
+
 	cacheKey := truncateHash(hash)
 	if e, ok := c.entries.Get(cacheKey); ok {
-		return e.(entry), nil
+		return e, nil
 	}
 
 	ei, err, _ := c.singleflight.Do(cacheKey, func() (interface{}, error) {
@@ -183,10 +201,13 @@ func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, 
 		if err != nil {
 			return nil, err
 		}
+
 		c.entries.Add(cacheKey, e)
+
 		return e, nil
 	})
 	e, _ := ei.(entry)
+
 	return e, err
 }
 
@@ -196,24 +217,30 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 	if err != nil {
 		return nil, fmt.Errorf("invalid base32 hash")
 	}
+
 	name := hash + "." + domain
 	txts, err := c.cfg.Resolver.LookupTXT(ctx, hash+"."+domain)
 	c.cfg.Logger.Trace("DNS discovery lookup", "name", name, "err", err)
+
 	if err != nil {
 		return nil, err
 	}
+
 	for _, txt := range txts {
 		e, err := parseEntry(txt, c.cfg.ValidSchemes)
-		if err == errUnknownEntry {
+		if errors.Is(err, errUnknownEntry) {
 			continue
 		}
+
 		if !bytes.HasPrefix(crypto.Keccak256([]byte(txt)), wantHash) {
 			err = nameError{name, errHashMismatch}
 		} else if err != nil {
 			err = nameError{name, err}
 		}
+
 		return e, err
 	}
+
 	return nil, nameError{name, errNoEntry}
 }
 
@@ -234,6 +261,7 @@ type randomIterator struct {
 
 func (c *Client) newRandomIterator() *randomIterator {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &randomIterator{
 		c:        c,
 		ctx:      ctx,
@@ -268,7 +296,9 @@ func (it *randomIterator) addTree(url string) error {
 	if err != nil {
 		return fmt.Errorf("invalid enrtree URL: %v", err)
 	}
+
 	it.lc.addLink("", le.str)
+
 	return nil
 }
 
@@ -279,14 +309,18 @@ func (it *randomIterator) nextNode() *enode.Node {
 		if ct == nil {
 			return nil
 		}
+
 		n, err := ct.syncRandom(it.ctx)
 		if err != nil {
-			if err == it.ctx.Err() {
+			if errors.Is(err, it.ctx.Err()) {
 				return nil // context canceled.
 			}
+
 			it.c.cfg.Logger.Debug("Error in DNS random node sync", "tree", ct.loc.domain, "err", err)
+
 			continue
 		}
+
 		if n != nil {
 			return n
 		}
@@ -312,6 +346,7 @@ func (it *randomIterator) pickTree() *clientTree {
 
 	for {
 		canSync, trees := it.syncableTrees()
+
 		switch {
 		case canSync:
 			// Pick a random tree.
@@ -344,16 +379,20 @@ func (it *randomIterator) syncableTrees() (canSync bool, trees []*clientTree) {
 			it.disabledList = append(it.disabledList, ct)
 		}
 	}
+
 	if len(it.syncableList) > 0 {
 		return true, it.syncableList
 	}
+
 	return false, it.disabledList
 }
 
 // waitForRootUpdates waits for the closest scheduled root check time on the given trees.
 func (it *randomIterator) waitForRootUpdates(trees []*clientTree) bool {
 	var minTree *clientTree
+
 	var nextCheck mclock.AbsTime
+
 	for _, ct := range trees {
 		check := ct.nextScheduledRootCheck()
 		if minTree == nil || check < nextCheck {
@@ -364,6 +403,7 @@ func (it *randomIterator) waitForRootUpdates(trees []*clientTree) bool {
 
 	sleep := nextCheck.Sub(it.c.clock.Now())
 	it.c.cfg.Logger.Debug("DNS iterator waiting for root updates", "sleep", sleep, "tree", minTree.loc.domain)
+
 	timeout := it.c.clock.NewTimer(sleep)
 	defer timeout.Stop()
 	select {

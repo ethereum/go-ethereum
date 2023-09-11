@@ -12,11 +12,11 @@ import (
 )
 
 // SetChainConfig sets chain config
-func (api *PublicFilterAPI) SetChainConfig(chainConfig *params.ChainConfig) {
+func (api *FilterAPI) SetChainConfig(chainConfig *params.ChainConfig) {
 	api.chainConfig = chainConfig
 }
 
-func (api *PublicFilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
+func (api *FilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	if api.chainConfig == nil {
 		return nil, errors.New("no chain config found. Proper PublicFilterAPI initialization required")
 	}
@@ -27,19 +27,20 @@ func (api *PublicFilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCrit
 	var filter *BorBlockLogsFilter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
-		filter = NewBorBlockLogsFilter(api.backend, borConfig, *crit.BlockHash, crit.Addresses, crit.Topics)
+		filter = NewBorBlockLogsFilter(api.sys.backend, borConfig, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
 		// Convert the RPC block numbers into internal representations
 		begin := rpc.LatestBlockNumber.Int64()
 		if crit.FromBlock != nil {
 			begin = crit.FromBlock.Int64()
 		}
+
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = NewBorBlockLogsRangeFilter(api.backend, borConfig, begin, end, crit.Addresses, crit.Topics)
+		filter = NewBorBlockLogsRangeFilter(api.sys.backend, borConfig, begin, end, crit.Addresses, crit.Topics)
 	}
 
 	// Run the filter and return all the logs
@@ -47,11 +48,12 @@ func (api *PublicFilterAPI) GetBorBlockLogs(ctx context.Context, crit FilterCrit
 	if err != nil {
 		return nil, err
 	}
+
 	return returnLogs(logs), err
 }
 
 // NewDeposits send a notification each time a new deposit received from bridge.
-func (api *PublicFilterAPI) NewDeposits(ctx context.Context, crit ethereum.StateSyncFilter) (*rpc.Subscription, error) {
+func (api *FilterAPI) NewDeposits(ctx context.Context, crit ethereum.StateSyncFilter) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported

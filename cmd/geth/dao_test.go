@@ -17,7 +17,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -106,15 +105,15 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 
 func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBlock *big.Int, expectVote bool) {
 	// Create a temporary data directory to use and inspect later
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	// Start a Geth instance with the requested flags set and immediately terminate
 	if genesis != "" {
 		json := filepath.Join(datadir, "genesis.json")
-		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
+		if err := os.WriteFile(json, []byte(genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", test, err)
 		}
+
 		runGeth(t, "--datadir", datadir, "--networkid", "1337", "init", json).WaitExit()
 	} else {
 		// Force chain initialization
@@ -123,16 +122,19 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	}
 	// Retrieve the DAO config flag from the database
 	path := filepath.Join(datadir, "geth", "chaindata")
+
 	db, err := rawdb.NewLevelDBDatabase(path, 0, 0, "", false)
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
 	}
+
 	defer db.Close()
 
 	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
+
 	config := rawdb.ReadChainConfig(db, genesisHash)
 	if config == nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
@@ -148,6 +150,7 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	} else if config.DAOForkBlock.Cmp(expectBlock) != 0 {
 		t.Errorf("test %d: dao hard-fork block mismatch: have %v, want %v", test, config.DAOForkBlock, expectBlock)
 	}
+
 	if config.DAOForkSupport != expectVote {
 		t.Errorf("test %d: dao hard-fork support mismatch: have %v, want %v", test, config.DAOForkSupport, expectVote)
 	}

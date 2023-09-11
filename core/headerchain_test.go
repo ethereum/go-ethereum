@@ -27,12 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 	h := hc.CurrentHeader()
+
 	for {
 		canonHash := rawdb.ReadCanonicalHash(hc.chainDb, h.Number.Uint64())
 		if exp := h.Hash(); canonHash != exp {
@@ -43,11 +44,14 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
 			return fmt.Errorf("Canon TD missing at block %d", h.Number)
 		}
+
 		if h.Number.Uint64() == 0 {
 			break
 		}
+
 		h = hc.GetHeader(h.ParentHash, h.Number.Uint64()-1)
 	}
+
 	return nil
 }
 
@@ -62,6 +66,7 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 	if err := verifyUnbrokenCanonchain(hc); err != nil {
 		t.Fatal(err)
 	}
+
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("unexpected error from InsertHeaderChain: %v", err)
 	}
@@ -70,19 +75,20 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 // This test checks status reporting of InsertHeaderChain.
 func TestHeaderInsertion(t *testing.T) {
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	_, _ = gspec.Commit(db, trie.NewDatabase(db))
+
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 128, ethash.NewFaker(), 10)
 	// chain B: G->A1->B1...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
-	log.Root().SetHandler(log.StdoutHandler)
+	chainB := makeHeaderChain(gspec.Config, chainA[0], 128, ethash.NewFaker(), genDb, 10)
 
 	forker := NewForkChoice(hc, nil, nil)
 	// Inserting 64 headers on an empty chain, expecting

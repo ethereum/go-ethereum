@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,14 +27,18 @@ func TestLinkCache(t *testing.T) {
 
 	// Check adding links.
 	lc.addLink("1", "2")
+
 	if !lc.changed {
 		t.Error("changed flag not set")
 	}
+
 	lc.changed = false
 	lc.addLink("1", "2")
+
 	if lc.changed {
 		t.Error("changed flag set after adding link that's already present")
 	}
+
 	lc.addLink("2", "3")
 	lc.addLink("3", "1")
 	lc.addLink("2", "4")
@@ -43,14 +47,17 @@ func TestLinkCache(t *testing.T) {
 	if !lc.isReferenced("3") {
 		t.Error("3 not referenced")
 	}
+
 	if lc.isReferenced("6") {
 		t.Error("6 is referenced")
 	}
 
 	lc.resetLinks("1", nil)
+
 	if !lc.changed {
 		t.Error("changed flag not set")
 	}
+
 	if len(lc.backrefs) != 0 {
 		t.Logf("%+v", lc)
 		t.Error("reference maps should be empty")
@@ -65,7 +72,9 @@ func TestLinkCacheRandom(t *testing.T) {
 
 	// Create random links.
 	var lc linkCache
+
 	var remove []string
+
 	for i := 0; i < 100; i++ {
 		a, b := tags[rand.Intn(len(tags))], tags[rand.Intn(len(tags))]
 		lc.addLink(a, b)
@@ -76,6 +85,7 @@ func TestLinkCacheRandom(t *testing.T) {
 	for _, s := range remove {
 		lc.resetLinks(s, nil)
 	}
+
 	if len(lc.backrefs) != 0 {
 		t.Logf("%+v", lc)
 		t.Error("reference maps should be empty")

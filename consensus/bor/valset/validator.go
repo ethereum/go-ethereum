@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Validator represets Volatile state for each Validator
+// Validator represents Volatile state for each Validator
 type Validator struct {
 	ID               uint64         `json:"ID"`
 	Address          common.Address `json:"signer"`

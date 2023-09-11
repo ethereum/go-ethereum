@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 		listener net.Listener
 		err      error
 	)
+
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return nil, nil, err
 	}
@@ -39,12 +40,14 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 	CheckTimeouts(&timeouts)
 	// Bundle and start the HTTP server
 	httpSrv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  timeouts.ReadTimeout,
-		WriteTimeout: timeouts.WriteTimeout,
-		IdleTimeout:  timeouts.IdleTimeout,
+		Handler:           handler,
+		ReadTimeout:       timeouts.ReadTimeout,
+		ReadHeaderTimeout: timeouts.ReadHeaderTimeout,
+		WriteTimeout:      timeouts.WriteTimeout,
+		IdleTimeout:       timeouts.IdleTimeout,
 	}
 	go httpSrv.Serve(listener)
+
 	return httpSrv, listener.Addr(), err
 }
 
@@ -56,9 +59,11 @@ func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available [
 	for _, api := range apis {
 		if _, ok := availableSet[api.Namespace]; !ok {
 			availableSet[api.Namespace] = struct{}{}
+
 			available = append(available, api.Namespace)
 		}
 	}
+
 	for _, name := range modules {
 		if _, ok := availableSet[name]; !ok {
 			if name != rpc.MetadataApi && name != rpc.EngineApi {
@@ -66,6 +71,7 @@ func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available [
 			}
 		}
 	}
+
 	return bad, available
 }
 
@@ -75,10 +81,17 @@ func CheckTimeouts(timeouts *rpc.HTTPTimeouts) {
 		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
 		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
 	}
+
+	if timeouts.ReadHeaderTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read header timeout", "provided", timeouts.ReadHeaderTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadHeaderTimeout)
+		timeouts.ReadHeaderTimeout = rpc.DefaultHTTPTimeouts.ReadHeaderTimeout
+	}
+
 	if timeouts.WriteTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", rpc.DefaultHTTPTimeouts.WriteTimeout)
 		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
 	}
+
 	if timeouts.IdleTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", rpc.DefaultHTTPTimeouts.IdleTimeout)
 		timeouts.IdleTimeout = rpc.DefaultHTTPTimeouts.IdleTimeout

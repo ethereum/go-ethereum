@@ -34,6 +34,7 @@
       }
     ],
     "currentDifficulty": "0x20000",
-    "gasUsed": "0x109a0"
+    "gasUsed": "0x109a0",
+    "currentBaseFee": "0x36b"
   }
 }

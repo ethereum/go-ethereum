@@ -28,17 +28,18 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// List of known secure identity schemes.
+// ValidSchemes is a List of known secure identity schemes.
 var ValidSchemes = enr.SchemeMap{
 	"v4": V4ID{},
 }
 
+// ValidSchemesForTesting is a List of identity schemes for testing.
 var ValidSchemesForTesting = enr.SchemeMap{
 	"v4":   V4ID{},
 	"null": NullID{},
 }
 
-// v4ID is the "v4" identity scheme.
+// V4ID is the "v4" identity scheme.
 type V4ID struct{}
 
 // SignV4 signs a record using the v4 scheme.
@@ -50,14 +51,17 @@ func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
 
 	h := sha3.NewLegacyKeccak256()
 	rlp.Encode(h, cpy.AppendElements(nil))
+
 	sig, err := crypto.Sign(h.Sum(nil), privkey)
 	if err != nil {
 		return err
 	}
+
 	sig = sig[:len(sig)-1] // remove v
 	if err = cpy.SetSig(V4ID{}, sig); err == nil {
 		*r = cpy
 	}
+
 	return err
 }
 
@@ -71,21 +75,26 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 
 	h := sha3.NewLegacyKeccak256()
 	rlp.Encode(h, r.AppendElements(nil))
+
 	if !crypto.VerifySignature(entry, h.Sum(nil), sig) {
 		return enr.ErrInvalidSig
 	}
+
 	return nil
 }
 
 func (V4ID) NodeAddr(r *enr.Record) []byte {
 	var pubkey Secp256k1
+
 	err := r.Load(&pubkey)
 	if err != nil {
 		return nil
 	}
+
 	buf := make([]byte, 64)
 	math.ReadBits(pubkey.X, buf[:32])
 	math.ReadBits(pubkey.Y, buf[32:])
+
 	return crypto.Keccak256(buf)
 }
 
@@ -105,11 +114,14 @@ func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return err
 	}
+
 	pk, err := crypto.DecompressPubkey(buf)
 	if err != nil {
 		return err
 	}
+
 	*v = (Secp256k1)(*pk)
+
 	return nil
 }
 
@@ -131,6 +143,7 @@ func (v4CompatID) Verify(r *enr.Record, sig []byte) error {
 
 func signV4Compat(r *enr.Record, pubkey *ecdsa.PublicKey) {
 	r.Set((*Secp256k1)(pubkey))
+
 	if err := r.SetSig(v4CompatID{}, []byte{}); err != nil {
 		panic(err)
 	}
@@ -146,15 +159,19 @@ func (NullID) Verify(r *enr.Record, sig []byte) error {
 
 func (NullID) NodeAddr(r *enr.Record) []byte {
 	var id ID
+
 	r.Load(enr.WithEntry("nulladdr", &id))
+
 	return id[:]
 }
 
 func SignNull(r *enr.Record, id ID) *Node {
 	r.Set(enr.ID("null"))
 	r.Set(enr.WithEntry("nulladdr", id))
+
 	if err := r.SetSig(NullID{}, []byte{}); err != nil {
 		panic(err)
 	}
+
 	return &Node{r: *r, id: id}
 }

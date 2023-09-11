@@ -99,8 +99,8 @@ const (
 	P1DeriveKeyFromCurrent = uint8(0x10)
 	statusP1WalletStatus   = uint8(0x00)
 	statusP1Path           = uint8(0x01)
-	signP1PrecomputedHash  = uint8(0x01)
-	signP2OnlyBlock        = uint8(0x81)
+	signP1PrecomputedHash  = uint8(0x00)
+	signP2OnlyBlock        = uint8(0x00)
 	exportP1Any            = uint8(0x00)
 	exportP2Pubkey         = uint8(0x01)
 )
@@ -132,6 +132,7 @@ func NewWallet(hub *Hub, card *pcsc.Card) *Wallet {
 		Hub:  hub,
 		card: card,
 	}
+
 	return wallet
 }
 
@@ -167,7 +168,7 @@ func transmit(card *pcsc.Card, command *commandAPDU) (*responseAPDU, error) {
 	}
 
 	if response.Sw1 != sw1Ok {
-		return nil, fmt.Errorf("unexpected insecure response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
+		return nil, fmt.Errorf("unexpected insecure response status Cla=%#x, Ins=%#x, Sw=%#x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
 	}
 
 	return response, nil
@@ -202,6 +203,7 @@ func (w *Wallet) connect() error {
 		Wallet:  w,
 		Channel: channel,
 	}
+
 	return nil
 }
 
@@ -222,6 +224,7 @@ func (w *Wallet) doselect() (*applicationInfo, error) {
 	if _, err := asn1.UnmarshalWithParams(response.Data, appinfo, "tag:4"); err != nil {
 		return nil, err
 	}
+
 	return appinfo, nil
 }
 
@@ -234,9 +237,11 @@ func (w *Wallet) ping() error {
 	if !w.session.paired() {
 		return nil
 	}
+
 	if _, err := w.session.walletStatus(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -245,6 +250,7 @@ func (w *Wallet) release() error {
 	if w.session != nil {
 		return w.session.release()
 	}
+
 	return nil
 }
 
@@ -254,13 +260,16 @@ func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
 		return fmt.Errorf("wallet already paired")
 	}
+
 	pairing, err := w.session.pair(puk)
 	if err != nil {
 		return err
 	}
+
 	if err = w.Hub.setPairing(w, &pairing); err != nil {
 		return err
 	}
+
 	return w.session.authenticate(pairing)
 }
 
@@ -272,15 +281,19 @@ func (w *Wallet) Unpair(pin []byte) error {
 	if !w.session.paired() {
 		return fmt.Errorf("wallet %x not paired", w.PublicKey)
 	}
+
 	if err := w.session.verifyPin(pin); err != nil {
 		return fmt.Errorf("failed to verify pin: %s", err)
 	}
+
 	if err := w.session.unpair(); err != nil {
 		return fmt.Errorf("failed to unpair: %s", err)
 	}
+
 	if err := w.Hub.setPairing(w, nil); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -310,6 +323,7 @@ func (w *Wallet) Status() (string, error) {
 	if err != nil {
 		return fmt.Sprintf("Failed: %v", err), err
 	}
+
 	switch {
 	case !w.session.verified && status.PinRetryCount == 0 && status.PukRetryCount == 0:
 		return "Bricked, waiting for full wipe", nil
@@ -384,6 +398,7 @@ func (w *Wallet) Open(passphrase string) error {
 			w.log.Error("PIN needs to be at least 6 digits")
 			return ErrPINNeeded
 		}
+
 		if err := w.session.verifyPin([]byte(passphrase)); err != nil {
 			return err
 		}
@@ -392,6 +407,7 @@ func (w *Wallet) Open(passphrase string) error {
 			w.log.Error("PUK needs to be at least 12 digits")
 			return ErrPINUnblockNeeded
 		}
+
 		if err := w.session.unblockPin([]byte(passphrase)); err != nil {
 			return err
 		}
@@ -417,6 +433,7 @@ func (w *Wallet) Close() error {
 
 	// Terminate the self-derivations
 	var derr error
+
 	if dQuit != nil {
 		errc := make(chan error)
 		dQuit <- errc
@@ -432,6 +449,7 @@ func (w *Wallet) Close() error {
 	if err := w.release(); err != nil {
 		return err
 	}
+
 	return derr
 }
 
@@ -447,6 +465,7 @@ func (w *Wallet) selfDerive() {
 		errc chan error
 		err  error
 	)
+
 	for errc == nil && err == nil {
 		// Wait until either derivation or termination is requested
 		select {
@@ -461,8 +480,10 @@ func (w *Wallet) selfDerive() {
 		if w.session == nil || w.deriveChain == nil {
 			w.lock.Unlock()
 			reqc <- struct{}{}
+
 			continue
 		}
+
 		pairing := w.Hub.pairing(w)
 
 		// Device lock obtained, derive the next batch of accounts
@@ -475,6 +496,7 @@ func (w *Wallet) selfDerive() {
 
 			context = context.Background()
 		)
+
 		for i := 0; i < len(nextAddrs); i++ {
 			for empty := false; !empty; {
 				// Retrieve the next derived Ethereum account
@@ -483,6 +505,7 @@ func (w *Wallet) selfDerive() {
 						w.log.Warn("Smartcard wallet account derivation failed", "err", err)
 						break
 					}
+
 					nextAddrs[i] = nextAcc.Address
 				}
 				// Check the account's status against the current chain state
@@ -490,11 +513,13 @@ func (w *Wallet) selfDerive() {
 					balance *big.Int
 					nonce   uint64
 				)
+
 				balance, err = w.deriveChain.BalanceAt(context, nextAddrs[i], nil)
 				if err != nil {
 					w.log.Warn("Smartcard wallet balance retrieval failed", "err", err)
 					break
 				}
+
 				nonce, err = w.deriveChain.NonceAt(context, nextAddrs[i], nil)
 				if err != nil {
 					w.log.Warn("Smartcard wallet nonce retrieval failed", "err", err)
@@ -503,6 +528,7 @@ func (w *Wallet) selfDerive() {
 				// If the next account is empty, stop self-derivation, but add for the last base path
 				if balance.Sign() == 0 && nonce == 0 {
 					empty = true
+
 					if i < len(nextAddrs)-1 {
 						break
 					}
@@ -516,6 +542,7 @@ func (w *Wallet) selfDerive() {
 				if _, known := pairing.Accounts[nextAddrs[i]]; !known || !empty || nextAddrs[i] != w.deriveNextAddrs[i] {
 					w.log.Info("Smartcard wallet discovered new account", "address", nextAddrs[i], "path", path, "balance", balance, "nonce", nonce)
 				}
+
 				pairing.Accounts[nextAddrs[i]] = path
 
 				// Fetch the next potential account
@@ -538,6 +565,7 @@ func (w *Wallet) selfDerive() {
 
 		// Notify the user of termination and loop after a bit of time (to avoid trashing)
 		reqc <- struct{}{}
+
 		if err == nil {
 			select {
 			case errc = <-w.deriveQuit:
@@ -577,9 +605,12 @@ func (w *Wallet) Accounts() []accounts.Account {
 		for address, path := range pairing.Accounts {
 			ret = append(ret, w.makeAccount(address, path))
 		}
+
 		sort.Sort(accounts.AccountsByURL(ret))
+
 		return ret
 	}
+
 	return nil
 }
 
@@ -599,6 +630,7 @@ func (w *Wallet) Contains(account accounts.Account) bool {
 		_, ok := pairing.Accounts[account.Address]
 		return ok
 	}
+
 	return false
 }
 
@@ -625,6 +657,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 	if pin {
 		pairing := w.Hub.pairing(w)
 		pairing.Accounts[account.Address] = path
+
 		if err := w.Hub.setPairing(w, pairing); err != nil {
 			return accounts.Account{}, err
 		}
@@ -656,6 +689,7 @@ func (w *Wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.Chai
 		w.deriveNextPaths[i] = make(accounts.DerivationPath, len(base))
 		copy(w.deriveNextPaths[i][:], base[:])
 	}
+
 	w.deriveNextAddrs = make([]common.Address, len(bases))
 	w.deriveChain = chain
 }
@@ -701,10 +735,12 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	signer := types.LatestSignerForChainID(chainID)
 	hash := signer.Hash(tx)
+
 	sig, err := w.signHash(account, hash[:])
 	if err != nil {
 		return nil, err
 	}
+
 	return tx.WithSignature(signer, sig)
 }
 
@@ -759,6 +795,7 @@ func (w *Wallet) SignTxWithPassphrase(account accounts.Account, passphrase strin
 			return nil, err
 		}
 	}
+
 	return w.SignTx(account, tx, chainID)
 }
 
@@ -815,6 +852,7 @@ func (s *Session) unpair() error {
 	if !s.verified {
 		return fmt.Errorf("unpair requires that the PIN be verified")
 	}
+
 	return s.Channel.Unpair()
 }
 
@@ -823,7 +861,9 @@ func (s *Session) verifyPin(pin []byte) error {
 	if _, err := s.Channel.transmitEncrypted(claSCWallet, insVerifyPin, 0, 0, pin); err != nil {
 		return err
 	}
+
 	s.verified = true
+
 	return nil
 }
 
@@ -833,7 +873,9 @@ func (s *Session) unblockPin(pukpin []byte) error {
 	if _, err := s.Channel.transmitEncrypted(claSCWallet, insUnblockPin, 0, 0, pukpin); err != nil {
 		return err
 	}
+
 	s.verified = true
+
 	return nil
 }
 
@@ -852,8 +894,10 @@ func (s *Session) authenticate(pairing smartcardPairing) error {
 	if !bytes.Equal(s.Wallet.PublicKey, pairing.PublicKey) {
 		return fmt.Errorf("cannot pair using another wallet's pairing; %x != %x", s.Wallet.PublicKey, pairing.PublicKey)
 	}
+
 	s.Channel.PairingKey = pairing.PairingKey
 	s.Channel.PairingIndex = pairing.PairingIndex
+
 	return s.Channel.Open()
 }
 
@@ -875,18 +919,22 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 	if _, err := asn1.UnmarshalWithParams(response.Data, status, "tag:3"); err != nil {
 		return nil, err
 	}
+
 	return status, nil
 }
 
 // derivationPath fetches the wallet's current derivation path from the card.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
 	if err != nil {
 		return nil, err
 	}
+
 	buf := bytes.NewReader(response.Data)
 	path := make(accounts.DerivationPath, len(response.Data)/4)
+
 	return path, binary.Read(buf, binary.BigEndian, &path)
 }
 
@@ -905,6 +953,7 @@ func (s *Session) initialize(seed []byte) error {
 	if err != nil {
 		return err
 	}
+
 	if status == "Online" {
 		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
 	}
@@ -926,6 +975,7 @@ func (s *Session) initialize(seed []byte) error {
 	id.PublicKey = crypto.FromECDSAPub(&key.PublicKey)
 	id.PrivateKey = seed[:32]
 	id.ChainCode = seed[32:]
+
 	data, err := asn1.Marshal(id)
 	if err != nil {
 		return err
@@ -935,6 +985,7 @@ func (s *Session) initialize(seed []byte) error {
 	data[0] = 0xA1
 
 	_, err = s.Channel.transmitEncrypted(claSCWallet, insLoadKey, 0x02, 0, data)
+
 	return err
 }
 
@@ -946,6 +997,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	}
 
 	var p1 uint8
+
 	switch startingPoint {
 	case derivationpath.StartingPointMaster:
 		p1 = P1DeriveKeyFromMaster
@@ -978,6 +1030,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	if _, err := asn1.UnmarshalWithParams(response.Data, sigdata, "tag:0"); err != nil {
 		return accounts.Account{}, err
 	}
+
 	rbytes, sbytes := sigdata.Signature.R.Bytes(), sigdata.Signature.S.Bytes()
 	sig := make([]byte, 65)
 	copy(sig[32-len(rbytes):32], rbytes)
@@ -986,14 +1039,17 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	if err := confirmPublicKey(sig, sigdata.PublicKey); err != nil {
 		return accounts.Account{}, err
 	}
+
 	pub, err := crypto.UnmarshalPubkey(sigdata.PublicKey)
 	if err != nil {
 		return accounts.Account{}, err
 	}
+
 	return s.Wallet.makeAccount(crypto.PubkeyToAddress(*pub), path), nil
 }
 
 // keyExport contains information on an exported keypair.
+//
 //lint:ignore U1000 needs to be added to the console interface
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
@@ -1001,16 +1057,19 @@ type keyExport struct {
 }
 
 // publicKey returns the public key for the current derivation path.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)
 	if err != nil {
 		return nil, err
 	}
+
 	keys := new(keyExport)
 	if _, err := asn1.UnmarshalWithParams(response.Data, keys, "tag:1"); err != nil {
 		return nil, err
 	}
+
 	return keys.PublicKey, nil
 }
 
@@ -1028,16 +1087,19 @@ type signatureData struct {
 // recovering the v value.
 func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error) {
 	startTime := time.Now()
+
 	_, err := s.derive(path)
 	if err != nil {
 		return nil, err
 	}
+
 	deriveTime := time.Now()
 
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insSign, signP1PrecomputedHash, signP2OnlyBlock, hash)
 	if err != nil {
 		return nil, err
 	}
+
 	sigdata := new(signatureData)
 	if _, err := asn1.UnmarshalWithParams(response.Data, sigdata, "tag:0"); err != nil {
 		return nil, err
@@ -1053,6 +1115,7 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+
 	log.Debug("Signed using smartcard", "deriveTime", deriveTime.Sub(startTime), "signingTime", time.Since(deriveTime))
 
 	return sig, nil
@@ -1068,6 +1131,7 @@ func confirmPublicKey(sig, pubkey []byte) error {
 // recover the v value and produce a recoverable signature.
 func makeRecoverableSignature(hash, sig, expectedPubkey []byte) ([]byte, error) {
 	var libraryError error
+
 	for v := 0; v < 2; v++ {
 		sig[64] = byte(v)
 		if pubkey, err := crypto.Ecrecover(hash, sig); err == nil {
@@ -1078,8 +1142,10 @@ func makeRecoverableSignature(hash, sig, expectedPubkey []byte) ([]byte, error) 
 			libraryError = err
 		}
 	}
+
 	if libraryError != nil {
 		return nil, libraryError
 	}
+
 	return nil, ErrPubkeyMismatch
 }

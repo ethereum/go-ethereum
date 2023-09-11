@@ -24,12 +24,12 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -40,14 +40,34 @@ var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
-	fmt.Println(">>>", strings.Join(cmd.Args, " "))
+	fmt.Println(">>>", printArgs(cmd.Args))
+
 	if !*DryRunFlag {
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
+
 		if err := cmd.Run(); err != nil {
 			log.Fatal(err)
 		}
 	}
+}
+
+func printArgs(args []string) string {
+	var s strings.Builder
+
+	for i, arg := range args {
+		if i > 0 {
+			s.WriteByte(' ')
+		}
+
+		if strings.IndexByte(arg, ' ') >= 0 {
+			arg = strconv.QuoteToASCII(arg)
+		}
+
+		s.WriteString(arg)
+	}
+
+	return s.String()
 }
 
 func MustRunCommand(cmd string, args ...string) {
@@ -60,27 +80,34 @@ var warnedAboutGit bool
 // The command must complete successfully.
 func RunGit(args ...string) string {
 	cmd := exec.Command("git", args...)
+
 	var stdout, stderr bytes.Buffer
+
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
 			if !warnedAboutGit {
 				log.Println("Warning: can't find 'git' in PATH")
+
 				warnedAboutGit = true
 			}
+
 			return ""
 		}
+
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
+
 	return strings.TrimSpace(stdout.String())
 }
 
 // readGitFile returns content of file in .git directory.
 func readGitFile(file string) string {
-	content, err := ioutil.ReadFile(path.Join(".git", file))
+	content, err := os.ReadFile(path.Join(".git", file))
 	if err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(string(content))
 }
 
@@ -100,13 +127,16 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
 		log.Fatal(err)
 	}
+
 	out, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, outputPerm)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if err := tpl.Execute(out, x); err != nil {
 		log.Fatal(err)
 	}
+
 	if err := out.Close(); err != nil {
 		log.Fatal(err)
 	}
@@ -118,11 +148,14 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
 	sftp.Stderr = os.Stderr
+
 	if identityFile != "" {
 		sftp.Args = append(sftp.Args, "-i", identityFile)
 	}
+
 	sftp.Args = append(sftp.Args, host)
-	fmt.Println(">>>", strings.Join(sftp.Args, " "))
+	fmt.Println(">>>", printArgs(sftp.Args))
+
 	if *DryRunFlag {
 		return nil
 	}
@@ -131,17 +164,21 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	if err != nil {
 		return fmt.Errorf("can't create stdin pipe for sftp: %v", err)
 	}
+
 	stdout, err := sftp.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("can't create stdout pipe for sftp: %v", err)
 	}
+
 	if err := sftp.Start(); err != nil {
 		return err
 	}
+
 	in := io.MultiWriter(stdin, os.Stdout)
 	for _, f := range files {
 		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
 	}
+
 	fmt.Fprintln(in, "exit")
 	// Some issue with the PPA sftp server makes it so the server does not
 	// respond properly to a 'bye', 'exit' or 'quit' from the client.
@@ -151,25 +188,32 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 	// https://github.com/kolban-google/sftp-gcs/issues/23
 	// https://github.com/mscdex/ssh2/pull/1111
 	aborted := false
+
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			txt := scanner.Text()
 			fmt.Println(txt)
+
 			if txt == "sftp> exit" {
 				// Give it .5 seconds to exit (server might be fixed), then
 				// hard kill it from the outside
 				time.Sleep(500 * time.Millisecond)
+
 				aborted = true
+
 				sftp.Process.Kill()
 			}
 		}
 	}()
 	stdin.Close()
+
 	err = sftp.Wait()
+
 	if aborted {
 		return nil
 	}
+
 	return err
 }
 
@@ -177,23 +221,29 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 // package paths.
 func FindMainPackages(dir string) []string {
 	var commands []string
-	cmds, err := ioutil.ReadDir(dir)
+
+	cmds, err := os.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	for _, cmd := range cmds {
 		pkgdir := filepath.Join(dir, cmd.Name())
+
 		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		for name := range pkgs {
 			if name == "main" {
 				path := "./" + filepath.ToSlash(pkgdir)
 				commands = append(commands, path)
+
 				break
 			}
 		}
 	}
+
 	return commands
 }

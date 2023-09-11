@@ -18,7 +18,6 @@ package ethash
 
 import (
 	"context"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -39,6 +38,7 @@ func TestTestMode(t *testing.T) {
 	defer ethash.Close()
 
 	results := make(chan *types.Block)
+
 	err := ethash.Seal(context.Background(), nil, types.NewBlockWithHeader(header), results, nil)
 	if err != nil {
 		t.Fatalf("failed to seal block: %v", err)
@@ -47,6 +47,7 @@ func TestTestMode(t *testing.T) {
 	case block := <-results:
 		header.Nonce = types.EncodeNonce(block.Nonce())
 		header.MixDigest = block.MixDigest()
+
 		if err := ethash.verifySeal(nil, header, false); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
@@ -58,7 +59,9 @@ func TestTestMode(t *testing.T) {
 // This test checks that cache lru logic doesn't crash under load.
 // It reproduces https://github.com/ethereum/go-ethereum/issues/14943
 func TestCacheFileEvict(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "ethash-test")
+	// TODO: t.TempDir fails to remove the directory on Windows
+	// \AppData\Local\Temp\1\TestCacheFileEvict2179435125\001\cache-R23-0000000000000000: Access is denied.
+	tmpdir, err := os.MkdirTemp("", "ethash-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,13 +73,17 @@ func TestCacheFileEvict(t *testing.T) {
 		CacheDir:     tmpdir,
 		PowMode:      ModeTest,
 	}
+
 	e := New(config, nil, false)
 	defer e.Close()
 
 	workers := 8
 	epochs := 100
+
 	var wg sync.WaitGroup
+
 	wg.Add(workers)
+
 	for i := 0; i < workers; i++ {
 		go verifyTest(&wg, e, i, epochs)
 	}
@@ -87,12 +94,14 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 	defer wg.Done()
 
 	const wiggle = 4 * epochLength
+
 	r := rand.New(rand.NewSource(int64(workerIndex)))
 	for epoch := 0; epoch < epochs; epoch++ {
 		block := int64(epoch)*epochLength - wiggle/2 + r.Int63n(wiggle)
 		if block < 0 {
 			block = 0
 		}
+
 		header := &types.Header{Number: big.NewInt(block), Difficulty: big.NewInt(100)}
 		e.verifySeal(nil, header, false)
 	}
@@ -106,6 +115,7 @@ func TestRemoteSealer(t *testing.T) {
 	if _, err := api.GetWork(); err != errNoMiningWork {
 		t.Error("expect to return an error indicate there is no mining work")
 	}
+
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 	block := types.NewBlockWithHeader(header)
 	sealhash := ethash.SealHash(header)
@@ -147,6 +157,7 @@ func TestHashrate(t *testing.T) {
 		expect   uint64
 		ids      = []common.Hash{common.HexToHash("a"), common.HexToHash("b"), common.HexToHash("c")}
 	)
+
 	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
@@ -159,8 +170,10 @@ func TestHashrate(t *testing.T) {
 		if res := api.SubmitHashrate(hashrate[i], ids[i]); !res {
 			t.Error("remote miner submit hashrate failed")
 		}
+
 		expect += uint64(hashrate[i])
 	}
+
 	if tot := ethash.Hashrate(); tot != float64(expect) {
 		t.Error("expect total hashrate should be same")
 	}
@@ -168,6 +181,7 @@ func TestHashrate(t *testing.T) {
 
 func TestClosedRemoteSealer(t *testing.T) {
 	ethash := NewTester(nil, false)
+
 	time.Sleep(1 * time.Second) // ensure exit channel is listening
 	ethash.Close()
 

@@ -53,12 +53,14 @@ func main() {
 	flag.Parse()
 
 	var r io.Reader
+
 	switch {
 	case *hexMode != "":
 		data, err := hex.DecodeString(strings.TrimPrefix(*hexMode, "0x"))
 		if err != nil {
 			die(err)
 		}
+
 		r = bytes.NewReader(data)
 
 	case flag.NArg() == 0:
@@ -69,6 +71,7 @@ func main() {
 		if err != nil {
 			die(err)
 		}
+
 		defer fd.Close()
 		r = fd
 
@@ -77,13 +80,17 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+
 	out := os.Stdout
+
 	if *reverseMode {
 		data, err := textToRlp(r)
 		if err != nil {
 			die(err)
 		}
-		fmt.Printf("0x%x\n", data)
+
+		fmt.Printf("%#x\n", data)
+
 		return
 	} else {
 		err := rlpToText(r, out)
@@ -95,18 +102,23 @@ func main() {
 
 func rlpToText(r io.Reader, out io.Writer) error {
 	s := rlp.NewStream(r, 0)
+
 	for {
 		if err := dump(s, 0, out); err != nil {
 			if err != io.EOF {
 				return err
 			}
+
 			break
 		}
+
 		fmt.Fprintln(out)
+
 		if *single {
 			break
 		}
 	}
+
 	return nil
 }
 
@@ -115,12 +127,14 @@ func dump(s *rlp.Stream, depth int, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	switch kind {
 	case rlp.Byte, rlp.String:
 		str, err := s.Bytes()
 		if err != nil {
 			return err
 		}
+
 		if len(str) == 0 || !*noASCII && isASCII(str) {
 			fmt.Fprintf(out, "%s%q", ws(depth), str)
 		} else {
@@ -129,14 +143,17 @@ func dump(s *rlp.Stream, depth int, out io.Writer) error {
 	case rlp.List:
 		s.List()
 		defer s.ListEnd()
+
 		if size == 0 {
 			fmt.Fprintf(out, ws(depth)+"[]")
 		} else {
 			fmt.Fprintln(out, ws(depth)+"[")
+
 			for i := 0; ; i++ {
 				if i > 0 {
 					fmt.Fprint(out, ",\n")
 				}
+
 				if err := dump(s, depth+1, out); err == rlp.EOL {
 					break
 				} else if err != nil {
@@ -146,6 +163,7 @@ func dump(s *rlp.Stream, depth int, out io.Writer) error {
 			fmt.Fprint(out, ws(depth)+"]")
 		}
 	}
+
 	return nil
 }
 
@@ -155,6 +173,7 @@ func isASCII(b []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -178,11 +197,13 @@ func textToRlp(r io.Reader) ([]byte, error) {
 		obj     []interface{}
 		stack   = list.New()
 	)
+
 	for scanner.Scan() {
 		t := strings.TrimSpace(scanner.Text())
 		if len(t) == 0 {
 			continue
 		}
+
 		switch t {
 		case "[": // list start
 			stack.PushFront(obj)
@@ -199,12 +220,16 @@ func textToRlp(r io.Reader) ([]byte, error) {
 			} else { // hex data
 				data = common.FromHex(string(data))
 			}
+
 			obj = append(obj, data)
 		}
 	}
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+
 	data, err := rlp.EncodeToBytes(obj[0])
+
 	return data, err
 }

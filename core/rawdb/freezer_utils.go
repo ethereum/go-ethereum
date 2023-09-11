@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -30,10 +29,11 @@ import (
 // It is perfectly valid to have destPath == srcPath.
 func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) error) error {
 	// Create a temp file in the same dir where we want it to wind up
-	f, err := ioutil.TempFile(filepath.Dir(destPath), "*")
+	f, err := os.CreateTemp(filepath.Dir(destPath), "*")
 	if err != nil {
 		return err
 	}
+
 	fname := f.Name()
 
 	// Clean up the leftover file
@@ -41,6 +41,7 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 		if f != nil {
 			f.Close()
 		}
+
 		os.Remove(fname)
 	}()
 	// Apply the given function if it's not nil before we copy
@@ -55,6 +56,7 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 	if err != nil {
 		return err
 	}
+
 	if _, err = src.Seek(int64(offset), 0); err != nil {
 		src.Close()
 		return err
@@ -73,11 +75,13 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 	if err := f.Close(); err != nil {
 		return err
 	}
+
 	f = nil
 
 	if err := os.Rename(fname, destPath); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -94,6 +98,7 @@ func openFreezerFileForAppend(filename string) (*os.File, error) {
 	if _, err = file.Seek(0, io.SeekEnd); err != nil {
 		return nil, err
 	}
+
 	return file, nil
 }
 
@@ -116,5 +121,6 @@ func truncateFreezerFile(file *os.File, size int64) error {
 	if _, err := file.Seek(0, io.SeekEnd); err != nil {
 		return err
 	}
+
 	return nil
 }

@@ -34,6 +34,7 @@ func TestValueExpiration(t *testing.T) {
 		{ExpiredValue{Base: 128, Exp: 2}, Uint64ToFixed64(2), 128},
 		{ExpiredValue{Base: 128, Exp: 2}, Uint64ToFixed64(3), 64},
 	}
+
 	for _, c := range cases {
 		if got := c.input.Value(c.timeOffset); got != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, got)
@@ -69,10 +70,12 @@ func TestValueAddition(t *testing.T) {
 		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(1), 128, -128},
 		{ExpiredValue{Base: 128, Exp: 2}, -128, Uint64ToFixed64(2), 0, -128},
 	}
+
 	for _, c := range cases {
 		if net := c.input.Add(c.addend, c.timeOffset); net != c.expectNet {
 			t.Fatalf("Net amount mismatch, want=%d, got=%d", c.expectNet, net)
 		}
+
 		if got := c.input.Value(c.timeOffset); got != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, got)
 		}
@@ -91,8 +94,10 @@ func TestExpiredValueAddition(t *testing.T) {
 		{ExpiredValue{Base: 128, Exp: 0}, ExpiredValue{Base: 128, Exp: 1}, Uint64ToFixed64(0), 384},
 		{ExpiredValue{Base: 128, Exp: 0}, ExpiredValue{Base: 128, Exp: 0}, Uint64ToFixed64(1), 128},
 	}
+
 	for _, c := range cases {
 		c.input.AddExp(c.another)
+
 		if got := c.input.Value(c.timeOffset); got != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, got)
 		}
@@ -111,8 +116,10 @@ func TestExpiredValueSubtraction(t *testing.T) {
 		{ExpiredValue{Base: 128, Exp: 1}, ExpiredValue{Base: 128, Exp: 0}, Uint64ToFixed64(0), 128},
 		{ExpiredValue{Base: 128, Exp: 1}, ExpiredValue{Base: 128, Exp: 0}, Uint64ToFixed64(1), 64},
 	}
+
 	for _, c := range cases {
 		c.input.SubExp(c.another)
+
 		if got := c.input.Value(c.timeOffset); got != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, got)
 		}
@@ -149,6 +156,7 @@ func TestLinearExpiredValue(t *testing.T) {
 			Rate:   mclock.AbsTime(1),
 		}, mclock.AbsTime(3), 0},
 	}
+
 	for _, c := range cases {
 		if value := c.value.Value(c.now); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)
@@ -187,6 +195,7 @@ func TestLinearExpiredAddition(t *testing.T) {
 			Rate:   mclock.AbsTime(1),
 		}, -2, mclock.AbsTime(2), 0},
 	}
+
 	for _, c := range cases {
 		if value := c.value.Add(c.amount, c.now); value != c.expect {
 			t.Fatalf("Value mismatch, want=%d, got=%d", c.expect, value)

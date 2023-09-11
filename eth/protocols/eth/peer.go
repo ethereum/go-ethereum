@@ -21,7 +21,8 @@ import (
 	"math/rand"
 	"sync"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -61,6 +62,7 @@ func max(a, b int) int {
 	if a > b {
 		return a
 	}
+
 	return b
 }
 
@@ -133,7 +135,7 @@ func (p *Peer) ID() string {
 	return p.id
 }
 
-// Version retrieves the peer's negoatiated `eth` protocol version.
+// Version retrieves the peer's negotiated `eth` protocol version.
 func (p *Peer) Version() uint {
 	return p.version
 }
@@ -144,6 +146,7 @@ func (p *Peer) Head() (hash common.Hash, td *big.Int) {
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
+
 	return hash, new(big.Int).Set(p.td)
 }
 
@@ -188,12 +191,13 @@ func (p *Peer) markTransaction(hash common.Hash) {
 // not be managed directly.
 //
 // The reasons this is public is to allow packages using this protocol to write
-// tests that directly send messages without having to do the asyn queueing.
+// tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.Transactions) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
+
 	return p2p.Send(p.rw, TransactionsMsg, txs)
 }
 
@@ -210,16 +214,29 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 	}
 }
 
-// sendPooledTransactionHashes sends transaction hashes to the peer and includes
+// sendPooledTransactionHashes66 sends transaction hashes to the peer and includes
 // them in its transaction hash set for future reference.
 //
 // This method is a helper used by the async transaction announcer. Don't call it
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
-func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash) error {
+func (p *Peer) sendPooledTransactionHashes66(hashes []common.Hash) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket(hashes))
+	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket66(hashes))
+}
+
+// sendPooledTransactionHashes68 sends transaction hashes (tagged with their type
+// and size) to the peer and includes them in its transaction hash set for future
+// reference.
+//
+// This method is a helper used by the async transaction announcer. Don't call it
+// directly as the queueing (memory) and transmission (bandwidth) costs should
+// not be managed directly.
+func (p *Peer) sendPooledTransactionHashes68(hashes []common.Hash, types []byte, sizes []uint32) error {
+	// Mark all the transactions as known, but ensure we don't overflow our limits
+	p.knownTxs.Add(hashes...)
+	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket68{Types: types, Sizes: sizes, Hashes: hashes})
 }
 
 // AsyncSendPooledTransactionHashes queues a list of transactions hashes to eventually
@@ -258,6 +275,7 @@ func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 		request[i].Hash = hashes[i]
 		request[i].Number = numbers[i]
 	}
+
 	return p2p.Send(p.rw, NewBlockHashesMsg, request)
 }
 
@@ -278,6 +296,7 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
+
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block: block,
 		TD:    td,
@@ -296,7 +315,7 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	}
 }
 
-// ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
+// ReplyBlockHeadersRLP is the eth/66 response to GetBlockHeaders.
 func (p *Peer) ReplyBlockHeadersRLP(id uint64, headers []rlp.RawValue) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, &BlockHeadersRLPPacket66{
 		RequestId:             id,
@@ -304,7 +323,7 @@ func (p *Peer) ReplyBlockHeadersRLP(id uint64, headers []rlp.RawValue) error {
 	})
 }
 
-// ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
+// ReplyBlockBodiesRLP is the eth/66 response to GetBlockBodies.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
 	return p2p.Send(p.rw, BlockBodiesMsg, &BlockBodiesRLPPacket66{
@@ -333,6 +352,7 @@ func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
 // single header. It is used solely by the fetcher.
 func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching single header", "hash", hash)
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -353,6 +373,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
@@ -360,6 +381,7 @@ func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request
 // specified header query, based on the hash of an origin block.
 func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -380,6 +402,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
@@ -387,6 +410,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -407,6 +431,7 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
@@ -414,6 +439,7 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 // specified.
 func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -429,6 +455,7 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
@@ -436,6 +463,7 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 // data, corresponding to the specified hashes.
 func (p *Peer) RequestNodeData(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -451,12 +479,14 @@ func (p *Peer) RequestNodeData(hashes []common.Hash, sink chan *Response) (*Requ
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
+
 	id := rand.Uint64()
 
 	req := &Request{
@@ -472,15 +502,18 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
 func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(hashes))
+
 	id := rand.Uint64()
 
 	requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
+
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{
 		RequestId:                   id,
 		GetPooledTransactionsPacket: hashes,
@@ -489,7 +522,7 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 
 // knownCache is a cache for known hashes.
 type knownCache struct {
-	hashes mapset.Set
+	hashes mapset.Set[common.Hash]
 	max    int
 }
 
@@ -497,7 +530,7 @@ type knownCache struct {
 func newKnownCache(max int) *knownCache {
 	return &knownCache{
 		max:    max,
-		hashes: mapset.NewSet(),
+		hashes: mapset.NewSet[common.Hash](),
 	}
 }
 
@@ -506,6 +539,7 @@ func (k *knownCache) Add(hashes ...common.Hash) {
 	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
 		k.hashes.Pop()
 	}
+
 	for _, hash := range hashes {
 		k.hashes.Add(hash)
 	}
