@@ -608,17 +608,23 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, genesisAlloc 
 		common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 		common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 		common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
-		faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 	}
 
 	if genesisAlloc != nil {
+		precompiled := map[common.Address]struct{}{}
+		for addr := range alloc {
+			precompiled[addr] = struct{}{}
+		}
 		for addr, account := range *genesisAlloc {
 			// Don't overwrite the precompiled accounts
-			if _, ok := alloc[addr]; !ok {
-				alloc[addr] = account
+			if _, ok := precompiled[addr]; ok {
+				log.Crit("DeveloperGenesisBlock: can't overwrite precompiled account", "address", addr)
 			}
+			alloc[addr] = account
 		}
 	}
+
+	alloc[faucet] = GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
