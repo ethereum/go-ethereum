@@ -31,24 +31,19 @@ func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	cd := common.Hex2Bytes(calldata)
 	sigdata, argdata := cd[:4], cd[4:]
-
 	method, err := abispec.MethodById(sigdata)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	data, err := method.Inputs.UnpackValues(argdata)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if len(data) != len(exp) {
 		t.Fatalf("Mismatched length, expected %d, got %d", len(exp), len(data))
 	}
-
 	for i, elem := range data {
 		if !reflect.DeepEqual(elem, exp[i]) {
 			t.Fatalf("Unpack error, arg %d, got %v, want %v", i, elem, exp[i])
@@ -62,7 +57,6 @@ func TestNewUnpacker(t *testing.T) {
 		calldata string
 		exp      []interface{}
 	}
-
 	testcases := []unpackTest{
 		{ // https://solidity.readthedocs.io/en/develop/abi-spec.html#use-of-dynamic-types
 			`[{"type":"function","name":"f", "inputs":[{"type":"uint256"},{"type":"uint32[]"},{"type":"bytes10"},{"type":"bytes"}]}]`,
@@ -171,7 +165,6 @@ func TestMaliciousABIStrings(t *testing.T) {
 		"func(,uint256,uint256,uint256)",
 	}
 	data := common.Hex2Bytes("4401a6e40000000000000000000000000000000000000000000000000000000000000012")
-
 	for i, tt := range tests {
 		_, err := verifySelector(tt, data)
 		if err == nil {

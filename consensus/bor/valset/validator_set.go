@@ -499,7 +499,6 @@ func (vals *ValidatorSet) applyUpdates(updates []*Validator) {
 		} else {
 			// Apply add or update.
 			merged[i] = updates[0]
-
 			if existing[0].Address == updates[0].Address {
 				// Validator is present in both, advance existing.
 				existing = existing[1:]
@@ -507,7 +506,6 @@ func (vals *ValidatorSet) applyUpdates(updates []*Validator) {
 
 			updates = updates[1:]
 		}
-
 		i++
 	}
 

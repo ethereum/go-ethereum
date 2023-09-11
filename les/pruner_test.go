@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -47,7 +47,6 @@ func TestLightPruner(t *testing.T) {
 			connect:  true,
 		}
 	)
-
 	server, client, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
@@ -58,7 +57,6 @@ func TestLightPruner(t *testing.T) {
 		defer it.Release()
 
 		var next = from
-
 		for it.Next() {
 			number := resolve(it.Key(), it.Value())
 			if number == nil || *number < from {
@@ -66,18 +64,15 @@ func TestLightPruner(t *testing.T) {
 			} else if *number > to {
 				return true
 			}
-
 			if exist {
 				if *number != next {
 					return false
 				}
-
 				next++
 			} else {
 				return false
 			}
 		}
-
 		return true
 	}
 	// checkPruned checks and ensures the stale chain data has been pruned.
@@ -189,7 +184,6 @@ func TestLightPruner(t *testing.T) {
 			},
 		},
 	}
-
 	for _, c := range cases {
 		for i := c.from; i <= c.to; i++ {
 			if !c.method(i) {

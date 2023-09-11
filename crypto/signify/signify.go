@@ -25,7 +25,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"strings"
 	"time"
 )
@@ -40,15 +40,12 @@ func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	if len(keydata) != 104 {
 		return nil, nil, nil, errInvalidKeyLength
 	}
-
 	if string(keydata[:2]) != "Ed" {
 		return nil, nil, nil, errInvalidKeyHeader
 	}
-
 	return keydata[40:], keydata[:2], keydata[32:40], nil
 }
 
@@ -61,24 +58,20 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 	if strings.IndexByte(untrustedComment, '\n') >= 0 {
 		return errors.New("untrusted comment must not contain newline")
 	}
-
 	if strings.IndexByte(trustedComment, '\n') >= 0 {
 		return errors.New("trusted comment must not contain newline")
 	}
-
 	if untrustedComment == "" {
 		untrustedComment = "verify with " + input + ".pub"
 	}
-
 	if trustedComment == "" {
 		trustedComment = fmt.Sprintf("timestamp:%d", time.Now().Unix())
 	}
 
-	filedata, err := os.ReadFile(input)
+	filedata, err := ioutil.ReadFile(input)
 	if err != nil {
 		return err
 	}
-
 	skey, header, keyNum, err := parsePrivateKey(key)
 	if err != nil {
 		return err
@@ -86,7 +79,6 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 
 	// Create the main data signature.
 	rawSig := ed25519.Sign(skey, filedata)
-
 	var dataSig []byte
 	dataSig = append(dataSig, header...)
 	dataSig = append(dataSig, keyNum...)
@@ -100,11 +92,9 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 
 	// Create the output file.
 	var out = new(bytes.Buffer)
-
 	fmt.Fprintln(out, "untrusted comment:", untrustedComment)
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(dataSig))
 	fmt.Fprintln(out, "trusted comment:", trustedComment)
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(commentSig))
-	// nolint:gosec
-	return os.WriteFile(output, out.Bytes(), 0644)
+	return ioutil.WriteFile(output, out.Bytes(), 0644)
 }

@@ -28,11 +28,9 @@ func Fuzz(data []byte) int {
 	if len(data) == 0 {
 		return 0
 	}
-
 	if data[0]%2 == 0 {
 		return fuzzEncode(data[1:])
 	}
-
 	return fuzzDecode(data[1:])
 }
 
@@ -43,7 +41,6 @@ func fuzzEncode(data []byte) int {
 	if !bytes.Equal(data, proc) {
 		panic("content mismatch")
 	}
-
 	return 1
 }
 
@@ -66,10 +63,8 @@ func fuzzDecode(data []byte) int {
 	if err != nil {
 		panic(err)
 	}
-
 	if !bytes.Equal(decomp, blob) {
 		panic("content mismatch")
 	}
-
 	return 1
 }

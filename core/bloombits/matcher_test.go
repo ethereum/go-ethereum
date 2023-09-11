@@ -31,7 +31,6 @@ const testSectionSize = 4096
 // Tests that wildcard filter rules (nil) can be specified and are handled well.
 func TestMatcherWildcards(t *testing.T) {
 	t.Parallel()
-
 	matcher := NewMatcher(testSectionSize, [][][]byte{
 		{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
 		{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
@@ -45,15 +44,12 @@ func TestMatcherWildcards(t *testing.T) {
 	if len(matcher.filters) != 3 {
 		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)
 	}
-
 	if len(matcher.filters[0]) != 2 {
 		t.Fatalf("address clause size mismatch: have %d, want %d", len(matcher.filters[0]), 2)
 	}
-
 	if len(matcher.filters[1]) != 2 {
 		t.Fatalf("combo topic clause size mismatch: have %d, want %d", len(matcher.filters[1]), 2)
 	}
-
 	if len(matcher.filters[2]) != 1 {
 		t.Fatalf("singletone topic clause size mismatch: have %d, want %d", len(matcher.filters[2]), 1)
 	}
@@ -79,7 +75,6 @@ func TestMatcherIntermittent(t *testing.T) {
 // Tests the matcher pipeline on random input to hopefully catch anomalies.
 func TestMatcherRandom(t *testing.T) {
 	t.Parallel()
-
 	for i := 0; i < 10; i++ {
 		testMatcherBothModes(t, makeRandomIndexes([]int{1}, 50), 0, 10000, 0)
 		testMatcherBothModes(t, makeRandomIndexes([]int{3}, 50), 0, 10000, 0)
@@ -124,19 +119,18 @@ func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {
 			}
 		}
 	}
-
 	return res
 }
 
 // testMatcherDiffBatches runs the given matches test in single-delivery and also
 // in batches delivery mode, verifying that all kinds of deliveries are handled
-// correctly within.
+// correctly withn.
 func testMatcherDiffBatches(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, intermittent bool, retrievals uint32) {
 	singleton := testMatcher(t, filter, start, blocks, intermittent, retrievals, 1)
 	batched := testMatcher(t, filter, start, blocks, intermittent, retrievals, 16)
 
 	if singleton != batched {
-		t.Errorf("filter = %v blocks = %v intermittent = %v: request count mismatch, %v in singleton vs. %v in batched mode", filter, blocks, intermittent, singleton, batched)
+		t.Errorf("filter = %v blocks = %v intermittent = %v: request count mismatch, %v in signleton vs. %v in batched mode", filter, blocks, intermittent, singleton, batched)
 	}
 }
 
@@ -166,7 +160,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 		}
 	}
 	// Track the number of retrieval requests made
-	var requested atomic.Uint32
+	var requested uint32
 
 	// Start the matching session for the filter and the retriever goroutines
 	quit := make(chan struct{})
@@ -176,7 +170,6 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	if err != nil {
 		t.Fatalf("failed to stat matcher session: %v", err)
 	}
-
 	startRetrievers(session, quit, &requested, maxReqCount)
 
 	// Iterate over all the blocks and verify that the pipeline produces the correct matches
@@ -187,7 +180,6 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 				t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected #%v, results channel closed", filter, blocks, intermittent, i)
 				return 0
 			}
-
 			if match != i {
 				t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected #%v, got #%v", filter, blocks, intermittent, i, match)
 			}
@@ -203,7 +195,6 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 				if err != nil {
 					t.Fatalf("failed to stat matcher session: %v", err)
 				}
-
 				startRetrievers(session, quit, &requested, maxReqCount)
 			}
 		}
@@ -217,16 +208,15 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, start, blocks uint64, in
 	session.Close()
 	close(quit)
 
-	if retrievals != 0 && requested.Load() != retrievals {
-		t.Errorf("filter = %v  blocks = %v  intermittent = %v: request count mismatch, have #%v, want #%v", filter, blocks, intermittent, requested.Load(), retrievals)
+	if retrievals != 0 && requested != retrievals {
+		t.Errorf("filter = %v  blocks = %v  intermittent = %v: request count mismatch, have #%v, want #%v", filter, blocks, intermittent, requested, retrievals)
 	}
-
-	return requested.Load()
+	return requested
 }
 
 // startRetrievers starts a batch of goroutines listening for section requests
 // and serving them.
-func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *atomic.Uint32, batch int) {
+func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *uint32, batch int) {
 	requests := make(chan chan *Retrieval)
 
 	for i := 0; i < 10; i++ {
@@ -248,8 +238,7 @@ func startRetrievers(session *MatcherSession, quit chan struct{}, retrievals *at
 					for i, section := range task.Sections {
 						if rand.Int()%4 != 0 { // Handle occasional missing deliveries
 							task.Bitsets[i] = generateBitset(task.Bit, section)
-
-							retrievals.Add(1)
+							atomic.AddUint32(retrievals, 1)
 						}
 					}
 					request <- task
@@ -267,13 +256,11 @@ func generateBitset(bit uint, section uint64) []byte {
 		for b := 0; b < 8; b++ {
 			blockIdx := section*testSectionSize + uint64(i*8+b)
 			bitset[i] += bitset[i]
-
 			if (blockIdx % uint64(bit)) == 0 {
 				bitset[i]++
 			}
 		}
 	}
-
 	return bitset
 }
 
@@ -283,7 +270,6 @@ func expMatch1(filter bloomIndexes, i uint64) bool {
 			return false
 		}
 	}
-
 	return true
 }
 
@@ -293,7 +279,6 @@ func expMatch2(filter []bloomIndexes, i uint64) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -303,6 +288,5 @@ func expMatch3(filter [][]bloomIndexes, i uint64) bool {
 			return false
 		}
 	}
-
 	return true
 }

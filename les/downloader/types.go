@@ -54,7 +54,6 @@ func (p *bodyPack) Items() int {
 	if len(p.transactions) <= len(p.uncles) {
 		return len(p.transactions)
 	}
-
 	return len(p.uncles)
 }
 func (p *bodyPack) Stats() string { return fmt.Sprintf("%d:%d", len(p.transactions), len(p.uncles)) }

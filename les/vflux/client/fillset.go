@@ -52,11 +52,9 @@ func NewFillSet(ns *nodestate.NodeStateMachine, input enode.Iterator, flags node
 		if oldState.Equals(flags) {
 			fs.count--
 		}
-
 		if newState.Equals(flags) {
 			fs.count++
 		}
-
 		if fs.target > fs.count {
 			fs.cond.Signal()
 		}
@@ -64,7 +62,6 @@ func NewFillSet(ns *nodestate.NodeStateMachine, input enode.Iterator, flags node
 	})
 
 	go fs.readLoop()
-
 	return fs
 }
 
@@ -78,11 +75,9 @@ func (fs *FillSet) readLoop() {
 		}
 
 		fs.lock.Unlock()
-
 		if !fs.input.Next() {
 			return
 		}
-
 		fs.ns.SetState(fs.input.Node(), fs.flags, nodestate.Flags{}, 0)
 	}
 }

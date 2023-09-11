@@ -37,8 +37,8 @@ type KeyValueWriter interface {
 	Delete(key []byte) error
 }
 
-// KeyValueStater wraps the Stat method of a backing data store.
-type KeyValueStater interface {
+// Stater wraps the Stat method of a backing data store.
+type Stater interface {
 	// Stat returns a particular internal stat of the database.
 	Stat(property string) (string, error)
 }
@@ -60,16 +60,16 @@ type Compacter interface {
 type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
-	KeyValueStater
 	Batcher
 	Iteratee
+	Stater
 	Compacter
 	Snapshotter
 	io.Closer
 }
 
-// AncientReaderOp contains the methods required to read from immutable ancient data.
-type AncientReaderOp interface {
+// AncientReader contains the methods required to read from immutable ancient data.
+type AncientReader interface {
 	// HasAncient returns an indicator whether the specified data exists in the
 	// ancient store.
 	HasAncient(kind string, number uint64) (bool, error)
@@ -95,13 +95,13 @@ type AncientReaderOp interface {
 	AncientSize(kind string) (uint64, error)
 }
 
-// AncientReader is the extended ancient reader interface including 'batched' or 'atomic' reading.
-type AncientReader interface {
-	AncientReaderOp
+// AncientBatchReader is the interface for 'batched' or 'atomic' reading.
+type AncientBatchReader interface {
+	AncientReader
 
 	// ReadAncients runs the given read operation while ensuring that no writes take place
 	// on the underlying freezer.
-	ReadAncients(fn func(AncientReaderOp) error) (err error)
+	ReadAncients(fn func(AncientReader) error) (err error)
 }
 
 // AncientWriter contains the methods required to write to immutable ancient data.
@@ -140,19 +140,11 @@ type AncientWriteOp interface {
 	AppendRaw(kind string, number uint64, item []byte) error
 }
 
-// AncientStater wraps the Stat method of a backing data store.
-type AncientStater interface {
-	// AncientDatadir returns the path of root ancient directory. Empty string
-	// will be returned if ancient store is not enabled at all. The returned
-	// path can be used to construct the path of other freezers.
-	AncientDatadir() (string, error)
-}
-
 // Reader contains the methods required to read data from both key-value as well as
 // immutable ancient data.
 type Reader interface {
 	KeyValueReader
-	AncientReader
+	AncientBatchReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -162,17 +154,10 @@ type Writer interface {
 	AncientWriter
 }
 
-// Stater contains the methods required to retrieve states from both key-value as well as
-// immutable ancient data.
-type Stater interface {
-	KeyValueStater
-	AncientStater
-}
-
 // AncientStore contains all the methods required to allow handling different
 // ancient data stores backing immutable chain data store.
 type AncientStore interface {
-	AncientReader
+	AncientBatchReader
 	AncientWriter
 	io.Closer
 }

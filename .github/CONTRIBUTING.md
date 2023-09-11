@@ -35,6 +35,6 @@ and help.
 
 ## Configuration, dependencies, and tests
 
-Please see the [Developers' Guide](https://geth.ethereum.org/docs/developers/geth-developer/dev-guide)
+Please see the [Developers' Guide](https://geth.ethereum.org/docs/developers/devguide)
 for more details on configuring your environment, managing project dependencies
 and testing procedures.

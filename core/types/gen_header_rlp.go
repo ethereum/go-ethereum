@@ -41,9 +41,8 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
 	_tmp1 := obj.BaseFee != nil
-	_tmp2 := obj.WithdrawalsHash != nil
-	_tmp3 := obj.ExcessDataGas != nil
-	if _tmp1 || _tmp2 || _tmp3 {
+	_tmp2 := len(obj.TxDependency) > 0
+	if _tmp1 || _tmp2 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -53,22 +52,16 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBigInt(obj.BaseFee)
 		}
 	}
-	if _tmp2 || _tmp3 {
-		if obj.WithdrawalsHash == nil {
-			w.Write([]byte{0x80})
-		} else {
-			w.WriteBytes(obj.WithdrawalsHash[:])
-		}
-	}
-	if _tmp3 {
-		if obj.ExcessDataGas == nil {
-			w.Write(rlp.EmptyString)
-		} else {
-			if obj.ExcessDataGas.Sign() == -1 {
-				return rlp.ErrNegativeBigInt
+	if _tmp2 {
+		_tmp3 := w.List()
+		for _, _tmp4 := range obj.TxDependency {
+			_tmp5 := w.List()
+			for _, _tmp6 := range _tmp4 {
+				w.WriteUint64(_tmp6)
 			}
-			w.WriteBigInt(obj.ExcessDataGas)
+			w.ListEnd(_tmp5)
 		}
+		w.ListEnd(_tmp3)
 	}
 	w.ListEnd(_tmp0)
 	return w.Flush()

@@ -51,7 +51,6 @@ func TestGenesisContractChange(t *testing.T) {
 				Code:    []byte{0x1, 0x1},
 			},
 		},
-		Config: &params.ChainConfig{},
 	}
 
 	db := rawdb.NewMemoryDatabase()
@@ -60,7 +59,8 @@ func TestGenesisContractChange(t *testing.T) {
 	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
 	require.NoError(t, err)
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genspec, nil, b, vm.Config{}, nil, nil, nil)
+	config := params.ChainConfig{}
+	chain, err := core.NewBlockChain(db, nil, &config, b, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	addBlock := func(root common.Hash, num int64) (common.Hash, *state.StateDB) {
@@ -68,12 +68,12 @@ func TestGenesisContractChange(t *testing.T) {
 			ParentHash: root,
 			Number:     big.NewInt(num),
 		}
-		b.Finalize(chain, h, statedb, nil, nil, nil)
+		b.Finalize(chain, h, statedb, nil, nil)
 
 		// write state to database
 		root, err := statedb.Commit(false)
 		require.NoError(t, err)
-		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
+		require.NoError(t, statedb.Database().TrieDB().Commit(root, true, nil))
 
 		statedb, err := state.New(h.Root, state.NewDatabase(db), nil)
 		require.NoError(t, err)

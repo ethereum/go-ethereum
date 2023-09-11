@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -46,17 +45,14 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 	if len(result.Accounts) != expectedNum {
 		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
 	}
-
 	for address := range result.Accounts {
 		if address == (common.Address{}) {
 			t.Fatalf("empty address returned")
 		}
-
 		if !statedb.Exist(address) {
 			t.Fatalf("account not found in state %s", address.Hex())
 		}
 	}
-
 	return result
 }
 
@@ -70,7 +66,7 @@ func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), nil)
 		state, _ = state.New(common.Hash{}, statedb, nil)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
 		m        = map[common.Address]bool{}
@@ -81,14 +77,12 @@ func TestAccountRange(t *testing.T) {
 		addr := common.BytesToAddress(crypto.Keccak256Hash(hash.Bytes()).Bytes())
 		addrs[i] = addr
 		state.SetBalance(addrs[i], big.NewInt(1))
-
 		if _, ok := m[addr]; ok {
 			t.Fatalf("bad")
 		} else {
 			m[addr] = true
 		}
 	}
-
 	state.Commit(true)
 	root := state.IntermediateRoot(true)
 
@@ -96,25 +90,21 @@ func TestAccountRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
 	// test pagination
 	firstResult := accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
 	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
 
 	hList := make(resultHash, 0)
-
 	for addr1 := range firstResult.Accounts {
 		// If address is empty, then it makes no sense to compare
 		// them as they might be two different accounts.
 		if addr1 == (common.Address{}) {
 			continue
 		}
-
 		if _, duplicate := secondResult.Accounts[addr1]; duplicate {
 			t.Fatalf("pagination test failed:  results should not overlap")
 		}
-
 		hList = append(hList, crypto.Keccak256Hash(addr1.Bytes()))
 	}
 	// Test to see if it's possible to recover from the middle of the previous
@@ -123,7 +113,6 @@ func TestAccountRange(t *testing.T) {
 	middleH := hList[AccountRangeMaxResults/2]
 	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
 	missing, infirst, insecond := 0, 0, 0
-
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
 			infirst++
@@ -133,15 +122,12 @@ func TestAccountRange(t *testing.T) {
 			missing++
 		}
 	}
-
 	if missing != 0 {
 		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", missing)
 	}
-
 	if infirst != AccountRangeMaxResults/2 {
 		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, AccountRangeMaxResults/2)
 	}
-
 	if insecond != AccountRangeMaxResults/2 {
 		t.Fatalf("Imbalance in the number of second-test results: %d != %d", insecond, AccountRangeMaxResults/2)
 	}
@@ -154,10 +140,8 @@ func TestEmptyAccountRange(t *testing.T) {
 		statedb = state.NewDatabase(rawdb.NewMemoryDatabase())
 		st, _   = state.New(common.Hash{}, statedb, nil)
 	)
-
 	st.Commit(true)
 	st.IntermediateRoot(true)
-
 	results := st.IteratorDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
@@ -167,7 +151,6 @@ func TestEmptyAccountRange(t *testing.T) {
 	if bytes.Equal(results.Next, (common.Hash{}).Bytes()) {
 		t.Fatalf("Empty results should not return a second page")
 	}
-
 	if len(results.Accounts) != 0 {
 		t.Fatalf("Empty state should not return addresses: %v", results.Accounts)
 	}
@@ -193,7 +176,6 @@ func TestStorageRangeAt(t *testing.T) {
 			keys[3]: {Key: &common.Hash{0x03}, Value: common.Hash{0x04}},
 		}
 	)
-
 	for _, entry := range storage {
 		state.SetState(addr, *entry.Key, entry.Value)
 	}
@@ -226,18 +208,12 @@ func TestStorageRangeAt(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		tr, err := state.StorageTrie(addr)
+		result, err := storageRangeAt(state.StorageTrie(addr), test.start, test.limit)
 		if err != nil {
 			t.Error(err)
 		}
-
-		result, err := storageRangeAt(tr, test.start, test.limit)
-		if err != nil {
-			t.Error(err)
-		}
-
 		if !reflect.DeepEqual(result, test.want) {
-			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
+			t.Fatalf("wrong result for range 0x%x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
 	}

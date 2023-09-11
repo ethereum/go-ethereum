@@ -19,9 +19,6 @@ package rlp
 import (
 	"bytes"
 	"fmt"
-	"math/big"
-
-	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -33,7 +30,6 @@ func decodeEncode(input []byte, val interface{}, i int) {
 		if err != nil {
 			panic(err)
 		}
-
 		if !bytes.Equal(input, output) {
 			panic(fmt.Sprintf("case %d: encode-decode is not equal, \ninput : %x\noutput: %x", i, input, output))
 		}
@@ -42,10 +38,6 @@ func decodeEncode(input []byte, val interface{}, i int) {
 
 func Fuzz(input []byte) int {
 	if len(input) == 0 {
-		return 0
-	}
-
-	if len(input) > 500*1024 {
 		return 0
 	}
 
@@ -65,7 +57,6 @@ func Fuzz(input []byte) int {
 
 	{
 		decodeEncode(input, new(interface{}), i)
-
 		i++
 	}
 	{
@@ -74,9 +65,7 @@ func Fuzz(input []byte) int {
 			String string
 			Bytes  []byte
 		}
-
 		decodeEncode(input, &v, i)
-
 		i++
 	}
 
@@ -87,11 +76,8 @@ func Fuzz(input []byte) int {
 			Slice []*Types
 			Iface []interface{}
 		}
-
 		var v Types
-
 		decodeEncode(input, &v, i)
-
 		i++
 	}
 	{
@@ -105,16 +91,12 @@ func Fuzz(input []byte) int {
 			Array  [3]*AllTypes
 			Iface  []interface{}
 		}
-
 		var v AllTypes
-
 		decodeEncode(input, &v, i)
-
 		i++
 	}
 	{
 		decodeEncode(input, [10]byte{}, i)
-
 		i++
 	}
 	{
@@ -122,53 +104,24 @@ func Fuzz(input []byte) int {
 			Byte [10]byte
 			Rool [10]bool
 		}
-
 		decodeEncode(input, &v, i)
-
 		i++
 	}
 	{
 		var h types.Header
-
 		decodeEncode(input, &h, i)
-
 		i++
-
 		var b types.Block
-
 		decodeEncode(input, &b, i)
-
 		i++
-
 		var t types.Transaction
-
 		decodeEncode(input, &t, i)
-
 		i++
-
 		var txs types.Transactions
-
 		decodeEncode(input, &txs, i)
-
 		i++
-
 		var rs types.Receipts
-
 		decodeEncode(input, &rs, i)
 	}
-	{
-		i++
-
-		var v struct {
-			AnIntPtr  *big.Int
-			AnInt     big.Int
-			AnU256Ptr *uint256.Int
-			AnU256    uint256.Int
-			NotAnU256 [4]uint64
-		}
-
-		decodeEncode(input, &v, i)
-	}
-
 	return 1
 }

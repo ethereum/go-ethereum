@@ -36,15 +36,10 @@ import (
 )
 
 var (
-	testdb      = rawdb.NewMemoryDatabase()
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
-	gspec       = &core.Genesis{
-		Config:  params.TestChainConfig,
-		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
-	genesis      = gspec.MustCommit(testdb)
+	testdb       = rawdb.NewMemoryDatabase()
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
+	genesis      = core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000000000))
 	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
 )
 
@@ -53,18 +48,16 @@ var (
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks, _ := core.GenerateChain(gspec.Config, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == genesis && i%3 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
-
 			block.AddTx(tx)
 		}
 		// If the block number is a multiple of 5, add a bonus uncle to the block
@@ -76,12 +69,10 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 	hashes[len(hashes)-1] = parent.Hash()
 	blockm := make(map[common.Hash]*types.Block, n+1)
 	blockm[parent.Hash()] = parent
-
 	for i, b := range blocks {
 		hashes[len(hashes)-i-2] = b.Hash()
 		blockm[b.Hash()] = b
 	}
-
 	return hashes, blockm
 }
 
@@ -144,7 +135,6 @@ func (f *fetcherTester) chainHeight() uint64 {
 	if f.fetcher.light {
 		return f.headers[f.hashes[len(f.hashes)-1]].Number.Uint64()
 	}
-
 	return f.blocks[f.hashes[len(f.hashes)-1]].NumberU64()
 }
 
@@ -166,7 +156,6 @@ func (f *fetcherTester) insertHeaders(headers []*types.Header) (int, error) {
 		f.hashes = append(f.hashes, header.Hash())
 		f.headers[header.Hash()] = header
 	}
-
 	return 0, nil
 }
 
@@ -188,7 +177,6 @@ func (f *fetcherTester) insertChain(blocks types.Blocks) (int, error) {
 		f.hashes = append(f.hashes, block.Hash())
 		f.blocks[block.Hash()] = block
 	}
-
 	return 0, nil
 }
 
@@ -224,11 +212,9 @@ func (f *fetcherTester) makeHeaderFetcher(peer string, blocks map[common.Hash]*t
 			Time: drift,
 			Done: make(chan error, 1), // Ignore the returned status
 		}
-
 		go func() {
 			sink <- res
 		}()
-
 		return req, nil
 	}
 }
@@ -259,7 +245,6 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 				Uncles:       uncles[i],
 			}
 		}
-
 		req := &eth.Request{
 			Peer: peer,
 		}
@@ -269,11 +254,9 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 			Time: drift,
 			Done: make(chan error, 1), // Ignore the returned status
 		}
-
 		go func() {
 			sink <- res
 		}()
-
 		return req, nil
 	}
 }
@@ -387,7 +370,6 @@ func testSequentialAnnouncements(t *testing.T, light bool) {
 
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
-
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -437,7 +419,6 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan interface{})
-
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -463,7 +444,6 @@ func testConcurrentAnnouncements(t *testing.T, light bool) {
 	if int(counter) != targetBlocks {
 		t.Fatalf("retrieval count mismatch: have %v, want %v", counter, targetBlocks)
 	}
-
 	verifyChainHeight(t, tester, uint64(len(hashes)-1))
 }
 
@@ -484,11 +464,9 @@ func testOverlappingAnnouncements(t *testing.T, light bool) {
 	// Iteratively announce blocks, but overlap them continuously
 	overlap := 16
 	imported := make(chan interface{}, len(hashes)-1)
-
 	for i := 0; i < overlap; i++ {
 		imported <- nil
 	}
-
 	tester.fetcher.importedHook = func(header *types.Header, block *types.Block) {
 		if light {
 			if header == nil {
@@ -536,20 +514,16 @@ func testPendingDeduplication(t *testing.T, light bool) {
 
 		// Simulate a long running fetch
 		resink := make(chan *eth.Response)
-
 		req, err := headerFetcher(hash, resink)
 		if err == nil {
 			go func() {
 				res := <-resink
-
 				time.Sleep(delay)
 				sink <- res
 			}()
 		}
-
 		return req, err
 	}
-
 	checkNonExist := func() bool {
 		return tester.getBlock(hashes[0]) == nil
 	}
@@ -569,7 +543,6 @@ func testPendingDeduplication(t *testing.T, light bool) {
 	if int(counter) != 1 {
 		t.Fatalf("retrieval count mismatch: have %v, want %v", counter, 1)
 	}
-
 	verifyChainHeight(t, tester, 1)
 }
 
@@ -603,7 +576,6 @@ func testRandomArrivalImport(t *testing.T, light bool) {
 			imported <- block
 		}
 	}
-
 	for i := len(hashes) - 1; i >= 0; i-- {
 		if i != skip {
 			tester.fetcher.Notify("valid", hashes[i], uint64(len(hashes)-i-1), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
@@ -703,14 +675,12 @@ func TestDistantPropagationDiscarding(t *testing.T) {
 	// Ensure that a block with a lower number than the threshold is discarded
 	tester.fetcher.Enqueue("lower", blocks[hashes[low]])
 	time.Sleep(10 * time.Millisecond)
-
 	if !tester.fetcher.queue.Empty() {
 		t.Fatalf("fetcher queued stale block")
 	}
 	// Ensure that a block with a higher number than the threshold is discarded
 	tester.fetcher.Enqueue("higher", blocks[hashes[high]])
 	time.Sleep(10 * time.Millisecond)
-
 	if !tester.fetcher.queue.Empty() {
 		t.Fatalf("fetcher queued future block")
 	}
@@ -793,7 +763,6 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 		announced <- nil
 	}
 	tester.fetcher.Notify("bad", hashes[0], 2, time.Now().Add(-arriveTimeout), badHeaderFetcher, badBodyFetcher)
-
 	verifyAnnounce := func() {
 		for i := 0; i < 2; i++ {
 			select {
@@ -814,7 +783,6 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	if !dropped {
 		t.Fatalf("peer with invalid numbered announcement not dropped")
 	}
-
 	goodHeaderFetcher := tester.makeHeaderFetcher("good", blocks, -gatherSlack)
 	goodBodyFetcher := tester.makeBodyFetcher("good", blocks, 0)
 	// Make sure a good announcement passes without a drop
@@ -829,7 +797,6 @@ func testInvalidNumberAnnouncement(t *testing.T, light bool) {
 	if dropped {
 		t.Fatalf("peer with valid numbered announcement dropped")
 	}
-
 	verifyImportDone(t, imported)
 }
 
@@ -905,10 +872,8 @@ func TestHashMemoryExhaustionAttack(t *testing.T) {
 		if i < maxQueueDist {
 			tester.fetcher.Notify("valid", hashes[len(hashes)-2-i], uint64(i+1), time.Now(), validHeaderFetcher, validBodyFetcher)
 		}
-
 		tester.fetcher.Notify("attacker", attack[i], 1 /* don't distance drop */, time.Now(), attackerHeaderFetcher, attackerBodyFetcher)
 	}
-
 	if count := atomic.LoadInt32(&announces); count != hashLimit+maxQueueDist {
 		t.Fatalf("queued announce count mismatch: have %d, want %d", count, hashLimit+maxQueueDist)
 	}
@@ -943,7 +908,6 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	targetBlocks := hashLimit + 2*maxQueueDist
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
 	attack := make(map[common.Hash]*types.Block)
-
 	for i := byte(0); len(attack) < blockLimit+2*maxQueueDist; i++ {
 		hashes, blocks := makeChain(maxQueueDist-1, i, unknownBlock)
 		for _, hash := range hashes[:maxQueueDist-2] {
@@ -954,9 +918,7 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	for _, block := range attack {
 		tester.fetcher.Enqueue("attacker", block)
 	}
-
 	time.Sleep(200 * time.Millisecond)
-
 	if queued := atomic.LoadInt32(&enqueued); queued != blockLimit {
 		t.Fatalf("queued block count mismatch: have %d, want %d", queued, blockLimit)
 	}
@@ -965,7 +927,6 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 		tester.fetcher.Enqueue("valid", blocks[hashes[len(hashes)-3-i]])
 	}
 	time.Sleep(100 * time.Millisecond)
-
 	if queued := atomic.LoadInt32(&enqueued); queued != blockLimit+maxQueueDist-1 {
 		t.Fatalf("queued block count mismatch: have %d, want %d", queued, blockLimit+maxQueueDist-1)
 	}

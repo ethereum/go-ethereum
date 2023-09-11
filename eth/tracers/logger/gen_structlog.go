@@ -21,18 +21,17 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Op            vm.OpCode                   `json:"op"`
 		Gas           math.HexOrDecimal64         `json:"gas"`
 		GasCost       math.HexOrDecimal64         `json:"gasCost"`
-		Memory        hexutil.Bytes               `json:"memory,omitempty"`
+		Memory        hexutil.Bytes               `json:"memory"`
 		MemorySize    int                         `json:"memSize"`
 		Stack         []uint256.Int               `json:"stack"`
-		ReturnData    hexutil.Bytes               `json:"returnData,omitempty"`
+		ReturnData    hexutil.Bytes               `json:"returnData"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
 		OpName        string                      `json:"opName"`
-		ErrorString   string                      `json:"error,omitempty"`
+		ErrorString   string                      `json:"error"`
 	}
-
 	var enc StructLog
 	enc.Pc = s.Pc
 	enc.Op = s.Op
@@ -48,7 +47,6 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 	enc.Err = s.Err
 	enc.OpName = s.OpName()
 	enc.ErrorString = s.ErrorString()
-
 	return json.Marshal(&enc)
 }
 
@@ -59,68 +57,54 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Op            *vm.OpCode                  `json:"op"`
 		Gas           *math.HexOrDecimal64        `json:"gas"`
 		GasCost       *math.HexOrDecimal64        `json:"gasCost"`
-		Memory        *hexutil.Bytes              `json:"memory,omitempty"`
+		Memory        *hexutil.Bytes              `json:"memory"`
 		MemorySize    *int                        `json:"memSize"`
 		Stack         []uint256.Int               `json:"stack"`
-		ReturnData    *hexutil.Bytes              `json:"returnData,omitempty"`
+		ReturnData    *hexutil.Bytes              `json:"returnData"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         *int                        `json:"depth"`
 		RefundCounter *uint64                     `json:"refund"`
 		Err           error                       `json:"-"`
 	}
-
 	var dec StructLog
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-
 	if dec.Pc != nil {
 		s.Pc = *dec.Pc
 	}
-
 	if dec.Op != nil {
 		s.Op = *dec.Op
 	}
-
 	if dec.Gas != nil {
 		s.Gas = uint64(*dec.Gas)
 	}
-
 	if dec.GasCost != nil {
 		s.GasCost = uint64(*dec.GasCost)
 	}
-
 	if dec.Memory != nil {
 		s.Memory = *dec.Memory
 	}
-
 	if dec.MemorySize != nil {
 		s.MemorySize = *dec.MemorySize
 	}
-
 	if dec.Stack != nil {
 		s.Stack = dec.Stack
 	}
-
 	if dec.ReturnData != nil {
 		s.ReturnData = *dec.ReturnData
 	}
-
 	if dec.Storage != nil {
 		s.Storage = dec.Storage
 	}
-
 	if dec.Depth != nil {
 		s.Depth = *dec.Depth
 	}
-
 	if dec.RefundCounter != nil {
 		s.RefundCounter = *dec.RefundCounter
 	}
-
 	if dec.Err != nil {
 		s.Err = dec.Err
 	}
-
 	return nil
 }

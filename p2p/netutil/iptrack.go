@@ -65,13 +65,11 @@ func (it *IPTracker) PredictFullConeNAT() bool {
 	now := it.clock.Now()
 	it.gcContact(now)
 	it.gcStatements(now)
-
 	for host, st := range it.statements {
 		if c, ok := it.contact[host]; !ok || c > st.time {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -82,16 +80,13 @@ func (it *IPTracker) PredictEndpoint() string {
 	// The current strategy is simple: find the endpoint with most statements.
 	counts := make(map[string]int)
 	maxcount, max := 0, ""
-
 	for _, s := range it.statements {
 		c := counts[s.endpoint] + 1
 		counts[s.endpoint] = c
-
 		if c > maxcount && c >= it.minStatements {
 			maxcount, max = c, s.endpoint
 		}
 	}
-
 	return max
 }
 
@@ -99,7 +94,6 @@ func (it *IPTracker) PredictEndpoint() string {
 func (it *IPTracker) AddStatement(host, endpoint string) {
 	now := it.clock.Now()
 	it.statements[host] = ipStatement{endpoint, now}
-
 	if time.Duration(now-it.lastStatementGC) >= it.window {
 		it.gcStatements(now)
 	}
@@ -110,7 +104,6 @@ func (it *IPTracker) AddStatement(host, endpoint string) {
 func (it *IPTracker) AddContact(host string) {
 	now := it.clock.Now()
 	it.contact[host] = now
-
 	if time.Duration(now-it.lastContactGC) >= it.contactWindow {
 		it.gcContact(now)
 	}
@@ -119,7 +112,6 @@ func (it *IPTracker) AddContact(host string) {
 func (it *IPTracker) gcStatements(now mclock.AbsTime) {
 	it.lastStatementGC = now
 	cutoff := now.Add(-it.window)
-
 	for host, s := range it.statements {
 		if s.time < cutoff {
 			delete(it.statements, host)
@@ -130,7 +122,6 @@ func (it *IPTracker) gcStatements(now mclock.AbsTime) {
 func (it *IPTracker) gcContact(now mclock.AbsTime) {
 	it.lastContactGC = now
 	cutoff := now.Add(-it.contactWindow)
-
 	for host, ct := range it.contact {
 		if ct < cutoff {
 			delete(it.contact, host)

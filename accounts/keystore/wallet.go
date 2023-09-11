@@ -46,7 +46,6 @@ func (w *keystoreWallet) Status() (string, error) {
 	if _, ok := w.keystore.unlocked[w.account.Address]; ok {
 		return "Unlocked", nil
 	}
-
 	return "Locked", nil
 }
 

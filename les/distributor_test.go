@@ -59,24 +59,19 @@ func (p *testDistPeer) send(r *testDistReq) {
 
 func (p *testDistPeer) worker(t *testing.T, checkOrder bool, stop chan struct{}) {
 	var last uint64
-
 	for {
 		wait := time.Millisecond
-
 		p.lock.Lock()
 		if len(p.sent) > 0 {
 			rq := p.sent[0]
 			wait = time.Duration(rq.procTime)
 			p.sumCost -= rq.cost
-
 			if checkOrder {
 				if rq.order <= last {
 					t.Errorf("Requests processed in wrong order")
 				}
-
 				last = rq.order
 			}
-
 			p.sent = p.sent[1:]
 		}
 		p.lock.Unlock()
@@ -100,11 +95,9 @@ func (p *testDistPeer) waitBefore(cost uint64) (time.Duration, float64) {
 	p.lock.RLock()
 	sumCost := p.sumCost + cost
 	p.lock.RUnlock()
-
 	if sumCost < testDistBufLimit {
 		return 0, float64(testDistBufLimit-sumCost) / float64(testDistBufLimit)
 	}
-
 	return time.Duration(sumCost - testDistBufLimit), 0
 }
 
@@ -130,7 +123,6 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	defer close(stop)
 
 	dist := newRequestDistributor(nil, &mclock.System{})
-
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}
@@ -152,7 +144,6 @@ func testRequestDistributor(t *testing.T, resend bool) {
 			order:     uint64(i),
 			canSendTo: make(map[*testDistPeer]struct{}),
 		}
-
 		for _, peer := range peers {
 			if rand.Intn(2) != 0 {
 				rq.canSendTo[peer] = struct{}{}
@@ -160,25 +151,21 @@ func testRequestDistributor(t *testing.T, resend bool) {
 		}
 
 		wg.Add(1)
-
 		req := &distReq{
 			getCost: rq.getCost,
 			canSend: rq.canSend,
 			request: rq.request,
 		}
 		chn := dist.queue(req)
-
 		go func() {
 			cnt := 1
 			if resend && len(rq.canSendTo) != 0 {
 				cnt = rand.Intn(testDistMaxResendCount) + 1
 			}
-
 			for i := 0; i < cnt; i++ {
 				if i != 0 {
 					chn = dist.queue(req)
 				}
-
 				p := <-chn
 				if p == nil {
 					if len(rq.canSendTo) != 0 {
@@ -193,7 +180,6 @@ func testRequestDistributor(t *testing.T, resend bool) {
 			}
 			wg.Done()
 		}()
-
 		if rand.Intn(1000) == 0 {
 			time.Sleep(time.Duration(rand.Intn(5000000)))
 		}

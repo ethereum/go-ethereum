@@ -118,7 +118,6 @@ func (mv *MVHashMap) Write(k Key, v Version, data interface{}) {
 		cells = n
 		val, _ := mv.m.LoadOrStore(kenc, n)
 		cells = val.(*TxnIndexCells)
-
 		return
 	})
 

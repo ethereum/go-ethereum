@@ -35,7 +35,6 @@ func TestInstructionIteratorValid(t *testing.T) {
 	if err := it.Error(); err != nil {
 		t.Errorf("Expected 2, but encountered error %v instead.", err)
 	}
-
 	if cnt != 2 {
 		t.Errorf("Expected 2, but got %v instead.", cnt)
 	}
@@ -69,7 +68,6 @@ func TestInstructionIteratorEmpty(t *testing.T) {
 	if err := it.Error(); err != nil {
 		t.Errorf("Expected 0, but encountered error %v instead.", err)
 	}
-
 	if cnt != 0 {
 		t.Errorf("Expected 0, but got %v instead.", cnt)
 	}

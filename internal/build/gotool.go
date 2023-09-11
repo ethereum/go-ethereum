@@ -44,7 +44,6 @@ func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 		tool.Env = append(tool.Env, "CGO_ENABLED=1")
 		tool.Env = append(tool.Env, "GOARCH="+g.GOARCH)
 	}
-
 	if g.GOOS != "" && g.GOOS != runtime.GOOS {
 		tool.Env = append(tool.Env, "GOOS="+g.GOOS)
 	}
@@ -54,7 +53,6 @@ func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 	} else if os.Getenv("CC") != "" {
 		tool.Env = append(tool.Env, "CC="+os.Getenv("CC"))
 	}
-
 	return tool
 }
 
@@ -68,7 +66,6 @@ func (g *GoToolchain) Install(gobin string, args ...string) *exec.Cmd {
 	if !filepath.IsAbs(gobin) {
 		panic("GOBIN must be an absolute path")
 	}
-
 	tool := g.goTool("install")
 	tool.Env = append(tool.Env, "GOBIN="+gobin)
 	tool.Args = append(tool.Args, "-mod=readonly")
@@ -81,7 +78,6 @@ func (g *GoToolchain) Install(gobin string, args ...string) *exec.Cmd {
 	pathTool := g.goTool("env", "GOPATH")
 	output, _ := pathTool.Output()
 	tool.Env = append(tool.Env, "GOPATH="+string(output))
-
 	return tool
 }
 
@@ -89,25 +85,21 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 	if g.Root == "" {
 		g.Root = runtime.GOROOT()
 	}
-
-	tool := exec.Command(filepath.Join(g.Root, "bin", "go"), command) // nolint: gosec
+	tool := exec.Command(filepath.Join(g.Root, "bin", "go"), command)
 	tool.Args = append(tool.Args, args...)
 	tool.Env = append(tool.Env, "GOROOT="+g.Root)
 
 	// Forward environment variables to the tool, but skip compiler target settings.
 	// TODO: what about GOARM?
 	skip := map[string]struct{}{"GOROOT": {}, "GOARCH": {}, "GOOS": {}, "GOBIN": {}, "CC": {}}
-
 	for _, e := range os.Environ() {
 		if i := strings.IndexByte(e, '='); i >= 0 {
 			if _, ok := skip[e[:i]]; ok {
 				continue
 			}
 		}
-
 		tool.Env = append(tool.Env, e)
 	}
-
 	return tool
 }
 
@@ -129,22 +121,18 @@ func DownloadGo(csdb *ChecksumDB, version string) string {
 
 	// For Arm architecture, GOARCH includes ISA version.
 	os := runtime.GOOS
-
 	arch := runtime.GOARCH
 	if arch == "arm" {
 		arch = "armv6l"
 	}
-
 	file := fmt.Sprintf("go%s.%s-%s", version, os, arch)
 	if os == "windows" {
 		file += ".zip"
 	} else {
 		file += ".tar.gz"
 	}
-
 	url := "https://golang.org/dl/" + file
 	dst := filepath.Join(ucache, file)
-
 	if err := csdb.DownloadFile(url, dst); err != nil {
 		log.Fatal(err)
 	}
@@ -153,11 +141,9 @@ func DownloadGo(csdb *ChecksumDB, version string) string {
 	if err := ExtractArchive(dst, godir); err != nil {
 		log.Fatal(err)
 	}
-
 	goroot, err := filepath.Abs(filepath.Join(godir, "go"))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return goroot
 }

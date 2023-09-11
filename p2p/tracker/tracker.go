@@ -87,7 +87,6 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 	if !metrics.Enabled {
 		return
 	}
-
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -122,7 +121,7 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 }
 
 // clean is called automatically when a preset time passes without a response
-// being delivered for the first network request.
+// being dleivered for the first network request.
 func (t *Tracker) clean() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -136,7 +135,6 @@ func (t *Tracker) clean() {
 			id   = head.Value.(uint64)
 			req  = t.pending[id]
 		)
-
 		if time.Since(req.time) < t.timeout+5*time.Millisecond {
 			break
 		}
@@ -160,7 +158,6 @@ func (t *Tracker) schedule() {
 		t.wake = nil
 		return
 	}
-
 	t.wake = time.AfterFunc(time.Until(t.pending[t.expire.Front().Value.(uint64)].time.Add(t.timeout)), t.clean)
 }
 
@@ -169,7 +166,6 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 	if !metrics.Enabled {
 		return
 	}
-
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -178,7 +174,6 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 	if !ok {
 		m := fmt.Sprintf("%s/%s/%d/%#02x", staleMeterName, t.protocol, version, code)
 		metrics.GetOrRegisterMeter(m, nil).Mark(1)
-
 		return
 	}
 	// If the response is funky, it might be some active attack
@@ -187,19 +182,16 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 			"have", fmt.Sprintf("%s:%s/%d:%d", peer, t.protocol, version, code),
 			"want", fmt.Sprintf("%s:%s/%d:%d", peer, t.protocol, req.version, req.resCode),
 		)
-
 		return
 	}
 	// Everything matches, mark the request serviced and meter it
 	t.expire.Remove(req.expire)
 	delete(t.pending, id)
-
 	if req.expire.Prev() == nil {
 		if t.wake.Stop() {
 			t.schedule()
 		}
 	}
-
 	g := fmt.Sprintf("%s/%s/%d/%#02x", trackedGaugeName, t.protocol, req.version, req.reqCode)
 	metrics.GetOrRegisterGauge(g, nil).Dec(1)
 

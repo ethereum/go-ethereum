@@ -167,7 +167,6 @@ func TestOrderG1(t *testing.T) {
 	one := new(G1).ScalarBaseMult(new(big.Int).SetInt64(1))
 	g.Add(g, one)
 	g.p.MakeAffine(nil)
-
 	if g.p.x.Cmp(one.p.x) != 0 || g.p.y.Cmp(one.p.y) != 0 {
 		t.Errorf("1+0 != 1 in G1")
 	}
@@ -182,7 +181,6 @@ func TestOrderG2(t *testing.T) {
 	one := new(G2).ScalarBaseMult(new(big.Int).SetInt64(1))
 	g.Add(g, one)
 	g.p.MakeAffine(nil)
-
 	if g.p.x.x.Cmp(one.p.x.x) != 0 ||
 		g.p.x.y.Cmp(one.p.x.y) != 0 ||
 		g.p.y.x.Cmp(one.p.y.x) != 0 ||
@@ -193,7 +191,6 @@ func TestOrderG2(t *testing.T) {
 
 func TestOrderGT(t *testing.T) {
 	gt := Pair(&G1{curveGen}, &G2{twistGen})
-
 	g := new(GT).ScalarMult(gt, Order)
 	if !g.p.IsOne() {
 		t.Error("GT has incorrect order")
@@ -222,7 +219,6 @@ func TestBilinearity(t *testing.T) {
 func TestG1Marshal(t *testing.T) {
 	g := new(G1).ScalarBaseMult(new(big.Int).SetInt64(1))
 	form := g.Marshal()
-
 	_, err := new(G1).Unmarshal(form)
 	if err != nil {
 		t.Fatalf("failed to unmarshal")
@@ -235,7 +231,6 @@ func TestG1Marshal(t *testing.T) {
 	if _, err = g2.Unmarshal(form); err != nil {
 		t.Fatalf("failed to unmarshal ∞")
 	}
-
 	if !g2.p.IsInfinity() {
 		t.Fatalf("∞ unmarshaled incorrectly")
 	}
@@ -244,7 +239,6 @@ func TestG1Marshal(t *testing.T) {
 func TestG2Marshal(t *testing.T) {
 	g := new(G2).ScalarBaseMult(new(big.Int).SetInt64(1))
 	form := g.Marshal()
-
 	_, err := new(G2).Unmarshal(form)
 	if err != nil {
 		t.Fatalf("failed to unmarshal")
@@ -253,11 +247,9 @@ func TestG2Marshal(t *testing.T) {
 	g.ScalarBaseMult(Order)
 	form = g.Marshal()
 	g2 := new(G2)
-
 	if _, err = g2.Unmarshal(form); err != nil {
 		t.Fatalf("failed to unmarshal ∞")
 	}
-
 	if !g2.p.IsInfinity() {
 		t.Fatalf("∞ unmarshaled incorrectly")
 	}

@@ -60,7 +60,6 @@ func TestParseNetlist(t *testing.T) {
 			t.Errorf("%q: got error %q, want %q", test.input, err, test.wantErr)
 			continue
 		}
-
 		if !reflect.DeepEqual(l, test.wantList) {
 			spew.Dump(l)
 			spew.Dump(test.wantList)
@@ -71,7 +70,6 @@ func TestParseNetlist(t *testing.T) {
 
 func TestNilNetListContains(t *testing.T) {
 	var list *Netlist
-
 	checkContains(t, list.Contains, nil, []string{"1.2.3.4"})
 }
 
@@ -123,7 +121,6 @@ func checkContains(t *testing.T, fn func(net.IP) bool, inc, exc []string) {
 			t.Error("returned false for included address", s)
 		}
 	}
-
 	for _, s := range exc {
 		if fn(parseIP(s)) {
 			t.Error("returned true for excluded address", s)
@@ -136,7 +133,6 @@ func parseIP(s string) net.IP {
 	if ip == nil {
 		panic("invalid " + s)
 	}
-
 	return ip
 }
 
@@ -173,7 +169,6 @@ func TestCheckRelayIP(t *testing.T) {
 func BenchmarkCheckRelayIP(b *testing.B) {
 	sender := parseIP("23.55.1.242")
 	addr := parseIP("23.55.1.2")
-
 	for i := 0; i < b.N; i++ {
 		CheckRelayIP(sender, addr)
 	}
@@ -233,7 +228,6 @@ func TestDistinctNetSet(t *testing.T) {
 	}
 
 	set := DistinctNetSet{Subnet: 15, Limit: 2}
-
 	for _, op := range ops {
 		var desc string
 		if op.add != "" {
@@ -245,7 +239,6 @@ func TestDistinctNetSet(t *testing.T) {
 			desc = fmt.Sprintf("Remove(%s)", op.remove)
 			set.Remove(parseIP(op.remove))
 		}
-
 		t.Logf("%s: %v", desc, set)
 	}
 }
@@ -257,11 +250,9 @@ func TestDistinctNetSetAddRemove(t *testing.T) {
 		for _, ip := range ips {
 			s.Add(ip)
 		}
-
 		for _, ip := range ips {
 			s.Remove(ip)
 		}
-
 		return s.Len() == 0
 	}
 

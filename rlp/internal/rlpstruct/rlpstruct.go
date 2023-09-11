@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -44,14 +44,13 @@ type Type struct {
 	Elem      *Type // non-nil for Kind values of Ptr, Slice, Array
 }
 
-// DefaultNilValue determines whether a nil pointer to t encodes/decodes
+// defaultNilValue determines whether a nil pointer to t encodes/decodes
 // as an empty string or empty list.
 func (t Type) DefaultNilValue() NilKind {
 	k := t.Kind
 	if isUint(k) || k == reflect.String || k == reflect.Bool || isByteArray(t) {
 		return NilKindString
 	}
-
 	return NilKindList
 }
 
@@ -97,7 +96,6 @@ func (e TagError) Error() string {
 	if e.StructType != "" {
 		field = e.StructType + "." + e.Field
 	}
-
 	return fmt.Sprintf("rlp: invalid struct tag %q for %s (%s)", e.Tag, field, e.Err)
 }
 
@@ -108,23 +106,18 @@ func ProcessFields(allFields []Field) ([]Field, []Tags, error) {
 
 	// Gather all exported fields and their tags.
 	var fields []Field
-
 	var tags []Tags
-
 	for _, field := range allFields {
 		if !field.Exported {
 			continue
 		}
-
 		ts, err := parseTag(field, lastPublic)
 		if err != nil {
 			return nil, nil, err
 		}
-
 		if ts.Ignored {
 			continue
 		}
-
 		fields = append(fields, field)
 		tags = append(tags, ts)
 	}
@@ -133,17 +126,13 @@ func ProcessFields(allFields []Field) ([]Field, []Tags, error) {
 	// all fields after it must also be optional. Note: optional + tail
 	// is supported.
 	var anyOptional bool
-
 	var firstOptionalName string
-
 	for i, ts := range tags {
 		name := fields[i].Name
-
 		if ts.Optional || ts.Tail {
 			if !anyOptional {
 				firstOptionalName = name
 			}
-
 			anyOptional = true
 		} else {
 			if anyOptional {
@@ -152,16 +141,13 @@ func ProcessFields(allFields []Field) ([]Field, []Tags, error) {
 			}
 		}
 	}
-
 	return fields, tags, nil
 }
 
 func parseTag(field Field, lastPublic int) (Tags, error) {
 	name := field.Name
 	tag := reflect.StructTag(field.Tag)
-
 	var ts Tags
-
 	for _, t := range strings.Split(tag.Get("rlp"), ",") {
 		switch t = strings.TrimSpace(t); t {
 		case "":
@@ -173,7 +159,6 @@ func parseTag(field Field, lastPublic int) (Tags, error) {
 			if field.Type.Kind != reflect.Ptr {
 				return ts, TagError{Field: name, Tag: t, Err: "field is not a pointer"}
 			}
-
 			switch t {
 			case "nil":
 				ts.NilKind = field.Type.Elem.DefaultNilValue()
@@ -192,11 +177,9 @@ func parseTag(field Field, lastPublic int) (Tags, error) {
 			if field.Index != lastPublic {
 				return ts, TagError{Field: name, Tag: t, Err: "must be on last field"}
 			}
-
 			if ts.Optional {
 				return ts, TagError{Field: name, Tag: t, Err: `also has "optional" tag`}
 			}
-
 			if field.Type.Kind != reflect.Slice {
 				return ts, TagError{Field: name, Tag: t, Err: "field type is not slice"}
 			}
@@ -204,19 +187,16 @@ func parseTag(field Field, lastPublic int) (Tags, error) {
 			return ts, TagError{Field: name, Tag: t, Err: "unknown tag"}
 		}
 	}
-
 	return ts, nil
 }
 
 func lastPublicField(fields []Field) int {
 	last := 0
-
 	for _, f := range fields {
 		if f.Exported {
 			last = f.Index
 		}
 	}
-
 	return last
 }
 

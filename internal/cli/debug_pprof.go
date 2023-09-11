@@ -154,7 +154,6 @@ func (d *DebugPprofCommand) Run(args []string) int {
 			d.UI.Output(fmt.Sprintf("Failed to get status: %v", err))
 			return 1
 		}
-
 		if err := dEnv.writeJSON("status.json", statusResp); err != nil {
 			d.UI.Error(err.Error())
 			return 1

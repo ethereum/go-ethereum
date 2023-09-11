@@ -20,9 +20,7 @@ import "fmt"
 
 func ExampleTypeMux() {
 	type someEvent struct{ I int }
-
 	type otherEvent struct{ S string }
-
 	type yetAnotherEvent struct{ X, Y int }
 
 	var mux TypeMux
@@ -30,12 +28,10 @@ func ExampleTypeMux() {
 	// Start a subscriber.
 	done := make(chan struct{})
 	sub := mux.Subscribe(someEvent{}, otherEvent{})
-
 	go func() {
 		for event := range sub.Chan() {
 			fmt.Printf("Received: %#v\n", event.Data)
 		}
-
 		fmt.Println("done")
 		close(done)
 	}()

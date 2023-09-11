@@ -32,13 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-const basefeeWiggleMultiplier = 2
-
-var (
-	errNoEventSignature       = errors.New("no event signature")
-	errEventSignatureMismatch = errors.New("event signature mismatch")
-)
-
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
 type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, error)
@@ -97,17 +90,14 @@ type MetaData struct {
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	if m.ab != nil {
 		return m.ab, nil
 	}
-
 	if parsed, err := abi.JSON(strings.NewReader(m.ABI)); err != nil {
 		return nil, err
 	} else {
 		m.ab = &parsed
 	}
-
 	return m.ab, nil
 }
 
@@ -144,14 +134,11 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-
 	tx, err := c.transact(opts, nil, append(bytecode, input...))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-
 	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
-
 	return c.address, tx, c, nil
 }
 
@@ -164,7 +151,6 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	if opts == nil {
 		opts = new(CallOpts)
 	}
-
 	if results == nil {
 		results = new([]interface{})
 	}
@@ -173,26 +159,19 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	if err != nil {
 		return err
 	}
-
 	var (
 		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
 	)
-
 	if opts.Pending {
 		pb, ok := c.caller.(PendingContractCaller)
 		if !ok {
 			return ErrNoPendingState
 		}
-
 		output, err = pb.PendingCallContract(ctx, msg)
-		if err != nil {
-			return err
-		}
-
-		if len(output) == 0 {
+		if err == nil && len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = pb.PendingCodeAt(ctx, c.address); err != nil {
 				return err
@@ -205,7 +184,6 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		if err != nil {
 			return err
 		}
-
 		if len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
 			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
@@ -219,12 +197,9 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	if len(*results) == 0 {
 		res, err := c.abi.Unpack(method, output)
 		*results = res
-
 		return err
 	}
-
 	res := *results
-
 	return c.abi.UnpackIntoInterface(res[0], method, output)
 }
 
@@ -269,7 +244,6 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		if err != nil {
 			return nil, err
 		}
-
 		gasTipCap = tip
 	}
 	// Estimate FeeCap
@@ -277,19 +251,16 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	if gasFeeCap == nil {
 		gasFeeCap = new(big.Int).Add(
 			gasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(basefeeWiggleMultiplier)),
+			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 		)
 	}
-
 	if gasFeeCap.Cmp(gasTipCap) < 0 {
 		return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", gasFeeCap, gasTipCap)
 	}
 	// Estimate GasLimit
 	gasLimit := opts.GasLimit
-
 	if opts.GasLimit == 0 {
 		var err error
-
 		gasLimit, err = c.estimateGasLimit(opts, contract, input, nil, gasTipCap, gasFeeCap, value)
 		if err != nil {
 			return nil, err
@@ -300,7 +271,6 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	if err != nil {
 		return nil, err
 	}
-
 	baseTx := &types.DynamicFeeTx{
 		To:        contract,
 		Nonce:     nonce,
@@ -310,7 +280,6 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		Value:     value,
 		Data:      input,
 	}
-
 	return types.NewTx(baseTx), nil
 }
 
@@ -330,15 +299,12 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		if err != nil {
 			return nil, err
 		}
-
 		gasPrice = price
 	}
 	// Estimate GasLimit
 	gasLimit := opts.GasLimit
-
 	if opts.GasLimit == 0 {
 		var err error
-
 		gasLimit, err = c.estimateGasLimit(opts, contract, input, gasPrice, nil, nil, value)
 		if err != nil {
 			return nil, err
@@ -349,7 +315,6 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 	if err != nil {
 		return nil, err
 	}
-
 	baseTx := &types.LegacyTx{
 		To:       contract,
 		Nonce:    nonce,
@@ -358,7 +323,6 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		Value:    value,
 		Data:     input,
 	}
-
 	return types.NewTx(baseTx), nil
 }
 
@@ -371,7 +335,6 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 			return 0, ErrNoCode
 		}
 	}
-
 	msg := ethereum.CallMsg{
 		From:      opts.From,
 		To:        contract,
@@ -381,7 +344,6 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 		Value:     value,
 		Data:      input,
 	}
-
 	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 }
 
@@ -404,11 +366,8 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx *types.Transaction
 		err   error
 	)
-
 	if opts.GasPrice != nil {
 		rawTx, err = c.createLegacyTx(opts, contract, input)
-	} else if opts.GasFeeCap != nil && opts.GasTipCap != nil {
-		rawTx, err = c.createDynamicTx(opts, contract, input, nil)
 	} else {
 		// Only query for basefee if gasPrice not specified
 		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); errHead != nil {
@@ -420,7 +379,6 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			rawTx, err = c.createLegacyTx(opts, contract, input)
 		}
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -428,20 +386,16 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
-
 	signedTx, err := opts.Signer(opts.From, rawTx)
 	if err != nil {
 		return nil, err
 	}
-
 	if opts.NoSend {
 		return signedTx, nil
 	}
-
 	if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
 		return nil, err
 	}
-
 	return signedTx, nil
 }
 
@@ -477,7 +431,6 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 	if err != nil {
 		return nil, nil, err
 	}
-
 	sub, err := event.NewSubscription(func(quit <-chan struct{}) error {
 		for _, log := range buff {
 			select {
@@ -486,14 +439,12 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 				return nil
 			}
 		}
-
 		return nil
 	}), nil
 
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return logs, sub, nil
 }
 
@@ -521,68 +472,48 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 	if opts.Start != nil {
 		config.FromBlock = new(big.Int).SetUint64(*opts.Start)
 	}
-
 	sub, err := c.filterer.SubscribeFilterLogs(ensureContext(opts.Context), config, logs)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return logs, sub, nil
 }
 
 // UnpackLog unpacks a retrieved log into the provided output structure.
 func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) error {
-	// Anonymous events are not supported.
-	if len(log.Topics) == 0 {
-		return errNoEventSignature
-	}
-
 	if log.Topics[0] != c.abi.Events[event].ID {
-		return errEventSignatureMismatch
+		return fmt.Errorf("event signature mismatch")
 	}
-
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return err
 		}
 	}
-
 	var indexed abi.Arguments
-
 	for _, arg := range c.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
 	}
-
 	return abi.ParseTopics(out, indexed, log.Topics[1:])
 }
 
 // UnpackLogIntoMap unpacks a retrieved log into the provided map.
 func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event string, log types.Log) error {
-	// Anonymous events are not supported.
-	if len(log.Topics) == 0 {
-		return errNoEventSignature
-	}
-
 	if log.Topics[0] != c.abi.Events[event].ID {
-		return errEventSignatureMismatch
+		return fmt.Errorf("event signature mismatch")
 	}
-
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
 			return err
 		}
 	}
-
 	var indexed abi.Arguments
-
 	for _, arg := range c.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
 	}
-
 	return abi.ParseTopicsIntoMap(out, indexed, log.Topics[1:])
 }
 
@@ -592,6 +523,5 @@ func ensureContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return context.Background()
 	}
-
 	return ctx
 }

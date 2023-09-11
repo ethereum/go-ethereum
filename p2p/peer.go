@@ -129,13 +129,11 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 		protos[i].Name = cap.Name
 		protos[i].Version = cap.Version
 	}
-
 	pipe, _ := net.Pipe()
 	node := enode.SignNull(new(enr.Record), id)
 	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
 	peer := newPeer(log.Root(), conn, protos)
 	close(peer.closed) // ensures Disconnect doesn't block
-
 	return peer
 }
 
@@ -145,7 +143,6 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 func NewPeerPipe(id enode.ID, name string, caps []Cap, pipe *MsgPipeRW) *Peer {
 	p := NewPeer(id, name, caps)
 	p.testPipe = pipe
-
 	return p
 }
 
@@ -165,7 +162,6 @@ func (p *Peer) Name() string {
 	if len(s) > 20 {
 		return s[:20] + "..."
 	}
-
 	return s
 }
 
@@ -191,7 +187,6 @@ func (p *Peer) RunningCap(protocol string, versions []uint) bool {
 			}
 		}
 	}
-
 	return false
 }
 
@@ -240,7 +235,6 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 		closed:   make(chan struct{}),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
 	}
-
 	return p
 }
 
@@ -255,9 +249,7 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 		readErr    = make(chan error, 1)
 		reason     DiscReason // sent to the peer
 	)
-
 	p.wg.Add(2)
-
 	go p.readLoop(readErr)
 	go p.pingLoop()
 
@@ -297,16 +289,13 @@ loop:
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
-
 	return remoteRequested, err
 }
 
 func (p *Peer) pingLoop() {
 	ping := time.NewTimer(pingInterval)
-
 	defer p.wg.Done()
 	defer ping.Stop()
-
 	for {
 		select {
 		case <-ping.C:
@@ -314,7 +303,6 @@ func (p *Peer) pingLoop() {
 				p.protoErr <- err
 				return
 			}
-
 			ping.Reset(pingInterval)
 		case <-p.closed:
 			return
@@ -324,14 +312,12 @@ func (p *Peer) pingLoop() {
 
 func (p *Peer) readLoop(errc chan<- error) {
 	defer p.wg.Done()
-
 	for {
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
 			errc <- err
 			return
 		}
-
 		msg.ReceivedAt = time.Now()
 		if err = p.handle(msg); err != nil {
 			errc <- err
@@ -344,15 +330,12 @@ func (p *Peer) handle(msg Msg) error {
 	switch {
 	case msg.Code == pingMsg:
 		msg.Discard()
-
 		go SendItems(p.rw, pongMsg)
 	case msg.Code == discMsg:
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
 		var m struct{ R DiscReason }
-
 		rlp.Decode(msg.Payload, &m)
-
 		return m.R
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
@@ -363,7 +346,6 @@ func (p *Peer) handle(msg Msg) error {
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
 		}
-
 		if metrics.Enabled {
 			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
 			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
@@ -376,13 +358,11 @@ func (p *Peer) handle(msg Msg) error {
 			return io.EOF
 		}
 	}
-
 	return nil
 }
 
 func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
 	n := 0
-
 	for _, cap := range caps {
 		for _, proto := range protocols {
 			if proto.Name == cap.Name && proto.Version == cap.Version {
@@ -390,14 +370,12 @@ func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
 			}
 		}
 	}
-
 	return n
 }
 
 // matchProtocols creates structures for matching named subprotocols.
 func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[string]*protoRW {
 	sort.Sort(capsByNameAndVersion(caps))
-
 	offset := baseProtocolLength
 	result := make(map[string]*protoRW)
 
@@ -417,36 +395,28 @@ outer:
 			}
 		}
 	}
-
 	return result
 }
 
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
 	p.wg.Add(len(p.running))
-
 	for _, proto := range p.running {
 		proto := proto
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
-
 		var rw MsgReadWriter = proto
-
 		if p.events != nil {
 			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name, p.Info().Network.RemoteAddress, p.Info().Network.LocalAddress)
 		}
-
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
-
 		go func() {
 			defer p.wg.Done()
-
 			err := proto.Run(p, rw)
 			if err == nil {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
-
 				err = errProtocolReturned
-			} else if !errors.Is(err, io.EOF) {
+			} else if err != io.EOF {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
@@ -462,7 +432,6 @@ func (p *Peer) getProto(code uint64) (*protoRW, error) {
 			return proto, nil
 		}
 	}
-
 	return nil, newPeerError(errInvalidMsgCode, "%d", code)
 }
 
@@ -480,7 +449,6 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
-
 	msg.meterCap = rw.cap()
 	msg.meterCode = msg.Code
 
@@ -497,7 +465,6 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	case <-rw.closed:
 		err = ErrShuttingDown
 	}
-
 	return err
 }
 
@@ -548,7 +515,6 @@ func (p *Peer) Info() *PeerInfo {
 	if p.Node().Seq() > 0 {
 		info.ENR = p.Node().String()
 	}
-
 	info.Network.LocalAddress = p.LocalAddr().String()
 	info.Network.RemoteAddress = p.RemoteAddr().String()
 	info.Network.Inbound = p.rw.is(inboundConn)
@@ -558,7 +524,6 @@ func (p *Peer) Info() *PeerInfo {
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
 		protoInfo := interface{}("unknown")
-
 		if query := proto.Protocol.PeerInfo; query != nil {
 			if metadata := query(p.ID()); metadata != nil {
 				protoInfo = metadata
@@ -566,9 +531,7 @@ func (p *Peer) Info() *PeerInfo {
 				protoInfo = "handshake"
 			}
 		}
-
 		info.Protocols[proto.Name] = protoInfo
 	}
-
 	return info
 }
