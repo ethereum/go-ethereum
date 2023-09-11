@@ -275,6 +275,10 @@ const schema string = `
         # Withdrawals is a list of withdrawals associated with this block. If
         # withdrawals are unavailable for this block, this field will be null.
         withdrawals: [Withdrawal!]
+        # BlobGasUsed is the amount of gas used for blob transactions.
+        blobGasUsed: Long
+        # ExcessBlobGas is the amount of excess gas available for blob transactions.
+        excessBlobGas: Long
     }
 
     # CallData represents the data associated with a local contract call.
