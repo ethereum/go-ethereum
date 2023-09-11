@@ -82,7 +82,6 @@ func (c counterSnapshot) Count() int64 { return int64(c) }
 // NilCounter is a no-op Counter.
 type NilCounter struct{}
 
-// Clear is a no-op.
 func (NilCounter) Clear()                    {}
 func (NilCounter) Dec(i int64)               {}
 func (NilCounter) Inc(i int64)               {}

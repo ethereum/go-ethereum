@@ -51,14 +51,9 @@ func (g gaugeFloat64Snapshot) Value() float64 { return float64(g) }
 // NilGauge is a no-op Gauge.
 type NilGaugeFloat64 struct{}
 
-// Snapshot is a no-op.
 func (NilGaugeFloat64) Snapshot() GaugeFloat64Snapshot { return NilGaugeFloat64{} }
-
-// Update is a no-op.
-func (NilGaugeFloat64) Update(v float64) {}
-
-// Value is a no-op.
-func (NilGaugeFloat64) Value() float64 { return 0.0 }
+func (NilGaugeFloat64) Update(v float64)               {}
+func (NilGaugeFloat64) Value() float64                 { return 0.0 }
 
 // StandardGaugeFloat64 is the standard implementation of a GaugeFloat64 and uses
 // atomic to manage a single float64 value.

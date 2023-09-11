@@ -39,12 +39,12 @@ func NewEWMA15() EWMA {
 	return NewEWMA(1 - math.Exp(-5.0/60.0/15))
 }
 
-// eWMASnapshot is a read-only copy of another EWMA.
-type eWMASnapshot float64
+// ewmaSnapshot is a read-only copy of another EWMA.
+type ewmaSnapshot float64
 
 // Rate returns the rate of events per second at the time the snapshot was
 // taken.
-func (a eWMASnapshot) Rate() float64 { return float64(a) }
+func (a ewmaSnapshot) Rate() float64 { return float64(a) }
 
 // NilEWMA is a no-op EWMA.
 type NilEWMA struct{}
@@ -67,7 +67,7 @@ type StandardEWMA struct {
 // Snapshot returns a read-only copy of the EWMA.
 func (a *StandardEWMA) Snapshot() EWMASnapshot {
 	r := math.Float64frombits(a.rate.Load()) * float64(time.Second)
-	return eWMASnapshot(r)
+	return ewmaSnapshot(r)
 }
 
 // Tick ticks the clock to update the moving average.  It assumes it is called
