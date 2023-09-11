@@ -58,7 +58,7 @@ type SkippedTransaction struct {
 	// BlockNumber is the number of the block in which this transaction was skipped.
 	BlockNumber uint64
 
-	// BlockNumber is the hash of the block in which this transaction was skipped or nil.
+	// BlockHash is the hash of the block in which this transaction was skipped or nil.
 	BlockHash *common.Hash
 }
 
@@ -80,7 +80,7 @@ type SkippedTransactionV2 struct {
 	// BlockNumber is the number of the block in which this transaction was skipped.
 	BlockNumber uint64
 
-	// BlockNumber is the hash of the block in which this transaction was skipped or nil.
+	// BlockHash is the hash of the block in which this transaction was skipped or nil.
 	BlockHash *common.Hash
 }
 

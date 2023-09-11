@@ -322,7 +322,8 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	// still we have no state root for per tx, only set the head and tail
 	if index == 0 {
 		txStorageTrace.RootBefore = state.GetRootHash()
-	} else if index == len(block.Transactions())-1 {
+	}
+	if index == len(block.Transactions())-1 {
 		txStorageTrace.RootAfter = block.Root()
 	}
 
