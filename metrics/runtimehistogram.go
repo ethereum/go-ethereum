@@ -86,34 +86,30 @@ func newRuntimeHistogramSnapshot(h *metrics.Float64Histogram) *runtimeHistogramS
 func (h *runtimeHistogramSnapshot) calc() {
 	h.calculated = true
 	var (
-		count  int64   // number of samples
-		sum    float64 // approx sum of all sample values
-		minSet = false
-		min    int64
-		max    float64
+		count int64   // number of samples
+		sum   float64 // approx sum of all sample values
+		min   int64
+		max   float64
 	)
 	if len(h.internal.Counts) == 0 {
 		return
 	}
 	for i, c := range h.internal.Counts {
-		count += int64(c)
-		midpoint := h.midpoint(i)
-		sum += midpoint * float64(c)
 		if c == 0 {
 			continue
 		}
-		if !minSet {
-			minSet = true
+		if count == 0 { // Set min only first loop iteration
 			min = int64(math.Floor(h.internal.Buckets[i]))
 		}
-		if count > 0 {
-			edge := h.internal.Buckets[i+1]
-			if math.IsInf(edge, 1) {
-				edge = h.internal.Buckets[i]
-			}
-			if edge > max {
-				max = edge
-			}
+		count += int64(c)
+		sum += h.midpoint(i) * float64(c)
+		// Set max on every iteration
+		edge := h.internal.Buckets[i+1]
+		if math.IsInf(edge, 1) {
+			edge = h.internal.Buckets[i]
+		}
+		if edge > max {
+			max = edge
 		}
 	}
 	h.min = min
