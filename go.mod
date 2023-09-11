@@ -56,7 +56,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/status-im/keycard-go v0.2.0
-	github.com/streamingfast/firehose-ethereum/types v0.0.0-20230706172428-1ea1414b9d6b
+	github.com/streamingfast/firehose-ethereum/types v0.0.0-20230911154550-654ed552f285
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
@@ -168,7 +168,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
-	go.uber.org/atomic v1.11.0
+	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect

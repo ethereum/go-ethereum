@@ -679,8 +679,8 @@ github.com/streamingfast/dstore v0.1.1-0.20220607202639-35118aeaf648 h1:xpy3HNXe
 github.com/streamingfast/dstore v0.1.1-0.20220607202639-35118aeaf648/go.mod h1:SHSEIPowGeE1TfNNmGeAUUnlO3dwevmX5kFOSazU60M=
 github.com/streamingfast/eth-go v0.0.0-20220421042603-ebe2c94fcc92 h1:jMLyqSyOP0Wf1wbC0qhTW8GdFr+NM5WBwBzNc74TAk8=
 github.com/streamingfast/eth-go v0.0.0-20220421042603-ebe2c94fcc92/go.mod h1:GSWB6tldvuaUekmehj7yCv/8o6MIWPb+9Hf+m4uZdDM=
-github.com/streamingfast/firehose-ethereum/types v0.0.0-20230706172428-1ea1414b9d6b h1:DIXZBExj65Kn4aoGGj0iD7obTVh910aHyY7R1+yfkSY=
-github.com/streamingfast/firehose-ethereum/types v0.0.0-20230706172428-1ea1414b9d6b/go.mod h1:Kh5fptEEMKVw/QXrdfr49ldY3SP5+/MJoUPQfUtByUU=
+github.com/streamingfast/firehose-ethereum/types v0.0.0-20230911154550-654ed552f285 h1:CHi8MSyRFe4ngApM2XbR5AueTd/6pSxAvzxFhqdy08Q=
+github.com/streamingfast/firehose-ethereum/types v0.0.0-20230911154550-654ed552f285/go.mod h1:Kh5fptEEMKVw/QXrdfr49ldY3SP5+/MJoUPQfUtByUU=
 github.com/streamingfast/jsonpb v0.0.0-20210811021341-3670f0aa02d0 h1:g8eEYbFSykyzIyuxNMmHEUGGUvJE0ivmqZagLDK42gw=
 github.com/streamingfast/jsonpb v0.0.0-20210811021341-3670f0aa02d0/go.mod h1:cTNObq2Uofb330y05JbbZZ6RwE6QUXw5iVcHk1Fx3fk=
 github.com/streamingfast/logging v0.0.0-20210811175431-f3b44b61606a/go.mod h1:4GdqELhZOXj4xwc4IaBmzofzdErGynnaSzuzxy0ZIBo=

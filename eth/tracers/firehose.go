@@ -784,7 +784,7 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 		reason == vm.GasChangeTxRefunds ||
 		reason == vm.GasChangeTxBuyBack ||
 		reason == vm.GasChangeCallInitialBalance ||
-		reason == vm.GasChangeCallLeftOverRefunded {
+		reason == vm.GasChangeCallLeftOverReturned {
 		return
 	}
 
@@ -1126,15 +1126,16 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	//
 	// New chain should uncomment the code below and remove the same assigments to UNKNOWN
 	//
-	// vm.GasChangeTxInitialBalance: pbeth.GasChange_REASON_INITIAL_BALANCE,
-	// vm.GasChangeTxRefunds: pbeth.GasChange_REASON_REFUND,
-	// vm.GasChangeTxBuyBack: pbeth.GasChange_REASON_BUYBACK,
-	// vm.GasChangeCallInitialBalance: pbeth.GasChange_REASON_BUYBACK,
+	// vm.GasChangeTxInitialBalance:     pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
+	// vm.GasChangeTxRefunds:            pbeth.GasChange_REASON_TX_REFUNDS,
+	// vm.GasChangeTxBuyBack:            pbeth.GasChange_REASON_TX_BUY_BACK,
+	// vm.GasChangeCallInitialBalance:   pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
+	// vm.GasChangeCallLeftOverReturned: pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
 	vm.GasChangeTxInitialBalance:     pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeTxRefunds:            pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeTxBuyBack:            pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeCallInitialBalance:   pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasChangeCallLeftOverRefunded: pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeCallLeftOverReturned: pbeth.GasChange_REASON_UNKNOWN,
 
 	vm.GasChangeTxIntrinsicGas:          pbeth.GasChange_REASON_INTRINSIC_GAS,
 	vm.GasChangeCallContractCreation:    pbeth.GasChange_REASON_CONTRACT_CREATION,
@@ -1142,7 +1143,7 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	vm.GasChangeCallCodeStorage:         pbeth.GasChange_REASON_CODE_STORAGE,
 	vm.GasChangeCallPrecompiledContract: pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
 	vm.GasChangeCallStorageColdAccess:   pbeth.GasChange_REASON_STATE_COLD_ACCESS,
-	vm.GasChangeCallLeftOverReturned:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	vm.GasChangeCallLeftOverRefunded:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
 	vm.GasChangeCallFailedExecution:     pbeth.GasChange_REASON_FAILED_EXECUTION,
 
 	// Ignored, we track them manually, newGasChange ensure that we panic if we see Unknown
