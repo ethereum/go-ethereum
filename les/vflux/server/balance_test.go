@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -54,20 +54,25 @@ func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpir
 	// Initialize and customize the setup for the balance testing
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()
-	setup.clientField = setup.setup.NewField("balancTestClient", reflect.TypeOf(balanceTestClient{}))
+	setup.clientField = setup.setup.NewField("balanceTestClient", reflect.TypeOf(balanceTestClient{}))
 
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
+
 	if posExp == nil {
 		posExp = zeroExpirer{}
 	}
+
 	if negExp == nil {
 		negExp = zeroExpirer{}
 	}
+
 	if db == nil {
 		db = memorydb.New()
 	}
+
 	bt := newBalanceTracker(ns, setup, db, clock, posExp, negExp)
 	ns.Start()
+
 	return &balanceTestSetup{
 		clock: clock,
 		db:    db,
@@ -80,10 +85,13 @@ func newBalanceTestSetup(db ethdb.KeyValueStore, posExp, negExp utils.ValueExpir
 func (b *balanceTestSetup) newNode(capacity uint64) *nodeBalance {
 	node := enode.SignNull(&enr.Record{}, enode.ID{})
 	b.ns.SetField(node, b.setup.clientField, balanceTestClient{})
+
 	if capacity != 0 {
 		b.ns.SetField(node, b.setup.capacityField, capacity)
 	}
+
 	n, _ := b.ns.GetField(node, b.setup.balanceField).(*nodeBalance)
+
 	return n
 }
 
@@ -91,6 +99,7 @@ func (b *balanceTestSetup) setBalance(node *nodeBalance, pos, neg uint64) (err e
 	b.bt.BalanceOperation(node.node.ID(), node.connAddress, func(balance AtomicBalanceOperator) {
 		err = balance.SetBalance(pos, neg)
 	})
+
 	return
 }
 
@@ -98,6 +107,7 @@ func (b *balanceTestSetup) addBalance(node *nodeBalance, add int64) (old, new ui
 	b.bt.BalanceOperation(node.node.ID(), node.connAddress, func(balance AtomicBalanceOperator) {
 		old, new, err = balance.AddBalance(add)
 	})
+
 	return
 }
 
@@ -111,6 +121,7 @@ func TestAddBalance(t *testing.T) {
 	defer b.stop()
 
 	node := b.newNode(1000)
+
 	var inputs = []struct {
 		delta     int64
 		expect    [2]uint64
@@ -123,19 +134,23 @@ func TestAddBalance(t *testing.T) {
 		{1, [2]uint64{0, 1}, 1, false},
 		{maxBalance, [2]uint64{0, 0}, 0, true},
 	}
+
 	for _, i := range inputs {
 		old, new, err := b.addBalance(node, i.delta)
 		if i.expectErr {
 			if err == nil {
 				t.Fatalf("Expect get error but nil")
 			}
+
 			continue
 		} else if err != nil {
 			t.Fatalf("Expect get no error but %v", err)
 		}
+
 		if old != i.expect[0] || new != i.expect[1] {
 			t.Fatalf("Positive balance mismatch, got %v -> %v", old, new)
 		}
+
 		if b.bt.TotalTokenAmount() != i.total {
 			t.Fatalf("Total positive balance mismatch, want %v, got %v", i.total, b.bt.TotalTokenAmount())
 		}
@@ -154,12 +169,15 @@ func TestSetBalance(t *testing.T) {
 		{0, 1000},
 		{1000, 1000},
 	}
+
 	for _, i := range inputs {
 		b.setBalance(node, i.pos, i.neg)
+
 		pos, neg := node.GetBalance()
 		if pos != i.pos {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.pos, pos)
 		}
+
 		if neg != i.neg {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.neg, neg)
 		}
@@ -184,22 +202,28 @@ func TestBalanceTimeCost(t *testing.T) {
 		{time.Second * 59, 0, 0},
 		{time.Second, 0, uint64(time.Second)},
 	}
+
 	for _, i := range inputs {
 		b.clock.Run(i.runTime)
+
 		if pos, _ := node.GetBalance(); pos != i.expPos {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
+
 		if _, neg := node.GetBalance(); neg != i.expNeg {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
 	}
 
 	b.setBalance(node, uint64(time.Minute), 0) // Refill 1 minute time allowance
+
 	for _, i := range inputs {
 		b.clock.Run(i.runTime)
+
 		if pos, _ := node.GetBalance(); pos != i.expPos {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
+
 		if _, neg := node.GetBalance(); neg != i.expNeg {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
@@ -213,6 +237,7 @@ func TestBalanceReqCost(t *testing.T) {
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
 
 	b.setBalance(node, uint64(time.Minute), 0) // 1 minute time serving time allowance
+
 	var inputs = []struct {
 		reqCost uint64
 		expPos  uint64
@@ -223,11 +248,14 @@ func TestBalanceReqCost(t *testing.T) {
 		{uint64(time.Second * 59), 0, 0},
 		{uint64(time.Second), 0, uint64(time.Second)},
 	}
+
 	for _, i := range inputs {
 		node.RequestServed(i.reqCost)
+
 		if pos, _ := node.GetBalance(); pos != i.expPos {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
+
 		if _, neg := node.GetBalance(); neg != i.expNeg {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
@@ -250,8 +278,10 @@ func TestBalanceToPriority(t *testing.T) {
 		{0, 0, 0},
 		{0, 1000, -1000},
 	}
+
 	for _, i := range inputs {
 		b.setBalance(node, i.pos, i.neg)
+
 		priority := node.priority(1000)
 		if priority != i.priority {
 			t.Fatalf("priority mismatch, want %v, got %v", i.priority, priority)
@@ -265,6 +295,7 @@ func TestEstimatedPriority(t *testing.T) {
 	node := b.newNode(1000000000)
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
 	b.setBalance(node, uint64(time.Minute), 0)
+
 	var inputs = []struct {
 		runTime    time.Duration // time cost
 		futureTime time.Duration // diff of future time
@@ -288,9 +319,11 @@ func TestEstimatedPriority(t *testing.T) {
 		// 1 minute estimated time cost, 4/58 * 10^9 estimated request cost per sec.
 		{0, time.Minute, 0, -int64(time.Minute) - int64(time.Second)*120/29},
 	}
+
 	for _, i := range inputs {
 		b.clock.Run(i.runTime)
 		node.RequestServed(i.reqCost)
+
 		priority := node.estimatePriority(1000000000, 0, i.futureTime, 0, false)
 		if priority != i.priority {
 			t.Fatalf("Estimated priority mismatch, want %v, got %v", i.priority, priority)
@@ -298,11 +331,14 @@ func TestEstimatedPriority(t *testing.T) {
 	}
 }
 
-func TestPostiveBalanceCounting(t *testing.T) {
+func TestPositiveBalanceCounting(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 
 	var nodes []*nodeBalance
+
 	for i := 0; i < 100; i += 1 {
 		node := b.newNode(1000000)
 		node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
@@ -311,11 +347,13 @@ func TestPostiveBalanceCounting(t *testing.T) {
 
 	// Allocate service token
 	var sum uint64
+
 	for i := 0; i < 100; i += 1 {
 		amount := int64(rand.Intn(100) + 100)
 		b.addBalance(nodes[i], amount)
 		sum += uint64(amount)
 	}
+
 	if b.bt.TotalTokenAmount() != sum {
 		t.Fatalf("Invalid token amount")
 	}
@@ -326,14 +364,17 @@ func TestPostiveBalanceCounting(t *testing.T) {
 			b.ns.SetField(nodes[i].node, b.setup.capacityField, uint64(1))
 		}
 	}
+
 	if b.bt.TotalTokenAmount() != sum {
 		t.Fatalf("Invalid token amount")
 	}
+
 	for i := 0; i < 100; i += 1 {
 		if rand.Intn(2) == 0 {
 			b.ns.SetField(nodes[i].node, b.setup.capacityField, uint64(1))
 		}
 	}
+
 	if b.bt.TotalTokenAmount() != sum {
 		t.Fatalf("Invalid token amount")
 	}
@@ -353,7 +394,9 @@ func TestCallbackChecking(t *testing.T) {
 		{0, time.Second},
 		{-int64(time.Second), 2 * time.Second},
 	}
+
 	b.setBalance(node, uint64(time.Second), 0)
+
 	for _, i := range inputs {
 		diff, _ := node.timeUntil(i.priority)
 		if diff != i.expDiff {
@@ -369,6 +412,7 @@ func TestCallback(t *testing.T) {
 	node.SetPriceFactors(PriceFactors{1, 0, 1}, PriceFactors{1, 0, 1})
 
 	callCh := make(chan struct{}, 1)
+
 	b.setBalance(node, uint64(time.Minute), 0)
 	node.addCallback(balanceCallbackZero, 0, func() { callCh <- struct{}{} })
 
@@ -394,6 +438,7 @@ func TestCallback(t *testing.T) {
 func TestBalancePersistence(t *testing.T) {
 	posExp := &utils.Expirer{}
 	negExp := &utils.Expirer{}
+
 	posExp.SetRate(0, math.Log(2)/float64(time.Hour*2)) // halves every two hours
 	negExp.SetRate(0, math.Log(2)/float64(time.Hour))   // halves every hour
 	setup := newBalanceTestSetup(nil, posExp, negExp)
@@ -403,6 +448,7 @@ func TestBalancePersistence(t *testing.T) {
 		if pos != expPos {
 			t.Fatalf("Positive balance incorrect, want %v, got %v", expPos, pos)
 		}
+
 		if neg != expNeg {
 			t.Fatalf("Positive balance incorrect, want %v, got %v", expPos, pos)
 		}
@@ -415,7 +461,9 @@ func TestBalancePersistence(t *testing.T) {
 	}
 
 	expTotal(0)
+
 	balance := setup.newNode(0)
+
 	expTotal(0)
 	setup.setBalance(balance, 16000000000, 16000000000)
 	exp(balance, 16000000000, 16000000000)
@@ -428,7 +476,9 @@ func TestBalancePersistence(t *testing.T) {
 
 	// Test the functionalities after restart
 	setup = newBalanceTestSetup(setup.db, posExp, negExp)
+
 	expTotal(8000000000)
+
 	balance = setup.newNode(0)
 	exp(balance, 8000000000, 4000000000)
 	expTotal(8000000000)

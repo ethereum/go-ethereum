@@ -25,6 +25,7 @@ func newGFp2(pool *bnPool) *gfP2 {
 func (e *gfP2) String() string {
 	x := new(big.Int).Mod(e.x, P)
 	y := new(big.Int).Mod(e.y, P)
+
 	return "(" + x.String() + "," + y.String() + ")"
 }
 
@@ -36,18 +37,21 @@ func (e *gfP2) Put(pool *bnPool) {
 func (e *gfP2) Set(a *gfP2) *gfP2 {
 	e.x.Set(a.x)
 	e.y.Set(a.y)
+
 	return e
 }
 
 func (e *gfP2) SetZero() *gfP2 {
 	e.x.SetInt64(0)
 	e.y.SetInt64(0)
+
 	return e
 }
 
 func (e *gfP2) SetOne() *gfP2 {
 	e.x.SetInt64(0)
 	e.y.SetInt64(1)
+
 	return e
 }
 
@@ -55,6 +59,7 @@ func (e *gfP2) Minimal() {
 	if e.x.Sign() < 0 || e.x.Cmp(P) >= 0 {
 		e.x.Mod(e.x, P)
 	}
+
 	if e.y.Sign() < 0 || e.y.Cmp(P) >= 0 {
 		e.y.Mod(e.y, P)
 	}
@@ -68,47 +73,56 @@ func (e *gfP2) IsOne() bool {
 	if e.x.Sign() != 0 {
 		return false
 	}
+
 	words := e.y.Bits()
+
 	return len(words) == 1 && words[0] == 1
 }
 
 func (e *gfP2) Conjugate(a *gfP2) *gfP2 {
 	e.y.Set(a.y)
 	e.x.Neg(a.x)
+
 	return e
 }
 
 func (e *gfP2) Negative(a *gfP2) *gfP2 {
 	e.x.Neg(a.x)
 	e.y.Neg(a.y)
+
 	return e
 }
 
 func (e *gfP2) Add(a, b *gfP2) *gfP2 {
 	e.x.Add(a.x, b.x)
 	e.y.Add(a.y, b.y)
+
 	return e
 }
 
 func (e *gfP2) Sub(a, b *gfP2) *gfP2 {
 	e.x.Sub(a.x, b.x)
 	e.y.Sub(a.y, b.y)
+
 	return e
 }
 
 func (e *gfP2) Double(a *gfP2) *gfP2 {
 	e.x.Lsh(a.x, 1)
 	e.y.Lsh(a.y, 1)
+
 	return e
 }
 
 func (c *gfP2) Exp(a *gfP2, power *big.Int, pool *bnPool) *gfP2 {
 	sum := newGFp2(pool)
 	sum.SetOne()
+
 	t := newGFp2(pool)
 
 	for i := power.BitLen() - 1; i >= 0; i-- {
 		t.Square(sum, pool)
+
 		if power.Bit(i) != 0 {
 			sum.Mul(t, a, pool)
 		} else {
@@ -148,6 +162,7 @@ func (e *gfP2) Mul(a, b *gfP2, pool *bnPool) *gfP2 {
 func (e *gfP2) MulScalar(a *gfP2, b *big.Int) *gfP2 {
 	e.x.Mul(a.x, b)
 	e.y.Mul(a.y, b)
+
 	return e
 }
 
@@ -197,6 +212,7 @@ func (e *gfP2) Invert(a *gfP2, pool *bnPool) *gfP2 {
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
 	t := pool.Get()
 	t.Mul(a.y, a.y)
+
 	t2 := pool.Get()
 	t2.Mul(a.x, a.x)
 	t.Add(t, t2)

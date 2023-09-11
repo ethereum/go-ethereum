@@ -48,7 +48,9 @@ func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig)
 	if err != nil {
 		return err
 	}
+
 	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
+
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return err
@@ -62,6 +64,7 @@ func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig)
 
 	blockblob := container.NewBlockBlobClient(name)
 	_, err = blockblob.Upload(context.Background(), in, nil)
+
 	return err
 }
 
@@ -72,20 +75,26 @@ func AzureBlobstoreList(config AzureBlobstoreConfig) ([]*azblob.BlobItemInternal
 	if err != nil {
 		return nil, err
 	}
+
 	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
+
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return nil, err
 	}
+
 	var maxResults int32 = 5000
 	pager := container.ListBlobsFlat(&azblob.ContainerListBlobFlatSegmentOptions{
 		Maxresults: &maxResults,
 	})
+
 	var allBlobs []*azblob.BlobItemInternal
+
 	for pager.NextPage(context.Background()) {
 		res := pager.PageResponse()
 		allBlobs = append(allBlobs, res.ContainerListBlobFlatSegmentResult.Segment.BlobItems...)
 	}
+
 	return allBlobs, pager.Err()
 }
 
@@ -96,6 +105,7 @@ func AzureBlobstoreDelete(config AzureBlobstoreConfig, blobs []*azblob.BlobItemI
 		for _, blob := range blobs {
 			fmt.Printf("would delete %s (%s) from %s/%s\n", *blob.Name, blob.Properties.LastModified, config.Account, config.Container)
 		}
+
 		return nil
 	}
 	// Create an authenticated client against the Azure cloud
@@ -103,7 +113,9 @@ func AzureBlobstoreDelete(config AzureBlobstoreConfig, blobs []*azblob.BlobItemI
 	if err != nil {
 		return err
 	}
+
 	u := fmt.Sprintf("https://%s.blob.core.windows.net/%s", config.Account, config.Container)
+
 	container, err := azblob.NewContainerClientWithSharedKey(u, credential, nil)
 	if err != nil {
 		return err
@@ -114,7 +126,9 @@ func AzureBlobstoreDelete(config AzureBlobstoreConfig, blobs []*azblob.BlobItemI
 		if _, err := blockblob.Delete(context.Background(), &azblob.DeleteBlobOptions{}); err != nil {
 			return err
 		}
+
 		fmt.Printf("deleted  %s (%s)\n", *blob.Name, blob.Properties.LastModified)
 	}
+
 	return nil
 }

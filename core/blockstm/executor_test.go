@@ -17,6 +17,8 @@ import (
 
 type OpType int
 
+var numProcs = 8
+
 const readType = 0
 const writeType = 1
 const otherType = 2
@@ -286,6 +288,7 @@ func testExecutorComb(t *testing.T, totalTxs []int, numReads []int, numWrites []
 					if execDuration < expectedSerialDuration {
 						improved++
 					}
+
 					total++
 
 					performance := greenTick
@@ -331,6 +334,7 @@ func testExecutorCombWithMetadata(t *testing.T, totalTxs []int, numReads []int, 
 					if execDuration < expectedSerialDuration {
 						improved++
 					}
+
 					total++
 
 					performance := greenTick
@@ -425,7 +429,7 @@ func runParallel(t *testing.T, tasks []ExecTask, validation PropertyCheck, metad
 	profile := false
 
 	start := time.Now()
-	result, err := executeParallelWithCheck(tasks, false, validation, metadata, nil)
+	result, err := executeParallelWithCheck(tasks, false, validation, metadata, numProcs, nil)
 
 	if result.Deps != nil && profile {
 		result.Deps.Report(*result.Stats, func(str string) { fmt.Println(str) })
@@ -458,7 +462,7 @@ func runParallel(t *testing.T, tasks []ExecTask, validation PropertyCheck, metad
 func runParallelGetMetadata(t *testing.T, tasks []ExecTask, validation PropertyCheck) map[int]map[int]bool {
 	t.Helper()
 
-	res, err := executeParallelWithCheck(tasks, true, validation, false, nil)
+	res, err := executeParallelWithCheck(tasks, true, validation, false, numProcs, nil)
 
 	assert.NoError(t, err, "error occur during parallel execution")
 
@@ -943,7 +947,7 @@ func TestBreakFromCircularDependency(t *testing.T) {
 	cancel()
 
 	// This should not hang
-	_, err := ExecuteParallel(tasks, false, true, ctx)
+	_, err := ExecuteParallel(tasks, false, true, numProcs, ctx)
 
 	if err == nil {
 		t.Error("Expected cancel error")
@@ -976,7 +980,7 @@ func TestBreakFromPartialCircularDependency(t *testing.T) {
 	cancel()
 
 	// This should not hang
-	_, err := ExecuteParallel(tasks, false, true, ctx)
+	_, err := ExecuteParallel(tasks, false, true, numProcs, ctx)
 
 	if err == nil {
 		t.Error("Expected cancel error")

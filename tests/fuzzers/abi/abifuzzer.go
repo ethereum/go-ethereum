@@ -56,26 +56,33 @@ func unpackPack(abi abi.ABI, method string, input []byte) ([]interface{}, bool) 
 				err.Error() == "abi: cannot use uint8 as type int8 as argument" {
 				return out, false
 			}
+
 			panic(err)
 		}
+
 		return out, true
 	}
+
 	return nil, false
 }
 
 func packUnpack(abi abi.ABI, method string, input *[]interface{}) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
 		outptr := reflect.New(reflect.TypeOf(input))
+
 		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
 		if err != nil {
 			panic(err)
 		}
+
 		out := outptr.Elem().Interface()
 		if !reflect.DeepEqual(input, out) {
 			panic(fmt.Sprintf("unpackPack is not equal, \ninput : %x\noutput: %x", input, out))
 		}
+
 		return true
 	}
+
 	return false
 }
 
@@ -89,9 +96,11 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 	if stateMutability != nil {
 		sig += fmt.Sprintf(`, "stateMutability": "%v" `, *stateMutability)
 	}
+
 	if payable != nil {
 		sig += fmt.Sprintf(`, "payable": %v `, *payable)
 	}
+
 	if len(inputs) > 0 {
 		sig += `, "inputs" : [ {`
 		for i, inp := range inputs {
@@ -100,16 +109,20 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 				sig += ","
 			}
 		}
+
 		sig += "} ]"
 		sig += `, "outputs" : [ {`
+
 		for i, inp := range inputs {
 			sig += fmt.Sprintf(`"name" : "%v", "type" : "%v" `, inp.name, inp.typ)
 			if i+1 < len(inputs) {
 				sig += ","
 			}
 		}
+
 		sig += "} ]"
 	}
+
 	sig += `}]`
 
 	return abi.JSON(strings.NewReader(sig))
@@ -122,11 +135,14 @@ func runFuzzer(input []byte) int {
 	name := names[getUInt(fuzzer)%len(names)]
 	stateM := stateMutabilites[getUInt(fuzzer)%len(stateMutabilites)]
 	payable := payables[getUInt(fuzzer)%len(payables)]
+
 	maxLen := 5
 	for k := 1; k < maxLen; k++ {
 		var arg []args
+
 		for i := k; i > 0; i-- {
 			argName := varNames[i]
+
 			argTyp := varTypes[getUInt(fuzzer)%len(varTypes)]
 			if getUInt(fuzzer)%10 == 0 {
 				argTyp += "[]"
@@ -134,22 +150,27 @@ func runFuzzer(input []byte) int {
 				arrayArgs := getUInt(fuzzer)%30 + 1
 				argTyp += fmt.Sprintf("[%d]", arrayArgs)
 			}
+
 			arg = append(arg, args{
 				name: argName,
 				typ:  argTyp,
 			})
 		}
+
 		abi, err := createABI(name, stateM, payable, arg)
 		if err != nil {
 			continue
 		}
+
 		structs, b := unpackPack(abi, name, input)
 		c := packUnpack(abi, name, &structs)
 		good = good || b || c
 	}
+
 	if good {
 		return 1
 	}
+
 	return 0
 }
 
@@ -159,12 +180,15 @@ func Fuzz(input []byte) int {
 
 func getUInt(fuzzer *fuzz.Fuzzer) int {
 	var i int
+
 	fuzzer.Fuzz(&i)
+
 	if i < 0 {
 		i = -i
 		if i < 0 {
 			return 0
 		}
 	}
+
 	return i
 }

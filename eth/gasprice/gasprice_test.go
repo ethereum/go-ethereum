@@ -45,9 +45,23 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	if number > testHead {
 		return nil, nil
 	}
+
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
+
+	if number == rpc.FinalizedBlockNumber {
+		return b.chain.CurrentFinalBlock(), nil
+	}
+
+	if number == rpc.SafeBlockNumber {
+		return b.chain.CurrentSafeBlock(), nil
+	}
+
 	if number == rpc.LatestBlockNumber {
 		number = testHead
 	}
+
 	if number == rpc.PendingBlockNumber {
 		if b.pending {
 			number = testHead + 1
@@ -55,6 +69,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 			return nil, nil
 		}
 	}
+
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
@@ -62,9 +77,23 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	if number > testHead {
 		return nil, nil
 	}
+
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
+
+	if number == rpc.FinalizedBlockNumber {
+		number = rpc.BlockNumber(b.chain.CurrentFinalBlock().Number.Uint64())
+	}
+
+	if number == rpc.SafeBlockNumber {
+		number = rpc.BlockNumber(b.chain.CurrentSafeBlock().Number.Uint64())
+	}
+
 	if number == rpc.LatestBlockNumber {
 		number = testHead
 	}
+
 	if number == rpc.PendingBlockNumber {
 		if b.pending {
 			number = testHead + 1
@@ -72,6 +101,7 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 			return nil, nil
 		}
 	}
+
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
@@ -84,6 +114,7 @@ func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 		block := b.chain.GetBlockByNumber(testHead + 1)
 		return block, b.chain.GetReceiptsByHash(block.Hash())
 	}
+
 	return nil, nil
 }
 
@@ -95,6 +126,12 @@ func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return nil
 }
 
+func (b *testBackend) teardown() {
+	b.chain.Stop()
+}
+
+// newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
+// after use, otherwise the blockchain instance will mem-leak via goroutines.
 func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -106,16 +143,15 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
+
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
+	config.GrayGlacierBlock = londonBlock
+	config.TerminalTotalDifficulty = common.Big0
 	engine := ethash.NewFaker()
-	db := rawdb.NewMemoryDatabase()
-	genesis, err := gspec.Commit(db)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	// Generate testing blocks
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		var txdata types.TxData
@@ -139,16 +175,19 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 				Data:     []byte{},
 			}
 		}
+
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
 	// Construct testing chain
-	diskdb := rawdb.NewMemoryDatabase()
-	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec.Config, engine, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
+
 	chain.InsertChain(blocks)
+	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
+	chain.SetSafe(chain.GetBlockByNumber(25).Header())
+
 	return &testBackend{chain: chain, pending: pending}
 }
 
@@ -166,6 +205,7 @@ func TestSuggestTipCap(t *testing.T) {
 		Percentile: 60,
 		Default:    big.NewInt(params.GWei),
 	}
+
 	var cases = []struct {
 		fork   *big.Int // London fork number
 		expect *big.Int // Expected gasprice suggestion
@@ -176,15 +216,20 @@ func TestSuggestTipCap(t *testing.T) {
 		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
 		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
 	}
+
 	for _, c := range cases {
 		backend := newTestBackend(t, c.fork, false)
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
 		got, err := oracle.SuggestTipCap(context.Background())
+
+		backend.teardown()
+
 		if err != nil {
 			t.Fatalf("Failed to retrieve recommended gas price: %v", err)
 		}
+
 		if got.Cmp(c.expect) != 0 {
 			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
 		}

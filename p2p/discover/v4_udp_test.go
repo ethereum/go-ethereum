@@ -76,6 +76,7 @@ func newUDPTest(t *testing.T) *udpTest {
 	test.table = test.udp.tab
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
 	<-test.table.initDone
+
 	return test
 }
 
@@ -99,6 +100,7 @@ func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *
 	if err != nil {
 		test.t.Errorf("%s encode error: %v", data.Name(), err)
 	}
+
 	test.sent = append(test.sent, enc)
 	if err = test.udp.handlePacket(addr, enc); err != wantError {
 		test.t.Errorf("error mismatch: got %q, want %q", err, wantError)
@@ -117,18 +119,23 @@ func (test *udpTest) waitPacketOut(validate interface{}) (closed bool) {
 		test.t.Error("packet receive error:", err)
 		return false
 	}
+
 	p, _, hash, err := v4wire.Decode(dgram.data)
 	if err != nil {
 		test.t.Errorf("sent packet decode error: %v", err)
 		return false
 	}
+
 	fn := reflect.ValueOf(validate)
+
 	exptype := fn.Type().In(0)
 	if !reflect.TypeOf(p).AssignableTo(exptype) {
 		test.t.Errorf("sent packet type mismatch, got: %v, want: %v", reflect.TypeOf(p), exptype)
 		return false
 	}
+
 	fn.Call([]reflect.Value{reflect.ValueOf(p), reflect.ValueOf(&dgram.to), reflect.ValueOf(hash)})
+
 	return false
 }
 
@@ -144,11 +151,13 @@ func TestUDPv4_packetErrors(t *testing.T) {
 
 func TestUDPv4_pingTimeout(t *testing.T) {
 	t.Parallel()
+
 	test := newUDPTest(t)
 	defer test.close()
 
 	key := newkey()
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
+
 	node := enode.NewV4(&key.PublicKey, toaddr.IP, 0, toaddr.Port)
 	if _, err := test.udp.ping(node); err != errTimeout {
 		t.Error("expected timeout error, got", err)
@@ -162,10 +171,10 @@ func (req testPacket) Name() string { return "" }
 
 func TestUDPv4_responseTimeouts(t *testing.T) {
 	t.Parallel()
+
 	test := newUDPTest(t)
 	defer test.close()
 
-	rand.Seed(time.Now().UnixNano())
 	randomDuration := func(max time.Duration) time.Duration {
 		return time.Duration(rand.Int63n(int64(max)))
 	}
@@ -176,6 +185,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 		nilErr     = make(chan error, nReqs) // for requests that get a reply
 		timeoutErr = make(chan error, nReqs) // for requests that time out
 	)
+
 	for i := 0; i < nReqs; i++ {
 		// Create a matcher for a random request in udp.loop. Requests
 		// with ptype <= 128 will not get a reply and should time out.
@@ -186,19 +196,23 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 			callback: func(v4wire.Packet) (bool, bool) { return true, true },
 		}
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
+
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
 			test.udp.addReplyMatcher <- p
+
 			nTimeouts++
 		} else {
 			p.errc = nilErr
 			test.udp.addReplyMatcher <- p
+
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ip, testPacket(p.ptype)) {
 					t.Logf("not matched: %v", p)
 				}
 			})
 		}
+
 		time.Sleep(randomDuration(30 * time.Millisecond))
 	}
 
@@ -208,25 +222,30 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 		recvDeadline        = time.After(20 * time.Second)
 		nTimeoutsRecv, nNil = 0, 0
 	)
+
 	for i := 0; i < nReqs; i++ {
 		select {
 		case err := <-timeoutErr:
 			if err != errTimeout {
 				t.Fatalf("got non-timeout error on timeoutErr %d: %v", i, err)
 			}
+
 			nTimeoutsRecv++
 		case err := <-nilErr:
 			if err != nil {
 				t.Fatalf("got non-nil error on nilErr %d: %v", i, err)
 			}
+
 			nNil++
 		case <-recvDeadline:
 			t.Fatalf("exceeded recv deadline")
 		}
 	}
+
 	if nTimeoutsRecv != nTimeouts {
 		t.Errorf("wrong number of timeout errors received: got %d, want %d", nTimeoutsRecv, nTimeouts)
 	}
+
 	if nNil != nReqs-nTimeouts {
 		t.Errorf("wrong number of successful replies: got %d, want %d", nNil, nReqs-nTimeouts)
 	}
@@ -234,16 +253,19 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 
 func TestUDPv4_findnodeTimeout(t *testing.T) {
 	t.Parallel()
+
 	test := newUDPTest(t)
 	defer test.close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	toid := enode.ID{1, 2, 3, 4}
 	target := v4wire.Pubkey{4, 5, 6, 7}
+
 	result, err := test.udp.findnode(toid, toaddr, target)
 	if err != errTimeout {
 		t.Error("expected timeout error, got", err)
 	}
+
 	if len(result) > 0 {
 		t.Error("expected empty result, got", result)
 	}
@@ -258,6 +280,7 @@ func TestUDPv4_findnode(t *testing.T) {
 	// take care not to overflow any bucket.
 	nodes := &nodesByDistance{target: testTarget.ID()}
 	live := make(map[enode.ID]bool)
+
 	numCandidates := 2 * bucketSize
 	for i := 0; i < numCandidates; i++ {
 		key := newkey()
@@ -268,6 +291,7 @@ func TestUDPv4_findnode(t *testing.T) {
 			n.livenessChecks = 1
 			live[n.ID()] = true
 		}
+
 		nodes.push(n, numCandidates)
 	}
 	fillTable(test.table, nodes.entries)
@@ -280,15 +304,19 @@ func TestUDPv4_findnode(t *testing.T) {
 	// check that closest neighbors are returned.
 	expected := test.table.findnodeByID(testTarget.ID(), bucketSize, true)
 	test.packetIn(nil, &v4wire.Findnode{Target: testTarget, Expiration: futureExp})
+
 	waitNeighbors := func(want []*node) {
 		test.waitPacketOut(func(p *v4wire.Neighbors, to *net.UDPAddr, hash []byte) {
 			if len(p.Nodes) != len(want) {
 				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+				return
 			}
+
 			for i, n := range p.Nodes {
 				if n.ID.ID() != want[i].ID() {
 					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, n, expected.entries[i])
 				}
+
 				if !live[n.ID.ID()] {
 					t.Errorf("result includes dead node %v", n.ID.ID())
 				}
@@ -301,6 +329,7 @@ func TestUDPv4_findnode(t *testing.T) {
 		waitNeighbors(want[:v4wire.MaxNeighbors])
 		want = want[v4wire.MaxNeighbors:]
 	}
+
 	waitNeighbors(want)
 }
 
@@ -312,9 +341,11 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.IP, time.Now())
 
 	// queue a pending findnode request
-	resultc, errc := make(chan []*node), make(chan error)
+	resultc, errc := make(chan []*node, 1), make(chan error, 1)
+
 	go func() {
 		rid := encodePubkey(&test.remotekey.PublicKey).id()
+
 		ns, err := test.udp.findnode(rid, test.remoteaddr, testTarget)
 		if err != nil && len(ns) == 0 {
 			errc <- err
@@ -339,9 +370,11 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 		wrapNode(enode.MustParse("enode://1b5b4aa662d7cb44a7221bfba67302590b643028197a7d5214790f3bac7aaa4a3241be9e83c09cf1f6c69d007c634faae3dc1b1221793e8446c0b3a09de65960@10.0.1.16:30303")),
 	}
 	rpclist := make([]v4wire.Node, len(list))
+
 	for i := range list {
 		rpclist[i] = nodeToRPC(list[i])
 	}
+
 	test.packetIn(nil, &v4wire.Neighbors{Expiration: futureExp, Nodes: rpclist[:2]})
 	test.packetIn(nil, &v4wire.Neighbors{Expiration: futureExp, Nodes: rpclist[2:]})
 
@@ -394,6 +427,7 @@ func TestUDPv4_pingMatchIP(t *testing.T) {
 func TestUDPv4_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
 	added := make(chan *node, 1)
+
 	test.table.nodeAddedHook = func(n *node) { added <- n }
 	defer test.close()
 
@@ -406,6 +440,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if !bytes.Equal(p.ReplyTok, pinghash) {
 			t.Errorf("got pong.ReplyTok %x, want %x", p.ReplyTok, pinghash)
 		}
+
 		wantTo := v4wire.Endpoint{
 			// The mirrored UDP address is the UDP packet sender
 			IP: test.remoteaddr.IP, UDP: uint16(test.remoteaddr.Port),
@@ -422,6 +457,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint()) {
 			t.Errorf("got ping.From %#v, want %#v", p.From, test.udp.ourEndpoint())
 		}
+
 		wantTo := v4wire.Endpoint{
 			// The mirrored UDP address is the UDP packet sender.
 			IP:  test.remoteaddr.IP,
@@ -431,6 +467,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if !reflect.DeepEqual(p.To, wantTo) {
 			t.Errorf("got ping.To %v, want %v", p.To, wantTo)
 		}
+
 		test.packetIn(nil, &v4wire.Pong{ReplyTok: hash, Expiration: futureExp})
 	})
 
@@ -442,12 +479,15 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if n.ID() != rid {
 			t.Errorf("node has wrong ID: got %v, want %v", n.ID(), rid)
 		}
+
 		if !n.IP().Equal(test.remoteaddr.IP) {
 			t.Errorf("node has wrong IP: got %v, want: %v", n.IP(), test.remoteaddr.IP)
 		}
+
 		if n.UDP() != test.remoteaddr.Port {
 			t.Errorf("node has wrong UDP port: got %v, want: %v", n.UDP(), test.remoteaddr.Port)
 		}
+
 		if n.TCP() != int(testRemote.TCP) {
 			t.Errorf("node has wrong TCP port: got %v, want: %v", n.TCP(), testRemote.TCP)
 		}
@@ -478,6 +518,7 @@ func TestUDPv4_EIP868(t *testing.T) {
 		if p.ENRSeq != wantNode.Seq() {
 			t.Errorf("wrong sequence number in ping: %d, want %d", p.ENRSeq, wantNode.Seq())
 		}
+
 		test.packetIn(nil, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
 	})
 
@@ -488,8 +529,9 @@ func TestUDPv4_EIP868(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invalid record: %v", err)
 		}
+
 		if !reflect.DeepEqual(n, wantNode) {
-			t.Fatalf("wrong node in enrResponse: %v", n)
+			t.Fatalf("wrong node in ENRResponse: %v", n)
 		}
 	})
 }
@@ -502,10 +544,12 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 	nodes := make([]*UDPv4, 4)
 	for i := range nodes {
 		var cfg Config
+
 		if i > 0 {
 			bn := nodes[0].Self()
 			cfg.Bootnodes = []*enode.Node{bn}
 		}
+
 		nodes[i] = startLocalhostV4(t, cfg)
 		defer nodes[i].Close()
 	}
@@ -513,11 +557,13 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 	// Run through the iterator on all nodes until
 	// they have all found each other.
 	status := make(chan error, len(nodes))
+
 	for i := range nodes {
 		node := nodes[i]
 		go func() {
 			found := make(map[enode.ID]bool, len(nodes))
 			it := node.RandomNodes()
+
 			for it.Next() {
 				found[it.Node().ID()] = true
 				if len(found) == len(nodes) {
@@ -532,6 +578,7 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 	// Wait for all status reports.
 	timeout := time.NewTimer(30 * time.Second)
 	defer timeout.Stop()
+
 	for received := 0; received < len(nodes); {
 		select {
 		case <-timeout.C:
@@ -540,6 +587,7 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 			}
 		case err := <-status:
 			received++
+
 			if err != nil {
 				t.Error("ERROR:", err)
 				return
@@ -569,13 +617,16 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	realaddr := socket.LocalAddr().(*net.UDPAddr)
 	ln.SetStaticIP(realaddr.IP)
 	ln.SetFallbackUDP(realaddr.Port)
+
 	udp, err := ListenV4(socket, ln, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return udp
 }
 
@@ -595,6 +646,7 @@ type dgram struct {
 
 func newpipe() *dgramPipe {
 	mu := new(sync.Mutex)
+
 	return &dgramPipe{
 		closing: make(chan struct{}),
 		cond:    &sync.Cond{L: mu},
@@ -608,11 +660,14 @@ func (c *dgramPipe) WriteToUDP(b []byte, to *net.UDPAddr) (n int, err error) {
 	copy(msg, b)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	if c.closed {
 		return 0, errors.New("closed")
 	}
+
 	c.queue = append(c.queue, dgram{*to, b})
 	c.cond.Signal()
+
 	return len(b), nil
 }
 
@@ -625,11 +680,14 @@ func (c *dgramPipe) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) 
 func (c *dgramPipe) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	if !c.closed {
 		close(c.closing)
 		c.closed = true
 	}
+
 	c.cond.Broadcast()
+
 	return nil
 }
 
@@ -642,6 +700,7 @@ func (c *dgramPipe) receive() (dgram, error) {
 	defer c.mu.Unlock()
 
 	var timedOut bool
+
 	timer := time.AfterFunc(3*time.Second, func() {
 		c.mu.Lock()
 		timedOut = true
@@ -653,14 +712,18 @@ func (c *dgramPipe) receive() (dgram, error) {
 	for len(c.queue) == 0 && !c.closed && !timedOut {
 		c.cond.Wait()
 	}
+
 	if c.closed {
 		return dgram{}, errClosed
 	}
+
 	if timedOut {
 		return dgram{}, errTimeout
 	}
+
 	p := c.queue[0]
 	copy(c.queue, c.queue[1:])
 	c.queue = c.queue[:len(c.queue)-1]
+
 	return p, nil
 }

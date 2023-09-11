@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -57,6 +57,7 @@ func (s *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, err
 	for _, wallet := range s.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
+
 	return accs, nil
 }
 
@@ -74,6 +75,7 @@ type rawWallet struct {
 // {"jsonrpc":"2.0","method":"clef_listWallets","params":[], "id":5}
 func (s *UIServerAPI) ListWallets() []rawWallet {
 	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
+
 	for _, wallet := range s.am.Wallets() {
 		status, failure := wallet.Status()
 
@@ -85,8 +87,10 @@ func (s *UIServerAPI) ListWallets() []rawWallet {
 		if failure != nil {
 			raw.Failure = failure.Error()
 		}
+
 		wallets = append(wallets, raw)
 	}
+
 	return wallets
 }
 
@@ -99,19 +103,27 @@ func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (account
 	if err != nil {
 		return accounts.Account{}, err
 	}
+
 	derivPath, err := accounts.ParseDerivationPath(path)
 	if err != nil {
 		return accounts.Account{}, err
 	}
+
 	if pin == nil {
 		pin = new(bool)
 	}
+
 	return wallet.Derive(derivPath, *pin)
 }
 
 // fetchKeystore retrieves the encrypted keystore from the account manager.
 func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
-	return am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := am.Backends(keystore.KeyStoreType)
+	if len(ks) == 0 {
+		return nil
+	}
+
+	return ks[0].(*keystore.KeyStore)
 }
 
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
@@ -123,6 +135,7 @@ func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Ac
 	if err != nil {
 		return accounts.Account{}, err
 	}
+
 	if err := ValidatePasswordFormat(password); err != nil {
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
@@ -141,10 +154,12 @@ func (s *UIServerAPI) OpenWallet(url string, passphrase *string) error {
 	if err != nil {
 		return err
 	}
+
 	pass := ""
 	if passphrase != nil {
 		pass = *passphrase
 	}
+
 	return wallet.Open(pass)
 }
 
@@ -172,10 +187,12 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 	if err != nil {
 		return nil, err
 	}
+
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
 		return nil, fmt.Errorf("account is not a keystore-account")
 	}
-	return ioutil.ReadFile(wallet.URL().Path)
+
+	return os.ReadFile(wallet.URL().Path)
 }
 
 // Import tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
@@ -189,9 +206,11 @@ func (api *UIServerAPI) Import(ctx context.Context, keyJSON json.RawMessage, old
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
+
 	if err := ValidatePasswordFormat(newPassphrase); err != nil {
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
+
 	return be[0].(*keystore.KeyStore).Import(keyJSON, oldPassphrase, newPassphrase)
 }
 

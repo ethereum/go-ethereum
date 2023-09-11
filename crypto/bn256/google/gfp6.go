@@ -36,6 +36,7 @@ func (e *gfP6) Set(a *gfP6) *gfP6 {
 	e.x.Set(a.x)
 	e.y.Set(a.y)
 	e.z.Set(a.z)
+
 	return e
 }
 
@@ -43,6 +44,7 @@ func (e *gfP6) SetZero() *gfP6 {
 	e.x.SetZero()
 	e.y.SetZero()
 	e.z.SetZero()
+
 	return e
 }
 
@@ -50,6 +52,7 @@ func (e *gfP6) SetOne() *gfP6 {
 	e.x.SetZero()
 	e.y.SetZero()
 	e.z.SetOne()
+
 	return e
 }
 
@@ -71,6 +74,7 @@ func (e *gfP6) Negative(a *gfP6) *gfP6 {
 	e.x.Negative(a.x)
 	e.y.Negative(a.y)
 	e.z.Negative(a.z)
+
 	return e
 }
 
@@ -81,6 +85,7 @@ func (e *gfP6) Frobenius(a *gfP6, pool *bnPool) *gfP6 {
 
 	e.x.Mul(e.x, xiTo2PMinus2Over3, pool)
 	e.y.Mul(e.y, xiToPMinus1Over3, pool)
+
 	return e
 }
 
@@ -91,6 +96,7 @@ func (e *gfP6) FrobeniusP2(a *gfP6) *gfP6 {
 	// τ^(p²) = ττ^(p²-1) = τξ^((p²-1)/3)
 	e.y.MulScalar(a.y, xiToPSquaredMinus1Over3)
 	e.z.Set(a.z)
+
 	return e
 }
 
@@ -98,6 +104,7 @@ func (e *gfP6) Add(a, b *gfP6) *gfP6 {
 	e.x.Add(a.x, b.x)
 	e.y.Add(a.y, b.y)
 	e.z.Add(a.z, b.z)
+
 	return e
 }
 
@@ -105,6 +112,7 @@ func (e *gfP6) Sub(a, b *gfP6) *gfP6 {
 	e.x.Sub(a.x, b.x)
 	e.y.Sub(a.y, b.y)
 	e.z.Sub(a.z, b.z)
+
 	return e
 }
 
@@ -112,6 +120,7 @@ func (e *gfP6) Double(a *gfP6) *gfP6 {
 	e.x.Double(a.x)
 	e.y.Double(a.y)
 	e.z.Double(a.z)
+
 	return e
 }
 
@@ -119,7 +128,6 @@ func (e *gfP6) Mul(a, b *gfP6, pool *bnPool) *gfP6 {
 	// "Multiplication and Squaring on Pairing-Friendly Fields"
 	// Section 4, Karatsuba method.
 	// http://eprint.iacr.org/2006/471.pdf
-
 	v0 := newGFp2(pool)
 	v0.Mul(a.z, b.z, pool)
 	v1 := newGFp2(pool)
@@ -129,8 +137,10 @@ func (e *gfP6) Mul(a, b *gfP6, pool *bnPool) *gfP6 {
 
 	t0 := newGFp2(pool)
 	t0.Add(a.x, a.y)
+
 	t1 := newGFp2(pool)
 	t1.Add(b.x, b.y)
+
 	tz := newGFp2(pool)
 	tz.Mul(t0, t1, pool)
 
@@ -141,6 +151,7 @@ func (e *gfP6) Mul(a, b *gfP6, pool *bnPool) *gfP6 {
 
 	t0.Add(a.y, a.z)
 	t1.Add(b.y, b.z)
+
 	ty := newGFp2(pool)
 	ty.Mul(t0, t1, pool)
 	ty.Sub(ty, v0)
@@ -150,6 +161,7 @@ func (e *gfP6) Mul(a, b *gfP6, pool *bnPool) *gfP6 {
 
 	t0.Add(a.x, a.z)
 	t1.Add(b.x, b.z)
+
 	tx := newGFp2(pool)
 	tx.Mul(t0, t1, pool)
 	tx.Sub(tx, v0)
@@ -168,6 +180,7 @@ func (e *gfP6) Mul(a, b *gfP6, pool *bnPool) *gfP6 {
 	v0.Put(pool)
 	v1.Put(pool)
 	v2.Put(pool)
+
 	return e
 }
 
@@ -175,6 +188,7 @@ func (e *gfP6) MulScalar(a *gfP6, b *gfP2, pool *bnPool) *gfP6 {
 	e.x.Mul(a.x, b, pool)
 	e.y.Mul(a.y, b, pool)
 	e.z.Mul(a.z, b, pool)
+
 	return e
 }
 
@@ -182,6 +196,7 @@ func (e *gfP6) MulGFP(a *gfP6, b *big.Int) *gfP6 {
 	e.x.MulScalar(a.x, b)
 	e.y.MulScalar(a.y, b)
 	e.z.MulScalar(a.z, b)
+
 	return e
 }
 
@@ -214,6 +229,7 @@ func (e *gfP6) Square(a *gfP6, pool *bnPool) *gfP6 {
 	c1.Square(c1, pool)
 	c1.Sub(c1, v0)
 	c1.Sub(c1, v1)
+
 	xiV2 := newGFp2(pool).MulXi(v2, pool)
 	c1.Add(c1, xiV2)
 
@@ -241,7 +257,6 @@ func (e *gfP6) Square(a *gfP6, pool *bnPool) *gfP6 {
 func (e *gfP6) Invert(a *gfP6, pool *bnPool) *gfP6 {
 	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
-
 	// Here we can give a short explanation of how it works: let j be a cubic root of
 	// unity in GF(p²) so that 1+j+j²=0.
 	// Then (xτ² + yτ + z)(xj²τ² + yjτ + z)(xjτ² + yj²τ + z)

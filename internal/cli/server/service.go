@@ -101,12 +101,14 @@ func (s *Server) PeersAdd(ctx context.Context, req *proto.PeersAddRequest) (*pro
 	if err != nil {
 		return nil, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	srv := s.node.Server()
 	if req.Trusted {
 		srv.AddTrustedPeer(node)
 	} else {
 		srv.AddPeer(node)
 	}
+
 	return &proto.PeersAddResponse{}, nil
 }
 
@@ -115,12 +117,14 @@ func (s *Server) PeersRemove(ctx context.Context, req *proto.PeersRemoveRequest)
 	if err != nil {
 		return nil, fmt.Errorf("invalid enode: %v", err)
 	}
+
 	srv := s.node.Server()
 	if req.Trusted {
 		srv.RemoveTrustedPeer(node)
 	} else {
 		srv.RemovePeer(node)
 	}
+
 	return &proto.PeersRemoveResponse{}, nil
 }
 
@@ -131,23 +135,28 @@ func (s *Server) PeersList(ctx context.Context, req *proto.PeersListRequest) (*p
 	for _, p := range peers {
 		resp.Peers = append(resp.Peers, peerInfoToPeer(p))
 	}
+
 	return resp, nil
 }
 
 func (s *Server) PeersStatus(ctx context.Context, req *proto.PeersStatusRequest) (*proto.PeersStatusResponse, error) {
 	var peerInfo *p2p.PeerInfo
+
 	for _, p := range s.node.Server().PeersInfo() {
 		if strings.HasPrefix(p.ID, req.Enode) {
 			if peerInfo != nil {
 				return nil, fmt.Errorf("more than one peer with the same prefix")
 			}
+
 			peerInfo = p
 		}
 	}
+
 	resp := &proto.PeersStatusResponse{}
 	if peerInfo != nil {
 		resp.Peer = peerInfoToPeer(peerInfo)
 	}
+
 	return resp, nil
 }
 
@@ -188,6 +197,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 			} else {
 				break
 			}
+
 			i++
 		}
 	}
@@ -197,7 +207,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 
 	resp := &proto.StatusResponse{
 		CurrentHeader: headerToProtoHeader(apiBackend.CurrentHeader()),
-		CurrentBlock:  headerToProtoHeader(apiBackend.CurrentBlock().Header()),
+		CurrentBlock:  headerToProtoHeader(apiBackend.CurrentBlock()),
 		NumPeers:      int64(len(s.node.Server().PeersInfo())),
 		SyncMode:      s.config.SyncMode,
 		Syncing: &proto.StatusResponse_Syncing{
@@ -207,6 +217,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 		},
 		Forks: gatherForks(s.config.chain.Genesis.Config, s.config.chain.Genesis.Config.Bor),
 	}
+
 	return resp, nil
 }
 
@@ -260,12 +271,14 @@ func gatherForks(configList ...interface{}) []*proto.StatusResponse_Fork {
 		skip := "DAOForkBlock"
 
 		conf := reflect.ValueOf(config).Elem()
+
 		for i := 0; i < kind.NumField(); i++ {
 			// Fetch the next field and skip non-fork rules
 			field := kind.Field(i)
 			if strings.Contains(field.Name, skip) {
 				continue
 			}
+
 			if !strings.HasSuffix(field.Name, "Block") {
 				continue
 			}
@@ -275,6 +288,7 @@ func gatherForks(configList ...interface{}) []*proto.StatusResponse_Fork {
 			}
 
 			val := conf.Field(i)
+
 			switch field.Type.Kind() {
 			case bigIntT:
 				rule := val.Interface().(*big.Int)
@@ -293,11 +307,11 @@ func gatherForks(configList ...interface{}) []*proto.StatusResponse_Fork {
 			forks = append(forks, fork)
 		}
 	}
+
 	return forks
 }
 
 func convertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
-
 	var blockStubs []*proto.BlockStub
 
 	for _, block := range blocks {
@@ -312,10 +326,10 @@ func convertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
 }
 
 func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainWatchServer) error {
-
 	chain2HeadChanSize := 10
 
 	chain2HeadCh := make(chan core.Chain2HeadEvent, chain2HeadChanSize)
+
 	headSub := s.backend.APIBackend.SubscribeChain2HeadEvent(chain2HeadCh)
 	defer headSub.Unsubscribe()
 

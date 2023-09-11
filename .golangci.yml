@@ -1,7 +1,7 @@
 # This file configures github.com/golangci/golangci-lint.
 
 run:
-  go: '1.18'
+  go: '1.20'
   timeout: 20m
   tests: true
   # default is true. Enables skipping of directories:
@@ -146,7 +146,7 @@ linters-settings:
 
 issues:
   exclude-rules:
-    - path: crypto/blake2b/
+    - path: crypto/bn256/cloudflare/optate.go
       linters:
         - deadcode
     - path: crypto/bn256/cloudflare

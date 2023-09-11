@@ -16,9 +16,9 @@ import (
 	"gotest.tools/assert"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -36,7 +36,7 @@ var (
 	// Only this account is a validator for the 0th span
 	keySprintLength, _ = crypto.HexToECDSA(privKeySprintLength)
 
-	// This account is one the validators for 1st span (0-indexed)
+	// This account is one of the validators for 1st span (0-indexed)
 	keySprintLength2, _ = crypto.HexToECDSA(privKeySprintLength2)
 
 	keysSprintLength = []*ecdsa.PrivateKey{keySprintLength, keySprintLength2}
@@ -778,7 +778,6 @@ func InitGenesisSprintLength(t *testing.T, faucets []*ecdsa.PrivateKey, fileLoca
 	}
 
 	genesis.Config.ChainID = big.NewInt(15001)
-	genesis.Config.EIP150Hash = common.Hash{}
 	genesis.Config.Bor.Sprint["0"] = sprintSize
 
 	return genesis
@@ -811,7 +810,7 @@ func InitMinerSprintLength(genesis *core.Genesis, privKey *ecdsa.PrivateKey, wit
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{

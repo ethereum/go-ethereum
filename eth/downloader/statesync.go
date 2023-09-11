@@ -37,6 +37,7 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 		s.err = errCancelStateFetch
 		close(s.done)
 	}
+
 	return s
 }
 
@@ -119,5 +120,6 @@ func (s *stateSync) Cancel() error {
 	s.cancelOnce.Do(func() {
 		close(s.cancel)
 	})
+
 	return s.Wait()
 }

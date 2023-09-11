@@ -26,6 +26,7 @@ func ExampleFeed_acknowledgedEvents() {
 	// This example shows how the return value of Send can be used for request/reply
 	// interaction between event consumers and producers.
 	var feed event.Feed
+
 	type ackedEvent struct {
 		i   int
 		ack chan<- struct{}
@@ -34,11 +35,14 @@ func ExampleFeed_acknowledgedEvents() {
 	// Consumers wait for events on the feed and acknowledge processing.
 	done := make(chan struct{})
 	defer close(done)
+
 	for i := 0; i < 3; i++ {
 		ch := make(chan ackedEvent, 100)
 		sub := feed.Subscribe(ch)
+
 		go func() {
 			defer sub.Unsubscribe()
+
 			for {
 				select {
 				case ev := <-ch:
@@ -56,6 +60,7 @@ func ExampleFeed_acknowledgedEvents() {
 	for i := 0; i < 3; i++ {
 		acksignal := make(chan struct{})
 		n := feed.Send(ackedEvent{i, acksignal})
+
 		for ack := 0; ack < n; ack++ {
 			<-acksignal
 		}

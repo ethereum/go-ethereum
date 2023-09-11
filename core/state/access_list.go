@@ -39,11 +39,14 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 		// no such address (and hence zero slots)
 		return false, false
 	}
+
 	if idx == -1 {
 		// address yes, but no slots
 		return true, false
 	}
+
 	_, slotPresent = al.slots[idx][slot]
+
 	return true, slotPresent
 }
 
@@ -60,14 +63,18 @@ func (a *accessList) Copy() *accessList {
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
 	}
+
 	cp.slots = make([]map[common.Hash]struct{}, len(a.slots))
+
 	for i, slotMap := range a.slots {
 		newSlotmap := make(map[common.Hash]struct{}, len(slotMap))
 		for k := range slotMap {
 			newSlotmap[k] = struct{}{}
 		}
+
 		cp.slots[i] = newSlotmap
 	}
+
 	return cp
 }
 
@@ -77,7 +84,9 @@ func (al *accessList) AddAddress(address common.Address) bool {
 	if _, present := al.addresses[address]; present {
 		return false
 	}
+
 	al.addresses[address] = -1
+
 	return true
 }
 
@@ -93,6 +102,7 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 		al.addresses[address] = len(al.slots)
 		slotmap := map[common.Hash]struct{}{slot: {}}
 		al.slots = append(al.slots, slotmap)
+
 		return !addrPresent, true
 	}
 	// There is already an (address,slot) mapping
@@ -116,6 +126,7 @@ func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 	if !addrOk {
 		panic("reverting slot change, address not present in list")
 	}
+
 	slotmap := al.slots[idx]
 	delete(slotmap, slot)
 	// If that was the last (first) slot, remove it

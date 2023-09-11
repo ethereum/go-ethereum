@@ -103,13 +103,16 @@ func (p *AccountRangePacket) Unpack() ([]common.Hash, [][]byte, error) {
 		hashes   = make([]common.Hash, len(p.Accounts))
 		accounts = make([][]byte, len(p.Accounts))
 	)
+
 	for i, acc := range p.Accounts {
 		val, err := snapshot.FullAccountRLP(acc.Body)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid account %x: %v", acc.Body, err)
 		}
+
 		hashes[i], accounts[i] = acc.Hash, val
 	}
+
 	return hashes, accounts, nil
 }
 
@@ -143,14 +146,17 @@ func (p *StorageRangesPacket) Unpack() ([][]common.Hash, [][][]byte) {
 		hashset = make([][]common.Hash, len(p.Slots))
 		slotset = make([][][]byte, len(p.Slots))
 	)
+
 	for i, slots := range p.Slots {
 		hashset[i] = make([]common.Hash, len(slots))
 		slotset[i] = make([][]byte, len(slots))
+
 		for j, slot := range slots {
 			hashset[i][j] = slot.Hash
 			slotset[i][j] = slot.Body
 		}
 	}
+
 	return hashset, slotset
 }
 

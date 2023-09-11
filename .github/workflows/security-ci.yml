@@ -2,47 +2,6 @@ name: Security CI
 on: [ push, pull_request ]
 
 jobs:
-  snyk:
-    name: Snyk and Publish
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@master
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/golang@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          GOFLAGS: "-buildvcs=false"
-        with:
-          args: --org=${{ secrets.SNYK_ORG }} --severity-threshold=medium --sarif-file-output=snyk.sarif
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v2
-        continue-on-error: true
-        with:
-          sarif_file: snyk.sarif
-
-  snyk-code:
-    name: Snyk Code and Publish
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@master
-      - name: Run Snyk SAST to check for code vulnerabilities
-        uses: snyk/actions/golang@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --org=${{ secrets.SNYK_ORG }} --sarif-file-output=snyk.sarif
-          command: code test
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v2
-        continue-on-error: true
-        with:
-          sarif_file: snyk.sarif
-
   govuln:
     name: Run govuln check and Publish
     runs-on: ubuntu-latest
@@ -54,8 +13,7 @@ jobs:
         env:
           DEBUG: "true"
         with:
-          go-version: 1.19
-          vulncheck-version: latest
+          go-version: 1.20.5
           package: ./...
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-vuln: true

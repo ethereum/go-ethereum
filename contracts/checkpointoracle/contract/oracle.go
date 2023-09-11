@@ -50,6 +50,7 @@ func DeployCheckpointOracle(auth *bind.TransactOpts, backend bind.ContractBacken
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
+
 	return address, tx, &CheckpointOracle{CheckpointOracleCaller: CheckpointOracleCaller{contract: contract}, CheckpointOracleTransactor: CheckpointOracleTransactor{contract: contract}, CheckpointOracleFilterer: CheckpointOracleFilterer{contract: contract}}, nil
 }
 
@@ -118,6 +119,7 @@ func NewCheckpointOracle(address common.Address, backend bind.ContractBackend) (
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracle{CheckpointOracleCaller: CheckpointOracleCaller{contract: contract}, CheckpointOracleTransactor: CheckpointOracleTransactor{contract: contract}, CheckpointOracleFilterer: CheckpointOracleFilterer{contract: contract}}, nil
 }
 
@@ -127,6 +129,7 @@ func NewCheckpointOracleCaller(address common.Address, caller bind.ContractCalle
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracleCaller{contract: contract}, nil
 }
 
@@ -136,6 +139,7 @@ func NewCheckpointOracleTransactor(address common.Address, transactor bind.Contr
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracleTransactor{contract: contract}, nil
 }
 
@@ -145,6 +149,7 @@ func NewCheckpointOracleFilterer(address common.Address, filterer bind.ContractF
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracleFilterer{contract: contract}, nil
 }
 
@@ -154,6 +159,7 @@ func bindCheckpointOracle(address common.Address, caller bind.ContractCaller, tr
 	if err != nil {
 		return nil, err
 	}
+
 	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 }
 
@@ -209,7 +215,6 @@ func (_CheckpointOracle *CheckpointOracleCaller) GetAllAdmin(opts *bind.CallOpts
 	out0 := *abi.ConvertType(out[0], new([]common.Address)).(*[]common.Address)
 
 	return out0, err
-
 }
 
 // GetAllAdmin is a free data retrieval call binding the contract method 0x45848dfc.
@@ -242,7 +247,6 @@ func (_CheckpointOracle *CheckpointOracleCaller) GetLatestCheckpoint(opts *bind.
 	out2 := *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
 
 	return out0, out1, out2, err
-
 }
 
 // GetLatestCheckpoint is a free data retrieval call binding the contract method 0x4d6a304c.
@@ -310,7 +314,9 @@ func (it *CheckpointOracleNewCheckpointVoteIterator) Next() bool {
 				it.fail = err
 				return false
 			}
+
 			it.Event.Raw = log
+
 			return true
 
 		default:
@@ -325,12 +331,15 @@ func (it *CheckpointOracleNewCheckpointVoteIterator) Next() bool {
 			it.fail = err
 			return false
 		}
+
 		it.Event.Raw = log
+
 		return true
 
 	case err := <-it.sub.Err():
 		it.done = true
 		it.fail = err
+
 		return it.Next()
 	}
 }
@@ -361,7 +370,6 @@ type CheckpointOracleNewCheckpointVote struct {
 //
 // Solidity: event NewCheckpointVote(uint64 indexed index, bytes32 checkpointHash, uint8 v, bytes32 r, bytes32 s)
 func (_CheckpointOracle *CheckpointOracleFilterer) FilterNewCheckpointVote(opts *bind.FilterOpts, index []uint64) (*CheckpointOracleNewCheckpointVoteIterator, error) {
-
 	var indexRule []interface{}
 	for _, indexItem := range index {
 		indexRule = append(indexRule, indexItem)
@@ -371,6 +379,7 @@ func (_CheckpointOracle *CheckpointOracleFilterer) FilterNewCheckpointVote(opts 
 	if err != nil {
 		return nil, err
 	}
+
 	return &CheckpointOracleNewCheckpointVoteIterator{contract: _CheckpointOracle.contract, event: "NewCheckpointVote", logs: logs, sub: sub}, nil
 }
 
@@ -378,7 +387,6 @@ func (_CheckpointOracle *CheckpointOracleFilterer) FilterNewCheckpointVote(opts 
 //
 // Solidity: event NewCheckpointVote(uint64 indexed index, bytes32 checkpointHash, uint8 v, bytes32 r, bytes32 s)
 func (_CheckpointOracle *CheckpointOracleFilterer) WatchNewCheckpointVote(opts *bind.WatchOpts, sink chan<- *CheckpointOracleNewCheckpointVote, index []uint64) (event.Subscription, error) {
-
 	var indexRule []interface{}
 	for _, indexItem := range index {
 		indexRule = append(indexRule, indexItem)
@@ -388,8 +396,10 @@ func (_CheckpointOracle *CheckpointOracleFilterer) WatchNewCheckpointVote(opts *
 	if err != nil {
 		return nil, err
 	}
+
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		defer sub.Unsubscribe()
+
 		for {
 			select {
 			case log := <-logs:
@@ -398,6 +408,7 @@ func (_CheckpointOracle *CheckpointOracleFilterer) WatchNewCheckpointVote(opts *
 				if err := _CheckpointOracle.contract.UnpackLog(event, "NewCheckpointVote", log); err != nil {
 					return err
 				}
+
 				event.Raw = log
 
 				select {
@@ -424,5 +435,6 @@ func (_CheckpointOracle *CheckpointOracleFilterer) ParseNewCheckpointVote(log ty
 	if err := _CheckpointOracle.contract.UnpackLog(event, "NewCheckpointVote", log); err != nil {
 		return nil, err
 	}
+
 	return event, nil
 }

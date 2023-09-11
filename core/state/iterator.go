@@ -64,6 +64,7 @@ func (it *NodeIterator) Next() bool {
 		it.Error = err
 		return false
 	}
+
 	return it.retrieve()
 }
 
@@ -83,8 +84,10 @@ func (it *NodeIterator) step() error {
 			if it.dataIt.Error() != nil {
 				return it.dataIt.Error()
 			}
+
 			it.dataIt = nil
 		}
+
 		return nil
 	}
 	// If we had source code previously, discard that
@@ -97,7 +100,9 @@ func (it *NodeIterator) step() error {
 		if it.stateIt.Error() != nil {
 			return it.stateIt.Error()
 		}
+
 		it.state, it.stateIt = nil, nil
+
 		return nil
 	}
 	// If the state trie node is an internal entry, leave as is
@@ -109,23 +114,30 @@ func (it *NodeIterator) step() error {
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}
-	dataTrie, err := it.state.db.OpenStorageTrie(common.BytesToHash(it.stateIt.LeafKey()), account.Root)
+
+	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, common.BytesToHash(it.stateIt.LeafKey()), account.Root)
+
 	if err != nil {
 		return err
 	}
+
 	it.dataIt = dataTrie.NodeIterator(nil)
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
+
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
 		addrHash := common.BytesToHash(it.stateIt.LeafKey())
+
 		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}
 	}
+
 	it.accountHash = it.stateIt.Parent()
+
 	return nil
 }
 
@@ -151,5 +163,6 @@ func (it *NodeIterator) retrieve() bool {
 	case it.stateIt != nil:
 		it.Hash, it.Parent = it.stateIt.Hash(), it.stateIt.Parent()
 	}
+
 	return true
 }

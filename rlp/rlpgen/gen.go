@@ -1,3 +1,19 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -25,6 +41,7 @@ func newBuildContext(packageRLP *types.Package) *buildContext {
 	enc := packageRLP.Scope().Lookup("Encoder").Type().Underlying()
 	dec := packageRLP.Scope().Lookup("Decoder").Type().Underlying()
 	rawv := packageRLP.Scope().Lookup("RawValue").Type()
+
 	return &buildContext{
 		typeToStructCache: make(map[types.Type]*rlpstruct.Type),
 		encoderIface:      enc.(*types.Interface),
@@ -49,11 +66,13 @@ func (bctx *buildContext) typeToStructType(typ types.Type) *rlpstruct.Type {
 
 	// Resolve named types to their underlying type, but keep the name.
 	name := types.TypeString(typ, nil)
+
 	for {
 		utype := typ.Underlying()
 		if utype == typ {
 			break
 		}
+
 		typ = utype
 	}
 
@@ -72,6 +91,7 @@ func (bctx *buildContext) typeToStructType(typ types.Type) *rlpstruct.Type {
 		etype := typ.(interface{ Elem() types.Type }).Elem()
 		t.Elem = bctx.typeToStructType(etype)
 	}
+
 	return t
 }
 
@@ -94,6 +114,7 @@ func newGenContext(inPackage *types.Package) *genContext {
 func (ctx *genContext) temp() string {
 	v := fmt.Sprintf("_tmp%d", ctx.tempCounter)
 	ctx.tempCounter++
+
 	return v
 }
 
@@ -115,7 +136,9 @@ func (ctx *genContext) importsList() []string {
 	for k := range ctx.imports {
 		imp = append(imp, k)
 	}
+
 	sort.Strings(imp)
+
 	return imp
 }
 
@@ -124,6 +147,7 @@ func (ctx *genContext) qualify(pkg *types.Package) string {
 	if pkg.Path() == ctx.inPackage.Path() {
 		return ""
 	}
+
 	ctx.addImport(pkg.Path())
 	// TODO: renaming?
 	return pkg.Name()
@@ -152,6 +176,7 @@ type basicOp struct {
 func (*buildContext) makeBasicOp(typ *types.Basic) (op, error) {
 	op := basicOp{typ: typ}
 	kind := typ.Kind()
+
 	switch {
 	case kind == types.Bool:
 		op.writeMethod = "WriteBool"
@@ -172,6 +197,7 @@ func (*buildContext) makeBasicOp(typ *types.Basic) (op, error) {
 	default:
 		return nil, fmt.Errorf("unhandled basic type: %v", typ)
 	}
+
 	return op, nil
 }
 
@@ -179,7 +205,9 @@ func (*buildContext) makeByteSliceOp(typ *types.Slice) op {
 	if !isByte(typ.Elem()) {
 		panic("non-byte slice type in makeByteSliceOp")
 	}
+
 	bslice := types.NewSlice(types.Typ[types.Uint8])
+
 	return basicOp{
 		typ:           typ,
 		writeMethod:   "WriteBytes",
@@ -191,6 +219,7 @@ func (*buildContext) makeByteSliceOp(typ *types.Slice) op {
 
 func (bctx *buildContext) makeRawValueOp() op {
 	bslice := types.NewSlice(types.Typ[types.Uint8])
+
 	return basicOp{
 		typ:           bctx.rawValueType,
 		writeMethod:   "Write",
@@ -212,6 +241,7 @@ func (op basicOp) genWrite(ctx *genContext, v string) string {
 	if op.writeNeedsConversion() {
 		v = fmt.Sprintf("%s(%s)", op.writeArgType, v)
 	}
+
 	return fmt.Sprintf("w.%s(%s)\n", op.writeMethod, v)
 }
 
@@ -221,6 +251,7 @@ func (op basicOp) genDecode(ctx *genContext) (string, string) {
 		result  = resultV
 		method  = op.decMethod
 	)
+
 	if op.decUseBitSize {
 		// Note: For now, this only works for platform-independent integer
 		// sizes. makeBasicOp forbids the platform-dependent types.
@@ -230,13 +261,16 @@ func (op basicOp) genDecode(ctx *genContext) (string, string) {
 
 	// Call the decoder method.
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "%s, err := dec.%s()\n", resultV, method)
 	fmt.Fprintf(&b, "if err != nil { return err }\n")
+
 	if op.decodeNeedsConversion() {
 		conv := ctx.temp()
 		fmt.Fprintf(&b, "%s := %s(%s)\n", conv, types.TypeString(op.typ, ctx.qualify), resultV)
 		result = conv
 	}
+
 	return result, b.String()
 }
 
@@ -251,6 +285,7 @@ func (bctx *buildContext) makeByteArrayOp(name *types.Named, typ *types.Array) b
 	if name == nil {
 		nt = typ
 	}
+
 	return byteArrayOp{typ, nt}
 }
 
@@ -262,12 +297,14 @@ func (op byteArrayOp) genDecode(ctx *genContext) (string, string) {
 	var resultV = ctx.temp()
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "var %s %s\n", resultV, types.TypeString(op.name, ctx.qualify))
 	fmt.Fprintf(&b, "if err := dec.ReadBytes(%s[:]); err != nil { return err }\n", resultV)
+
 	return resultV, b.String()
 }
 
-// bigIntNoPtrOp handles non-pointer big.Int.
+// bigIntOp handles big.Int.
 // This exists because big.Int has it's own decoder operation on rlp.Stream,
 // but the decode method returns *big.Int, so it needs to be dereferenced.
 type bigIntOp struct {
@@ -280,10 +317,12 @@ func (op bigIntOp) genWrite(ctx *genContext, v string) string {
 	fmt.Fprintf(&b, "if %s.Sign() == -1 {\n", v)
 	fmt.Fprintf(&b, "  return rlp.ErrNegativeBigInt\n")
 	fmt.Fprintf(&b, "}\n")
+
 	dst := v
 	if !op.pointer {
 		dst = "&" + v
 	}
+
 	fmt.Fprintf(&b, "w.WriteBigInt(%s)\n", dst)
 
 	// Wrap with nil check.
@@ -304,6 +343,7 @@ func (op bigIntOp) genDecode(ctx *genContext) (string, string) {
 	var resultV = ctx.temp()
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "%s, err := dec.BigInt()\n", resultV)
 	fmt.Fprintf(&b, "if err != nil { return err }\n")
 
@@ -311,6 +351,53 @@ func (op bigIntOp) genDecode(ctx *genContext) (string, string) {
 	if !op.pointer {
 		result = "(*" + resultV + ")"
 	}
+
+	return result, b.String()
+}
+
+// uint256Op handles "github.com/holiman/uint256".Int
+type uint256Op struct {
+	pointer bool
+}
+
+func (op uint256Op) genWrite(ctx *genContext, v string) string {
+	var b bytes.Buffer
+
+	dst := v
+	if !op.pointer {
+		dst = "&" + v
+	}
+
+	fmt.Fprintf(&b, "w.WriteUint256(%s)\n", dst)
+
+	// Wrap with nil check.
+	if op.pointer {
+		code := b.String()
+		b.Reset()
+		fmt.Fprintf(&b, "if %s == nil {\n", v)
+		fmt.Fprintf(&b, "  w.Write(rlp.EmptyString)")
+		fmt.Fprintf(&b, "} else {\n")
+		fmt.Fprint(&b, code)
+		fmt.Fprintf(&b, "}\n")
+	}
+
+	return b.String()
+}
+
+func (op uint256Op) genDecode(ctx *genContext) (string, string) {
+	ctx.addImport("github.com/holiman/uint256")
+
+	var b bytes.Buffer
+
+	resultV := ctx.temp()
+	fmt.Fprintf(&b, "var %s uint256.Int\n", resultV)
+	fmt.Fprintf(&b, "if err := dec.ReadUint256(&%s); err != nil { return err }\n", resultV)
+
+	result := resultV
+	if op.pointer {
+		result = "&" + resultV
+	}
+
 	return result, b.String()
 }
 
@@ -329,11 +416,14 @@ func (op encoderDecoderOp) genWrite(ctx *genContext, v string) string {
 func (op encoderDecoderOp) genDecode(ctx *genContext) (string, string) {
 	// DecodeRLP must have pointer receiver, and this is verified in makeOp.
 	etyp := op.typ.(*types.Pointer).Elem()
+
 	var resultV = ctx.temp()
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "%s := new(%s)\n", resultV, types.TypeString(etyp, ctx.qualify))
 	fmt.Fprintf(&b, "if err := %s.DecodeRLP(dec); err != nil { return err }\n", resultV)
+
 	return resultV, b.String()
 }
 
@@ -350,6 +440,7 @@ func (bctx *buildContext) makePtrOp(elemTyp types.Type, tags rlpstruct.Tags) (op
 	if err != nil {
 		return nil, err
 	}
+
 	op := ptrOp{elemTyp: elemTyp, elem: elemOp}
 
 	// Determine nil value.
@@ -360,6 +451,7 @@ func (bctx *buildContext) makePtrOp(elemTyp types.Type, tags rlpstruct.Tags) (op
 		styp := bctx.typeToStructType(elemTyp)
 		op.nilValue = styp.DefaultNilValue()
 	}
+
 	return op, nil
 }
 
@@ -371,8 +463,10 @@ func (op ptrOp) genWrite(ctx *genContext, v string) string {
 	//
 	// For `v.field` and `v[:]` on arrays, the dereference operation is not required.
 	var vv string
+
 	_, isStruct := op.elem.(structOp)
 	_, isByteArray := op.elem.(byteArrayOp)
+
 	if isStruct || isByteArray {
 		vv = v
 	} else {
@@ -380,11 +474,13 @@ func (op ptrOp) genWrite(ctx *genContext, v string) string {
 	}
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "if %s == nil {\n", v)
 	fmt.Fprintf(&b, "  w.Write([]byte{0x%X})\n", op.nilValue)
 	fmt.Fprintf(&b, "} else {\n")
 	fmt.Fprintf(&b, "  %s", op.elem.genWrite(ctx, vv))
 	fmt.Fprintf(&b, "}\n")
+
 	return b.String()
 }
 
@@ -404,12 +500,15 @@ func (op ptrOp) genDecode(ctx *genContext) (string, string) {
 		sizeV    = ctx.temp()
 		wantKind string
 	)
+
 	if op.nilValue == rlpstruct.NilKindList {
 		wantKind = "rlp.List"
 	} else {
 		wantKind = "rlp.String"
 	}
+
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "var %s %s\n", resultV, types.TypeString(types.NewPointer(op.elemTyp), ctx.qualify))
 	fmt.Fprintf(&b, "if %s, %s, err := dec.Kind(); err != nil {\n", kindV, sizeV)
 	fmt.Fprintf(&b, "  return err\n")
@@ -417,6 +516,7 @@ func (op ptrOp) genDecode(ctx *genContext) (string, string) {
 	fmt.Fprint(&b, code)
 	fmt.Fprintf(&b, "  %s = &%s\n", resultV, result)
 	fmt.Fprintf(&b, "}\n")
+
 	return resultV, b.String()
 }
 
@@ -437,6 +537,7 @@ type structField struct {
 func (bctx *buildContext) makeStructOp(named *types.Named, typ *types.Struct) (op, error) {
 	// Convert fields to []rlpstruct.Field.
 	var allStructFields []rlpstruct.Field
+
 	for i := 0; i < typ.NumFields(); i++ {
 		f := typ.Field(i)
 		allStructFields = append(allStructFields, rlpstruct.Field{
@@ -456,17 +557,21 @@ func (bctx *buildContext) makeStructOp(named *types.Named, typ *types.Struct) (o
 
 	// Create field ops.
 	var op = structOp{named: named, typ: typ}
+
 	for i, field := range fields {
 		// Advanced struct tags are not supported yet.
 		tag := tags[i]
 		if err := checkUnsupportedTags(field.Name, tag); err != nil {
 			return nil, err
 		}
+
 		typ := typ.Field(field.Index).Type()
+
 		elem, err := bctx.makeOp(nil, typ, tags[i])
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %v", field.Name, err)
 		}
+
 		f := &structField{name: field.Name, typ: typ, elem: elem}
 		if tag.Optional {
 			op.optionalFields = append(op.optionalFields, f)
@@ -474,6 +579,7 @@ func (bctx *buildContext) makeStructOp(named *types.Named, typ *types.Struct) (o
 			op.fields = append(op.fields, f)
 		}
 	}
+
 	return op, nil
 }
 
@@ -481,19 +587,25 @@ func checkUnsupportedTags(field string, tag rlpstruct.Tags) error {
 	if tag.Tail {
 		return fmt.Errorf(`field %s has unsupported struct tag "tail"`, field)
 	}
+
 	return nil
 }
 
 func (op structOp) genWrite(ctx *genContext, v string) string {
 	var b bytes.Buffer
+
 	var listMarker = ctx.temp()
+
 	fmt.Fprintf(&b, "%s := w.List()\n", listMarker)
+
 	for _, field := range op.fields {
 		selector := v + "." + field.name
 		fmt.Fprint(&b, field.elem.genWrite(ctx, selector))
 	}
+
 	op.writeOptionalFields(&b, ctx, v)
 	fmt.Fprintf(&b, "w.ListEnd(%s)\n", listMarker)
+
 	return b.String()
 }
 
@@ -503,6 +615,7 @@ func (op structOp) writeOptionalFields(b *bytes.Buffer, ctx *genContext, v strin
 	}
 	// First check zero-ness of all optional fields.
 	var zeroV = make([]string, len(op.optionalFields))
+
 	for i, field := range op.optionalFields {
 		selector := v + "." + field.name
 		zeroV[i] = ctx.temp()
@@ -512,10 +625,12 @@ func (op structOp) writeOptionalFields(b *bytes.Buffer, ctx *genContext, v strin
 	for i, field := range op.optionalFields {
 		selector := v + "." + field.name
 		cond := ""
+
 		for j := i; j < len(op.optionalFields); j++ {
 			if j > i {
 				cond += " || "
 			}
+
 			cond += zeroV[j]
 		}
 		fmt.Fprintf(b, "if %s {\n", cond)
@@ -537,26 +652,32 @@ func (op structOp) genDecode(ctx *genContext) (string, string) {
 
 	// Create struct object.
 	var resultV = ctx.temp()
+
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "var %s %s\n", resultV, typeName)
 
 	// Decode fields.
 	fmt.Fprintf(&b, "{\n")
 	fmt.Fprintf(&b, "if _, err := dec.List(); err != nil { return err }\n")
+
 	for _, field := range op.fields {
 		result, code := field.elem.genDecode(ctx)
 		fmt.Fprintf(&b, "// %s:\n", field.name)
 		fmt.Fprint(&b, code)
 		fmt.Fprintf(&b, "%s.%s = %s\n", resultV, field.name, result)
 	}
+
 	op.decodeOptionalFields(&b, ctx, resultV)
 	fmt.Fprintf(&b, "if err := dec.ListEnd(); err != nil { return err }\n")
 	fmt.Fprintf(&b, "}\n")
+
 	return resultV, b.String()
 }
 
 func (op structOp) decodeOptionalFields(b *bytes.Buffer, ctx *genContext, resultV string) {
 	var suffix bytes.Buffer
+
 	for _, field := range op.optionalFields {
 		result, code := field.elem.genDecode(ctx)
 		fmt.Fprintf(b, "// %s:\n", field.name)
@@ -565,6 +686,7 @@ func (op structOp) decodeOptionalFields(b *bytes.Buffer, ctx *genContext, result
 		fmt.Fprintf(b, "%s.%s = %s\n", resultV, field.name, result)
 		fmt.Fprintf(&suffix, "}\n")
 	}
+
 	suffix.WriteTo(b)
 }
 
@@ -579,6 +701,7 @@ func (bctx *buildContext) makeSliceOp(typ *types.Slice) (op, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return sliceOp{typ: typ, elemOp: elemOp}, nil
 }
 
@@ -590,19 +713,23 @@ func (op sliceOp) genWrite(ctx *genContext, v string) string {
 	)
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "%s := w.List()\n", listMarker)
 	fmt.Fprintf(&b, "for _, %s := range %s {\n", iterElemV, v)
 	fmt.Fprint(&b, elemCode)
 	fmt.Fprintf(&b, "}\n")
 	fmt.Fprintf(&b, "w.ListEnd(%s)\n", listMarker)
+
 	return b.String()
 }
 
 func (op sliceOp) genDecode(ctx *genContext) (string, string) {
 	var sliceV = ctx.temp() // holds the output slice
+
 	elemResult, elemCode := op.elemOp.genDecode(ctx)
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "var %s %s\n", sliceV, types.TypeString(op.typ, ctx.qualify))
 	fmt.Fprintf(&b, "if _, err := dec.List(); err != nil { return err }\n")
 	fmt.Fprintf(&b, "for dec.MoreDataInList() {\n")
@@ -610,6 +737,7 @@ func (op sliceOp) genDecode(ctx *genContext) (string, string) {
 	fmt.Fprintf(&b, "  %s = append(%s, %s)\n", sliceV, sliceV, elemResult)
 	fmt.Fprintf(&b, "}\n")
 	fmt.Fprintf(&b, "if err := dec.ListEnd(); err != nil { return err }\n")
+
 	return sliceV, b.String()
 }
 
@@ -619,9 +747,15 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
 		}
+
+		if isUint256(typ) {
+			return uint256Op{}, nil
+		}
+
 		if typ == bctx.rawValueType {
 			return bctx.makeRawValueOp(), nil
 		}
+
 		if bctx.isDecoder(typ) {
 			return nil, fmt.Errorf("type %v implements rlp.Decoder with non-pointer receiver", typ)
 		}
@@ -631,13 +765,19 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isBigInt(typ.Elem()) {
 			return bigIntOp{pointer: true}, nil
 		}
+
+		if isUint256(typ.Elem()) {
+			return uint256Op{pointer: true}, nil
+		}
 		// Encoder/Decoder interfaces.
 		if bctx.isEncoder(typ) {
 			if bctx.isDecoder(typ) {
 				return encoderDecoderOp{typ}, nil
 			}
+
 			return nil, fmt.Errorf("type %v implements rlp.Encoder but not rlp.Decoder", typ)
 		}
+
 		if bctx.isDecoder(typ) {
 			return nil, fmt.Errorf("type %v implements rlp.Decoder but not rlp.Encoder", typ)
 		}
@@ -652,12 +792,14 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if isByte(etyp) && !bctx.isEncoder(etyp) {
 			return bctx.makeByteSliceOp(typ), nil
 		}
+
 		return bctx.makeSliceOp(typ)
 	case *types.Array:
 		etyp := typ.Elem()
 		if isByte(etyp) && !bctx.isEncoder(etyp) {
 			return bctx.makeByteArrayOp(name, typ), nil
 		}
+
 		return nil, fmt.Errorf("unhandled array type: %v", typ)
 	default:
 		return nil, fmt.Errorf("unhandled type: %v", typ)
@@ -670,12 +812,15 @@ func generateDecoder(ctx *genContext, typ string, op op) []byte {
 	ctx.addImport(pathOfPackageRLP)
 
 	result, code := op.genDecode(ctx)
+
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "func (obj *%s) DecodeRLP(dec *rlp.Stream) error {\n", typ)
 	fmt.Fprint(&b, code)
 	fmt.Fprintf(&b, "  *obj = %s\n", result)
 	fmt.Fprintf(&b, "  return nil\n")
 	fmt.Fprintf(&b, "}\n")
+
 	return b.Bytes()
 }
 
@@ -686,11 +831,13 @@ func generateEncoder(ctx *genContext, typ string, op op) []byte {
 	ctx.addImport(pathOfPackageRLP)
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "func (obj *%s) EncodeRLP(_w io.Writer) error {\n", typ)
 	fmt.Fprintf(&b, "  w := rlp.NewEncoderBuffer(_w)\n")
 	fmt.Fprint(&b, op.genWrite(ctx, "obj"))
 	fmt.Fprintf(&b, "  return w.Flush()\n")
 	fmt.Fprintf(&b, "}\n")
+
 	return b.Bytes()
 }
 
@@ -698,6 +845,7 @@ func (bctx *buildContext) generate(typ *types.Named, encoder, decoder bool) ([]b
 	bctx.topType = typ
 
 	pkg := typ.Obj().Pkg()
+
 	op, err := bctx.makeOp(nil, typ, rlpstruct.Tags{})
 	if err != nil {
 		return nil, err
@@ -708,22 +856,28 @@ func (bctx *buildContext) generate(typ *types.Named, encoder, decoder bool) ([]b
 		encSource []byte
 		decSource []byte
 	)
+
 	if encoder {
 		encSource = generateEncoder(ctx, typ.Obj().Name(), op)
 	}
+
 	if decoder {
 		decSource = generateDecoder(ctx, typ.Obj().Name(), op)
 	}
 
 	var b bytes.Buffer
+
 	fmt.Fprintf(&b, "package %s\n\n", pkg.Name())
+
 	for _, imp := range ctx.importsList() {
 		fmt.Fprintf(&b, "import %q\n", imp)
 	}
+
 	if encoder {
 		fmt.Fprintln(&b)
 		b.Write(encSource)
 	}
+
 	if decoder {
 		fmt.Fprintln(&b)
 		b.Write(decSource)

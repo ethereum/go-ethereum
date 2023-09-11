@@ -41,6 +41,7 @@ type ExpDecaySample struct {
 	reservoirSize int
 	t0, t1        time.Time
 	values        *expDecaySampleHeap
+	rand          *rand.Rand
 }
 
 // NewExpDecaySample constructs a new exponentially-decaying sample with the
@@ -49,6 +50,7 @@ func NewExpDecaySample(reservoirSize int, alpha float64) Sample {
 	if !Enabled {
 		return NilSample{}
 	}
+
 	s := &ExpDecaySample{
 		alpha:         alpha,
 		reservoirSize: reservoirSize,
@@ -56,6 +58,13 @@ func NewExpDecaySample(reservoirSize int, alpha float64) Sample {
 		values:        newExpDecaySampleHeap(reservoirSize),
 	}
 	s.t1 = s.t0.Add(rescaleThreshold)
+
+	return s
+}
+
+// SetRand sets the random source (useful in tests)
+func (s *ExpDecaySample) SetRand(prng *rand.Rand) Sample {
+	s.rand = prng
 	return s
 }
 
@@ -74,6 +83,7 @@ func (s *ExpDecaySample) Clear() {
 func (s *ExpDecaySample) Count() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return s.count
 }
 
@@ -109,6 +119,7 @@ func (s *ExpDecaySample) Percentiles(ps []float64) []float64 {
 func (s *ExpDecaySample) Size() int {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return s.values.Size()
 }
 
@@ -118,9 +129,11 @@ func (s *ExpDecaySample) Snapshot() Sample {
 	defer s.mutex.Unlock()
 	vals := s.values.Values()
 	values := make([]int64, len(vals))
+
 	for i, v := range vals {
 		values[i] = v.v
 	}
+
 	return &SampleSnapshot{
 		count:  s.count,
 		values: values,
@@ -148,9 +161,11 @@ func (s *ExpDecaySample) Values() []int64 {
 	defer s.mutex.Unlock()
 	vals := s.values.Values()
 	values := make([]int64, len(vals))
+
 	for i, v := range vals {
 		values[i] = v.v
 	}
+
 	return values
 }
 
@@ -164,20 +179,32 @@ func (s *ExpDecaySample) Variance() float64 {
 func (s *ExpDecaySample) update(t time.Time, v int64) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	s.count++
 	if s.values.Size() == s.reservoirSize {
 		s.values.Pop()
 	}
+
+	var f64 float64
+
+	if s.rand != nil {
+		f64 = s.rand.Float64()
+	} else {
+		f64 = rand.Float64()
+	}
+
 	s.values.Push(expDecaySample{
-		k: math.Exp(t.Sub(s.t0).Seconds()*s.alpha) / rand.Float64(),
+		k: math.Exp(t.Sub(s.t0).Seconds()*s.alpha) / f64,
 		v: v,
 	})
+
 	if t.After(s.t1) {
 		values := s.values.Values()
 		t0 := s.t0
 		s.values.Clear()
 		s.t0 = t
 		s.t1 = s.t0.Add(rescaleThreshold)
+
 		for _, v := range values {
 			v.k = v.k * math.Exp(-s.alpha*s.t0.Sub(t0).Seconds())
 			s.values.Push(v)
@@ -237,12 +264,14 @@ func SampleMax(values []int64) int64 {
 	if len(values) == 0 {
 		return 0
 	}
+
 	var max int64 = math.MinInt64
 	for _, v := range values {
 		if max < v {
 			max = v
 		}
 	}
+
 	return max
 }
 
@@ -251,6 +280,7 @@ func SampleMean(values []int64) float64 {
 	if len(values) == 0 {
 		return 0.0
 	}
+
 	return float64(SampleSum(values)) / float64(len(values))
 }
 
@@ -259,12 +289,14 @@ func SampleMin(values []int64) int64 {
 	if len(values) == 0 {
 		return 0
 	}
+
 	var min int64 = math.MaxInt64
 	for _, v := range values {
 		if min > v {
 			min = v
 		}
 	}
+
 	return min
 }
 
@@ -277,9 +309,11 @@ func SamplePercentile(values int64Slice, p float64) float64 {
 // int64.
 func SamplePercentiles(values int64Slice, ps []float64) []float64 {
 	scores := make([]float64, len(ps))
+
 	size := len(values)
 	if size > 0 {
 		sort.Sort(values)
+
 		for i, p := range ps {
 			pos := p * float64(size+1)
 			if pos < 1.0 {
@@ -293,6 +327,7 @@ func SamplePercentiles(values int64Slice, ps []float64) []float64 {
 			}
 		}
 	}
+
 	return scores
 }
 
@@ -360,6 +395,7 @@ func (*SampleSnapshot) Update(int64) {
 func (s *SampleSnapshot) Values() []int64 {
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
+
 	return values
 }
 
@@ -377,6 +413,7 @@ func SampleSum(values []int64) int64 {
 	for _, v := range values {
 		sum += v
 	}
+
 	return sum
 }
 
@@ -385,12 +422,16 @@ func SampleVariance(values []int64) float64 {
 	if len(values) == 0 {
 		return 0.0
 	}
+
 	m := SampleMean(values)
+
 	var sum float64
+
 	for _, v := range values {
 		d := float64(v) - m
 		sum += d * d
 	}
+
 	return sum / float64(len(values))
 }
 
@@ -402,6 +443,7 @@ type UniformSample struct {
 	mutex         sync.Mutex
 	reservoirSize int
 	values        []int64
+	rand          *rand.Rand
 }
 
 // NewUniformSample constructs a new uniform sample with the given reservoir
@@ -410,10 +452,17 @@ func NewUniformSample(reservoirSize int) Sample {
 	if !Enabled {
 		return NilSample{}
 	}
+
 	return &UniformSample{
 		reservoirSize: reservoirSize,
 		values:        make([]int64, 0, reservoirSize),
 	}
+}
+
+// SetRand sets the random source (useful in tests)
+func (s *UniformSample) SetRand(prng *rand.Rand) Sample {
+	s.rand = prng
+	return s
 }
 
 // Clear clears all samples.
@@ -429,6 +478,7 @@ func (s *UniformSample) Clear() {
 func (s *UniformSample) Count() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return s.count
 }
 
@@ -437,6 +487,7 @@ func (s *UniformSample) Count() int64 {
 func (s *UniformSample) Max() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleMax(s.values)
 }
 
@@ -444,6 +495,7 @@ func (s *UniformSample) Max() int64 {
 func (s *UniformSample) Mean() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleMean(s.values)
 }
 
@@ -452,6 +504,7 @@ func (s *UniformSample) Mean() float64 {
 func (s *UniformSample) Min() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleMin(s.values)
 }
 
@@ -459,6 +512,7 @@ func (s *UniformSample) Min() int64 {
 func (s *UniformSample) Percentile(p float64) float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SamplePercentile(s.values, p)
 }
 
@@ -467,6 +521,7 @@ func (s *UniformSample) Percentile(p float64) float64 {
 func (s *UniformSample) Percentiles(ps []float64) []float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SamplePercentiles(s.values, ps)
 }
 
@@ -474,6 +529,7 @@ func (s *UniformSample) Percentiles(ps []float64) []float64 {
 func (s *UniformSample) Size() int {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return len(s.values)
 }
 
@@ -483,6 +539,7 @@ func (s *UniformSample) Snapshot() Sample {
 	defer s.mutex.Unlock()
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
+
 	return &SampleSnapshot{
 		count:  s.count,
 		values: values,
@@ -493,6 +550,7 @@ func (s *UniformSample) Snapshot() Sample {
 func (s *UniformSample) StdDev() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleStdDev(s.values)
 }
 
@@ -500,6 +558,7 @@ func (s *UniformSample) StdDev() float64 {
 func (s *UniformSample) Sum() int64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleSum(s.values)
 }
 
@@ -507,11 +566,18 @@ func (s *UniformSample) Sum() int64 {
 func (s *UniformSample) Update(v int64) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	s.count++
 	if len(s.values) < s.reservoirSize {
 		s.values = append(s.values, v)
 	} else {
-		r := rand.Int63n(s.count)
+		var r int64
+		if s.rand != nil {
+			r = s.rand.Int63n(s.count)
+		} else {
+			r = rand.Int63n(s.count)
+		}
+
 		if r < int64(len(s.values)) {
 			s.values[int(r)] = v
 		}
@@ -524,6 +590,7 @@ func (s *UniformSample) Values() []int64 {
 	defer s.mutex.Unlock()
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
+
 	return values
 }
 
@@ -531,6 +598,7 @@ func (s *UniformSample) Values() []int64 {
 func (s *UniformSample) Variance() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	return SampleVariance(s.values)
 }
 
@@ -569,6 +637,7 @@ func (h *expDecaySampleHeap) Pop() expDecaySample {
 	n = len(h.s)
 	s := h.s[n-1]
 	h.s = h.s[0 : n-1]
+
 	return s
 }
 
@@ -586,6 +655,7 @@ func (h *expDecaySampleHeap) up(j int) {
 		if i == j || !(h.s[j].k < h.s[i].k) {
 			break
 		}
+
 		h.s[i], h.s[j] = h.s[j], h.s[i]
 		j = i
 	}
@@ -597,13 +667,16 @@ func (h *expDecaySampleHeap) down(i, n int) {
 		if j1 >= n || j1 < 0 { // j1 < 0 after int overflow
 			break
 		}
+
 		j := j1 // left child
 		if j2 := j1 + 1; j2 < n && !(h.s[j1].k < h.s[j2].k) {
 			j = j2 // = 2*i + 2  // right child
 		}
+
 		if !(h.s[j].k < h.s[i].k) {
 			break
 		}
+
 		h.s[i], h.s[j] = h.s[j], h.s[i]
 		i = j
 	}

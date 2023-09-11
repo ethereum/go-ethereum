@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"math/rand"
 	"testing"
 
@@ -32,6 +33,7 @@ func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} 
 	for hash := range destructs {
 		copy[hash] = struct{}{}
 	}
+
 	return copy
 }
 
@@ -40,6 +42,7 @@ func copyAccounts(accounts map[common.Hash][]byte) map[common.Hash][]byte {
 	for hash, blob := range accounts {
 		copy[hash] = blob
 	}
+
 	return copy
 }
 
@@ -51,6 +54,7 @@ func copyStorage(storage map[common.Hash]map[common.Hash][]byte) map[common.Hash
 			copy[accHash][slotHash] = blob
 		}
 	}
+
 	return copy
 }
 
@@ -67,13 +71,15 @@ func TestMergeBasics(t *testing.T) {
 		data := randomAccount()
 
 		accounts[h] = data
+
 		if rand.Intn(4) == 0 {
 			destructs[h] = struct{}{}
 		}
+
 		if rand.Intn(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
 			value := make([]byte, 32)
-			rand.Read(value)
+			_, _ = crand.Read(value)
 			accStorage[randomHash()] = value
 			storage[h] = accStorage
 		}
@@ -91,9 +97,11 @@ func TestMergeBasics(t *testing.T) {
 		if have, want := len(merged.accountList), 0; have != want {
 			t.Errorf("accountList wrong: have %v, want %v", have, want)
 		}
+
 		if have, want := len(merged.AccountList()), len(accounts); have != want {
 			t.Errorf("AccountList() wrong: have %v, want %v", have, want)
 		}
+
 		if have, want := len(merged.accountList), len(accounts); have != want {
 			t.Errorf("accountList [2] wrong: have %v, want %v", have, want)
 		}
@@ -109,13 +117,16 @@ func TestMergeBasics(t *testing.T) {
 			if have, want := len(merged.storageList), i; have != want {
 				t.Errorf("[1] storageList wrong: have %v, want %v", have, want)
 			}
+
 			list, _ := merged.StorageList(aHash)
 			if have, want := len(list), len(sMap); have != want {
 				t.Errorf("[2] StorageList() wrong: have %v, want %v", have, want)
 			}
+
 			if have, want := len(merged.storageList[aHash]), len(sMap); have != want {
 				t.Errorf("storageList wrong: have %v, want %v", have, want)
 			}
+
 			i++
 		}
 	}
@@ -162,12 +173,15 @@ func TestMergeDelete(t *testing.T) {
 	if data, _ := child.Account(h1); data == nil {
 		t.Errorf("last diff layer: expected %x account to be non-nil", h1)
 	}
+
 	if data, _ := child.Account(h2); data != nil {
 		t.Errorf("last diff layer: expected %x account to be nil", h2)
 	}
+
 	if _, ok := child.destructSet[h1]; ok {
 		t.Errorf("last diff layer: expected %x drop to be missing", h1)
 	}
+
 	if _, ok := child.destructSet[h2]; !ok {
 		t.Errorf("last diff layer: expected %x drop to be present", h1)
 	}
@@ -177,12 +191,15 @@ func TestMergeDelete(t *testing.T) {
 	if data, _ := merged.Account(h1); data == nil {
 		t.Errorf("merged layer: expected %x account to be non-nil", h1)
 	}
+
 	if data, _ := merged.Account(h2); data != nil {
 		t.Errorf("merged layer: expected %x account to be nil", h2)
 	}
+
 	if _, ok := merged.destructSet[h1]; !ok { // Note, drops stay alive until persisted to disk!
 		t.Errorf("merged diff layer: expected %x drop to be present", h1)
 	}
+
 	if _, ok := merged.destructSet[h2]; !ok { // Note, drops stay alive until persisted to disk!
 		t.Errorf("merged diff layer: expected %x drop to be present", h1)
 	}
@@ -209,6 +226,7 @@ func TestInsertAndMerge(t *testing.T) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		parent = newDiffLayer(emptyLayer(), common.Hash{}, destructs, accounts, storage)
 	}
 	{
@@ -217,6 +235,7 @@ func TestInsertAndMerge(t *testing.T) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		accounts[acc] = randomAccount()
 		storage[acc] = make(map[common.Hash][]byte)
 		storage[acc][slot] = []byte{0x01}
@@ -253,18 +272,25 @@ func BenchmarkSearch(b *testing.B) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		for i := 0; i < 10000; i++ {
 			accounts[randomHash()] = randomAccount()
 		}
+
 		return newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
 	}
+
 	var layer snapshot
+
 	layer = emptyLayer()
 	for i := 0; i < 128; i++ {
 		layer = fill(layer)
 	}
+
 	key := crypto.Keccak256Hash([]byte{0x13, 0x38})
+
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		layer.AccountRLP(key)
 	}
@@ -289,23 +315,29 @@ func BenchmarkSearchSlot(b *testing.B) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		accounts[accountKey] = accountRLP
 
 		accStorage := make(map[common.Hash][]byte)
+
 		for i := 0; i < 5; i++ {
 			value := make([]byte, 32)
-			rand.Read(value)
+			_, _ = crand.Read(value)
 			accStorage[randomHash()] = value
 			storage[accountKey] = accStorage
 		}
+
 		return newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
 	}
+
 	var layer snapshot
+
 	layer = emptyLayer()
 	for i := 0; i < 128; i++ {
 		layer = fill(layer)
 	}
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		layer.Storage(accountKey, storageKey)
 	}
@@ -323,25 +355,32 @@ func BenchmarkFlatten(b *testing.B) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		for i := 0; i < 100; i++ {
 			accountKey := randomHash()
 			accounts[accountKey] = randomAccount()
 
 			accStorage := make(map[common.Hash][]byte)
+
 			for i := 0; i < 20; i++ {
 				value := make([]byte, 32)
-				rand.Read(value)
+				_, _ = crand.Read(value)
 				accStorage[randomHash()] = value
-
 			}
+
 			storage[accountKey] = accStorage
 		}
+
 		return newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
 	}
+
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
+
 		var layer snapshot
+
 		layer = emptyLayer()
 		for i := 1; i < 128; i++ {
 			layer = fill(layer)
@@ -353,6 +392,7 @@ func BenchmarkFlatten(b *testing.B) {
 			if !ok {
 				break
 			}
+
 			layer = dl.flatten()
 		}
 		b.StopTimer()
@@ -373,22 +413,26 @@ func BenchmarkJournal(b *testing.B) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
+
 		for i := 0; i < 200; i++ {
 			accountKey := randomHash()
 			accounts[accountKey] = randomAccount()
 
 			accStorage := make(map[common.Hash][]byte)
+
 			for i := 0; i < 200; i++ {
 				value := make([]byte, 32)
-				rand.Read(value)
+				_, _ = crand.Read(value)
 				accStorage[randomHash()] = value
-
 			}
+
 			storage[accountKey] = accStorage
 		}
+
 		return newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
 	}
 	layer := snapshot(emptyLayer())
+
 	for i := 1; i < 128; i++ {
 		layer = fill(layer)
 	}

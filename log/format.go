@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
+
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -79,15 +81,17 @@ type TerminalStringer interface {
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
-//     [LEVEL] [TIME] MESSAGE key=value key=value ...
+//	[LEVEL] [TIME] MESSAGE key=value key=value ...
 //
 // Example:
 //
-//     [DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-//
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func TerminalFormat(usecolor bool) Format {
 	return FormatFunc(func(r *Record) []byte {
+		msg := escapeMessage(r.Msg)
+
 		var color = 0
+
 		if usecolor {
 			switch r.Lvl {
 			case LvlCrit:
@@ -107,6 +111,7 @@ func TerminalFormat(usecolor bool) Format {
 
 		b := &bytes.Buffer{}
 		lvl := r.Lvl.AlignedString()
+
 		if atomic.LoadUint32(&locationEnabled) != 0 {
 			// Log origin printing was requested, format the location path and line number
 			location := fmt.Sprintf("%+v", r.Call)
@@ -119,28 +124,30 @@ func TerminalFormat(usecolor bool) Format {
 				align = len(location)
 				atomic.StoreUint32(&locationLength, uint32(align))
 			}
+
 			padding := strings.Repeat(" ", align-len(location))
 
 			// Assemble and print the log heading
 			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, msg)
 			} else {
-				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, msg)
 			}
 		} else {
 			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), msg)
 			} else {
-				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
+				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), msg)
 			}
 		}
 		// try to justify the log output for short messages
-		length := utf8.RuneCountInString(r.Msg)
+		length := utf8.RuneCountInString(msg)
 		if len(r.Ctx) > 0 && length < termMsgJust {
 			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
 		}
 		// print the keys logfmt style
 		logfmt(b, r.Ctx, color, true)
+
 		return b.Bytes()
 	})
 }
@@ -149,12 +156,12 @@ func TerminalFormat(usecolor bool) Format {
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-//
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
 		buf := &bytes.Buffer{}
 		logfmt(buf, append(common, r.Ctx...), 0, false)
+
 		return buf.Bytes()
 	})
 }
@@ -167,8 +174,11 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 
 		k, ok := ctx[i].(string)
 		v := formatLogfmtValue(ctx[i+1], term)
+
 		if !ok {
 			k, v = errorKey, formatLogfmtValue(k, term)
+		} else {
+			k = escapeString(k)
 		}
 
 		// XXX: we should probably check that all of your key bytes aren't invalid
@@ -184,13 +194,16 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 			fieldPadding[k] = padding
 			fieldPaddingLock.Unlock()
 		}
+
 		if color > 0 {
 			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, k)
 		} else {
 			buf.WriteString(k)
 			buf.WriteByte('=')
 		}
+
 		buf.WriteString(v)
+
 		if i < len(ctx)-2 && padding > length {
 			buf.Write(bytes.Repeat([]byte{' '}, padding-length))
 		}
@@ -214,6 +227,7 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 			return json.MarshalIndent(v, "", "    ")
 		}
 	}
+
 	return FormatFunc(func(r *Record) []byte {
 		props := make(map[string]interface{})
 
@@ -222,14 +236,17 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 		props[r.KeyNames.Msg] = r.Msg
 
 		ctx := make([]string, len(r.Ctx))
+
 		for i := 0; i < len(r.Ctx); i += 2 {
 			k, ok := r.Ctx[i].(string)
 			if !ok {
 				props[errorKey] = fmt.Sprintf("%+v is not a string key,", r.Ctx[i])
 			}
+
 			ctx[i] = k
 			ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
 		}
+
 		props[r.KeyNames.Ctx] = ctx
 
 		b, err := jsonMarshal(props)
@@ -237,11 +254,14 @@ func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 			b, _ = jsonMarshal(map[string]string{
 				errorKey: err.Error(),
 			})
+
 			return b
 		}
+
 		if lineSeparated {
 			b = append(b, '\n')
 		}
+
 		return b
 	})
 }
@@ -269,6 +289,7 @@ func JSONFormatEx(pretty, lineSeparated bool) Format {
 			if !ok {
 				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
 			}
+
 			props[k] = formatJSONValue(r.Ctx[i+1])
 		}
 
@@ -277,6 +298,7 @@ func JSONFormatEx(pretty, lineSeparated bool) Format {
 			b, _ = jsonMarshal(map[string]string{
 				errorKey: err.Error(),
 			})
+
 			return b
 		}
 
@@ -338,19 +360,31 @@ func formatLogfmtValue(value interface{}, term bool) string {
 		return v.Format(timeFormat)
 
 	case *big.Int:
-		// Big ints get consumed by the Stringer clause so we need to handle
+		// Big ints get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
 			return "<nil>"
 		}
+
 		return formatLogfmtBigInt(v)
+
+	case *uint256.Int:
+		// Uint256s get consumed by the Stringer clause, so we need to handle
+		// them earlier on.
+		if v == nil {
+			return "<nil>"
+		}
+
+		return formatLogfmtUint256(v)
 	}
+
 	if term {
 		if s, ok := value.(TerminalStringer); ok {
 			// Custom terminal stringer provided, use that
 			return escapeString(s.TerminalString())
 		}
 	}
+
 	value = formatShared(value)
 	switch v := value.(type) {
 	case bool:
@@ -392,6 +426,7 @@ func FormatLogfmtInt64(n int64) string {
 	if n < 0 {
 		return formatLogfmtUint64(uint64(-n), true)
 	}
+
 	return formatLogfmtUint64(uint64(n), false)
 }
 
@@ -417,6 +452,7 @@ func formatLogfmtUint64(n uint64, neg bool) string {
 		i     = maxLength - 1
 		comma = 0
 	)
+
 	for ; n > 0; i-- {
 		if comma == 3 {
 			comma = 0
@@ -427,10 +463,12 @@ func formatLogfmtUint64(n uint64, neg bool) string {
 			n /= 10
 		}
 	}
+
 	if neg {
 		out[i] = '-'
 		i--
 	}
+
 	return string(out[i+1:])
 }
 
@@ -439,6 +477,7 @@ func formatLogfmtBigInt(n *big.Int) string {
 	if n.IsUint64() {
 		return FormatLogfmtUint64(n.Uint64())
 	}
+
 	if n.IsInt64() {
 		return FormatLogfmtInt64(n.Int64())
 	}
@@ -449,6 +488,7 @@ func formatLogfmtBigInt(n *big.Int) string {
 		comma = 0
 		i     = len(buf) - 1
 	)
+
 	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
 		c := text[j]
 
@@ -459,12 +499,49 @@ func formatLogfmtBigInt(n *big.Int) string {
 			buf[i] = ','
 			i--
 			comma = 0
+
 			fallthrough
 		default:
 			buf[i] = c
 			comma++
 		}
 	}
+
+	return string(buf[i+1:])
+}
+
+// formatLogfmtUint256 formats n with thousand separators.
+func formatLogfmtUint256(n *uint256.Int) string {
+	if n.IsUint64() {
+		return FormatLogfmtUint64(n.Uint64())
+	}
+
+	var (
+		text  = n.Dec()
+		buf   = make([]byte, len(text)+len(text)/3)
+		comma = 0
+		i     = len(buf) - 1
+	)
+
+	for j := len(text) - 1; j >= 0; j, i = j-1, i-1 {
+		c := text[j]
+
+		switch {
+		case c == '-':
+			buf[i] = c
+		case comma == 3:
+			buf[i] = ','
+			i--
+
+			comma = 0
+
+			fallthrough
+		default:
+			buf[i] = c
+			comma++
+		}
+	}
+
 	return string(buf[i+1:])
 }
 
@@ -472,15 +549,44 @@ func formatLogfmtBigInt(n *big.Int) string {
 // calls strconv.Quote if needed
 func escapeString(s string) string {
 	needsQuoting := false
+
 	for _, r := range s {
-		// We quote everything below " (0x34) and above~ (0x7E), plus equal-sign
+		// We quote everything below " (0x22) and above~ (0x7E), plus equal-sign
 		if r <= '"' || r > '~' || r == '=' {
 			needsQuoting = true
 			break
 		}
 	}
+
 	if !needsQuoting {
 		return s
 	}
+
+	return strconv.Quote(s)
+}
+
+// escapeMessage checks if the provided string needs escaping/quoting, similarly
+// to escapeString. The difference is that this method is more lenient: it allows
+// for spaces and linebreaks to occur without needing quoting.
+func escapeMessage(s string) string {
+	needsQuoting := false
+
+	for _, r := range s {
+		// Allow CR/LF/TAB. This is to make multi-line messages work.
+		if r == '\r' || r == '\n' || r == '\t' {
+			continue
+		}
+		// We quote everything below <space> (0x20) and above~ (0x7E),
+		// plus equal-sign
+		if r < ' ' || r > '~' || r == '=' {
+			needsQuoting = true
+			break
+		}
+	}
+
+	if !needsQuoting {
+		return s
+	}
+
 	return strconv.Quote(s)
 }

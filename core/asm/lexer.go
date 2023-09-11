@@ -63,6 +63,7 @@ func (it tokenType) String() string {
 	if int(it) > len(stringtokenTypes) {
 		return "invalid"
 	}
+
 	return stringtokenTypes[it]
 }
 
@@ -93,7 +94,7 @@ type lexer struct {
 	debug bool // flag for triggering debug output
 }
 
-// lex lexes the program by name with the given source. It returns a
+// Lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
 func Lex(source []byte, debug bool) <-chan token {
 	ch := make(chan token)
@@ -103,8 +104,10 @@ func Lex(source []byte, debug bool) <-chan token {
 		state:  lexLine,
 		debug:  debug,
 	}
+
 	go func() {
 		l.emit(lineStart)
+
 		for l.state != nil {
 			l.state = l.state(l)
 		}
@@ -121,8 +124,10 @@ func (l *lexer) next() (rune rune) {
 		l.width = 0
 		return 0
 	}
+
 	rune, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
 	l.pos += l.width
+
 	return rune
 }
 
@@ -135,6 +140,7 @@ func (l *lexer) backup() {
 func (l *lexer) peek() rune {
 	r := l.next()
 	l.backup()
+
 	return r
 }
 
@@ -199,6 +205,7 @@ func lexLine(l *lexer) stateFn {
 		case r == '\n':
 			l.emit(lineEnd)
 			l.ignore()
+
 			l.lineno++
 
 			l.emit(lineStart)
@@ -257,6 +264,7 @@ func lexNumber(l *lexer) stateFn {
 	if l.accept("xX") {
 		acceptance = HexadecimalNumbers
 	}
+
 	l.acceptRun(acceptance)
 
 	l.emit(number)
@@ -275,6 +283,7 @@ func lexElement(l *lexer) stateFn {
 	} else {
 		l.emit(element)
 	}
+
 	return lexLine
 }
 

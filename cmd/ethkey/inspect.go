@@ -19,12 +19,13 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"os"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"gopkg.in/urfave/cli.v1"
 )
 
 type outputInspect struct {
@@ -33,7 +34,14 @@ type outputInspect struct {
 	PrivateKey string
 }
 
-var commandInspect = cli.Command{
+var (
+	privateFlag = &cli.BoolFlag{
+		Name:  "private",
+		Usage: "include the private key in the output",
+	}
+)
+
+var commandInspect = &cli.Command{
 	Name:      "inspect",
 	Usage:     "inspect a keyfile",
 	ArgsUsage: "<keyfile>",
@@ -45,16 +53,13 @@ make sure to use this feature with great caution!`,
 	Flags: []cli.Flag{
 		passphraseFlag,
 		jsonFlag,
-		cli.BoolFlag{
-			Name:  "private",
-			Usage: "include the private key in the output",
-		},
+		privateFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		keyfilepath := ctx.Args().First()
 
 		// Read key from file.
-		keyjson, err := ioutil.ReadFile(keyfilepath)
+		keyjson, err := os.ReadFile(keyfilepath)
 		if err != nil {
 			utils.Fatalf("Failed to read the keyfile at '%s': %v", keyfilepath, err)
 		}
@@ -67,7 +72,7 @@ make sure to use this feature with great caution!`,
 		}
 
 		// Output all relevant information we can retrieve.
-		showPrivate := ctx.Bool("private")
+		showPrivate := ctx.Bool(privateFlag.Name)
 		out := outputInspect{
 			Address: key.Address.Hex(),
 			PublicKey: hex.EncodeToString(

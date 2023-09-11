@@ -350,6 +350,9 @@ type JsonRPCConfig struct {
 	HttpTimeout *HttpTimeouts `hcl:"timeouts,block" toml:"timeouts,block"`
 
 	AllowUnprotectedTxs bool `hcl:"allow-unprotected-txs,optional" toml:"allow-unprotected-txs,optional"`
+
+	// EnablePersonal enables the deprecated personal namespace.
+	EnablePersonal bool `hcl:"enabledeprecatedpersonal,optional" toml:"enabledeprecatedpersonal,optional"`
 }
 
 type AUTHConfig struct {
@@ -662,6 +665,7 @@ func DefaultConfig() *Config {
 			TxFeeCap:            ethconfig.Defaults.RPCTxFeeCap,
 			RPCEVMTimeout:       ethconfig.Defaults.RPCEVMTimeout,
 			AllowUnprotectedTxs: false,
+			EnablePersonal:      false,
 			Http: &APIConfig{
 				Enabled:                     false,
 				Port:                        8545,
@@ -911,8 +915,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	{
 		n.GPO.Blocks = int(c.Gpo.Blocks)
 		n.GPO.Percentile = int(c.Gpo.Percentile)
-		n.GPO.MaxHeaderHistory = c.Gpo.MaxHeaderHistory
-		n.GPO.MaxBlockHistory = c.Gpo.MaxBlockHistory
+		n.GPO.MaxHeaderHistory = uint64(c.Gpo.MaxHeaderHistory)
+		n.GPO.MaxBlockHistory = uint64(c.Gpo.MaxBlockHistory)
 		n.GPO.MaxPrice = c.Gpo.MaxPrice
 		n.GPO.IgnorePrice = c.Gpo.IgnorePrice
 	}
@@ -1036,7 +1040,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	// RequiredBlocks
 	{
-		n.PeerRequiredBlocks = map[uint64]common.Hash{}
+		n.RequiredBlocks = map[uint64]common.Hash{}
+
 		for k, v := range c.RequiredBlocks {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
@@ -1048,7 +1053,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 				return nil, fmt.Errorf("invalid required block hash %s: %v", v, err)
 			}
 
-			n.PeerRequiredBlocks[number] = hash
+			n.RequiredBlocks[number] = hash
 		}
 	}
 
@@ -1125,6 +1130,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.NoPruning = true
 		if !n.Preimages {
 			n.Preimages = true
+
 			log.Info("Enabling recording of key preimages since archive mode is used")
 		}
 	default:
@@ -1278,6 +1284,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		Version:               params.VersionWithCommit(gitCommit, gitDate),
 		IPCPath:               ipcPath,
 		AllowUnprotectedTxs:   c.JsonRPC.AllowUnprotectedTxs,
+		EnablePersonal:        c.JsonRPC.EnablePersonal,
 		P2P: p2p.Config{
 			MaxPeers:        int(c.P2P.MaxPeers),
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
@@ -1441,12 +1448,14 @@ func MakeDatabaseHandles(max int) (int, error) {
 
 func parseBootnodes(urls []string) ([]*enode.Node, error) {
 	dst := []*enode.Node{}
+
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				return nil, fmt.Errorf("invalid bootstrap url '%s': %v", url, err)
 			}
+
 			dst = append(dst, node)
 		}
 	}

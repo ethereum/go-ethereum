@@ -48,6 +48,7 @@ func (s *senderFromServer) Sender(tx *types.Transaction) (common.Address, error)
 	if s.addr == (common.Address{}) {
 		return common.Address{}, errNotCached
 	}
+
 	return s.addr, nil
 }
 

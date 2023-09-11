@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ type resultStore struct {
 	// Internal index of first non-completed entry, updated atomically when needed.
 	// If all items are complete, this will equal length(items), so
 	// *important* : is not safe to use for indexing without checking against length
-	indexIncomplete int32 // atomic access
+	indexIncomplete atomic.Int32
 
 	// throttleThreshold is the limit up to which we _want_ to fill the
 	// results. If blocks are large, we want to limit the results to less
@@ -63,7 +63,9 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 	if threshold >= limit {
 		threshold = limit
 	}
+
 	r.throttleThreshold = threshold
+
 	return r.throttleThreshold
 }
 
@@ -71,23 +73,27 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 // wants to reserve headers for fetching.
 //
 // It returns the following:
-//   stale     - if true, this item is already passed, and should not be requested again
-//   throttled - if true, the store is at capacity, this particular header is not prio now
-//   item      - the result to store data into
-//   err       - any error that occurred
+//
+//	stale     - if true, this item is already passed, and should not be requested again
+//	throttled - if true, the store is at capacity, this particular header is not prio now
+//	item      - the result to store data into
+//	err       - any error that occurred
 func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	var index int
+
 	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}
+
 	if item == nil {
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
+
 	return stale, throttled, item, err
 }
 
@@ -100,6 +106,7 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 	defer r.lock.RUnlock()
 
 	res, _, stale, _, err := r.getFetchResult(headerNumber)
+
 	return res, stale, err
 }
 
@@ -114,16 +121,20 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 		err = fmt.Errorf("%w: index allocation went beyond available resultStore space "+
 			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d", errInvalidChain,
 			index, headerNumber, r.resultOffset, len(r.items))
+
 		return nil, index, stale, throttle, err
 	}
+
 	if stale {
 		return nil, index, stale, throttle, nil
 	}
+
 	item = r.items[index]
+
 	return item, index, stale, throttle, nil
 }
 
-// hasCompletedItems returns true if there are processable items available
+// HasCompletedItems returns true if there are processable items available
 // this method is cheaper than countCompleted
 func (r *resultStore) HasCompletedItems() bool {
 	r.lock.RLock()
@@ -132,9 +143,11 @@ func (r *resultStore) HasCompletedItems() bool {
 	if len(r.items) == 0 {
 		return false
 	}
+
 	if item := r.items[0]; item != nil && item.AllDone() {
 		return true
 	}
+
 	return false
 }
 
@@ -145,17 +158,20 @@ func (r *resultStore) HasCompletedItems() bool {
 func (r *resultStore) countCompleted() int {
 	// We iterate from the already known complete point, and see
 	// if any more has completed since last count
-	index := atomic.LoadInt32(&r.indexIncomplete)
+	index := r.indexIncomplete.Load()
+
 	for ; ; index++ {
 		if index >= int32(len(r.items)) {
 			break
 		}
+
 		result := r.items[index]
 		if result == nil || !result.AllDone() {
 			break
 		}
 	}
-	atomic.StoreInt32(&r.indexIncomplete, index)
+	r.indexIncomplete.Store(index)
+
 	return int(index)
 }
 
@@ -168,17 +184,19 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	if limit > completed {
 		limit = completed
 	}
+
 	results := make([]*fetchResult, limit)
 	copy(results, r.items[:limit])
 
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
+
 	for i := len(r.items) - limit; i < len(r.items); i++ {
 		r.items[i] = nil
 	}
 	// Advance the expected block number of the first cache entry
 	r.resultOffset += uint64(limit)
-	atomic.AddInt32(&r.indexIncomplete, int32(-limit))
+	r.indexIncomplete.Add(int32(-limit))
 
 	return results
 }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -46,6 +45,7 @@ func TestKeccak256Hasher(t *testing.T) {
 	msg := []byte("abc")
 	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
 	hasher := NewKeccakState()
+
 	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := HashData(hasher, in); return h[:] }, msg, exp)
 }
 
@@ -53,6 +53,7 @@ func TestToECDSAErrors(t *testing.T) {
 	if _, err := HexToECDSA("0000000000000000000000000000000000000000000000000000000000000000"); err == nil {
 		t.Fatal("HexToECDSA should've returned error")
 	}
+
 	if _, err := HexToECDSA("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); err == nil {
 		t.Fatal("HexToECDSA should've returned error")
 	}
@@ -70,6 +71,7 @@ func TestUnmarshalPubkey(t *testing.T) {
 	if err != errInvalidPubkey || key != nil {
 		t.Fatalf("expected error, got %v, %v", err, key)
 	}
+
 	key, err = UnmarshalPubkey([]byte{1, 2, 3})
 	if err != errInvalidPubkey || key != nil {
 		t.Fatalf("expected error, got %v, %v", err, key)
@@ -83,10 +85,12 @@ func TestUnmarshalPubkey(t *testing.T) {
 			Y:     hexutil.MustDecodeBig("0xb01abc6e1db640cf3106b520344af1d58b00b57823db3e1407cbc433e1b6d04d"),
 		}
 	)
+
 	key, err = UnmarshalPubkey(enc)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+
 	if !reflect.DeepEqual(key, dec) {
 		t.Fatal("wrong result")
 	}
@@ -97,15 +101,19 @@ func TestSign(t *testing.T) {
 	addr := common.HexToAddress(testAddrHex)
 
 	msg := Keccak256([]byte("foo"))
+
 	sig, err := Sign(msg, key)
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
+
 	recoveredPub, err := Ecrecover(msg, sig)
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
 	}
+
 	pubKey, _ := UnmarshalPubkey(recoveredPub)
+
 	recoveredAddr := PubkeyToAddress(*pubKey)
 	if addr != recoveredAddr {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr)
@@ -116,6 +124,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
 	}
+
 	recoveredAddr2 := PubkeyToAddress(*recoveredPub2)
 	if addr != recoveredAddr2 {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr2)
@@ -126,6 +135,7 @@ func TestInvalidSign(t *testing.T) {
 	if _, err := Sign(make([]byte, 1), nil); err == nil {
 		t.Errorf("expected sign with hash 1 byte to error")
 	}
+
 	if _, err := Sign(make([]byte, 33), nil); err == nil {
 		t.Errorf("expected sign with hash 33 byte to error")
 	}
@@ -141,6 +151,7 @@ func TestNewContractAddress(t *testing.T) {
 	caddr0 := CreateAddress(addr, 0)
 	caddr1 := CreateAddress(addr, 1)
 	caddr2 := CreateAddress(addr, 2)
+
 	checkAddr(t, common.HexToAddress("333c3310824b7c685133f2bedb2ca4b8b4df633d"), caddr0)
 	checkAddr(t, common.HexToAddress("8bda78331c916a08481428e4b07c96d3e916d165"), caddr1)
 	checkAddr(t, common.HexToAddress("c9ddedf451bc62ce88bf9292afb13df35b670699"), caddr2)
@@ -182,15 +193,17 @@ func TestLoadECDSA(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		f, err := ioutil.TempFile("", "loadecdsa_test.*.txt")
+		f, err := os.CreateTemp("", "loadecdsa_test.*.txt")
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		filename := f.Name()
 		f.WriteString(test.input)
 		f.Close()
 
 		_, err = LoadECDSA(filename)
+
 		switch {
 		case err != nil && test.err == "":
 			t.Fatalf("unexpected error for input %q:\n  %v", test.input, err)
@@ -203,22 +216,26 @@ func TestLoadECDSA(t *testing.T) {
 }
 
 func TestSaveECDSA(t *testing.T) {
-	f, err := ioutil.TempFile("", "saveecdsa_test.*.txt")
+	f, err := os.CreateTemp("", "saveecdsa_test.*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	file := f.Name()
 	f.Close()
+
 	defer os.Remove(file)
 
 	key, _ := HexToECDSA(testPrivHex)
 	if err := SaveECDSA(file, key); err != nil {
 		t.Fatal(err)
 	}
+
 	loaded, err := LoadECDSA(file)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !reflect.DeepEqual(key, loaded) {
 		t.Fatal("loaded key not equal to saved key")
 	}

@@ -41,33 +41,44 @@ func newTestEnv(remote string, listen1, listen2 string) *testenv {
 	if err != nil {
 		panic(err)
 	}
+
 	l2, err := net.ListenPacket("udp", fmt.Sprintf("%v:0", listen2))
 	if err != nil {
 		panic(err)
 	}
+
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
+
 	node, err := enode.Parse(enode.ValidSchemes, remote)
 	if err != nil {
 		panic(err)
 	}
+
 	if node.IP() == nil || node.UDP() == 0 {
 		var ip net.IP
+
 		var tcpPort, udpPort int
+
 		if ip = node.IP(); ip == nil {
 			ip = net.ParseIP("127.0.0.1")
 		}
+
 		if tcpPort = node.TCP(); tcpPort == 0 {
 			tcpPort = 30303
 		}
+
 		if udpPort = node.TCP(); udpPort == 0 {
 			udpPort = 30303
 		}
+
 		node = enode.NewV4(node.Pubkey(), ip, tcpPort, udpPort)
 	}
+
 	addr := &net.UDPAddr{IP: node.IP(), Port: node.UDP()}
+
 	return &testenv{l1, l2, key, node, addr}
 }
 
@@ -81,27 +92,34 @@ func (te *testenv) send(c net.PacketConn, req v4wire.Packet) []byte {
 	if err != nil {
 		panic(fmt.Errorf("can't encode %v packet: %v", req.Name(), err))
 	}
+
 	if _, err := c.WriteTo(packet, te.remoteAddr); err != nil {
 		panic(fmt.Errorf("can't send %v: %v", req.Name(), err))
 	}
+
 	return hash
 }
 
 func (te *testenv) read(c net.PacketConn) (v4wire.Packet, []byte, error) {
 	buf := make([]byte, 2048)
+
 	if err := c.SetReadDeadline(time.Now().Add(waitTime)); err != nil {
 		return nil, nil, err
 	}
+
 	n, _, err := c.ReadFrom(buf)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	p, _, hash, err := v4wire.Decode(buf[:n])
+
 	return p, hash, err
 }
 
 func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
 	addr := c.LocalAddr().(*net.UDPAddr)
+
 	return v4wire.Endpoint{
 		IP:  addr.IP.To4(),
 		UDP: uint16(addr.Port),
@@ -119,5 +137,6 @@ func contains(ns []v4wire.Node, key v4wire.Pubkey) bool {
 			return true
 		}
 	}
+
 	return false
 }

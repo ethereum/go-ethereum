@@ -42,6 +42,7 @@ func NewPairingEngine() *Engine {
 	fp12 := newFp12(fp6)
 	g1 := NewG1()
 	g2 := newG2(fp2)
+
 	return &Engine{
 		fp2:               fp2,
 		fp12:              fp12,
@@ -61,7 +62,9 @@ func newEngineTemp() pairingEngineTemp {
 	for i := 0; i < 10; i++ {
 		t2[i] = &fe2{}
 	}
+
 	t12 := [9]fe12{}
+
 	return pairingEngineTemp{t2, t12}
 }
 
@@ -72,6 +75,7 @@ func (e *Engine) AddPair(g1 *PointG1, g2 *PointG2) *Engine {
 		e.affine(p)
 		e.pairs = append(e.pairs, p)
 	}
+
 	return e
 }
 
@@ -79,6 +83,7 @@ func (e *Engine) AddPair(g1 *PointG1, g2 *PointG2) *Engine {
 func (e *Engine) AddPairInv(g1 *PointG1, g2 *PointG2) *Engine {
 	e.G1.Neg(g1, g1)
 	e.AddPair(g1, g2)
+
 	return e
 }
 
@@ -167,15 +172,19 @@ func (e *Engine) preCompute(ellCoeffs *[68][3]fe2, twistPoint *PointG2) {
 	if e.G2.IsZero(twistPoint) {
 		return
 	}
+
 	r := new(PointG2).Set(twistPoint)
 	j := 0
+
 	for i := x.BitLen() - 2; i >= 0; i-- {
 		e.doublingStep(&ellCoeffs[j], r)
+
 		if x.Bit(i) != 0 {
 			j++
 			ellCoeffs[j] = fe6{}
 			e.additionStep(&ellCoeffs[j], r, twistPoint)
 		}
+
 		j++
 	}
 }
@@ -183,22 +192,29 @@ func (e *Engine) preCompute(ellCoeffs *[68][3]fe2, twistPoint *PointG2) {
 func (e *Engine) millerLoop(f *fe12) {
 	pairs := e.pairs
 	ellCoeffs := make([][68][3]fe2, len(pairs))
+
 	for i := 0; i < len(pairs); i++ {
 		e.preCompute(&ellCoeffs[i], pairs[i].g2)
 	}
+
 	fp12, fp2 := e.fp12, e.fp2
 	t := e.t2
+
 	f.one()
+
 	j := 0
+
 	for i := 62; /* x.BitLen() - 2 */ i >= 0; i-- {
 		if i != 62 {
 			fp12.square(f, f)
 		}
+
 		for i := 0; i <= len(pairs)-1; i++ {
 			fp2.mulByFq(t[0], &ellCoeffs[i][j][2], &pairs[i].g1[1])
 			fp2.mulByFq(t[1], &ellCoeffs[i][j][1], &pairs[i].g1[0])
 			fp12.mulBy014Assign(f, &ellCoeffs[i][j][0], t[1], t[0])
 		}
+
 		if x.Bit(i) != 0 {
 			j++
 			for i := 0; i <= len(pairs)-1; i++ {
@@ -207,6 +223,7 @@ func (e *Engine) millerLoop(f *fe12) {
 				fp12.mulBy014Assign(f, &ellCoeffs[i][j][0], t[1], t[0])
 			}
 		}
+
 		j++
 	}
 	fp12.conjugate(f, f)
@@ -259,8 +276,10 @@ func (e *Engine) calculate() *fe12 {
 	if len(e.pairs) == 0 {
 		return f
 	}
+
 	e.millerLoop(f)
 	e.finalExp(f)
+
 	return f
 }
 
@@ -273,6 +292,7 @@ func (e *Engine) Check() bool {
 func (e *Engine) Result() *E {
 	r := e.calculate()
 	e.Reset()
+
 	return r
 }
 

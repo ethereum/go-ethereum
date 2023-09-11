@@ -19,13 +19,11 @@ package tracetest
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
-	"unicode"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,66 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-
-	// Force-load native and js pacakges, to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
-
-// To generate a new callTracer test, copy paste the makeTest method below into
-// a Geth console and call it with a transaction hash you which to export.
-
-/*
-// makeTest generates a callTracer test by running a prestate reassembled and a
-// call trace run, assembling all the gathered information into a test case.
-var makeTest = function(tx, rewind) {
-  // Generate the genesis block from the block, transaction and prestate data
-  var block   = eth.getBlock(eth.getTransaction(tx).blockHash);
-  var genesis = eth.getBlock(block.parentHash);
-
-  delete genesis.gasUsed;
-  delete genesis.logsBloom;
-  delete genesis.parentHash;
-  delete genesis.receiptsRoot;
-  delete genesis.sha3Uncles;
-  delete genesis.size;
-  delete genesis.transactions;
-  delete genesis.transactionsRoot;
-  delete genesis.uncles;
-
-  genesis.gasLimit  = genesis.gasLimit.toString();
-  genesis.number    = genesis.number.toString();
-  genesis.timestamp = genesis.timestamp.toString();
-
-  genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer", rewind: rewind});
-  for (var key in genesis.alloc) {
-    genesis.alloc[key].nonce = genesis.alloc[key].nonce.toString();
-  }
-  genesis.config = admin.nodeInfo.protocols.eth.config;
-
-  // Generate the call trace and produce the test input
-  var result = debug.traceTransaction(tx, {tracer: "callTracer", rewind: rewind});
-  delete result.time;
-
-  console.log(JSON.stringify({
-    genesis: genesis,
-    context: {
-      number:     block.number.toString(),
-      difficulty: block.difficulty,
-      timestamp:  block.timestamp.toString(),
-      gasLimit:   block.gasLimit.toString(),
-      miner:      block.miner,
-    },
-    input:  eth.getRawTransaction(tx),
-    result: result,
-  }, null, 2));
-}
-*/
 
 type callContext struct {
 	Number     math.HexOrDecimal64   `json:"number"`
@@ -103,26 +46,37 @@ type callContext struct {
 	Miner      common.Address        `json:"miner"`
 }
 
+// callLog is the result of LOG opCode
+type callLog struct {
+	Address common.Address `json:"address"`
+	Topics  []common.Hash  `json:"topics"`
+	Data    hexutil.Bytes  `json:"data"`
+}
+
 // callTrace is the result of a callTracer run.
 type callTrace struct {
-	Type    string          `json:"type"`
-	From    common.Address  `json:"from"`
-	To      common.Address  `json:"to"`
-	Input   hexutil.Bytes   `json:"input"`
-	Output  hexutil.Bytes   `json:"output"`
-	Gas     *hexutil.Uint64 `json:"gas,omitempty"`
-	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
-	Value   *hexutil.Big    `json:"value,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Calls   []callTrace     `json:"calls,omitempty"`
+	From         common.Address  `json:"from"`
+	Gas          *hexutil.Uint64 `json:"gas"`
+	GasUsed      *hexutil.Uint64 `json:"gasUsed"`
+	To           *common.Address `json:"to,omitempty"`
+	Input        hexutil.Bytes   `json:"input"`
+	Output       hexutil.Bytes   `json:"output,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	RevertReason string          `json:"revertReason,omitempty"`
+	Calls        []callTrace     `json:"calls,omitempty"`
+	Logs         []callLog       `json:"logs,omitempty"`
+	Value        *hexutil.Big    `json:"value,omitempty"`
+	// Gencodec adds overridden fields at the end
+	Type string `json:"type"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.
 type callTracerTest struct {
-	Genesis *core.Genesis `json:"genesis"`
-	Context *callContext  `json:"context"`
-	Input   string        `json:"input"`
-	Result  *callTrace    `json:"result"`
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *callContext    `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
+	Result       *callTrace      `json:"result"`
 }
 
 // Iterates over all the input-output datasets in the tracer test harness and
@@ -135,15 +89,24 @@ func TestCallTracerNative(t *testing.T) {
 	testCallTracer("callTracer", "call_tracer", t)
 }
 
+func TestCallTracerNativeWithLog(t *testing.T) {
+	t.Parallel()
+	testCallTracer("callTracer", "call_tracer_withLog", t)
+}
+
 func testCallTracer(tracerName string, dirPath string, t *testing.T) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
+	isLegacy := strings.HasSuffix(dirPath, "_legacy")
+
+	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
 		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
@@ -153,12 +116,13 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk
-			if blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
+			if blob, err := os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
-			if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
+
+			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
 			// Configure a blockchain with the given prestate
@@ -174,92 +138,95 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 					Transfer:    core.Transfer,
 					Coinbase:    test.Context.Miner,
 					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+					Time:        uint64(test.Context.Time),
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
+					BaseFee:     test.Genesis.BaseFee,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			tracer, err := tracers.New(tracerName, new(tracers.Context))
+
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
-			msg, err := tx.AsMessage(signer, nil)
+
+			evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
+
+			msg, err := core.TransactionToMessage(tx, signer, nil)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if _, err = st.TransitionDb(context.Background()); err != nil {
+
+			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background())
+			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			// Retrieve the trace result and compare against the etalon
+			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := new(callTrace)
-			if err := json.Unmarshal(res, ret); err != nil {
-				t.Fatalf("failed to unmarshal trace result: %v", err)
+			// The legacy javascript calltracer marshals json in js, which
+			// is not deterministic (as opposed to the golang json encoder).
+			if isLegacy {
+				// This is a tweak to make it deterministic. Can be removed when
+				// we remove the legacy tracer.
+				var x callTrace
+
+				_ = json.Unmarshal(res, &x)
+				res, _ = json.Marshal(x)
 			}
 
-			if !jsonEqual(ret, test.Result) {
-				// uncomment this for easier debugging
-				//have, _ := json.MarshalIndent(ret, "", " ")
-				//want, _ := json.MarshalIndent(test.Result, "", " ")
-				//t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
-				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+			want, err := json.Marshal(test.Result)
+			if err != nil {
+				t.Fatalf("failed to marshal test: %v", err)
+			}
+
+			if string(want) != string(res) {
+				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
+			}
+			// Sanity check: compare top call's gas used against vm result
+			type simpleResult struct {
+				GasUsed hexutil.Uint64
+			}
+
+			var topCall simpleResult
+			if err := json.Unmarshal(res, &topCall); err != nil {
+				t.Fatalf("failed to unmarshal top calls gasUsed: %v", err)
+			}
+
+			if uint64(topCall.GasUsed) != vmRet.UsedGas {
+				t.Fatalf("top call has invalid gasUsed. have: %d want: %d", topCall.GasUsed, vmRet.UsedGas)
 			}
 		})
 	}
 }
 
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
-// comparison
-func jsonEqual(x, y interface{}) bool {
-	xTrace := new(callTrace)
-	yTrace := new(callTrace)
-	if xj, err := json.Marshal(x); err == nil {
-		json.Unmarshal(xj, xTrace)
-	} else {
-		return false
-	}
-	if yj, err := json.Marshal(y); err == nil {
-		json.Unmarshal(yj, yTrace)
-	} else {
-		return false
-	}
-	return reflect.DeepEqual(xTrace, yTrace)
-}
-
-// camel converts a snake cased input string into a camel cased output.
-func camel(str string) string {
-	pieces := strings.Split(str, "_")
-	for i := 1; i < len(pieces); i++ {
-		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
-	}
-	return strings.Join(pieces, "")
-}
 func BenchmarkTracers(b *testing.B) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", "call_tracer"))
+	files, err := os.ReadDir(filepath.Join("testdata", "call_tracer"))
 	if err != nil {
 		b.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
+			blob, err := os.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
 			}
+
 			test := new(callTracerTest)
 			if err := json.Unmarshal(blob, test); err != nil {
 				b.Fatalf("failed to parse testcase: %v", err)
 			}
-			benchTracer("callTracerNative", test, b)
+
+			benchTracer("callTracer", test, b)
 		})
 	}
 }
@@ -270,11 +237,14 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
+
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
-	msg, err := tx.AsMessage(signer, nil)
+
+	msg, err := core.TransactionToMessage(tx, signer, nil)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
+
 	origin, _ := signer.Sender(tx)
 	txContext := vm.TxContext{
 		Origin:   origin,
@@ -285,7 +255,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Transfer:    core.Transfer,
 		Coinbase:    test.Context.Miner,
 		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+		Time:        uint64(test.Context.Time),
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
@@ -293,13 +263,14 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		tracer, err := tracers.New(tracerName, new(tracers.Context))
+		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
 
-		evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
+		evm := vm.NewEVM(blockContext, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 		snap := statedb.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 
@@ -315,84 +286,127 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	}
 }
 
-// TestZeroValueToNotExitCall tests the calltracer(s) on the following:
-// Tx to A, A calls B with zero value. B does not already exist.
-// Expected: that enter/exit is invoked and the inner call is shown in the result
-func TestZeroValueToNotExitCall(t *testing.T) {
-	var to = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-	privkey, err := crypto.HexToECDSA("0000000000000000deadbeef00000000000000000000000000000000deadbeef")
-	if err != nil {
-		t.Fatalf("err %v", err)
+func TestInternals(t *testing.T) {
+	t.Parallel()
+
+	var (
+		to        = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")
+		txContext = vm.TxContext{
+			Origin:   origin,
+			GasPrice: big.NewInt(1),
+		}
+		blockContext = vm.BlockContext{
+			CanTransfer: core.CanTransfer,
+			Transfer:    core.Transfer,
+			Coinbase:    common.Address{},
+			BlockNumber: new(big.Int).SetUint64(8000000),
+			Time:        5,
+			Difficulty:  big.NewInt(0x30000),
+			GasLimit:    uint64(6000000),
+		}
+	)
+
+	mkTracer := func(name string, cfg json.RawMessage) tracers.Tracer {
+		tr, err := tracers.DefaultDirectory.New(name, nil, cfg)
+		if err != nil {
+			t.Fatalf("failed to create call tracer: %v", err)
+		}
+
+		return tr
 	}
-	signer := types.NewEIP155Signer(big.NewInt(1))
-	tx, err := types.SignNewTx(privkey, signer, &types.LegacyTx{
-		GasPrice: big.NewInt(0),
-		Gas:      50000,
-		To:       &to,
-	})
-	if err != nil {
-		t.Fatalf("err %v", err)
-	}
-	origin, _ := signer.Sender(tx)
-	txContext := vm.TxContext{
-		Origin:   origin,
-		GasPrice: big.NewInt(1),
-	}
-	blockContext := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    common.Address{},
-		BlockNumber: new(big.Int).SetUint64(8000000),
-		Time:        new(big.Int).SetUint64(5),
-		Difficulty:  big.NewInt(0x30000),
-		GasLimit:    uint64(6000000),
-	}
-	var code = []byte{
-		byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), // in and outs zero
-		byte(vm.DUP1), byte(vm.PUSH1), 0xff, byte(vm.GAS), // value=0,address=0xff, gas=GAS
-		byte(vm.CALL),
-	}
-	var alloc = core.GenesisAlloc{
-		to: core.GenesisAccount{
-			Nonce: 1,
-			Code:  code,
+
+	for _, tc := range []struct {
+		name   string
+		code   []byte
+		tracer tracers.Tracer
+		want   string
+	}{
+		{
+			// TestZeroValueToNotExitCall tests the calltracer(s) on the following:
+			// Tx to A, A calls B with zero value. B does not already exist.
+			// Expected: that enter/exit is invoked and the inner call is shown in the result
+			name: "ZeroValueToNotExitCall",
+			code: []byte{
+				byte(vm.PUSH1), 0x0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), // in and outs zero
+				byte(vm.DUP1), byte(vm.PUSH1), 0xff, byte(vm.GAS), // value=0,address=0xff, gas=GAS
+				byte(vm.CALL),
+			},
+			tracer: mkTracer("callTracer", nil),
+			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`,
 		},
-		origin: core.GenesisAccount{
-			Nonce:   0,
-			Balance: big.NewInt(500000000000000),
+		{
+			name:   "Stack depletion in LOG0",
+			code:   []byte{byte(vm.LOG3)},
+			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
+			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0xc350","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`,
 		},
-	}
-	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
-	// Create the tracer, the EVM environment and run it
-	tracer, err := tracers.New("callTracer", nil)
-	if err != nil {
-		t.Fatalf("failed to create call tracer: %v", err)
-	}
+		{
+			name: "Mem expansion in LOG0",
+			code: []byte{
+				byte(vm.PUSH1), 0x1,
+				byte(vm.PUSH1), 0x0,
+				byte(vm.MSTORE),
+				byte(vm.PUSH1), 0xff,
+				byte(vm.PUSH1), 0x0,
+				byte(vm.LOG0),
+			},
+			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
+			want:   `{"from":"0x000000000000000000000000000000000000feed","gas":"0xc350","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}],"value":"0x0","type":"CALL"}`,
+		},
+		{
+			// Leads to OOM on the prestate tracer
+			name: "Prestate-tracer - mem expansion in CREATE2",
+			code: []byte{
+				byte(vm.PUSH1), 0x1,
+				byte(vm.PUSH1), 0x0,
+				byte(vm.MSTORE),
+				byte(vm.PUSH1), 0x1,
+				byte(vm.PUSH5), 0xff, 0xff, 0xff, 0xff, 0xff,
+				byte(vm.PUSH1), 0x1,
+				byte(vm.PUSH1), 0x0,
+				byte(vm.CREATE2),
+				byte(vm.PUSH1), 0xff,
+				byte(vm.PUSH1), 0x0,
+				byte(vm.LOG0),
+			},
+			tracer: mkTracer("prestateTracer", json.RawMessage(`{ "withLog": true }`)),
+			want:   `{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x000000000000000000000000000000000000feed":{"balance":"0x1c6bf52640350"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"}}`,
+		},
+	} {
+		_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(),
+			core.GenesisAlloc{
+				to: core.GenesisAccount{
+					Code: tc.code,
+				},
+				origin: core.GenesisAccount{
+					Balance: big.NewInt(500000000000000),
+				},
+			}, false)
+		evm := vm.NewEVM(blockContext, txContext, statedb, params.MainnetChainConfig, vm.Config{Tracer: tc.tracer})
+		msg := &core.Message{
+			To:                &to,
+			From:              origin,
+			Value:             big.NewInt(0),
+			GasLimit:          50000,
+			GasPrice:          big.NewInt(0),
+			GasFeeCap:         big.NewInt(0),
+			GasTipCap:         big.NewInt(0),
+			SkipAccountChecks: false,
+		}
+		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 
-	evm := vm.NewEVM(blockContext, txContext, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
-	msg, err := tx.AsMessage(signer, nil)
-	if err != nil {
-		t.Fatalf("failed to prepare transaction for tracing: %v", err)
-	}
-	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		if _, err := st.TransitionDb(context.Background()); err != nil {
+			t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
+		}
+		// Retrieve the trace result and compare against the expected
+		res, err := tc.tracer.GetResult()
+		if err != nil {
+			t.Fatalf("test %v: failed to retrieve trace result: %v", tc.name, err)
+		}
 
-	if _, err = st.TransitionDb(context.Background()); err != nil {
-		t.Fatalf("failed to execute transaction: %v", err)
-	}
-
-	// Retrieve the trace result and compare against the etalon
-	res, err := tracer.GetResult()
-	if err != nil {
-		t.Fatalf("failed to retrieve trace result: %v", err)
-	}
-	have := new(callTrace)
-	if err := json.Unmarshal(res, have); err != nil {
-		t.Fatalf("failed to unmarshal trace result: %v", err)
-	}
-	wantStr := `{"type":"CALL","from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","to":"0x00000000000000000000000000000000deadbeef","value":"0x0","gas":"0x7148","gasUsed":"0x2d0","input":"0x","output":"0x","calls":[{"type":"CALL","from":"0x00000000000000000000000000000000deadbeef","to":"0x00000000000000000000000000000000000000ff","value":"0x0","gas":"0x6cbf","gasUsed":"0x0","input":"0x","output":"0x"}]}`
-	want := new(callTrace)
-	json.Unmarshal([]byte(wantStr), want)
-	if !jsonEqual(have, want) {
-		t.Error("have != want")
+		if string(res) != tc.want {
+			t.Fatalf("test %v: trace mismatch\n have: %v\n want: %v\n", tc.name, string(res), tc.want)
+		}
 	}
 }

@@ -82,6 +82,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   evmtimeout = "5s"                                # Sets a timeout used for eth_call (0=infinite)
   txfeecap = 5.0                                   # Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)
   allow-unprotected-txs = false                    # Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC (default: false)
+  enabledeprecatedpersonal = false                 # Enables the (deprecated) personal namespace
   [jsonrpc.http]
     enabled = false                                # Enable the HTTP-RPC server
     port = 8545                                    # http.port

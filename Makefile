@@ -25,7 +25,7 @@ GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) $(GO_LDFLAGS) -p 1
 
 bor:
 	mkdir -p $(GOPATH)/bin/
-	go build -o $(GOBIN)/bor $(GO_LDFLAGS) ./cmd/cli/main.go 
+	go build -o $(GOBIN)/bor $(GO_LDFLAGS) ./cmd/cli/main.go
 	cp $(GOBIN)/bor $(GOPATH)/bin/
 	@echo "Done building."
 
@@ -35,6 +35,7 @@ protoc:
 generate-mocks:
 	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
 	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
+	go generate mockgen -destination=../eth/filters/IDatabase.go -package=filters . Database
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -76,7 +77,7 @@ lint:
 
 lintci-deps:
 	rm -f ./build/bin/golangci-lint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.50.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.53.3
 
 goimports:
 	goimports -local "$(PACKAGE)" -w .
@@ -197,7 +198,7 @@ geth-windows-amd64:
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
 
 PACKAGE_NAME          := github.com/maticnetwork/bor
-GOLANG_CROSS_VERSION  ?= v1.19.1
+GOLANG_CROSS_VERSION  ?= v1.20.5
 
 .PHONY: release-dry-run
 release-dry-run:
@@ -212,7 +213,7 @@ release-dry-run:
 		-v `pwd`:/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
 		goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
-		--rm-dist --skip-validate --skip-publish
+		--clean --skip-validate --skip-publish
 
 .PHONY: release
 release:
@@ -229,4 +230,4 @@ release:
 		-v `pwd`:/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
 		goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
-		--rm-dist --skip-validate
+		--clean --skip-validate

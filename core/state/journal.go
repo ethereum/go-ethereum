@@ -70,6 +70,7 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 			}
 		}
 	}
+
 	j.entries = j.entries[:snapshot]
 }
 
@@ -139,6 +140,11 @@ type (
 		address *common.Address
 		slot    *common.Hash
 	}
+
+	transientStorageChange struct {
+		account       *common.Address
+		key, prevalue common.Hash
+	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
@@ -154,8 +160,9 @@ func (ch createObjectChange) dirtied() *common.Address {
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
 	RevertWrite(s, blockstm.NewAddressKey(ch.prev.address))
-	if !ch.prevdestruct && s.snap != nil {
-		delete(s.snapDestructs, ch.prev.addrHash)
+
+	if !ch.prevdestruct {
+		delete(s.stateObjectsDestruct, ch.prev.address)
 	}
 }
 
@@ -219,6 +226,14 @@ func (ch storageChange) dirtied() *common.Address {
 	return ch.account
 }
 
+func (ch transientStorageChange) revert(s *StateDB) {
+	s.setTransientState(*ch.account, ch.key, ch.prevalue)
+}
+
+func (ch transientStorageChange) dirtied() *common.Address {
+	return nil
+}
+
 func (ch refundChange) revert(s *StateDB) {
 	s.refund = ch.prev
 }
@@ -234,6 +249,7 @@ func (ch addLogChange) revert(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
+
 	s.logSize--
 }
 

@@ -20,10 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -53,6 +51,7 @@ func TestNodeCloseMultipleTimes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+
 	stack.Close()
 
 	// Ensure that a stopped node can be stopped again
@@ -73,6 +72,7 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start node: %v", err)
 	}
+
 	if err := stack.Start(); err != ErrNodeRunning {
 		t.Fatalf("start failure mismatch: have %v, want %v ", err, ErrNodeRunning)
 	}
@@ -80,6 +80,7 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 	if err := stack.Close(); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
+
 	if err := stack.Close(); err != ErrNodeStopped {
 		t.Fatalf("stop failure mismatch: have %v, want %v ", err, ErrNodeStopped)
 	}
@@ -88,18 +89,16 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 // Tests that if the data dir is already in use, an appropriate error is returned.
 func TestNodeUsedDataDir(t *testing.T) {
 	// Create a temporary folder to use as the data directory
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a new node based on the data directory
 	original, err := New(&Config{DataDir: dir})
 	if err != nil {
 		t.Fatalf("failed to create original protocol stack: %v", err)
 	}
+
 	defer original.Close()
+
 	if err := original.Start(); err != nil {
 		t.Fatalf("failed to start original protocol stack: %v", err)
 	}
@@ -162,11 +161,13 @@ func TestNodeCloseClosesDB(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't open DB:", err)
 	}
+
 	if err = db.Put([]byte{}, []byte{}); err != nil {
 		t.Fatal("can't Put on open DB:", err)
 	}
 
 	stack.Close()
+
 	if err = db.Put([]byte{}, []byte{}); err == nil {
 		t.Fatal("Put succeeded after node is closed")
 	}
@@ -178,7 +179,9 @@ func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 	defer stack.Close()
 
 	var db ethdb.Database
+
 	var err error
+
 	stack.RegisterLifecycle(&InstrumentedService{
 		startHook: func() {
 			db, err = stack.OpenDatabase("mydb", 0, 0, "", false)
@@ -245,10 +248,12 @@ func TestLifecycleLifeCycle(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start protocol stack: %v", err)
 	}
+
 	for id := range lifecycles {
 		if !started[id] {
 			t.Fatalf("service %s: freshly started service not running", id)
 		}
+
 		if stopped[id] {
 			t.Fatalf("service %s: freshly started service already stopped", id)
 		}
@@ -257,6 +262,7 @@ func TestLifecycleLifeCycle(t *testing.T) {
 	if err := stack.Close(); err != nil {
 		t.Fatalf("failed to stop protocol stack: %v", err)
 	}
+
 	for id := range lifecycles {
 		if !stopped[id] {
 			t.Fatalf("service %s: freshly terminated service still running", id)
@@ -305,10 +311,12 @@ func TestLifecycleStartupError(t *testing.T) {
 	if err := stack.Start(); err != failure {
 		t.Fatalf("stack startup failure mismatch: have %v, want %v", err, failure)
 	}
+
 	for id := range lifecycles {
 		if started[id] && !stopped[id] {
 			t.Fatalf("service %s: started but not stopped", id)
 		}
+
 		delete(started, id)
 		delete(stopped, id)
 	}
@@ -356,10 +364,12 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start protocol stack: %v", err)
 	}
+
 	for id := range lifecycles {
 		if !started[id] {
 			t.Fatalf("service %s: service not running", id)
 		}
+
 		if stopped[id] {
 			t.Fatalf("service %s: service already stopped", id)
 		}
@@ -373,14 +383,17 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 		if err.Services[failer] != failure {
 			t.Fatalf("failer termination failure mismatch: have %v, want %v", err.Services[failer], failure)
 		}
+
 		if len(err.Services) != 1 {
 			t.Fatalf("failure count mismatch: have %d, want %d", len(err.Services), 1)
 		}
 	}
+
 	for id := range lifecycles {
 		if !stopped[id] {
 			t.Fatalf("service %s: service not terminated", id)
 		}
+
 		delete(started, id)
 		delete(stopped, id)
 	}
@@ -414,10 +427,12 @@ func TestRegisterHandler_Successful(t *testing.T) {
 	// check response
 	resp := doHTTPRequest(t, httpReq)
 	buf := make([]byte, 7)
+
 	_, err = io.ReadFull(resp.Body, buf)
 	if err != nil {
 		t.Fatalf("could not read response: %v", err)
 	}
+
 	assert.Equal(t, "success", string(buf))
 }
 
@@ -446,9 +461,11 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	if node.WSEndpoint() != ws {
 		t.Fatalf("endpoints should be the same")
 	}
+
 	if !checkRPC(ws) {
 		t.Fatalf("ws request failed")
 	}
+
 	if !checkRPC(node.HTTPEndpoint()) {
 		t.Fatalf("http request failed")
 	}
@@ -460,6 +477,7 @@ func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't listen:", err)
 	}
+
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
 
@@ -480,6 +498,7 @@ func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
 	if !checkRPC(ws) {
 		t.Fatalf("ws request failed")
 	}
+
 	if !checkRPC(node.HTTPEndpoint()) {
 		t.Fatalf("http request failed")
 	}
@@ -542,14 +561,18 @@ func TestNodeRPCPrefix(t *testing.T) {
 				WSHost:         "127.0.0.1",
 				WSPathPrefix:   test.wsPrefix,
 			}
+
 			node, err := New(cfg)
 			if err != nil {
 				t.Fatal("can't create node:", err)
 			}
+
 			defer node.Close()
+
 			if err := node.Start(); err != nil {
 				t.Fatal("can't start node:", err)
 			}
+
 			test.check(t, node)
 		})
 	}
@@ -557,6 +580,7 @@ func TestNodeRPCPrefix(t *testing.T) {
 
 func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 	t.Helper()
+
 	httpBase := "http://" + node.http.listenAddr()
 	wsBase := "ws://" + node.http.listenAddr()
 
@@ -564,49 +588,60 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		t.Errorf("Error: node has wrong WSEndpoint %q", node.WSEndpoint())
 	}
 
+	var resp *http.Response
 	for _, path := range test.wantHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp = rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 200 {
 			t.Errorf("Error: %s: bad status code %d, want 200", path, resp.StatusCode)
 		}
 	}
+
+	defer resp.Body.Close()
+
 	for _, path := range test.wantNoHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp = rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 404 {
 			t.Errorf("Error: %s: bad status code %d, want 404", path, resp.StatusCode)
 		}
 	}
+
+	defer resp.Body.Close()
+
 	for _, path := range test.wantWS {
 		err := wsRequest(t, wsBase+path)
 		if err != nil {
 			t.Errorf("Error: %s: WebSocket connection failed: %v", path, err)
 		}
 	}
+
 	for _, path := range test.wantNoWS {
 		err := wsRequest(t, wsBase+path)
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}
-
 	}
 }
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
-		HTTPHost: "127.0.0.1",
-		HTTPPort: httpPort,
-		WSHost:   "127.0.0.1",
-		WSPort:   wsPort,
+		HTTPHost:     "127.0.0.1",
+		HTTPPort:     httpPort,
+		WSHost:       "127.0.0.1",
+		WSPort:       wsPort,
+		HTTPTimeouts: rpc.DefaultHTTPTimeouts,
 	}
+
 	node, err := New(conf)
 	if err != nil {
 		t.Fatalf("could not create a new node: %v", err)
 	}
+
 	return node
 }
 
 func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
 	node := createNode(t, httpPort, wsPort)
+
 	err := node.Start()
 	if err != nil {
 		t.Fatalf("could not start http service on node: %v", err)
@@ -617,11 +652,14 @@ func startHTTP(t *testing.T, httpPort, wsPort int) *Node {
 
 func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	client := http.DefaultClient
+
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
-
 	}
+
+	t.Cleanup(func() { resp.Body.Close() })
+
 	return resp
 }
 
@@ -631,6 +669,7 @@ func containsProtocol(stackProtocols []p2p.Protocol, protocol p2p.Protocol) bool
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -640,5 +679,6 @@ func containsAPI(stackAPIs []rpc.API, api rpc.API) bool {
 			return true
 		}
 	}
+
 	return false
 }

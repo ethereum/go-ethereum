@@ -20,8 +20,8 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,7 +29,7 @@ import (
 )
 
 func TestServerRegisterName(t *testing.T) {
-	server := NewServer(0, 0)
+	server := NewServer("test", 0, 0)
 	service := new(testService)
 
 	if err := server.RegisterName("test", service); err != nil {
@@ -45,21 +45,23 @@ func TestServerRegisterName(t *testing.T) {
 		t.Fatalf("Expected service calc to be registered")
 	}
 
-	wantCallbacks := 10
+	wantCallbacks := 13
 	if len(svc.callbacks) != wantCallbacks {
 		t.Errorf("Expected %d callbacks for service 'service', got %d", wantCallbacks, len(svc.callbacks))
 	}
 }
 
 func TestServer(t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal("where'd my testdata go?")
 	}
+
 	for _, f := range files {
 		if f.IsDir() || strings.HasPrefix(f.Name(), ".") {
 			continue
 		}
+
 		path := filepath.Join("testdata", f.Name())
 		name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
 		t.Run(name, func(t *testing.T) {
@@ -70,17 +72,22 @@ func TestServer(t *testing.T) {
 
 func runTestScript(t *testing.T, file string) {
 	server := newTestServer()
-	content, err := ioutil.ReadFile(file)
+
+	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()
+
 	go server.ServeCodec(NewCodec(serverConn), 0)
+
 	readbuf := bufio.NewReader(clientConn)
+
 	for _, line := range strings.Split(string(content), "\n") {
 		line = strings.TrimSpace(line)
+
 		switch {
 		case len(line) == 0 || strings.HasPrefix(line, "//"):
 			// skip comments, blank lines
@@ -89,6 +96,7 @@ func runTestScript(t *testing.T, file string) {
 			t.Log(line)
 			// write to connection
 			clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+
 			if _, err := io.WriteString(clientConn, line[4:]+"\n"); err != nil {
 				t.Fatalf("write error: %v", err)
 			}
@@ -97,10 +105,12 @@ func runTestScript(t *testing.T, file string) {
 			want := line[4:]
 			// read line from connection and compare text
 			clientConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
 			sent, err := readbuf.ReadString('\n')
 			if err != nil {
 				t.Fatalf("read error: %v", err)
 			}
+
 			sent = strings.TrimRight(sent, "\r\n")
 			if sent != want {
 				t.Errorf("wrong line from server\ngot:  %s\nwant: %s", sent, want)
@@ -121,7 +131,9 @@ func TestServerShortLivedConn(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't listen:", err)
 	}
+
 	defer listener.Close()
+
 	go server.ServeListener(listener)
 
 	var (
@@ -129,6 +141,7 @@ func TestServerShortLivedConn(t *testing.T) {
 		wantResp = `{"jsonrpc":"2.0","id":1,"result":{"nftest":"1.0","rpc":"1.0","test":"1.0"}}` + "\n"
 		deadline = time.Now().Add(10 * time.Second)
 	)
+
 	for i := 0; i < 20; i++ {
 		conn, err := net.Dial("tcp", listener.Addr().String())
 		if err != nil {
@@ -147,6 +160,7 @@ func TestServerShortLivedConn(t *testing.T) {
 		if err != nil {
 			t.Fatal("read error:", err)
 		}
+
 		if !bytes.Equal(buf[:n], []byte(wantResp)) {
 			t.Fatalf("wrong response: %s", buf[:n])
 		}

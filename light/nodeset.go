@@ -51,6 +51,7 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	if _, ok := db.nodes[string(key)]; ok {
 		return nil
 	}
+
 	keystr := string(key)
 
 	db.nodes[keystr] = common.CopyBytes(value)
@@ -66,6 +67,7 @@ func (db *NodeSet) Delete(key []byte) error {
 	defer db.lock.Unlock()
 
 	delete(db.nodes, string(key))
+
 	return nil
 }
 
@@ -77,6 +79,7 @@ func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.nodes[string(key)]; ok {
 		return entry, nil
 	}
+
 	return nil, errors.New("not found")
 }
 
@@ -111,6 +114,7 @@ func (db *NodeSet) NodeList() NodeList {
 	for _, key := range db.order {
 		values = append(values, db.nodes[key])
 	}
+
 	return values
 }
 
@@ -138,6 +142,7 @@ func (n NodeList) Store(db ethdb.KeyValueWriter) {
 func (n NodeList) NodeSet() *NodeSet {
 	db := NewNodeSet()
 	n.Store(db)
+
 	return db
 }
 
@@ -158,5 +163,6 @@ func (n NodeList) DataSize() int {
 	for _, node := range n {
 		size += len(node)
 	}
+
 	return size
 }

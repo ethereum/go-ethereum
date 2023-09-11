@@ -37,21 +37,26 @@ var nullNode *enode.Node
 
 func init() {
 	var r enr.Record
+
 	r.Set(enr.IP{0, 0, 0, 0})
 	nullNode = enode.SignNull(&r, enode.ID{})
 }
 
 func newTestTable(t transport) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
+
 	tab, _ := newTable(t, db, nil, log.Root())
 	go tab.loop()
+
 	return tab, db
 }
 
 // nodeAtDistance creates a node for which enode.LogDist(base, n.id) == ld.
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
+
 	r.Set(enr.IP(ip))
+
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
@@ -61,6 +66,7 @@ func nodesAtDistance(base enode.ID, ld int, n int) []*enode.Node {
 	for i := range results {
 		results[i] = unwrapNode(nodeAtDistance(base, ld, intIP(i)))
 	}
+
 	return results
 }
 
@@ -69,6 +75,7 @@ func nodesToRecords(nodes []*enode.Node) []*enr.Record {
 	for i := range nodes {
 		records[i] = nodes[i].Record()
 	}
+
 	return records
 }
 
@@ -81,14 +88,17 @@ func idAtDistance(a enode.ID, n int) (b enode.ID) {
 	b = a
 	pos := len(a) - n/8 - 1
 	bit := byte(0x01) << (byte(n%8) - 1)
+
 	if bit == 0 {
 		pos++
 		bit = 0x80
 	}
+
 	b[pos] = a[pos]&^bit | ^a[pos]&bit // TODO: randomize end bits
 	for i := pos + 1; i < len(a); i++ {
 		b[i] = byte(rand.Intn(255))
 	}
+
 	return b
 }
 
@@ -100,9 +110,11 @@ func intIP(i int) net.IP {
 func fillBucket(tab *Table, n *node) (last *node) {
 	ld := enode.LogDist(tab.self().ID(), n.ID())
 	b := tab.bucket(n.ID())
+
 	for len(b.entries) < bucketSize {
 		b.entries = append(b.entries, nodeAtDistance(tab.self().ID(), ld, intIP(ld)))
 	}
+
 	return b.entries[bucketSize-1]
 }
 
@@ -123,6 +135,7 @@ type pingRecorder struct {
 
 func newPingRecorder() *pingRecorder {
 	var r enr.Record
+
 	r.Set(enr.IP{0, 0, 0, 0})
 	n := enode.SignNull(&r, enode.ID{})
 
@@ -134,8 +147,8 @@ func newPingRecorder() *pingRecorder {
 	}
 }
 
-// setRecord updates a node record. Future calls to ping and
-// requestENR will return this record.
+// updateRecord updates a node record. Future calls to ping and
+// RequestENR will return this record.
 func (t *pingRecorder) updateRecord(n *enode.Node) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -156,13 +169,15 @@ func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
 	if t.dead[n.ID()] {
 		return 0, errTimeout
 	}
+
 	if t.records[n.ID()] != nil {
 		seq = t.records[n.ID()].Seq()
 	}
+
 	return seq, nil
 }
 
-// requestENR simulates an ENR request.
+// RequestENR simulates an ENR request.
 func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -170,20 +185,25 @@ func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 	if t.dead[n.ID()] || t.records[n.ID()] == nil {
 		return nil, errTimeout
 	}
+
 	return t.records[n.ID()], nil
 }
 
 func hasDuplicates(slice []*node) bool {
 	seen := make(map[enode.ID]bool)
+
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))
 		}
+
 		if seen[e.ID()] {
 			return true
 		}
+
 		seen[e.ID()] = true
 	}
+
 	return false
 }
 
@@ -196,18 +216,23 @@ func checkNodesEqual(got, want []*enode.Node) error {
 			}
 		}
 	}
+
 	return nil
 
 NotEqual:
 	output := new(bytes.Buffer)
 	fmt.Fprintf(output, "got %d nodes:\n", len(got))
+
 	for _, n := range got {
 		fmt.Fprintf(output, "  %v %v\n", n.ID(), n)
 	}
+
 	fmt.Fprintf(output, "want %d:\n", len(want))
+
 	for _, n := range want {
 		fmt.Fprintf(output, "  %v %v\n", n.ID(), n)
 	}
+
 	return errors.New(output.String())
 }
 
@@ -233,10 +258,12 @@ func hexEncPrivkey(h string) *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+
 	key, err := crypto.ToECDSA(b)
 	if err != nil {
 		panic(err)
 	}
+
 	return key
 }
 
@@ -246,9 +273,12 @@ func hexEncPubkey(h string) (ret encPubkey) {
 	if err != nil {
 		panic(err)
 	}
+
 	if len(b) != len(ret) {
 		panic("invalid length")
 	}
+
 	copy(ret[:], b)
+
 	return ret
 }

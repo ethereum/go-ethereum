@@ -55,6 +55,7 @@ func TestEncodingCycle(t *testing.T) {
 			t.Errorf("test %d: failed to decompress compressed data: %v", i, err)
 			continue
 		}
+
 		if !bytes.Equal(data, proc) {
 			t.Errorf("test %d: compress/decompress mismatch: have %x, want %x", i, proc, data)
 		}
@@ -105,9 +106,11 @@ func TestDecodingCycle(t *testing.T) {
 		if err != tt.fail {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.fail)
 		}
+
 		if err != nil {
 			continue
 		}
+
 		if comp := bitsetEncodeBytes(orig); !bytes.Equal(comp, data) {
 			t.Errorf("test %d: decompress/compress mismatch: have %x, want %x", i, comp, data)
 		}
@@ -124,6 +127,7 @@ func TestCompression(t *testing.T) {
 	if data := CompressBytes(in); !bytes.Equal(data, out) {
 		t.Errorf("encoding mismatch for sparse data: have %x, want %x", data, out)
 	}
+
 	if data, err := DecompressBytes(out, len(in)); err != nil || !bytes.Equal(data, in) {
 		t.Errorf("decoding mismatch for sparse data: have %x, want %x, error %v", data, in, err)
 	}
@@ -134,6 +138,7 @@ func TestCompression(t *testing.T) {
 	if data := CompressBytes(in); !bytes.Equal(data, out) {
 		t.Errorf("encoding mismatch for dense data: have %x, want %x", data, out)
 	}
+
 	if data, err := DecompressBytes(out, len(in)); err != nil || !bytes.Equal(data, in) {
 		t.Errorf("decoding mismatch for dense data: have %x, want %x, error %v", data, in, err)
 	}
@@ -175,6 +180,7 @@ func benchmarkEncoding(b *testing.B, bytes int, fill float64) {
 	// Reset the benchmark and measure encoding/decoding
 	b.ResetTimer()
 	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
 	}

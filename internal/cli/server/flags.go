@@ -472,6 +472,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "JsonRPC",
 	})
 	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "rpc.enabledeprecatedpersonal",
+		Usage:   "Enables the (deprecated) personal namespace",
+		Value:   &c.cliConfig.JsonRPC.EnablePersonal,
+		Default: c.cliConfig.JsonRPC.EnablePersonal,
+		Group:   "JsonRPC",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "ipcdisable",
 		Usage:   "Disable the IPC-RPC server",
 		Value:   &c.cliConfig.JsonRPC.IPCDisable,

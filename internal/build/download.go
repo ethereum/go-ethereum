@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -37,10 +36,11 @@ type ChecksumDB struct {
 
 // MustLoadChecksums loads a file containing checksums.
 func MustLoadChecksums(file string) *ChecksumDB {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		log.Fatal("can't load checksum file: " + err.Error())
 	}
+
 	return &ChecksumDB{strings.Split(string(content), "\n")}
 }
 
@@ -56,10 +56,12 @@ func (db *ChecksumDB) Verify(path string) error {
 	if _, err := io.Copy(h, bufio.NewReader(fd)); err != nil {
 		return err
 	}
+
 	fileHash := hex.EncodeToString(h.Sum(nil))
 	if !db.findHash(filepath.Base(path), fileHash) {
 		return fmt.Errorf("invalid file hash %s for %s", fileHash, filepath.Base(path))
 	}
+
 	return nil
 }
 
@@ -70,6 +72,7 @@ func (db *ChecksumDB) findHash(basename, hash string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -79,6 +82,7 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 		fmt.Printf("%s is up-to-date\n", dstPath)
 		return nil
 	}
+
 	fmt.Printf("%s is stale\n", dstPath)
 	fmt.Printf("downloading from %s\n", url)
 
@@ -88,17 +92,22 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	} else if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download error: status %d", resp.StatusCode)
 	}
+
 	defer resp.Body.Close()
+
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 		return err
 	}
+
 	fd, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
+
 	dst := newDownloadWriter(fd, resp.ContentLength)
 	_, err = io.Copy(dst, resp.Body)
 	dst.Close()
+
 	if err != nil {
 		return err
 	}
@@ -128,13 +137,16 @@ func (w *downloadWriter) Write(buf []byte) (int, error) {
 	// Report progress.
 	w.written += int64(n)
 	pct := w.written * 10 / w.size * 10
+
 	if pct != w.lastpct {
 		if w.lastpct != 0 {
 			fmt.Print("...")
 		}
+
 		fmt.Print(pct, "%")
 		w.lastpct = pct
 	}
+
 	return n, err
 }
 
@@ -142,10 +154,13 @@ func (w *downloadWriter) Close() error {
 	if w.lastpct > 0 {
 		fmt.Println() // Finish the progress line.
 	}
+
 	flushErr := w.dstBuf.Flush()
 	closeErr := w.file.Close()
+
 	if flushErr != nil {
 		return flushErr
 	}
+
 	return closeErr
 }

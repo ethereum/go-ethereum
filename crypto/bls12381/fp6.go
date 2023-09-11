@@ -35,6 +35,7 @@ func newFp6Temp() fp6Temp {
 	for i := 0; i < len(t); i++ {
 		t[i] = &fe2{}
 	}
+
 	return fp6Temp{t}
 }
 
@@ -43,6 +44,7 @@ func newFp6(f *fp2) *fp6 {
 	if f == nil {
 		return &fp6{newFp2(), t}
 	}
+
 	return &fp6{f, t}
 }
 
@@ -50,19 +52,24 @@ func (e *fp6) fromBytes(b []byte) (*fe6, error) {
 	if len(b) < 288 {
 		return nil, errors.New("input string should be larger than 288 bytes")
 	}
+
 	fp2 := e.fp2
+
 	u2, err := fp2.fromBytes(b[:96])
 	if err != nil {
 		return nil, err
 	}
+
 	u1, err := fp2.fromBytes(b[96:192])
 	if err != nil {
 		return nil, err
 	}
+
 	u0, err := fp2.fromBytes(b[192:])
 	if err != nil {
 		return nil, err
 	}
+
 	return &fe6{*u0, *u1, *u2}, nil
 }
 
@@ -72,6 +79,7 @@ func (e *fp6) toBytes(a *fe6) []byte {
 	copy(out[:96], fp2.toBytes(&a[2]))
 	copy(out[96:192], fp2.toBytes(&a[1]))
 	copy(out[192:], fp2.toBytes(&a[0]))
+
 	return out
 }
 
@@ -280,6 +288,7 @@ func (e *fp6) exp(c, a *fe6, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.square(z, z)
+
 		if s.Bit(i) == 1 {
 			e.mul(z, z, a)
 		}
@@ -317,6 +326,7 @@ func (e *fp6) frobeniusMap(c, a *fe6, power uint) {
 	fp2.frobeniusMap(&c[0], &a[0], power)
 	fp2.frobeniusMap(&c[1], &a[1], power)
 	fp2.frobeniusMap(&c[2], &a[2], power)
+
 	switch power % 6 {
 	case 0:
 		return
@@ -335,7 +345,9 @@ func (e *fp6) frobeniusMapAssign(a *fe6, power uint) {
 	fp2.frobeniusMapAssign(&a[0], power)
 	fp2.frobeniusMapAssign(&a[1], power)
 	fp2.frobeniusMapAssign(&a[2], power)
+
 	t := e.t
+
 	switch power % 6 {
 	case 0:
 		return

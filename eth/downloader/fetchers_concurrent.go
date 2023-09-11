@@ -47,7 +47,7 @@ type typedQueue interface {
 
 	// capacity is responsible for calculating how many items of the abstracted
 	// type a particular peer is estimated to be able to retrieve within the
-	// alloted round trip time.
+	// allotted round trip time.
 	capacity(peer *peerConnection, rtt time.Duration) int
 
 	// updateCapacity is responsible for updating how many items of the abstracted
@@ -58,7 +58,7 @@ type typedQueue interface {
 	// from the download queue to the specified peer.
 	reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
 
-	// unreserve is resposible for removing the current retrieval allocation
+	// unreserve is responsible for removing the current retrieval allocation
 	// assigned to a specific peer and placing it back into the pool to allow
 	// reassigning to some other peer.
 	unreserve(peer string) int
@@ -90,9 +90,10 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			req.Close()
 		}
 	}()
+
 	ordering := make(map[*eth.Request]int)
-	timeouts := prque.New(func(data interface{}, index int) {
-		ordering[data.(*eth.Request)] = index
+	timeouts := prque.New[int64, *eth.Request](func(data *eth.Request, index int) {
+		ordering[data] = index
 	})
 
 	timeout := time.NewTimer(0)
@@ -125,6 +126,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 
 	// Prepare the queue and fetch block parts until the block header fetcher's done
 	finished := false
+
 	for {
 		// Short circuit if we lost all our peers
 		if d.peers.Len() == 0 && !beaconMode {
@@ -141,6 +143,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				idles []*peerConnection
 				caps  []int
 			)
+
 			for _, peer := range d.peers.AllPeers() {
 				pending, stale := pending[peer.id], stales[peer.id]
 				if pending == nil && stale == nil {
@@ -156,6 +159,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 					}
 				}
 			}
+
 			sort.Sort(&peerCapacitySort{idles, caps})
 
 			var (
@@ -163,12 +167,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				throttled  bool
 				queued     = queue.pending()
 			)
+
 			for _, peer := range idles {
 				// Short circuit if throttling activated or there are no more
 				// queued tasks to be retrieved
 				if throttled {
 					break
 				}
+
 				if queued = queue.pending(); queued == 0 {
 					break
 				}
@@ -179,10 +185,13 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				if progress {
 					progressed = true
 				}
+
 				if throttle {
 					throttled = true
+
 					throttleCounter.Inc(1)
 				}
+
 				if request == nil {
 					continue
 				}
@@ -190,19 +199,21 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				req, err := queue.request(peer, request, responses)
 				if err != nil {
 					// Sending the request failed, which generally means the peer
-					// was diconnected in between assignment and network send.
+					// was disconnected in between assignment and network send.
 					// Although all peer removal operations return allocated tasks
 					// to the queue, that is async, and we can do better here by
 					// immediately pushing the unfulfilled requests.
 					queue.unreserve(peer.id) // TODO(karalabe): This needs a non-expiration method
 					continue
 				}
+
 				pending[peer.id] = req
 
 				ttl := d.peers.rates.TargetTimeout()
 				ordering[req] = timeouts.Size()
 
 				timeouts.Push(req, -time.Now().Add(ttl).UnixNano())
+
 				if timeouts.Size() == 1 {
 					timeout.Reset(ttl)
 				}
@@ -231,6 +242,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				if _, ok := pending[peerid]; ok {
 					event.peer.log.Error("Pending request exists for joining peer")
 				}
+
 				if _, ok := stales[peerid]; ok {
 					event.peer.log.Error("Stale request exists for joining peer")
 				}
@@ -246,18 +258,22 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 
 				if index, live := ordering[req]; live {
 					timeouts.Remove(index)
+
 					if index == 0 {
 						if !timeout.Stop() {
 							<-timeout.C
 						}
+
 						if timeouts.Size() > 0 {
 							_, exp := timeouts.Peek()
 							timeout.Reset(time.Until(time.Unix(0, -exp)))
 						}
 					}
+
 					delete(ordering, req)
 				}
 			}
+
 			if req, ok := stales[peerid]; ok {
 				delete(stales, peerid)
 				req.Close()
@@ -268,27 +284,29 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			// below is purely for to catch programming errors, given the correct
 			// code, there's no possible order of events that should result in a
 			// timeout firing for a non-existent event.
-			item, exp := timeouts.Peek()
+			req, exp := timeouts.Peek()
 			if now, at := time.Now(), time.Unix(0, -exp); now.Before(at) {
 				log.Error("Timeout triggered but not reached", "left", at.Sub(now))
 				timeout.Reset(at.Sub(now))
+
 				continue
 			}
-			req := item.(*eth.Request)
-
 			// Stop tracking the timed out request from a timing perspective,
 			// cancel it, so it's not considered in-flight anymore, but keep
 			// the peer marked busy to prevent assigning a second request and
 			// overloading it further.
 			delete(pending, req.Peer)
 			stales[req.Peer] = req
-			delete(ordering, req)
 
-			timeouts.Pop()
+			timeouts.Pop() // Popping an item will reorder indices in `ordering`, delete after, otherwise will resurrect!
+
 			if timeouts.Size() > 0 {
 				_, exp := timeouts.Peek()
 				timeout.Reset(time.Until(time.Unix(0, -exp)))
 			}
+
+			delete(ordering, req)
+
 			// New timeout potentially set if there are more requests pending,
 			// reschedule the failed one to a free peer
 			fails := queue.unreserve(req.Peer)
@@ -312,6 +330,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				log.Error("Delivery timeout from unknown peer", "peer", req.Peer)
 				continue
 			}
+
 			if fails > 2 {
 				queue.updateCapacity(peer, 0, 0)
 			} else {
@@ -335,15 +354,18 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			index, live := ordering[res.Req]
 			if live {
 				timeouts.Remove(index)
+
 				if index == 0 {
 					if !timeout.Stop() {
 						<-timeout.C
 					}
+
 					if timeouts.Size() > 0 {
 						_, exp := timeouts.Peek()
 						timeout.Reset(time.Until(time.Unix(0, -exp)))
 					}
 				}
+
 				delete(ordering, res.Req)
 			}
 			// Delete the pending request (if it still exists) and mark the peer idle

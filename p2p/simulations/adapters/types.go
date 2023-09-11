@@ -39,10 +39,9 @@ import (
 // Node represents a node in a simulation network which is created by a
 // NodeAdapter, for example:
 //
-// * SimNode    - An in-memory node
-// * ExecNode   - A child process node
-// * DockerNode - A Docker container node
-//
+//   - SimNode, an in-memory node in the same process
+//   - ExecNode, a child process node
+//   - DockerNode, a node running in a Docker container
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte
@@ -163,6 +162,7 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
 	}
+
 	return json.Marshal(confJSON)
 }
 
@@ -185,10 +185,12 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return err
 		}
+
 		privKey, err := crypto.ToECDSA(key)
 		if err != nil {
 			return err
 		}
+
 		n.PrivateKey = privKey
 	}
 
@@ -222,6 +224,7 @@ func RandomNodeConfig() *NodeConfig {
 	}
 
 	enodId := enode.PubkeyToIDV4(&prvkey.PublicKey)
+
 	return &NodeConfig{
 		PrivateKey:      prvkey,
 		ID:              enodId,
@@ -237,15 +240,19 @@ func assignTCPPort() (uint16, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	l.Close()
+
 	_, port, err := net.SplitHostPort(l.Addr().String())
 	if err != nil {
 		return 0, err
 	}
+
 	p, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {
 		return 0, err
 	}
+
 	return uint16(p), nil
 }
 
@@ -287,6 +294,7 @@ func RegisterLifecycles(lifecycles LifecycleConstructors) {
 		if _, exists := lifecycleConstructorFuncs[name]; exists {
 			panic(fmt.Sprintf("node service already exists: %q", name))
 		}
+
 		lifecycleConstructorFuncs[name] = f
 	}
 
@@ -303,8 +311,10 @@ func RegisterLifecycles(lifecycles LifecycleConstructors) {
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	enrIp := enr.IP(ip)
 	n.Record.Set(&enrIp)
+
 	enrTcpPort := enr.TCP(tcpport)
 	n.Record.Set(&enrTcpPort)
+
 	enrUdpPort := enr.UDP(udpport)
 	n.Record.Set(&enrUdpPort)
 
@@ -312,12 +322,15 @@ func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	if err != nil {
 		return fmt.Errorf("unable to generate ENR: %v", err)
 	}
+
 	nod, err := enode.New(enode.V4ID{}, &n.Record)
 	if err != nil {
 		return fmt.Errorf("unable to create enode: %v", err)
 	}
+
 	log.Trace("simnode new", "record", n.Record)
 	n.node = nod
+
 	return nil
 }
 

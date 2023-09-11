@@ -19,9 +19,7 @@ package enode
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -40,9 +38,11 @@ func TestDBNodeKey(t *testing.T) {
 		0x70, 0xbc, 0xc9, 0xe1, 0xa6, 0xf6, 0xa4, 0x39, //
 		':', 'v', '4',
 	}
+
 	if !bytes.Equal(enc, want) {
 		t.Errorf("wrong encoded key:\ngot  %q\nwant %q", enc, want)
 	}
+
 	id, _ := splitNodeKey(enc)
 	if id != keytestID {
 		t.Errorf("wrong ID from splitNodeKey")
@@ -64,16 +64,20 @@ func TestDBNodeItemKey(t *testing.T) {
 		0x00, 0x00, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x03, //
 		':', 'f', 'o', 'o', 'b', 'a', 'r',
 	}
+
 	if !bytes.Equal(enc, want) {
 		t.Errorf("wrong encoded key:\ngot  %q\nwant %q", enc, want)
 	}
+
 	id, ip, field := splitNodeItemKey(enc)
 	if id != keytestID {
 		t.Errorf("splitNodeItemKey returned wrong ID: %v", id)
 	}
+
 	if !ip.Equal(wantIP) {
 		t.Errorf("splitNodeItemKey returned wrong IP: %v", ip)
 	}
+
 	if field != wantField {
 		t.Errorf("splitNodeItemKey returned wrong field: %q", field)
 	}
@@ -101,6 +105,7 @@ func TestDBInt64(t *testing.T) {
 		// Check all existing and non existing values
 		for j := 0; j < len(tests); j++ {
 			num := db.fetchInt64(tests[j].key)
+
 			switch {
 			case j <= i && num != tests[j].value:
 				t.Errorf("test %d, item %d: value mismatch: have %v, want %v", i, j, num, tests[j].value)
@@ -128,9 +133,11 @@ func TestDBFetchStore(t *testing.T) {
 	if stored := db.LastPingReceived(node.ID(), node.IP()); stored.Unix() != 0 {
 		t.Errorf("ping: non-existing object: %v", stored)
 	}
+
 	if err := db.UpdateLastPingReceived(node.ID(), node.IP(), inst); err != nil {
 		t.Errorf("ping: failed to update: %v", err)
 	}
+
 	if stored := db.LastPingReceived(node.ID(), node.IP()); stored.Unix() != inst.Unix() {
 		t.Errorf("ping: value mismatch: have %v, want %v", stored, inst)
 	}
@@ -138,9 +145,11 @@ func TestDBFetchStore(t *testing.T) {
 	if stored := db.LastPongReceived(node.ID(), node.IP()); stored.Unix() != 0 {
 		t.Errorf("pong: non-existing object: %v", stored)
 	}
+
 	if err := db.UpdateLastPongReceived(node.ID(), node.IP(), inst); err != nil {
 		t.Errorf("pong: failed to update: %v", err)
 	}
+
 	if stored := db.LastPongReceived(node.ID(), node.IP()); stored.Unix() != inst.Unix() {
 		t.Errorf("pong: value mismatch: have %v, want %v", stored, inst)
 	}
@@ -148,9 +157,11 @@ func TestDBFetchStore(t *testing.T) {
 	if stored := db.FindFails(node.ID(), node.IP()); stored != 0 {
 		t.Errorf("find-node fails: non-existing object: %v", stored)
 	}
+
 	if err := db.UpdateFindFails(node.ID(), node.IP(), num); err != nil {
 		t.Errorf("find-node fails: failed to update: %v", err)
 	}
+
 	if stored := db.FindFails(node.ID(), node.IP()); stored != num {
 		t.Errorf("find-node fails: value mismatch: have %v, want %v", stored, num)
 	}
@@ -158,9 +169,11 @@ func TestDBFetchStore(t *testing.T) {
 	if stored := db.Node(node.ID()); stored != nil {
 		t.Errorf("node: non-existing object: %v", stored)
 	}
+
 	if err := db.UpdateNode(node); err != nil {
 		t.Errorf("node: failed to update: %v", err)
 	}
+
 	if stored := db.Node(node.ID()); stored == nil {
 		t.Errorf("node: not found")
 	} else if !reflect.DeepEqual(stored, node) {
@@ -248,12 +261,14 @@ func TestDBSeedQuery(t *testing.T) {
 	// every time when the database is small. Run the test multiple
 	// times to avoid flakes.
 	const attempts = 15
+
 	var err error
 	for i := 0; i < attempts; i++ {
 		if err = testSeedQuery(); err == nil {
 			return
 		}
 	}
+
 	if err != nil {
 		t.Errorf("no successful run in %d attempts: %v", attempts, err)
 	}
@@ -268,6 +283,7 @@ func testSeedQuery() error {
 		if err := db.UpdateNode(seed.node); err != nil {
 			return fmt.Errorf("node %d: failed to insert: %v", i, err)
 		}
+
 		if err := db.UpdateLastPongReceived(seed.node.ID(), seed.node.IP(), seed.pong); err != nil {
 			return fmt.Errorf("node %d: failed to insert bondTime: %v", i, err)
 		}
@@ -276,35 +292,37 @@ func testSeedQuery() error {
 	// Retrieve the entire batch and check for duplicates
 	seeds := db.QuerySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
 	have := make(map[ID]struct{})
+
 	for _, seed := range seeds {
 		have[seed.ID()] = struct{}{}
 	}
+
 	want := make(map[ID]struct{})
 	for _, seed := range nodeDBSeedQueryNodes[1:] {
 		want[seed.node.ID()] = struct{}{}
 	}
+
 	if len(seeds) != len(want) {
 		return fmt.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(want))
 	}
+
 	for id := range have {
 		if _, ok := want[id]; !ok {
 			return fmt.Errorf("extra seed: %v", id)
 		}
 	}
+
 	for id := range want {
 		if _, ok := have[id]; !ok {
 			return fmt.Errorf("missing seed: %v", id)
 		}
 	}
+
 	return nil
 }
 
 func TestDBPersistency(t *testing.T) {
-	root, err := ioutil.TempDir("", "nodedb-")
-	if err != nil {
-		t.Fatalf("failed to create temporary data folder: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	var (
 		testKey = []byte("somekey")
@@ -316,9 +334,11 @@ func TestDBPersistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create persistent database: %v", err)
 	}
+
 	if err := db.storeInt64(testKey, testInt); err != nil {
 		t.Fatalf("failed to store value: %v.", err)
 	}
+
 	db.Close()
 
 	// Reopen the database and check the value
@@ -326,9 +346,11 @@ func TestDBPersistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
+
 	if val := db.fetchInt64(testKey); val != testInt {
 		t.Fatalf("value mismatch: have %v, want %v", val, testInt)
 	}
+
 	db.Close()
 }
 
@@ -433,6 +455,7 @@ func TestDBExpiration(t *testing.T) {
 				t.Fatalf("node %d: failed to insert: %v", i, err)
 			}
 		}
+
 		if err := db.UpdateLastPongReceived(seed.node.ID(), seed.node.IP(), seed.pong); err != nil {
 			t.Fatalf("node %d: failed to update bondTime: %v", i, err)
 		}
@@ -442,13 +465,16 @@ func TestDBExpiration(t *testing.T) {
 
 	// Check that expired entries have been removed.
 	unixZeroTime := time.Unix(0, 0)
+
 	for i, seed := range nodeDBExpirationNodes {
 		node := db.Node(seed.node.ID())
 		pong := db.LastPongReceived(seed.node.ID(), seed.node.IP())
+
 		if seed.exp {
 			if seed.storeNode && node != nil {
 				t.Errorf("node %d (%s) shouldn't be present after expiration", i, seed.node.ID().TerminalString())
 			}
+
 			if !pong.Equal(unixZeroTime) {
 				t.Errorf("pong time %d (%s %v) shouldn't be present after expiration", i, seed.node.ID().TerminalString(), seed.node.IP())
 			}
@@ -456,6 +482,7 @@ func TestDBExpiration(t *testing.T) {
 			if seed.storeNode && node == nil {
 				t.Errorf("node %d (%s) should be present after expiration", i, seed.node.ID().TerminalString())
 			}
+
 			if !pong.Equal(seed.pong.Truncate(1 * time.Second)) {
 				t.Errorf("pong time %d (%s) should be %v after expiration, but is %v", i, seed.node.ID().TerminalString(), seed.pong, pong)
 			}

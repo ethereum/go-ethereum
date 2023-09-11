@@ -49,9 +49,11 @@ func FromHex(s string) ([]byte, error) {
 	if len(s) > 1 && (s[0:2] == "0x" || s[0:2] == "0X") {
 		s = s[2:]
 	}
+
 	if len(s)%2 == 1 {
 		s = "0" + s
 	}
+
 	return hex.DecodeString(s)
 }
 
@@ -69,26 +71,31 @@ func (t *RLPTest) Run() error {
 
 	// Check whether encoding the value produces the same bytes.
 	in := translateJSON(t.In)
+
 	b, err := rlp.EncodeToBytes(in)
 	if err != nil {
 		return fmt.Errorf("encode failed: %v", err)
 	}
+
 	if !bytes.Equal(b, outb) {
 		return fmt.Errorf("encode produced %x, want %x", b, outb)
 	}
 	// Test stream decoding.
 	s := rlp.NewStream(bytes.NewReader(outb), 0)
+
 	return checkDecodeFromJSON(s, in)
 }
 
 func checkDecodeInterface(b []byte, isValid bool) error {
 	err := rlp.DecodeBytes(b, new(interface{}))
+
 	switch {
 	case isValid && err != nil:
 		return fmt.Errorf("decoding failed: %v", err)
 	case !isValid && err == nil:
 		return fmt.Errorf("decoding of invalid value succeeded")
 	}
+
 	return nil
 }
 
@@ -103,14 +110,17 @@ func translateJSON(v interface{}) interface{} {
 			if !ok {
 				panic(fmt.Errorf("bad test: bad big int: %q", v))
 			}
+
 			return big
 		}
+
 		return []byte(v)
 	case []interface{}:
 		new := make([]interface{}, len(v))
 		for i := range v {
 			new[i] = translateJSON(v[i])
 		}
+
 		return new
 	default:
 		panic(fmt.Errorf("can't handle %T", v))
@@ -124,10 +134,11 @@ func translateJSON(v interface{}) interface{} {
 func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 	switch exp := exp.(type) {
 	case uint64:
-		i, err := s.Uint()
+		i, err := s.Uint64()
 		if err != nil {
 			return addStack("Uint", exp, err)
 		}
+
 		if i != exp {
 			return addStack("Uint", exp, fmt.Errorf("result mismatch: got %d", i))
 		}
@@ -136,6 +147,7 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 		if err := s.Decode(&big); err != nil {
 			return addStack("Big", exp, err)
 		}
+
 		if big.Cmp(exp) != 0 {
 			return addStack("Big", exp, fmt.Errorf("result mismatch: got %d", big))
 		}
@@ -144,6 +156,7 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 		if err != nil {
 			return addStack("Bytes", exp, err)
 		}
+
 		if !bytes.Equal(b, exp) {
 			return addStack("Bytes", exp, fmt.Errorf("result mismatch: got %x", b))
 		}
@@ -151,22 +164,26 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 		if _, err := s.List(); err != nil {
 			return addStack("List", exp, err)
 		}
+
 		for i, v := range exp {
 			if err := checkDecodeFromJSON(s, v); err != nil {
 				return addStack(fmt.Sprintf("[%d]", i), exp, err)
 			}
 		}
+
 		if err := s.ListEnd(); err != nil {
 			return addStack("ListEnd", exp, err)
 		}
 	default:
 		panic(fmt.Errorf("unhandled type: %T", exp))
 	}
+
 	return nil
 }
 
 func addStack(op string, val interface{}, err error) error {
 	lines := strings.Split(err.Error(), "\n")
 	lines = append(lines, fmt.Sprintf("\t%s: %v", op, val))
+
 	return errors.New(strings.Join(lines, "\n"))
 }

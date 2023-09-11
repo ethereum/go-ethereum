@@ -21,7 +21,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestBytesPadding(t *testing.T) {
@@ -74,12 +76,69 @@ func TestBytesPadding(t *testing.T) {
 			if err != nil {
 				t.Errorf("test %d: expected no error, got %v", i, err)
 			}
+
 			if len(val) != 32 {
 				t.Errorf("test %d: expected len 32, got %d", i, len(val))
 			}
+
 			if !bytes.Equal(val, test.Output) {
 				t.Errorf("test %d: expected %x, got %x", i, test.Output, val)
 			}
+		}
+	}
+}
+
+func TestParseAddress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Input  interface{}
+		Output []byte // nil => error
+	}{
+		{
+			Input:  [20]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
+		},
+		{
+			Input:  "0x0102030405060708090A0B0C0D0E0F1011121314",
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
+		},
+		{
+			Input:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
+		},
+		// Various error-cases:
+		{Input: "0x000102030405060708090A0B0C0D0E0F1011121314"}, // too long string
+		{Input: "0x01"}, // too short string
+		{Input: ""},
+		{Input: [32]byte{}},       // too long fixed-size array
+		{Input: [21]byte{}},       // too long fixed-size array
+		{Input: make([]byte, 19)}, // too short slice
+		{Input: make([]byte, 21)}, // too long slice
+		{Input: nil},
+	}
+
+	d := TypedData{}
+	for i, test := range tests {
+		val, err := d.EncodePrimitiveValue("address", test.Input, 1)
+		if test.Output == nil {
+			if err == nil {
+				t.Errorf("test %d: expected error, got no error (result %x)", i, val)
+			}
+
+			continue
+		}
+
+		if err != nil {
+			t.Errorf("test %d: expected no error, got %v", i, err)
+		}
+
+		if have, want := len(val), 32; have != want {
+			t.Errorf("test %d: have len %d, want %d", i, have, want)
+		}
+
+		if !bytes.Equal(val, test.Output) {
+			t.Errorf("test %d: want %x, have %x", i, test.Output, val)
 		}
 	}
 }
@@ -98,17 +157,23 @@ func TestParseBytes(t *testing.T) {
 		{"not a hex string", nil},
 		{15, nil},
 		{nil, nil},
+		{[2]byte{12, 34}, []byte{12, 34}},
+		{[8]byte{12, 34, 56, 78, 90, 12, 34, 56}, []byte{12, 34, 56, 78, 90, 12, 34, 56}},
+		{[16]byte{12, 34, 56, 78, 90, 12, 34, 56, 12, 34, 56, 78, 90, 12, 34, 56}, []byte{12, 34, 56, 78, 90, 12, 34, 56, 12, 34, 56, 78, 90, 12, 34, 56}},
 	} {
 		out, ok := parseBytes(tt.v)
 		if tt.exp == nil {
 			if ok || out != nil {
 				t.Errorf("test %d: expected !ok, got ok = %v with out = %x", i, ok, out)
 			}
+
 			continue
 		}
+
 		if !ok {
 			t.Errorf("test %d: expected ok got !ok", i)
 		}
+
 		if !bytes.Equal(out, tt.exp) {
 			t.Errorf("test %d: expected %x got %x", i, tt.exp, out)
 		}
@@ -123,6 +188,7 @@ func TestParseInteger(t *testing.T) {
 	}{
 		{"uint32", "-123", nil},
 		{"int32", "-123", big.NewInt(-123)},
+		{"int32", big.NewInt(-124), big.NewInt(-124)},
 		{"uint32", "0xff", big.NewInt(0xff)},
 		{"int8", "0xffff", nil},
 	} {
@@ -130,16 +196,66 @@ func TestParseInteger(t *testing.T) {
 		if tt.exp == nil && res == nil {
 			continue
 		}
+
 		if tt.exp == nil && res != nil {
 			t.Errorf("test %d, got %v, expected nil", i, res)
 			continue
 		}
+
 		if tt.exp != nil && res == nil {
 			t.Errorf("test %d, got '%v', expected %v", i, err, tt.exp)
 			continue
 		}
+
 		if tt.exp.Cmp(res) != 0 {
 			t.Errorf("test %d, got %v expected %v", i, res, tt.exp)
 		}
+	}
+}
+
+func TestConvertStringDataToSlice(t *testing.T) {
+	t.Parallel()
+
+	slice := []string{"a", "b", "c"}
+
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConvertUint256DataToSlice(t *testing.T) {
+	t.Parallel()
+
+	slice := []*math.HexOrDecimal256{
+		math.NewHexOrDecimal256(1),
+		math.NewHexOrDecimal256(2),
+		math.NewHexOrDecimal256(3),
+	}
+
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConvertAddressDataToSlice(t *testing.T) {
+	t.Parallel()
+
+	slice := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000002"),
+		common.HexToAddress("0x0000000000000000000000000000000000000003"),
+	}
+
+	var it interface{} = slice
+	_, err := convertDataToSlice(it)
+
+	if err != nil {
+		t.Fatal(err)
 	}
 }

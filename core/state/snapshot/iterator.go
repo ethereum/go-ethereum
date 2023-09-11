@@ -109,6 +109,7 @@ func (it *diffAccountIterator) Next() bool {
 	if len(it.keys) == 0 {
 		return false
 	}
+
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 		return false
@@ -117,6 +118,7 @@ func (it *diffAccountIterator) Next() bool {
 	it.curHash = it.keys[0]
 	// key cached, shift the iterator and notify the user of success
 	it.keys = it.keys[1:]
+
 	return true
 }
 
@@ -141,18 +143,22 @@ func (it *diffAccountIterator) Hash() common.Hash {
 // Note the returned account is not a copy, please don't modify it.
 func (it *diffAccountIterator) Account() []byte {
 	it.layer.lock.RLock()
+
 	blob, ok := it.layer.accountData[it.curHash]
 	if !ok {
 		if _, ok := it.layer.destructSet[it.curHash]; ok {
 			it.layer.lock.RUnlock()
 			return nil
 		}
+
 		panic(fmt.Sprintf("iterator referenced non-existent account: %x", it.curHash))
 	}
 	it.layer.lock.RUnlock()
+
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 	}
+
 	return blob
 }
 
@@ -169,6 +175,7 @@ type diskAccountIterator struct {
 // AccountIterator creates an account iterator over a disk layer.
 func (dl *diskLayer) AccountIterator(seek common.Hash) AccountIterator {
 	pos := common.TrimRightZeroes(seek[:])
+
 	return &diskAccountIterator{
 		layer: dl,
 		it:    dl.diskdb.NewIterator(rawdb.SnapshotAccountPrefix, pos),
@@ -186,12 +193,15 @@ func (it *diskAccountIterator) Next() bool {
 		if !it.it.Next() {
 			it.it.Release()
 			it.it = nil
+
 			return false
 		}
+
 		if len(it.it.Key()) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
 			break
 		}
 	}
+
 	return true
 }
 
@@ -204,6 +214,7 @@ func (it *diskAccountIterator) Error() error {
 	if it.it == nil {
 		return nil // Iterator is exhausted and released
 	}
+
 	return it.it.Error()
 }
 
@@ -276,6 +287,7 @@ func (it *diffStorageIterator) Next() bool {
 	if len(it.keys) == 0 {
 		return false
 	}
+
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 		return false
@@ -284,6 +296,7 @@ func (it *diffStorageIterator) Next() bool {
 	it.curHash = it.keys[0]
 	// key cached, shift the iterator and notify the user of success
 	it.keys = it.keys[1:]
+
 	return true
 }
 
@@ -308,6 +321,7 @@ func (it *diffStorageIterator) Hash() common.Hash {
 // Note the returned slot is not a copy, please don't modify it.
 func (it *diffStorageIterator) Slot() []byte {
 	it.layer.lock.RLock()
+
 	storage, ok := it.layer.storageData[it.account]
 	if !ok {
 		panic(fmt.Sprintf("iterator referenced non-existent account storage: %x", it.account))
@@ -318,9 +332,11 @@ func (it *diffStorageIterator) Slot() []byte {
 		panic(fmt.Sprintf("iterator referenced non-existent storage slot: %x", it.curHash))
 	}
 	it.layer.lock.RUnlock()
+
 	if it.layer.Stale() {
 		it.fail, it.keys = ErrSnapshotStale, nil
 	}
+
 	return blob
 }
 
@@ -341,6 +357,7 @@ type diskStorageIterator struct {
 // is always false.
 func (dl *diskLayer) StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool) {
 	pos := common.TrimRightZeroes(seek[:])
+
 	return &diskStorageIterator{
 		layer:   dl,
 		account: account,
@@ -359,12 +376,15 @@ func (it *diskStorageIterator) Next() bool {
 		if !it.it.Next() {
 			it.it.Release()
 			it.it = nil
+
 			return false
 		}
+
 		if len(it.it.Key()) == len(rawdb.SnapshotStoragePrefix)+common.HashLength+common.HashLength {
 			break
 		}
 	}
+
 	return true
 }
 
@@ -377,6 +397,7 @@ func (it *diskStorageIterator) Error() error {
 	if it.it == nil {
 		return nil // Iterator is exhausted and released
 	}
+
 	return it.it.Error()
 }
 

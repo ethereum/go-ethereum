@@ -47,14 +47,13 @@ type InstrumentedService struct {
 
 	startHook func()
 	stopHook  func()
-
-	protocols []p2p.Protocol
 }
 
 func (s *InstrumentedService) Start() error {
 	if s.startHook != nil {
 		s.startHook()
 	}
+
 	return s.start
 }
 
@@ -62,6 +61,7 @@ func (s *InstrumentedService) Stop() error {
 	if s.stopHook != nil {
 		s.stopHook()
 	}
+
 	return s.stop
 }
 
@@ -73,6 +73,7 @@ func NewFullService(stack *Node) (*FullService, error) {
 	stack.RegisterProtocols(fs.Protocols())
 	stack.RegisterAPIs(fs.APIs())
 	stack.RegisterLifecycle(fs)
+
 	return fs, nil
 }
 
@@ -97,17 +98,12 @@ func (f *FullService) APIs() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "admin",
-			Version:   "1.0",
 		},
 		{
 			Namespace: "debug",
-			Version:   "1.0",
-			Public:    true,
 		},
 		{
 			Namespace: "net",
-			Version:   "1.0",
-			Public:    true,
 		},
 	}
 }

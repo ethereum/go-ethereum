@@ -20,14 +20,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var gethPubKeys []string = []string{
@@ -57,6 +59,7 @@ func versionCheck(ctx *cli.Context) error {
 	url := ctx.String(VersionCheckUrlFlag.Name)
 	version := ctx.String(VersionCheckVersionFlag.Name)
 	log.Info("Checking vulnerabilities", "version", version, "url", url)
+
 	return checkCurrent(url, version)
 }
 
@@ -66,63 +69,81 @@ func checkCurrent(url, current string) error {
 		sig  []byte
 		err  error
 	)
+
 	if data, err = fetch(url); err != nil {
 		return fmt.Errorf("could not retrieve data: %w", err)
 	}
+
 	if sig, err = fetch(fmt.Sprintf("%v.minisig", url)); err != nil {
 		return fmt.Errorf("could not retrieve signature: %w", err)
 	}
+
 	if err = verifySignature(gethPubKeys, data, sig); err != nil {
 		return err
 	}
+
 	var vulns []vulnJson
 	if err = json.Unmarshal(data, &vulns); err != nil {
 		return err
 	}
+
 	allOk := true
+
 	for _, vuln := range vulns {
 		r, err := regexp.Compile(vuln.Check)
 		if err != nil {
 			return err
 		}
+
 		if r.MatchString(current) {
 			allOk = false
+
 			fmt.Printf("## Vulnerable to %v (%v)\n\n", vuln.Uid, vuln.Name)
 			fmt.Printf("Severity: %v\n", vuln.Severity)
 			fmt.Printf("Summary : %v\n", vuln.Summary)
 			fmt.Printf("Fixed in: %v\n", vuln.Fixed)
+
 			if len(vuln.CVE) > 0 {
 				fmt.Printf("CVE: %v\n", vuln.CVE)
 			}
+
 			if len(vuln.Links) > 0 {
 				fmt.Printf("References:\n")
+
 				for _, ref := range vuln.Links {
 					fmt.Printf("\t- %v\n", ref)
 				}
 			}
+
 			fmt.Println()
 		}
 	}
+
 	if allOk {
 		fmt.Println("No vulnerabilities found")
 	}
+
 	return nil
 }
 
 // fetch makes an HTTP request to the given url and returns the response body
 func fetch(url string) ([]byte, error) {
 	if filep := strings.TrimPrefix(url, "file://"); filep != url {
-		return ioutil.ReadFile(filep)
+		return os.ReadFile(filep)
 	}
+
 	res, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
+
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
+
 	return body, nil
 }
 
@@ -135,26 +156,33 @@ func verifySignature(pubkeys []string, data, sigdata []byte) error {
 	}
 	// find the used key
 	var key *minisign.PublicKey
+
 	for _, pubkey := range pubkeys {
 		pub, err := minisign.NewPublicKey(pubkey)
 		if err != nil {
 			// our pubkeys should be parseable
 			return err
 		}
+
 		if pub.KeyId != sig.KeyId {
 			continue
 		}
+
 		key = &pub
+
 		break
 	}
+
 	if key == nil {
 		log.Info("Signing key not trusted", "keyid", keyID(sig.KeyId), "error", err)
 		return errors.New("signature could not be verified")
 	}
+
 	if ok, err := key.Verify(data, sig); !ok || err != nil {
 		log.Info("Verification failed error", "keyid", keyID(key.KeyId), "error", err)
 		return errors.New("signature could not be verified")
 	}
+
 	return nil
 }
 
@@ -165,5 +193,6 @@ func keyID(id [8]byte) string {
 	for i := range id {
 		rev[len(rev)-1-i] = id[i]
 	}
+
 	return fmt.Sprintf("%X", rev)
 }

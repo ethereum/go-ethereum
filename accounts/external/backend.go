@@ -45,6 +45,7 @@ func NewExternalBackend(endpoint string) (*ExternalBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &ExternalBackend{
 		signers: []accounts.Wallet{signer},
 	}, nil
@@ -73,6 +74,7 @@ func NewExternalSigner(endpoint string) (*ExternalSigner, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	extsigner := &ExternalSigner{
 		client:   client,
 		endpoint: endpoint,
@@ -82,7 +84,9 @@ func NewExternalSigner(endpoint string) (*ExternalSigner, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	extsigner.status = fmt.Sprintf("ok [version=%v]", version)
+
 	return extsigner, nil
 }
 
@@ -107,11 +111,13 @@ func (api *ExternalSigner) Close() error {
 
 func (api *ExternalSigner) Accounts() []accounts.Account {
 	var accnts []accounts.Account
+
 	res, err := api.listAccounts()
 	if err != nil {
 		log.Error("account listing failed", "error", err)
 		return accnts
 	}
+
 	for _, addr := range res {
 		accnts = append(accnts, accounts.Account{
 			URL: accounts.URL{
@@ -121,26 +127,31 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 			Address: addr,
 		})
 	}
+
 	api.cacheMu.Lock()
 	api.cache = accnts
 	api.cacheMu.Unlock()
+
 	return accnts
 }
 
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
 	defer api.cacheMu.RUnlock()
+
 	if api.cache == nil {
 		// If we haven't already fetched the accounts, it's time to do so now
 		api.cacheMu.RUnlock()
 		api.Accounts()
 		api.cacheMu.RLock()
 	}
+
 	for _, a := range api.cache {
 		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -152,13 +163,10 @@ func (api *ExternalSigner) SelfDerive(bases []accounts.DerivationPath, chain eth
 	log.Error("operation SelfDerive not supported on external signers")
 }
 
-func (api *ExternalSigner) signHash(account accounts.Account, hash []byte) ([]byte, error) {
-	return []byte{}, fmt.Errorf("operation not supported on external signers")
-}
-
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	var res hexutil.Bytes
+
 	var signAddress = common.NewMixedcaseAddress(account.Address)
 	if err := api.client.Call(&res, "account_signData",
 		mimeType,
@@ -170,11 +178,13 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 	if mimeType == accounts.MimetypeClique && (res[64] == 27 || res[64] == 28) {
 		res[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
 	}
+
 	return res, nil
 }
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
 	var signature hexutil.Bytes
+
 	var signAddress = common.NewMixedcaseAddress(account.Address)
 	if err := api.client.Call(&signature, "account_signData",
 		accounts.MimetypeTextPlain,
@@ -182,11 +192,13 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 		hexutil.Encode(text)); err != nil {
 		return nil, err
 	}
+
 	if signature[64] == 27 || signature[64] == 28 {
 		// If clef is used as a backend, it may already have transformed
 		// the signature to ethereum-type signature.
 		signature[64] -= 27 // Transform V from Ethereum-legacy to 0/1
 	}
+
 	return signature, nil
 }
 
@@ -202,11 +214,14 @@ type signTransactionResult struct {
 // transaction overrides the chainID parameter.
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	data := hexutil.Bytes(tx.Data())
+
 	var to *common.MixedcaseAddress
+
 	if tx.To() != nil {
 		t := common.NewMixedcaseAddress(*tx.To())
 		to = &t
 	}
+
 	args := &apitypes.SendTxArgs{
 		Data:  &data,
 		Nonce: hexutil.Uint64(tx.Nonce()),
@@ -229,19 +244,23 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 	if chainID != nil && chainID.Sign() != 0 {
 		args.ChainID = (*hexutil.Big)(chainID)
 	}
+
 	if tx.Type() != types.LegacyTxType {
 		// However, if the user asked for a particular chain id, then we should
 		// use that instead.
 		if tx.ChainId().Sign() != 0 {
 			args.ChainID = (*hexutil.Big)(tx.ChainId())
 		}
+
 		accessList := tx.AccessList()
 		args.AccessList = &accessList
 	}
+
 	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
 	}
+
 	return res.Tx, nil
 }
 
@@ -261,6 +280,7 @@ func (api *ExternalSigner) listAccounts() ([]common.Address, error) {
 	if err := api.client.Call(&res, "account_list"); err != nil {
 		return nil, err
 	}
+
 	return res, nil
 }
 
@@ -269,5 +289,6 @@ func (api *ExternalSigner) pingVersion() (string, error) {
 	if err := api.client.Call(&v, "account_version"); err != nil {
 		return "", err
 	}
+
 	return v, nil
 }

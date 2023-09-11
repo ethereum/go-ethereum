@@ -51,6 +51,7 @@ func NewID() ID {
 // randomIDGenerator returns a function generates a random IDs.
 func randomIDGenerator() func() ID {
 	var buf = make([]byte, 8)
+
 	var seed int64
 	if _, err := crand.Read(buf); err == nil {
 		seed = int64(binary.BigEndian.Uint64(buf))
@@ -62,11 +63,14 @@ func randomIDGenerator() func() ID {
 		mu  sync.Mutex
 		rng = rand.New(rand.NewSource(seed))
 	)
+
 	return func() ID {
 		mu.Lock()
 		defer mu.Unlock()
+
 		id := make([]byte, 16)
 		rng.Read(id)
+
 		return encodeID(id)
 	}
 }
@@ -74,9 +78,11 @@ func randomIDGenerator() func() ID {
 func encodeID(b []byte) ID {
 	id := hex.EncodeToString(b)
 	id = strings.TrimLeft(id, "0")
+
 	if id == "" {
 		id = "0" // ID's are RPC quantities, no leading zero's and 0 is 0x0.
 	}
+
 	return ID("0x" + id)
 }
 
@@ -114,7 +120,9 @@ func (n *Notifier) CreateSubscription() *Subscription {
 	} else if n.callReturned {
 		panic("can't create subscription after subscribe call has returned")
 	}
+
 	n.sub = &Subscription{ID: n.h.idgen(), namespace: n.namespace, err: make(chan error, 1)}
+
 	return n.sub
 }
 
@@ -134,10 +142,13 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 	} else if n.sub.ID != id {
 		panic("Notify with wrong ID")
 	}
+
 	if n.activated {
 		return n.send(n.sub, enc)
 	}
+
 	n.buffer = append(n.buffer, enc)
+
 	return nil
 }
 
@@ -153,6 +164,7 @@ func (n *Notifier) takeSubscription() *Subscription {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.callReturned = true
+
 	return n.sub
 }
 
@@ -168,18 +180,23 @@ func (n *Notifier) activate() error {
 			return err
 		}
 	}
+
 	n.activated = true
+
 	return nil
 }
 
 func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
 	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
 	ctx := context.Background()
-	return n.h.conn.writeJSON(ctx, &jsonrpcMessage{
+
+	msg := &jsonrpcMessage{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
 		Params:  params,
-	})
+	}
+
+	return n.h.conn.writeJSON(ctx, msg, false)
 }
 
 // A Subscription is created by a notifier and tied to that notifier. The client can use
@@ -240,6 +257,7 @@ func newClientSubscription(c *Client, namespace string, channel reflect.Value) *
 		unsubDone:   make(chan struct{}),
 		err:         make(chan error, 1),
 	}
+
 	return sub
 }
 
@@ -325,6 +343,7 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 
 	for {
 		var chosen int
+
 		var recv reflect.Value
 		if buffer.Len() == 0 {
 			// Idle, omit send case.
@@ -340,10 +359,12 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 			if !recv.IsNil() {
 				err = recv.Interface().(error)
 			}
+
 			if err == errUnsubscribed {
 				// Exiting because Unsubscribe was called, unsubscribe on server.
 				return true, nil
 			}
+
 			return false, err
 
 		case 1: // <-sub.in
@@ -351,13 +372,16 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 			if err != nil {
 				return true, err
 			}
+
 			if buffer.Len() == maxClientSubscriptionBuffer {
 				return true, ErrSubscriptionQueueOverflow
 			}
+
 			buffer.PushBack(val)
 
 		case 2: // sub.channel<-
 			cases[2].Send = reflect.Value{} // Don't hold onto the value.
+
 			buffer.Remove(buffer.Front())
 		}
 	}
@@ -366,6 +390,7 @@ func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, error) {
 	val := reflect.New(sub.etype)
 	err := json.Unmarshal(result, val.Interface())
+
 	return val.Elem().Interface(), err
 }
 

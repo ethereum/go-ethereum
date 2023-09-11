@@ -49,6 +49,21 @@ func (mr *MockDatabaseMockRecorder) Ancient(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ancient", reflect.TypeOf((*MockDatabase)(nil).Ancient), arg0, arg1)
 }
 
+// AncientDatadir mocks base method.
+func (m *MockDatabase) AncientDatadir() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AncientDatadir")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AncientDatadir indicates an expected call of AncientDatadir.
+func (mr *MockDatabaseMockRecorder) AncientDatadir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AncientDatadir", reflect.TypeOf((*MockDatabase)(nil).AncientDatadir))
+}
+
 // AncientRange mocks base method.
 func (m *MockDatabase) AncientRange(arg0 string, arg1, arg2, arg3 uint64) ([][]byte, error) {
 	m.ctrl.T.Helper()
@@ -282,7 +297,7 @@ func (mr *MockDatabaseMockRecorder) Put(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // ReadAncients mocks base method.
-func (m *MockDatabase) ReadAncients(arg0 func(ethdb.AncientReader) error) error {
+func (m *MockDatabase) ReadAncients(arg0 func(ethdb.AncientReaderOp) error) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadAncients", arg0)
 	ret0, _ := ret[0].(error)

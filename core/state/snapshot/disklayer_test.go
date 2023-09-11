@@ -18,15 +18,11 @@ package snapshot
 
 import (
 	"bytes"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -38,6 +34,7 @@ func reverse(blob []byte) []byte {
 	for i, b := range blob {
 		res[len(blob)-1-i] = b
 	}
+
 	return res
 }
 
@@ -137,6 +134,7 @@ func TestDiskMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
+
 	if err := snaps.Cap(diffRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
@@ -149,6 +147,7 @@ func TestDiskMerge(t *testing.T) {
 	// assertAccount ensures that an account matches the given blob.
 	assertAccount := func(account common.Hash, data []byte) {
 		t.Helper()
+
 		blob, err := base.AccountRLP(account)
 		if err != nil {
 			t.Errorf("account access (%x) failed: %v", account, err)
@@ -166,6 +165,7 @@ func TestDiskMerge(t *testing.T) {
 	// assertStorage ensures that a storage slot matches the given blob.
 	assertStorage := func(account common.Hash, slot common.Hash, data []byte) {
 		t.Helper()
+
 		blob, err := base.Storage(account, slot)
 		if err != nil {
 			t.Errorf("storage access (%x:%x) failed: %v", account, slot, err)
@@ -187,6 +187,7 @@ func TestDiskMerge(t *testing.T) {
 	// assertDatabaseAccount ensures that an account from the database matches the given blob.
 	assertDatabaseAccount := func(account common.Hash, data []byte) {
 		t.Helper()
+
 		if blob := rawdb.ReadAccountSnapshot(db, account); !bytes.Equal(blob, data) {
 			t.Errorf("account database access (%x) mismatch: have %x, want %x", account, blob, data)
 		}
@@ -201,6 +202,7 @@ func TestDiskMerge(t *testing.T) {
 	// assertDatabaseStorage ensures that a storage slot from the database matches the given blob.
 	assertDatabaseStorage := func(account common.Hash, slot common.Hash, data []byte) {
 		t.Helper()
+
 		if blob := rawdb.ReadStorageSnapshot(db, account, slot); !bytes.Equal(blob, data) {
 			t.Errorf("storage database access (%x:%x) mismatch: have %x, want %x", account, slot, blob, data)
 		}
@@ -276,6 +278,7 @@ func TestDiskPartialMerge(t *testing.T) {
 				rawdb.WriteStorageSnapshot(db, account, slot, data[:])
 			}
 		}
+
 		insertAccount(conNoModNoCache, conNoModNoCache[:])
 		insertStorage(conNoModNoCache, conNoModNoCacheSlot, conNoModNoCacheSlot[:])
 		insertAccount(conNoModCache, conNoModCache[:])
@@ -314,10 +317,12 @@ func TestDiskPartialMerge(t *testing.T) {
 		// already covered by the disk snapshot, and errors out otherwise.
 		assertAccount := func(account common.Hash, data []byte) {
 			t.Helper()
+
 			blob, err := base.AccountRLP(account)
 			if bytes.Compare(account[:], genMarker) > 0 && err != ErrNotCoveredYet {
 				t.Fatalf("test %d: post-marker (%x) account access (%x) succeeded: %x", i, genMarker, account, blob)
 			}
+
 			if bytes.Compare(account[:], genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) account access (%x) mismatch: have %x, want %x", i, genMarker, account, blob, data)
 			}
@@ -330,10 +335,12 @@ func TestDiskPartialMerge(t *testing.T) {
 		// it's already covered by the disk snapshot, and errors out otherwise.
 		assertStorage := func(account common.Hash, slot common.Hash, data []byte) {
 			t.Helper()
+
 			blob, err := base.Storage(account, slot)
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) > 0 && err != ErrNotCoveredYet {
 				t.Fatalf("test %d: post-marker (%x) storage access (%x:%x) succeeded: %x", i, genMarker, account, slot, blob)
 			}
+
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) storage access (%x:%x) mismatch: have %x, want %x", i, genMarker, account, slot, blob, data)
 			}
@@ -360,6 +367,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("test %d: failed to update snapshot tree: %v", i, err)
 		}
+
 		if err := snaps.Cap(diffRoot, 0); err != nil {
 			t.Fatalf("test %d: failed to flatten snapshot tree: %v", i, err)
 		}
@@ -368,6 +376,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		if _, ok := base.(*diskLayer); !ok {
 			t.Fatalf("test %d: update not flattend into the disk layer", i)
 		}
+
 		assertAccount(accNoModNoCache, accNoModNoCache[:])
 		assertAccount(accNoModCache, accNoModCache[:])
 		assertAccount(accModNoCache, reverse(accModNoCache[:]))
@@ -391,10 +400,12 @@ func TestDiskPartialMerge(t *testing.T) {
 		// exist otherwise.
 		assertDatabaseAccount := func(account common.Hash, data []byte) {
 			t.Helper()
+
 			blob := rawdb.ReadAccountSnapshot(db, account)
 			if bytes.Compare(account[:], genMarker) > 0 && blob != nil {
 				t.Fatalf("test %d: post-marker (%x) account database access (%x) succeeded: %x", i, genMarker, account, blob)
 			}
+
 			if bytes.Compare(account[:], genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) account database access (%x) mismatch: have %x, want %x", i, genMarker, account, blob, data)
 			}
@@ -411,10 +422,12 @@ func TestDiskPartialMerge(t *testing.T) {
 		// and does not exist otherwise.
 		assertDatabaseStorage := func(account common.Hash, slot common.Hash, data []byte) {
 			t.Helper()
+
 			blob := rawdb.ReadStorageSnapshot(db, account, slot)
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) > 0 && blob != nil {
 				t.Fatalf("test %d: post-marker (%x) storage database access (%x:%x) succeeded: %x", i, genMarker, account, slot, blob)
 			}
+
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) storage database access (%x:%x) mismatch: have %x, want %x", i, genMarker, account, slot, blob, data)
 			}
@@ -471,14 +484,19 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	}, nil); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
+
 	if err := snaps.Cap(diffRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
+
 	blob := rawdb.ReadSnapshotGenerator(db)
+
 	var generator journalGenerator
+
 	if err := rlp.DecodeBytes(blob, &generator); err != nil {
 		t.Fatalf("Failed to decode snapshot generator %v", err)
 	}
+
 	if !bytes.Equal(generator.Marker, genMarker) {
 		t.Fatalf("Generator marker is not matched")
 	}
@@ -491,15 +509,19 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update snapshot tree: %v", err)
 	}
+
 	diskLayer := snaps.layers[snaps.diskRoot()].(*diskLayer)
 	diskLayer.genMarker = nil // Construction finished
+
 	if err := snaps.Cap(diffTwoRoot, 0); err != nil {
 		t.Fatalf("failed to flatten snapshot tree: %v", err)
 	}
+
 	blob = rawdb.ReadSnapshotGenerator(db)
 	if err := rlp.DecodeBytes(blob, &generator); err != nil {
 		t.Fatalf("Failed to decode snapshot generator %v", err)
 	}
+
 	if len(generator.Marker) != 0 {
 		t.Fatalf("Failed to update snapshot generator")
 	}
@@ -518,18 +540,9 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	var db ethdb.Database
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
 
-	if dir, err := ioutil.TempDir("", "disklayer-test"); err != nil {
-		t.Fatal(err)
-	} else {
-		defer os.RemoveAll(dir)
-		diskdb, err := leveldb.New(dir, 256, 0, "", false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		db = rawdb.NewDatabase(diskdb)
-	}
 	// Fill even keys [0,2,4...]
 	for i := 0; i < 0xff; i += 2 {
 		acc := common.Hash{byte(i)}
@@ -556,6 +569,7 @@ func TestDiskSeek(t *testing.T) {
 		pos    byte
 		expkey byte
 	}
+
 	var cases = []testcase{
 		{0xff, 0x55}, // this should exit immediately without checking key
 		{0x01, 0x02},
@@ -563,12 +577,15 @@ func TestDiskSeek(t *testing.T) {
 		{0xfd, 0xfe},
 		{0x00, 0x00},
 	}
+
 	for i, tc := range cases {
 		it, err := snaps.AccountIterator(baseRoot, common.Hash{tc.pos})
 		if err != nil {
 			t.Fatalf("case %d, error: %v", i, err)
 		}
+
 		count := 0
+
 		for it.Next() {
 			k, v, err := it.Hash()[0], it.Account()[0], it.Error()
 			if err != nil {
@@ -578,6 +595,7 @@ func TestDiskSeek(t *testing.T) {
 			if count == 0 && k != tc.expkey {
 				t.Fatalf("test %d, item %d, got %v exp %v", i, count, k, tc.expkey)
 			}
+
 			count++
 			if v != k {
 				t.Fatalf("test %d, item %d, value wrong, got %v exp %v", i, count, v, k)

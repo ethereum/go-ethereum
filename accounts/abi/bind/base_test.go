@@ -18,6 +18,7 @@ package bind_test
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"reflect"
 	"strings"
@@ -75,34 +76,52 @@ func (mt *mockTransactor) SendTransaction(ctx context.Context, tx *types.Transac
 }
 
 type mockCaller struct {
-	codeAtBlockNumber         *big.Int
-	callContractBlockNumber   *big.Int
-	pendingCodeAtCalled       bool
-	pendingCallContractCalled bool
+	codeAtBlockNumber       *big.Int
+	callContractBlockNumber *big.Int
+	callContractBytes       []byte
+	callContractErr         error
+	codeAtBytes             []byte
+	codeAtErr               error
 }
 
 func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
 	mc.codeAtBlockNumber = blockNumber
-	return []byte{1, 2, 3}, nil
+	return mc.codeAtBytes, mc.codeAtErr
 }
 
 func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
-	return nil, nil
+	return mc.callContractBytes, mc.callContractErr
 }
 
-func (mc *mockCaller) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+type mockPendingCaller struct {
+	*mockCaller
+	pendingCodeAtBytes        []byte
+	pendingCodeAtErr          error
+	pendingCodeAtCalled       bool
+	pendingCallContractCalled bool
+	pendingCallContractBytes  []byte
+	pendingCallContractErr    error
+}
+
+func (mc *mockPendingCaller) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
 	mc.pendingCodeAtCalled = true
-	return nil, nil
+	return mc.pendingCodeAtBytes, mc.pendingCodeAtErr
 }
 
-func (mc *mockCaller) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+func (mc *mockPendingCaller) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	mc.pendingCallContractCalled = true
-	return nil, nil
+	return mc.pendingCallContractBytes, mc.pendingCallContractErr
 }
-func TestPassingBlockNumber(t *testing.T) {
 
-	mc := &mockCaller{}
+func TestPassingBlockNumber(t *testing.T) {
+	t.Parallel()
+
+	mc := &mockPendingCaller{
+		mockCaller: &mockCaller{
+			codeAtBytes: []byte{1, 2, 3},
+		},
+	}
 
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
 		Methods: map[string]abi.Method{
@@ -169,11 +188,33 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
 }
 
+func TestUnpackAnonymousLogIntoMap(t *testing.T) {
+	t.Parallel()
+
+	mockLog := newMockLog(nil, common.HexToHash("0x0"))
+
+	abiString := `[{"anonymous":false,"inputs":[{"indexed":false,"name":"amount","type":"uint256"}],"name":"received","type":"event"}]`
+	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+
+	var received map[string]interface{}
+	err := bc.UnpackLogIntoMap(received, "received", mockLog)
+
+	if err == nil {
+		t.Error("unpacking anonymous event is not supported")
+	}
+
+	if err.Error() != "no event signature" {
+		t.Errorf("expected error 'no event signature', got '%s'", err)
+	}
+}
+
 func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	sliceBytes, err := rlp.EncodeToBytes([]string{"name1", "name2", "name3", "name4"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hash := crypto.Keccak256Hash(sliceBytes)
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(string[],address,uint256,bytes)")),
@@ -199,6 +240,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	hash := crypto.Keccak256Hash(arrBytes)
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(address[2],address,uint256,bytes)")),
@@ -225,7 +267,9 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	hash := crypto.Keccak256Hash([]byte("mockFunction(address,uint)"))
 	functionSelector := hash[:4]
 	functionTyBytes := append(addrBytes, functionSelector...)
+
 	var functionTy [24]byte
+
 	copy(functionTy[:], functionTyBytes[0:24])
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(function,address,uint256,bytes)")),
@@ -321,6 +365,7 @@ func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]in
 	if len(received) != len(expected) {
 		t.Fatalf("unpacked map length %v not equal expected length of %v", len(received), len(expected))
 	}
+
 	for name, elem := range expected {
 		if !reflect.DeepEqual(elem, received[name]) {
 			t.Errorf("field %v does not match expected, want %v, got %v", name, elem, received[name])
@@ -340,4 +385,151 @@ func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 		Index:       7,
 		Removed:     false,
 	}
+}
+
+func TestCall(t *testing.T) {
+	t.Parallel()
+
+	var method, methodWithArg = "something", "somethingArrrrg"
+
+	tests := []struct {
+		name, method string
+		opts         *bind.CallOpts
+		mc           bind.ContractCaller
+		results      *[]interface{}
+		wantErr      bool
+		wantErrExact error
+	}{{
+		name: "ok not pending",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method: method,
+	}, {
+		name: "ok pending",
+		mc: &mockPendingCaller{
+			pendingCodeAtBytes: []byte{0},
+		},
+		opts: &bind.CallOpts{
+			Pending: true,
+		},
+		method: method,
+	}, {
+		name:    "pack error, no method",
+		mc:      new(mockCaller),
+		method:  "else",
+		wantErr: true,
+	}, {
+		name: "interface error, pending but not a PendingContractCaller",
+		mc:   new(mockCaller),
+		opts: &bind.CallOpts{
+			Pending: true,
+		},
+		method:       method,
+		wantErrExact: bind.ErrNoPendingState,
+	}, {
+		name: "pending call canceled",
+		mc: &mockPendingCaller{
+			pendingCallContractErr: context.DeadlineExceeded,
+		},
+		opts: &bind.CallOpts{
+			Pending: true,
+		},
+		method:       method,
+		wantErrExact: context.DeadlineExceeded,
+	}, {
+		name: "pending code at error",
+		mc: &mockPendingCaller{
+			pendingCodeAtErr: errors.New(""),
+		},
+		opts: &bind.CallOpts{
+			Pending: true,
+		},
+		method:  method,
+		wantErr: true,
+	}, {
+		name: "no pending code at",
+		mc:   new(mockPendingCaller),
+		opts: &bind.CallOpts{
+			Pending: true,
+		},
+		method:       method,
+		wantErrExact: bind.ErrNoCode,
+	}, {
+		name: "call contract error",
+		mc: &mockCaller{
+			callContractErr: context.DeadlineExceeded,
+		},
+		method:       method,
+		wantErrExact: context.DeadlineExceeded,
+	}, {
+		name: "code at error",
+		mc: &mockCaller{
+			codeAtErr: errors.New(""),
+		},
+		method:  method,
+		wantErr: true,
+	}, {
+		name:         "no code at",
+		mc:           new(mockCaller),
+		method:       method,
+		wantErrExact: bind.ErrNoCode,
+	}, {
+		name: "unpack error missing arg",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method:  methodWithArg,
+		wantErr: true,
+	}, {
+		name: "interface unpack error",
+		mc: &mockCaller{
+			codeAtBytes: []byte{0},
+		},
+		method:  method,
+		results: &[]interface{}{0},
+		wantErr: true,
+	}}
+
+	for _, test := range tests {
+		bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
+			Methods: map[string]abi.Method{
+				method: {
+					Name:    method,
+					Outputs: abi.Arguments{},
+				},
+				methodWithArg: {
+					Name:    methodWithArg,
+					Outputs: abi.Arguments{abi.Argument{}},
+				},
+			},
+		}, test.mc, nil, nil)
+		err := bc.Call(test.opts, test.results, test.method)
+
+		if test.wantErr || test.wantErrExact != nil {
+			if err == nil {
+				t.Fatalf("%q expected error", test.name)
+			}
+
+			if test.wantErrExact != nil && !errors.Is(err, test.wantErrExact) {
+				t.Fatalf("%q expected error %q but got %q", test.name, test.wantErrExact, err)
+			}
+
+			continue
+		}
+
+		if err != nil {
+			t.Fatalf("%q unexpected error: %v", test.name, err)
+		}
+	}
+}
+
+// TestCrashers contains some strings which previously caused the abi codec to crash.
+func TestCrashers(t *testing.T) {
+	t.Parallel()
+
+	_, _ = abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"_1"}]}]}]`))
+	_, _ = abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"&"}]}]}]`))
+	_, _ = abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"----"}]}]}]`))
+	_, _ = abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"foo.Bar"}]}]}]`))
 }

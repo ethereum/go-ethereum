@@ -5,18 +5,15 @@ jobs:
   allow_failures:
     - stage: build
       os: osx
-      go: 1.17.x
       env:
         - azure-osx
-        - azure-ios
-        - cocoapods-ios
 
   include:
     # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - lint
       git:
@@ -31,7 +28,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -48,7 +45,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - docker
       services:
@@ -65,7 +62,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -90,7 +87,7 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -148,7 +145,7 @@ jobs:
         - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
 
         # Install Go to allow building with
-        - curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.20.5.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -162,11 +159,9 @@ jobs:
     - stage: build
       if: type = push
       os: osx
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-osx
-        - azure-ios
-        - cocoapods-ios
         - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
@@ -174,58 +169,58 @@ jobs:
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
-        # Build the iOS framework and upload it to CocoaPods and Azure
-        - gem uninstall cocoapods -a -x
-        - gem install cocoapods
-
-        - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
-        - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
-        - if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then git clone --depth=1 https://github.com/CocoaPods/Specs.git ~/.cocoapods/repos/master && pod setup --verbose; fi
-
-        - xctool -version
-        - xcrun simctl list
-
-        # Workaround for https://github.com/golang/go/issues/23749
-        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
-        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -signify SIGNIFY_KEY -deploy trunk -upload gethstore/builds
-
     # These builders run the tests
     - stage: build
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       if: type = pull_request
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test $TEST_PACKAGES
 
+    # This builder does the Ubuntu PPA nightly uploads
     - stage: build
+      if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
+        - ubuntu-ppa
         - GO111MODULE=on
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      addons:
+        apt:
+          packages:
+            - devscripts
+            - debhelper
+            - dput
+            - fakeroot
+            - python-bzrlib
+            - python-paramiko
       script:
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
+        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Azure archive purges to avoid accumulating junk
     - stage: build
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - azure-purge
         - GO111MODULE=on
@@ -239,9 +234,9 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.20.x
       env:
         - GO111MODULE=on
       script:
-        - go run build/ci.go test  -race -coverage $TEST_PACKAGES
+        - go run build/ci.go test  -race $TEST_PACKAGES
 

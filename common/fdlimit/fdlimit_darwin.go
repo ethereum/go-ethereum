@@ -35,6 +35,7 @@ func Raise(max uint64) (uint64, error) {
 	if limit.Cur > max {
 		limit.Cur = max
 	}
+
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
 	}
@@ -42,6 +43,7 @@ func Raise(max uint64) (uint64, error) {
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
 	}
+
 	return limit.Cur, nil
 }
 
@@ -52,6 +54,7 @@ func Current() (int, error) {
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
 	}
+
 	return int(limit.Cur), nil
 }
 
@@ -67,5 +70,6 @@ func Maximum() (int, error) {
 	if limit.Max > hardlimit {
 		limit.Max = hardlimit
 	}
+
 	return int(limit.Max), nil
 }

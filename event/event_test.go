@@ -28,6 +28,7 @@ type testEvent int
 func TestSubCloseUnsub(t *testing.T) {
 	// the point of this test is **not** to panic
 	var mux TypeMux
+
 	mux.Stop()
 	sub := mux.Subscribe(0)
 	sub.Unsubscribe()
@@ -38,11 +39,13 @@ func TestSub(t *testing.T) {
 	defer mux.Stop()
 
 	sub := mux.Subscribe(testEvent(0))
+
 	go func() {
 		if err := mux.Post(testEvent(5)); err != nil {
 			t.Errorf("Post returned unexpected error: %v", err)
 		}
 	}()
+
 	ev := <-sub.Chan()
 
 	if ev.Data.(testEvent) != testEvent(5) {
@@ -59,6 +62,7 @@ func TestMuxErrorAfterStop(t *testing.T) {
 	if _, isopen := <-sub.Chan(); isopen {
 		t.Errorf("subscription channel was not closed")
 	}
+
 	if err := mux.Post(testEvent(0)); err != ErrMuxClosed {
 		t.Errorf("Post error mismatch, got: %s, expected: %s", err, ErrMuxClosed)
 	}
@@ -70,6 +74,7 @@ func TestUnsubscribeUnblockPost(t *testing.T) {
 
 	sub := mux.Subscribe(testEvent(0))
 	unblocked := make(chan bool)
+
 	go func() {
 		mux.Post(testEvent(5))
 		unblocked <- true
@@ -100,7 +105,6 @@ func TestSubscribeDuplicateType(t *testing.T) {
 }
 
 func TestMuxConcurrent(t *testing.T) {
-	rand.Seed(time.Now().Unix())
 	mux := new(TypeMux)
 	defer mux.Stop()
 
@@ -115,6 +119,7 @@ func TestMuxConcurrent(t *testing.T) {
 	}
 	sub := func(i int) {
 		time.Sleep(time.Duration(rand.Intn(99)) * time.Millisecond)
+
 		sub := mux.Subscribe(testEvent(0))
 		<-sub.Chan()
 		sub.Unsubscribe()
@@ -124,6 +129,7 @@ func TestMuxConcurrent(t *testing.T) {
 	go poster()
 	go poster()
 	go poster()
+
 	nsubs := 1000
 	for i := 0; i < nsubs; i++ {
 		go sub(i)
@@ -134,6 +140,7 @@ func TestMuxConcurrent(t *testing.T) {
 	for i := 0; i < nsubs; i++ {
 		counts[<-recv]++
 	}
+
 	for i, count := range counts {
 		if count != 1 {
 			t.Errorf("receiver %d called %d times, expected only 1 call", i, count)
@@ -155,14 +162,19 @@ func BenchmarkPost1000(b *testing.B) {
 		subscribed, done sync.WaitGroup
 		nsubs            = 1000
 	)
+
 	subscribed.Add(nsubs)
 	done.Add(nsubs)
+
 	for i := 0; i < nsubs; i++ {
 		go func() {
 			s := mux.Subscribe(testEvent(0))
+
 			subscribed.Done()
+
 			for range s.Chan() {
 			}
+
 			done.Done()
 		}()
 	}
@@ -170,6 +182,7 @@ func BenchmarkPost1000(b *testing.B) {
 
 	// The actual benchmark.
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		mux.Post(testEvent(0))
 	}
@@ -187,13 +200,16 @@ func BenchmarkPostConcurrent(b *testing.B) {
 	emptySubscriber(mux)
 
 	var wg sync.WaitGroup
+
 	poster := func() {
 		for i := 0; i < b.N; i++ {
 			mux.Post(testEvent(0))
 		}
 		wg.Done()
 	}
+
 	wg.Add(5)
+
 	for i := 0; i < 5; i++ {
 		go poster()
 	}
@@ -204,7 +220,9 @@ func BenchmarkPostConcurrent(b *testing.B) {
 func BenchmarkChanSend(b *testing.B) {
 	c := make(chan interface{})
 	defer close(c)
+
 	closed := make(chan struct{})
+
 	go func() {
 		for range c {
 		}

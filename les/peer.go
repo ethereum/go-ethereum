@@ -86,23 +86,29 @@ type keyValueMap map[string]rlp.RawValue
 func (l keyValueList) add(key string, val interface{}) keyValueList {
 	var entry keyValueEntry
 	entry.Key = key
+
 	if val == nil {
 		val = uint64(0)
 	}
+
 	enc, err := rlp.EncodeToBytes(val)
 	if err == nil {
 		entry.Value = enc
 	}
+
 	return append(l, entry)
 }
 
 func (l keyValueList) decode() (keyValueMap, uint64) {
 	m := make(keyValueMap)
+
 	var size uint64
+
 	for _, entry := range l {
 		m[entry.Key] = entry.Value
 		size += uint64(len(entry.Key)) + uint64(len(entry.Value)) + 8
 	}
+
 	return m, size
 }
 
@@ -111,9 +117,11 @@ func (m keyValueMap) get(key string, val interface{}) error {
 	if !ok {
 		return errResp(ErrMissingKey, "%s", key)
 	}
+
 	if val == nil {
 		return nil
 	}
+
 	return rlp.DecodeBytes(enc, val)
 }
 
@@ -222,10 +230,12 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 			errc <- err
 			return
 		}
+
 		if msg.Code != StatusMsg {
 			errc <- errResp(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
 			return
 		}
+
 		if msg.Size > ProtocolMaxMsgSize {
 			errc <- errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 			return
@@ -237,8 +247,10 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 		}
 		errc <- nil
 	}()
+
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
+
 	for i := 0; i < 2; i++ {
 		select {
 		case err := <-errc:
@@ -249,6 +261,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 			return nil, p2p.DiscReadTimeout
 		}
 	}
+
 	return recvList, nil
 }
 
@@ -287,27 +300,35 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 	if err != nil {
 		return err
 	}
+
 	recv, size := recvList.decode()
 	if size > allowedUpdateBytes {
 		return errResp(ErrRequestRejected, "")
 	}
+
 	var rGenesis common.Hash
+
 	var rVersion, rNetwork uint64
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
+
 	if err := recv.get("networkId", &rNetwork); err != nil {
 		return err
 	}
+
 	if err := recv.get("genesisHash", &rGenesis); err != nil {
 		return err
 	}
+
 	if rGenesis != genesis {
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
 	}
+
 	if rNetwork != p.network {
 		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
 	}
+
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
@@ -317,13 +338,16 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 		if err := recv.get("forkID", &forkID); err != nil {
 			return err
 		}
+
 		if err := forkFilter(forkID); err != nil {
 			return errResp(ErrForkIDRejected, "%v", err)
 		}
 	}
+
 	if recvCallback != nil {
 		return recvCallback(recv)
 	}
+
 	return nil
 }
 
@@ -396,7 +420,9 @@ func (p *serverPeer) rejectUpdate(size uint64) bool {
 			p.updateCount = 0
 		}
 	}
+
 	p.updateCount += size
+
 	return p.updateCount > allowedUpdateBytes
 }
 
@@ -421,6 +447,7 @@ func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data interface{}) error
 		ReqID uint64
 		Data  interface{}
 	}
+
 	return p2p.Send(w, msgcode, &req{reqID, data})
 }
 
@@ -484,10 +511,12 @@ func (p *serverPeer) requestTxStatus(reqID uint64, txHashes []common.Hash) error
 // sendTxs creates a reply with a batch of transactions to be added to the remote transaction pool.
 func (p *serverPeer) sendTxs(reqID uint64, amount int, txs rlp.RawValue) error {
 	p.Log().Debug("Sending batch of transactions", "amount", amount, "size", len(txs))
+
 	sizeFactor := (len(txs) + txSizeCostLimit/2) / txSizeCostLimit
 	if sizeFactor > amount {
 		amount = sizeFactor
 	}
+
 	return p.sendRequest(SendTxV2Msg, reqID, txs, amount)
 }
 
@@ -506,10 +535,12 @@ func (p *serverPeer) getRequestCost(msgcode uint64, amount int) uint64 {
 	if costs == nil {
 		return 0
 	}
+
 	cost := costs.baseCost + costs.reqCost*uint64(amount)
 	if cost > p.fcParams.BufLimit {
 		cost = p.fcParams.BufLimit
 	}
+
 	return cost
 }
 
@@ -523,14 +554,18 @@ func (p *serverPeer) getTxRelayCost(amount, size int) uint64 {
 	if costs == nil {
 		return 0
 	}
+
 	cost := costs.baseCost + costs.reqCost*uint64(amount)
 	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
+
 	if sizeCost > cost {
 		cost = sizeCost
 	}
+
 	if cost > p.fcParams.BufLimit {
 		cost = p.fcParams.BufLimit
 	}
+
 	return cost
 }
 
@@ -542,7 +577,9 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 	if p.hasBlockHook != nil {
 		return p.hasBlockHook(hash, number, hasState)
 	}
+
 	head := p.headInfo.Number
+
 	var since, recent uint64
 	if hasState {
 		since = p.stateSince
@@ -551,6 +588,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		since = p.chainSince
 		recent = p.chainRecent
 	}
+
 	return head >= number && number >= since && (recent == 0 || number+recent+4 > head)
 }
 
@@ -567,6 +605,7 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
 	}
+
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
 		costUpdate := MRC.decode(ProtocolLengths[uint(p.version)])
@@ -598,6 +637,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if p.trusted {
 			p.announceType = announceTypeSigned
 		}
+
 		*lists = (*lists).add("announceType", p.announceType)
 	}, func(recv keyValueMap) error {
 		var (
@@ -605,36 +645,46 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 			rNum  uint64
 			rTd   *big.Int
 		)
+
 		if err := recv.get("headTd", &rTd); err != nil {
 			return err
 		}
+
 		if err := recv.get("headHash", &rHash); err != nil {
 			return err
 		}
+
 		if err := recv.get("headNum", &rNum); err != nil {
 			return err
 		}
+
 		p.headInfo = blockInfo{Hash: rHash, Number: rNum, Td: rTd}
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
 		}
+
 		if recv.get("serveRecentChain", &p.chainRecent) != nil {
 			p.chainRecent = 0
 		}
+
 		if recv.get("serveStateSince", &p.stateSince) != nil {
 			p.onlyAnnounce = true
 		}
+
 		if recv.get("serveRecentState", &p.stateRecent) != nil {
 			p.stateRecent = 0
 		}
+
 		if recv.get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
+
 		if p.version >= lpv4 {
 			var recentTx uint
 			if err := recv.get("recentTxLookup", &recentTx); err != nil {
 				return err
 			}
+
 			p.txHistory = uint64(recentTx)
 		} else {
 			// The weak assumption is held here that legacy les server(les2,3)
@@ -642,6 +692,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 			// versions is disabled if the transaction is unindexed.
 			p.txHistory = txIndexUnlimited
 		}
+
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
@@ -650,13 +701,16 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
 		}
+
 		if err := recv.get("flowControl/MRR", &sParams.MinRecharge); err != nil {
 			return err
 		}
+
 		var MRC RequestCostList
 		if err := recv.get("flowControl/MRC", &MRC); err != nil {
 			return err
 		}
+
 		p.fcParams = sParams
 		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
 		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
@@ -671,6 +725,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -679,6 +734,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 // references should be removed upon disconnection by setValueTracker(nil, nil).
 func (p *serverPeer) setValueTracker(nvt *vfc.NodeValueTracker) {
 	p.vtLock.Lock()
+
 	p.nodeValueTracker = nvt
 	if nvt != nil {
 		p.sentReqs = make(map[uint64]sentReqEntry)
@@ -696,7 +752,9 @@ func (p *serverPeer) updateVtParams() {
 	if p.nodeValueTracker == nil {
 		return
 	}
+
 	reqCosts := make([]uint64, len(requestList))
+
 	for code, costs := range p.fcCosts {
 		if m, ok := requestMapping[uint32(code)]; ok {
 			reqCosts[m.first] = costs.baseCost + costs.reqCost
@@ -705,6 +763,7 @@ func (p *serverPeer) updateVtParams() {
 			}
 		}
 	}
+
 	p.nodeValueTracker.UpdateCosts(reqCosts)
 }
 
@@ -730,17 +789,21 @@ func (p *serverPeer) answeredRequest(id uint64) {
 		p.vtLock.Unlock()
 		return
 	}
+
 	e, ok := p.sentReqs[id]
 	delete(p.sentReqs, id)
 	nvt := p.nodeValueTracker
 	p.vtLock.Unlock()
+
 	if !ok {
 		return
 	}
+
 	var (
 		vtReqs   [2]vfc.ServedRequest
 		reqCount int
 	)
+
 	m := requestMapping[e.reqType]
 	if m.rest == -1 || e.amount <= 1 {
 		reqCount = 1
@@ -750,6 +813,7 @@ func (p *serverPeer) answeredRequest(id uint64) {
 		vtReqs[0] = vfc.ServedRequest{ReqType: uint32(m.first), Amount: 1}
 		vtReqs[1] = vfc.ServedRequest{ReqType: uint32(m.rest), Amount: e.amount - 1}
 	}
+
 	dt := time.Duration(mclock.Now() - e.at)
 	nvt.Served(vtReqs[:reqCount], dt)
 }
@@ -810,6 +874,7 @@ func (p *clientPeer) FreeClientId() string {
 			return addr.IP.String()
 		}
 	}
+
 	return p.id
 }
 
@@ -833,23 +898,29 @@ func (p *clientPeer) freeze() {
 		// its frozen status permanently
 		atomic.StoreUint32(&p.frozen, 1)
 		p.Peer.Disconnect(p2p.DiscUselessPeer)
+
 		return
 	}
+
 	if atomic.SwapUint32(&p.frozen, 1) == 0 {
 		go func() {
 			p.sendStop()
 			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
+
 			for {
 				bufValue, bufLimit := p.fcClient.BufferStatus()
 				if bufLimit == 0 {
 					return
 				}
+
 				if bufValue <= bufLimit/8 {
 					time.Sleep(freezeCheckPeriod)
 					continue
 				}
+
 				atomic.StoreUint32(&p.frozen, 0)
 				p.sendResume(bufValue)
+
 				return
 			}
 		}()
@@ -871,6 +942,7 @@ func (r *reply) send(bv uint64) error {
 		ReqID, BV uint64
 		Data      rlp.RawValue
 	}
+
 	return p2p.Send(r.w, r.msgcode, &resp{r.reqID, bv, r.data})
 }
 
@@ -954,15 +1026,18 @@ func (p *clientPeer) UpdateCapacity(newCap uint64, requested bool) {
 	if newCap != p.fcParams.MinRecharge {
 		p.fcParams = flowcontrol.ServerParams{MinRecharge: newCap, BufLimit: newCap * bufLimitRatio}
 		p.fcClient.UpdateParams(p.fcParams)
+
 		var kvList keyValueList
 		kvList = kvList.add("flowControl/MRR", newCap)
 		kvList = kvList.add("flowControl/BL", newCap*bufLimitRatio)
+
 		p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
 	}
 
 	if p.capacity == 0 && newCap != 0 {
 		p.sendLastAnnounce()
 	}
+
 	p.capacity = newCap
 }
 
@@ -985,47 +1060,15 @@ func (p *clientPeer) sendLastAnnounce() {
 	if p.lastAnnounce.Td == nil {
 		return
 	}
+
 	if p.headInfo.Td == nil || p.lastAnnounce.Td.Cmp(p.headInfo.Td) > 0 {
 		if !p.queueSend(func() { p.sendAnnounce(p.lastAnnounce) }) {
 			p.Log().Debug("Dropped announcement because queue is full", "number", p.lastAnnounce.Number, "hash", p.lastAnnounce.Hash)
 		} else {
 			p.Log().Debug("Sent announcement", "number", p.lastAnnounce.Number, "hash", p.lastAnnounce.Hash)
 		}
-		p.headInfo = blockInfo{Hash: p.lastAnnounce.Hash, Number: p.lastAnnounce.Number, Td: p.lastAnnounce.Td}
-	}
-}
 
-// freezeClient temporarily puts the client in a frozen state which means all
-// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
-// after a short time if the client's buffer value is at least in the slightly positive
-// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
-// message.
-func (p *clientPeer) freezeClient() {
-	if p.version < lpv3 {
-		// if Stop/Resume is not supported then just drop the peer after setting
-		// its frozen status permanently
-		atomic.StoreUint32(&p.frozen, 1)
-		p.Peer.Disconnect(p2p.DiscUselessPeer)
-		return
-	}
-	if atomic.SwapUint32(&p.frozen, 1) == 0 {
-		go func() {
-			p.sendStop()
-			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
-			for {
-				bufValue, bufLimit := p.fcClient.BufferStatus()
-				if bufLimit == 0 {
-					return
-				}
-				if bufValue <= bufLimit/8 {
-					time.Sleep(freezeCheckPeriod)
-				} else {
-					atomic.StoreUint32(&p.frozen, 0)
-					p.sendResume(bufValue)
-					break
-				}
-			}
-		}()
+		p.headInfo = blockInfo{Hash: p.lastAnnounce.Hash, Number: p.lastAnnounce.Number, Td: p.lastAnnounce.Td}
 	}
 }
 
@@ -1040,15 +1083,18 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			recentTx -= blockSafetyMargin - txIndexRecentOffset
 		}
 	}
+
 	if server.config.UltraLightOnlyAnnounce {
 		recentTx = txIndexDisabled
 	}
+
 	if recentTx != txIndexUnlimited && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
 	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
+
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
@@ -1062,12 +1108,15 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			if server.archiveMode {
 				stateRecent = 0
 			}
+
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
 		}
+
 		if p.version >= lpv4 {
 			*lists = (*lists).add("recentTxLookup", recentTx)
 		}
+
 		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
 		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
 
@@ -1077,6 +1126,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		} else {
 			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
 		}
+
 		*lists = (*lists).add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
@@ -1100,6 +1150,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 				p.announceType = announceTypeSimple
 			}
 		}
+
 		return nil
 	})
 }
@@ -1113,6 +1164,7 @@ func (p *clientPeer) bumpInvalid() {
 func (p *clientPeer) getInvalid() uint64 {
 	p.invalidLock.RLock()
 	defer p.invalidLock.RUnlock()
+
 	return p.invalidCount.Value(mclock.Now())
 }
 
@@ -1157,19 +1209,6 @@ func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
 	}
 }
 
-// unSubscribe removes the specified service from the subscriber pool.
-func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	for i, s := range ps.subscribers {
-		if s == sub {
-			ps.subscribers = append(ps.subscribers[:i], ps.subscribers[i+1:]...)
-			return
-		}
-	}
-}
-
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
 func (ps *serverPeerSet) register(peer *serverPeer) error {
@@ -1179,13 +1218,16 @@ func (ps *serverPeerSet) register(peer *serverPeer) error {
 	if ps.closed {
 		return errClosed
 	}
+
 	if _, exist := ps.peers[peer.id]; exist {
 		return errAlreadyRegistered
 	}
+
 	ps.peers[peer.id] = peer
 	for _, sub := range ps.subscribers {
 		sub.registerPeer(peer)
 	}
+
 	return nil
 }
 
@@ -1200,11 +1242,15 @@ func (ps *serverPeerSet) unregister(id string) error {
 	if !ok {
 		return errNotRegistered
 	}
+
 	delete(ps.peers, id)
+
 	for _, sub := range ps.subscribers {
 		sub.unregisterPeer(p)
 	}
+
 	p.Peer.Disconnect(p2p.DiscRequested)
+
 	return nil
 }
 
@@ -1217,6 +1263,7 @@ func (ps *serverPeerSet) ids() []string {
 	for id := range ps.peers {
 		ids = append(ids, id)
 	}
+
 	return ids
 }
 
@@ -1236,25 +1283,6 @@ func (ps *serverPeerSet) len() int {
 	return len(ps.peers)
 }
 
-// bestPeer retrieves the known peer with the currently highest total difficulty.
-// If the peerset is "client peer set", then nothing meaningful will return. The
-// reason is client peer never send back their latest status to server.
-func (ps *serverPeerSet) bestPeer() *serverPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var (
-		bestPeer *serverPeer
-		bestTd   *big.Int
-	)
-	for _, p := range ps.peers {
-		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p, td
-		}
-	}
-	return bestPeer
-}
-
 // allServerPeers returns all server peers in a list.
 func (ps *serverPeerSet) allPeers() []*serverPeer {
 	ps.lock.RLock()
@@ -1264,6 +1292,7 @@ func (ps *serverPeerSet) allPeers() []*serverPeer {
 	for _, p := range ps.peers {
 		list = append(list, p)
 	}
+
 	return list
 }
 
@@ -1276,6 +1305,7 @@ func (ps *serverPeerSet) close() {
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
+
 	ps.closed = true
 }
 
@@ -1304,11 +1334,14 @@ func (ps *clientPeerSet) register(peer *clientPeer) error {
 	if ps.closed {
 		return errClosed
 	}
+
 	if _, exist := ps.peers[peer.ID()]; exist {
 		return errAlreadyRegistered
 	}
+
 	ps.peers[peer.ID()] = peer
 	ps.announceOrStore(peer)
+
 	return nil
 }
 
@@ -1323,8 +1356,10 @@ func (ps *clientPeerSet) unregister(id enode.ID) error {
 	if !ok {
 		return errNotRegistered
 	}
+
 	delete(ps.peers, id)
 	p.Peer.Disconnect(p2p.DiscRequested)
+
 	return nil
 }
 
@@ -1337,6 +1372,7 @@ func (ps *clientPeerSet) ids() []enode.ID {
 	for id := range ps.peers {
 		ids = append(ids, id)
 	}
+
 	return ids
 }
 
@@ -1346,14 +1382,6 @@ func (ps *clientPeerSet) peer(id enode.ID) *clientPeer {
 	defer ps.lock.RUnlock()
 
 	return ps.peers[id]
-}
-
-// len returns if the current number of peers in the set.
-func (ps *clientPeerSet) len() int {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return len(ps.peers)
 }
 
 // setSignerKey sets the signer key for signed announcements. Should be called before
@@ -1379,6 +1407,7 @@ func (ps *clientPeerSet) announceOrStore(p *clientPeer) {
 	if ps.lastAnnounce.Td == nil {
 		return
 	}
+
 	switch p.announceType {
 	case announceTypeSimple:
 		p.announceOrStore(ps.lastAnnounce)
@@ -1387,6 +1416,7 @@ func (ps *clientPeerSet) announceOrStore(p *clientPeer) {
 			ps.signedAnnounce = ps.lastAnnounce
 			ps.signedAnnounce.sign(ps.privateKey)
 		}
+
 		p.announceOrStore(ps.signedAnnounce)
 	}
 }
@@ -1400,6 +1430,7 @@ func (ps *clientPeerSet) close() {
 	for _, p := range ps.peers {
 		p.Peer.Disconnect(p2p.DiscQuitting)
 	}
+
 	ps.closed = true
 }
 
@@ -1425,10 +1456,13 @@ func (s *serverSet) register(peer *clientPeer) error {
 	if s.closed {
 		return errClosed
 	}
+
 	if _, exist := s.set[peer.id]; exist {
 		return errAlreadyRegistered
 	}
+
 	s.set[peer.id] = peer
+
 	return nil
 }
 
@@ -1439,11 +1473,14 @@ func (s *serverSet) unregister(peer *clientPeer) error {
 	if s.closed {
 		return errClosed
 	}
+
 	if _, exist := s.set[peer.id]; !exist {
 		return errNotRegistered
 	}
+
 	delete(s.set, peer.id)
 	peer.Peer.Disconnect(p2p.DiscQuitting)
+
 	return nil
 }
 
@@ -1454,5 +1491,6 @@ func (s *serverSet) close() {
 	for _, p := range s.set {
 		p.Peer.Disconnect(p2p.DiscQuitting)
 	}
+
 	s.closed = true
 }

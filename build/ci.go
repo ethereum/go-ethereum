@@ -31,8 +31,6 @@ Available commands are:
 	importkeys                                                                                  -- imports signing keys from env
 	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
 	nsis                                                                                        -- creates a Windows NSIS installer
-	aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
-	xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
 	purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -40,18 +38,15 @@ For all commands, -n prevents execution of external programs (dry run mode).
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -78,7 +73,6 @@ var (
 		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("geth"),
-		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
 	}
@@ -100,10 +94,6 @@ var (
 		{
 			BinaryName:  "geth",
 			Description: "Ethereum CLI client.",
-		},
-		{
-			BinaryName:  "puppeth",
-			Description: "Ethereum private network manager.",
 		},
 		{
 			BinaryName:  "rlpdump",
@@ -130,14 +120,15 @@ var (
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
-	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite
+	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish
 	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11", // EOL: 04/2024
-		"xenial": "golang-go",   // EOL: 04/2026
-		"bionic": "golang-go",   // EOL: 04/2028
-		"focal":  "golang-go",   // EOL: 04/2030
-		"impish": "golang-go",   // EOL: 07/2022
-		// "jammy": "golang-go",   // EOL: 04/2027
+		"trusty":  "golang-1.11", // EOL: 04/2024
+		"xenial":  "golang-go",   // EOL: 04/2026
+		"bionic":  "golang-go",   // EOL: 04/2028
+		"focal":   "golang-go",   // EOL: 04/2030
+		"jammy":   "golang-go",   // EOL: 04/2032
+		"kinetic": "golang-go",   // EOL: 07/2023
+		"lunar":   "golang-go",   // EOL: 01/2024
 	}
 
 	debGoBootPaths = map[string]string{
@@ -145,10 +136,10 @@ var (
 		"golang-go":   "/usr/lib/go",
 	}
 
-	// This is the version of go that will be downloaded by
+	// This is the version of Go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.18"
+	dlgoVersion = "1.20"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -163,7 +154,7 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if _, err := os.Stat(filepath.Join("build", "ci.go")); os.IsNotExist(err) {
+	if !common.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
@@ -184,10 +175,6 @@ func main() {
 		doDebianSource(os.Args[2:])
 	case "nsis":
 		doWindowsInstaller(os.Args[2:])
-	case "aar":
-		doAndroidArchive(os.Args[2:])
-	case "xcode":
-		doXCodeFramework(os.Args[2:])
 	case "purge":
 		doPurge(os.Args[2:])
 	default:
@@ -199,9 +186,10 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch = flag.String("arch", "", "Architecture to cross build for")
-		cc   = flag.String("cc", "", "C compiler to cross build with")
+		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch       = flag.String("arch", "", "Architecture to cross build for")
+		cc         = flag.String("cc", "", "C compiler to cross build with")
+		staticlink = flag.Bool("static", false, "Create statically-linked executable")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -212,9 +200,12 @@ func doInstall(cmdline []string) {
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 
+	// Disable CLI markdown doc generation in release builds.
+	buildTags := []string{"urfave_cli_no_docs"}
+
 	// Configure the build.
 	env := build.Env()
-	gobuild := tc.Go("build", buildFlags(env)...)
+	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
@@ -247,24 +238,34 @@ func doInstall(cmdline []string) {
 }
 
 // buildFlags returns the go tool flags for building.
-func buildFlags(env build.Environment) (flags []string) {
+func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
-		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
-		ld = append(ld, "-X", "main.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitDate="+env.Date)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
-	// Enforce the stacksize to 8M, which is the case on most platforms apart from
-	// alpine Linux.
 	if runtime.GOOS == "linux" {
-		ld = append(ld, "-extldflags", "-Wl,-z,stack-size=0x800000")
+		// Enforce the stacksize to 8M, which is the case on most platforms apart from
+		// alpine Linux.
+		extld := []string{"-Wl,-z,stack-size=0x800000"}
+		if staticLinking {
+			extld = append(extld, "-static")
+			// Under static linking, use of certain glibc features must be
+			// disabled to avoid shared library dependencies.
+			buildTags = append(buildTags, "osusergo", "netgo")
+		}
+		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
+	}
+	if len(buildTags) > 0 {
+		flags = append(flags, "-tags", strings.Join(buildTags, ","))
 	}
 	return flags
 }
@@ -456,10 +457,6 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.IsCronJob {
-		log.Printf("skipping archive creation because this is a cron job")
-		os.Exit(0)
-	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
@@ -593,7 +590,7 @@ func doDocker(cmdline []string) {
 			}
 			if mismatch {
 				// Build numbers mismatching, retry in a short time to
-				// avoid concurrent failes in both publisher images. If
+				// avoid concurrent fails in both publisher images. If
 				// however the retry failed too, it means the concurrent
 				// builder is still crunching, let that do the publish.
 				if i == 0 {
@@ -654,10 +651,10 @@ func doDebianSource(cmdline []string) {
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
 	}
-
-	// Download and verify the Go source package.
-	gobundle := downloadGoSources(*cachedir)
-
+	// Download and verify the Go source packages.
+	var (
+		gobundle = downloadGoSources(*cachedir)
+	)
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
 	srcdepfetch.Env = append(srcdepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
@@ -680,12 +677,12 @@ func doDebianSource(cmdline []string) {
 				return
 			}
 
-			// Add Go source code
+			// Add builder Go source code
 			if err := build.ExtractArchive(gobundle, canonicalPath); err != nil {
-				log.Fatalf("Failed to extract Go sources: %v", err)
+				log.Fatalf("Failed to extract builder Go sources: %v", err)
 			}
 			if err := os.Rename(filepath.Join(canonicalPath, "go"), filepath.Join(canonicalPath, ".go")); err != nil {
-				log.Fatalf("Failed to rename Go source folder: %v", err)
+				log.Fatalf("Failed to rename builder Go source folder: %v", err)
 			}
 			// Add all dependency modules in compressed form
 			os.MkdirAll(filepath.Join(canonicalPath, ".mod", "cache"), 0755)
@@ -739,8 +736,8 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if _, err := os.Stat(idfile); os.IsNotExist(err) {
-			ioutil.WriteFile(idfile, sshkey, 0600)
+		if !common.FileExist(idfile) {
+			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
 	// Upload
@@ -763,7 +760,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = ioutil.TempDir("", "geth-build-")
+		wdflag, err = os.MkdirTemp("", "geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -961,10 +958,10 @@ func doWindowsInstaller(cmdline []string) {
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 	if err := cp.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll"); err != nil {
-		log.Fatal("Failed to copy SimpleFC.dll: %v", err)
+		log.Fatalf("Failed to copy SimpleFC.dll: %v", err)
 	}
 	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING"); err != nil {
-		log.Fatal("Failed to copy copyright note: %v", err)
+		log.Fatalf("Failed to copy copyright note: %v", err)
 	}
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
@@ -973,7 +970,10 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
-	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	if err != nil {
+		log.Fatalf("Failed to convert installer file path: %v", err)
+	}
 	build.MustRunCommand("makensis.exe",
 		"/DOUTPUTFILE="+installer,
 		"/DMAJORVERSION="+version[0],
@@ -985,240 +985,6 @@ func doWindowsInstaller(cmdline []string) {
 	// Sign and publish installer.
 	if err := archiveUpload(installer, *upload, *signer, *signify); err != nil {
 		log.Fatal(err)
-	}
-}
-
-// Android archives
-
-func doAndroidArchive(cmdline []string) {
-	var (
-		local   = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
-		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. ANDROID_SIGNING_KEY)`)
-		signify = flag.String("signify", "", `Environment variable holding the signify signing key (e.g. ANDROID_SIGNIFY_KEY)`)
-		deploy  = flag.String("deploy", "", `Destination to deploy the archive (usually "https://oss.sonatype.org")`)
-		upload  = flag.String("upload", "", `Destination to upload the archive (usually "gethstore/builds")`)
-	)
-	flag.CommandLine.Parse(cmdline)
-	env := build.Env()
-	tc := new(build.GoToolchain)
-
-	// Sanity check that the SDK and NDK are installed and set
-	if os.Getenv("ANDROID_HOME") == "" {
-		log.Fatal("Please ensure ANDROID_HOME points to your Android SDK")
-	}
-
-	// Build gomobile.
-	install := tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest")
-	install.Env = append(install.Env)
-	build.MustRun(install)
-
-	// Ensure all dependencies are available. This is required to make
-	// gomobile bind work because it expects go.sum to contain all checksums.
-	build.MustRun(tc.Go("mod", "download"))
-
-	// Build the Android archive and Maven resources
-	build.MustRun(gomobileTool("bind", "-ldflags", "-s -w", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
-
-	if *local {
-		// If we're building locally, copy bundle to build dir and skip Maven
-		os.Rename("geth.aar", filepath.Join(GOBIN, "geth.aar"))
-		os.Rename("geth-sources.jar", filepath.Join(GOBIN, "geth-sources.jar"))
-		return
-	}
-	meta := newMavenMetadata(env)
-	build.Render("build/mvn.pom", meta.Package+".pom", 0755, meta)
-
-	// Skip Maven deploy and Azure upload for PR builds
-	maybeSkipArchive(env)
-
-	// Sign and upload the archive to Azure
-	archive := "geth-" + archiveBasename("android", params.ArchiveVersion(env.Commit)) + ".aar"
-	os.Rename("geth.aar", archive)
-
-	if err := archiveUpload(archive, *upload, *signer, *signify); err != nil {
-		log.Fatal(err)
-	}
-	// Sign and upload all the artifacts to Maven Central
-	os.Rename(archive, meta.Package+".aar")
-	if *signer != "" && *deploy != "" {
-		// Import the signing key into the local GPG instance
-		key := getenvBase64(*signer)
-		gpg := exec.Command("gpg", "--import")
-		gpg.Stdin = bytes.NewReader(key)
-		build.MustRun(gpg)
-		keyID, err := build.PGPKeyID(string(key))
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Upload the artifacts to Sonatype and/or Maven Central
-		repo := *deploy + "/service/local/staging/deploy/maven2"
-		if meta.Develop {
-			repo = *deploy + "/content/repositories/snapshots"
-		}
-		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
-			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
-			"-Dgpg.keyname="+keyID,
-			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
-	}
-}
-
-func gomobileTool(subcmd string, args ...string) *exec.Cmd {
-	cmd := exec.Command(filepath.Join(GOBIN, "gomobile"), subcmd)
-	cmd.Args = append(cmd.Args, args...)
-	cmd.Env = []string{
-		"PATH=" + GOBIN + string(os.PathListSeparator) + os.Getenv("PATH"),
-	}
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "PATH=") || strings.HasPrefix(e, "GOBIN=") {
-			continue
-		}
-		cmd.Env = append(cmd.Env, e)
-	}
-	cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
-	return cmd
-}
-
-type mavenMetadata struct {
-	Version      string
-	Package      string
-	Develop      bool
-	Contributors []mavenContributor
-}
-
-type mavenContributor struct {
-	Name  string
-	Email string
-}
-
-func newMavenMetadata(env build.Environment) mavenMetadata {
-	// Collect the list of authors from the repo root
-	contribs := []mavenContributor{}
-	if authors, err := os.Open("AUTHORS"); err == nil {
-		defer authors.Close()
-
-		scanner := bufio.NewScanner(authors)
-		for scanner.Scan() {
-			// Skip any whitespace from the authors list
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" || line[0] == '#' {
-				continue
-			}
-			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+)>")
-			parts := re.FindStringSubmatch(line)
-			if len(parts) == 3 {
-				contribs = append(contribs, mavenContributor{Name: parts[1], Email: parts[2]})
-			}
-		}
-	}
-	// Render the version and package strings
-	version := params.Version
-	if isUnstableBuild(env) {
-		version += "-SNAPSHOT"
-	}
-	return mavenMetadata{
-		Version:      version,
-		Package:      "geth-" + version,
-		Develop:      isUnstableBuild(env),
-		Contributors: contribs,
-	}
-}
-
-// XCode frameworks
-
-func doXCodeFramework(cmdline []string) {
-	var (
-		local   = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
-		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. IOS_SIGNING_KEY)`)
-		signify = flag.String("signify", "", `Environment variable holding the signify signing key (e.g. IOS_SIGNIFY_KEY)`)
-		deploy  = flag.String("deploy", "", `Destination to deploy the archive (usually "trunk")`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
-	)
-	flag.CommandLine.Parse(cmdline)
-	env := build.Env()
-	tc := new(build.GoToolchain)
-
-	// Build gomobile.
-	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest"))
-
-	// Ensure all dependencies are available. This is required to make
-	// gomobile bind work because it expects go.sum to contain all checksums.
-	build.MustRun(tc.Go("mod", "download"))
-
-	// Build the iOS XCode framework
-	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
-
-	if *local {
-		// If we're building locally, use the build folder and stop afterwards
-		bind.Dir = GOBIN
-		build.MustRun(bind)
-		return
-	}
-
-	// Create the archive.
-	maybeSkipArchive(env)
-	archive := "geth-" + archiveBasename("ios", params.ArchiveVersion(env.Commit))
-	if err := os.MkdirAll(archive, 0755); err != nil {
-		log.Fatal(err)
-	}
-	bind.Dir, _ = filepath.Abs(archive)
-	build.MustRun(bind)
-	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)
-
-	// Sign and upload the framework to Azure
-	if err := archiveUpload(archive+".tar.gz", *upload, *signer, *signify); err != nil {
-		log.Fatal(err)
-	}
-	// Prepare and upload a PodSpec to CocoaPods
-	if *deploy != "" {
-		meta := newPodMetadata(env, archive)
-		build.Render("build/pod.podspec", "Geth.podspec", 0755, meta)
-		build.MustRunCommand("pod", *deploy, "push", "Geth.podspec", "--allow-warnings")
-	}
-}
-
-type podMetadata struct {
-	Version      string
-	Commit       string
-	Archive      string
-	Contributors []podContributor
-}
-
-type podContributor struct {
-	Name  string
-	Email string
-}
-
-func newPodMetadata(env build.Environment, archive string) podMetadata {
-	// Collect the list of authors from the repo root
-	contribs := []podContributor{}
-	if authors, err := os.Open("AUTHORS"); err == nil {
-		defer authors.Close()
-
-		scanner := bufio.NewScanner(authors)
-		for scanner.Scan() {
-			// Skip any whitespace from the authors list
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" || line[0] == '#' {
-				continue
-			}
-			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+)>")
-			parts := re.FindStringSubmatch(line)
-			if len(parts) == 3 {
-				contribs = append(contribs, podContributor{Name: parts[1], Email: parts[2]})
-			}
-		}
-	}
-	version := params.Version
-	if isUnstableBuild(env) {
-		version += "-unstable." + env.Buildnum
-	}
-	return podMetadata{
-		Archive:      archive,
-		Version:      version,
-		Commit:       env.Commit,
-		Contributors: contribs,
 	}
 }
 

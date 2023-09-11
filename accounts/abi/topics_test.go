@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ func TestMakeTopics(t *testing.T) {
 	type args struct {
 		query [][]interface{}
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -123,6 +124,7 @@ func TestMakeTopics(t *testing.T) {
 				t.Errorf("makeTopics() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("makeTopics() = %v, want %v", got, tt.want)
 			}
@@ -355,6 +357,7 @@ func TestParseTopics(t *testing.T) {
 			if err := ParseTopics(createObj, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopics() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			resultObj := tt.args.resultObj()
 			if !reflect.DeepEqual(createObj, resultObj) {
 				t.Errorf("parseTopics() = %v, want %v", createObj, resultObj)
@@ -372,6 +375,7 @@ func TestParseTopicsIntoMap(t *testing.T) {
 			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			resultMap := tt.args.resultMap()
 			if !reflect.DeepEqual(outMap, resultMap) {
 				t.Errorf("parseTopicsIntoMap() = %v, want %v", outMap, resultMap)

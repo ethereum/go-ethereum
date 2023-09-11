@@ -25,16 +25,19 @@ import (
 )
 
 // ConvertType converts an interface of a runtime type into a interface of the
-// given type
-// e.g. turn
-// var fields []reflect.StructField
-// fields = append(fields, reflect.StructField{
-// 		Name: "X",
-//		Type: reflect.TypeOf(new(big.Int)),
-//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
-// }
-// into
-// type TupleT struct { X *big.Int }
+// given type, e.g. turn this code:
+//
+//	var fields []reflect.StructField
+//
+//	fields = append(fields, reflect.StructField{
+//			Name: "X",
+//			Type: reflect.TypeOf(new(big.Int)),
+//			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+//	}
+//
+// into:
+//
+//	type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
 	protoType := reflect.TypeOf(proto)
 	if reflect.TypeOf(in).ConvertibleTo(protoType) {
@@ -44,6 +47,7 @@ func ConvertType(in interface{}, proto interface{}) interface{} {
 	if err := set(reflect.ValueOf(proto), reflect.ValueOf(in)); err != nil {
 		panic(err)
 	}
+
 	return proto
 }
 
@@ -53,6 +57,7 @@ func indirect(v reflect.Value) reflect.Value {
 	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
 		return indirect(v.Elem())
 	}
+
 	return v
 }
 
@@ -71,6 +76,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 			return reflect.TypeOf(uint64(0))
 		}
 	}
+
 	switch size {
 	case 8:
 		return reflect.TypeOf(int8(0))
@@ -81,6 +87,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	case 64:
 		return reflect.TypeOf(int64(0))
 	}
+
 	return reflect.TypeOf(&big.Int{})
 }
 
@@ -89,6 +96,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())
 	reflect.Copy(slice, value)
+
 	return slice
 }
 
@@ -98,8 +106,9 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 // strict ruleset as bare `reflect` does.
 func set(dst, src reflect.Value) error {
 	dstType, srcType := dst.Type(), src.Type()
+
 	switch {
-	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid():
+	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Ptr || dst.Elem().CanSet()):
 		return set(dst.Elem(), src)
 	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
 		return set(dst.Elem(), src)
@@ -114,6 +123,7 @@ func set(dst, src reflect.Value) error {
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
+
 	return nil
 }
 
@@ -127,10 +137,12 @@ func setSlice(dst, src reflect.Value) error {
 			return err
 		}
 	}
+
 	if dst.CanSet() {
 		dst.Set(slice)
 		return nil
 	}
+
 	return errors.New("Cannot set slice, destination not settable")
 }
 
@@ -138,20 +150,25 @@ func setArray(dst, src reflect.Value) error {
 	if src.Kind() == reflect.Ptr {
 		return set(dst, indirect(src))
 	}
+
 	array := reflect.New(dst.Type()).Elem()
+
 	min := src.Len()
 	if src.Len() > dst.Len() {
 		min = dst.Len()
 	}
+
 	for i := 0; i < min; i++ {
 		if err := set(array.Index(i), src.Index(i)); err != nil {
 			return err
 		}
 	}
+
 	if dst.CanSet() {
 		dst.Set(array)
 		return nil
 	}
+
 	return errors.New("Cannot set array, destination not settable")
 }
 
@@ -159,22 +176,27 @@ func setStruct(dst, src reflect.Value) error {
 	for i := 0; i < src.NumField(); i++ {
 		srcField := src.Field(i)
 		dstField := dst.Field(i)
+
 		if !dstField.IsValid() || !srcField.IsValid() {
 			return fmt.Errorf("Could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
 		}
+
 		if err := set(dstField, srcField); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // mapArgNamesToStructFields maps a slice of argument names to struct fields.
-// first round: for each Exportable field that contains a `abi:""` tag
-//   and this field name exists in the given argument name list, pair them together.
-// second round: for each argument name that has not been already linked,
-//   find what variable is expected to be mapped into, if it exists and has not been
-//   used, pair them.
+//
+// first round: for each Exportable field that contains a `abi:""` tag and this field name
+// exists in the given argument name list, pair them together.
+//
+// second round: for each argument name that has not been already linked, find what
+// variable is expected to be mapped into, if it exists and has not been used, pair them.
+//
 // Note this function assumes the given value is a struct value.
 func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[string]string, error) {
 	typ := value.Type()
@@ -201,6 +223,7 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 		}
 		// check which argument field matches with the abi tag.
 		found := false
+
 		for _, arg := range argNames {
 			if arg == tagName {
 				if abi2struct[arg] != "" {
@@ -220,7 +243,6 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 
 	// second round ~~~
 	for _, argName := range argNames {
-
 		structFieldName := ToCamelCase(argName)
 
 		if structFieldName == "" {
@@ -237,6 +259,7 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 				value.FieldByName(structFieldName).IsValid() {
 				return nil, fmt.Errorf("abi: multiple variables maps to the same abi field '%s'", argName)
 			}
+
 			continue
 		}
 
@@ -256,5 +279,6 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 			struct2abi[structFieldName] = argName
 		}
 	}
+
 	return abi2struct, nil
 }

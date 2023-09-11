@@ -171,6 +171,7 @@ func sub(z, x, y *fe) {
 	z[3], b = bits.Sub64(x[3], y[3], b)
 	z[4], b = bits.Sub64(x[4], y[4], b)
 	z[5], b = bits.Sub64(x[5], y[5], b)
+
 	if b != 0 {
 		var c uint64
 		z[0], c = bits.Add64(z[0], 13402431016077863595, 0)
@@ -190,6 +191,7 @@ func subAssign(z, x *fe) {
 	z[3], b = bits.Sub64(z[3], x[3], b)
 	z[4], b = bits.Sub64(z[4], x[4], b)
 	z[5], b = bits.Sub64(z[5], x[5], b)
+
 	if b != 0 {
 		var c uint64
 		z[0], c = bits.Add64(z[0], 13402431016077863595, 0)
@@ -216,6 +218,7 @@ func neg(z *fe, x *fe) {
 		z.zero()
 		return
 	}
+
 	var borrow uint64
 	z[0], borrow = bits.Sub64(13402431016077863595, x[0], 0)
 	z[1], borrow = bits.Sub64(2210141511517208575, x[1], borrow)
@@ -227,6 +230,7 @@ func neg(z *fe, x *fe) {
 
 func mul(z, x, y *fe) {
 	var t [6]uint64
+
 	var c [3]uint64
 	{
 		// round 0
@@ -345,7 +349,6 @@ func mul(z, x, y *fe) {
 }
 
 func square(z, x *fe) {
-
 	var p [6]uint64
 
 	var u, v uint64
@@ -354,6 +357,7 @@ func square(z, x *fe) {
 		u, p[0] = bits.Mul64(x[0], x[0])
 		m := p[0] * 9940570264628428797
 		C := madd0(m, 13402431016077863595, p[0])
+
 		var t uint64
 		t, u, v = madd1sb(x[0], x[1], u)
 		C, p[0] = madd2(m, 2210141511517208575, v, C)
@@ -372,6 +376,7 @@ func square(z, x *fe) {
 		C := madd0(m, 13402431016077863595, p[0])
 		u, v = madd1(x[1], x[1], p[1])
 		C, p[0] = madd2(m, 2210141511517208575, v, C)
+
 		var t uint64
 		t, u, v = madd2sb(x[1], x[2], p[2], u)
 		C, p[1] = madd2(m, 7435674573564081700, v, C)
@@ -389,6 +394,7 @@ func square(z, x *fe) {
 		C, p[0] = madd2(m, 2210141511517208575, p[1], C)
 		u, v = madd1(x[2], x[2], p[2])
 		C, p[1] = madd2(m, 7435674573564081700, v, C)
+
 		var t uint64
 		t, u, v = madd2sb(x[2], x[3], p[3], u)
 		C, p[2] = madd2(m, 7239337960414712511, v, C)
@@ -405,6 +411,7 @@ func square(z, x *fe) {
 		C, p[1] = madd2(m, 7435674573564081700, p[2], C)
 		u, v = madd1(x[3], x[3], p[3])
 		C, p[2] = madd2(m, 7239337960414712511, v, C)
+
 		var t uint64
 		t, u, v = madd2sb(x[3], x[4], p[4], u)
 		C, p[3] = madd2(m, 5412103778470702295, v, C)
@@ -467,10 +474,12 @@ func square(z, x *fe) {
 
 func madd(a, b, t, u, v uint64) (uint64, uint64, uint64) {
 	var carry uint64
+
 	hi, lo := bits.Mul64(a, b)
 	v, carry = bits.Add64(lo, v, 0)
 	u, carry = bits.Add64(hi, u, carry)
 	t, _ = bits.Add64(t, 0, carry)
+
 	return t, u, v
 }
 
@@ -480,26 +489,31 @@ func madd0(a, b, c uint64) (hi uint64) {
 	hi, lo = bits.Mul64(a, b)
 	_, carry = bits.Add64(lo, c, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
+
 	return
 }
 
 // madd1 hi, lo = a*b + c
 func madd1(a, b, c uint64) (hi uint64, lo uint64) {
 	var carry uint64
+
 	hi, lo = bits.Mul64(a, b)
 	lo, carry = bits.Add64(lo, c, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
+
 	return
 }
 
 // madd2 hi, lo = a*b + c + d
 func madd2(a, b, c, d uint64) (hi uint64, lo uint64) {
 	var carry uint64
+
 	hi, lo = bits.Mul64(a, b)
 	c, carry = bits.Add64(c, d, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
 	lo, carry = bits.Add64(lo, c, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
+
 	return
 }
 
@@ -516,6 +530,7 @@ func madd2s(a, b, c, d, e uint64) (superhi, hi, lo uint64) {
 	lo, carry = bits.Add64(lo, sum, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
 	hi, _ = bits.Add64(hi, 0, d)
+
 	return
 }
 
@@ -528,6 +543,7 @@ func madd1s(a, b, d, e uint64) (superhi, hi, lo uint64) {
 	lo, carry = bits.Add64(lo, e, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
 	hi, _ = bits.Add64(hi, 0, d)
+
 	return
 }
 
@@ -542,6 +558,7 @@ func madd2sb(a, b, c, e uint64) (superhi, hi, lo uint64) {
 	hi, _ = bits.Add64(hi, 0, carry)
 	lo, carry = bits.Add64(lo, sum, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
+
 	return
 }
 
@@ -553,15 +570,18 @@ func madd1sb(a, b, e uint64) (superhi, hi, lo uint64) {
 	hi, superhi = bits.Add64(hi, hi, carry)
 	lo, carry = bits.Add64(lo, e, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
+
 	return
 }
 
 func madd3(a, b, c, d, e uint64) (hi uint64, lo uint64) {
 	var carry uint64
+
 	hi, lo = bits.Mul64(a, b)
 	c, carry = bits.Add64(c, d, 0)
 	hi, _ = bits.Add64(hi, 0, carry)
 	lo, carry = bits.Add64(lo, c, 0)
 	hi, _ = bits.Add64(hi, e, carry)
+
 	return
 }

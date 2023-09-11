@@ -14,6 +14,7 @@ func NewHealthcheck(f func(Healthcheck)) Healthcheck {
 	if !Enabled {
 		return NilHealthcheck{}
 	}
+
 	return &StandardHealthcheck{nil, f}
 }
 

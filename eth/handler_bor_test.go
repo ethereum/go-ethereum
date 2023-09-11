@@ -86,6 +86,7 @@ func TestFetchWhitelistCheckpoints(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			heimdall.fetchCheckpointCount = getMockFetchCheckpointFn(tc.count, tc.fetchErr)
 			blockNums, blockHashes, err := handler.fetchWhitelistCheckpoints(ctx, bor, verifier, tc.first)
 

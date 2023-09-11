@@ -63,6 +63,7 @@ func (s *scheduler) run(sections chan uint64, dist chan *request, done chan []by
 
 	// Start the pipeline schedulers to forward between user -> distributor -> user
 	wg.Add(2)
+
 	go s.scheduleRequests(sections, dist, pend, quit, wg)
 	go s.scheduleDeliveries(pend, done, quit, wg)
 }

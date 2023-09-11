@@ -100,6 +100,7 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 	if err != nil {
 		return fmt.Errorf("invalid payload id %q: %w", input, err)
 	}
+
 	return nil
 }
 
@@ -119,35 +120,43 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 	for i, tx := range txs {
 		enc[i], _ = tx.MarshalBinary()
 	}
+
 	return enc
 }
 
 func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
+
 	for i, encTx := range enc {
 		var tx types.Transaction
 		if err := tx.UnmarshalBinary(encTx); err != nil {
 			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
 		}
+
 		txs[i] = &tx
 	}
+
 	return txs, nil
 }
 
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
-// 		len(extraData) <= 32
-// 		uncleHash = emptyUncleHash
-// 		difficulty = 0
+//
+//	len(extraData) <= 32
+//	uncleHash = emptyUncleHash
+//	difficulty = 0
+//
 // and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
+
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
@@ -165,10 +174,12 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		Extra:       params.ExtraData,
 		MixDigest:   params.Random,
 	}
+
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
+
 	return block, nil
 }
 

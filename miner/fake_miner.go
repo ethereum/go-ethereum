@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -78,13 +79,24 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	t.Helper()
 
+	// addr0 := common.Address{0x1}
+
+	// genspec := &core.Genesis{
+	// 	Alloc: map[common.Address]core.GenesisAccount{
+	// 		addr0: {
+	// 			Balance: big.NewInt(0),
+	// 			Code:    []byte{0x1, 0x1},
+	// 		},
+	// 	},
+	// }
+
 	// Create Ethash config
-	chainDB, _, chainConfig := NewDBForFakes(t)
+	chainDB, genspec, chainConfig := NewDBForFakes(t)
 
 	engine := NewFakeBor(t, chainDB, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil, nil)
+	bc, err := core.NewBlockChain(chainDB, nil, genspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
@@ -92,7 +104,7 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
-	pool := core.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
+	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
 	backend := NewMockBackend(bc, pool)
 
 	// Create event Mux
@@ -130,7 +142,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 	chainDB := rawdb.NewDatabase(memdb)
 	genesis := core.DeveloperGenesisBlock(2, 11_500_000, common.HexToAddress("12345"))
 
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, genesis)
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}
@@ -157,10 +169,10 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 
 type mockBackend struct {
 	bc     *core.BlockChain
-	txPool *core.TxPool
+	txPool *txpool.TxPool
 }
 
-func NewMockBackend(bc *core.BlockChain, txPool *core.TxPool) *mockBackend {
+func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
 	return &mockBackend{
 		bc:     bc,
 		txPool: txPool,
@@ -171,7 +183,7 @@ func (m *mockBackend) BlockChain() *core.BlockChain {
 	return m.bc
 }
 
-func (m *mockBackend) TxPool() *core.TxPool {
+func (m *mockBackend) TxPool() *txpool.TxPool {
 	return m.txPool
 }
 
@@ -185,14 +197,15 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
-func (bc *testBlockChain) CurrentBlock() *types.Block {
-	return types.NewBlock(&types.Header{
+func (bc *testBlockChain) CurrentBlock() *types.Header {
+	return &types.Header{
 		GasLimit: bc.gasLimit,
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+		Number:   new(big.Int),
+	}
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return bc.CurrentBlock()
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -205,7 +218,7 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 
 var (
 	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
+	testTxPoolConfig  txpool.Config
 	ethashChainConfig *params.ChainConfig
 	cliqueChainConfig *params.ChainConfig
 
@@ -229,7 +242,7 @@ var (
 )
 
 func init() {
-	testTxPoolConfig = core.DefaultTxPoolConfig
+	testTxPoolConfig = txpool.DefaultConfig
 	testTxPoolConfig.Journal = ""
 	ethashChainConfig = new(params.ChainConfig)
 	*ethashChainConfig = *params.TestChainConfig

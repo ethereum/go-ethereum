@@ -428,12 +428,15 @@ func runDialTest(t *testing.T, config dialConfig, rounds []dialTestRound) {
 	// Set up the dialer. The setup function below runs on the dialTask
 	// goroutine and adds the peer.
 	var dialsched *dialScheduler
+
 	setup := func(fd net.Conn, f connFlag, node *enode.Node) error {
 		conn := &conn{flags: f, node: node}
 		dialsched.peerAdded(conn)
 		setupCh <- conn
+
 		return nil
 	}
+
 	dialsched = newDialScheduler(config, iterator, setup)
 	defer dialsched.stop()
 
@@ -443,33 +446,40 @@ func runDialTest(t *testing.T, config dialConfig, rounds []dialTestRound) {
 			if peers[c.node.ID()] != nil {
 				t.Fatalf("round %d: peer %v already connected", i, c.node.ID())
 			}
+
 			dialsched.peerAdded(c)
 			peers[c.node.ID()] = c
 		}
+
 		for _, id := range round.peersRemoved {
 			c := peers[id]
 			if c == nil {
 				t.Fatalf("round %d: can't remove non-existent peer %v", i, id)
 			}
+
 			dialsched.peerRemoved(c)
 		}
 
 		// Init round.
 		t.Logf("round %d (%d peers)", i, len(peers))
 		resolver.setAnswers(round.wantResolves)
+
 		if round.update != nil {
 			round.update(dialsched)
 		}
+
 		iterator.addNodes(round.discovered)
 
 		// Unblock dialTask goroutines.
 		if err := dialer.completeDials(round.succeeded, nil); err != nil {
 			t.Fatalf("round %d: %v", i, err)
 		}
+
 		for range round.succeeded {
 			conn := <-setupCh
 			peers[conn.node.ID()] = conn
 		}
+
 		if err := dialer.completeDials(round.failed, errors.New("oops")); err != nil {
 			t.Fatalf("round %d: %v", i, err)
 		}
@@ -478,6 +488,7 @@ func runDialTest(t *testing.T, config dialConfig, rounds []dialTestRound) {
 		if err := dialer.waitForDials(round.wantNewDials); err != nil {
 			t.Fatalf("round %d: %v", i, err)
 		}
+
 		if !resolver.checkCalls() {
 			t.Fatalf("unexpected calls to Resolve: %v", resolver.calls)
 		}
@@ -501,6 +512,7 @@ type dialTestIterator struct {
 func newDialTestIterator() *dialTestIterator {
 	it := &dialTestIterator{}
 	it.cond = sync.NewCond(&it.mu)
+
 	return it
 }
 
@@ -527,12 +539,15 @@ func (it *dialTestIterator) Next() bool {
 	for len(it.buf) == 0 && !it.closed {
 		it.cond.Wait()
 	}
+
 	if it.closed {
 		return false
 	}
+
 	it.cur = it.buf[0]
 	copy(it.buf[:], it.buf[1:])
 	it.buf = it.buf[:len(it.buf)-1]
+
 	return true
 }
 
@@ -588,6 +603,7 @@ func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
 	for _, n := range nodes {
 		waitset[n.ID()] = n
 	}
+
 	timeout := time.NewTimer(1 * time.Second)
 	defer timeout.Stop()
 
@@ -598,9 +614,11 @@ func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
 			if !ok {
 				return fmt.Errorf("attempt to dial unexpected node %v", req.n.ID())
 			}
+
 			if !reflect.DeepEqual(req.n, want) {
 				return fmt.Errorf("ENR of dialed node %v does not match test", req.n.ID())
 			}
+
 			delete(waitset, req.n.ID())
 			d.blocked[req.n.ID()] = req
 		case <-timeout.C:
@@ -608,6 +626,7 @@ func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
 			for id := range waitset {
 				waitlist = append(waitlist, id)
 			}
+
 			return fmt.Errorf("timed out waiting for dials to %v", waitlist)
 		}
 	}
@@ -633,6 +652,7 @@ func (d *dialTestDialer) completeDials(ids []enode.ID, err error) error {
 		}
 		req.unblock <- err
 	}
+
 	return nil
 }
 
@@ -660,6 +680,7 @@ func (t *dialTestResolver) checkCalls() bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -668,5 +689,6 @@ func (t *dialTestResolver) Resolve(n *enode.Node) *enode.Node {
 	defer t.mu.Unlock()
 
 	t.calls = append(t.calls, n.ID())
+
 	return t.answers[n.ID()]
 }

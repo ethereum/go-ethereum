@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -43,15 +43,20 @@ func newTestPeer(name string, version uint, backend Backend) (*testPeer, <-chan 
 
 	// Start the peer on a new thread
 	var id enode.ID
+
 	rand.Read(id[:])
 
 	peer := NewPeer(version, p2p.NewPeer(id, name, nil), net, backend.TxPool())
 	errc := make(chan error, 1)
+
 	go func() {
+		defer app.Close()
+
 		errc <- backend.RunPeer(peer, func(peer *Peer) error {
 			return Handle(backend, peer)
 		})
 	}()
+
 	return &testPeer{app: app, net: net, Peer: peer}, errc
 }
 
@@ -82,6 +87,7 @@ func TestPeerSet(t *testing.T) {
 
 	// add item in batch
 	s.Add(vals...)
+
 	if s.Cardinality() < size {
 		t.Fatalf("bad size")
 	}

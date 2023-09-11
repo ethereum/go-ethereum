@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-//go:generate gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
+//go:generate go run github.com/fjl/gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
 
 type DifficultyTest struct {
 	ParentTimestamp    uint64      `json:"parentTimestamp"`
@@ -64,6 +64,6 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 			test.ParentTimestamp, test.ParentDifficulty, test.UncleHash,
 			test.CurrentTimestamp, test.CurrentBlockNumber, actual, exp)
 	}
-	return nil
 
+	return nil
 }

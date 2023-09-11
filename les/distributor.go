@@ -85,8 +85,11 @@ func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDis
 	if peers != nil {
 		peers.subscribe(d)
 	}
+
 	d.wg.Add(1)
+
 	go d.loop()
+
 	return d
 }
 
@@ -124,10 +127,12 @@ var (
 // main event loop
 func (d *requestDistributor) loop() {
 	defer d.wg.Done()
+
 	for {
 		select {
 		case <-d.closeCh:
 			d.lock.Lock()
+
 			elem := d.reqQueue.Front()
 			for elem != nil {
 				req := elem.Value.(*distReq)
@@ -136,6 +141,7 @@ func (d *requestDistributor) loop() {
 				elem = elem.Next()
 			}
 			d.lock.Unlock()
+
 			return
 		case <-d.loopChn:
 			d.lock.Lock()
@@ -192,6 +198,7 @@ func selectPeerWeight(i interface{}) uint64 {
 func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	checkedPeers := make(map[distPeer]struct{})
 	elem := d.reqQueue.Front()
+
 	var (
 		bestWait time.Duration
 		sel      *utils.WeightedRandomSelect
@@ -205,36 +212,45 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 		req := elem.Value.(*distReq)
 		canSend := false
 		now := d.clock.Now()
+
 		if req.waitForPeers > now {
 			canSend = true
+
 			wait := time.Duration(req.waitForPeers - now)
 			if bestWait == 0 || wait < bestWait {
 				bestWait = wait
 			}
 		}
+
 		for peer := range d.peers {
 			if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
 				canSend = true
 				cost := req.getCost(peer)
+
 				wait, bufRemain := peer.waitBefore(cost)
 				if wait == 0 {
 					if sel == nil {
 						sel = utils.NewWeightedRandomSelect(selectPeerWeight)
 					}
+
 					sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
 				} else {
 					if bestWait == 0 || wait < bestWait {
 						bestWait = wait
 					}
 				}
+
 				checkedPeers[peer] = struct{}{}
 			}
 		}
+
 		next := elem.Next()
+
 		if !canSend && elem == d.reqQueue.Front() {
 			close(req.sentChn)
 			d.remove(req)
 		}
+
 		elem = next
 	}
 
@@ -242,6 +258,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 		c := sel.Choose().(selectPeerItem)
 		return c.peer, c.req, 0
 	}
+
 	return nil, nil, bestWait
 }
 
@@ -256,7 +273,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 	if r.reqOrder == 0 {
 		d.lastReqOrder++
 		r.reqOrder = d.lastReqOrder
-		r.waitForPeers = d.clock.Now() + mclock.AbsTime(waitForPeers)
+		r.waitForPeers = d.clock.Now().Add(waitForPeers)
 	}
 	// Assign the timestamp when the request is queued no matter it's
 	// a new one or re-queued one.
@@ -270,6 +287,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 		for before.Value.(*distReq).reqOrder < r.reqOrder {
 			before = before.Next()
 		}
+
 		r.element = d.reqQueue.InsertBefore(r, before)
 	}
 
@@ -279,6 +297,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 	}
 
 	r.sentChn = make(chan distPeer, 1)
+
 	return r.sentChn
 }
 
@@ -295,6 +314,7 @@ func (d *requestDistributor) cancel(r *distReq) bool {
 
 	close(r.sentChn)
 	d.remove(r)
+
 	return true
 }
 

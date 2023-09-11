@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -89,7 +89,7 @@ type nodeHistoryEnc struct {
 	RedialWaitStart, RedialWaitEnd uint64
 }
 
-// queryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
+// QueryFunc sends a pre-negotiation query and blocks until a response arrives or timeout occurs.
 // It returns 1 if the remote node has confirmed that connection is possible, 0 if not
 // possible and -1 if no response arrived (timeout).
 type QueryFunc func(*enode.Node) int
@@ -205,6 +205,7 @@ func (s *serverPoolIterator) Next() bool {
 		s.nextFn(s.dialIterator.Node())
 		return true
 	}
+
 	return false
 }
 
@@ -222,16 +223,18 @@ func (s *serverPoolIterator) Close() {
 func (s *ServerPool) AddMetrics(
 	suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge metrics.Gauge,
 	sessionValueMeter, serverDialedMeter metrics.Meter) {
-
 	s.suggestedTimeoutGauge = suggestedTimeoutGauge
 	s.totalValueGauge = totalValueGauge
 	s.sessionValueMeter = sessionValueMeter
+
 	if serverSelectableGauge != nil {
 		s.ns.AddLogMetrics(sfHasValue, sfDialProcess, "selectable", nil, nil, serverSelectableGauge)
 	}
+
 	if serverDialedMeter != nil {
 		s.ns.AddLogMetrics(sfDialing, nodestate.Flags{}, "dialed", serverDialedMeter, nil, nil)
 	}
+
 	if serverConnectedGauge != nil {
 		s.ns.AddLogMetrics(sfConnected, nodestate.Flags{}, "connected", nil, nil, serverConnectedGauge)
 	}
@@ -255,13 +258,17 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 				// remove query flag if the node is already somewhere in the dial process
 				s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
 			}
+
 			return
 		}
+
 		fails := atomic.LoadUint32(&s.queryFails)
+
 		failMax := fails
 		if failMax > maxQueryFails {
 			failMax = maxQueryFails
 		}
+
 		if rand.Intn(maxQueryFails*2) < int(failMax) {
 			// skip pre-negotiation with increasing chance, max 50%
 			// this ensures that the client can operate even if UDP is not working at all
@@ -269,12 +276,15 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 			// set canDial before resetting queried so that FillSet will not read more
 			// candidates unnecessarily
 			s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
+
 			return
 		}
+
 		go func() {
 			q := query(n)
 			if q == -1 {
 				atomic.AddUint32(&s.queryFails, 1)
+
 				fails++
 				if fails%warnQueryFails == 0 {
 					// warn if a large number of consecutive queries have failed
@@ -283,6 +293,7 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 			} else {
 				atomic.StoreUint32(&s.queryFails, 0)
 			}
+
 			s.ns.Operation(func() {
 				// we are no longer running in the operation that the callback belongs to, start a new one because of setRedialWait
 				if q == 1 {
@@ -290,10 +301,12 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 				} else {
 					s.setRedialWait(n, queryCost, queryWaitStep)
 				}
+
 				s.ns.SetStateSub(n, nodestate.Flags{}, sfQuery, 0)
 			})
 		}()
 	})
+
 	return NewQueueIterator(s.ns, sfCanDial, nodestate.Flags{}, false, func(waiting bool) {
 		if waiting {
 			s.fillSet.SetTarget(preNegLimit)
@@ -303,14 +316,16 @@ func (s *ServerPool) addPreNegFilter(input enode.Iterator, query QueryFunc) enod
 	})
 }
 
-// start starts the server pool. Note that NodeStateMachine should be started first.
+// Start starts the server pool. Note that NodeStateMachine should be started first.
 func (s *ServerPool) Start() {
 	s.ns.Start()
+
 	for _, iter := range s.mixSources {
 		// add sources to mixer at startup because the mixer instantly tries to read them
 		// which should only happen after NodeStateMachine has been started
 		s.mixer.AddSource(iter)
 	}
+
 	for _, url := range s.trustedURLs {
 		if node, err := enode.Parse(s.validSchemes, url); err == nil {
 			s.ns.SetState(node, sfAlwaysConnect, nodestate.Flags{}, 0)
@@ -318,18 +333,22 @@ func (s *ServerPool) Start() {
 			log.Error("Invalid trusted server URL", "url", url, "error", err)
 		}
 	}
+
 	unixTime := s.unixTime()
 	s.ns.Operation(func() {
 		s.ns.ForEach(sfHasValue, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 			s.calculateWeight(node)
+
 			if n, ok := s.ns.GetField(node, sfiNodeHistory).(nodeHistory); ok && n.redialWaitEnd > unixTime {
 				wait := n.redialWaitEnd - unixTime
 				lastWait := n.redialWaitEnd - n.redialWaitStart
+
 				if wait > lastWait {
 					// if the time until expiration is larger than the last suggested
 					// waiting time then the system clock was probably adjusted
 					wait = lastWait
 				}
+
 				s.ns.SetStateSub(node, sfRedialWait, nodestate.Flags{}, time.Duration(wait)*time.Second)
 			}
 		})
@@ -337,11 +356,12 @@ func (s *ServerPool) Start() {
 	atomic.StoreUint32(&s.started, 1)
 }
 
-// stop stops the server pool
+// Stop stops the server pool
 func (s *ServerPool) Stop() {
 	if s.fillSet != nil {
 		s.fillSet.Close()
 	}
+
 	s.ns.Operation(func() {
 		s.ns.ForEach(sfConnected, nodestate.Flags{}, func(n *enode.Node, state nodestate.Flags) {
 			// recalculate weight of connected nodes in order to update hasValue flag if necessary
@@ -357,14 +377,17 @@ func (s *ServerPool) RegisterNode(node *enode.Node) (*NodeValueTracker, error) {
 	if atomic.LoadUint32(&s.started) == 0 {
 		return nil, errors.New("server pool not started yet")
 	}
+
 	nvt := s.vt.Register(node.ID())
 	s.ns.Operation(func() {
 		s.ns.SetStateSub(node, sfConnected, sfDialing.Or(sfWaitDialTimeout), 0)
 		s.ns.SetFieldSub(node, sfiConnectedStats, nvt.RtStats())
+
 		if node.IP().IsLoopback() {
 			s.ns.SetFieldSub(node, sfiLocalAddress, node.Record())
 		}
 	})
+
 	return nvt, nil
 }
 
@@ -386,6 +409,7 @@ func (s *ServerPool) recalTimeout() {
 	s.timeoutLock.RLock()
 	refreshed := s.timeoutRefreshed
 	s.timeoutLock.RUnlock()
+
 	now := s.clock.Now()
 	if refreshed != 0 && time.Duration(now-refreshed) < timeoutRefresh {
 		return
@@ -404,9 +428,11 @@ func (s *ServerPool) recalTimeout() {
 	if t := rts.Timeout(0.1); t > timeout {
 		timeout = t
 	}
+
 	if t := rts.Timeout(0.5) * 2; t > timeout {
 		timeout = t
 	}
+
 	s.timeoutLock.Lock()
 	if s.timeout != timeout {
 		s.timeout = timeout
@@ -415,10 +441,12 @@ func (s *ServerPool) recalTimeout() {
 		if s.suggestedTimeoutGauge != nil {
 			s.suggestedTimeoutGauge.Update(int64(s.timeout / time.Millisecond))
 		}
+
 		if s.totalValueGauge != nil {
 			s.totalValueGauge.Update(int64(rts.Value(s.timeWeights, s.vt.StatsExpFactor())))
 		}
 	}
+
 	s.timeoutRefreshed = now
 	s.timeoutLock.Unlock()
 }
@@ -428,6 +456,7 @@ func (s *ServerPool) GetTimeout() time.Duration {
 	s.recalTimeout()
 	s.timeoutLock.RLock()
 	defer s.timeoutLock.RUnlock()
+
 	return s.timeout
 }
 
@@ -437,6 +466,7 @@ func (s *ServerPool) getTimeoutAndWeight() (time.Duration, ResponseTimeWeights) 
 	s.recalTimeout()
 	s.timeoutLock.RLock()
 	defer s.timeoutLock.RUnlock()
+
 	return s.timeout, s.timeWeights
 }
 
@@ -447,10 +477,12 @@ func (s *ServerPool) addDialCost(n *nodeHistory, amount int64) uint64 {
 	if amount > 0 {
 		n.dialCost.Add(amount, logOffset)
 	}
+
 	totalDialCost := n.dialCost.Value(logOffset)
 	if totalDialCost < dialCost {
 		totalDialCost = dialCost
 	}
+
 	return totalDialCost
 }
 
@@ -460,19 +492,23 @@ func (s *ServerPool) serviceValue(node *enode.Node) (sessionValue, totalValue fl
 	if nvt == nil {
 		return 0, 0
 	}
+
 	currentStats := nvt.RtStats()
 	_, timeWeights := s.getTimeoutAndWeight()
 	expFactor := s.vt.StatsExpFactor()
 
 	totalValue = currentStats.Value(timeWeights, expFactor)
+
 	if connStats, ok := s.ns.GetField(node, sfiConnectedStats).(ResponseTimeStats); ok {
 		diff := currentStats
 		diff.SubStats(&connStats)
+
 		sessionValue = diff.Value(timeWeights, expFactor)
 		if s.sessionValueMeter != nil {
 			s.sessionValueMeter.Mark(int64(sessionValue))
 		}
 	}
+
 	return
 }
 
@@ -490,6 +526,7 @@ func (s *ServerPool) updateWeight(node *enode.Node, totalValue float64, totalDia
 		s.ns.SetFieldSub(node, sfiNodeHistory, nil)
 		s.ns.SetFieldSub(node, sfiLocalAddress, nil)
 	}
+
 	s.ns.Persist(node) // saved if node history or hasValue changed
 }
 
@@ -518,7 +555,9 @@ func (s *ServerPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 	// steps because queries are cheaper and therefore we can allow more failed attempts.
 	unixTime := s.unixTime()
 	plannedTimeout := float64(n.redialWaitEnd - n.redialWaitStart) // last planned redialWait timeout
-	var actualWait float64                                         // actual waiting time elapsed
+
+	var actualWait float64 // actual waiting time elapsed
+
 	if unixTime > n.redialWaitEnd {
 		// the planned timeout has elapsed
 		actualWait = plannedTimeout
@@ -542,12 +581,15 @@ func (s *ServerPool) setRedialWait(node *enode.Node, addDialCost int64, waitStep
 	// connection (but never under the minimum)
 	a := totalValue * dialCost * float64(minRedialWait)
 	b := float64(totalDialCost) * sessionValue
+
 	if a < b*nextTimeout {
 		nextTimeout = a / b
 	}
+
 	if nextTimeout < minRedialWait {
 		nextTimeout = minRedialWait
 	}
+
 	wait := time.Duration(float64(time.Second) * nextTimeout)
 	if wait < waitThreshold {
 		n.redialWaitStart = unixTime
@@ -597,6 +639,7 @@ func (s *ServerPool) DialNode(n *enode.Node) *enode.Node {
 		n, _ := enode.New(dummyIdentity(n.ID()), enr)
 		return n
 	}
+
 	return n
 }
 
