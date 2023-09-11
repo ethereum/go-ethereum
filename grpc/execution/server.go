@@ -194,15 +194,14 @@ func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req
 }
 
 // CreateBlock is used to drive deterministic creation of an executed block from a sequenced block.
-func (s *ExecutionServiceServerV1Alpha2) CreateBlock(ctx context.Context, req *executionv1a2.CreateBlockRequest) (*executionv1a2.Block, error) {
-	log.Info("CreateBlock called request", "request", req)
+func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *executionv1a2.ExecuteBlockRequest) (*executionv1a2.Block, error) {
+	log.Info("ExecuteBlock called request", "request", req)
 
 	// Validate block being created has valid previous hash
 	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
 	softHash := s.bc.CurrentSafeBlock().Hash()
-	headHash := s.bc.CurrentHeader().Hash()
-	if prevHeadHash != headHash || headHash != softHash {
-		return nil, fmt.Errorf("Block can only be created on top head block, when head matches soft")
+	if prevHeadHash != softHash {
+		return nil, fmt.Errorf("Block can only be created on top of soft block.")
 	}
 
 	// The Engine API has been modified to use transactions from this mempool and abide by it's ordering.
@@ -254,7 +253,6 @@ func (s *ExecutionServiceServerV1Alpha2) CreateBlock(ctx context.Context, req *e
 
 // GetCommitmentState fetches the current CommitmentState of the chain.
 func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context, req *executionv1a2.GetCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
-	headBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentHeader())
 	softBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
 	firmBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
 
@@ -263,7 +261,6 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 	}
 
 	res := &executionv1a2.CommitmentState{
-		Head: headBlock,
 		Soft: softBlock,
 		Firm: firmBlock,
 	}
@@ -274,7 +271,7 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 // UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
 func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Context, req *executionv1a2.UpdateCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
 	newForkChoice := &engine.ForkchoiceStateV1{
-		HeadBlockHash:      common.BytesToHash(req.CommitmentState.Head.Hash),
+		HeadBlockHash:      common.BytesToHash(req.CommitmentState.Soft.Hash),
 		SafeBlockHash:      common.BytesToHash(req.CommitmentState.Soft.Hash),
 		FinalizedBlockHash: common.BytesToHash(req.CommitmentState.Firm.Hash),
 	}
