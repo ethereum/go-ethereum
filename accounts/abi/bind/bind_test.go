@@ -2060,7 +2060,46 @@ var bindTests = []struct {
 			if b, err := NewNumericMethodName(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, nil)
 			}
-`,
+		`,
+	}, {
+		name: "BindConvenienceMethods",
+		contract: `	
+		// SPDX-License-Identifier: GPL-3.0
+		pragma solidity >=0.4.22 <0.9.0;
+
+		contract BindConvenienceMethods {
+			event Bar(address _bar);
+			function foo() public {}
+		}
+		`,
+		bytecode: []string{"6080604052348015600f57600080fd5b50606d80601d6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063c298557814602d575b600080fd5b60336035565b005b56fea2646970667358221220bd57c6759dcde310f52ee8c78b3e0708958ebe0e84df4e9d02acaf3692be89b964736f6c63430008040033"},
+		abi:      []string{"[\n\t{\n\t\t\"anonymous\": false,\n\t\t\"inputs\": [\n\t\t\t{\n\t\t\t\t\"indexed\": false,\n\t\t\t\t\"internalType\": \"address\",\n\t\t\t\t\"name\": \"_bar\",\n\t\t\t\t\"type\": \"address\"\n\t\t\t}\n\t\t],\n\t\t\"name\": \"Bar\",\n\t\t\"type\": \"event\"\n\t},\n\t{\n\t\t\"inputs\": [],\n\t\t\"name\": \"foo\",\n\t\t\"outputs\": [],\n\t\t\"stateMutability\": \"nonpayable\",\n\t\t\"type\": \"function\"\n\t}\n]"},
+		imports: `
+			"github.com/ethereum/go-ethereum/common"
+		`,
+		tester: `
+			b, err := NewBindConvenienceMethods(common.Address{}, nil)
+			if b == nil || err != nil {
+				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, err)
+			}
+
+			_, err = b.BarEvent()
+			if err != nil {
+				t.Fatalf("binding (%v) failed to get event (%v)", b, err)
+			}
+
+			_, err = b.FooMethod()
+			if err != nil {
+				t.Fatalf("binding (%v) failed to get method (%v)", b, err)
+			}
+
+			_, err = b.FooRawCalldata()
+			if err != nil {
+				t.Fatalf("binding (%v) failed to get raw calldata (%v)", b, err)
+			}
+ 			
+			_ = b.GetABI() // Validate GetABI()-method exists
+		`,
 	},
 }
 

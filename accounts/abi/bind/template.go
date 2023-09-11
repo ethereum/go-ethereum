@@ -276,8 +276,8 @@ var (
 	}
 
 	// GetABI is a convenience that returns the parsed ABI of the bound contract.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) GetABI() abi.ABI {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Caller.contract.GetABI()
+	func (_{{$contract.Type}} *{{$contract.Type}}) GetABI() abi.ABI {
+		return _{{$contract.Type}}.{{$contract.Type}}Caller.contract.GetABI()
 	}
 	
 	// Call invokes the (constant) contract method with params as input values and
@@ -323,7 +323,7 @@ var (
 		//
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}Method() (*abi.Method, error) {
-			return _{{$contract.Type}}.contract.Method("{{.Normalized.Name}}")
+			return _{{$contract.Type}}.contract.Method("{{.Original.Name}}")
 		}
 	
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
@@ -372,7 +372,7 @@ var (
 		//
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}Method() (*abi.Method, error) {
-			return _{{$contract.Type}}.contract.Method("{{.Normalized.Name}}")
+			return _{{$contract.Type}}.contract.Method("{{.Original.Name}}")
 		}
 
 		// {{.Normalized.Name}}RawCalldata is the abi packed data binding the contract method 0x{{printf "%x" .Original.ID}}.
@@ -525,7 +525,7 @@ var (
 		//
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) {{.Normalized.Name}}Event() (*abi.Event, error) {
-			return _{{$contract.Type}}.contract.Event("{{.Normalized.Name}}")
+			return _{{$contract.Type}}.contract.Event("{{.Original.Name}}")
 		}
 
 		// Filter{{.Normalized.Name}} is a free log retrieval operation binding the contract event 0x{{printf "%x" .Original.ID}}.

@@ -149,11 +149,6 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
-// Address returns the contract deployment address.
-func (c *BoundContract) Address() common.Address {
-	return c.address
-}
-
 // GetABI returns the contract ABI Object of the BoundContract.
 func (c *BoundContract) GetABI() abi.ABI {
 	return c.abi
