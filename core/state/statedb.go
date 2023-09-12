@@ -461,7 +461,6 @@ func (s *StateDB) Selfdestruct6780(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-
 	if stateObject.created {
 		s.SelfDestruct(addr)
 	}
@@ -702,7 +701,7 @@ func (s *StateDB) Copy() *StateDB {
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
-		journal:              newJournal(),
+		journal:              s.journal.copy(),
 		hasher:               crypto.NewKeccakState(),
 
 		// In order for the block producer to be able to use and make additions
@@ -712,36 +711,14 @@ func (s *StateDB) Copy() *StateDB {
 		snaps: s.snaps,
 		snap:  s.snap,
 	}
-	// Copy the dirty states, logs, and preimages
-	for addr := range s.journal.dirties {
-		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
-		// and in the Finalise-method, there is a case where an object is in the journal but not
-		// in the stateObjects: OOG after touch on ripeMD prior to Byzantium. Thus, we need to check for
-		// nil
-		if object, exist := s.stateObjects[addr]; exist {
-			// Even though the original object is dirty, we are not copying the journal,
-			// so we need to make sure that any side-effect the journal would have caused
-			// during a commit (or similar op) is already applied to the copy.
-			state.stateObjects[addr] = object.deepCopy(state)
-
-			state.stateObjectsDirty[addr] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
-			state.stateObjectsPending[addr] = struct{}{} // Mark the copy pending to force external (account) commits
-		}
+	// Deep copy cached state objects along with the pending and dirty markers.
+	for addr, obj := range s.stateObjects {
+		state.stateObjects[addr] = obj.deepCopy()
 	}
-	// Above, we don't copy the actual journal. This means that if the copy
-	// is copied, the loop above will be a no-op, since the copy's journal
-	// is empty. Thus, here we iterate over stateObjects, to enable copies
-	// of copies.
 	for addr := range s.stateObjectsPending {
-		if _, exist := state.stateObjects[addr]; !exist {
-			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
-		}
 		state.stateObjectsPending[addr] = struct{}{}
 	}
 	for addr := range s.stateObjectsDirty {
-		if _, exist := state.stateObjects[addr]; !exist {
-			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
-		}
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	// Deep copy the destruction markers.

@@ -438,16 +438,16 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
+func (s *stateObject) deepCopy() *stateObject {
 	obj := &stateObject{
-		db:       db,
+		db:       s.db,
 		address:  s.address,
 		addrHash: s.addrHash,
 		origin:   s.origin,
 		data:     s.data,
 	}
 	if s.trie != nil {
-		obj.trie = db.db.CopyTrie(s.trie)
+		obj.trie = s.db.db.CopyTrie(s.trie)
 	}
 	obj.code = s.code
 	obj.dirtyStorage = s.dirtyStorage.Copy()

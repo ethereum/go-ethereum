@@ -296,3 +296,21 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 		}
 	}
 }
+
+func TestCreateObjectRevert(t *testing.T) {
+	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	addr := common.BytesToAddress([]byte("so0"))
+	snap := state.Snapshot()
+
+	state.CreateAccount(addr)
+	so0 := state.getStateObject(addr)
+	so0.SetBalance(big.NewInt(42))
+	so0.SetNonce(43)
+	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	state.setStateObject(so0)
+
+	state.RevertToSnapshot(snap)
+	if state.Exist(addr) {
+		t.Error("Unexpected account after revert")
+	}
+}
