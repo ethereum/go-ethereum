@@ -143,7 +143,7 @@ const schema string = `
         # coerced into the EIP-1559 format by setting both maxFeePerGas and
         # maxPriorityFeePerGas as the transaction's gas price.
         effectiveGasPrice: BigInt
-        # BlobGasUsed is the amount of gas used for this blob transaction.
+        # BlobGasUsed is the amount of blob gas used by this transaction.
         blobGasUsed: Long
         # blobGasPrice is the actual value per blob gas deducted from the senders account.
         blobGasPrice: BigInt
@@ -168,7 +168,7 @@ const schema string = `
         # RawReceipt is the canonical encoding of the receipt. For post EIP-2718 typed transactions
         # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
-        # BlobVersionedHashes is a set of hash values contained in the blob transaction.
+        # BlobVersionedHashes is a set of hash outputs from the blobs in the transaction.
         blobVersionedHashes: [Bytes32!]
     }
 
@@ -275,9 +275,9 @@ const schema string = `
         # Withdrawals is a list of withdrawals associated with this block. If
         # withdrawals are unavailable for this block, this field will be null.
         withdrawals: [Withdrawal!]
-        # BlobGasUsed is the amount of gas used for blob transactions.
+        # BlobGasUsed is the total amount of gas used by the transactions.
         blobGasUsed: Long
-        # ExcessBlobGas is the amount of excess gas available for blob transactions.
+        # ExcessBlobGas is a running total of blob gas consumed in excess of the target, prior to the block.
         excessBlobGas: Long
     }
 
