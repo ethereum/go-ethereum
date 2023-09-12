@@ -282,6 +282,13 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
+// opBlobfee implements BLOBFEE opcode
+func opBlobfee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	blobFee, _ := uint256.FromBig(interpreter.evm.Context.Blobfee)
+	scope.Stack.push(blobFee)
+	return nil, nil
+}
+
 // enable4844 applies EIP-4844 (DATAHASH opcode)
 func enable4844(jt *JumpTable) {
 	// New opcode
@@ -290,6 +297,13 @@ func enable4844(jt *JumpTable) {
 		constantGas: GasFastestStep,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
+	}
+	jt[BLOBFEE] = &operation{
+		execute:     opSelfdestruct6780,
+		dynamicGas:  gasSelfdestructEIP3529,
+		constantGas: params.SelfdestructGasEIP150,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
 	}
 }
 

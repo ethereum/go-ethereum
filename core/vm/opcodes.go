@@ -101,6 +101,7 @@ const (
 	SELFBALANCE OpCode = 0x47
 	BASEFEE     OpCode = 0x48
 	BLOBHASH    OpCode = 0x49
+	BLOBFEE     OpCode = 0x4a
 )
 
 // 0x50 range - 'storage' and execution.
@@ -287,6 +288,7 @@ var opCodeToString = map[OpCode]string{
 	SELFBALANCE: "SELFBALANCE",
 	BASEFEE:     "BASEFEE",
 	BLOBHASH:    "BLOBHASH",
+	BLOBFEE:     "BLOBFEE",
 
 	// 0x50 range - 'storage' and execution.
 	POP:      "POP",
@@ -444,6 +446,7 @@ var stringToOp = map[string]OpCode{
 	"CHAINID":        CHAINID,
 	"BASEFEE":        BASEFEE,
 	"BLOBHASH":       BLOBHASH,
+	"BLOBFEE":        BLOBFEE,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,

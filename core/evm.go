@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -40,6 +41,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
+		blobFee     *big.Int
 		random      *common.Hash
 	)
 
@@ -51,6 +53,9 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	}
 	if header.BaseFee != nil {
 		baseFee = new(big.Int).Set(header.BaseFee)
+	}
+	if header.ExcessBlobGas != nil {
+		blobFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
@@ -64,6 +69,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Time:          header.Time,
 		Difficulty:    new(big.Int).Set(header.Difficulty),
 		BaseFee:       baseFee,
+		BlobFee:       blobFee,
 		GasLimit:      header.GasLimit,
 		Random:        random,
 		ExcessBlobGas: header.ExcessBlobGas,
