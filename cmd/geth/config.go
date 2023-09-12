@@ -36,6 +36,7 @@ import (
 	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -176,6 +177,18 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
 	}
+
+	if ctx.IsSet(utils.VMTraceFlag.Name) {
+		if name := ctx.String(utils.VMTraceFlag.Name); name != "" {
+			t, err := directory.LiveDirectory.New(name)
+			if err != nil {
+				utils.Fatalf("Failed to create tracer %q: %v", name, err)
+			}
+
+			cfg.Eth.VMTracer = t
+		}
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure log filter RPC API.
