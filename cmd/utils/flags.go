@@ -1042,11 +1042,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.SepoliaBootnodes
 	case ctx.Bool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	}
-
-	// don't apply defaults if BootstrapNodes is already set
-	if cfg.BootstrapNodes != nil {
-		return
+	case cfg.BootstrapNodesV5 != nil:
+		return // already set, don't apply defaults.
 	}
 
 	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
