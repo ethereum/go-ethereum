@@ -169,6 +169,12 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
+	// Database - LevelDB options
+	LevelDbCompactionTableSize           uint64
+	LevelDbCompactionTableSizeMultiplier float64
+	LevelDbCompactionTotalSize           uint64
+	LevelDbCompactionTotalSizeMultiplier float64
+
 	TrieCleanCache          int
 	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
 	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
