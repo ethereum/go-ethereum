@@ -43,5 +43,65 @@ type EVMLogger interface {
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
-	OnGasConsumed(gas, amount uint64)
+	OnGasChange(old, new uint64, reason GasChangeReason)
 }
+
+// GasChangeReason is used to indicate the reason for a gas change, useful
+// for tracing and reporting.
+//
+// There is essentially two types of gas changes, those that can be emitted once per transaction
+// and those that can be emitted on a call basis, so possibly multiple times per transaction.
+//
+// They can be recognized easily by their name, those that start with `GasChangeTx` are emitted
+// once per transaction, while those that start with `GasChangeCall` are emitted on a call basis.
+type GasChangeReason byte
+
+const (
+	GasChangeUnspecified GasChangeReason = iota
+
+	// GasChangeTxInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
+	// one such gas change per transaction.
+	GasChangeTxInitialBalance
+	// GasChangeTxIntrinsicGas is the amount of gas that will be charged for the intrinsic cost of the transaction, there is
+	// always exactly one of those per transaction.
+	GasChangeTxIntrinsicGas
+	// GasChangeTxRefunds is the sum of all refunds which happened during the tx execution (e.g. storage slot being cleared)
+	// this generates an increase in gas. There is at most one of such gas change per transaction.
+	GasChangeTxRefunds
+	// GasChangeTxLeftOverReturned is the amount of gas left over at the end of transaction's execution that will be returned
+	// to the chain. This change will always be a negative change as we "drain" left over gas towards 0. If there was no gas
+	// left at the end of execution, no such even will be emitted. The returned gas's value in Wei is returned to caller.
+	// There is at most one of such gas change per transaction.
+	GasChangeTxLeftOverReturned
+
+	// GasChangeCallInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
+	// one such gas change per call.
+	GasChangeCallInitialBalance
+	// GasChangeCallLeftOverReturned is the amount of gas left over that will be returned to the caller, this change will always
+	// be a negative change as we "drain" left over gas towards 0. If there was no gas left at the end of execution, no such even
+	// will be emitted.
+	GasChangeCallLeftOverReturned
+	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the call after the child call execution it
+	// executed completed. This value is always positive as we are giving gas back to the you, the left over gas of the child.
+	// If there was no gas left to be refunded, no such even will be emitted.
+	GasChangeCallLeftOverRefunded
+	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE.
+	GasChangeCallContractCreation
+	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2.
+	GasChangeCallContractCreation2
+	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
+	GasChangeCallCodeStorage
+	// GasChangeCallOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
+	// performed can be check by `CaptureState` handling.
+	GasChangeCallOpCode
+	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution.
+	GasChangeCallPrecompiledContract
+	// GasChangeCallStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules.
+	GasChangeCallStorageColdAccess
+	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
+	GasChangeCallFailedExecution
+
+	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
+	// it will be "manually" tracked by a direct emit of the gas change event.
+	GasChangeIgnored GasChangeReason = 0xFF
+)

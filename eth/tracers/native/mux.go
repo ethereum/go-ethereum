@@ -96,9 +96,9 @@ func (t *muxTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 }
 
 // CaptureGasConsumed is called when gas is consumed.
-func (t *muxTracer) OnGasConsumed(gas, amount uint64) {
+func (t *muxTracer) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 	for _, t := range t.tracers {
-		t.OnGasConsumed(gas, amount)
+		t.OnGasChange(old, new, reason)
 	}
 }
 

@@ -174,7 +174,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 		return nil, 0, ErrOutOfGas
 	}
 	if logger != nil {
-		logger.OnGasConsumed(suppliedGas, gasCost)
+		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, GasChangeCallPrecompiledContract)
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)
