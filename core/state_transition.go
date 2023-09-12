@@ -469,7 +469,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
 
 	if st.evm.Config.Tracer != nil && st.gasRemaining > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasChangeTxBuyBack)
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasChangeTxLeftOverReturned)
 	}
 
 	// Also return remaining gas to the block gas counter so it is

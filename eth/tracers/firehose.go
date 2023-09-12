@@ -782,7 +782,7 @@ func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 	// Ref eb1916a67d9bea03df16a7a3e2cfac72
 	if reason == vm.GasChangeTxInitialBalance ||
 		reason == vm.GasChangeTxRefunds ||
-		reason == vm.GasChangeTxBuyBack ||
+		reason == vm.GasChangeTxLeftOverReturned ||
 		reason == vm.GasChangeCallInitialBalance ||
 		reason == vm.GasChangeCallLeftOverReturned {
 		return
@@ -1128,12 +1128,12 @@ var gasChangeReasonToPb = map[vm.GasChangeReason]pbeth.GasChange_Reason{
 	//
 	// vm.GasChangeTxInitialBalance:     pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
 	// vm.GasChangeTxRefunds:            pbeth.GasChange_REASON_TX_REFUNDS,
-	// vm.GasChangeTxBuyBack:            pbeth.GasChange_REASON_TX_BUY_BACK,
+	// vm.GasChangeTxLeftOverReturned:   pbeth.GasChange_REASON_TX_LEFT_OVER_RETURNED,
 	// vm.GasChangeCallInitialBalance:   pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
 	// vm.GasChangeCallLeftOverReturned: pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
 	vm.GasChangeTxInitialBalance:     pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeTxRefunds:            pbeth.GasChange_REASON_UNKNOWN,
-	vm.GasChangeTxBuyBack:            pbeth.GasChange_REASON_UNKNOWN,
+	vm.GasChangeTxLeftOverReturned:   pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeCallInitialBalance:   pbeth.GasChange_REASON_UNKNOWN,
 	vm.GasChangeCallLeftOverReturned: pbeth.GasChange_REASON_UNKNOWN,
 

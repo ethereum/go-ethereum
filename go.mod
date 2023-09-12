@@ -56,7 +56,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/status-im/keycard-go v0.2.0
-	github.com/streamingfast/firehose-ethereum/types v0.0.0-20230911154550-654ed552f285
+	github.com/streamingfast/firehose-ethereum/types v0.0.0-20230912180331-359d900a4e1e
 	github.com/stretchr/testify v1.8.1
 	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7

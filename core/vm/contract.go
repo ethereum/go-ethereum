@@ -163,7 +163,7 @@ func (c *Contract) UseGas(gas uint64, logger EVMLogger, reason GasChangeReason) 
 	if c.Gas < gas {
 		return false
 	}
-	if logger != nil {
+	if logger != nil && reason != GasChangeIgnored {
 		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
 	}
 	c.Gas -= gas

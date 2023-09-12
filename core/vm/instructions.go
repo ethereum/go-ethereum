@@ -613,7 +613,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
@@ -658,7 +658,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
@@ -708,7 +708,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
@@ -748,7 +748,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
@@ -781,7 +781,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
@@ -814,7 +814,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, GasChangeCallLeftOverRefunded)
 	}
 
