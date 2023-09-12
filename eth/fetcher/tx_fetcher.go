@@ -229,7 +229,11 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 		duplicate, underpriced int64
 	)
 	isUnderpriced := func(hash common.Hash) bool {
-		_, ok := f.underpriced[hash]
+		prevTime, ok := f.underpriced[hash]
+		if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
+			delete(f.underpriced, hash)
+			return false
+		}
 		return ok
 	}
 	for _, hash := range hashes {
@@ -307,14 +311,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
-				// Periodically delete old transactions from the underpriced set
-				now := time.Now().Unix()
-				for hash, time := range f.underpriced {
-					if time+maxTxUnderpricedTimeout < now {
-						delete(f.underpriced, hash)
-					}
-				}
-				// If the set is still to big, delete a pseudorandom element
+				// If the set is to big, delete a pseudorandom element
 				for hash := range f.underpriced {
 					if len(f.underpriced) < maxTxUnderpricedSetSize {
 						break
