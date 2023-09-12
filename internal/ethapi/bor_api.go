@@ -51,3 +51,17 @@ func (s *BlockChainAPI) appendRPCMarshalBorTransaction(ctx context.Context, bloc
 
 	return fields
 }
+
+// EthereumAPI provides an API to access Ethereum related information.
+type BorAPI struct {
+	b Backend
+}
+
+// NewEthereumAPI creates a new Ethereum protocol API.
+func NewBorAPI(b Backend) *BorAPI {
+	return &BorAPI{b}
+}
+
+func (api *BorAPI) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	return api.b.GetVoteOnHash(ctx, starBlockNr, endBlockNr, hash, milestoneId)
+}
