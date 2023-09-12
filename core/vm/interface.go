@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -78,6 +79,17 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
+
+	// <specular modification>
+	Copy() *state.StateDB
+	GetCurrentLogs() []*types.Log
+	GetCurrentAccessListForProof() (map[common.Address]int, []map[common.Hash]struct{})
+	GetStateRootForProof(common.Address) common.Hash
+	GetRootForProof() common.Hash
+	GetStorageRoot(addr common.Address) common.Hash
+	CommitForProof()
+	DeleteSuicidedAccountForProof(addr common.Address)
+	// <specular modification/>
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

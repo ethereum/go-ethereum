@@ -1375,6 +1375,99 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 	return s.accessList.Contains(addr, slot)
 }
 
+// <specular modification>
+func (s *StateDB) GetCurrentLogs() []*types.Log {
+	return s.logs[s.thash]
+}
+
+func (s *StateDB) GetCurrentAccessListForProof() (map[common.Address]int, []map[common.Hash]struct{}) {
+	return s.accessList.addresses, s.accessList.slots
+}
+
+func (s *StateDB) GetStateRootForProof(addr common.Address) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return common.Hash{}
+	}
+	return stateObject.data.Root
+}
+
+func (s *StateDB) GetRootForProof() common.Hash {
+	return s.trie.Hash()
+}
+
+func (s *StateDB) CommitForProof() {
+	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
+	for addr := range s.journal.dirties {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			continue
+		}
+		if obj.empty() { // rollup-specific: we ignore suicided accounts here
+			obj.deleted = true
+
+			// We need to maintain account deletions explicitly (will remain
+			// set indefinitely). Note only the first occurred self-destruct
+			// event is tracked.
+			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
+				s.stateObjectsDestruct[obj.address] = obj.origin
+			}
+			// Note, we can't do this only at the end of a block because multiple
+			// transactions within the same block might self destruct and then
+			// resurrect an account; but the snapshotter needs both events.
+			delete(s.accounts, obj.addrHash)      // Clear out any previously updated account data (may be recreated via a resurrect)
+			delete(s.storages, obj.addrHash)      // Clear out any previously updated storage data (may be recreated via a resurrect)
+			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
+			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
+		} else {
+			obj.finalise(true) // Prefetch slots in the background
+		}
+		s.stateObjectsPending[addr] = struct{}{}
+		s.stateObjectsDirty[addr] = struct{}{}
+		addressesToPrefetch = append(addressesToPrefetch, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
+		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
+	}
+	for addr := range s.stateObjectsPending {
+		if obj := s.stateObjects[addr]; !obj.deleted {
+			obj.updateRoot()
+		}
+	}
+	if s.prefetcher != nil {
+		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
+			s.trie = trie
+		}
+	}
+	for addr := range s.stateObjectsPending {
+		if obj := s.stateObjects[addr]; obj.deleted {
+			s.deleteStateObject(obj)
+		} else {
+			s.updateStateObject(obj)
+		}
+	}
+	if len(s.stateObjectsPending) > 0 {
+		s.stateObjectsPending = make(map[common.Address]struct{})
+	}
+}
+
+func (s *StateDB) DeleteSuicidedAccountForProof(addr common.Address) {
+	obj, exist := s.stateObjects[addr]
+	if !exist {
+		return
+	}
+	obj.deleted = true
+	if s.prefetcher != nil {
+		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{common.CopyBytes(addr[:])})
+		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
+			s.trie = trie
+		}
+	}
+	s.deleteStateObject(obj)
+}
+
+// <specular modification/>
+
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
 func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) map[common.Hash]struct{} {
 	ret := make(map[common.Hash]struct{}, len(set))

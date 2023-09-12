@@ -146,6 +146,65 @@ type Message struct {
 	SkipAccountChecks bool
 }
 
+// <specular modification>
+
+// The vm package doesn't have access to the Message type defined above.
+// Getters are defined for EVMHook which uses MessageInterface instead.
+
+func (m *Message) GetTo() *common.Address {
+	return m.To
+}
+
+func (m *Message) GetFrom() common.Address {
+	return m.From
+}
+
+func (m *Message) GetNonce() uint64 {
+	return m.Nonce
+}
+
+func (m *Message) GetValue() *big.Int {
+	return m.Value
+}
+
+func (m *Message) GetGasLimit() uint64 {
+	return m.GasLimit
+}
+
+func (m *Message) GetGasPrice() *big.Int {
+	return m.GasPrice
+}
+
+func (m *Message) GetGasFeeCap() *big.Int {
+	return m.GasFeeCap
+}
+
+func (m *Message) GetGasTipCap() *big.Int {
+	return m.GasTipCap
+}
+
+func (m *Message) GetData() []byte {
+	return m.Data
+}
+
+func (m *Message) GetAccessList() types.AccessList {
+	return m.AccessList
+}
+
+func (m *Message) GetBlobGasFeeCap() *big.Int {
+	return m.BlobGasFeeCap
+}
+
+func (m *Message) GetBlobHashes() []common.Hash {
+	return m.BlobHashes
+}
+
+func (m *Message) GetSkipAccountChecks() bool {
+	return m.SkipAccountChecks
+}
+
+// <specular modification/>
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
@@ -388,6 +447,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	st.gasRemaining -= gas
+
+	// <specular modification>
+	if st.evm.Config.SpecularEVMPreTransferHook != nil {
+		err = st.evm.Config.SpecularEVMPreTransferHook(st.msg, st.evm)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// <specular modification/>
 
 	// Check clause 6
 	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {

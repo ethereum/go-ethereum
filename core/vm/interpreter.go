@@ -17,11 +17,35 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+// <specular modification>
+type MessageInterface interface {
+	GetTo() *common.Address
+	GetFrom() common.Address
+	GetNonce() uint64
+	GetValue() *big.Int
+	GetGasLimit() uint64
+	GetGasPrice() *big.Int
+	GetGasFeeCap() *big.Int
+	GetGasTipCap() *big.Int
+	GetData() []byte
+	GetAccessList() types.AccessList
+	GetBlobGasFeeCap() *big.Int
+	GetBlobHashes() []common.Hash
+	GetSkipAccountChecks() bool
+}
+
+type EVMHook func(msg MessageInterface, evm *EVM) error
+
+// <specular modification/>
 
 // Config are the configuration options for the Interpreter
 type Config struct {
@@ -29,6 +53,10 @@ type Config struct {
 	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int     // Additional EIPS that are to be enabled
+
+	// <specular modification>
+	SpecularEVMPreTransferHook EVMHook
+	// <specular modification/>
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
