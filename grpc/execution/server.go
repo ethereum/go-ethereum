@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
@@ -19,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // executionServiceServer is the implementation of the ExecutionServiceServerV1Alpha1 interface.
@@ -127,7 +130,7 @@ func (s *ExecutionServiceServerV1Alpha1) FinalizeBlock(ctx context.Context, req 
 }
 
 func (s *ExecutionServiceServerV1Alpha1) InitState(ctx context.Context, req *executionv1a1.InitStateRequest) (*executionv1a1.InitStateResponse, error) {
-	currHead := s.eth.BlockChain().CurrentHeader()
+	currHead := s.bc.CurrentHeader()
 	res := &executionv1a1.InitStateResponse{
 		BlockHash: currHead.Hash().Bytes(),
 	}
@@ -141,21 +144,16 @@ type ExecutionServiceServerV1Alpha2 struct {
 	// All implementations must embed UnimplementedExecutionServiceServer
 	// for forward compatibility
 	executionv1a2.UnimplementedExecutionServiceServer
-
-	consensus *catalyst.ConsensusAPI
-	eth       *eth.Ethereum
-
-	bc *core.BlockChain
+	
+	eth    *eth.Ethereum
+	bc     *core.BlockChain
 }
 
 func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServerV1Alpha2 {
-	consensus := catalyst.NewConsensusAPI(eth)
-
 	bc := eth.BlockChain()
 
 	return &ExecutionServiceServerV1Alpha2{
 		eth:       eth,
-		consensus: consensus,
 		bc:        bc,
 	}
 }
@@ -166,7 +164,7 @@ func (s *ExecutionServiceServerV1Alpha2) GetBlock(ctx context.Context, req *exec
 
 	res, err := s.getBlockFromIdentifier(req.GetIdentifier())
 	if err != nil {
-		return nil, fmt.Errorf("Block header cannot be converted to execution block")
+		return nil, status.Error(codes.NotFound, "Block header cannot be converted to execution block")
 	}
 
 	return res, nil
@@ -201,7 +199,7 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
 	softHash := s.bc.CurrentSafeBlock().Hash()
 	if prevHeadHash != softHash {
-		return nil, fmt.Errorf("Block can only be created on top of soft block.")
+		return nil, status.Error(codes.FailedPrecondition, "Block can only be created on top of soft block.")
 	}
 
 	// The Engine API has been modified to use transactions from this mempool and abide by it's ordering.
@@ -217,7 +215,7 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	payload, err := s.eth.Miner().BuildPayload(payloadAttributes)
 	if err != nil {
 		log.Error("failed to build payload", "err", err)
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, "could not build block with provided txs")
 	}
 
 	// call blockchain.InsertChain to actually execute and write the blocks to state
@@ -230,10 +228,11 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	}
 	n, err := s.bc.InsertChain(blocks)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, "failed to insert block to chain")
 	}
 	if n != 1 {
-		return nil, fmt.Errorf("failed to insert block into blockchain (n=%d)", n)
+		log.Error("block was inserted at height ", n, " instead of head")
+		return nil, status.Error(codes.Internal, "failed to insert block to chain")
 	}
 
 	// remove txs from original mempool
@@ -257,7 +256,7 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 	firmBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed finding CommitmentState")
+		return nil, err
 	}
 
 	res := &executionv1a2.CommitmentState{
@@ -270,15 +269,47 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 
 // UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
 func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Context, req *executionv1a2.UpdateCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
-	newForkChoice := &engine.ForkchoiceStateV1{
-		HeadBlockHash:      common.BytesToHash(req.CommitmentState.Soft.Hash),
-		SafeBlockHash:      common.BytesToHash(req.CommitmentState.Soft.Hash),
-		FinalizedBlockHash: common.BytesToHash(req.CommitmentState.Firm.Hash),
+	softEthHash := common.BytesToHash(req.CommitmentState.Soft.Hash)
+	firmEthHash := common.BytesToHash(req.CommitmentState.Firm.Hash)
+
+	// Validate that the firm and soft blocks exist before going further
+	softBlock := s.bc.GetBlockByHash(softEthHash)
+	if (softBlock == nil) {
+		return nil, status.Error(codes.InvalidArgument, "Soft block specified does not exist")
+	}
+	firmBlock := s.bc.GetBlockByHash(firmEthHash)
+	if (firmBlock == nil) {
+		return nil, status.Error(codes.InvalidArgument, "Firm block specified does not exist")
+	} 
+	
+	currentHead := s.bc.CurrentBlock().Hash()
+	
+	// Update the head block to soft commitment
+	// This must be done before last validation step, we can only check if a block
+	// belongs to the canonical chain.
+	if currentHead != softEthHash {
+		if _, err := s.bc.SetCanonical(softBlock); err != nil {
+			return nil, status.Error(codes.Internal, "could not update head to safe hash")
+		}
 	}
 
-	_, err := s.consensus.ForkchoiceUpdatedV1(*newForkChoice, nil)
-	if err != nil {
-		return nil, err
+	// Once head is updated validate that firm belongs to chain
+	if (rawdb.ReadCanonicalHash(s.eth.ChainDb(), firmBlock.NumberU64()) != firmEthHash) {
+		// We don't want partial commitments, rolling back.
+		rollbackBlock := s.bc.GetBlockByHash(currentHead)
+		s.bc.SetCanonical(rollbackBlock)
+
+		return nil, status.Error(codes.InvalidArgument, "Firm block specified does not exist on canonical chain")
+	}
+
+	// Updating the safe and final after everything validated
+	currentSafe := s.bc.CurrentSafeBlock().Hash()
+	if currentSafe != softEthHash {
+		s.bc.SetSafe(softBlock.Header())
+	}
+	currentFirm := s.bc.CurrentFinalBlock().Hash()
+	if currentFirm != firmEthHash {
+		s.bc.SetFinalized(firmBlock.Header())
 	}
 
 	return req.CommitmentState, nil
@@ -286,6 +317,8 @@ func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Conte
 
 func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *executionv1a2.BlockIdentifier) (*executionv1a2.Block, error) {
 	var header *types.Header
+
+	// Grab the header based on the identifier provided
 	switch id_type := identifier.Identifier.(type) {
 	case *executionv1a2.BlockIdentifier_BlockNumber:
 		header = s.bc.GetHeaderByNumber(uint64(identifier.GetBlockNumber()))
@@ -294,16 +327,16 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 		header = s.bc.GetHeaderByHash(common.BytesToHash(identifier.GetBlockHash()))
 		break
 	default:
-		return nil, fmt.Errorf("Identifier has unexpected type %T", id_type)
+		return nil, status.Errorf(codes.InvalidArgument, "identifier has unexpected type %T", id_type)
 	}
 
 	if header == nil {
-		return nil, fmt.Errorf("Couldn't locate block with identifier %s", identifier.Identifier)
+		return nil, status.Errorf(codes.NotFound, "Couldn't locate block with identifier %s", identifier.Identifier)
 	}
 
 	res, err := s.ethHeaderToExecutionBlock(header)
 	if err != nil {
-		return nil, fmt.Errorf("Block header cannot be converted to execution block")
+		return nil, status.Errorf(codes.Internal, "internal error")
 	}
 
 	return res, nil
