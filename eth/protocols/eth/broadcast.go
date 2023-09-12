@@ -44,12 +44,14 @@ func (p *Peer) broadcastBlocks() {
 		select {
 		case prop := <-p.queuedBlocks:
 			if err := p.SendNewBlock(prop.block, prop.td); err != nil {
+				p.Log().Info("Block broadcasting stopped on block", "number", prop.block.Number(), "hash", prop.block.Hash(), "err", err)
 				return
 			}
 			p.Log().Trace("Propagated block", "number", prop.block.Number(), "hash", prop.block.Hash(), "td", prop.td)
 
 		case block := <-p.queuedBlockAnns:
 			if err := p.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()}); err != nil {
+				p.Log().Info("Block broadcasting stopped on block", "number", block.Number(), "hash", block.Hash(), "err", err)
 				return
 			}
 			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
