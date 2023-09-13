@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -62,13 +63,14 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		return stateDb.RawDump(opts), nil
 	}
 	var header *types.Header
-	if blockNr == rpc.LatestBlockNumber {
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		header = api.eth.blockchain.CurrentBlock()
-	} else if blockNr == rpc.FinalizedBlockNumber {
+	case rpc.FinalizedBlockNumber:
 		header = api.eth.blockchain.CurrentFinalBlock()
-	} else if blockNr == rpc.SafeBlockNumber {
+	case rpc.SafeBlockNumber:
 		header = api.eth.blockchain.CurrentSafeBlock()
-	} else {
+	default:
 		block := api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
@@ -146,13 +148,14 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			}
 		} else {
 			var header *types.Header
-			if number == rpc.LatestBlockNumber {
+			switch number {
+			case rpc.LatestBlockNumber:
 				header = api.eth.blockchain.CurrentBlock()
-			} else if number == rpc.FinalizedBlockNumber {
+			case rpc.FinalizedBlockNumber:
 				header = api.eth.blockchain.CurrentFinalBlock()
-			} else if number == rpc.SafeBlockNumber {
+			case rpc.SafeBlockNumber:
 				header = api.eth.blockchain.CurrentSafeBlock()
-			} else {
+			default:
 				block := api.eth.blockchain.GetBlockByNumber(uint64(number))
 				if block == nil {
 					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
@@ -214,7 +217,6 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
@@ -224,18 +226,20 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	}
 	defer release()
 
-	st, err := statedb.StorageTrie(contractAddress)
+	return storageRangeAt(statedb, block.Root(), contractAddress, keyStart, maxResult)
+}
+
+func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
+	storageRoot := statedb.GetStorageRoot(address)
+	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
+		return StorageRangeResult{}, nil // empty storage
+	}
+	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
+	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	if st == nil {
-		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
-	}
-	return storageRangeAt(st, keyStart, maxResult)
-}
-
-func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
-	trieIt, err := st.NodeIterator(start)
+	trieIt, err := tr.NodeIterator(start)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -247,7 +251,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 			return StorageRangeResult{}, err
 		}
 		e := storageEntry{Value: common.BytesToHash(content)}
-		if preimage := st.GetKey(it.Key); preimage != nil {
+		if preimage := tr.GetKey(it.Key); preimage != nil {
 			preimage := common.BytesToHash(preimage)
 			e.Key = &preimage
 		}
@@ -320,7 +324,7 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
-	triedb := api.eth.BlockChain().StateCache().TrieDB()
+	triedb := api.eth.BlockChain().TrieDB()
 
 	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
 	if err != nil {

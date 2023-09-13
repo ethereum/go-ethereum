@@ -28,10 +28,11 @@ import (
 // servingQueue allows running tasks in a limited number of threads and puts the
 // waiting tasks in a priority queue
 type servingQueue struct {
-	recentTime, queuedTime, servingTimeDiff uint64
-	burstLimit, burstDropLimit              uint64
-	burstDecRate                            float64
-	lastUpdate                              mclock.AbsTime
+	recentTime, queuedTime     uint64
+	servingTimeDiff            atomic.Uint64
+	burstLimit, burstDropLimit uint64
+	burstDecRate               float64
+	lastUpdate                 mclock.AbsTime
 
 	queueAddCh, queueBestCh chan *servingTask
 	stopThreadCh, quit      chan struct{}
@@ -100,7 +101,7 @@ func (t *servingTask) done() uint64 {
 	t.timeAdded = t.servingTime
 	if t.expTime > diff {
 		t.expTime -= diff
-		atomic.AddUint64(&t.sq.servingTimeDiff, t.expTime)
+		t.sq.servingTimeDiff.Add(t.expTime)
 	} else {
 		t.expTime = 0
 	}
@@ -215,8 +216,14 @@ func (sq *servingQueue) freezePeers() {
 		tasks.list = append(tasks.list, task)
 		tasks.sumTime += task.expTime
 	}
-	slices.SortFunc(peerList, func(a, b *peerTasks) bool {
-		return a.priority < b.priority
+	slices.SortFunc(peerList, func(a, b *peerTasks) int {
+		if a.priority < b.priority {
+			return -1
+		}
+		if a.priority > b.priority {
+			return 1
+		}
+		return 0
 	})
 	drop := true
 	for _, tasks := range peerList {
@@ -243,7 +250,7 @@ func (sq *servingQueue) freezePeers() {
 
 // updateRecentTime recalculates the recent serving time value
 func (sq *servingQueue) updateRecentTime() {
-	subTime := atomic.SwapUint64(&sq.servingTimeDiff, 0)
+	subTime := sq.servingTimeDiff.Swap(0)
 	now := mclock.Now()
 	dt := now - sq.lastUpdate
 	sq.lastUpdate = now

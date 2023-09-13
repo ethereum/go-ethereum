@@ -88,8 +88,8 @@ func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []co
 }
 
 func makeTries() (chtTrie *trie.Trie, bloomTrie *trie.Trie, chtKeys, bloomKeys [][]byte) {
-	chtTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase()))
-	bloomTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase()))
+	chtTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), trie.HashDefaults))
+	bloomTrie = trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), trie.HashDefaults))
 	for i := 0; i < testChainLen; i++ {
 		// The element in CHT is <big-endian block number> -> <block hash>
 		key := make([]byte, 8)

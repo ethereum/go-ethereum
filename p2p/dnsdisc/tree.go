@@ -214,8 +214,8 @@ func (t *Tree) build(entries []entry) entry {
 }
 
 func sortByID(nodes []*enode.Node) []*enode.Node {
-	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
-		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 	return nodes
 }

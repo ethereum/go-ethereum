@@ -126,6 +126,10 @@ func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot B
 			measurement[Name] = name
 			measurement[Value] = m.Value()
 			snapshot.Gauges = append(snapshot.Gauges, measurement)
+		case metrics.GaugeInfo:
+			measurement[Name] = name
+			measurement[Value] = m.Value()
+			snapshot.Gauges = append(snapshot.Gauges, measurement)
 		case metrics.Histogram:
 			if m.Count() > 0 {
 				gauges := make([]Measurement, histogramGaugeCount)

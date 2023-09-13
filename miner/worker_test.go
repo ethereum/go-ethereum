@@ -63,7 +63,7 @@ var (
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
 
 	// Test transactions
-	pendingTxs []*txpool.Transaction
+	pendingTxs []*types.Transaction
 	newTxs     []*types.Transaction
 
 	testConfig = &Config{
@@ -93,7 +93,7 @@ func init() {
 		Gas:      params.TxGas,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
-	pendingTxs = append(pendingTxs, &txpool.Transaction{Tx: tx1})
+	pendingTxs = append(pendingTxs, tx1)
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
 		Nonce:    1,
@@ -194,8 +194,8 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(true)}}, true, false)
-		b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(false)}}, true, false)
+		b.txPool.Add([]*types.Transaction{b.newRandomTx(true)}, true, false)
+		b.txPool.Add([]*types.Transaction{b.newRandomTx(false)}, true, false)
 
 		select {
 		case ev := <-sub.Chan():
@@ -452,32 +452,50 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 
 	// This API should work even when the automatic sealing is not enabled
 	for _, c := range cases {
-		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, nil, false)
+		r := w.getSealingBlock(&generateParams{
+			parentHash:  c.parent,
+			timestamp:   timestamp,
+			coinbase:    c.coinbase,
+			random:      c.random,
+			withdrawals: nil,
+			beaconRoot:  nil,
+			noTxs:       false,
+			forceTime:   true,
+		})
 		if c.expectErr {
-			if err == nil {
+			if r.err == nil {
 				t.Error("Expect error but get nil")
 			}
 		} else {
-			if err != nil {
-				t.Errorf("Unexpected error %v", err)
+			if r.err != nil {
+				t.Errorf("Unexpected error %v", r.err)
 			}
-			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+			assertBlock(r.block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
 
 	// This API should work even when the automatic sealing is enabled
 	w.start()
 	for _, c := range cases {
-		block, _, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random, nil, false)
+		r := w.getSealingBlock(&generateParams{
+			parentHash:  c.parent,
+			timestamp:   timestamp,
+			coinbase:    c.coinbase,
+			random:      c.random,
+			withdrawals: nil,
+			beaconRoot:  nil,
+			noTxs:       false,
+			forceTime:   true,
+		})
 		if c.expectErr {
-			if err == nil {
+			if r.err == nil {
 				t.Error("Expect error but get nil")
 			}
 		} else {
-			if err != nil {
-				t.Errorf("Unexpected error %v", err)
+			if r.err != nil {
+				t.Errorf("Unexpected error %v", r.err)
 			}
-			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+			assertBlock(r.block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
 }

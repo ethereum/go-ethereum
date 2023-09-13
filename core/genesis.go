@@ -63,8 +63,8 @@ type Genesis struct {
 	GasUsed       uint64      `json:"gasUsed"`
 	ParentHash    common.Hash `json:"parentHash"`
 	BaseFee       *big.Int    `json:"baseFeePerGas"` // EIP-1559
-	ExcessDataGas *uint64     `json:"excessDataGas"` // EIP-4844
-	DataGasUsed   *uint64     `json:"dataGasUsed"`   // EIP-4844
+	ExcessBlobGas *uint64     `json:"excessBlobGas"` // EIP-4844
+	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 }
 
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
@@ -99,8 +99,8 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	genesis.Mixhash = genesisHeader.MixDigest
 	genesis.Coinbase = genesisHeader.Coinbase
 	genesis.BaseFee = genesisHeader.BaseFee
-	genesis.ExcessDataGas = genesisHeader.ExcessDataGas
-	genesis.DataGasUsed = genesisHeader.DataGasUsed
+	genesis.ExcessBlobGas = genesisHeader.ExcessBlobGas
+	genesis.BlobGasUsed = genesisHeader.BlobGasUsed
 
 	return &genesis, nil
 }
@@ -130,7 +130,9 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	for addr, account := range *ga {
-		statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+		if account.Balance != nil {
+			statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -150,7 +152,9 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 		return err
 	}
 	for addr, account := range *ga {
-		statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+		if account.Balance != nil {
+			statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -242,8 +246,8 @@ type genesisSpecMarshaling struct {
 	Difficulty    *math.HexOrDecimal256
 	Alloc         map[common.UnprefixedAddress]GenesisAccount
 	BaseFee       *math.HexOrDecimal256
-	ExcessDataGas *math.HexOrDecimal64
-	DataGasUsed   *math.HexOrDecimal64
+	ExcessBlobGas *math.HexOrDecimal64
+	BlobGasUsed   *math.HexOrDecimal64
 }
 
 type genesisAccountMarshaling struct {
@@ -337,10 +341,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		applyOverrides(genesis.Config)
 		return genesis.Config, block.Hash(), nil
 	}
-	// We have the genesis block in database(perhaps in ancient database)
-	// but the corresponding state is missing.
+	// The genesis block is present(perhaps in ancient database) while the
+	// state database is not initialized yet. It can happen that the node
+	// is initialized with an external ancient store. Commit genesis state
+	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
+	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -491,13 +497,18 @@ func (g *Genesis) ToBlock() *types.Block {
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
 		if conf.IsCancun(num, g.Timestamp) {
-			head.ExcessDataGas = g.ExcessDataGas
-			head.DataGasUsed = g.DataGasUsed
-			if head.ExcessDataGas == nil {
-				head.ExcessDataGas = new(uint64)
+			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
+			// the zero hash. This is because the genesis block does not have a parent
+			// by definition.
+			head.ParentBeaconRoot = new(common.Hash)
+			// EIP-4844 fields
+			head.ExcessBlobGas = g.ExcessBlobGas
+			head.BlobGasUsed = g.BlobGasUsed
+			if head.ExcessBlobGas == nil {
+				head.ExcessBlobGas = new(uint64)
 			}
-			if head.DataGasUsed == nil {
-				head.DataGasUsed = new(uint64)
+			if head.BlobGasUsed == nil {
+				head.BlobGasUsed = new(uint64)
 			}
 		}
 	}
@@ -545,8 +556,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database, bcLogger Bloc
 // The block is committed as the canonical head block.
 // Note the state changes will be committed in hash-based scheme, use Commit
 // if path-scheme is preferred.
-func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
-	block, err := g.Commit(db, trie.NewDatabase(db), nil)
+func (g *Genesis) MustCommit(db ethdb.Database, triedb *trie.Database) *types.Block {
+	block, err := g.Commit(db, triedb, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -590,6 +601,19 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultHoleskyGenesisBlock returns the Holesky network genesis block.
+func DefaultHoleskyGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.HoleskyChainConfig,
+		Nonce:      0x1234,
+		ExtraData:  hexutil.MustDecode("0x686f77206d7563682069732074686520666973683f"),
+		GasLimit:   0x17d7840,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  1694786100,
+		Alloc:      decodePrealloc(holeskyAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block.
 func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
@@ -617,13 +641,34 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address) *Genesis {
 }
 
 func decodePrealloc(data string) GenesisAlloc {
-	var p []struct{ Addr, Balance *big.Int }
+	var p []struct {
+		Addr    *big.Int
+		Balance *big.Int
+		Misc    *struct {
+			Nonce uint64
+			Code  []byte
+			Slots []struct {
+				Key common.Hash
+				Val common.Hash
+			}
+		} `rlp:"optional"`
+	}
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
 	ga := make(GenesisAlloc, len(p))
 	for _, account := range p {
-		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
+		acc := GenesisAccount{Balance: account.Balance}
+		if account.Misc != nil {
+			acc.Nonce = account.Misc.Nonce
+			acc.Code = account.Misc.Code
+
+			acc.Storage = make(map[common.Hash]common.Hash)
+			for _, slot := range account.Misc.Slots {
+				acc.Storage[slot.Key] = slot.Val
+			}
+		}
+		ga[common.BigToAddress(account.Addr)] = acc
 	}
 	return ga
 }

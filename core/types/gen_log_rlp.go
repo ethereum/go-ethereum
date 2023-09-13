@@ -8,7 +8,7 @@ package types
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
-func (obj *rlpLog) EncodeRLP(_w io.Writer) error {
+func (obj *Log) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
 	w.WriteBytes(obj.Address[:])

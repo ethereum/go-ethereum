@@ -19,21 +19,27 @@ package trie
 import (
 	"errors"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // Config defines all necessary options for database.
 type Config struct {
-	Cache     int  // Memory allowance (MB) to use for caching trie nodes in memory
-	Preimages bool // Flag whether the preimage of trie key is recorded
+	Preimages bool           // Flag whether the preimage of node key is recorded
+	HashDB    *hashdb.Config // Configs for hash-based scheme
+	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+}
 
-	// Testing hooks
-	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
+// HashDefaults represents a config for using hash-based scheme with
+// default settings.
+var HashDefaults = &Config{
+	Preimages: false,
+	HashDB:    hashdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -46,14 +52,20 @@ type backend interface {
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
 
-	// Size returns the current storage size of the memory cache in front of the
-	// persistent database layer.
-	Size() common.StorageSize
+	// Size returns the current storage size of the diff layers on top of the
+	// disk layer and the storage size of the nodes cached in the disk layer.
+	//
+	// For hash scheme, there is no differentiation between diff layer nodes
+	// and dirty disk layer nodes, so both are merged into the second return.
+	Size() (common.StorageSize, common.StorageSize)
 
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to
 	// the specified root.
-	Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error
+	//
+	// The passed in maps(nodes, states) will be retained to avoid copying
+	// everything. Therefore, these maps must not be changed afterwards.
+	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
@@ -67,65 +79,63 @@ type backend interface {
 // types of node backend as an entrypoint. It's responsible for all interactions
 // relevant with trie nodes and node preimages.
 type Database struct {
-	config    *Config          // Configuration for trie database
-	diskdb    ethdb.Database   // Persistent database to store the snapshot
-	cleans    *fastcache.Cache // Megabytes permitted using for read caches
-	preimages *preimageStore   // The store for caching preimages
-	backend   backend          // The backend for managing trie nodes
+	config    *Config        // Configuration for trie database
+	diskdb    ethdb.Database // Persistent database to store the snapshot
+	preimages *preimageStore // The store for caching preimages
+	backend   backend        // The backend for managing trie nodes
 }
 
-// prepare initializes the database with provided configs, but the
-// database backend is still left as nil.
-func prepare(diskdb ethdb.Database, config *Config) *Database {
-	var cleans *fastcache.Cache
-	if config != nil && config.Cache > 0 {
-		cleans = fastcache.New(config.Cache * 1024 * 1024)
+// NewDatabase initializes the trie database with default settings, note
+// the legacy hash-based scheme is used by default.
+func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
+	// Sanitize the config and use the default one if it's not specified.
+	if config == nil {
+		config = HashDefaults
 	}
 	var preimages *preimageStore
-	if config != nil && config.Preimages {
+	if config.Preimages {
 		preimages = newPreimageStore(diskdb)
 	}
-	return &Database{
+	db := &Database{
 		config:    config,
 		diskdb:    diskdb,
-		cleans:    cleans,
 		preimages: preimages,
 	}
-}
-
-// NewDatabase initializes the trie database with default settings, namely
-// the legacy hash-based scheme is used by default.
-func NewDatabase(diskdb ethdb.Database) *Database {
-	return NewDatabaseWithConfig(diskdb, nil)
-}
-
-// NewDatabaseWithConfig initializes the trie database with provided configs.
-// The path-based scheme is not activated yet, always initialized with legacy
-// hash-based scheme by default.
-func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
-	db := prepare(diskdb, config)
-	db.backend = hashdb.New(diskdb, db.cleans, mptResolver{})
+	if config.HashDB != nil && config.PathDB != nil {
+		log.Crit("Both 'hash' and 'path' mode are configured")
+	}
+	if config.PathDB != nil {
+		db.backend = pathdb.New(diskdb, config.PathDB)
+	} else {
+		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
+	}
 	return db
 }
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
-	return db.backend.(*hashdb.Database).Reader(blockRoot)
+	switch b := db.backend.(type) {
+	case *hashdb.Database:
+		return b.Reader(blockRoot)
+	case *pathdb.Database:
+		return b.Reader(blockRoot)
+	}
+	return nil, errors.New("unknown backend")
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
 // the size exceeds the threshold.
+//
+// The passed in maps(nodes, states) will be retained to avoid copying everything.
+// Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
-	if db.config != nil && db.config.OnCommit != nil {
-		db.config.OnCommit(states)
-	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	return db.backend.Update(root, parent, nodes)
+	return db.backend.Update(root, parent, block, nodes, states)
 }
 
 // Commit iterates over all the children of a particular node, writes them out
@@ -138,18 +148,19 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.backend.Commit(root, report)
 }
 
-// Size returns the storage size of dirty trie nodes in front of the persistent
-// database and the size of cached preimages.
-func (db *Database) Size() (common.StorageSize, common.StorageSize) {
+// Size returns the storage size of diff layer nodes above the persistent disk
+// layer, the dirty nodes buffered within the disk layer, and the size of cached
+// preimages.
+func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize) {
 	var (
-		storages  common.StorageSize
-		preimages common.StorageSize
+		diffs, nodes common.StorageSize
+		preimages    common.StorageSize
 	)
-	storages = db.backend.Size()
+	diffs, nodes = db.backend.Size()
 	if db.preimages != nil {
 		preimages = db.preimages.size()
 	}
-	return storages, preimages
+	return diffs, nodes, preimages
 }
 
 // Initialized returns an indicator if the state data is already initialized
@@ -228,4 +239,61 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return nil, errors.New("not supported")
 	}
 	return hdb.Node(hash)
+}
+
+// Recover rollbacks the database to a specified historical point. The state is
+// supported as the rollback destination only if it's canonical state and the
+// corresponding trie histories are existent. It's only supported by path-based
+// database and will return an error for others.
+func (db *Database) Recover(target common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Recover(target, &trieLoader{db: db})
+}
+
+// Recoverable returns the indicator if the specified state is enabled to be
+// recovered. It's only supported by path-based database and will return an
+// error for others.
+func (db *Database) Recoverable(root common.Hash) (bool, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false, errors.New("not supported")
+	}
+	return pdb.Recoverable(root), nil
+}
+
+// Reset wipes all available journal from the persistent database and discard
+// all caches and diff layers. Using the given root to create a new disk layer.
+// It's only supported by path-based database and will return an error for others.
+func (db *Database) Reset(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Reset(root)
+}
+
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
+// This is meant to be used during shutdown to persist the snapshot without
+// flattening everything down (bad for reorgs). It's only supported by path-based
+// database and will return an error for others.
+func (db *Database) Journal(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Journal(root)
+}
+
+// SetBufferSize sets the node buffer size to the provided value(in bytes).
+// It's only supported by path-based database and will return an error for
+// others.
+func (db *Database) SetBufferSize(size int) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.SetBufferSize(size)
 }

@@ -892,7 +892,7 @@ func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 }
 
 func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
-	logs := rawdb.ReadLogs(fb.db, hash, number, fb.bc.Config())
+	logs := rawdb.ReadLogs(fb.db, hash, number)
 	return logs, nil
 }
 

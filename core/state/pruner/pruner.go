@@ -85,13 +85,16 @@ func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
 	if headBlock == nil {
 		return nil, errors.New("failed to load head block")
 	}
+	// Offline pruning is only supported in legacy hash based scheme.
+	triedb := trie.NewDatabase(db, trie.HashDefaults)
+
 	snapconfig := snapshot.Config{
 		CacheSize:  256,
 		Recovery:   false,
 		NoBuild:    true,
 		AsyncBuild: false,
 	}
-	snaptree, err := snapshot.New(snapconfig, db, trie.NewDatabase(db), headBlock.Root())
+	snaptree, err := snapshot.New(snapconfig, db, triedb, headBlock.Root())
 	if err != nil {
 		return nil, err // The relevant snapshot(s) might not exist
 	}
@@ -361,7 +364,9 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 		NoBuild:    true,
 		AsyncBuild: false,
 	}
-	snaptree, err := snapshot.New(snapconfig, db, trie.NewDatabase(db), headBlock.Root())
+	// Offline pruning is only supported in legacy hash based scheme.
+	triedb := trie.NewDatabase(db, trie.HashDefaults)
+	snaptree, err := snapshot.New(snapconfig, db, triedb, headBlock.Root())
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
@@ -403,7 +408,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}
-	t, err := trie.NewStateTrie(trie.StateTrieID(genesis.Root()), trie.NewDatabase(db))
+	t, err := trie.NewStateTrie(trie.StateTrieID(genesis.Root()), trie.NewDatabase(db, trie.HashDefaults))
 	if err != nil {
 		return err
 	}
@@ -427,7 +432,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 			}
 			if acc.Root != types.EmptyRootHash {
 				id := trie.StorageTrieID(genesis.Root(), common.BytesToHash(accIter.LeafKey()), acc.Root)
-				storageTrie, err := trie.NewStateTrie(id, trie.NewDatabase(db))
+				storageTrie, err := trie.NewStateTrie(id, trie.NewDatabase(db, trie.HashDefaults))
 				if err != nil {
 					return err
 				}
