@@ -891,12 +891,17 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 
 	// do not do CCC checks on follower nodes
 	if w.isRunning() {
+		// do gas limit check up-front and do not run CCC if it fails
+		if w.current.gasPool.Gas() < tx.Gas() {
+			return nil, nil, core.ErrGasLimitReached
+		}
+
 		snap := w.current.state.Snapshot()
 
 		log.Trace(
 			"Worker apply ccc for tx",
 			"id", w.circuitCapacityChecker.ID,
-			"txhash", tx.Hash(),
+			"txHash", tx.Hash().Hex(),
 		)
 
 		// 1. we have to check circuit capacity before `core.ApplyTransaction`,
@@ -922,7 +927,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		log.Trace(
 			"Worker apply ccc for tx result",
 			"id", w.circuitCapacityChecker.ID,
-			"txhash", tx.Hash(),
+			"txHash", tx.Hash().Hex(),
 			"accRows", accRows,
 		)
 	}
@@ -933,6 +938,20 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
+
+		if accRows != nil {
+			// At this point, we have called CCC but the transaction failed in `ApplyTransaction`.
+			// If we skip this tx and continue to pack more, the next tx will likely fail with
+			// `circuitcapacitychecker.ErrUnknown`. However, at this point we cannot decide whether
+			// we should seal the block or skip the tx and continue, so we simply return the error.
+			log.Error(
+				"GetBlockTrace passed but ApplyTransaction failed, ccc is left in inconsistent state",
+				"blockNumber", w.current.header.Number,
+				"txHash", tx.Hash().Hex(),
+				"err", err,
+			)
+		}
+
 		return nil, traces, err
 	}
 
