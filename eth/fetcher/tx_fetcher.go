@@ -238,7 +238,6 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 		return ok
 	}
 	for _, hash := range hashes {
-
 		switch {
 		case f.hasTx(hash):
 			duplicate++
