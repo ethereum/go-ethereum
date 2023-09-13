@@ -2044,7 +2044,7 @@ func SetupMetricsFromCLI(ctx *cli.Context) {
 }
 
 func SetupMetricsFromConfig(c *metrics.Config) {
-	if metrics.Enabled {
+	if !metrics.Enabled {
 		return
 	}
 
