@@ -185,10 +185,10 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
 		}
 		metrics.NewRegisteredGaugeInfo("geth/info", nil).Update(metrics.GaugeInfoValue{
-			"arch":          runtime.GOARCH,
-			"os":            runtime.GOOS,
-			"version":       cfg.Node.Version,
-			"eth_protocols": strings.Join(protos, ","),
+			"arch":      runtime.GOARCH,
+			"os":        runtime.GOOS,
+			"version":   cfg.Node.Version,
+			"protocols": strings.Join(protos, ","),
 		})
 	}
 
