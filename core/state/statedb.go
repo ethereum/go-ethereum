@@ -1061,12 +1061,10 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 			slotDeletionSkip.Inc(1)
 		}
 		n := int64(len(slots))
-		if n > slotDeletionMaxCount.Value() {
-			slotDeletionMaxCount.Update(n)
-		}
-		if int64(size) > slotDeletionMaxSize.Value() {
-			slotDeletionMaxSize.Update(int64(size))
-		}
+
+		slotDeletionMaxCount.UpdateIfGt(int64(len(slots)))
+		slotDeletionMaxSize.UpdateIfGt(int64(size))
+
 		slotDeletionTimer.UpdateSince(start)
 		slotDeletionCount.Mark(n)
 		slotDeletionSize.Mark(int64(size))

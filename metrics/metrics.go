@@ -85,6 +85,12 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/sched/latencies:seconds"}, // histogram
 }
 
+func ReadRuntimeStats() *runtimeStats {
+	r := new(runtimeStats)
+	readRuntimeStats(r)
+	return r
+}
+
 func readRuntimeStats(v *runtimeStats) {
 	metrics.Read(runtimeSamples)
 	for _, s := range runtimeSamples {
