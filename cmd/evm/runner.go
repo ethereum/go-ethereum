@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -117,15 +116,14 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer        vm.EVMLogger
-		debugLogger   *logger.StructLogger
-		statedb       *state.StateDB
-		chainConfig   *params.ChainConfig
-		sender        = common.BytesToAddress([]byte("sender"))
-		receiver      = common.BytesToAddress([]byte("receiver"))
-		genesisConfig *core.Genesis
-		preimages     = ctx.Bool(DumpFlag.Name)
-		blobHashes    []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
+		tracer      vm.EVMLogger
+		debugLogger *logger.StructLogger
+		statedb     *state.StateDB
+		chainConfig *params.ChainConfig
+		sender      = common.BytesToAddress([]byte("sender"))
+		receiver    = common.BytesToAddress([]byte("receiver"))
+		preimages   = ctx.Bool(DumpFlag.Name)
+		blobHashes  []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -135,30 +133,30 @@ func runCmd(ctx *cli.Context) error {
 	} else {
 		debugLogger = logger.NewStructLogger(logconfig)
 	}
+
+	initialGas := ctx.Uint64(GasFlag.Name)
+	genesisConfig := new(core.Genesis)
+	genesisConfig.GasLimit = initialGas
 	if ctx.String(GenesisFlag.Name) != "" {
-		gen := readGenesis(ctx.String(GenesisFlag.Name))
-		genesisConfig = gen
-		db := rawdb.NewMemoryDatabase()
-		triedb := trie.NewDatabase(db, &trie.Config{
-			Preimages: preimages,
-			HashDB:    hashdb.Defaults,
-		})
-		defer triedb.Close()
-		genesis := gen.MustCommit(db, triedb)
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(genesis.Root(), sdb, nil)
-		chainConfig = gen.Config
+		genesisConfig = readGenesis(ctx.String(GenesisFlag.Name))
+		if genesisConfig.GasLimit != 0 {
+			initialGas = genesisConfig.GasLimit
+		}
 	} else {
-		db := rawdb.NewMemoryDatabase()
-		triedb := trie.NewDatabase(db, &trie.Config{
-			Preimages: preimages,
-			HashDB:    hashdb.Defaults,
-		})
-		defer triedb.Close()
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
-		genesisConfig = new(core.Genesis)
+		genesisConfig.Config = params.AllEthashProtocolChanges
 	}
+
+	db := rawdb.NewMemoryDatabase()
+	triedb := trie.NewDatabase(db, &trie.Config{
+		Preimages: preimages,
+		HashDB:    hashdb.Defaults,
+	})
+	defer triedb.Close()
+	genesis := genesisConfig.MustCommit(db, triedb)
+	sdb := state.NewDatabaseWithNodeDB(db, triedb)
+	statedb, _ = state.New(genesis.Root(), sdb, nil)
+	chainConfig = genesisConfig.Config
+
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
@@ -211,10 +209,6 @@ func runCmd(ctx *cli.Context) error {
 			return err
 		}
 		code = common.Hex2Bytes(bin)
-	}
-	initialGas := ctx.Uint64(GasFlag.Name)
-	if genesisConfig.GasLimit != 0 {
-		initialGas = genesisConfig.GasLimit
 	}
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
