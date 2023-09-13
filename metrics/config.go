@@ -40,15 +40,14 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
-	if c.EnableInfluxDB || c.EnableInfluxDBV2 {
-		v1FlagIsSet := c.InfluxDBUsername != "" || c.InfluxDBPassword != ""
-		v2FlagIsSet := c.InfluxDBToken != "" || c.InfluxDBOrganization != "" || c.InfluxDBBucket != ""
+	v1FlagIsSet := c.InfluxDBUsername != "" || c.InfluxDBPassword != ""
+	v2FlagIsSet := c.InfluxDBToken != "" || c.InfluxDBOrganization != "" || c.InfluxDBBucket != ""
 
-		if c.EnableInfluxDB && v2FlagIsSet {
-			return errors.New("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
-		} else if c.EnableInfluxDBV2 && v1FlagIsSet {
-			return errors.New("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
-		}
+	if c.EnableInfluxDB && v2FlagIsSet {
+		return errors.New("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
+	}
+	if c.EnableInfluxDBV2 && v1FlagIsSet {
+		return errors.New("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
 	}
 	return nil
 }
