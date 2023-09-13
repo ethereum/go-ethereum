@@ -133,3 +133,15 @@ type CustomError struct {
 func (e *CustomError) ErrorCode() int { return e.Code }
 
 func (e *CustomError) Error() string { return e.ValidationError }
+
+type OptionsValidateError struct{ Message string }
+
+func (e *OptionsValidateError) ErrorCode() int { return -32003 }
+
+func (e *OptionsValidateError) Error() string { return e.Message }
+
+type KnownAccountsLimitExceededError struct{ Message string }
+
+func (e *KnownAccountsLimitExceededError) ErrorCode() int { return -32005 }
+
+func (e *KnownAccountsLimitExceededError) Error() string { return e.Message }

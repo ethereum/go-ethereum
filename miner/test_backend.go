@@ -95,7 +95,7 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-// PeerCount implements Backend.
+// PeerCount implements testWorkerBackend.
 func (*testWorkerBackend) PeerCount() int {
 	panic("unimplemented")
 }
@@ -397,7 +397,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 			// If our sealing block contains less than 2 uncle blocks,
 			// add the new uncle block if valid and regenerate a new
 			// sealing block for higher profit.
-			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
+			if w.IsRunning() && w.current != nil && len(w.current.uncles) < 2 {
 				start := time.Now()
 				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
 					commitErr := w.commit(ctx, w.current.copy(), nil, true, start)
@@ -428,7 +428,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
 			// nolint : nestif
-			if !w.isRunning() && w.current != nil {
+			if !w.IsRunning() && w.current != nil {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
@@ -486,7 +486,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *int32, noem
 	tracing.Exec(ctx, "", "worker.prepareWork", func(ctx context.Context, span trace.Span) {
 		// Set the coinbase if the worker is running or it's required
 		var coinbase common.Address
-		if w.isRunning() {
+		if w.IsRunning() {
 			if w.coinbase == (common.Address{}) {
 				log.Error("Refusing to mine without etherbase")
 				return
@@ -873,7 +873,7 @@ mainloop:
 		}
 	}
 
-	if !w.isRunning() && len(coalescedLogs) > 0 {
+	if !w.IsRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
 		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
