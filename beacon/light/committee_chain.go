@@ -79,11 +79,17 @@ type CommitteeChain struct {
 	config             *types.ChainConfig
 	signerThreshold    int
 	minimumUpdateScore types.UpdateScore
-	enforceTime        bool
+	enforceTime        bool // enforceTime specifies whether the age of a signed header should be checked
 }
 
 // NewCommitteeChain creates a new CommitteeChain.
-func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
+func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
+	return newCommitteeChain(db, config, signerThreshold, enforceTime, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
+}
+
+// newCommitteeChain creates a new CommitteeChain with the option of replacing the
+// clock source and signature verification for testing purposes.
+func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	var (
 		fixedRootEncoder = func(root common.Hash) ([]byte, error) {
 			return root[:], nil
@@ -163,10 +169,15 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 
 // checkConstraints checks committee chain validity constraints
 func (s *CommitteeChain) checkConstraints() bool {
+	isNotInFixedRootRange := func(r Range) bool {
+		return s.fixedRoots.periods.IsEmpty() ||
+			r.First < s.fixedRoots.periods.First ||
+			r.First >= s.fixedRoots.periods.Next
+	}
+
 	valid := true
 	if !s.updates.periods.IsEmpty() {
-		if s.fixedRoots.periods.IsEmpty() || s.updates.periods.First < s.fixedRoots.periods.First ||
-			s.updates.periods.First >= s.fixedRoots.periods.Next {
+		if isNotInFixedRootRange(s.updates.periods) {
 			log.Error("First update is not in the fixed roots range")
 			valid = false
 		}
@@ -176,8 +187,7 @@ func (s *CommitteeChain) checkConstraints() bool {
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
-		if s.fixedRoots.periods.IsEmpty() || s.committees.periods.First < s.fixedRoots.periods.First ||
-			s.committees.periods.First >= s.fixedRoots.periods.Next {
+		if isNotInFixedRootRange(s.committees.periods) {
 			log.Error("First committee is not in the fixed roots range")
 			valid = false
 		}
@@ -205,6 +215,10 @@ func (s *CommitteeChain) Reset() {
 func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
+
+	if root == (common.Hash{}) {
+		return ErrWrongCommitteeRoot
+	}
 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)

@@ -51,7 +51,7 @@ func GenerateTestUpdate(config *types.ChainConfig, period uint64, committee, nex
 func GenerateTestSignedHeader(header types.Header, config *types.ChainConfig, committee *types.SerializedSyncCommittee, signatureSlot uint64, signerCount int) types.SignedHeader {
 	bitmask := makeBitmask(signerCount)
 	signingRoot, _ := config.Forks.SigningRoot(header)
-	c, _ := DummyVerifier{}.deserializeSyncCommittee(committee)
+	c, _ := dummyVerifier{}.deserializeSyncCommittee(committee)
 	return types.SignedHeader{
 		Header: header,
 		Signature: types.SyncAggregate{
@@ -113,33 +113,33 @@ type committeeSigVerifier interface {
 	verifySignature(committee syncCommittee, signedRoot common.Hash, aggregate *types.SyncAggregate) bool
 }
 
-// BLSVerifier implements committeeSigVerifier
-type BLSVerifier struct{}
+// blsVerifier implements committeeSigVerifier
+type blsVerifier struct{}
 
 // deserializeSyncCommittee implements committeeSigVerifier
-func (BLSVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
+func (blsVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
 	return s.Deserialize()
 }
 
 // verifySignature implements committeeSigVerifier
-func (BLSVerifier) verifySignature(committee syncCommittee, signingRoot common.Hash, aggregate *types.SyncAggregate) bool {
+func (blsVerifier) verifySignature(committee syncCommittee, signingRoot common.Hash, aggregate *types.SyncAggregate) bool {
 	return committee.(*types.SyncCommittee).VerifySignature(signingRoot, aggregate)
 }
 
 type dummySyncCommittee [32]byte
 
-// DummyVerifier implements committeeSigVerifier
-type DummyVerifier struct{}
+// dummyVerifier implements committeeSigVerifier
+type dummyVerifier struct{}
 
 // deserializeSyncCommittee implements committeeSigVerifier
-func (DummyVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
+func (dummyVerifier) deserializeSyncCommittee(s *types.SerializedSyncCommittee) (syncCommittee, error) {
 	var sc dummySyncCommittee
 	copy(sc[:], s[:32])
 	return sc, nil
 }
 
 // verifySignature implements committeeSigVerifier
-func (DummyVerifier) verifySignature(committee syncCommittee, signingRoot common.Hash, aggregate *types.SyncAggregate) bool {
+func (dummyVerifier) verifySignature(committee syncCommittee, signingRoot common.Hash, aggregate *types.SyncAggregate) bool {
 	return aggregate.Signature == makeDummySignature(committee.(dummySyncCommittee), signingRoot, aggregate.Signers)
 }
 

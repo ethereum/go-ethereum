@@ -38,7 +38,8 @@ type canonicalStore[T any] struct {
 	decode    func([]byte) (T, error)
 }
 
-// newCanonicalStore creates a new canonicalStore.
+// newCanonicalStore creates a new canonicalStore and loads all keys associated
+// with the keyPrefix in order to determine the ranges available in the database.
 func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 	encode func(T) ([]byte, error), decode func([]byte) (T, error)) *canonicalStore[T] {
 	cs := &canonicalStore[T]{
