@@ -83,14 +83,14 @@ func (s *ExpDecaySample) Clear() {
 func (s *ExpDecaySample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	vals := s.values.Values()
-	values := make([]int64, len(vals))
 	var (
-		max int64 = math.MinInt64
-		min int64 = math.MaxInt64
-		sum int64
+		samples       = s.values.Values()
+		values        = make([]int64, len(samples))
+		max     int64 = math.MinInt64
+		min     int64 = math.MaxInt64
+		sum     int64
 	)
-	for i, item := range vals {
+	for i, item := range samples {
 		v := item.v
 		values[i] = v
 		sum += v
@@ -196,8 +196,7 @@ type sampleSnapshot struct {
 
 // newSampleSnapshotPrecalculated creates a read-only sampleSnapShot, using
 // precalculated sums to avoid iterating the values
-func newSampleSnapshotPrecalculated(count int64, values []int64,
-	min, max, sum int64) *sampleSnapshot {
+func newSampleSnapshotPrecalculated(count int64, values []int64, min, max, sum int64) *sampleSnapshot {
 	if len(values) == 0 {
 		return &sampleSnapshot{
 			count:  count,
