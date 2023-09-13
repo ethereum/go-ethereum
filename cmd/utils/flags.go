@@ -2043,6 +2043,46 @@ func SetupMetrics(ctx *cli.Context) {
 	}
 }
 
+func SetupMetricsFromConfig(c *metrics.Config) {
+	if !c.Enabled {
+		return
+	}
+
+	if err := c.Validate(); err != nil {
+		Fatalf("Metric in config file contains error: %v", err)
+	}
+
+	log.Info("Enabling metrics collection")
+
+	if c.EnableInfluxDB || c.EnableInfluxDBV2 {
+		var (
+			tagsMap      = SplitTagsFlag(c.InfluxDBTags)
+			endpoint     = c.InfluxDBEndpoint
+			database     = c.InfluxDBDatabase
+			username     = c.InfluxDBUsername
+			password     = c.InfluxDBPassword
+			token        = c.InfluxDBToken
+			bucket       = c.InfluxDBBucket
+			organization = c.InfluxDBOrganization
+		)
+		if c.EnableInfluxDB {
+			log.Info("Enabling metrics export to InfluxDB")
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+		} else if c.EnableInfluxDBV2 {
+			log.Info("Enabling metrics export to InfluxDB (v2)")
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+		}
+	}
+
+	if c.HTTP != "" {
+		address := net.JoinHostPort(c.HTTP, fmt.Sprintf("%d", c.Port))
+		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+		exp.Setup(address)
+	} else if c.Port != 0 {
+		log.Warn("influxdb.port specified without inflxdb.addr, metrics server will not start.")
+	}
+}
+
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
