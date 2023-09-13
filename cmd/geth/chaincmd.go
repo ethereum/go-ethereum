@@ -258,9 +258,7 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
+	utils.SetupMetricsFromCLI(ctx)
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
