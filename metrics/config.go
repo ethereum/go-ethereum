@@ -16,6 +16,10 @@
 
 package metrics
 
+import (
+	"errors"
+)
+
 // Config contains the configuration for the metric collection.
 type Config struct {
 	Enabled          bool   `toml:",omitempty"`
@@ -33,6 +37,20 @@ type Config struct {
 	InfluxDBToken        string `toml:",omitempty"`
 	InfluxDBBucket       string `toml:",omitempty"`
 	InfluxDBOrganization string `toml:",omitempty"`
+}
+
+func (c *Config) Validate() error {
+	if c.EnableInfluxDB || c.EnableInfluxDBV2 {
+		v1FlagIsSet := c.InfluxDBUsername != "" || c.InfluxDBPassword != ""
+		v2FlagIsSet := c.InfluxDBToken != "" || c.InfluxDBOrganization != "" || c.InfluxDBBucket != ""
+
+		if c.EnableInfluxDB && v2FlagIsSet {
+			return errors.New("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
+		} else if c.EnableInfluxDBV2 && v1FlagIsSet {
+			return errors.New("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
+		}
+	}
+	return nil
 }
 
 // DefaultConfig is the default config for metrics used in go-ethereum.
