@@ -19,9 +19,9 @@ import (
 	executionv1a2 "github.com/ethereum/go-ethereum/grpc/gen/astria/execution/v1alpha2"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // executionServiceServer is the implementation of the ExecutionServiceServerV1Alpha1 interface.
@@ -138,23 +138,23 @@ func (s *ExecutionServiceServerV1Alpha1) InitState(ctx context.Context, req *exe
 	return res, nil
 }
 
-// ExecutionServiceServerV1Alpha2 is the implementation of the ExecutionServiceServer interface.
+// ExecutionServiceServerV1Alpha2 is the implementation of the
+// ExecutionServiceServer interface.
 type ExecutionServiceServerV1Alpha2 struct {
-	// NOTE - from the generated code:
-	// All implementations must embed UnimplementedExecutionServiceServer
-	// for forward compatibility
+	// NOTE - from the generated code: All implementations must embed
+	// UnimplementedExecutionServiceServer for forward compatibility
 	executionv1a2.UnimplementedExecutionServiceServer
-	
-	eth    *eth.Ethereum
-	bc     *core.BlockChain
+
+	eth *eth.Ethereum
+	bc  *core.BlockChain
 }
 
 func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServerV1Alpha2 {
 	bc := eth.BlockChain()
 
 	return &ExecutionServiceServerV1Alpha2{
-		eth:       eth,
-		bc:        bc,
+		eth: eth,
+		bc:  bc,
 	}
 }
 
@@ -170,7 +170,8 @@ func (s *ExecutionServiceServerV1Alpha2) GetBlock(ctx context.Context, req *exec
 	return res, nil
 }
 
-// BatchGetBlocks will return an array of Blocks given an array of block identifiers.
+// BatchGetBlocks will return an array of Blocks given an array of block
+// identifiers.
 func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req *executionv1a2.BatchGetBlocksRequest) (*executionv1a2.BatchGetBlocksResponse, error) {
 	var blocks []*executionv1a2.Block
 
@@ -191,7 +192,8 @@ func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req
 	return res, nil
 }
 
-// CreateBlock is used to drive deterministic creation of an executed block from a sequenced block.
+// ExecuteBlock drives deterministic derivation of a rollup block from sequencer
+// block data
 func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *executionv1a2.ExecuteBlockRequest) (*executionv1a2.Block, error) {
 	log.Info("ExecuteBlock called request", "request", req)
 
@@ -202,7 +204,8 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 		return nil, status.Error(codes.FailedPrecondition, "Block can only be created on top of soft block.")
 	}
 
-	// The Engine API has been modified to use transactions from this mempool and abide by it's ordering.
+	// The Engine API has been modified to use transactions from this mempool and
+	// abide by it's ordering.
 	s.eth.TxPool().SetAstriaOrdered(req.Transactions)
 
 	// Build a payload to add to the chain
@@ -218,7 +221,8 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 		return nil, status.Error(codes.InvalidArgument, "could not build block with provided txs")
 	}
 
-	// call blockchain.InsertChain to actually execute and write the blocks to state
+	// call blockchain.InsertChain to actually execute and write the blocks to
+	// state
 	block, err := engine.ExecutableDataToBlock(*payload.Resolve().ExecutionPayload)
 	if err != nil {
 		return nil, err
@@ -267,26 +271,27 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 	return res, nil
 }
 
-// UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
+// UpdateCommitmentState replaces the whole CommitmentState with a new
+// CommitmentState.
 func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Context, req *executionv1a2.UpdateCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
 	softEthHash := common.BytesToHash(req.CommitmentState.Soft.Hash)
 	firmEthHash := common.BytesToHash(req.CommitmentState.Firm.Hash)
 
 	// Validate that the firm and soft blocks exist before going further
 	softBlock := s.bc.GetBlockByHash(softEthHash)
-	if (softBlock == nil) {
+	if softBlock == nil {
 		return nil, status.Error(codes.InvalidArgument, "Soft block specified does not exist")
 	}
 	firmBlock := s.bc.GetBlockByHash(firmEthHash)
-	if (firmBlock == nil) {
+	if firmBlock == nil {
 		return nil, status.Error(codes.InvalidArgument, "Firm block specified does not exist")
-	} 
-	
+	}
+
 	currentHead := s.bc.CurrentBlock().Hash()
-	
-	// Update the head block to soft commitment
-	// This must be done before last validation step, we can only check if a block
-	// belongs to the canonical chain.
+
+	// Update the head block to soft commitment This must be done before last
+	// validation step, we can only check if a block belongs to the canonical
+	// chain.
 	if currentHead != softEthHash {
 		if _, err := s.bc.SetCanonical(softBlock); err != nil {
 			return nil, status.Error(codes.Internal, "could not update head to safe hash")
@@ -294,7 +299,7 @@ func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Conte
 	}
 
 	// Once head is updated validate that firm belongs to chain
-	if (rawdb.ReadCanonicalHash(s.eth.ChainDb(), firmBlock.NumberU64()) != firmEthHash) {
+	if rawdb.ReadCanonicalHash(s.eth.ChainDb(), firmBlock.NumberU64()) != firmEthHash {
 		// We don't want partial commitments, rolling back.
 		rollbackBlock := s.bc.GetBlockByHash(currentHead)
 		s.bc.SetCanonical(rollbackBlock)
