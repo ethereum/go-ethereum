@@ -22,10 +22,10 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -151,8 +151,7 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	underpricedMu sync.Mutex
-	underpriced   map[common.Hash]int64 // Transactions discarded as too cheap (don't re-fetch)
+	underpriced *lru.Cache[common.Hash, int64] // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
@@ -206,7 +205,7 @@ func NewTxFetcherForTests(
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
 		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: make(map[common.Hash]int64),
+		underpriced: lru.NewCache[common.Hash, int64](maxTxUnderpricedSetSize),
 		hasTx:       hasTx,
 		addTxs:      addTxs,
 		fetchTxs:    fetchTxs,
@@ -231,12 +230,9 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 		duplicate, underpriced int64
 	)
 	isUnderpriced := func(hash common.Hash) bool {
-		f.underpricedMu.Lock()
-		defer f.underpricedMu.Unlock()
-
-		prevTime, ok := f.underpriced[hash]
+		prevTime, ok := f.underpriced.Peek(hash)
 		if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
-			delete(f.underpriced, hash)
+			f.underpriced.Remove(hash)
 			return false
 		}
 		return ok
@@ -316,17 +312,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
-				f.underpricedMu.Lock()
-				// If the set is to big, delete a pseudorandom element
-				for hash := range f.underpriced {
-					if len(f.underpriced) < maxTxUnderpricedSetSize {
-						break
-					}
-					delete(f.underpriced, hash)
-				}
-				// add the underpriced transaction to the set
-				f.underpriced[batch[j].Hash()] = batch[j].Time().Unix()
-				f.underpricedMu.Unlock()
+				f.underpriced.Add(batch[j].Hash(), batch[j].Time().Unix())
 			}
 			// Track a few interesting failure types
 			switch {
