@@ -28,12 +28,13 @@ import (
 
 var (
 	// These flags override values in build env.
-	GitCommitFlag   = flag.String("git-commit", "", `Overrides git commit hash embedded into executables`)
-	GitBranchFlag   = flag.String("git-branch", "", `Overrides git branch being built`)
-	GitTagFlag      = flag.String("git-tag", "", `Overrides git tag being built`)
-	BuildnumFlag    = flag.String("buildnum", "", `Overrides CI build number`)
-	PullRequestFlag = flag.Bool("pull-request", false, `Overrides pull request status of the build`)
-	CronJobFlag     = flag.Bool("cron-job", false, `Overrides cron job status of the build`)
+	GitCommitFlag     = flag.String("git-commit", "", `Overrides git commit hash embedded into executables`)
+	GitBranchFlag     = flag.String("git-branch", "", `Overrides git branch being built`)
+	GitTagFlag        = flag.String("git-tag", "", `Overrides git tag being built`)
+	BuildnumFlag      = flag.String("buildnum", "", `Overrides CI build number`)
+	PullRequestFlag   = flag.Bool("pull-request", false, `Overrides pull request status of the build`)
+	CronJobFlag       = flag.Bool("cron-job", false, `Overrides cron job status of the build`)
+	UbuntuVersionFlag = flag.String("ubuntu", "", `Sets the ubuntu version being built for`)
 )
 
 // Environment contains metadata provided by the build environment.
@@ -43,6 +44,7 @@ type Environment struct {
 	Repo                      string // name of GitHub repo
 	Commit, Date, Branch, Tag string // Git info
 	Buildnum                  string
+	UbuntuVersion             string // Ubuntu version being built for
 	IsPullRequest             bool
 	IsCronJob                 bool
 }
@@ -167,6 +169,9 @@ func applyEnvFlags(env Environment) Environment {
 	}
 	if *CronJobFlag {
 		env.IsCronJob = true
+	}
+	if *UbuntuVersionFlag != "" {
+		env.UbuntuVersion = *UbuntuVersionFlag
 	}
 	return env
 }

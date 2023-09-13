@@ -318,7 +318,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.istanbul = pool.config.IsIstanbul(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
-	pool.shanghai = pool.config.IsShanghai(uint64(time.Now().Unix()))
+	pool.shanghai = pool.config.IsShanghai(next, uint64(time.Now().Unix()))
 }
 
 // Stop stops the light transaction pool
@@ -494,29 +494,29 @@ func (pool *TxPool) GetTransactions() (txs types.Transactions, err error) {
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and nonce.
-func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (pool *TxPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
 	// Retrieve all the pending transactions and sort by account and by nonce
-	pending := make(map[common.Address]types.Transactions)
+	pending := make(map[common.Address][]*types.Transaction)
 	for _, tx := range pool.pending {
 		account, _ := types.Sender(pool.signer, tx)
 		pending[account] = append(pending[account], tx)
 	}
 	// There are no queued transactions in a light pool, just return an empty map
-	queued := make(map[common.Address]types.Transactions)
+	queued := make(map[common.Address][]*types.Transaction)
 	return pending, queued
 }
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
-func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (pool *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
 	// Retrieve the pending transactions and sort by nonce
-	var pending types.Transactions
+	var pending []*types.Transaction
 	for _, tx := range pool.pending {
 		account, _ := types.Sender(pool.signer, tx)
 		if account != addr {
@@ -525,7 +525,7 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 		pending = append(pending, tx)
 	}
 	// There are no queued transactions in a light pool, just return an empty map
-	return pending, types.Transactions{}
+	return pending, []*types.Transaction{}
 }
 
 // RemoveTransactions removes all given transactions from the pool.

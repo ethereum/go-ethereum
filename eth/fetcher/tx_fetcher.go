@@ -294,6 +294,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			otherreject int64
 		)
 		batch := txs[i:end]
+
 		for j, err := range f.addTxs(batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another

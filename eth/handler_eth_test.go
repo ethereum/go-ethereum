@@ -311,11 +311,10 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	for nonce := range insert {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-
 		insert[nonce] = tx
 	}
-	go handler.txpool.AddRemotes(insert) // Need goroutine to not block on feed
-	time.Sleep(250 * time.Millisecond)   // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
+	go handler.txpool.Add(insert, false, false) // Need goroutine to not block on feed
+	time.Sleep(250 * time.Millisecond)          // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
 
 	// Create a source handler to send messages through and a sink peer to receive them
 	p2pSrc, p2pSink := p2p.MsgPipe()
@@ -437,10 +436,9 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-
 		txs[nonce] = tx
 	}
-	source.txpool.AddRemotes(txs)
+	source.txpool.Add(txs, false, false)
 
 	// Iterate through all the sinks and ensure they all got the transactions
 	for i := range sinks {

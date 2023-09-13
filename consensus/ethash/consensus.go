@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -254,7 +255,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 			return err
 		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -262,11 +263,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	if chain.Config().IsShanghai(header.Time) {
-		return fmt.Errorf("ethash does not support shanghai fork")
+	if chain.Config().IsShanghai(header.Number, header.Time) {
+		return errors.New("ethash does not support shanghai fork")
 	}
-	if chain.Config().IsCancun(header.Time) {
-		return fmt.Errorf("ethash does not support cancun fork")
+	if chain.Config().IsCancun(header.Number, header.Time) {
+		return errors.New("ethash does not support cancun fork")
 	}
 	// Add some fake checks for tests
 	if ethash.fakeDelay != nil {

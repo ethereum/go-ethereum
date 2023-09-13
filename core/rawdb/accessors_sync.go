@@ -17,8 +17,6 @@
 package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -53,7 +51,7 @@ func ReadSkeletonHeader(db ethdb.KeyValueReader, number uint64) *types.Header {
 		return nil
 	}
 	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+	if err := rlp.DecodeBytes(data, header); err != nil {
 		log.Error("Invalid skeleton header RLP", "number", number, "err", err)
 		return nil
 	}

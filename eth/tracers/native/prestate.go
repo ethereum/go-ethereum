@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
@@ -165,7 +166,11 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init := scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		init, err := tracers.GetMemoryCopyPadded(scope.Memory, int64(offset.Uint64()), int64(size.Uint64()))
+		if err != nil {
+			log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
+			return
+		}
 		inithash := crypto.Keccak256(init)
 		salt := stackData[stackLen-4]
 		addr := crypto.CreateAddress2(caller, salt.Bytes32(), inithash)

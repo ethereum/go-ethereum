@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -147,7 +148,7 @@ func dnsSync(ctx *cli.Context) error {
 
 func dnsSign(ctx *cli.Context) error {
 	if ctx.NArg() < 2 {
-		return fmt.Errorf("need tree definition directory and key file as arguments")
+		return errors.New("need tree definition directory and key file as arguments")
 	}
 	var (
 		defdir  = ctx.Args().Get(0)
@@ -201,7 +202,7 @@ func directoryName(dir string) string {
 // dnsToTXT performs dnsTXTCommand.
 func dnsToTXT(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need tree definition directory as argument")
+		return errors.New("need tree definition directory as argument")
 	}
 	output := ctx.Args().Get(1)
 	if output == "" {
@@ -218,7 +219,7 @@ func dnsToTXT(ctx *cli.Context) error {
 // dnsToCloudflare performs dnsCloudflareCommand.
 func dnsToCloudflare(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
-		return fmt.Errorf("need tree definition directory as argument")
+		return errors.New("need tree definition directory as argument")
 	}
 	domain, t, err := loadTreeDefinitionForExport(ctx.Args().Get(0))
 	if err != nil {
@@ -231,7 +232,7 @@ func dnsToCloudflare(ctx *cli.Context) error {
 // dnsToRoute53 performs dnsRoute53Command.
 func dnsToRoute53(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
-		return fmt.Errorf("need tree definition directory as argument")
+		return errors.New("need tree definition directory as argument")
 	}
 	domain, t, err := loadTreeDefinitionForExport(ctx.Args().Get(0))
 	if err != nil {
@@ -244,7 +245,7 @@ func dnsToRoute53(ctx *cli.Context) error {
 // dnsNukeRoute53 performs dnsRoute53NukeCommand.
 func dnsNukeRoute53(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
-		return fmt.Errorf("need domain name as argument")
+		return errors.New("need domain name as argument")
 	}
 	client := newRoute53Client(ctx)
 	return client.deleteDomain(ctx.Args().First())
@@ -363,10 +364,10 @@ func loadTreeDefinitionForExport(dir string) (domain string, t *dnsdisc.Tree, er
 // tree's signature if valid.
 func ensureValidTreeSignature(t *dnsdisc.Tree, pubkey *ecdsa.PublicKey, sig string) error {
 	if sig == "" {
-		return fmt.Errorf("missing signature, run 'devp2p dns sign' first")
+		return errors.New("missing signature, run 'devp2p dns sign' first")
 	}
 	if err := t.SetSignature(pubkey, sig); err != nil {
-		return fmt.Errorf("invalid signature on tree, run 'devp2p dns sign' to update it")
+		return errors.New("invalid signature on tree, run 'devp2p dns sign' to update it")
 	}
 	return nil
 }

@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -67,7 +69,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		GasLimit:   11500000,
 		Difficulty: big.NewInt(1048576),
 	}
-	newGQLService(t, stack, genesis, 10, func(i int, gen *core.BlockGen) {})
+	newGQLService(t, stack, false, genesis, 10, func(i int, gen *core.BlockGen) {})
 	// start node
 	if err := stack.Start(); err != nil {
 		t.Fatalf("could not start node: %v", err)
@@ -191,7 +193,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	signer := types.LatestSigner(genesis.Config)
-	newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+	newGQLService(t, stack, false, genesis, 1, func(i int, gen *core.BlockGen) {
 		gen.SetCoinbase(common.Address{1})
 		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    uint64(0),
@@ -292,7 +294,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 	defer stack.Close()
 
 	var tx *types.Transaction
-	handler, chain := newGQLService(t, stack, genesis, 1, func(i int, gen *core.BlockGen) {
+	handler, chain := newGQLService(t, stack, false, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Nonce: 1, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
@@ -360,6 +362,66 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 	}
 }
 
+func TestWithdrawals(t *testing.T) {
+	var (
+		key, _ = crypto.GenerateKey()
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+
+		genesis = &core.Genesis{
+			Config:     params.AllEthashProtocolChanges,
+			GasLimit:   11500000,
+			Difficulty: common.Big1,
+			Alloc: core.GenesisAlloc{
+				addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		signer = types.LatestSigner(genesis.Config)
+		stack  = createNode(t)
+	)
+	defer stack.Close()
+
+	handler, _ := newGQLService(t, stack, true, genesis, 1, func(i int, gen *core.BlockGen) {
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{To: &common.Address{}, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
+		gen.AddTx(tx)
+		gen.AddWithdrawal(&types.Withdrawal{
+			Validator: 5,
+			Address:   common.Address{},
+			Amount:    10,
+		})
+	})
+	// start node
+	if err := stack.Start(); err != nil {
+		t.Fatalf("could not start node: %v", err)
+	}
+
+	for i, tt := range []struct {
+		body string
+		want string
+	}{
+		// Genesis block has no withdrawals.
+		{
+			body: "{block(number: 0) { withdrawalsRoot withdrawals { index } } }",
+			want: `{"block":{"withdrawalsRoot":null,"withdrawals":null}}`,
+		},
+		{
+			body: "{block(number: 1) { withdrawalsRoot withdrawals { validator amount } } }",
+			want: `{"block":{"withdrawalsRoot":"0x8418fc1a48818928f6692f148e9b10e99a88edc093b095cb8ca97950284b553d","withdrawals":[{"validator":"0x5","amount":"0xa"}]}}`,
+		},
+	} {
+		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+		if res.Errors != nil {
+			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
+		}
+		have, err := json.Marshal(res.Data)
+		if err != nil {
+			t.Fatalf("failed to encode graphql response for testcase #%d: %s", i, err)
+		}
+		if string(have) != tt.want {
+			t.Errorf("response unmatch for testcase #%d.\nhave:\n%s\nwant:\n%s", i, have, tt.want)
+		}
+	}
+}
+
 func createNode(t *testing.T) *node.Node {
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
@@ -374,16 +436,25 @@ func createNode(t *testing.T) *node.Node {
 	return stack
 }
 
-func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
+func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
 	ethConf := &ethconfig.Config{
-		Genesis:                 gspec,
-		NetworkId:               1337,
-		TrieCleanCache:          5,
-		TrieCleanCacheJournal:   "triecache",
-		TrieCleanCacheRejournal: 60 * time.Minute,
-		TrieDirtyCache:          5,
-		TrieTimeout:             60 * time.Minute,
-		SnapshotCache:           5,
+		Genesis:        gspec,
+		NetworkId:      1337,
+		TrieCleanCache: 5,
+		TrieDirtyCache: 5,
+		TrieTimeout:    60 * time.Minute,
+		SnapshotCache:  5,
+	}
+	var engine consensus.Engine = ethash.NewFaker()
+	if shanghai {
+		engine = beacon.NewFaker()
+		chainCfg := gspec.Config
+		chainCfg.TerminalTotalDifficultyPassed = true
+		chainCfg.TerminalTotalDifficulty = common.Big0
+		// GenerateChain will increment timestamps by 10.
+		// Shanghai upgrade at block 1.
+		shanghaiTime := uint64(5)
+		chainCfg.ShanghaiTime = &shanghaiTime
 	}
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
@@ -391,7 +462,7 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 	}
 	// Create some blocks and import them
 	chain, _ := core.GenerateChain(params.AllEthashProtocolChanges, ethBackend.BlockChain().Genesis(),
-		ethash.NewFaker(), ethBackend.ChainDb(), genBlocks, genfunc)
+		engine, ethBackend.ChainDb(), genBlocks, genfunc)
 	_, err = ethBackend.BlockChain().InsertChain(chain)
 	if err != nil {
 		t.Fatalf("could not create import blocks: %v", err)

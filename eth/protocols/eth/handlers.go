@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -246,6 +247,10 @@ func handleGetNodeData66(backend Backend, msg Decoder, peer *Peer) error {
 // ServiceGetNodeDataQuery assembles the response to a node data query. It is
 // exposed to allow external packages to test protocol behavior.
 func ServiceGetNodeDataQuery(chain *core.BlockChain, query GetNodeDataPacket) [][]byte {
+	// Request nodes by hash is not supported in path-based scheme.
+	if chain.TrieDB().Scheme() == rawdb.PathScheme {
+		return nil
+	}
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes int
@@ -257,7 +262,7 @@ func ServiceGetNodeDataQuery(chain *core.BlockChain, query GetNodeDataPacket) []
 			break
 		}
 		// Retrieve the requested state entry
-		entry, err := chain.TrieNode(hash)
+		entry, err := chain.TrieDB().Node(hash)
 		if len(entry) == 0 || err != nil {
 			// Read the contract code with prefix only to save unnecessary lookups.
 			entry, err = chain.ContractCodeWithPrefix(hash)

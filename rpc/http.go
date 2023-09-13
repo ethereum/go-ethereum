@@ -139,7 +139,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	var cfg clientConfig
 	cfg.httpClient = client
 	fn := newClientTransportHTTP(endpoint, &cfg)
-	return newClient(context.Background(), fn)
+	return newClient(context.Background(), &cfg, fn)
 }
 
 func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
@@ -176,11 +176,12 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 	}
 	defer respBody.Close()
 
-	var respmsg jsonrpcMessage
-	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
+	var resp jsonrpcMessage
+	batch := [1]*jsonrpcMessage{&resp}
+	if err := json.NewDecoder(respBody).Decode(&resp); err != nil {
 		return err
 	}
-	op.resp <- &respmsg
+	op.resp <- batch[:]
 	return nil
 }
 
@@ -191,16 +192,12 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 		return err
 	}
 	defer respBody.Close()
-	var respmsgs []jsonrpcMessage
+
+	var respmsgs []*jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
 	}
-	if len(respmsgs) != len(msgs) {
-		return fmt.Errorf("batch has %d requests but response has %d: %w", len(msgs), len(respmsgs), ErrBadResult)
-	}
-	for i := 0; i < len(respmsgs); i++ {
-		op.resp <- &respmsgs[i]
-	}
+	op.resp <- respmsgs
 	return nil
 }
 

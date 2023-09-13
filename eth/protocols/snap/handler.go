@@ -284,7 +284,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		req.Bytes = softResponseLimit
 	}
 	// Retrieve the requested state and bail out if non existent
-	tr, err := trie.New(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
+	tr, err := trie.New(trie.StateTrieID(req.Root), chain.TrieDB())
 	if err != nil {
 		return nil, nil
 	}
@@ -322,12 +322,12 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 
 	// Generate the Merkle proofs for the first and last account
 	proof := light.NewNodeSet()
-	if err := tr.Prove(req.Origin[:], 0, proof); err != nil {
+	if err := tr.Prove(req.Origin[:], proof); err != nil {
 		log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 		return nil, nil
 	}
 	if last != (common.Hash{}) {
-		if err := tr.Prove(last[:], 0, proof); err != nil {
+		if err := tr.Prove(last[:], proof); err != nil {
 			log.Warn("Failed to prove account range", "last", last, "err", err)
 			return nil, nil
 		}
@@ -414,7 +414,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
+			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -423,17 +423,17 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				return nil, nil
 			}
 			id := trie.StorageTrieID(req.Root, account, acc.Root)
-			stTrie, err := trie.NewStateTrie(id, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewStateTrie(id, chain.TrieDB())
 			if err != nil {
 				return nil, nil
 			}
 			proof := light.NewNodeSet()
-			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
+			if err := stTrie.Prove(origin[:], proof); err != nil {
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return nil, nil
 			}
 			if last != (common.Hash{}) {
-				if err := stTrie.Prove(last[:], 0, proof); err != nil {
+				if err := stTrie.Prove(last[:], proof); err != nil {
 					log.Warn("Failed to prove storage range", "last", last, "err", err)
 					return nil, nil
 				}
@@ -487,7 +487,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		req.Bytes = softResponseLimit
 	}
 	// Make sure we have the state associated with the request
-	triedb := chain.StateCache().TrieDB()
+	triedb := chain.TrieDB()
 
 	accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), triedb)
 	if err != nil {

@@ -88,7 +88,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
-	timer.Stop()
+	if timer != nil {
+		timer.Stop()
+	}
 	responded.Do(func() {
 		responseJSON, err := json.Marshal(response)
 		if err != nil {
@@ -122,6 +124,7 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
 
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
+	stack.RegisterHandler("GraphQL UI", "/graphql/ui/", GraphiQL{})
 	stack.RegisterHandler("GraphQL", "/graphql", handler)
 	stack.RegisterHandler("GraphQL", "/graphql/", handler)
 

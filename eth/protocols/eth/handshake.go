@@ -17,12 +17,14 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -59,9 +61,11 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 		select {
 		case err := <-errc:
 			if err != nil {
+				markError(p, err)
 				return err
 			}
 		case <-timeout.C:
+			markError(p, p2p.DiscReadTimeout)
 			return p2p.DiscReadTimeout
 		}
 	}
@@ -104,4 +108,26 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
 	return nil
+}
+
+// markError registers the error with the corresponding metric.
+func markError(p *Peer, err error) {
+	if !metrics.Enabled {
+		return
+	}
+	m := meters.get(p.Inbound())
+	switch errors.Unwrap(err) {
+	case errNetworkIDMismatch:
+		m.networkIDMismatch.Mark(1)
+	case errProtocolVersionMismatch:
+		m.protocolVersionMismatch.Mark(1)
+	case errGenesisMismatch:
+		m.genesisMismatch.Mark(1)
+	case errForkIDRejected:
+		m.forkidRejected.Mark(1)
+	case p2p.DiscReadTimeout:
+		m.timeoutError.Mark(1)
+	default:
+		m.peerError.Mark(1)
+	}
 }

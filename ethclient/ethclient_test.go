@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -55,7 +54,7 @@ var (
 )
 
 func TestToFilterArg(t *testing.T) {
-	blockHashErr := fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock")
+	blockHashErr := errors.New("cannot specify both BlockHash and FromBlock/ToBlock")
 	addresses := []common.Address{
 		common.HexToAddress("0xD36722ADeC3EdCB29c8e7b5a47f352D701393462"),
 	}
@@ -251,7 +250,7 @@ func generateTestChain() []*types.Block {
 
 func TestEthClient(t *testing.T) {
 	backend, chain := newTestBackend(t)
-	client, _ := backend.Attach()
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
