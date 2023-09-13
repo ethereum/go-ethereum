@@ -2081,6 +2081,9 @@ func SetupMetricsFromConfig(c *metrics.Config) {
 	} else if c.Port != 0 {
 		log.Warn("influxdb.port specified without inflxdb.addr, metrics server will not start.")
 	}
+
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {
