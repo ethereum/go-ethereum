@@ -22,6 +22,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -150,7 +151,8 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	underpriced map[common.Hash]int64 // Transactions discarded as too cheap (don't re-fetch)
+	underpricedMu sync.Mutex
+	underpriced   map[common.Hash]int64 // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
@@ -229,6 +231,9 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 		duplicate, underpriced int64
 	)
 	isUnderpriced := func(hash common.Hash) bool {
+		f.underpricedMu.Lock()
+		defer f.underpricedMu.Unlock()
+
 		prevTime, ok := f.underpriced[hash]
 		if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
 			delete(f.underpriced, hash)
@@ -311,6 +316,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
+				f.underpricedMu.Lock()
 				// If the set is to big, delete a pseudorandom element
 				for hash := range f.underpriced {
 					if len(f.underpriced) < maxTxUnderpricedSetSize {
@@ -320,6 +326,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 				}
 				// add the underpriced transaction to the set
 				f.underpriced[batch[j].Hash()] = batch[j].Time().Unix()
+				f.underpricedMu.Unlock()
 			}
 			// Track a few interesting failure types
 			switch {
