@@ -73,7 +73,7 @@ type Config struct {
 func (cfg *Config) process() (code []byte, err error) {
 	// Load packages.
 	pcfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedTypes | packages.NeedImports | packages.NeedDeps,
+		Mode: packages.NeedName | packages.NeedTypes,
 		Dir:  cfg.Dir,
 	}
 	ps, err := packages.Load(pcfg, pathOfPackageRLP, ".")
