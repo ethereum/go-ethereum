@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	goruntime "runtime"
-	"runtime/pprof"
 	"testing"
 	"time"
 
@@ -39,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -52,6 +50,7 @@ var runCommand = &cli.Command{
 	Usage:       "run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
+	Flags:       flags.Merge(vmFlags, traceFlags),
 }
 
 // readGenesis will read the given JSON format genesis file and return
@@ -109,9 +108,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 }
 
 func runCmd(ctx *cli.Context) error {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
 	logconfig := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.Bool(DisableStackFlag.Name),
@@ -236,19 +232,6 @@ func runCmd(ctx *cli.Context) error {
 		},
 	}
 
-	if cpuProfilePath := ctx.String(CPUProfileFlag.Name); cpuProfilePath != "" {
-		f, err := os.Create(cpuProfilePath)
-		if err != nil {
-			fmt.Println("could not create CPU profile: ", err)
-			os.Exit(1)
-		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			fmt.Println("could not start CPU profile: ", err)
-			os.Exit(1)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if chainConfig != nil {
 		runtimeConfig.ChainConfig = chainConfig
 	} else {
@@ -294,19 +277,6 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(DumpFlag.Name) {
 		statedb.Commit(genesisConfig.Number, true)
 		fmt.Println(string(statedb.Dump(nil)))
-	}
-
-	if memProfilePath := ctx.String(MemProfileFlag.Name); memProfilePath != "" {
-		f, err := os.Create(memProfilePath)
-		if err != nil {
-			fmt.Println("could not create memory profile: ", err)
-			os.Exit(1)
-		}
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			fmt.Println("could not write memory profile: ", err)
-			os.Exit(1)
-		}
-		f.Close()
 	}
 
 	if ctx.Bool(DebugFlag.Name) {
