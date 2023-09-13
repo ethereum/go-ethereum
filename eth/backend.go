@@ -155,7 +155,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO - Check this - Arpit
+
+	// START: Bor changes
 	eth := &Ethereum{
 		config:            config,
 		merger:            consensus.NewMerger(chainDb),
@@ -175,12 +176,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
-	// TODO - Check this - Arpit
-	// if ethereum.APIBackend.allowUnprotectedTxs {
-	// 	log.Debug(" ###########", "Unprotected transactions allowed")
+	if eth.APIBackend.allowUnprotectedTxs {
+		log.Debug(" ###########", "Unprotected transactions allowed")
 
-	// 	config.TxPool.AllowUnprotectedTxs = true
-	// }
+		config.TxPool.AllowUnprotectedTxs = true
+	}
 
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
@@ -832,12 +832,10 @@ func (s *Ethereum) Stop() error {
 	// Close all bg processes
 	close(s.closeCh)
 
-	// closing consensus engine first, as miner has deps on it
-	s.engine.Close()
-	// TODO - Check this Arpit
-	// s.txPool.Stop()
+	s.txPool.Close()
 	s.miner.Close()
 	s.blockchain.Stop()
+	s.engine.Close()
 
 	// Clean shutdown marker as the last thing before closing db
 	s.shutdownTracker.Stop()

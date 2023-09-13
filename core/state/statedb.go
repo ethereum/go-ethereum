@@ -398,7 +398,6 @@ func (s *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 				s.SetNonce(addr, sr.GetNonce(addr))
 			case CodePath:
 				s.SetCode(addr, sr.GetCode(addr))
-			// TODO - Arpit -----------------
 			case SuicidePath:
 				stateObject := sr.getDeletedStateObject(addr)
 				if stateObject != nil && stateObject.deleted {

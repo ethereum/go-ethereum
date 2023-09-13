@@ -319,7 +319,6 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 
 // SubscribeNewTxsEvent registers a subscription of NewTxsEvent and starts sending
 // events to the given channel.
-// TODO - Arpit
 func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	subs := make([]event.Subscription, len(p.subpools))
 	for i, subpool := range p.subpools {
@@ -357,6 +356,19 @@ func (p *TxPool) Nonce(addr common.Address) uint64 {
 		}
 	}
 	return nonce
+}
+
+// Stats retrieves the current pool stats, namely the number of pending and the
+// number of queued (non-executable) transactions.
+func (p *TxPool) Stats() (int, int) {
+	var runnable, blocked int
+	for _, subpool := range p.subpools {
+		run, block := subpool.Stats()
+
+		runnable += run
+		blocked += block
+	}
+	return runnable, blocked
 }
 
 // // Stats retrieves the current pool stats, namely the number of pending and the

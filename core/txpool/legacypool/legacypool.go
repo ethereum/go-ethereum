@@ -143,7 +143,8 @@ type Config struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	Lifetime            time.Duration // Maximum amount of time non-executable transaction are queued
+	AllowUnprotectedTxs bool          // Allow non-EIP-155 transactions
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.

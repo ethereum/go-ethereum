@@ -2107,7 +2107,6 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	borTx := false
 
-	// TEST THIS --------------------------------- Arpit
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null

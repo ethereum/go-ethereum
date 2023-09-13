@@ -68,9 +68,6 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
-		if block == nil {
-			return nil, errors.New("pending block is not available")
-		}
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
@@ -139,9 +136,6 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
-		if block == nil {
-			return nil, errors.New("pending block is not available")
-		}
 		return block, nil
 	}
 	// Otherwise resolve and return the block
@@ -151,17 +145,12 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 
 	if number == rpc.FinalizedBlockNumber {
-		// TODO - Arpit
-		// finalBlocknumber, err := getFinalizedBlockNumber(b.eth)
-		// if err != nil {
-		// 	return nil, errors.New("finalized block not found")
-		// }
-
-		header := b.eth.blockchain.CurrentFinalBlock()
-		if header == nil {
+		finalBlocknumber, err := getFinalizedBlockNumber(b.eth)
+		if err != nil {
 			return nil, errors.New("finalized block not found")
 		}
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+
+		return b.eth.blockchain.CurrentFinalizedBlock(finalBlocknumber), nil
 	}
 
 	if number == rpc.SafeBlockNumber {
@@ -170,9 +159,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		}
 
 		header := b.eth.blockchain.CurrentSafeBlock()
-		if header == nil {
-			return nil, errors.New("safe block not found")
-		}
+
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
 
@@ -369,9 +356,7 @@ func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 }
 
 func (b *EthAPIBackend) Stats() (runnable int, blocked int) {
-	// TODO - Arpit
-	return 0, 0
-	// return b.eth.txPool.Stats()
+	return b.eth.txPool.Stats()
 }
 
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {

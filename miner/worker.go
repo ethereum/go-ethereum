@@ -168,6 +168,7 @@ type newWorkReq struct {
 	//nolint:containedctx
 	ctx       context.Context
 	interrupt *atomic.Int32
+	noempty   bool
 	timestamp int64
 }
 
@@ -265,6 +266,13 @@ type worker struct {
 	profileCount        *int32 // Global count for profiling
 	interruptCommitFlag bool   // Interrupt commit ( Default true )
 	interruptedTxCache  *vm.TxCache
+
+	// noempty is the flag used to control whether the feature of pre-seal empty
+	// block is enabled. The default value is false(pre-seal is enabled by default).
+	// But in some special scenario the consensus engine will seal blocks instantaneously,
+	// in this case this feature will add all empty blocks into canonical chain
+	// non-stop and no real transaction will be included.
+	noempty atomic.Bool
 }
 
 //nolint:staticcheck
@@ -292,6 +300,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitAdjustCh:    make(chan *intervalAdjust, resubmitAdjustChanSize),
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
+	worker.noempty.Store(true)
 	worker.profileCount = new(int32)
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -307,10 +316,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		Cache: interruptedTxCache,
 	}
 
-	// TODO - Arpit
-	// if !worker.interruptCommitFlag {
-	// 	worker.noempty.Store(false)
-	// }
+	if !worker.interruptCommitFlag {
+		worker.noempty.Store(false)
+	}
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -349,6 +357,16 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	}
 
 	return worker
+}
+
+// disablePreseal disables pre-sealing feature
+func (w *worker) disablePreseal() {
+	w.noempty.Store(true)
+}
+
+// enablePreseal enables pre-sealing feature
+func (w *worker) enablePreseal() {
+	w.noempty.Store(false)
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
@@ -481,7 +499,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 	<-timer.C // discard the initial tick
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
-	commit := func(s int32) {
+	commit := func(noempty bool, s int32) {
 		ctx, span := tracing.Trace(ctx, "worker.newWorkLoop.commit")
 		tracing.EndSpan(span)
 		if interrupt != nil {
@@ -490,7 +508,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 
 		interrupt = new(atomic.Int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, timestamp: timestamp, ctx: ctx}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, timestamp: timestamp, ctx: ctx, noempty: noempty}:
 		case <-w.exitCh:
 			return
 		}
@@ -517,13 +535,13 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 			clearPending(w.chain.CurrentBlock().Number.Uint64())
 
 			timestamp = time.Now().Unix()
-			commit(commitInterruptNewHead)
+			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
 
 			timestamp = time.Now().Unix()
-			commit(commitInterruptNewHead)
+			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
@@ -534,7 +552,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 					timer.Reset(recommit)
 					continue
 				}
-				commit(commitInterruptResubmit)
+				commit(true, commitInterruptResubmit)
 			}
 
 		case interval := <-w.resubmitIntervalCh:
@@ -594,11 +612,11 @@ func (w *worker) mainLoop(ctx context.Context) {
 			if w.chainConfig.ChainID.Cmp(params.BorMainnetChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.MumbaiChainConfig.ChainID) == 0 {
 				if w.eth.PeerCount() > 0 {
 					//nolint:contextcheck
-					w.commitWork(req.ctx, req.interrupt, req.timestamp)
+					w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
 				}
 			} else {
 				//nolint:contextcheck
-				w.commitWork(req.ctx, req.interrupt, req.timestamp)
+				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
 			}
 
 		case req := <-w.getWorkCh:
@@ -645,7 +663,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(ctx, nil, time.Now().Unix())
+					w.commitWork(ctx, nil, true, time.Now().Unix())
 				}
 			}
 
@@ -1509,7 +1527,7 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) (*typ
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
-func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, timestamp int64) {
+func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempty bool, timestamp int64) {
 	// Abort committing if node is still syncing
 	if w.syncing.Load() {
 		return
@@ -1550,9 +1568,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, timest
 		stopFn()
 	}()
 
-	// TODO - Arpit
-	if w.interruptCommitFlag {
-		// if !noempty && w.interruptCommitFlag {
+	if !noempty && w.interruptCommitFlag {
 		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
 		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
 		// nolint : staticcheck
@@ -1567,12 +1583,11 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, timest
 		attribute.Int("number", int(work.header.Number.Uint64())),
 	)
 
-	// TODO - Arpit
-	// // Create an empty block based on temporary copied state for
-	// // sealing in advance without waiting block execution finished.
-	// if !noempty && !w.noempty.Load() {
-	// 	_ = w.commit(ctx, work.copy(), nil, false, start)
-	// }
+	// Create an empty block based on temporary copied state for
+	// sealing in advance without waiting block execution finished.
+	if !noempty && !w.noempty.Load() {
+		_ = w.commit(ctx, work.copy(), nil, false, start)
+	}
 	// Fill pending transactions from the txpool into the block.
 	err = w.fillTransactions(ctx, interrupt, work, interruptCtx)
 
