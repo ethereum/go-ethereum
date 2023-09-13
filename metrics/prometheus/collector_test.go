@@ -55,10 +55,10 @@ func findFirstDiffPos(a, b string) string {
 	yy := strings.Split(b, "\n")
 	for i, x := range strings.Split(a, "\n") {
 		if i >= len(yy) {
-			return fmt.Sprintf("a:%d: %s\nb:%d: <EOF>", i, x, i)
+			return fmt.Sprintf("have:%d: %s\nwant:%d: <EOF>", i, x, i)
 		}
 		if y := yy[i]; x != y {
-			return fmt.Sprintf("a:%d: %s\nb:%d: %s", i, x, i, y)
+			return fmt.Sprintf("have:%d: %s\nwant:%d: %s", i, x, i, y)
 		}
 	}
 	return ""

@@ -96,7 +96,7 @@ func TestExampleV2(t *testing.T) {
 	}
 	if have != want {
 		t.Errorf("\nhave:\n%v\nwant:\n%v\n", have, want)
-		t.Logf("have vs want:\n %v", findFirstDiffPos(have, want))
+		t.Logf("have vs want:\n%v", findFirstDiffPos(have, want))
 	}
 }
 
