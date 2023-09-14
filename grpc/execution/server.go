@@ -162,12 +162,7 @@ func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServe
 func (s *ExecutionServiceServerV1Alpha2) GetBlock(ctx context.Context, req *executionv1a2.GetBlockRequest) (*executionv1a2.Block, error) {
 	log.Info("GetBlock called request", "request", req)
 
-	res, err := s.getBlockFromIdentifier(req.GetIdentifier())
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "Block header cannot be converted to execution block")
-	}
-
-	return res, nil
+	return s.getBlockFromIdentifier(req.GetIdentifier())
 }
 
 // BatchGetBlocks will return an array of Blocks given an array of block
@@ -204,8 +199,8 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 		return nil, status.Error(codes.FailedPrecondition, "Block can only be created on top of soft block.")
 	}
 
-	// The Engine API has been modified to use transactions from this mempool and
-	// abide by it's ordering.
+	// This set of ordered TXs on the TxPool is has been configured to be used by
+	// the Miner when building a payload.
 	s.eth.TxPool().SetAstriaOrdered(req.Transactions)
 
 	// Build a payload to add to the chain
@@ -218,7 +213,7 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	payload, err := s.eth.Miner().BuildPayload(payloadAttributes)
 	if err != nil {
 		log.Error("failed to build payload", "err", err)
-		return nil, status.Error(codes.InvalidArgument, "could not build block with provided txs")
+		return nil, status.Error(codes.InvalidArgument, "Could not build block with provided txs")
 	}
 
 	// call blockchain.InsertChain to actually execute and write the blocks to
@@ -236,7 +231,7 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	}
 	if n != 1 {
 		log.Error("block was inserted at height ", n, " instead of head")
-		return nil, status.Error(codes.Internal, "failed to insert block to chain")
+		return nil, status.Error(codes.Internal, "Failed to insert block to chain")
 	}
 
 	// remove txs from original mempool
@@ -256,8 +251,8 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 
 // GetCommitmentState fetches the current CommitmentState of the chain.
 func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context, req *executionv1a2.GetCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
-	softBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
-	firmBlock, err := s.ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
+	softBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
+	firmBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
 
 	if err != nil {
 		return nil, err
@@ -294,7 +289,7 @@ func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Conte
 	// chain.
 	if currentHead != softEthHash {
 		if _, err := s.bc.SetCanonical(softBlock); err != nil {
-			return nil, status.Error(codes.Internal, "could not update head to safe hash")
+			return nil, status.Error(codes.Internal, "Could not update head to safe hash")
 		}
 	}
 
@@ -327,10 +322,8 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 	switch id_type := identifier.Identifier.(type) {
 	case *executionv1a2.BlockIdentifier_BlockNumber:
 		header = s.bc.GetHeaderByNumber(uint64(identifier.GetBlockNumber()))
-		break
 	case *executionv1a2.BlockIdentifier_BlockHash:
 		header = s.bc.GetHeaderByHash(common.BytesToHash(identifier.GetBlockHash()))
-		break
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "identifier has unexpected type %T", id_type)
 	}
@@ -339,15 +332,16 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 		return nil, status.Errorf(codes.NotFound, "Couldn't locate block with identifier %s", identifier.Identifier)
 	}
 
-	res, err := s.ethHeaderToExecutionBlock(header)
+	res, err := ethHeaderToExecutionBlock(header)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "internal error")
+		// This should never happen since we validate header exists above.
+		return nil, status.Error(codes.Internal, "internal error")
 	}
 
 	return res, nil
 }
 
-func (s *ExecutionServiceServerV1Alpha2) ethHeaderToExecutionBlock(header *types.Header) (*executionv1a2.Block, error) {
+func ethHeaderToExecutionBlock(header *types.Header) (*executionv1a2.Block, error) {
 	if header == nil {
 		return nil, fmt.Errorf("Cannot convert nil header to execution block")
 	}
