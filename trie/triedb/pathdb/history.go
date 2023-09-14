@@ -596,7 +596,7 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 	// Load the meta objects in range [nhead+1, ohead]
 	blobs, err := rawdb.ReadStateHistoryMetaList(freezer, nhead+1, ohead-nhead)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w, start: %d, count: %d, tail: %d, head: %d", err, nhead+1, ohead-nhead, otail, ohead)
 	}
 	batch := db.NewBatch()
 	for _, blob := range blobs {
@@ -611,7 +611,7 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 	}
 	ohead, err = freezer.TruncateHead(nhead)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w, target: %d, tail: %d, head: %d", err, nhead, otail, ohead)
 	}
 	return int(ohead - nhead), nil
 }

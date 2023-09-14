@@ -173,7 +173,8 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		// it's not aligned with the disk layer.
 		pruned, err := truncateFromHead(db.diskdb, freezer, db.tree.bottom().stateID())
 		if err != nil {
-			log.Crit("Failed to truncate extra state histories", "err", err)
+			persistentID := rawdb.ReadPersistentStateID(db.diskdb)
+			log.Crit("Failed to truncate extra state histories", "persistentID", persistentID, "diskID", db.tree.bottom().stateID(), "err", err)
 		}
 		if pruned != 0 {
 			log.Warn("Truncated extra state histories", "number", pruned)
