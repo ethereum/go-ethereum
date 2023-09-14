@@ -64,7 +64,7 @@ chain/account/commits.five-minute:          0.029134344092314267
 
 Any developer is free to add, remove or modify the available metrics as they see fit. The precise list of available metrics is always available by opening the metrics server in the browser.
 
-Geth also supports dumping metrics directly into an influx database. In order to activate this, the `--metrics.influxdb` flag must be provided at startup. The API endpoint,username, password and other influxdb tags can also be provided. The available tags are:
+Geth also supports dumping metrics directly into an influx database. In order to activate this, the `--metrics.influxdb` flag must be provided at startup. The API endpoint, username, password and other influxdb tags can also be provided. The available tags are:
 
 ```sh
 --metrics.influxdb.endpoint value      InfluxDB API endpoint to report metrics to (default: "http://localhost:8086")

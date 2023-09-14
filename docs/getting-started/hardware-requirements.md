@@ -18,7 +18,7 @@ It is recommended to use at least 16GB RAM.
 Disk space is usually the primary bottleneck for node operators. At the time of writing (September 2022) a 2TB SSD is recommended for a full node running Geth and a consensus client. Geth itself requires >650GB of disk space for a snap-synced full node and, with the default cache size, grows about 14GB/week. Pruning brings the total storage back down to the original 650GB.
 Archive nodes require additional space. A "full" archive node that keeps all state back to genesis requires more than 12TB of space. Partial archive nodes can also be created by turning off the garbage collector after some initial sync - the storage requirement depends how much state is saved.
 
-As well as storage capacity, Geth nodes rely on fast read and write operations. This means HDDs and cheaper HDDS can sometimes struggle to sync the blockchain. A list of SSD models that users report being able and unable to sync Geth is available in this [GitHub Gist](https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038). Please note that the list has _not_ been verified by the Geth team.
+As well as storage capacity, Geth nodes rely on fast read and write operations. This means HDDs and cheaper SSDs can sometimes struggle to sync the blockchain. A list of SSD models that users report being able and unable to sync Geth is available in this [GitHub Gist](https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038). Please note that the list has _not_ been verified by the Geth team.
 
 ## Bandwidth {#bandwidth}
 
