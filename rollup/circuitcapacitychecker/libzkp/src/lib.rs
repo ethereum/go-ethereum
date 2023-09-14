@@ -2,11 +2,11 @@
 
 pub mod checker {
     use crate::utils::{c_char_to_str, c_char_to_vec, vec_to_c_char};
-    use anyhow::{anyhow, Error};
+    use anyhow::{anyhow, bail, Error};
     use libc::c_char;
     use prover::{
-        types::eth::BlockTrace,
         zkevm::{CircuitCapacityChecker, RowUsage},
+        BlockTrace,
     };
     use serde_derive::{Deserialize, Serialize};
     use std::cell::OnceCell;
@@ -97,13 +97,13 @@ pub mod checker {
         let traces = serde_json::from_slice::<BlockTrace>(&tx_traces_vec)?;
 
         if traces.transactions.len() != 1 {
-            return Err(anyhow!("traces.transactions.len() != 1"));
+            bail!("traces.transactions.len() != 1");
         }
         if traces.execution_results.len() != 1 {
-            return Err(anyhow!("traces.execution_results.len() != 1"));
+            bail!("traces.execution_results.len() != 1");
         }
         if traces.tx_storage_trace.len() != 1 {
-            return Err(anyhow!("traces.tx_storage_trace.len() != 1"));
+            bail!("traces.tx_storage_trace.len() != 1");
         }
 
         let r = panic::catch_unwind(|| {
@@ -120,10 +120,8 @@ pub mod checker {
         });
         match r {
             Ok(result) => result,
-            Err(_) => {
-                return Err(anyhow!(
-                    "estimate_circuit_capacity (id: {id:?}) error in apply_tx"
-                ))
+            Err(e) => {
+                bail!("estimate_circuit_capacity (id: {id:?}) error in apply_tx, error: {e:?}")
             }
         }
     }
@@ -175,10 +173,8 @@ pub mod checker {
         });
         match r {
             Ok(result) => result,
-            Err(_) => {
-                return Err(anyhow!(
-                    "estimate_circuit_capacity (id: {id:?}) error in apply_block"
-                ))
+            Err(e) => {
+                bail!("estimate_circuit_capacity (id: {id:?}) error in apply_block, error: {e:?}")
             }
         }
     }
@@ -218,11 +214,7 @@ pub mod checker {
                 .get_tx_num() as u64)
         })
         .map_or_else(
-            |e| {
-                Err(anyhow!(
-                    "circuit capacity checker (id: {id}) error in get_tx_num: {e:?}"
-                ))
-            },
+            |e| bail!("circuit capacity checker (id: {id}) error in get_tx_num: {e:?}"),
             |result| result,
         )
     }
