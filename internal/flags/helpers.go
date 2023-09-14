@@ -180,13 +180,6 @@ func FlagString(f cli.Flag) string {
 	}
 }
 
-func pad(s string, length int) string {
-	if len(s) < length {
-		s += strings.Repeat(" ", length-len(s))
-	}
-	return s
-}
-
 func indent(s string, nspace int) string {
 	ind := strings.Repeat(" ", nspace)
 	return ind + strings.ReplaceAll(s, "\n", "\n"+ind)
