@@ -374,6 +374,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				logger.Info("History logs delivery finished, and now enter into live mode", "delivered", delivered)
 				liveOnly = true
 				histLogs = nil
+
 			case logs := <-liveLogs:
 				if len(logs) == 0 {
 					continue
@@ -405,6 +406,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// Send them all.
 					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 				}
+
 			case logs := <-histLogs:
 				if len(logs) == 0 {
 					continue
@@ -428,6 +430,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 				// Assuming batch = all logs of a single block
 				delivered = logs[0].BlockNumber
+
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				return
 			case <-notifier.Closed(): // connection dropped
