@@ -20,11 +20,13 @@ import (
 	"encoding"
 	"errors"
 	"flag"
+	"fmt"
 	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/urfave/cli/v2"
@@ -80,6 +82,14 @@ func (f *DirectoryFlag) String() string  { return cli.FlagStringer(f) }
 // Apply called by cli library, grabs variable from environment (if in env)
 // and adds variable to flag set for parsing.
 func (f *DirectoryFlag) Apply(set *flag.FlagSet) error {
+	for _, envVar := range f.EnvVars {
+		envVar = strings.TrimSpace(envVar)
+		if value, found := syscall.Getenv(envVar); found {
+			f.Value.Set(value)
+			f.HasBeenSet = true
+			break
+		}
+	}
 	eachName(f, func(name string) {
 		set.Var(&f.Value, f.Name, f.Usage)
 	})
@@ -167,6 +177,16 @@ func (f *TextMarshalerFlag) IsSet() bool     { return f.HasBeenSet }
 func (f *TextMarshalerFlag) String() string  { return cli.FlagStringer(f) }
 
 func (f *TextMarshalerFlag) Apply(set *flag.FlagSet) error {
+	for _, envVar := range f.EnvVars {
+		envVar = strings.TrimSpace(envVar)
+		if value, found := syscall.Getenv(envVar); found {
+			if err := f.Value.UnmarshalText([]byte(value)); err != nil {
+				return fmt.Errorf("could not parse %q from environment variable %q for flag %s: %s", value, envVar, f.Name, err)
+			}
+			f.HasBeenSet = true
+			break
+		}
+	}
 	eachName(f, func(name string) {
 		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
 	})
@@ -249,6 +269,16 @@ func (f *BigFlag) IsSet() bool     { return f.HasBeenSet }
 func (f *BigFlag) String() string  { return cli.FlagStringer(f) }
 
 func (f *BigFlag) Apply(set *flag.FlagSet) error {
+	for _, envVar := range f.EnvVars {
+		envVar = strings.TrimSpace(envVar)
+		if value, found := syscall.Getenv(envVar); found {
+			if _, ok := f.Value.SetString(value, 10); !ok {
+				return fmt.Errorf("could not parse %q from environment variable %q for flag %s", value, envVar, f.Name)
+			}
+			f.HasBeenSet = true
+			break
+		}
+	}
 	eachName(f, func(name string) {
 		f.Value = new(big.Int)
 		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
