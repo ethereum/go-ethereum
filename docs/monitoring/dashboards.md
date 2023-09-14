@@ -35,7 +35,7 @@ sudo systemctl start influxdb
 sudo apt install influxdb-client
 ```
 
-By default,InfluxDB it is reachable at `localhost:8086`. Before using the `influx` client, a new user with admin privileges needs to be created. This user will serve for high level management, creating databases and users.
+By default, InfluxDB it is reachable at `localhost:8086`. Before using the `influx` client, a new user with admin privileges needs to be created. This user will serve for high level management, creating databases and users.
 
 ```sh
 curl -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE USER username WITH PASSWORD 'password' WITH ALL PRIVILEGES"
