@@ -30,7 +30,7 @@ import (
 
 // usecolor defines whether the CLI help should use colored output or normal dumb
 // colorless terminal formatting.
-var usecolor = (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+var usecolor = (isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())) && os.Getenv("TERM") != "dumb"
 
 // NewApp creates an app with sane defaults.
 func NewApp(usage string) *cli.App {
