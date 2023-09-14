@@ -238,6 +238,10 @@ func init() {
 		flags.MigrateGlobalFlags(ctx)
 		return debug.Setup(ctx)
 	}
+	app.After = func(ctx *cli.Context) error {
+		debug.Exit()
+		return nil
+	}
 }
 
 func main() {
