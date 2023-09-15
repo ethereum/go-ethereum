@@ -10,6 +10,7 @@ import (
 
 type ExpiringBloom struct {
 	currentBloom int
+	union        *bloomfilter.Filter
 	blooms       []*bloomfilter.Filter
 	filterM      uint64
 	filterK      uint64
@@ -28,9 +29,14 @@ func NewExpiringBloom(n, m, k uint64, timeout time.Duration) *ExpiringBloom {
 		}
 		blooms = append(blooms, filter)
 	}
+	union, err := bloomfilter.New(m, k)
+	if err != nil {
+		panic(err)
+	}
 	filter := ExpiringBloom{
 		currentBloom: 0,
 		blooms:       blooms,
+		union:        union,
 		filterM:      m,
 		filterK:      k,
 		timer:        time.NewTicker(timeout),
@@ -55,6 +61,14 @@ func (e *ExpiringBloom) loop() {
 			if e.currentBloom == len(e.blooms)-1 {
 				e.currentBloom = 0
 			}
+			// Recreate the union filter
+			e.union, err = bloomfilter.New(e.filterM, e.filterK)
+			if err != nil {
+				panic(err)
+			}
+			for _, bloom := range e.blooms {
+				e.union.UnionInPlace(bloom)
+			}
 			e.mu.Unlock()
 		case <-e.closeCh:
 			break
@@ -71,11 +85,12 @@ func (e *ExpiringBloom) Put(key hash.Hash64) {
 	defer e.mu.RUnlock()
 
 	e.blooms[e.currentBloom].Add(key)
+	e.union.Add(key)
 }
 
 func (e *ExpiringBloom) Contain(key hash.Hash64) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	return e.blooms[e.currentBloom].Contains(key)
+	return e.union.Contains(key)
 }

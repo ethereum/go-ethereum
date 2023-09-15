@@ -41,10 +41,14 @@ func TestBloom(t *testing.T) {
 	testKey := hashable{[]byte{0x01}}
 	bloom.Put(testKey)
 	if !bloom.Contain(testKey) {
-		t.Fail()
+		t.Fatal()
+	}
+	time.Sleep(10 * time.Millisecond)
+	if !bloom.Contain(testKey) {
+		t.Fatal()
 	}
 	time.Sleep(10 * time.Millisecond)
 	if bloom.Contain(testKey) {
-		t.Fail()
+		t.Fatal()
 	}
 }
