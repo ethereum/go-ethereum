@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -260,8 +261,9 @@ func (b *BootnodeCommand) Run(args []string) int {
 		prometheusMux.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 
 		promServer := &http.Server{
-			Addr:    b.prometheusAddr,
-			Handler: prometheusMux,
+			Addr:              b.prometheusAddr,
+			Handler:           prometheusMux,
+			ReadHeaderTimeout: 30 * time.Second,
 		}
 
 		go func() {
