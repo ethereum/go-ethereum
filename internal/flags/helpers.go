@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -260,6 +262,40 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 
 		case *DirectoryFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
+		}
+	}
+}
+
+// CheckEnvVars iterates over all the environment variables and checks if any of
+// them look like a CLI flag but is not consumed. This can be used to detect old
+// or mistyped names.
+func CheckEnvVars(ctx *cli.Context, flags []cli.Flag, prefix string) {
+	known := make(map[string]string)
+	for _, flag := range flags {
+		docflag, ok := flag.(cli.DocGenerationFlag)
+		if !ok {
+			continue
+		}
+		for _, envvar := range docflag.GetEnvVars() {
+			known[envvar] = flag.Names()[0]
+		}
+	}
+	keyvals := os.Environ()
+	sort.Strings(keyvals)
+
+	for _, keyval := range keyvals {
+		key := strings.Split(keyval, "=")[0]
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		if flag, ok := known[key]; ok {
+			if ctx.Count(flag) > 0 {
+				log.Info("Config environment variable found", "envvar", key, "shadowedby", "--"+flag)
+			} else {
+				log.Info("Config environment variable found", "envvar", key)
+			}
+		} else {
+			log.Warn("Unknown config environment variable", "envvar", key)
 		}
 	}
 }
