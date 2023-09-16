@@ -8,71 +8,76 @@ import (
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
+const (
+	k = 4
+)
+
 type ExpiringBloom struct {
 	currentBloom int
 	union        *bloomfilter.Filter
 	blooms       []*bloomfilter.Filter
-	filterM      uint64
-	filterK      uint64
+	size         uint64
 
-	timer   *time.Ticker
-	mu      sync.RWMutex // Mutex only locks the currentBloom variable
+	timer *time.Ticker
+	// Mutex lock the currentBloom and union variables
+	mu      sync.RWMutex
 	closeCh chan struct{}
 }
 
-func NewExpiringBloom(n, m, k uint64, timeout time.Duration) *ExpiringBloom {
+func NewExpiringBloom(n, m uint64, timeout time.Duration) (*ExpiringBloom, error) {
+	union, err := bloomfilter.New(m*8, k)
+	if err != nil {
+		return nil, err
+	}
+
 	blooms := make([]*bloomfilter.Filter, 0, n)
 	for i := 0; i < int(n); i++ {
-		filter, err := bloomfilter.New(m, k)
+		filter, err := union.NewCompatible()
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		blooms = append(blooms, filter)
 	}
-	union, err := bloomfilter.New(m, k)
-	if err != nil {
-		panic(err)
-	}
+
 	filter := ExpiringBloom{
 		currentBloom: 0,
 		blooms:       blooms,
 		union:        union,
-		filterM:      m,
-		filterK:      k,
+		size:         m * 8,
 		timer:        time.NewTicker(timeout),
 		closeCh:      make(chan struct{}),
 	}
 	go filter.loop()
-	return &filter
+
+	return &filter, nil
 }
 
 func (e *ExpiringBloom) loop() {
 	for {
 		select {
 		case <-e.timer.C:
-			// Reset the filters on every tick
-			e.mu.Lock()
-			var err error
-			e.blooms[e.currentBloom], err = bloomfilter.New(e.filterM, e.filterK)
-			if err != nil {
-				panic(err)
-			}
-			e.currentBloom++
-			if e.currentBloom == len(e.blooms)-1 {
-				e.currentBloom = 0
-			}
-			// Recreate the union filter
-			e.union, err = bloomfilter.New(e.filterM, e.filterK)
-			if err != nil {
-				panic(err)
-			}
-			for _, bloom := range e.blooms {
-				e.union.UnionInPlace(bloom)
-			}
-			e.mu.Unlock()
+			e.tick()
 		case <-e.closeCh:
-			break
+			return
 		}
+	}
+}
+
+func (e *ExpiringBloom) tick() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Advance the current bloom
+	e.currentBloom++
+	if e.currentBloom == len(e.blooms) {
+		e.currentBloom = 0
+	}
+	// Clear the filter
+	e.blooms[e.currentBloom], _ = e.blooms[e.currentBloom].NewCompatible()
+	// Recreate the union filter
+	e.union, _ = e.union.NewCompatible()
+	for _, bloom := range e.blooms {
+		e.union.UnionInPlace(bloom)
 	}
 }
 
