@@ -225,7 +225,7 @@ func wordWrap(s string, width int) string {
 	return output.String()
 }
 
-// AutoEnvVars extens all the specific CLI flags with automatically generated
+// AutoEnvVars extends all the specific CLI flags with automatically generated
 // env vars by capitalizing the flag, replacing . with _ and prefixing it with
 // the specified string.
 //
