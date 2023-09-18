@@ -274,7 +274,7 @@ func (t *freezerTable) repair() error {
 	contentExp = int64(lastIndex.offset)
 	for contentExp != contentSize {
 		if t.readonly {
-			return fmt.Errorf("freezer table(path: %s, name: %s num: %d) is corrupted", t.path, t.name, lastIndex.filenum)
+			return fmt.Errorf("freezer table(path: %s, name: %s, num: %d) is corrupted", t.path, t.name, lastIndex.filenum)
 		}
 		verbose = true
 		// Truncate the head file to the last offset pointer
