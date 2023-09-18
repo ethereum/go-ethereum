@@ -359,8 +359,12 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		}()
 		var (
 			delivered uint64
-			liveOnly  bool
-			reorged   bool
+			// liveOnly is true when all historical logs are delivered
+			// and we switch-over to solely returning live logs.
+			liveOnly bool
+			// reorged is true when a reorg is detected.
+			// Question is if its enough to keep one flag (liveMode).
+			//reorged   bool
 			staleHash common.Hash
 		)
 		for {
@@ -379,20 +383,14 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				if len(logs) == 0 {
 					continue
 				}
-				if liveOnly {
-					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
-					continue
-				}
 				reorgBlock := logs[0].BlockNumber
-				if !reorged && reorgBlock <= delivered {
+				if !liveOnly && reorgBlock <= delivered {
 					logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
-					reorged = true
+					liveOnly = true
 				}
-				if !reorged {
+				if !liveOnly && logs[0].Removed && staleHash == (common.Hash{}) {
 					// Reorg in future. Remember fork point.
-					if logs[0].Removed && staleHash == (common.Hash{}) {
-						staleHash = logs[0].BlockHash
-					}
+					staleHash = logs[0].BlockHash
 					continue
 				}
 				if logs[0].Removed {
@@ -411,7 +409,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				if len(logs) == 0 {
 					continue
 				}
-				if reorged {
+				if liveOnly {
 					continue
 				}
 				if logs[0].BlockHash == staleHash {
