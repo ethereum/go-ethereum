@@ -211,10 +211,11 @@ func (t *freezerTable) repair() error {
 		}
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
-	if !t.readonly {
-		if overflow := stat.Size() % indexEntrySize; overflow != 0 {
-			truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
+	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
+		if t.readonly {
+			return fmt.Errorf("index file(path: %s, name: %s) size is not a multiple of %d", t.path, t.name, indexEntrySize)
 		}
+		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
 	}
 	// Retrieve the file sizes and prepare for truncation
 	if stat, err = t.index.Stat(); err != nil {
@@ -271,7 +272,10 @@ func (t *freezerTable) repair() error {
 
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
-	for !t.readonly && contentExp != contentSize {
+	for contentExp != contentSize {
+		if t.readonly {
+			return fmt.Errorf("freezer table(path: %s, name: %s num: %d) is corrupted", t.path, t.name, lastIndex.filenum)
+		}
 		verbose = true
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
