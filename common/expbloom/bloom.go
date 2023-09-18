@@ -85,7 +85,7 @@ func (e *ExpiringBloom) Stop() {
 	close(e.closeCh)
 }
 
-func (e *ExpiringBloom) Put(key hash.Hash64) {
+func (e *ExpiringBloom) Add(key hash.Hash64) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -93,7 +93,7 @@ func (e *ExpiringBloom) Put(key hash.Hash64) {
 	e.union.Add(key)
 }
 
-func (e *ExpiringBloom) Contain(key hash.Hash64) bool {
+func (e *ExpiringBloom) Contains(key hash.Hash64) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
