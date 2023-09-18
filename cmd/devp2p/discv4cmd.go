@@ -98,7 +98,7 @@ var (
 var (
 	bootnodesFlag = &cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Comma separated nodes used for bootstrapping(default is mainnet bootnodes)",
+		Usage: "Comma separated nodes used for bootstrapping",
 	}
 	nodekeyFlag = &cli.StringFlag{
 		Name:  "nodekey",
