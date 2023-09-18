@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -292,6 +293,18 @@ func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*typ
 	if err != nil {
 		return nil, err
 	}
+
+	bTraces, err := json.Marshal(traces)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("Validator get block traces",
+		"id", v.circuitCapacityChecker.ID,
+		"block number", block.NumberU64(),
+		"block hash", block.Hash().Hex(),
+		"traces", string(bTraces),
+	)
 
 	v.cMu.Lock()
 	defer v.cMu.Unlock()
