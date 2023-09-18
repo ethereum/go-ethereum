@@ -209,16 +209,20 @@ func (t *freezerTable) repair() error {
 		if _, err := t.index.Write(buffer); err != nil {
 			return err
 		}
+		t.logger.Info("Initialized index file")
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
 	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
-		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
+		remain := stat.Size() - overflow
+		truncateFreezerFile(t.index, remain) // New file can't trigger this path
+		t.logger.Info("Truncated extra data in index", "overflow", overflow, "remain", remain)
 	}
 	// Retrieve the file sizes and prepare for truncation
 	if stat, err = t.index.Stat(); err != nil {
 		return err
 	}
 	offsetsSize := stat.Size()
+	log.Info("Resolved index file", "size", offsetsSize)
 
 	// Open the head file
 	var (
@@ -246,13 +250,16 @@ func (t *freezerTable) repair() error {
 		return err
 	}
 	t.itemHidden.Store(meta.VirtualTail)
+	t.logger.Info("Resolved tails", "tailnum", t.tailId, "offset", t.itemOffset.Load(), "hidden", t.itemHidden.Load())
 
 	// Read the last index, use the default value in case the freezer is empty
 	if offsetsSize == indexEntrySize {
 		lastIndex = indexEntry{filenum: t.tailId, offset: 0}
+		t.logger.Info("Initialized last index", "filenum", lastIndex.filenum, "offset", lastIndex.offset)
 	} else {
 		t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 		lastIndex.unmarshalBinary(buffer)
+		t.logger.Info("Resolved last index", "filenum", lastIndex.filenum, "offset", lastIndex.offset)
 	}
 	if t.readonly {
 		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForReadOnly)
@@ -266,6 +273,7 @@ func (t *freezerTable) repair() error {
 		return err
 	}
 	contentSize = stat.Size()
+	t.logger.Info("Resolved head data file", "size", contentSize, "filenum", lastIndex.filenum)
 
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
@@ -768,7 +776,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 			return fmt.Errorf("missing data file %d", fileId)
 		}
 		if _, err := dataFile.ReadAt(output[len(output)-length:], int64(start)); err != nil {
-			return err
+			return fmt.Errorf("%w fileid: %d, start: %d, length: %d", err, fileId, start, length)
 		}
 		return nil
 	}
