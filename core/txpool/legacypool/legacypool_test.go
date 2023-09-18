@@ -1492,6 +1492,31 @@ func TestRepricing(t *testing.T) {
 	}
 }
 
+func TestMinGasPriceEnforced(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	pool, _ := setupPoolWithConfig(eip1559Config)
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000))
+
+	tx := pricedTransaction(0, 100000, big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasPrice().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasTipCap().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+}
+
 // Tests that setting the transaction pool gas price to a higher value correctly
 // discards everything cheaper (legacy & dynamic fee) than that and moves any
 // gapped transactions back from the pending pool to the queue.

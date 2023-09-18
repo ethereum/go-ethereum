@@ -585,9 +585,6 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load(),
 	}
-	if local {
-		opts.MinTip = new(big.Int)
-	}
 	if err := txpool.ValidateTransaction(tx, nil, nil, nil, pool.currentHead.Load(), pool.signer, opts); err != nil {
 		return err
 	}
