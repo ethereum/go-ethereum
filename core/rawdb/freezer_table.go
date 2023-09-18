@@ -211,8 +211,10 @@ func (t *freezerTable) repair() error {
 		}
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
-	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
-		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
+	if !t.readonly {
+		if overflow := stat.Size() % indexEntrySize; overflow != 0 {
+			truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
+		}
 	}
 	// Retrieve the file sizes and prepare for truncation
 	if stat, err = t.index.Stat(); err != nil {
@@ -269,7 +271,7 @@ func (t *freezerTable) repair() error {
 
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
-	for contentExp != contentSize {
+	for !t.readonly && contentExp != contentSize {
 		verbose = true
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
