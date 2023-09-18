@@ -196,14 +196,13 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 		nodeargs = append(nodeargs, n)
 	}
 
-	// Run the crawler.
 	disc, config := startV4(ctx)
 	defer disc.Close()
 
-	if len(inputSet) == 0 {
-		inputSet.add(config.Bootnodes...)
+	c, err := newCrawler(inputSet, config.Bootnodes, disc, enode.IterNodes(nodeargs))
+	if err != nil {
+		return err
 	}
-	c := newCrawler(inputSet, disc, enode.IterNodes(nodeargs))
 	c.revalidateInterval = 0
 	output := c.run(0, 1)
 	writeNodesJSON(nodesFile, output)
@@ -223,10 +222,10 @@ func discv4Crawl(ctx *cli.Context) error {
 	disc, config := startV4(ctx)
 	defer disc.Close()
 
-	if len(inputSet) == 0 {
-		inputSet.add(config.Bootnodes...)
+	c, err := newCrawler(inputSet, config.Bootnodes, disc, disc.RandomNodes())
+	if err != nil {
+		return err
 	}
-	c := newCrawler(inputSet, disc, disc.RandomNodes())
 	c.revalidateInterval = 10 * time.Minute
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)

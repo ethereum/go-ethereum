@@ -110,10 +110,10 @@ func discv5Crawl(ctx *cli.Context) error {
 	disc, config := startV5(ctx)
 	defer disc.Close()
 
-	if len(inputSet) == 0 {
-		inputSet.add(config.Bootnodes...)
+	c, err := newCrawler(inputSet, config.Bootnodes, disc, disc.RandomNodes())
+	if err != nil {
+		return err
 	}
-	c := newCrawler(inputSet, disc, disc.RandomNodes())
 	c.revalidateInterval = 10 * time.Minute
 	output := c.run(ctx.Duration(crawlTimeoutFlag.Name), ctx.Int(crawlParallelismFlag.Name))
 	writeNodesJSON(nodesFile, output)
