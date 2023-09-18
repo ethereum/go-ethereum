@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	bloom "github.com/ethereum/go-ethereum/common/expbloom"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,9 +36,9 @@ const (
 	// transaction hash is forgotten.
 	transactionEvictionInterval = 10 * time.Minute
 
-	// blockEvictionInterval specifies the interval in which a previously recorded
-	// block hash is forgotten.
-	blockEvictionInterval = 10 * time.Minute
+	// maxKnownBlocks is the maximum block hashes to keep in the known list
+	// before starting to randomly evict them.
+	maxKnownBlocks = 1024
 
 	// maxQueuedTxs is the maximum number of transactions to queue up before dropping
 	// older broadcasts.
@@ -77,7 +78,7 @@ type Peer struct {
 	head common.Hash // Latest advertised head block hash
 	td   *big.Int    // Latest advertised head block total difficulty
 
-	knownBlocks     *bloom.ExpiringBloom   // Set of block hashes known to be known by this peer
+	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
 	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
 
@@ -99,15 +100,13 @@ type Peer struct {
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	// https://hur.st/bloomfilter/?n=32768&p=1.0E-2&m=&k=4
 	txBloom, _ := bloom.NewExpiringBloom(10, 42*1024, transactionEvictionInterval/10)
-	// https://hur.st/bloomfilter/?n=1024&p=1.0E-2&m=&k=4
-	blockBloom, _ := bloom.NewExpiringBloom(10, 2*1024, 5*time.Minute)
 	peer := &Peer{
 		id:              p.ID().String(),
 		Peer:            p,
 		rw:              rw,
 		version:         version,
 		knownTxs:        txBloom,
-		knownBlocks:     blockBloom,
+		knownBlocks:     newKnownCache(maxKnownBlocks),
 		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
 		txBroadcast:     make(chan []common.Hash),
@@ -164,7 +163,7 @@ func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
 
 // KnownBlock returns whether peer is known to already have a block.
 func (p *Peer) KnownBlock(hash common.Hash) bool {
-	return p.knownBlocks.Contains(bloomHashWrapper(hash))
+	return p.knownBlocks.Contains(hash)
 }
 
 // KnownTransaction returns whether peer is known to already have a transaction.
@@ -176,7 +175,7 @@ func (p *Peer) KnownTransaction(hash common.Hash) bool {
 // never be propagated to this particular peer.
 func (p *Peer) markBlock(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known block hash
-	p.knownBlocks.Add(bloomHashWrapper(hash))
+	p.knownBlocks.Add(hash)
 }
 
 // markTransaction marks a transaction as known for the peer, ensuring that it
@@ -279,10 +278,8 @@ func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs [
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
-	// Mark all the block hashes as known
-	for _, hash := range hashes {
-		p.knownBlocks.Add(bloomHashWrapper(hash))
-	}
+	// Mark all the block hashes as known, but ensure we don't overflow our limits
+	p.knownBlocks.Add(hashes...)
 
 	request := make(NewBlockHashesPacket, len(hashes))
 	for i := 0; i < len(hashes); i++ {
@@ -298,8 +295,8 @@ func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 	select {
 	case p.queuedBlockAnns <- block:
-		// Mark all the block hash as known
-		p.knownBlocks.Add(bloomHashWrapper(block.Hash()))
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		p.knownBlocks.Add(block.Hash())
 	default:
 		p.Log().Debug("Dropping block announcement", "number", block.NumberU64(), "hash", block.Hash())
 	}
@@ -307,8 +304,8 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
-	// Mark all the block hash as known
-	p.knownBlocks.Add(bloomHashWrapper(block.Hash()))
+	// Mark all the block hash as known, but ensure we don't overflow our limits
+	p.knownBlocks.Add(block.Hash())
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block: block,
 		TD:    td,
@@ -320,8 +317,8 @@ func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
 func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	select {
 	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
-		// Mark all the block hash as known
-		p.knownBlocks.Add(bloomHashWrapper(block.Hash()))
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		p.knownBlocks.Add(block.Hash())
 	default:
 		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
 	}
@@ -516,6 +513,40 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 		RequestId:                   id,
 		GetPooledTransactionsPacket: hashes,
 	})
+}
+
+// knownCache is a cache for known hashes.
+type knownCache struct {
+	hashes mapset.Set[common.Hash]
+	max    int
+}
+
+// newKnownCache creates a new knownCache with a max capacity.
+func newKnownCache(max int) *knownCache {
+	return &knownCache{
+		max:    max,
+		hashes: mapset.NewSet[common.Hash](),
+	}
+}
+
+// Add adds a list of elements to the set.
+func (k *knownCache) Add(hashes ...common.Hash) {
+	for k.hashes.Cardinality() > max(0, k.max-len(hashes)) {
+		k.hashes.Pop()
+	}
+	for _, hash := range hashes {
+		k.hashes.Add(hash)
+	}
+}
+
+// Contains returns whether the given item is in the set.
+func (k *knownCache) Contains(hash common.Hash) bool {
+	return k.hashes.Contains(hash)
+}
+
+// Cardinality returns the number of elements in the set.
+func (k *knownCache) Cardinality() int {
+	return k.hashes.Cardinality()
 }
 
 // bloomHashWrapper wraps a common.Hash to be used in the bloom filter library.
