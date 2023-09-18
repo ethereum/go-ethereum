@@ -889,7 +889,8 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	if list.totalcost.Cmp(balance) > 0 {
 		pool.all.Remove(hash)
 		pool.priced.Removed(1)
-		pendingDiscardMeter.Mark(1)
+		// pendingDiscardMeter.Mark(1)
+		pool.pending[addr].Remove(tx)
 		return false
 	}
 	
