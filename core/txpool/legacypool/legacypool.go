@@ -884,7 +884,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 		return false
 	}
 
-	//Check balance for Overdraft
+	// Check balance for overdraft
 	balance := pool.currentState.GetBalance(addr)
 	if list.totalcost.Cmp(balance) > 0 {
 		pool.all.Remove(hash)
