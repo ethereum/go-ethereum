@@ -358,14 +358,16 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 			cancel()
 		}()
 		var (
+			// delivered is the block number of the last historical log delivered.
 			delivered uint64
-			// liveOnly is true when all historical logs are delivered
-			// and we switch-over to solely returning live logs.
-			liveOnly bool
-			// reorged is true when a reorg is detected.
-			// Question is if its enough to keep one flag (liveMode).
-			//reorged   bool
-			staleHash common.Hash
+			// liveMode is true when either:
+			// - all historical logs are delivered.
+			// - or, during history processing a reorg is detected.
+			liveMode bool
+			// reorgedBlockHash is the block hash of the reorg point. It is set when
+			// a reorg is detected in the future. It is used to detect if the history
+			// processor is sending stale logs.
+			reorgedBlockHash common.Hash
 		)
 		for {
 			select {
@@ -376,43 +378,51 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 				}
 				// Else historical logs are all delivered, let's switch to live mode
 				logger.Info("History logs delivery finished, and now enter into live mode", "delivered", delivered)
-				liveOnly = true
+				// TODO: It's theoretically possible that we miss logs due to
+				// asynchrony between the history processor and the chain subscription.
+				liveMode = true
 				histLogs = nil
 
 			case logs := <-liveLogs:
 				if len(logs) == 0 {
 					continue
 				}
-				reorgBlock := logs[0].BlockNumber
-				if !liveOnly && reorgBlock <= delivered {
-					logger.Info("Reorg detected", "reorgBlock", reorgBlock, "delivered", delivered)
-					liveOnly = true
-				}
-				if !liveOnly && logs[0].Removed && staleHash == (common.Hash{}) {
-					// Reorg in future. Remember fork point.
-					staleHash = logs[0].BlockHash
-					continue
-				}
-				if logs[0].Removed {
-					// Send removed logs notification up until the point
-					// we have delivered logs from old chain.
+				// TODO: further reorgs are possible during history processing.
+				if !liveMode && logs[0].BlockNumber <= delivered {
+					// History is being processed and a reorg is encountered.
+					// From this point we ignore historical logs coming in and
+					// only send logs from the chain subscription.
+					logger.Info("Reorg detected", "reorgBlock", logs[0].BlockNumber, "delivered", delivered)
+					liveMode = true
+					// On reorg the chain will send first the removed logs.
+					// Send them up to the block we've delivered historical logs for.
 					notifyLogsIf(notifier, rpcSub.ID, logs, func(log *types.Log) bool {
 						return log.BlockNumber <= delivered
 					})
-				} else {
-					// New logs are emitted for the whole new chain since the reorg block.
-					// Send them all.
-					notifyLogsIf(notifier, rpcSub.ID, logs, nil)
+					continue
 				}
+				if !liveMode {
+					if logs[0].Removed && reorgedBlockHash == (common.Hash{}) {
+						// Reorg in future. Remember fork point.
+						reorgedBlockHash = logs[0].BlockHash
+					}
+					// Implicit cases:
+					// - there was a reorg in future and blockchain is sending logs from the new chain.
+					// - history is still being processed and blockchain sends logs from the tip.
+					continue
+				}
+				// New logs are emitted for the whole new chain since the reorg block.
+				// Send them all.
+				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 
 			case logs := <-histLogs:
 				if len(logs) == 0 {
 					continue
 				}
-				if liveOnly {
+				if liveMode {
 					continue
 				}
-				if logs[0].BlockHash == staleHash {
+				if logs[0].BlockHash == reorgedBlockHash {
 					// We have reached the fork point and the historical producer
 					// is emitting old logs because of delay. Restart the process
 					// from last delivered block.
