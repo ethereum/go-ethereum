@@ -962,7 +962,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, traces, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) (bool, bool) {
+func (w *worker) commitTransactions(txs types.OrderedTransactionSet, coinbase common.Address, interrupt *int32) (bool, bool) {
 	var circuitCapacityReached bool
 
 	// Short circuit if current is nil
@@ -1348,29 +1348,16 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		w.commit(uncles, nil, false, tstart)
 	}
 	// fetch l1Txs
-	l1Txs := make(map[common.Address]types.Transactions)
-	pendingL1Txs := 0
+	var l1Messages []types.L1MessageTx
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		l1Messages := w.collectPendingL1Messages(env.nextL1MsgIndex)
-		pendingL1Txs = len(l1Messages)
-		for _, l1msg := range l1Messages {
-			tx := types.NewTx(&l1msg)
-			sender := l1msg.Sender
-			senderTxs, ok := l1Txs[sender]
-			if ok {
-				senderTxs = append(senderTxs, tx)
-				l1Txs[sender] = senderTxs
-			} else {
-				l1Txs[sender] = types.Transactions{tx}
-			}
-		}
+		l1Messages = w.collectPendingL1Messages(env.nextL1MsgIndex)
 	}
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && pendingL1Txs == 0 && atomic.LoadUint32(&w.noempty) == 0 {
+	if len(pending) == 0 && len(l1Messages) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
 		w.updateSnapshot()
 		return
 	}
@@ -1383,9 +1370,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	var skipCommit, circuitCapacityReached bool
-	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Txs) > 0 {
-		log.Trace("Processing L1 messages for inclusion", "count", pendingL1Txs)
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, l1Txs, header.BaseFee)
+	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 {
+		log.Trace("Processing L1 messages for inclusion", "count", len(l1Messages))
+		txs, err := types.NewL1MessagesByQueueIndex(l1Messages)
+		if err != nil {
+			log.Error("Failed to create L1 message set", "l1Messages", l1Messages, "err", err)
+			return
+		}
 		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
 			return

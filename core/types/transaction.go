@@ -20,14 +20,17 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
+	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rlp"
 )
 
@@ -522,6 +525,18 @@ func (s *TxByPriceAndTime) Pop() interface{} {
 	return x
 }
 
+// OrderedTransactionSet represents a set of transactions and some ordering on top of this set.
+type OrderedTransactionSet interface {
+	// Peek returns the next transaction.
+	Peek() *Transaction
+
+	// Shift removes the next transaction.
+	Shift()
+
+	// Pop removes all transactions from the current account.
+	Pop()
+}
+
 // TransactionsByPriceAndNonce represents a set of transactions that can return
 // transactions in a profit-maximizing sorted order, while supporting removing
 // entire batches of transactions for non-executable accounts.
@@ -588,6 +603,48 @@ func (t *TransactionsByPriceAndNonce) Shift() {
 // and hence all subsequent ones should be discarded from the same account.
 func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
+}
+
+// L1MessagesByQueueIndex represents a set of L1 messages ordered by their queue indices.
+type L1MessagesByQueueIndex struct {
+	msgs []L1MessageTx
+}
+
+func NewL1MessagesByQueueIndex(msgs []L1MessageTx) (*L1MessagesByQueueIndex, error) {
+	// sort by queue index
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].QueueIndex < msgs[j].QueueIndex
+	})
+
+	// check for duplicates/gaps
+	for ii := 0; ii < len(msgs)-1; ii++ {
+		current := msgs[ii].QueueIndex
+		next := msgs[ii+1].QueueIndex
+		if next != current+1 {
+			return nil, fmt.Errorf("invalid L1 message set, current index: %d, next index: %d", current, next)
+		}
+	}
+
+	return &L1MessagesByQueueIndex{msgs: msgs}, nil
+}
+
+func (t *L1MessagesByQueueIndex) Peek() *Transaction {
+	if len(t.msgs) == 0 {
+		return nil
+	}
+	return NewTx(&t.msgs[0])
+}
+
+func (t *L1MessagesByQueueIndex) Shift() {
+	t.msgs = t.msgs[1:]
+}
+
+func (t *L1MessagesByQueueIndex) Pop() {
+	log.Error("Pop() is called on L1MessagesByQueueIndex")
+
+	// this is a logic error, the intention should be "Shift()",
+	// so we will follow the same behavior in Pop
+	t.Shift()
 }
 
 // Message is a fully derived transaction and implements core.Message

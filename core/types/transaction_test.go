@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/rlp"
@@ -403,6 +405,61 @@ func TestTransactionTimeSort(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestL1MessageQueueIndexSort(t *testing.T) {
+	assert := assert.New(t)
+
+	msgs := []L1MessageTx{
+		{QueueIndex: 3, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 6, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}},
+		{QueueIndex: 5, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}},
+		{QueueIndex: 4, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{3}},
+	}
+
+	txset, err := NewL1MessagesByQueueIndex(msgs)
+	assert.NoError(err)
+
+	nextIndex := uint64(1)
+
+	for {
+		tx := txset.Peek()
+		if tx == nil {
+			break
+		}
+
+		assert.True(tx.IsL1MessageTx())
+		assert.Equal(nextIndex, tx.AsL1MessageTx().QueueIndex)
+
+		txset.Shift()
+		nextIndex++
+	}
+
+	assert.Equal(uint64(7), nextIndex)
+}
+
+func TestL1MessageQueueIndexSortInvalid(t *testing.T) {
+	assert := assert.New(t)
+
+	msgs := []L1MessageTx{
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+	}
+
+	_, err := NewL1MessagesByQueueIndex(msgs)
+	assert.Error(err)
+
+	msgs = []L1MessageTx{
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 3, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 4, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+	}
+
+	_, err = NewL1MessagesByQueueIndex(msgs)
+	assert.Error(err)
 }
 
 // TestTransactionCoding tests serializing/de-serializing to/from rlp and JSON.
