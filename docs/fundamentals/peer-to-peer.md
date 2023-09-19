@@ -3,7 +3,7 @@ title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-network) and [local testnets](/docs/developers/geth-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simply by passing:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-networks) and [local testnets](/docs/developers/geth-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simply by passing:
 
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
@@ -106,7 +106,7 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks {#custom-networks}
 
-It is often useful for developers to connect to private test networks rather than public testnets or Ethereum mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/fundamentals/private-network).
+It is often useful for developers to connect to private test networks rather than public testnets or Ethereum mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/fundamentals/private-networks).
 
 ## Static nodes {#static-nodes}
 

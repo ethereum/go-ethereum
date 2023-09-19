@@ -33,7 +33,7 @@
     - id: Pruning
       to: /docs/fundamentals/pruning
     - id: Private networks
-      to: /docs/fundamentals/private-network
+      to: /docs/fundamentals/private-networks
     - id: Config files
       to: /docs/fundamentals/config-files
     - id: Light client

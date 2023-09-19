@@ -32,7 +32,7 @@ sudo ntpdate -s time.nist.gov
 
 ## I would like to run multiple Geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable". {#multiple-geth-instances}
 
-Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/fundamentals/private-network) instructions.
+Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/fundamentals/private-networks) instructions.
 
 ## When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear? {#could-not-decrypt-key}
 
