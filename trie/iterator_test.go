@@ -378,6 +378,9 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
 	)
 	if memonly {
 		for path, n := range nodes.Nodes {
+			if n.IsDeleted() {
+				continue
+			}
 			paths = append(paths, []byte(path))
 			hashes = append(hashes, n.Hash)
 		}

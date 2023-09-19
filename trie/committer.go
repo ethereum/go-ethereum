@@ -63,6 +63,11 @@ func (c *committer) commit(path []byte, n node) node {
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
 			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
+
+			// Mark all internal nodes between parent and child as deleted.
+			for i := 1; i < len(cn.Key); i++ {
+				c.nodes.AddNode(append(path, cn.Key[:i]...), trienode.NewDeleted())
+			}
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
