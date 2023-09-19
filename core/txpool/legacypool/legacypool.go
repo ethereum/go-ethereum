@@ -613,7 +613,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if list := pool.pending[addr]; list != nil {
-				return list.totalcost
+				return list.GetCost(tx.Nonce())
 			}
 			return new(big.Int)
 		},
@@ -1437,7 +1437,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		queuedNofundsMeter.Mark(int64(len(drops)))
 
 		// Gather all executable transactions and promote them
-		readies := list.Ready(pool.pendingNonces.get(addr))
+		readies := list.Ready(pool.pendingNonces.get(addr), pool.currentState.GetBalance(addr))
 		for _, tx := range readies {
 			hash := tx.Hash()
 			if pool.promoteTx(addr, hash, tx) {
