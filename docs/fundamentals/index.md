@@ -22,6 +22,6 @@ Note also that there is a page explaining common log messages that are often que
 - [Logs](/docs/fundamentals/logs): learn how to interpret the main log messages Geth displays in the console
 - [Peer-to-peer](/docs/fundamentals/peer-to-peer): learn about Geth's peer-to-peer networking
 - [Pruning](/docs/fundamentals/pruning): read about Geth's data pruning options
-- [Private networks](/docs/fundamentals/private-network): learn hoe to set up a private network of multiple Geth nodes
+- [Private networks](/docs/fundamentals/private-network): learn how to set up a private network of multiple Geth nodes
 - [Light clients](/docs/fundamentals/les): read about Geth's light mode.
 - [Mining](/docs/fundamentals/mining): read about the mining algorithms Geth used to use to secure Ethereum before the network switched to proof-of-stake.
