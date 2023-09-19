@@ -115,7 +115,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-    defer chaindb.Close()
+	defer chaindb.Close()
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")
@@ -164,7 +164,7 @@ func expandVerkle(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-    defer chaindb.Close()
+	defer chaindb.Close()
 	var (
 		rootC   common.Hash
 		keylist [][]byte
