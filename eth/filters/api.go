@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -42,6 +43,11 @@ var (
 	errInvalidToBlock     = errors.New("log subscription does not support history block range")
 	errInvalidFromBlock   = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
 	errClientUnsubscribed = errors.New("client unsubscribed")
+)
+
+const (
+	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
+	maxTrackedBlocks = 32 * 1024
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -312,6 +318,7 @@ func (api *FilterAPI) liveLogs(notifier notifier, rpcSub *rpc.Subscription, crit
 			select {
 			case logs := <-matchedLogs:
 				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
+
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				logsSub.Unsubscribe()
 				return
@@ -360,14 +367,21 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 		var (
 			// delivered is the block number of the last historical log delivered.
 			delivered uint64
+
 			// liveMode is true when either:
 			// - all historical logs are delivered.
 			// - or, during history processing a reorg is detected.
 			liveMode bool
+
 			// reorgedBlockHash is the block hash of the reorg point. It is set when
 			// a reorg is detected in the future. It is used to detect if the history
 			// processor is sending stale logs.
 			reorgedBlockHash common.Hash
+
+			// hashes is used to track the hashes of the blocks that have been delivered.
+			// It is used as a guard to prevent duplicate logs as well as inaccurate "removed"
+			// logs being delivered during a reorg.
+			hashes = lru.NewBasicLRU[common.Hash, struct{}](maxTrackedBlocks)
 		)
 		for {
 			select {
@@ -394,12 +408,6 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// only send logs from the chain subscription.
 					logger.Info("Reorg detected", "reorgBlock", logs[0].BlockNumber, "delivered", delivered)
 					liveMode = true
-					// On reorg the chain will send first the removed logs.
-					// Send them up to the block we've delivered historical logs for.
-					notifyLogsIf(notifier, rpcSub.ID, logs, func(log *types.Log) bool {
-						return log.BlockNumber <= delivered
-					})
-					continue
 				}
 				if !liveMode {
 					if logs[0].Removed && reorgedBlockHash == (common.Hash{}) {
@@ -411,9 +419,8 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					// - history is still being processed and blockchain sends logs from the tip.
 					continue
 				}
-				// New logs are emitted for the whole new chain since the reorg block.
-				// Send them all.
-				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
+				// Removed logs from reorged chain, replacing logs or logs from tip of the chain.
+				notifyLogsIf(notifier, rpcSub.ID, logs, &hashes)
 
 			case logs := <-histLogs:
 				if len(logs) == 0 {
@@ -435,7 +442,7 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 					}
 					return
 				}
-				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
+				notifyLogsIf(notifier, rpcSub.ID, logs, &hashes)
 				// Assuming batch = all logs of a single block
 				delivered = logs[0].BlockNumber
 
@@ -494,9 +501,48 @@ func (api *FilterAPI) doHistLogs(ctx context.Context, from int64, addrs []common
 	}
 }
 
-func notifyLogsIf(notifier notifier, id rpc.ID, logs []*types.Log, cond func(log *types.Log) bool) {
-	for _, log := range logs {
-		if cond == nil || cond(log) {
+// notifyLogsIf sends logs to the notifier if the condition is met.
+// It assumes all logs of the same block are either all removed or all added.
+func notifyLogsIf(notifier notifier, id rpc.ID, logs []*types.Log, hashes *lru.BasicLRU[common.Hash, struct{}]) {
+	// Iterate logs and batch them by block hash.
+	type batch struct {
+		start   int
+		end     int
+		hash    common.Hash
+		removed bool
+	}
+	var (
+		batches = make([]batch, 0)
+		h       common.Hash
+	)
+	for i, log := range logs {
+		if h == log.BlockHash {
+			// Skip logs of seen block
+			continue
+		}
+		if len(batches) > 0 {
+			batches[len(batches)-1].end = i
+		}
+		batches = append(batches, batch{start: i, hash: log.BlockHash, removed: log.Removed})
+		h = log.BlockHash
+	}
+	// Close off last batch.
+	if batches[len(batches)-1].end == 0 {
+		batches[len(batches)-1].end = len(logs)
+	}
+	for _, batch := range batches {
+		if hashes != nil {
+			// During reorgs it's possible that logs from the new chain have been delivered.
+			// Avoid sending removed logs from the old chain and duplicate logs from new chain.
+			if batch.removed && !hashes.Contains(batch.hash) {
+				continue
+			}
+			if !batch.removed && hashes.Contains(batch.hash) {
+				continue
+			}
+			hashes.Add(batch.hash, struct{}{})
+		}
+		for _, log := range logs[batch.start:batch.end] {
 			log := log
 			notifier.Notify(id, &log)
 		}
