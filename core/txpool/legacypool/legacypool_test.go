@@ -734,25 +734,28 @@ func TestPostponing(t *testing.T) {
 		}
 	}
 	// Check that pre and post validations leave the pool as is
-	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
+	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != 2 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", pending, 4)
 	}
-	if len(pool.queue) != 0 {
-		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
+	if queue := pool.queue[accs[0]].Len() + pool.queue[accs[1]].Len(); queue != 128 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", queue, 128)
 	}
-	if pool.all.Count() != len(txs) {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
+	if pool.all.Count() != 130 { // discard 70 = 35 * 2, and 2 are going to pending, 128 to queue
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 130)
 	}
+
 	<-pool.requestReset(nil, nil)
-	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
+
+	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != 2 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", pending, 4)
 	}
-	if len(pool.queue) != 0 {
-		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
+	if queue := pool.queue[accs[0]].Len() + pool.queue[accs[1]].Len(); queue != 128 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", queue, 128)
 	}
-	if pool.all.Count() != len(txs) {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
+	if pool.all.Count() != 130 { // discard 70 = 35 * 2, and 2 are going to pending, 128 to queue
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 130)
 	}
+
 	// Reduce the balance of the account, and check that transactions are reorganised
 	for _, addr := range accs {
 		testAddBalance(pool, addr, big.NewInt(-1))
@@ -764,23 +767,24 @@ func TestPostponing(t *testing.T) {
 	if _, ok := pool.pending[accs[0]].txs.items[txs[0].Nonce()]; !ok {
 		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txs[0])
 	}
-	if _, ok := pool.queue[accs[0]].txs.items[txs[0].Nonce()]; ok {
-		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txs[0])
+	// the second account's first transaction is invalid.
+	if _, ok := pool.queue[accs[1]].txs.items[txs[100].Nonce()]; ok {
+		t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", 100, txs[100])
 	}
+
+	// every promoteExecutable and demoteUnexcutable function will filter pending and queue with Balance
+	// there are lots of transactions discarded
 	for i, tx := range txs[1:100] {
-		if i%2 == 1 {
-			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: valid but future transaction present in pending pool: %v", i+1, tx)
-			}
-			if _, ok := pool.queue[accs[0]].txs.items[tx.Nonce()]; !ok {
-				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+1, tx)
-			}
-		} else {
-			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: out-of-fund transaction present in pending pool: %v", i+1, tx)
-			}
+		if tx.Nonce() >= 65 {
+			continue
+		}
+		if (i+1)%2 == 1 { //cost 50100, which is insufficient
 			if _, ok := pool.queue[accs[0]].txs.items[tx.Nonce()]; ok {
 				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", i+1, tx)
+			}
+		} else { // cost 25100, which is sufficient
+			if _, ok := pool.queue[accs[0]].txs.items[tx.Nonce()]; !ok {
+				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+1, tx)
 			}
 		}
 	}
@@ -789,19 +793,24 @@ func TestPostponing(t *testing.T) {
 	if pool.pending[accs[1]] != nil {
 		t.Errorf("invalidated account still has pending transactions")
 	}
-	for i, tx := range txs[100:] {
-		if i%2 == 1 {
-			if _, ok := pool.queue[accs[1]].txs.items[tx.Nonce()]; !ok {
-				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", 100+i, tx)
+
+	for i, tx := range txs[101:] {
+		if tx.Nonce() >= 65 {
+			continue
+		}
+		if (i+101)%2 == 1 { //cost 50100, which is insufficient
+			if _, ok := pool.queue[accs[0]].txs.items[tx.Nonce()]; ok {
+				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", i+101, tx)
 			}
-		} else {
-			if _, ok := pool.queue[accs[1]].txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", 100+i, tx)
+		} else { // cost 25100, which is sufficient
+			if _, ok := pool.queue[accs[0]].txs.items[tx.Nonce()]; !ok {
+				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+101, tx)
 			}
 		}
 	}
-	if pool.all.Count() != len(txs)/2 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs)/2)
+	// half in the queue will be dsiacrded because of insufficient balance
+	if pool.all.Count() != 65 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 65)
 	}
 }
 
@@ -1341,7 +1350,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(10000000))
 	}
 	// Generate and queue a batch of transactions
 	nonces := make(map[common.Address]uint64)
@@ -1834,7 +1843,7 @@ func TestStableUnderpricing(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 2)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(200*1000000))
 	}
 	// Fill up the entire queue with the same transaction price points
 	txs := types.Transactions{}
