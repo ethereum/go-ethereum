@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	goruntime "runtime"
-	"runtime/pprof"
 	"testing"
 	"time"
 
@@ -34,12 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -52,6 +49,7 @@ var runCommand = &cli.Command{
 	Usage:       "run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
+	Flags:       flags.Merge(vmFlags, traceFlags),
 }
 
 // readGenesis will read the given JSON format genesis file and return
@@ -109,9 +107,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 }
 
 func runCmd(ctx *cli.Context) error {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
 	logconfig := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.Bool(DisableStackFlag.Name),
@@ -121,15 +116,14 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer        vm.EVMLogger
-		debugLogger   *logger.StructLogger
-		statedb       *state.StateDB
-		chainConfig   *params.ChainConfig
-		sender        = common.BytesToAddress([]byte("sender"))
-		receiver      = common.BytesToAddress([]byte("receiver"))
-		genesisConfig *core.Genesis
-		preimages     = ctx.Bool(DumpFlag.Name)
-		blobHashes    []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
+		tracer      vm.EVMLogger
+		debugLogger *logger.StructLogger
+		statedb     *state.StateDB
+		chainConfig *params.ChainConfig
+		sender      = common.BytesToAddress([]byte("sender"))
+		receiver    = common.BytesToAddress([]byte("receiver"))
+		preimages   = ctx.Bool(DumpFlag.Name)
+		blobHashes  []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -139,30 +133,30 @@ func runCmd(ctx *cli.Context) error {
 	} else {
 		debugLogger = logger.NewStructLogger(logconfig)
 	}
+
+	initialGas := ctx.Uint64(GasFlag.Name)
+	genesisConfig := new(core.Genesis)
+	genesisConfig.GasLimit = initialGas
 	if ctx.String(GenesisFlag.Name) != "" {
-		gen := readGenesis(ctx.String(GenesisFlag.Name))
-		genesisConfig = gen
-		db := rawdb.NewMemoryDatabase()
-		triedb := trie.NewDatabase(db, &trie.Config{
-			Preimages: preimages,
-			HashDB:    hashdb.Defaults,
-		})
-		defer triedb.Close()
-		genesis := gen.MustCommit(db, triedb)
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(genesis.Root(), sdb, nil)
-		chainConfig = gen.Config
+		genesisConfig = readGenesis(ctx.String(GenesisFlag.Name))
+		if genesisConfig.GasLimit != 0 {
+			initialGas = genesisConfig.GasLimit
+		}
 	} else {
-		db := rawdb.NewMemoryDatabase()
-		triedb := trie.NewDatabase(db, &trie.Config{
-			Preimages: preimages,
-			HashDB:    hashdb.Defaults,
-		})
-		defer triedb.Close()
-		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
-		genesisConfig = new(core.Genesis)
+		genesisConfig.Config = params.AllEthashProtocolChanges
 	}
+
+	db := rawdb.NewMemoryDatabase()
+	triedb := trie.NewDatabase(db, &trie.Config{
+		Preimages: preimages,
+		HashDB:    hashdb.Defaults,
+	})
+	defer triedb.Close()
+	genesis := genesisConfig.MustCommit(db, triedb)
+	sdb := state.NewDatabaseWithNodeDB(db, triedb)
+	statedb, _ = state.New(genesis.Root(), sdb, nil)
+	chainConfig = genesisConfig.Config
+
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
@@ -216,10 +210,6 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(bin)
 	}
-	initialGas := ctx.Uint64(GasFlag.Name)
-	if genesisConfig.GasLimit != 0 {
-		initialGas = genesisConfig.GasLimit
-	}
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
 		State:       statedb,
@@ -234,19 +224,6 @@ func runCmd(ctx *cli.Context) error {
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		},
-	}
-
-	if cpuProfilePath := ctx.String(CPUProfileFlag.Name); cpuProfilePath != "" {
-		f, err := os.Create(cpuProfilePath)
-		if err != nil {
-			fmt.Println("could not create CPU profile: ", err)
-			os.Exit(1)
-		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			fmt.Println("could not start CPU profile: ", err)
-			os.Exit(1)
-		}
-		defer pprof.StopCPUProfile()
 	}
 
 	if chainConfig != nil {
@@ -294,19 +271,6 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(DumpFlag.Name) {
 		statedb.Commit(genesisConfig.Number, true)
 		fmt.Println(string(statedb.Dump(nil)))
-	}
-
-	if memProfilePath := ctx.String(MemProfileFlag.Name); memProfilePath != "" {
-		f, err := os.Create(memProfilePath)
-		if err != nil {
-			fmt.Println("could not create memory profile: ", err)
-			os.Exit(1)
-		}
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			fmt.Println("could not write memory profile: ", err)
-			os.Exit(1)
-		}
-		f.Close()
 	}
 
 	if ctx.Bool(DebugFlag.Name) {
