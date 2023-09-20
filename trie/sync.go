@@ -370,8 +370,6 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 		owner, inner := ResolvePath([]byte(path))
 		rawdb.DeleteTrieNode(dbw, owner, inner, common.Hash{} /* unused */, s.scheme)
 	}
-	deletionGauge.Inc(int64(len(s.membatch.deletes)))
-
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
 	}
@@ -452,6 +450,10 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		// range of this internal path on disk. This would break the
 		// guarantee for state healing.
 		//
+		// While it's possible for this shortNode to overwrite a previously
+		// existing full node, the other branches of the fullNode can be
+		// retained as they remain untouched and complete.
+		//
 		// This step is only necessary for path mode, as there is no deletion
 		// in hash mode at all.
 		if _, ok := node.Val.(hashNode); ok && s.scheme == rawdb.PathScheme {
@@ -464,6 +466,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				// overall performance. FIX IT(rjl493456442)
 				if rawdb.HasTrieNodeInPath(s.database, owner, append(inner, key[:i]...)) {
 					req.deletes = append(req.deletes, key[:i])
+					deletionGauge.Inc(1)
 					log.Info("Detected dangling node", "owner", owner, "path", append(inner, key[:i]...))
 				}
 			}
