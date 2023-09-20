@@ -356,7 +356,7 @@ func (db *Database) Journal(root common.Hash) error {
 
 	// Short circuit if the database is in read only mode.
 	if db.readOnly {
-		return errSnapshotReadOnly
+		return errDatabaseReadOnly
 	}
 	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)

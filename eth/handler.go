@@ -100,8 +100,8 @@ type handler struct {
 	networkID  uint64
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
-	snapSync  atomic.Bool // Flag whether snap sync is enabled (gets disabled if we already have blocks)
-	acceptTxs atomic.Bool // Flag whether we're considered synchronised (enables transaction processing)
+	snapSync atomic.Bool // Flag whether snap sync is enabled (gets disabled if we already have blocks)
+	synced   atomic.Bool // Flag whether we're considered synchronised (enables transaction processing)
 
 	database ethdb.Database
 	txpool   txPool
@@ -163,10 +163,14 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		fullBlock, snapBlock := h.chain.CurrentBlock(), h.chain.CurrentSnapBlock()
 		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
 			h.snapSync.Store(true)
-			log.Warn("Switch sync mode from full sync to snap sync")
+			log.Warn("Switch sync mode from full sync to snap sync", "reason", "snap sync incomplete")
+		} else if !h.chain.HasState(fullBlock.Root) {
+			h.snapSync.Store(true)
+			log.Warn("Switch sync mode from full sync to snap sync", "reason", "head state missing")
 		}
 	} else {
-		if h.chain.CurrentBlock().Number.Uint64() > 0 {
+		head := h.chain.CurrentBlock()
+		if head.Number.Uint64() > 0 && h.chain.HasState(head.Root) {
 			// Print warning log if database is not empty to run snap sync.
 			log.Warn("Switch sync mode from snap sync to full sync")
 		} else {
@@ -174,17 +178,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			h.snapSync.Store(true)
 		}
 	}
-	// If sync succeeds, pass a callback to potentially disable snap sync mode
-	// and enable transaction propagation.
+	// If the sync succeeds, mark the local node as synced and enable all features
+	// with state synchronization requirements.
 	success := func() {
-		// If we were running snap sync and it finished, disable doing another
-		// round on next sync cycle
-		if h.snapSync.Load() {
-			log.Info("Snap sync complete, auto disabling")
-			h.snapSync.Store(false)
-		}
-		// If we've successfully finished a sync cycle, accept transactions from
-		// the network
 		h.enableSyncedFeatures()
 	}
 	// Construct the downloader (long sync)
@@ -245,7 +241,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// accept each others' blocks until a restart. Unfortunately we haven't figured
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
-		if h.snapSync.Load() {
+		if !h.synced.Load() {
 			log.Warn("Snap syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
@@ -272,11 +268,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			}
 			return 0, nil
 		}
-		n, err := h.chain.InsertChain(blocks)
-		if err == nil {
-			h.enableSyncedFeatures() // Mark initial sync done on any fetcher import
-		}
-		return n, err
+		return h.chain.InsertChain(blocks)
 	}
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
@@ -680,7 +672,15 @@ func (h *handler) txBroadcastLoop() {
 // enableSyncedFeatures enables the post-sync functionalities when the initial
 // sync is finished.
 func (h *handler) enableSyncedFeatures() {
-	h.acceptTxs.Store(true)
+	// Mark the local node as synced.
+	h.synced.Store(true)
+
+	// If we were running snap sync and it finished, disable doing another
+	// round on next sync cycle
+	if h.snapSync.Load() {
+		log.Info("Snap sync complete, auto disabling")
+		h.snapSync.Store(false)
+	}
 	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
 		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
