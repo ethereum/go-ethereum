@@ -44,6 +44,12 @@ func returnStack(s *Stack) {
 	stackPool.Put(s)
 }
 
+func deepCopyStack(s *Stack) *Stack {
+  ret := newstack()
+  ret.data = append(ret.data, s.data...)
+  return ret
+}
+
 // Data returns the underlying uint256.Int array.
 func (st *Stack) Data() []uint256.Int {
 	return st.data

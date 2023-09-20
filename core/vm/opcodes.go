@@ -218,6 +218,7 @@ const (
 	CREATE2      OpCode = 0xf5
 
 	STATICCALL   OpCode = 0xfa
+  SPAWN        OpCode = 0xfb
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
 	SELFDESTRUCT OpCode = 0xff
@@ -304,6 +305,7 @@ var opCodeToString = map[OpCode]string{
 	TLOAD:    "TLOAD",
 	TSTORE:   "TSTORE",
 	MCOPY:    "MCOPY",
+  SPAWN:    "SPAWN",
 	PUSH0:    "PUSH0",
 
 	// 0x60 range - pushes.
@@ -476,6 +478,7 @@ var stringToOp = map[string]OpCode{
 	"TLOAD":          TLOAD,
 	"TSTORE":         TSTORE,
 	"MCOPY":          MCOPY,
+  "SPAWN":          SPAWN,
 	"PUSH0":          PUSH0,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,

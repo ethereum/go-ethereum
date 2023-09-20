@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"log"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -501,6 +503,9 @@ func opMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
 	scope.Memory.Set32(mStart.Uint64(), &val)
+
+  // Temporary : Log the opMstore to easily see execution order
+  log.Printf("opMstore: mStart=%v, val=%v", mStart, val)
 	return nil, nil
 }
 
@@ -556,6 +561,27 @@ func opJumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 
 func opJumpdest(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
+}
+
+// TODO: Push end of program to stack before executing spawn and pop off after w/ other args?
+func opSpawn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+  if interpreter.evm.abort.Load() {
+    return nil, errStopToken
+  }
+
+  pos := scope.Stack.pop()
+  if !scope.Contract.validJumpdest(&pos) {
+    return nil, ErrInvalidJump
+  }
+  // Save coroutine to memory ( Stack, PC )
+  coroutine := NewCoroutine(pos.Uint64(), *scope.Stack)
+
+  // Add coroutine to queue
+  scope.PushCoroutine(coroutine)
+
+  log.Printf("Spawned coroutine %v", coroutine)
+
+  return nil, nil
 }
 
 func opPc(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
