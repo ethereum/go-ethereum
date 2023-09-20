@@ -83,9 +83,16 @@ type Database struct {
 	log log.Logger // Contextual logger tracking the database path
 }
 
+type LevelDBConfig struct {
+	CompactionTableSize           uint64  // LevelDB SSTable/file size in mebibytes
+	CompactionTableSizeMultiplier float64 // Multiplier on LevelDB SSTable/file size
+	CompactionTotalSize           uint64  // Total size in mebibytes of SSTables in a given LevelDB level
+	CompactionTotalSizeMultiplier float64 // Multiplier on level size on LevelDB levels
+}
+
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool, config LevelDBConfig) (*Database, error) {
 	return NewCustom(file, namespace, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
@@ -99,6 +106,22 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		options.OpenFilesCacheCapacity = handles
 		options.BlockCacheCapacity = cache / 2 * opt.MiB
 		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
+
+		if config.CompactionTableSize != 0 {
+			options.CompactionTableSize = int(config.CompactionTableSize * opt.MiB)
+		}
+
+		if config.CompactionTableSizeMultiplier != 0 {
+			options.CompactionTableSizeMultiplier = config.CompactionTableSizeMultiplier
+		}
+
+		if config.CompactionTotalSize != 0 {
+			options.CompactionTotalSize = int(config.CompactionTotalSize * opt.MiB)
+		}
+
+		if config.CompactionTotalSizeMultiplier != 0 {
+			options.CompactionTotalSizeMultiplier = config.CompactionTotalSizeMultiplier
+		}
 
 		if readonly {
 			options.ReadOnly = true
@@ -114,7 +137,14 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	logger := log.New("database", file)
 	usedCache := options.GetBlockCacheCapacity() + options.GetWriteBuffer()*2
 
-	logCtx := []interface{}{"cache", common.StorageSize(usedCache), "handles", options.GetOpenFilesCacheCapacity()}
+	logCtx := []interface{}{
+		"cache", common.StorageSize(usedCache),
+		"handles", options.GetOpenFilesCacheCapacity(),
+		"compactionTableSize", options.CompactionTableSize,
+		"compactionTableSizeMultiplier", options.CompactionTableSizeMultiplier,
+		"compactionTotalSize", options.CompactionTotalSize,
+		"compactionTotalSizeMultiplier", options.CompactionTotalSizeMultiplier}
+
 	if options.ReadOnly {
 		logCtx = append(logCtx, "readonly", "true")
 	}

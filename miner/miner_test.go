@@ -137,13 +137,15 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
 
-	miner.Stop()
+	ch := make(chan struct{})
+	miner.Stop(ch)
 	waitForMiningState(t, miner, false)
 
 	miner.Start()
 	waitForMiningState(t, miner, true)
 
-	miner.Stop()
+	ch = make(chan struct{})
+	miner.Stop(ch)
 	waitForMiningState(t, miner, false)
 }
 
@@ -187,7 +189,8 @@ func TestStartStopMiner(t *testing.T) {
 	miner.Start()
 	waitForMiningState(t, miner, true)
 
-	miner.Stop()
+	ch := make(chan struct{})
+	miner.Stop(ch)
 
 	waitForMiningState(t, miner, false)
 }

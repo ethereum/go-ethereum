@@ -1,111 +1,71 @@
 # Bor Overview
-Bor is the Official Golang implementation of the Matic protocol. It is a fork of Go Ethereum - https://github.com/ethereum/go-ethereum and EVM compatible.
+Bor is the Official Golang implementation of the Polygon PoS blockchain. It is a fork of [geth](https://github.com/ethereum/go-ethereum) and is EVM compatible (upto London fork).
 
-![Forks](https://img.shields.io/github/forks/maticnetwork/bor?style=social)
-![Stars](https://img.shields.io/github/stars/maticnetwork/bor?style=social)
-![Languages](https://img.shields.io/github/languages/count/maticnetwork/bor)
-![Issues](https://img.shields.io/github/issues/maticnetwork/bor)
-![PRs](https://img.shields.io/github/issues-pr-raw/maticnetwork/bor)
+[![API Reference](
+https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+)](https://pkg.go.dev/github.com/maticnetwork/bor)
+[![Go Report Card](https://goreportcard.com/badge/github.com/maticnetwork/bor)](https://goreportcard.com/report/github.com/maticnetwork/bor)
 ![MIT License](https://img.shields.io/github/license/maticnetwork/bor)
-![contributors](https://img.shields.io/github/contributors-anon/maticnetwork/bor)
-![size](https://img.shields.io/github/languages/code-size/maticnetwork/bor)
-![lines](https://img.shields.io/tokei/lines/github/maticnetwork/bor)
 [![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.gg/zdwkdvMNY2)
 [![Twitter Follow](https://img.shields.io/twitter/follow/0xPolygon.svg?style=social)](https://twitter.com/0xPolygon)
 
-## How to contribute
+### Installing bor using packaging
 
-### Contribution  Guidelines
-We believe one of the things that makes Polygon special is its coherent design and we seek to retain this defining characteristic. From the outset we defined some guidelines to ensure new contributions only ever enhance the project:
+The easiest way to get started with bor is to install the packages using the command below. Refer to the [releases](https://github.com/maticnetwork/bor/releases) section to find the latest stable version of bor.
+    
+    curl -L https://raw.githubusercontent.com/maticnetwork/install/main/bor.sh | bash -s -- v0.4.0 <network> <node_type>
 
-* Quality: Code in the Polygon project should meet the style guidelines, with sufficient test-cases, descriptive commit messages, evidence that the contribution does not break any compatibility commitments or cause adverse feature interactions, and evidence of high-quality peer-review
-* Size: The Polygon project’s culture is one of small pull-requests, regularly submitted. The larger a pull-request, the more likely it is that you will be asked to resubmit as a series of self-contained and individually reviewable smaller PRs
-* Maintainability: If the feature will require ongoing maintenance (eg support for a particular brand of database), we may ask you to accept responsibility for maintaining this feature
-### Submit an issue
+The network accepts `mainnet` or `mumbai` and the node type accepts `validator` or `sentry` or `archive`. The installation script does the following things:
+- Create a new user named `bor`.
+- Install the bor binary at `/usr/bin/bor`.
+- Dump the suitable config file (based on the network and node type provided) at `/var/lib/bor` and uses it as the home dir.
+- Create a systemd service named `bor` at `/lib/systemd/system/bor.service` which starts bor using the config file as `bor` user.
 
-- Create a [new issue](https://github.com/maticnetwork/bor/issues/new/choose)
-- Comment on the issue (if you'd like to be assigned to it) - that way [our team can assign the issue to you](https://github.blog/2019-06-25-assign-issues-to-issue-commenters/).
-- If you do not have a specific contribution in mind, you can also browse the issues labelled as `help wanted`
-- Issues that additionally have the `good first issue` label are considered ideal for first-timers
+The releases supports both the networks i.e. Polygon Mainnet and Mumbai (Testnet) unless explicitly specified. Before the stable release for mainnet, pre-releases will be available marked with `beta` tag for deploying on Mumbai (testnet). On sufficient testing, stable release for mainnet will be announced with a forum post.
 
-### Fork the repository (repo)
+### Building from source
 
-- If you're not sure, here's how to [fork the repo](https://help.github.com/en/articles/fork-a-repo)
-
-- If this is your first time forking our repo, this is all you need to do for this step:
-
+- Install Go (version 1.19 or later) and a C compiler.
+- Clone the repository and build the binary using the following commands:
+    ```shell
+    make bor
     ```
-    $ git clone git@github.com:[your_github_handle]/bor
+- Start bor using the ideal config files for validator and sentry provided in the `packaging` folder.
+    ```shell
+    ./build/bin/bor server --config ./packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml
     ```
-
-- If you've already forked the repo, you'll want to ensure your fork is configured and that it's up to date. This will save you the headache of potential merge conflicts.
-
-- To [configure your fork](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/configuring-a-remote-for-a-fork):
-
+- To build full set of utilities, run:
+    ```shell
+    make all
     ```
-    $ git remote add upstream https://github.com/maticnetwork/bor
-    ```
-
-- To [sync your fork with the latest changes](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/syncing-a-fork):
-
-    ```
-    $ git checkout master
-    $ git fetch upstream
-    $ git merge upstream/master
+- Run unit and integration tests
+    ```shell
+    make test && make test-integration
     ```
 
-### Building the source
+#### Using the new cli
 
-- Building `bor` requires both a Go (version 1.19 or later) and a C compiler. You can install
-them using your favourite package manager. Once the dependencies are installed, run
+Post `v0.3.0` release, bor uses a new command line interface (cli). The new-cli (located at `internal/cli`) has been built with keeping the flag usage similar to old-cli (located at `cmd/geth`) with a few notable changes. Please refer to [docs](./docs) section for flag usage guide and example.
 
-     ```shell
-     $ make bor
-     ```
+### Documentation
 
-### Make awesome changes!
+- The official documentation for the Polygon PoS chain can be found [here](https://wiki.polygon.technology/docs/pos/getting-started/). It contains all the conceptual and architectural details of the chain along with operational guide for users running the nodes.
+- New release announcements and discussions can be found on our [forum page](https://forum.polygon.technology/).
+- Polygon improvement proposals can be found [here](https://github.com/maticnetwork/Polygon-Improvement-Proposals/)
 
-1. Create new branch for your changes
+### Contribution guidelines
 
-    ```
-    $ git checkout -b new_branch_name
-    ```
+Thank you for considering helping out with the source code! We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes! If you'd like to contribute to bor, please fork, fix, commit and send a pull request for the maintainers to review and merge into the main code base. 
 
-2. Commit and prepare for pull request (PR). In your PR commit message, reference the issue it resolves (see [how to link a commit message to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword).
+From the outset we defined some guidelines to ensure new contributions only ever enhance the project:
 
-
-    Checkout our [Git-Rules](https://wiki.polygon.technology/docs/contribute/orientation/#git-rules)
-
-    ```
-    $ git commit -m "brief description of changes [Fixes #1234]"
-    ```
-
-3. Push to your GitHub account
-
-    ```
-    $ git push
-    ```
-
-### Submit your PR
-
-- After your changes are committed to your GitHub fork, submit a pull request (PR) to the `master` branch of the `maticnetwork/bor` repo
-- In your PR description, reference the issue it resolves (see [linking a pull request to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword))
-  - ex. `Updates out of date content [Fixes #1234]`
-- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/0xpolygon)?
-
-### Wait for review
-
-- The team reviews every PR
-- Acceptable PRs will be approved & merged into the `master` branch
-
-<hr style="margin-top: 3em; margin-bottom: 3em;">
-
-## Release
-
-- You can [view the history of releases](https://github.com/maticnetwork/bor/releases), which include PR highlights
-
-<hr style="margin-top: 3em; margin-bottom: 3em;">
-
+* Quality: Code in the Polygon project should meet the style guidelines, with sufficient test-cases, descriptive commit messages, evidence that the contribution does not break any compatibility commitments or cause adverse feature interactions, and evidence of high-quality peer-review. Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
+* Testing: Please ensure that the updated code passes all the tests locally before submitting a pull request. In order to run unit tests, run `make test` and to run integration tests, run `make test-integration`.
+* Size: The Polygon project’s culture is one of small pull-requests, regularly submitted. The larger a pull-request, the more likely it is that you will be asked to resubmit as a series of self-contained and individually reviewable smaller PRs.
+* Maintainability: If the feature will require ongoing maintenance (e.g. support for a particular brand of database), we may ask you to accept responsibility for maintaining this feature
+* Pull requests need to be based on and opened against the `develop` branch.
+* PR title should be prefixed with package(s) they modify.
+  * E.g. "eth, rpc: make trace configs optional"
 
 ## License
 
@@ -116,8 +76,6 @@ also included in our repository in the `COPYING.LESSER` file.
 The go-ethereum binaries (i.e. all code inside of the `cmd` directory) are licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also
 included in our repository in the `COPYING` file.
-
-<hr style="margin-top: 3em; margin-bottom: 3em;">
 
 ## Join our Discord server
 

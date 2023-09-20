@@ -188,6 +188,44 @@ func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyReceiptsHash
 }
 
+// ValidateBlockNumberOptions4337 validates the block range passed as in the options parameter in the conditional transaction (EIP-4337)
+func (h *Header) ValidateBlockNumberOptions4337(minBlockNumber *big.Int, maxBlockNumber *big.Int) error {
+	currentBlockNumber := h.Number
+
+	if minBlockNumber != nil {
+		if currentBlockNumber.Cmp(minBlockNumber) == -1 {
+			return fmt.Errorf("current block number %v is less than minimum block number: %v", currentBlockNumber, minBlockNumber)
+		}
+	}
+
+	if maxBlockNumber != nil {
+		if currentBlockNumber.Cmp(maxBlockNumber) == 1 {
+			return fmt.Errorf("current block number %v is greater than maximum block number: %v", currentBlockNumber, maxBlockNumber)
+		}
+	}
+
+	return nil
+}
+
+// ValidateBlockNumberOptions4337 validates the timestamp range passed as in the options parameter in the conditional transaction (EIP-4337)
+func (h *Header) ValidateTimestampOptions4337(minTimestamp *uint64, maxTimestamp *uint64) error {
+	currentBlockTime := h.Time
+
+	if minTimestamp != nil {
+		if currentBlockTime < *minTimestamp {
+			return fmt.Errorf("current block time %v is less than minimum timestamp: %v", currentBlockTime, minTimestamp)
+		}
+	}
+
+	if maxTimestamp != nil {
+		if currentBlockTime > *maxTimestamp {
+			return fmt.Errorf("current block time %v is greater than maximum timestamp: %v", currentBlockTime, maxTimestamp)
+		}
+	}
+
+	return nil
+}
+
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {

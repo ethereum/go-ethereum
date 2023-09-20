@@ -6,7 +6,7 @@
 [Service]
   Restart=on-failure
   RestartSec=5s
-  ExecStart=/usr/bin/bor bootnode -nodekey /var/lib/bor/config/nodekey -addr ":30303" -verbosity 5
+  ExecStart=/usr/bin/bor bootnode -node-key /var/lib/bor/data/bor/nodekey -listen-addr "0.0.0.0:30303" -verbosity 3
   Type=simple
   KillSignal=SIGINT
   User=bor

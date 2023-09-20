@@ -487,7 +487,7 @@ func (w *worker) stop() {
 }
 
 // isRunning returns an indicator whether worker is running or not.
-func (w *worker) isRunning() bool {
+func (w *worker) IsRunning() bool {
 	return w.running.Load()
 }
 
@@ -589,7 +589,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
+			if w.IsRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
 				if w.newTxs.Load() == 0 {
 					timer.Reset(recommit)
@@ -657,8 +657,15 @@ func (w *worker) mainLoop(ctx context.Context) {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			//nolint:contextcheck
-			w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			if w.chainConfig.ChainID.Cmp(params.BorMainnetChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.MumbaiChainConfig.ChainID) == 0 {
+				if w.eth.PeerCount() > 0 {
+					//nolint:contextcheck
+					w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+				}
+			} else {
+				//nolint:contextcheck
+				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+			}
 
 		case req := <-w.getWorkCh:
 			block, fees, err := w.generateWork(req.ctx, req.params)
@@ -684,7 +691,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 			}
 			// If our mining block contains less than 2 uncle blocks,
 			// add the new uncle block if valid and regenerate a mining block.
-			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
+			if w.IsRunning() && w.current != nil && len(w.current.uncles) < 2 {
 				start := time.Now()
 				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
 					commitErr := w.commit(ctx, w.current.copy(), nil, true, start)
@@ -714,7 +721,8 @@ func (w *worker) mainLoop(ctx context.Context) {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
-			if !w.isRunning() && w.current != nil {
+			// nolint : nestif
+			if !w.IsRunning() && w.current != nil {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
@@ -1145,6 +1153,31 @@ mainloop:
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
 
+		// not prioritising conditional transaction, yet.
+		//nolint:nestif
+		if options := tx.GetOptions(); options != nil {
+			if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
+				txs.Pop()
+
+				continue
+			}
+
+			if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
+				txs.Pop()
+
+				continue
+			}
+
+			if err := env.state.ValidateKnownAccounts(options.KnownAccounts); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
+				txs.Pop()
+
+				continue
+			}
+		}
+
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
@@ -1210,7 +1243,7 @@ mainloop:
 	}
 
 	// nolint:nestif
-	if EnableMVHashMap && w.isRunning() {
+	if EnableMVHashMap && w.IsRunning() {
 		close(chDeps)
 		depsWg.Wait()
 
@@ -1271,7 +1304,7 @@ mainloop:
 
 	}
 
-	if !w.isRunning() && len(coalescedLogs) > 0 {
+	if !w.IsRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
 		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
@@ -1685,7 +1718,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	tracing.Exec(ctx, "", "worker.prepareWork", func(ctx context.Context, span trace.Span) {
 		// Set the coinbase if the worker is running or it's required
 		var coinbase common.Address
-		if w.isRunning() {
+		if w.IsRunning() {
 			coinbase = w.etherbase()
 			if coinbase == (common.Address{}) {
 				log.Error("Refusing to mine without etherbase")
@@ -1800,7 +1833,7 @@ func getInterruptTimer(ctx context.Context, work *environment, current *types.Bl
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
 func (w *worker) commit(ctx context.Context, env *environment, interval func(), update bool, start time.Time) error {
-	if w.isRunning() {
+	if w.IsRunning() {
 		ctx, span := tracing.StartSpan(ctx, "commit")
 		defer tracing.EndSpan(span)
 

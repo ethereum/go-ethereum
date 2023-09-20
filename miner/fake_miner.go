@@ -172,6 +172,11 @@ type mockBackend struct {
 	txPool *txpool.TxPool
 }
 
+// PeerCount implements mockBackend.
+func (*mockBackend) PeerCount() int {
+	panic("unimplemented")
+}
+
 func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
 	return &mockBackend{
 		bc:     bc,

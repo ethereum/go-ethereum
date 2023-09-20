@@ -18,6 +18,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```datadir.ancient```: Data directory for ancient chain segments (default = inside chaindata)
 
+- ```db.engine```: Backing database implementation to use ('leveldb' or 'pebble') (default: leveldb)
+
 - ```keystore```: Path of the directory where keystores are located
 
 - ```rpc.batchlimit```: Maximum number of messages in a batch (default=100, use 0 for no limits) (default: 100)
@@ -123,6 +125,16 @@ The ```bor server``` command runs the Bor client.
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default: 2350000)
 
 - ```fdlimit```: Raise the open file descriptor resource limit (default = system fd limit) (default: 0)
+
+### ExtraDB Options
+
+- ```leveldb.compaction.table.size```: LevelDB SSTable/file size in mebibytes (default: 2)
+
+- ```leveldb.compaction.table.size.multiplier```: Multiplier on LevelDB SSTable/file size. Size for a level is determined by: `leveldb.compaction.table.size * (leveldb.compaction.table.size.multiplier ^ Level)` (default: 1)
+
+- ```leveldb.compaction.total.size```: Total size in mebibytes of SSTables in a given LevelDB level. Size for a level is determined by: `leveldb.compaction.total.size * (leveldb.compaction.total.size.multiplier ^ Level)` (default: 10)
+
+- ```leveldb.compaction.total.size.multiplier```: Multiplier on level size on LevelDB levels. Size for a level is determined by: `leveldb.compaction.total.size * (leveldb.compaction.total.size.multiplier ^ Level)` (default: 10)
 
 ### JsonRPC Options
 

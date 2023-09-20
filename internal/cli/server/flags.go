@@ -54,6 +54,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.Ancient,
 	})
 	f.StringFlag(&flagset.StringFlag{
+		Name:    "db.engine",
+		Usage:   "Backing database implementation to use ('leveldb' or 'pebble')",
+		Value:   &c.cliConfig.DBEngine,
+		Default: c.cliConfig.DBEngine,
+	})
+	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
 		Usage: "Path of the directory where keystores are located",
 		Value: &c.cliConfig.KeyStoreDir,
@@ -440,6 +446,36 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Cache.FDLimit,
 		Default: c.cliConfig.Cache.FDLimit,
 		Group:   "Cache",
+	})
+
+	// LevelDB options
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "leveldb.compaction.table.size",
+		Usage:   "LevelDB SSTable/file size in mebibytes",
+		Value:   &c.cliConfig.ExtraDB.LevelDbCompactionTableSize,
+		Default: c.cliConfig.ExtraDB.LevelDbCompactionTableSize,
+		Group:   "ExtraDB",
+	})
+	f.Float64Flag(&flagset.Float64Flag{
+		Name:    "leveldb.compaction.table.size.multiplier",
+		Usage:   "Multiplier on LevelDB SSTable/file size. Size for a level is determined by: `leveldb.compaction.table.size * (leveldb.compaction.table.size.multiplier ^ Level)`",
+		Value:   &c.cliConfig.ExtraDB.LevelDbCompactionTableSizeMultiplier,
+		Default: c.cliConfig.ExtraDB.LevelDbCompactionTableSizeMultiplier,
+		Group:   "ExtraDB",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "leveldb.compaction.total.size",
+		Usage:   "Total size in mebibytes of SSTables in a given LevelDB level. Size for a level is determined by: `leveldb.compaction.total.size * (leveldb.compaction.total.size.multiplier ^ Level)`",
+		Value:   &c.cliConfig.ExtraDB.LevelDbCompactionTotalSize,
+		Default: c.cliConfig.ExtraDB.LevelDbCompactionTotalSize,
+		Group:   "ExtraDB",
+	})
+	f.Float64Flag(&flagset.Float64Flag{
+		Name:    "leveldb.compaction.total.size.multiplier",
+		Usage:   "Multiplier on level size on LevelDB levels. Size for a level is determined by: `leveldb.compaction.total.size * (leveldb.compaction.total.size.multiplier ^ Level)`",
+		Value:   &c.cliConfig.ExtraDB.LevelDbCompactionTotalSizeMultiplier,
+		Default: c.cliConfig.ExtraDB.LevelDbCompactionTotalSizeMultiplier,
+		Group:   "ExtraDB",
 	})
 
 	// rpc options

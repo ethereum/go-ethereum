@@ -49,7 +49,7 @@ const (
 
 // Sprint length change tests
 func TestValidatorsBlockProduction(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
@@ -201,7 +201,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 }
 
 func TestSprintLengths(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	testBorConfig := params.TestChainConfig.Bor
 	testBorConfig.Sprint = map[string]uint64{
@@ -214,7 +214,7 @@ func TestSprintLengths(t *testing.T) {
 }
 
 func TestProducerDelay(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	testBorConfig := params.TestChainConfig.Bor
 	testBorConfig.ProducerDelay = map[string]uint64{
@@ -376,7 +376,7 @@ func SprintLengthReorgIndividual2Nodes(t *testing.T, index int, tt map[string]in
 
 func TestSprintLengthReorg2Nodes(t *testing.T) {
 	t.Skip()
-	t.Parallel()
+	// t.Parallel()
 
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
@@ -424,7 +424,7 @@ func TestSprintLengthReorg2Nodes(t *testing.T) {
 
 func TestSprintLengthReorg(t *testing.T) {
 	t.Skip()
-	t.Parallel()
+	// t.Parallel()
 
 	reorgsLengthTests := getTestSprintLengthReorgCases()
 	f, err := os.Create("sprintReorg.csv")
