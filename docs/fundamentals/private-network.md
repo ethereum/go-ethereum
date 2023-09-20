@@ -127,6 +127,11 @@ When Geth is started using `--datadir data` the genesis block defined in `genesi
 geth --datadir data --networkid 12345
 ```
 
+The default value for the storage scheme is `hash.` In case the plan is to use the `path` based storage scheme, the `--state.scheme=path` needs to be passed during the `init` step. This will ensure that the database is initialized with the correct storage scheme for the network. 
+
+```sh
+geth --state.scheme=path init --datadir data genesis.json
+```
 ### Scheduling Hard Forks {#scheduling-hard-forks}
 
 As Ethereum protocol development progresses, new features become available. To enable these features on an existing private network, a hard fork must be scheduled. To do this, a future block number must be chosen which determines precisely when the hard fork will activate. Continuing the `genesis.json` example above and assuming the current block number is 35421, a hard fork might be scheduled for block 40000. This hard fork might upgrade the network to conform to the 'London' specs. First, all the Geth instances on the private network must be recent enough to support the specific hard fork. If so, `genesis.json` can be updated so that the `londonBlock` key gets the value 40000. The Geth instances are then shut down and `geth init` is run to update their configuration. When the nodes are restarted they will pick up where they left off and run normally until block 40000, at which point they will automatically upgrade.
