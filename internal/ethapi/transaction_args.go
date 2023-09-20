@@ -286,10 +286,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, sk
 
 // toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) toTransaction() *types.Transaction {
+func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.MaxFeePerGas != nil:
+	case args.MaxFeePerGas != nil || type2:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -331,6 +331,6 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction() *types.Transaction {
-	return args.toTransaction()
+func (args *TransactionArgs) ToTransaction(type2 bool) *types.Transaction {
+	return args.toTransaction(type2)
 }

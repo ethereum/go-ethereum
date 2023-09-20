@@ -992,7 +992,7 @@ func TestMulticallV1(t *testing.T) {
 		Index     hexutil.Uint `json:"logIndex"`
 	}
 	type callRes struct {
-		ReturnValue string `json:"return"`
+		ReturnValue string `json:"returnData"`
 		Error       string
 		Logs        []log
 		GasUsed     string
@@ -1123,7 +1123,7 @@ func TestMulticallV1(t *testing.T) {
 					GasUsed:     "0x0",
 					Logs:        []log{},
 					Status:      "0x0",
-					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 9937000)", randomAccounts[3].addr.String()),
+					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4691388)", randomAccounts[3].addr.String()),
 				}},
 			}},
 		}, {
@@ -1574,7 +1574,7 @@ func TestMulticallV1(t *testing.T) {
 					GasUsed:     "0x0",
 					Logs:        []log{},
 					Status:      "0x0",
-					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 10000000)", accounts[2].addr),
+					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr),
 				}},
 			}},
 		},
