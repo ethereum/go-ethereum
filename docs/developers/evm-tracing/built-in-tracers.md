@@ -91,7 +91,7 @@ Return:
 
 ## Native tracers {#native-tracers}
 
-The following tracers are implement in Go. This means they are much more performant than other tracers that are written in Javascript. The tracers are selected by passing their name to the `tracer` parameter when invoking a tracing API method, e.g. `debug.traceTransaction(<txhash>, { tracer: 'callTracer' })`.
+The following tracers are implemented in Go. This means they are much more performant than other tracers that are written in Javascript. The tracers are selected by passing their name to the `tracer` parameter when invoking a tracing API method, e.g. `debug.traceTransaction(<txhash>, { tracer: 'callTracer' })`.
 
 ### 4byteTracer {#4byte-tracer}
 
