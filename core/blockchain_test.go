@@ -980,7 +980,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	archiveDb := makeDb()
 	defer archiveDb.Close()
 
-	archiveCaching := *DefaultCacheConfig
+	archiveCaching := *defaultCacheConfig
 	archiveCaching.TrieDirtyDisabled = true
 
 	archive, _ := NewBlockChain(archiveDb, &archiveCaching, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
@@ -1817,7 +1817,7 @@ func TestTrieForkGC(t *testing.T) {
 		Config:  params.TestChainConfig,
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*int(DefaultCacheConfig.TriesInMemory), func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*int(defaultCacheConfig.TriesInMemory), func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1867,8 +1867,8 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	genDb, shared, _ := GenerateChainWithGenesis(genesis, engine, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*int(DefaultCacheConfig.TriesInMemory), func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
-	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*int(DefaultCacheConfig.TriesInMemory)+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*int(defaultCacheConfig.TriesInMemory), func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*int(defaultCacheConfig.TriesInMemory)+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
 
 	// Import the shared chain and the original canonical one
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesis, nil, engine, vm.Config{}, nil, nil, nil)
@@ -3106,7 +3106,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	// Generate and import the canonical chain
-	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*int(DefaultCacheConfig.TriesInMemory), nil)
+	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*int(defaultCacheConfig.TriesInMemory), nil)
 
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
@@ -4000,7 +4000,7 @@ func TestSetCanonical(t *testing.T) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Generate and import the canonical chain
-	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*int(DefaultCacheConfig.TriesInMemory), func(i int, gen *BlockGen) {
+	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*int(defaultCacheConfig.TriesInMemory), func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -4021,7 +4021,7 @@ func TestSetCanonical(t *testing.T) {
 	}
 
 	// Generate the side chain and import them
-	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*int(DefaultCacheConfig.TriesInMemory), func(i int, gen *BlockGen) {
+	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*int(defaultCacheConfig.TriesInMemory), func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -4067,8 +4067,8 @@ func TestSetCanonical(t *testing.T) {
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	_, _ = chain.SetCanonical(canon[int(DefaultCacheConfig.TriesInMemory)-1])
-	verify(canon[int(DefaultCacheConfig.TriesInMemory)-1])
+	_, _ = chain.SetCanonical(canon[int(defaultCacheConfig.TriesInMemory)-1])
+	verify(canon[int(defaultCacheConfig.TriesInMemory)-1])
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted

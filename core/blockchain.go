@@ -157,9 +157,9 @@ type CacheConfig struct {
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
-// DefaultCacheConfig are the default caching values if none are specified by the
+// defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
-var DefaultCacheConfig = &CacheConfig{
+var defaultCacheConfig = &CacheConfig{
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
 	TrieTimeLimit:  5 * time.Minute,
@@ -167,6 +167,8 @@ var DefaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 	TriesInMemory:  1024,
 }
+
+var DefaultCacheConfig = defaultCacheConfig
 
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
@@ -257,11 +259,11 @@ type BlockChain struct {
 //nolint:gocognit
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
 	if cacheConfig == nil {
-		cacheConfig = DefaultCacheConfig
+		cacheConfig = defaultCacheConfig
 	}
 
 	if cacheConfig.TriesInMemory <= 0 {
-		cacheConfig.TriesInMemory = DefaultCacheConfig.TriesInMemory
+		cacheConfig.TriesInMemory = defaultCacheConfig.TriesInMemory
 	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabaseWithConfig(db, &trie.Config{

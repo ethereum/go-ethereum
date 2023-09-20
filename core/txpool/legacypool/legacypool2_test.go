@@ -50,7 +50,6 @@ func fillPool(t testing.TB, pool *LegacyPool) {
 	// Create a number of test accounts, fund them and make transactions
 	executableTxs := types.Transactions{}
 	nonExecutableTxs := types.Transactions{}
-
 	for i := 0; i < 384; i++ {
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(10000000000))
@@ -66,15 +65,14 @@ func fillPool(t testing.TB, pool *LegacyPool) {
 	slots := pool.all.Slots()
 	// sanity-check that the test prerequisites are ok (pending full)
 	if have, want := pending, slots; have != want {
-		tb.Fatalf("have %d, want %d", have, want)
+		t.Fatalf("have %d, want %d", have, want)
 	}
-
 	if have, want := queued, 0; have != want {
-		tb.Fatalf("have %d, want %d", have, want)
+		t.Fatalf("have %d, want %d", have, want)
 	}
 
-	tb.Logf("pool.config: GlobalSlots=%d, GlobalQueue=%d\n", pool.config.GlobalSlots, pool.config.GlobalQueue)
-	tb.Logf("pending: %d queued: %d, all: %d\n", pending, queued, slots)
+	t.Logf("pool.config: GlobalSlots=%d, GlobalQueue=%d\n", pool.config.GlobalSlots, pool.config.GlobalQueue)
+	t.Logf("pending: %d queued: %d, all: %d\n", pending, queued, slots)
 }
 
 // Tests that if a batch high-priced of non-executables arrive, they do not kick out

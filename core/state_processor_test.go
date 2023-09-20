@@ -47,11 +47,6 @@ func u64(val uint64) *uint64 { return &val }
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
 	var (
-		cacheConfig = &CacheConfig{
-			TrieCleanLimit: 154,
-			Preimages:      true,
-		}
-
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(1),
 			HomesteadBlock:                big.NewInt(0),
@@ -66,22 +61,20 @@ func TestStateProcessorErrors(t *testing.T) {
 			BerlinBlock:                   big.NewInt(0),
 			LondonBlock:                   big.NewInt(0),
 			Ethash:                        new(params.EthashConfig),
-			Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
 			ShanghaiTime:                  new(uint64),
 			CancunTime:                    new(uint64),
+			Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 		}
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
 	)
-
 	var makeTx = func(key *ecdsa.PrivateKey, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, key)
 		return tx
 	}
-
 	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			Nonce:     nonce,
@@ -93,7 +86,6 @@ func TestStateProcessorErrors(t *testing.T) {
 		}), signer, key1)
 		return tx
 	}
-
 	var mkDynamicCreationTx = func(nonce uint64, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, data []byte) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			Nonce:     nonce,
@@ -142,11 +134,9 @@ func TestStateProcessorErrors(t *testing.T) {
 		)
 
 		defer blockchain.Stop()
-
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
-
 		for i, tt := range []struct {
 			txs  []*types.Transaction
 			want string
@@ -269,7 +259,6 @@ func TestStateProcessorErrors(t *testing.T) {
 			if err == nil {
 				t.Fatal("block imported without errors")
 			}
-
 			if have, want := err.Error(), tt.want; have != want {
 				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
@@ -300,35 +289,27 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		)
-
 		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrTxTypeNotSupported
-					txs: []*types.Transaction{
-						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
-					},
-					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
+		for i, tt := range []struct {
+			txs  []*types.Transaction
+			want string
+		}{
+			{ // ErrTxTypeNotSupported
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-			} {
-				block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
+			},
+		} {
+			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+			_, err := blockchain.InsertChain(types.Blocks{block})
+			if err == nil {
+				t.Fatal("block imported without errors")
+			}
+			if have, want := err.Error(), tt.want; have != want {
+				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
 		}
 	}
@@ -347,111 +328,27 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 		)
-
 		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrSenderNoEOA
-					txs: []*types.Transaction{
-						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
-					},
-					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+		for i, tt := range []struct {
+			txs  []*types.Transaction
+			want string
+		}{
+			{ // ErrSenderNoEOA
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-			} {
-				block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+			},
+		} {
+			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
+			_, err := blockchain.InsertChain(types.Blocks{block})
+			if err == nil {
+				t.Fatal("block imported without errors")
 			}
-		}
-	}
-
-	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (EIP-3860) enabled.
-	{
-		var (
-			db    = rawdb.NewMemoryDatabase()
-			gspec = &Genesis{
-				Config: &params.ChainConfig{
-					ChainID:                       big.NewInt(1),
-					HomesteadBlock:                big.NewInt(0),
-					EIP150Block:                   big.NewInt(0),
-					EIP155Block:                   big.NewInt(0),
-					EIP158Block:                   big.NewInt(0),
-					ByzantiumBlock:                big.NewInt(0),
-					ConstantinopleBlock:           big.NewInt(0),
-					PetersburgBlock:               big.NewInt(0),
-					IstanbulBlock:                 big.NewInt(0),
-					MuirGlacierBlock:              big.NewInt(0),
-					BerlinBlock:                   big.NewInt(0),
-					LondonBlock:                   big.NewInt(0),
-					ArrowGlacierBlock:             big.NewInt(0),
-					GrayGlacierBlock:              big.NewInt(0),
-					MergeNetsplitBlock:            big.NewInt(0),
-					TerminalTotalDifficulty:       big.NewInt(0),
-					TerminalTotalDifficultyPassed: true,
-					// TODO marcello double check
-					ShanghaiTime: u64(0),
-					Bor:          &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
-				},
-				Alloc: GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-						Balance: big.NewInt(1000000000000000000), // 1 ether
-						Nonce:   0,
-					},
-				},
-			}
-			genesis               = gspec.MustCommit(db)
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
-			tooBigInitCode        = [params.MaxInitCodeSize + 1]byte{}
-			smallInitCode         = [320]byte{}
-		)
-
-		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrMaxInitCodeSizeExceeded
-					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 500000, common.Big0, eip1559.CalcBaseFee(config, genesis.Header()), tooBigInitCode[:]),
-					},
-					want: "could not apply tx 0 [0x832b54a6c3359474a9f504b1003b2cc1b6fcaa18e4ef369eb45b5d40dad6378f]: max initcode size exceeded: code size 49153 limit 49152",
-				},
-				{ // ErrIntrinsicGas: Not enough gas to cover init code
-					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 54299, common.Big0, eip1559.CalcBaseFee(config, genesis.Header()), smallInitCode[:]),
-					},
-					want: "could not apply tx 0 [0x39b7436cb432d3662a25626474282c5c4c1a213326fd87e4e18a91477bae98b2]: intrinsic gas too low: have 54299, want 54300",
-				},
-			} {
-				block := GenerateBadBlock(genesis, beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+			if have, want := err.Error(), tt.want; have != want {
+				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
 		}
 	}

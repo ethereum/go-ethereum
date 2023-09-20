@@ -124,7 +124,6 @@ func TestAuthEndpoints(t *testing.T) {
 		WSModules:   []string{"eth", "engine"},
 		HTTPModules: []string{"eth", "engine"},
 	}
-
 	node, err := New(conf)
 	if err != nil {
 		t.Fatalf("could not create a new node: %v", err)
@@ -146,7 +145,6 @@ func TestAuthEndpoints(t *testing.T) {
 			Authenticated: true,
 		},
 	})
-
 	if err := node.Start(); err != nil {
 		t.Fatalf("failed to start test node: %v", err)
 	}
@@ -156,18 +154,15 @@ func TestAuthEndpoints(t *testing.T) {
 	if a, b := node.WSEndpoint(), node.WSAuthEndpoint(); a == b {
 		t.Fatalf("expected ws and auth-ws endpoints to be different, got: %q and %q", a, b)
 	}
-
 	if a, b := node.HTTPEndpoint(), node.HTTPAuthEndpoint(); a == b {
 		t.Fatalf("expected http and auth-http endpoints to be different, got: %q and %q", a, b)
 	}
 
 	goodAuth := NewJWTAuth(secret)
-
 	var otherSecret [32]byte
 	if _, err := crand.Read(otherSecret[:]); err != nil {
 		t.Fatalf("failed to create jwt secret: %v", err)
 	}
-
 	badAuth := NewJWTAuth(otherSecret)
 
 	notTooLong := time.Second * 57

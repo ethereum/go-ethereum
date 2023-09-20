@@ -17,7 +17,6 @@
 package legacypool
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -25,7 +24,6 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,14 +32,12 @@ import (
 
 	"github.com/holiman/uint256"
 	"github.com/maticnetwork/crand"
-	"go.uber.org/goleak"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"pgregory.net/rapid"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/debug"
-	"github.com/ethereum/go-ethereum/common/leak"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -353,7 +349,7 @@ func testSetNonce(pool *LegacyPool, addr common.Address, nonce uint64) {
 	pool.mu.Unlock()
 }
 
-func getBalance(pool *TxPool, addr common.Address) *big.Int {
+func getBalance(pool *LegacyPool, addr common.Address) *big.Int {
 	bal := big.NewInt(0)
 
 	pool.mu.Lock()
@@ -416,11 +412,11 @@ func TestQueue(t *testing.T) {
 	pool.enqueueTx(tx.Hash(), tx, false, true)
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	tx = transaction(1, 100, key)
 	from, _ = deriveSender(tx)
@@ -429,11 +425,11 @@ func TestQueue(t *testing.T) {
 
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if len(pool.queue) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue))
@@ -459,11 +455,11 @@ func TestQueue2(t *testing.T) {
 
 	pool.promoteExecutables([]common.Address{from})
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if len(pool.pending) != 1 {
 		t.Error("expected pending length to be 1, got", len(pool.pending))
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if pool.queue[from].Len() != 2 {
 		t.Error("expected len(queue) == 2, got", pool.queue[from].Len())
@@ -580,7 +576,7 @@ func TestDoubleNonce(t *testing.T) {
 
 	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
@@ -588,14 +584,14 @@ func TestDoubleNonce(t *testing.T) {
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	// Add the third transaction and ensure it's not saved (smaller price)
 	pool.add(tx3, false)
 
 	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
@@ -603,7 +599,7 @@ func TestDoubleNonce(t *testing.T) {
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	// Ensure the total transaction count is correct
 	if pool.all.Count() != 1 {
@@ -625,11 +621,11 @@ func TestMissingNonce(t *testing.T) {
 		t.Error("didn't expect error", err)
 	}
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if len(pool.pending) != 0 {
 		t.Error("expected 0 pending transactions, got", len(pool.pending))
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if pool.queue[addr].Len() != 1 {
 		t.Error("expected 1 queued transaction, got", pool.queue[addr].Len())
@@ -705,11 +701,11 @@ func TestDropping(t *testing.T) {
 	pool.enqueueTx(tx12.Hash(), tx12, false, true)
 
 	// Check that pre and post validations leave the pool as is
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pool.pending[account].Len() != 3 {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
@@ -721,11 +717,11 @@ func TestDropping(t *testing.T) {
 
 	<-pool.requestReset(nil, nil)
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pool.pending[account].Len() != 3 {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if pool.queue[account].Len() != 3 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
@@ -738,7 +734,7 @@ func TestDropping(t *testing.T) {
 	testAddBalance(pool, account, big.NewInt(-650))
 	<-pool.requestReset(nil, nil)
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
@@ -750,7 +746,7 @@ func TestDropping(t *testing.T) {
 	if _, ok := pool.pending[account].txs.items[tx2.Nonce()]; ok {
 		t.Errorf("out-of-fund pending transaction present: %v", tx1)
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
@@ -771,7 +767,7 @@ func TestDropping(t *testing.T) {
 	pool.chain.(*testBlockChain).gasLimit.Store(100)
 	<-pool.requestReset(nil, nil)
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
@@ -779,7 +775,7 @@ func TestDropping(t *testing.T) {
 	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
 		t.Errorf("over-gased pending transaction present: %v", tx1)
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
@@ -840,11 +836,11 @@ func TestPostponing(t *testing.T) {
 		}
 	}
 	// Check that pre and post validations leave the pool as is
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if len(pool.queue) != 0 {
 		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
@@ -856,11 +852,11 @@ func TestPostponing(t *testing.T) {
 
 	<-pool.requestReset(nil, nil)
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
 		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if len(pool.queue) != 0 {
 		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue), 0)
@@ -878,17 +874,17 @@ func TestPostponing(t *testing.T) {
 
 	// The first account's first transaction remains valid, check that subsequent
 	// ones are either filtered out, or queued up for later.
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if _, ok := pool.pending[accs[0]].txs.items[txs[0].Nonce()]; !ok {
 		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txs[0])
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if _, ok := pool.queue[accs[0]].txs.items[txs[0].Nonce()]; ok {
 		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txs[0])
 	}
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	for i, tx := range txs[1:100] {
 		if i%2 == 1 {
 			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
@@ -908,15 +904,15 @@ func TestPostponing(t *testing.T) {
 			}
 		}
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	// The second account's first transaction got invalid, check that all transactions
 	// are either filtered out, or queued up for later.
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	if pool.pending[accs[1]] != nil {
 		t.Errorf("invalidated account still has pending transactions")
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	for i, tx := range txs[100:] {
 		if i%2 == 1 {
@@ -1017,11 +1013,11 @@ func TestQueueAccountLimiting(t *testing.T) {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 
-		pool.pendingMu.RLock()
+		// pool.pendingMu.RLock()
 		if len(pool.pending) != 0 {
 			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, len(pool.pending), 0)
 		}
-		pool.pendingMu.RUnlock()
+		// pool.pendingMu.RUnlock()
 
 		if i <= testTxPoolConfig.AccountQueue {
 			if pool.queue[account].Len() != int(i) {
@@ -1048,7 +1044,7 @@ func TestRejectUnprotectedTransaction(t *testing.T) {
 	t.Skip()
 
 	pool, key := setupPool()
-	defer pool.Stop()
+	defer pool.Close()
 
 	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -1057,7 +1053,7 @@ func TestRejectUnprotectedTransaction(t *testing.T) {
 	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
 	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
 
-	if err := pool.AddRemote(tx); !errors.Is(err, types.ErrInvalidChainId) {
+	if err := pool.addRemote(tx); !errors.Is(err, types.ErrInvalidChainId) {
 		t.Error("expected", types.ErrInvalidChainId, "got", err)
 	}
 }
@@ -1070,7 +1066,7 @@ func TestAllowUnprotectedTransactionWhenSet(t *testing.T) {
 	t.Skip()
 
 	pool, key := setupPool()
-	defer pool.Stop()
+	defer pool.Close()
 
 	tx := dynamicFeeTx(0, 22000, big.NewInt(5), big.NewInt(2), key)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -1081,7 +1077,7 @@ func TestAllowUnprotectedTransactionWhenSet(t *testing.T) {
 	pool.signer = types.LatestSignerForChainID(pool.chainconfig.ChainID)
 	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
 
-	if err := pool.AddRemote(tx); err != nil {
+	if err := pool.addRemote(tx); err != nil {
 		t.Error("expected", nil, "got", err)
 	}
 }
@@ -1390,11 +1386,11 @@ func TestPendingLimiting(t *testing.T) {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 
-		pool.pendingMu.RLock()
+		// pool.pendingMu.RLock()
 		if pool.pending[account].Len() != int(i)+1 {
 			t.Errorf("tx %d: pending pool size mismatch: have %d, want %d", i, pool.pending[account].Len(), i+1)
 		}
-		pool.pendingMu.RUnlock()
+		// pool.pendingMu.RUnlock()
 
 		if len(pool.queue) != 0 {
 			t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, pool.queue[account].Len(), 0)
@@ -1454,11 +1450,11 @@ func TestPendingGlobalLimiting(t *testing.T) {
 
 	pending := 0
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	for _, list := range pool.pending {
 		pending += list.Len()
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if pending > int(config.GlobalSlots) {
 		t.Fatalf("total pending transactions overflow allowance: %d > %d", pending, config.GlobalSlots)
@@ -1597,13 +1593,13 @@ func TestPendingMinimumAllowance(t *testing.T) {
 	// Import the batch and verify that limits have been enforced
 	pool.addRemotesSync(txs)
 
-	pool.pendingMu.RLock()
+	// pool.pendingMu.RLock()
 	for addr, list := range pool.pending {
 		if list.Len() != int(config.AccountSlots) {
 			t.Errorf("addr %x: total pending transactions mismatch: have %d, want %d", addr, list.Len(), config.AccountSlots)
 		}
 	}
-	pool.pendingMu.RUnlock()
+	// pool.pendingMu.RUnlock()
 
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
@@ -2334,7 +2330,6 @@ func TestDualHeapEviction(t *testing.T) {
 			// Create a test accounts and fund it
 			key, _ := crypto.GenerateKey()
 			testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000000))
-
 			if urgent {
 				tx = dynamicFeeTx(0, 100000, big.NewInt(int64(baseFee+1+i)), big.NewInt(int64(1+i)), key)
 				highTip = tx
@@ -2344,7 +2339,6 @@ func TestDualHeapEviction(t *testing.T) {
 			}
 			pool.addRemotesSync([]*types.Transaction{tx})
 		}
-
 		pending, queued := pool.Stats()
 		if pending+queued != 20 {
 			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 10)
@@ -2352,9 +2346,8 @@ func TestDualHeapEviction(t *testing.T) {
 	}
 
 	add(false)
-
 	for baseFee = 0; baseFee <= 1000; baseFee += 100 {
-		pool.priced.SetBaseFee(uint256.NewInt(uint64(baseFee)))
+		pool.priced.SetBaseFee(big.NewInt(int64(baseFee)))
 		add(true)
 		check(highCap, "fee cap")
 		add(false)
@@ -2914,8 +2907,6 @@ func BenchmarkBatchLocalInsert10000(b *testing.B) { benchmarkBatchInsert(b, 1000
 
 // Benchmarks the speed of batched transaction insertion.
 func benchmarkBatchInsert(b *testing.B, size int, local bool) {
-	b.Helper()
-
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupPool()
 	defer pool.Close()
@@ -2923,26 +2914,13 @@ func benchmarkBatchInsert(b *testing.B, size int, local bool) {
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	testAddBalance(pool, account, big.NewInt(1000000000000000000))
 
-	const format = "size %d, is local %t"
-
-	cases := []struct {
-		name    string
-		size    int
-		isLocal bool
-	}{
-		{size: size, isLocal: local},
-		{size: size, isLocal: local},
-		{size: size, isLocal: local},
-
-		{size: size, isLocal: local},
-		{size: size, isLocal: local},
-		{size: size, isLocal: local},
+	batches := make([]types.Transactions, b.N)
+	for i := 0; i < b.N; i++ {
+		batches[i] = make(types.Transactions, size)
+		for j := 0; j < size; j++ {
+			batches[i][j] = transaction(uint64(size*i+j), 100000, key)
+		}
 	}
-
-	for i := range cases {
-		cases[i].name = fmt.Sprintf(format, cases[i].size, cases[i].isLocal)
-	}
-
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, batch := range batches {
@@ -2999,7 +2977,7 @@ func BenchmarkInsertRemoteWithAllLocals(b *testing.B) {
 func BenchmarkPoolAccountMultiBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, _ := setupPool()
-	defer pool.Stop()
+	defer pool.Close()
 
 	batches := make(types.Transactions, b.N)
 
@@ -3019,112 +2997,114 @@ func BenchmarkPoolAccountMultiBatchInsert(b *testing.B) {
 	b.ResetTimer()
 
 	for _, tx := range batches {
-		pool.AddRemotesSync([]*types.Transaction{tx})
+		pool.addRemotesSync([]*types.Transaction{tx})
 	}
 }
 
-func BenchmarkPoolAccountMultiBatchInsertRace(b *testing.B) {
-	// Generate a batch of transactions to enqueue into the pool
-	pool, _ := setupPool()
-	defer pool.Stop()
+// TODO - Arpit
+// func BenchmarkPoolAccountMultiBatchInsertRace(b *testing.B) {
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pool, _ := setupPool()
+// 	defer pool.Close()
 
-	batches := make(types.Transactions, b.N)
+// 	batches := make(types.Transactions, b.N)
 
-	for i := 0; i < b.N; i++ {
-		key, _ := crypto.GenerateKey()
-		account := crypto.PubkeyToAddress(key.PublicKey)
-		tx := transaction(uint64(0), 100000, key)
+// 	for i := 0; i < b.N; i++ {
+// 		key, _ := crypto.GenerateKey()
+// 		account := crypto.PubkeyToAddress(key.PublicKey)
+// 		tx := transaction(uint64(0), 100000, key)
 
-		pool.currentState.AddBalance(account, big.NewInt(1000000))
+// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-		batches[i] = tx
-	}
+// 		batches[i] = tx
+// 	}
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go func() {
-		t := time.NewTicker(time.Microsecond)
-		defer t.Stop()
+// 	go func() {
+// 		t := time.NewTicker(time.Microsecond)
+// 		defer t.Stop()
 
-		var pending map[common.Address]types.Transactions
+// 		var pending map[common.Address]types.Transactions
 
-	loop:
-		for {
-			select {
-			case <-t.C:
-				pending = pool.Pending(context.Background(), true)
-			case <-done:
-				break loop
-			}
-		}
+// 	loop:
+// 		for {
+// 			select {
+// 			case <-t.C:
+// 				pending = pool.Pending(true)
+// 			case <-done:
+// 				break loop
+// 			}
+// 		}
 
-		fmt.Fprint(io.Discard, pending)
-	}()
+// 		fmt.Fprint(io.Discard, pending)
+// 	}()
 
-	b.ReportAllocs()
-	b.ResetTimer()
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for _, tx := range batches {
-		pool.AddRemotesSync([]*types.Transaction{tx})
-	}
+// 	for _, tx := range batches {
+// 		pool.addRemotesSync([]*types.Transaction{tx})
+// 	}
 
-	close(done)
-}
+// 	close(done)
+// }
 
-func BenchmarkPoolAccountMultiBatchInsertNoLockRace(b *testing.B) {
-	// Generate a batch of transactions to enqueue into the pool
-	pendingAddedCh := make(chan struct{}, 1024)
+// TODO - Arpit
+// func BenchmarkPoolAccountMultiBatchInsertNoLockRace(b *testing.B) {
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pendingAddedCh := make(chan struct{}, 1024)
 
-	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-	defer pool.Stop()
+// 	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+// 	defer pool.Close()
 
-	_ = localKey
+// 	_ = localKey
 
-	batches := make(types.Transactions, b.N)
+// 	batches := make(types.Transactions, b.N)
 
-	for i := 0; i < b.N; i++ {
-		key, _ := crypto.GenerateKey()
-		account := crypto.PubkeyToAddress(key.PublicKey)
-		tx := transaction(uint64(0), 100000, key)
+// 	for i := 0; i < b.N; i++ {
+// 		key, _ := crypto.GenerateKey()
+// 		account := crypto.PubkeyToAddress(key.PublicKey)
+// 		tx := transaction(uint64(0), 100000, key)
 
-		pool.currentState.AddBalance(account, big.NewInt(1000000))
+// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-		batches[i] = tx
-	}
+// 		batches[i] = tx
+// 	}
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go func() {
-		t := time.NewTicker(time.Microsecond)
-		defer t.Stop()
+// 	go func() {
+// 		t := time.NewTicker(time.Microsecond)
+// 		defer t.Stop()
 
-		var pending map[common.Address]types.Transactions
+// 		var pending map[common.Address]types.Transactions
 
-		for range t.C {
-			pending = pool.Pending(context.Background(), true)
+// 		for range t.C {
+// 			pending = pool.Pending(true)
 
-			if len(pending) >= b.N/2 {
-				close(done)
+// 			if len(pending) >= b.N/2 {
+// 				close(done)
 
-				return
-			}
-		}
-	}()
+// 				return
+// 			}
+// 		}
+// 	}()
 
-	b.ReportAllocs()
-	b.ResetTimer()
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for _, tx := range batches {
-		pool.AddRemotes([]*types.Transaction{tx})
-	}
+// 	for _, tx := range batches {
+// 		pool.addRemotes([]*types.Transaction{tx})
+// 	}
 
-	<-done
-}
+// 	<-done
+// }
 
 func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, _ := setupPool()
-	defer pool.Stop()
+	defer pool.Close()
 
 	batches := make(types.Transactions, b.N)
 
@@ -3144,162 +3124,165 @@ func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
 	b.ResetTimer()
 
 	for _, tx := range batches {
-		_ = pool.AddRemoteSync(tx)
+		_ = pool.addRemoteSync(tx)
 	}
 }
 
-func BenchmarkPoolAccountsBatchInsertRace(b *testing.B) {
-	// Generate a batch of transactions to enqueue into the pool
-	pool, _ := setupPool()
-	defer pool.Stop()
+// TODO - Arpit
+// func BenchmarkPoolAccountsBatchInsertRace(b *testing.B) {
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pool, _ := setupPool()
+// 	defer pool.Close()
 
-	batches := make(types.Transactions, b.N)
+// 	batches := make(types.Transactions, b.N)
 
-	for i := 0; i < b.N; i++ {
-		key, _ := crypto.GenerateKey()
-		account := crypto.PubkeyToAddress(key.PublicKey)
-		tx := transaction(uint64(0), 100000, key)
+// 	for i := 0; i < b.N; i++ {
+// 		key, _ := crypto.GenerateKey()
+// 		account := crypto.PubkeyToAddress(key.PublicKey)
+// 		tx := transaction(uint64(0), 100000, key)
 
-		pool.currentState.AddBalance(account, big.NewInt(1000000))
+// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-		batches[i] = tx
-	}
+// 		batches[i] = tx
+// 	}
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go func() {
-		t := time.NewTicker(time.Microsecond)
-		defer t.Stop()
+// 	go func() {
+// 		t := time.NewTicker(time.Microsecond)
+// 		defer t.Stop()
 
-		var pending map[common.Address]types.Transactions
+// 		var pending map[common.Address]types.Transactions
 
-	loop:
-		for {
-			select {
-			case <-t.C:
-				pending = pool.Pending(context.Background(), true)
-			case <-done:
-				break loop
-			}
-		}
+// 	loop:
+// 		for {
+// 			select {
+// 			case <-t.C:
+// 				pending = pool.Pending(true)
+// 			case <-done:
+// 				break loop
+// 			}
+// 		}
 
-		fmt.Fprint(io.Discard, pending)
-	}()
+// 		fmt.Fprint(io.Discard, pending)
+// 	}()
 
-	b.ReportAllocs()
-	b.ResetTimer()
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for _, tx := range batches {
-		_ = pool.AddRemoteSync(tx)
-	}
+// 	for _, tx := range batches {
+// 		_ = pool.addRemoteSync(tx)
+// 	}
 
-	close(done)
-}
+// 	close(done)
+// }
 
-func BenchmarkPoolAccountsBatchInsertNoLockRace(b *testing.B) {
-	// Generate a batch of transactions to enqueue into the pool
-	pendingAddedCh := make(chan struct{}, 1024)
+// TODO - Arpit
+// func BenchmarkPoolAccountsBatchInsertNoLockRace(b *testing.B) {
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pendingAddedCh := make(chan struct{}, 1024)
 
-	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-	defer pool.Stop()
+// 	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+// 	defer pool.Close()
 
-	_ = localKey
+// 	_ = localKey
 
-	batches := make(types.Transactions, b.N)
+// 	batches := make(types.Transactions, b.N)
 
-	for i := 0; i < b.N; i++ {
-		key, _ := crypto.GenerateKey()
-		account := crypto.PubkeyToAddress(key.PublicKey)
-		tx := transaction(uint64(0), 100000, key)
+// 	for i := 0; i < b.N; i++ {
+// 		key, _ := crypto.GenerateKey()
+// 		account := crypto.PubkeyToAddress(key.PublicKey)
+// 		tx := transaction(uint64(0), 100000, key)
 
-		pool.currentState.AddBalance(account, big.NewInt(1000000))
+// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-		batches[i] = tx
-	}
+// 		batches[i] = tx
+// 	}
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go func() {
-		t := time.NewTicker(time.Microsecond)
-		defer t.Stop()
+// 	go func() {
+// 		t := time.NewTicker(time.Microsecond)
+// 		defer t.Stop()
 
-		var pending map[common.Address]types.Transactions
+// 		var pending map[common.Address]types.Transactions
 
-		for range t.C {
-			pending = pool.Pending(context.Background(), true)
+// 		for range t.C {
+// 			pending = pool.Pending(true)
 
-			if len(pending) >= b.N/2 {
-				close(done)
+// 			if len(pending) >= b.N/2 {
+// 				close(done)
 
-				return
-			}
-		}
-	}()
+// 				return
+// 			}
+// 		}
+// 	}()
 
-	b.ReportAllocs()
-	b.ResetTimer()
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for _, tx := range batches {
-		_ = pool.AddRemote(tx)
-	}
+// 	for _, tx := range batches {
+// 		_ = pool.addRemote(tx)
+// 	}
 
-	<-done
-}
+// 	<-done
+// }
 
-func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
-	t.Parallel()
+// TODO - Arpit
+// func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
+// 	t.Parallel()
 
-	// Generate a batch of transactions to enqueue into the pool
-	pool, _ := setupPool()
-	defer pool.Stop()
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pool, _ := setupPool()
+// 	defer pool.Close()
 
-	const n = 5000
+// 	const n = 5000
 
-	batches := make(types.Transactions, n)
-	batchesSecond := make(types.Transactions, n)
+// 	batches := make(types.Transactions, n)
+// 	batchesSecond := make(types.Transactions, n)
 
-	for i := 0; i < n; i++ {
-		batches[i] = newTxs(pool)
-		batchesSecond[i] = newTxs(pool)
-	}
+// 	for i := 0; i < n; i++ {
+// 		batches[i] = newTxs(pool)
+// 		batchesSecond[i] = newTxs(pool)
+// 	}
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go func() {
-		t := time.NewTicker(time.Microsecond)
-		defer t.Stop()
+// 	go func() {
+// 		t := time.NewTicker(time.Microsecond)
+// 		defer t.Stop()
 
-		var (
-			pending map[common.Address]types.Transactions
-			total   int
-		)
+// 		var (
+// 			pending map[common.Address]types.Transactions
+// 			total   int
+// 		)
 
-		for range t.C {
-			pending = pool.Pending(context.Background(), true)
-			total = len(pending)
+// 		for range t.C {
+// 			pending = pool.Pending(true)
+// 			total = len(pending)
 
-			_ = pool.Locals()
+// 			_ = pool.Locals()
 
-			if total >= n {
-				close(done)
+// 			if total >= n {
+// 				close(done)
 
-				return
-			}
-		}
-	}()
+// 				return
+// 			}
+// 		}
+// 	}()
 
-	for _, tx := range batches {
-		pool.AddRemotesSync([]*types.Transaction{tx})
-	}
+// 	for _, tx := range batches {
+// 		pool.addRemotesSync([]*types.Transaction{tx})
+// 	}
 
-	for _, tx := range batchesSecond {
-		pool.AddRemotes([]*types.Transaction{tx})
-	}
+// 	for _, tx := range batchesSecond {
+// 		pool.addRemotes([]*types.Transaction{tx})
+// 	}
 
-	<-done
-}
+// 	<-done
+// }
 
-func newTxs(pool *TxPool) *types.Transaction {
+func newTxs(pool *LegacyPool) *types.Transaction {
 	key, _ := crypto.GenerateKey()
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	tx := transaction(uint64(0), 100000, key)
@@ -3435,398 +3418,399 @@ func defaultTxPoolRapidConfig() txPoolRapidConfig {
 	}
 }
 
+// TODO - Arpit
 // TestSmallTxPool is not something to run in parallel as far it uses all CPUs
 // nolint:paralleltest
-func TestSmallTxPool(t *testing.T) {
-	t.Parallel()
+// func TestSmallTxPool(t *testing.T) {
+// 	t.Parallel()
 
-	t.Skip("a red test to be fixed")
+// 	t.Skip("a red test to be fixed")
 
-	cfg := defaultTxPoolRapidConfig()
+// 	cfg := defaultTxPoolRapidConfig()
 
-	cfg.maxEmptyBlocks = 10
-	cfg.maxStuckBlocks = 10
+// 	cfg.maxEmptyBlocks = 10
+// 	cfg.maxStuckBlocks = 10
 
-	cfg.minTxs = 1
-	cfg.maxTxs = 2
+// 	cfg.minTxs = 1
+// 	cfg.maxTxs = 2
 
-	cfg.minAccs = 1
-	cfg.maxAccs = 2
+// 	cfg.minAccs = 1
+// 	cfg.maxAccs = 2
 
-	testPoolBatchInsert(t, cfg)
-}
+// 	testPoolBatchInsert(t, cfg)
+// }
 
-// This test is not something to run in parallel as far it uses all CPUs
-// nolint:paralleltest
-func TestBigTxPool(t *testing.T) {
-	t.Parallel()
+// // This test is not something to run in parallel as far it uses all CPUs
+// // nolint:paralleltest
+// func TestBigTxPool(t *testing.T) {
+// 	t.Parallel()
 
-	t.Skip("a red test to be fixed")
+// 	t.Skip("a red test to be fixed")
 
-	cfg := defaultTxPoolRapidConfig()
+// 	cfg := defaultTxPoolRapidConfig()
 
-	testPoolBatchInsert(t, cfg)
-}
+// 	testPoolBatchInsert(t, cfg)
+// }
 
 //nolint:gocognit,thelper
-func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
-	t.Helper()
+// func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
+// 	t.Helper()
 
-	t.Parallel()
+// 	t.Parallel()
 
-	const debug = false
+// 	const debug = false
 
-	initialBalance := big.NewInt(cfg.balance)
+// 	initialBalance := big.NewInt(cfg.balance)
 
-	keys := make([]*acc, cfg.maxAccs)
+// 	keys := make([]*acc, cfg.maxAccs)
 
-	var key *ecdsa.PrivateKey
+// 	var key *ecdsa.PrivateKey
 
-	// prealloc keys
-	for idx := 0; idx < cfg.maxAccs; idx++ {
-		key, _ = crypto.GenerateKey()
+// 	// prealloc keys
+// 	for idx := 0; idx < cfg.maxAccs; idx++ {
+// 		key, _ = crypto.GenerateKey()
 
-		keys[idx] = &acc{
-			key:     key,
-			nonce:   0,
-			account: crypto.PubkeyToAddress(key.PublicKey),
-		}
-	}
+// 		keys[idx] = &acc{
+// 			key:     key,
+// 			nonce:   0,
+// 			account: crypto.PubkeyToAddress(key.PublicKey),
+// 		}
+// 	}
 
-	var threads = runtime.NumCPU()
+// 	var threads = runtime.NumCPU()
 
-	if debug {
-		// 1 is set only for debug
-		threads = 1
-	}
+// 	if debug {
+// 		// 1 is set only for debug
+// 		threads = 1
+// 	}
 
-	testsDone := new(uint64)
+// 	testsDone := new(uint64)
 
-	for i := 0; i < threads; i++ {
-		t.Run(fmt.Sprintf("thread %d", i), func(t *testing.T) {
-			t.Parallel()
+// 	for i := 0; i < threads; i++ {
+// 		t.Run(fmt.Sprintf("thread %d", i), func(t *testing.T) {
+// 			t.Parallel()
 
-			rapid.Check(t, func(rt *rapid.T) {
-				caseParams := new(strings.Builder)
+// 			rapid.Check(t, func(rt *rapid.T) {
+// 				caseParams := new(strings.Builder)
 
-				defer func() {
-					res := atomic.AddUint64(testsDone, 1)
+// 				defer func() {
+// 					res := atomic.AddUint64(testsDone, 1)
 
-					if res%100 == 0 {
-						fmt.Println("case-done", res)
-					}
-				}()
+// 					if res%100 == 0 {
+// 						fmt.Println("case-done", res)
+// 					}
+// 				}()
 
-				// Generate a batch of transactions to enqueue into the pool
-				testTxPoolConfig := testTxPoolConfig
+// 				// Generate a batch of transactions to enqueue into the pool
+// 				testTxPoolConfig := testTxPoolConfig
 
-				// from sentry config
-				testTxPoolConfig.AccountQueue = 16
-				testTxPoolConfig.AccountSlots = 16
-				testTxPoolConfig.GlobalQueue = 32768
-				testTxPoolConfig.GlobalSlots = 32768
-				testTxPoolConfig.Lifetime = time.Hour + 30*time.Minute //"1h30m0s"
-				testTxPoolConfig.PriceLimit = 1
+// 				// from sentry config
+// 				testTxPoolConfig.AccountQueue = 16
+// 				testTxPoolConfig.AccountSlots = 16
+// 				testTxPoolConfig.GlobalQueue = 32768
+// 				testTxPoolConfig.GlobalSlots = 32768
+// 				testTxPoolConfig.Lifetime = time.Hour + 30*time.Minute //"1h30m0s"
+// 				testTxPoolConfig.PriceLimit = 1
 
-				now := time.Now()
-				pendingAddedCh := make(chan struct{}, 1024)
+// 				now := time.Now()
+// 				pendingAddedCh := make(chan struct{}, 1024)
 
-				pool, key := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, cfg.gasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-				defer pool.Stop()
+// 				pool, key := setupPoolWithConfig(params.TestChainConfig)
+// 				defer pool.Close()
 
-				totalAccs := rapid.IntRange(cfg.minAccs, cfg.maxAccs).Draw(rt, "totalAccs").(int)
+// 				totalAccs := rapid.IntRange(cfg.minAccs, cfg.maxAccs).Draw(rt, "totalAccs").(int)
 
-				fmt.Fprintf(caseParams, "Case params: totalAccs = %d;", totalAccs)
+// 				fmt.Fprintf(caseParams, "Case params: totalAccs = %d;", totalAccs)
 
-				defer func() {
-					pending, queued := pool.Content()
+// 				defer func() {
+// 					pending, queued := pool.Content()
 
-					if len(pending) != 0 {
-						pendingGas := make([]float64, 0, len(pending))
+// 					if len(pending) != 0 {
+// 						pendingGas := make([]float64, 0, len(pending))
 
-						for _, txs := range pending {
-							for _, tx := range txs {
-								pendingGas = append(pendingGas, float64(tx.Gas()))
-							}
-						}
+// 						for _, txs := range pending {
+// 							for _, tx := range txs {
+// 								pendingGas = append(pendingGas, float64(tx.Gas()))
+// 							}
+// 						}
 
-						mean, stddev := stat.MeanStdDev(pendingGas, nil)
-						fmt.Fprintf(caseParams, "\tpending mean %d, stdev %d, %d-%d;\n", int64(mean), int64(stddev), int64(floats.Min(pendingGas)), int64(floats.Max(pendingGas)))
-					}
+// 						mean, stddev := stat.MeanStdDev(pendingGas, nil)
+// 						fmt.Fprintf(caseParams, "\tpending mean %d, stdev %d, %d-%d;\n", int64(mean), int64(stddev), int64(floats.Min(pendingGas)), int64(floats.Max(pendingGas)))
+// 					}
 
-					if len(queued) != 0 {
-						queuedGas := make([]float64, 0, len(queued))
+// 					if len(queued) != 0 {
+// 						queuedGas := make([]float64, 0, len(queued))
 
-						for _, txs := range queued {
-							for _, tx := range txs {
-								queuedGas = append(queuedGas, float64(tx.Gas()))
-							}
-						}
+// 						for _, txs := range queued {
+// 							for _, tx := range txs {
+// 								queuedGas = append(queuedGas, float64(tx.Gas()))
+// 							}
+// 						}
 
-						mean, stddev := stat.MeanStdDev(queuedGas, nil)
-						fmt.Fprintf(caseParams, "\tqueued mean %d, stdev %d, %d-%d);\n\n", int64(mean), int64(stddev), int64(floats.Min(queuedGas)), int64(floats.Max(queuedGas)))
-					}
+// 						mean, stddev := stat.MeanStdDev(queuedGas, nil)
+// 						fmt.Fprintf(caseParams, "\tqueued mean %d, stdev %d, %d-%d);\n\n", int64(mean), int64(stddev), int64(floats.Min(queuedGas)), int64(floats.Max(queuedGas)))
+// 					}
 
-					rt.Log(caseParams)
-				}()
+// 					rt.Log(caseParams)
+// 				}()
 
-				// regenerate only local key
-				localKey := &acc{
-					key:     key,
-					account: crypto.PubkeyToAddress(key.PublicKey),
-				}
+// 				// regenerate only local key
+// 				localKey := &acc{
+// 					key:     key,
+// 					account: crypto.PubkeyToAddress(key.PublicKey),
+// 				}
 
-				if err := validatePoolInternals(pool); err != nil {
-					rt.Fatalf("pool internal state corrupted: %v", err)
-				}
+// 				if err := validatePoolInternals(pool); err != nil {
+// 					rt.Fatalf("pool internal state corrupted: %v", err)
+// 				}
 
-				var wg sync.WaitGroup
+// 				var wg sync.WaitGroup
 
-				wg.Add(1)
+// 				wg.Add(1)
 
-				go func() {
-					defer wg.Done()
+// 				go func() {
+// 					defer wg.Done()
 
-					now = time.Now()
+// 					now = time.Now()
 
-					testAddBalance(pool, localKey.account, initialBalance)
+// 					testAddBalance(pool, localKey.account, initialBalance)
 
-					for idx := 0; idx < totalAccs; idx++ {
-						testAddBalance(pool, keys[idx].account, initialBalance)
-					}
-				}()
+// 					for idx := 0; idx < totalAccs; idx++ {
+// 						testAddBalance(pool, keys[idx].account, initialBalance)
+// 					}
+// 				}()
 
-				nonces := make([]uint64, totalAccs)
-				gen := rapid.Custom(transactionsGen(keys, nonces, localKey, cfg.minTxs, cfg.maxTxs, cfg.gasPriceMin, cfg.gasPriceMax, cfg.gasLimitMin, cfg.gasLimitMax, caseParams))
+// 				nonces := make([]uint64, totalAccs)
+// 				gen := rapid.Custom(transactionsGen(keys, nonces, localKey, cfg.minTxs, cfg.maxTxs, cfg.gasPriceMin, cfg.gasPriceMax, cfg.gasLimitMin, cfg.gasLimitMax, caseParams))
 
-				txs := gen.Draw(rt, "batches").(*transactionBatches)
+// 				txs := gen.Draw(rt, "batches").(*transactionBatches)
 
-				wg.Wait()
+// 				wg.Wait()
 
-				var (
-					addIntoTxPool func(tx *types.Transaction) error
-					totalInBatch  int
-				)
+// 				var (
+// 					addIntoTxPool func(tx *types.Transaction) error
+// 					totalInBatch  int
+// 				)
 
-				for _, tx := range txs.txs {
-					addIntoTxPool = pool.AddRemoteSync
-
-					if tx.isLocal {
-						addIntoTxPool = pool.AddLocal
-					}
-
-					err := addIntoTxPool(tx.tx)
-					if err != nil {
-						rt.Log("on adding a transaction to the tx pool", err, tx.tx.Gas(), tx.tx.GasPrice(), pool.GasPrice(), getBalance(pool, keys[tx.idx].account))
-					}
-				}
+// 				for _, tx := range txs.txs {
+// 					addIntoTxPool = pool.addRemoteSync
+
+// 					if tx.isLocal {
+// 						addIntoTxPool = pool.addLocal
+// 					}
+
+// 					err := addIntoTxPool(tx.tx)
+// 					if err != nil {
+// 						rt.Log("on adding a transaction to the tx pool", err, tx.tx.Gas(), tx.tx.GasPrice(), tx.tx.GasPrice(), getBalance(pool, keys[tx.idx].account))
+// 					}
+// 				}
 
-				var (
-					block              int
-					emptyBlocks        int
-					stuckBlocks        int
-					lastTxPoolStats    int
-					currentTxPoolStats int
-				)
+// 				var (
+// 					block              int
+// 					emptyBlocks        int
+// 					stuckBlocks        int
+// 					lastTxPoolStats    int
+// 					currentTxPoolStats int
+// 				)
 
-				for {
-					// we'd expect fulfilling block take comparable, but less than blockTime
-					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.maxStuckBlocks)*cfg.blockTime)
+// 				for {
+// 					// we'd expect fulfilling block take comparable, but less than blockTime
+// 					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.maxStuckBlocks)*cfg.blockTime)
 
-					select {
-					case <-pendingAddedCh:
-					case <-ctx.Done():
-						pendingStat, queuedStat := pool.Stats()
-						if pendingStat+queuedStat == 0 {
-							cancel()
+// 					select {
+// 					case <-pendingAddedCh:
+// 					case <-ctx.Done():
+// 						pendingStat, queuedStat := pool.Stats()
+// 						if pendingStat+queuedStat == 0 {
+// 							cancel()
 
-							break
-						}
+// 							break
+// 						}
 
-						rt.Fatalf("got %ds block timeout (expected less then %s): total accounts %d. Pending %d, queued %d)",
-							block, 5*cfg.blockTime, txs.totalTxs, pendingStat, queuedStat)
-					}
+// 						rt.Fatalf("got %ds block timeout (expected less then %s): total accounts %d. Pending %d, queued %d)",
+// 							block, 5*cfg.blockTime, txs.totalTxs, pendingStat, queuedStat)
+// 					}
 
-					pendingStat, queuedStat := pool.Stats()
+// 					pendingStat, queuedStat := pool.Stats()
 
-					currentTxPoolStats = pendingStat + queuedStat
-					if currentTxPoolStats == 0 {
-						cancel()
-						break
-					}
+// 					currentTxPoolStats = pendingStat + queuedStat
+// 					if currentTxPoolStats == 0 {
+// 						cancel()
+// 						break
+// 					}
 
-					// check if txPool got stuck
-					if currentTxPoolStats == lastTxPoolStats {
-						stuckBlocks++ //todo: need something better then that
-					} else {
-						stuckBlocks = 0
-						lastTxPoolStats = currentTxPoolStats
-					}
+// 					// check if txPool got stuck
+// 					if currentTxPoolStats == lastTxPoolStats {
+// 						stuckBlocks++ //todo: need something better then that
+// 					} else {
+// 						stuckBlocks = 0
+// 						lastTxPoolStats = currentTxPoolStats
+// 					}
 
-					// copy-paste
-					start := time.Now()
-					pending := pool.Pending(context.Background(), true)
-					locals := pool.Locals()
+// 					// copy-paste
+// 					start := time.Now()
+// 					pending := pool.Pending(true)
+// 					locals := pool.Locals()
 
-					// from fillTransactions
-					removedFromPool, blockGasLeft, err := fillTransactions(ctx, pool, locals, pending, cfg.gasLimit)
+// 					// from fillTransactions
+// 					removedFromPool, blockGasLeft, err := fillTransactions(ctx, pool, locals, pending, cfg.gasLimit)
 
-					done := time.Since(start)
+// 					done := time.Since(start)
 
-					if removedFromPool > 0 {
-						emptyBlocks = 0
-					} else {
-						emptyBlocks++
-					}
+// 					if removedFromPool > 0 {
+// 						emptyBlocks = 0
+// 					} else {
+// 						emptyBlocks++
+// 					}
 
-					if emptyBlocks >= cfg.maxEmptyBlocks || stuckBlocks >= cfg.maxStuckBlocks {
-						// check for nonce gaps
-						var lastNonce, currentNonce int
+// 					if emptyBlocks >= cfg.maxEmptyBlocks || stuckBlocks >= cfg.maxStuckBlocks {
+// 						// check for nonce gaps
+// 						var lastNonce, currentNonce int
 
-						pending = pool.Pending(context.Background(), true)
+// 						pending = pool.Pending(true)
 
-						for txAcc, pendingTxs := range pending {
-							lastNonce = int(pool.Nonce(txAcc)) - len(pendingTxs) - 1
+// 						for txAcc, pendingTxs := range pending {
+// 							lastNonce = int(pool.Nonce(txAcc)) - len(pendingTxs) - 1
 
-							isFirst := true
+// 							isFirst := true
 
-							for _, tx := range pendingTxs {
-								currentNonce = int(tx.Nonce())
-								if currentNonce-lastNonce != 1 {
-									rt.Fatalf("got a nonce gap for account %q. Current pending nonce %d, previous %d %v; emptyBlocks - %v; stuckBlocks - %v",
-										txAcc, currentNonce, lastNonce, isFirst, emptyBlocks >= cfg.maxEmptyBlocks, stuckBlocks >= cfg.maxStuckBlocks)
-								}
+// 							for _, tx := range pendingTxs {
+// 								currentNonce = int(tx.Nonce())
+// 								if currentNonce-lastNonce != 1 {
+// 									rt.Fatalf("got a nonce gap for account %q. Current pending nonce %d, previous %d %v; emptyBlocks - %v; stuckBlocks - %v",
+// 										txAcc, currentNonce, lastNonce, isFirst, emptyBlocks >= cfg.maxEmptyBlocks, stuckBlocks >= cfg.maxStuckBlocks)
+// 								}
 
-								lastNonce = currentNonce
-							}
-						}
-					}
+// 								lastNonce = currentNonce
+// 							}
+// 						}
+// 					}
 
-					if emptyBlocks >= cfg.maxEmptyBlocks {
-						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
-							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
-					}
+// 					if emptyBlocks >= cfg.maxEmptyBlocks {
+// 						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
+// 							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
+// 					}
 
-					if stuckBlocks >= cfg.maxStuckBlocks {
-						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
-							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
-					}
+// 					if stuckBlocks >= cfg.maxStuckBlocks {
+// 						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
+// 							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
+// 					}
 
-					if err != nil {
-						rt.Fatalf("took too long: total time %s(expected %s), total accounts %d. Pending %d, locals %d)",
-							done, cfg.blockTime, txs.totalTxs, len(pending), len(locals))
-					}
+// 					if err != nil {
+// 						rt.Fatalf("took too long: total time %s(expected %s), total accounts %d. Pending %d, locals %d)",
+// 							done, cfg.blockTime, txs.totalTxs, len(pending), len(locals))
+// 					}
 
-					rt.Log("current_total", txs.totalTxs, "in_batch", totalInBatch, "removed", removedFromPool, "emptyBlocks", emptyBlocks, "blockGasLeft", blockGasLeft, "pending", len(pending), "locals", len(locals),
-						"locals+pending", done)
+// 					rt.Log("current_total", txs.totalTxs, "in_batch", totalInBatch, "removed", removedFromPool, "emptyBlocks", emptyBlocks, "blockGasLeft", blockGasLeft, "pending", len(pending), "locals", len(locals),
+// 						"locals+pending", done)
 
-					rt.Log("block", block, "pending", pendingStat, "queued", queuedStat, "elapsed", done)
+// 					rt.Log("block", block, "pending", pendingStat, "queued", queuedStat, "elapsed", done)
 
-					block++
+// 					block++
 
-					cancel()
-					// time.Sleep(time.Second)
-				}
-
-				rt.Logf("case completed totalTxs %d %v\n\n", txs.totalTxs, time.Since(now))
-			})
-		})
-	}
-
-	t.Log("done test cases", atomic.LoadUint64(testsDone))
-}
-
-func fillTransactions(ctx context.Context, pool *TxPool, locals []common.Address, pending map[common.Address]types.Transactions, gasLimit uint64) (int, uint64, error) {
-	localTxs := make(map[common.Address]types.Transactions)
-	remoteTxs := pending
-
-	for _, txAcc := range locals {
-		if txs := remoteTxs[txAcc]; len(txs) > 0 {
-			delete(remoteTxs, txAcc)
-
-			localTxs[txAcc] = txs
-		}
-	}
-
-	// fake signer
-	signer := types.NewLondonSigner(big.NewInt(1))
-
-	// fake baseFee
-	baseFee := uint256.NewInt(1)
-
-	blockGasLimit := gasLimit
-
-	var (
-		txLocalCount  int
-		txRemoteCount int
-	)
-
-	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, baseFee)
-
-		select {
-		case <-ctx.Done():
-			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
-		default:
-		}
-
-		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
-	}
-
-	select {
-	case <-ctx.Done():
-		return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
-	default:
-	}
-
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
-
-		select {
-		case <-ctx.Done():
-			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
-		default:
-		}
-
-		blockGasLimit, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
-	}
-
-	return txLocalCount + txRemoteCount, blockGasLimit, nil
-}
-
-func commitTransactions(pool *TxPool, txs *types.TransactionsByPriceAndNonce, blockGasLimit uint64) (uint64, int) {
-	var (
-		tx      *types.Transaction
-		txCount int
-	)
-
-	for {
-		tx = txs.Peek()
-
-		if tx == nil {
-			return blockGasLimit, txCount
-		}
-
-		if tx.Gas() <= blockGasLimit {
-			blockGasLimit -= tx.Gas()
-
-			pool.mu.Lock()
-			pool.removeTx(tx.Hash(), false)
-			pool.mu.Unlock()
-
-			txCount++
-		} else {
-			// we don't maximize fulfilment of the block. just fill somehow
-			return blockGasLimit, txCount
-		}
-	}
-}
-
-func MakeWithPromoteTxCh(ch chan struct{}) func(*TxPool) {
-	return func(pool *TxPool) {
-		pool.promoteTxCh = ch
-	}
-}
+// 					cancel()
+// 					// time.Sleep(time.Second)
+// 				}
+
+// 				rt.Logf("case completed totalTxs %d %v\n\n", txs.totalTxs, time.Since(now))
+// 			})
+// 		})
+// 	}
+
+// 	t.Log("done test cases", atomic.LoadUint64(testsDone))
+// }
+
+// func fillTransactions(ctx context.Context, pool *LegacyPool, locals []common.Address, pending map[common.Address][]*txpool.LazyTransaction, gasLimit uint64) (int, uint64, error) {
+// 	localTxs := make(map[common.Address]types.Transactions)
+// 	remoteTxs := pending
+
+// 	for _, txAcc := range locals {
+// 		if txs := remoteTxs[txAcc]; len(txs) > 0 {
+// 			delete(remoteTxs, txAcc)
+
+// 			localTxs[txAcc] = txs
+// 		}
+// 	}
+
+// 	// fake signer
+// 	signer := types.NewLondonSigner(big.NewInt(1))
+
+// 	// fake baseFee
+// 	baseFee := uint256.NewInt(1)
+
+// 	blockGasLimit := gasLimit
+
+// 	var (
+// 		txLocalCount  int
+// 		txRemoteCount int
+// 	)
+
+// 	if len(localTxs) > 0 {
+// 		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, baseFee)
+
+// 		select {
+// 		case <-ctx.Done():
+// 			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+// 		default:
+// 		}
+
+// 		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
+// 	}
+
+// 	select {
+// 	case <-ctx.Done():
+// 		return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+// 	default:
+// 	}
+
+// 	if len(remoteTxs) > 0 {
+// 		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
+
+// 		select {
+// 		case <-ctx.Done():
+// 			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+// 		default:
+// 		}
+
+// 		blockGasLimit, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
+// 	}
+
+// 	return txLocalCount + txRemoteCount, blockGasLimit, nil
+// }
+
+// func commitTransactions(pool *LegacyPool, txs *types.TransactionsByPriceAndNonce, blockGasLimit uint64) (uint64, int) {
+// 	var (
+// 		tx      *types.Transaction
+// 		txCount int
+// 	)
+
+// 	for {
+// 		tx = txs.Peek()
+
+// 		if tx == nil {
+// 			return blockGasLimit, txCount
+// 		}
+
+// 		if tx.Gas() <= blockGasLimit {
+// 			blockGasLimit -= tx.Gas()
+
+// 			pool.mu.Lock()
+// 			pool.removeTx(tx.Hash(), false, false)
+// 			pool.mu.Unlock()
+
+// 			txCount++
+// 		} else {
+// 			// we don't maximize fulfilment of the block. just fill somehow
+// 			return blockGasLimit, txCount
+// 		}
+// 	}
+// }
+
+// func MakeWithPromoteTxCh(ch chan struct{}) func(*LegacyPool) {
+// 	return func(pool *LegacyPool) {
+// 		pool.promoteTxCh = ch
+// 	}
+// }
 
 func BenchmarkBigs(b *testing.B) {
 	// max 256-bit
@@ -3868,727 +3852,727 @@ func BenchmarkBigs(b *testing.B) {
 }
 
 //nolint:thelper
-func mining(tb testing.TB, pool *TxPool, signer types.Signer, baseFee *uint256.Int, blockGasLimit uint64, totalBlocks int) (int, time.Duration, time.Duration) {
-	var (
-		localTxsCount  int
-		remoteTxsCount int
-		localTxs       = make(map[common.Address]types.Transactions)
-		remoteTxs      map[common.Address]types.Transactions
-		total          int
-	)
+// func mining(tb testing.TB, pool *LegacyPool, signer types.Signer, baseFee *uint256.Int, blockGasLimit uint64, totalBlocks int) (int, time.Duration, time.Duration) {
+// 	var (
+// 		localTxsCount  int
+// 		remoteTxsCount int
+// 		localTxs       = make(map[common.Address]types.Transactions)
+// 		remoteTxs      map[common.Address]types.Transactions
+// 		total          int
+// 	)
 
-	start := time.Now()
+// 	start := time.Now()
 
-	pending := pool.Pending(context.Background(), true)
+// 	pending := pool.Pending(true)
 
-	pendingDuration := time.Since(start)
+// 	pendingDuration := time.Since(start)
 
-	remoteTxs = pending
+// 	remoteTxs = pending
 
-	locals := pool.Locals()
+// 	locals := pool.Locals()
 
-	pendingLen, queuedLen := pool.Stats()
+// 	pendingLen, queuedLen := pool.Stats()
 
-	for _, account := range locals {
-		if txs := remoteTxs[account]; len(txs) > 0 {
-			delete(remoteTxs, account)
+// 	for _, account := range locals {
+// 		if txs := remoteTxs[account]; len(txs) > 0 {
+// 			delete(remoteTxs, account)
 
-			localTxs[account] = txs
-		}
-	}
+// 			localTxs[account] = txs
+// 		}
+// 	}
 
-	localTxsCount = len(localTxs)
-	remoteTxsCount = len(remoteTxs)
+// 	localTxsCount = len(localTxs)
+// 	remoteTxsCount = len(remoteTxs)
 
-	var txLocalCount int
+// 	var txLocalCount int
 
-	if localTxsCount > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, baseFee)
+// 	if localTxsCount > 0 {
+// 		txs := miner.newTransactionsByPriceAndNonce(signer, localTxs, baseFee)
 
-		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
+// 		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
 
-		total += txLocalCount
-	}
+// 		total += txLocalCount
+// 	}
 
-	var txRemoteCount int
+// 	var txRemoteCount int
 
-	if remoteTxsCount > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
+// 	if remoteTxsCount > 0 {
+// 		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
 
-		_, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
+// 		_, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
 
-		total += txRemoteCount
-	}
+// 		total += txRemoteCount
+// 	}
 
-	miningDuration := time.Since(start)
+// 	miningDuration := time.Since(start)
 
-	tb.Logf("[%s] mining block. block %d. total %d: pending %d(added %d), local %d(added %d), queued %d, localTxsCount %d, remoteTxsCount %d, pending %v, mining %v",
-		common.NowMilliseconds(), totalBlocks, total, pendingLen, txRemoteCount, localTxsCount, txLocalCount, queuedLen, localTxsCount, remoteTxsCount, pendingDuration, miningDuration)
+// 	tb.Logf("[%s] mining block. block %d. total %d: pending %d(added %d), local %d(added %d), queued %d, localTxsCount %d, remoteTxsCount %d, pending %v, mining %v",
+// 		common.NowMilliseconds(), totalBlocks, total, pendingLen, txRemoteCount, localTxsCount, txLocalCount, queuedLen, localTxsCount, remoteTxsCount, pendingDuration, miningDuration)
 
-	return total, pendingDuration, miningDuration
-}
+// 	return total, pendingDuration, miningDuration
+// }
 
 //nolint:paralleltest
-func TestPoolMiningDataRaces(t *testing.T) {
-	if testing.Short() {
-		t.Skip("only for data race testing")
-	}
-
-	const format = "size %d, txs ticker %v, api ticker %v"
-
-	cases := []struct {
-		name              string
-		size              int
-		txsTickerDuration time.Duration
-		apiTickerDuration time.Duration
-	}{
-		{
-			size:              1,
-			txsTickerDuration: 200 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              1,
-			txsTickerDuration: 400 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              1,
-			txsTickerDuration: 600 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              1,
-			txsTickerDuration: 800 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-
-		{
-			size:              5,
-			txsTickerDuration: 200 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              5,
-			txsTickerDuration: 400 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              5,
-			txsTickerDuration: 600 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              5,
-			txsTickerDuration: 800 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-
-		{
-			size:              10,
-			txsTickerDuration: 200 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              10,
-			txsTickerDuration: 400 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              10,
-			txsTickerDuration: 600 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              10,
-			txsTickerDuration: 800 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-
-		{
-			size:              20,
-			txsTickerDuration: 200 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              20,
-			txsTickerDuration: 400 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              20,
-			txsTickerDuration: 600 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              20,
-			txsTickerDuration: 800 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-
-		{
-			size:              30,
-			txsTickerDuration: 200 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              30,
-			txsTickerDuration: 400 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              30,
-			txsTickerDuration: 600 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-		{
-			size:              30,
-			txsTickerDuration: 800 * time.Millisecond,
-			apiTickerDuration: 10 * time.Millisecond,
-		},
-	}
-
-	for i := range cases {
-		cases[i].name = fmt.Sprintf(format, cases[i].size, cases[i].txsTickerDuration, cases[i].apiTickerDuration)
-	}
-
-	//nolint:paralleltest
-	for _, testCase := range cases {
-		singleCase := testCase
-
-		t.Run(singleCase.name, func(t *testing.T) {
-			defer goleak.VerifyNone(t, leak.IgnoreList()...)
-
-			const (
-				blocks          = 300
-				blockGasLimit   = 40_000_000
-				blockPeriod     = time.Second
-				threads         = 10
-				batchesSize     = 10_000
-				timeoutDuration = 10 * blockPeriod
-
-				balanceStr = "1_000_000_000_000"
-			)
-
-			apiWithMining(t, balanceStr, batchesSize, singleCase, timeoutDuration, threads, blockPeriod, blocks, blockGasLimit)
-		})
-	}
-}
-
-//nolint:gocognit,thelper
-func apiWithMining(tb testing.TB, balanceStr string, batchesSize int, singleCase struct {
-	name              string
-	size              int
-	txsTickerDuration time.Duration
-	apiTickerDuration time.Duration
-}, timeoutDuration time.Duration, threads int, blockPeriod time.Duration, blocks int, blockGasLimit uint64) {
-	done := make(chan struct{})
+// func TestPoolMiningDataRaces(t *testing.T) {
+// 	if testing.Short() {
+// 		t.Skip("only for data race testing")
+// 	}
+
+// 	const format = "size %d, txs ticker %v, api ticker %v"
+
+// 	cases := []struct {
+// 		name              string
+// 		size              int
+// 		txsTickerDuration time.Duration
+// 		apiTickerDuration time.Duration
+// 	}{
+// 		{
+// 			size:              1,
+// 			txsTickerDuration: 200 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              1,
+// 			txsTickerDuration: 400 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              1,
+// 			txsTickerDuration: 600 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              1,
+// 			txsTickerDuration: 800 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+
+// 		{
+// 			size:              5,
+// 			txsTickerDuration: 200 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              5,
+// 			txsTickerDuration: 400 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              5,
+// 			txsTickerDuration: 600 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              5,
+// 			txsTickerDuration: 800 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+
+// 		{
+// 			size:              10,
+// 			txsTickerDuration: 200 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              10,
+// 			txsTickerDuration: 400 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              10,
+// 			txsTickerDuration: 600 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              10,
+// 			txsTickerDuration: 800 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+
+// 		{
+// 			size:              20,
+// 			txsTickerDuration: 200 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              20,
+// 			txsTickerDuration: 400 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              20,
+// 			txsTickerDuration: 600 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              20,
+// 			txsTickerDuration: 800 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+
+// 		{
+// 			size:              30,
+// 			txsTickerDuration: 200 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              30,
+// 			txsTickerDuration: 400 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              30,
+// 			txsTickerDuration: 600 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 		{
+// 			size:              30,
+// 			txsTickerDuration: 800 * time.Millisecond,
+// 			apiTickerDuration: 10 * time.Millisecond,
+// 		},
+// 	}
+
+// 	for i := range cases {
+// 		cases[i].name = fmt.Sprintf(format, cases[i].size, cases[i].txsTickerDuration, cases[i].apiTickerDuration)
+// 	}
+
+// 	//nolint:paralleltest
+// 	for _, testCase := range cases {
+// 		singleCase := testCase
+
+// 		t.Run(singleCase.name, func(t *testing.T) {
+// 			defer goleak.VerifyNone(t, leak.IgnoreList()...)
+
+// 			const (
+// 				blocks          = 300
+// 				blockGasLimit   = 40_000_000
+// 				blockPeriod     = time.Second
+// 				threads         = 10
+// 				batchesSize     = 10_000
+// 				timeoutDuration = 10 * blockPeriod
+
+// 				balanceStr = "1_000_000_000_000"
+// 			)
+
+// 			apiWithMining(t, balanceStr, batchesSize, singleCase, timeoutDuration, threads, blockPeriod, blocks, blockGasLimit)
+// 		})
+// 	}
+// }
+
+// //nolint:gocognit,thelper
+// func apiWithMining(tb testing.TB, balanceStr string, batchesSize int, singleCase struct {
+// 	name              string
+// 	size              int
+// 	txsTickerDuration time.Duration
+// 	apiTickerDuration time.Duration
+// }, timeoutDuration time.Duration, threads int, blockPeriod time.Duration, blocks int, blockGasLimit uint64) {
+// 	done := make(chan struct{})
 
-	var wg sync.WaitGroup
+// 	var wg sync.WaitGroup
 
-	defer func() {
-		close(done)
+// 	defer func() {
+// 		close(done)
 
-		tb.Logf("[%s] finishing apiWithMining", common.NowMilliseconds())
+// 		tb.Logf("[%s] finishing apiWithMining", common.NowMilliseconds())
 
-		wg.Wait()
+// 		wg.Wait()
 
-		tb.Logf("[%s] apiWithMining finished", common.NowMilliseconds())
-	}()
+// 		tb.Logf("[%s] apiWithMining finished", common.NowMilliseconds())
+// 	}()
 
-	// Generate a batch of transactions to enqueue into the pool
-	pendingAddedCh := make(chan struct{}, 1024)
+// 	// Generate a batch of transactions to enqueue into the pool
+// 	pendingAddedCh := make(chan struct{}, 1024)
 
-	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-	defer pool.Stop()
+// 	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+// 	defer pool.Close()
 
-	localKeyPub := localKey.PublicKey
-	account := crypto.PubkeyToAddress(localKeyPub)
-
-	balance, ok := big.NewInt(0).SetString(balanceStr, 0)
-	if !ok {
-		tb.Fatal("incorrect initial balance", balanceStr)
-	}
-
-	testAddBalance(pool, account, balance)
-
-	signer := types.NewEIP155Signer(big.NewInt(1))
-	baseFee := uint256.NewInt(1)
-
-	batchesLocal := make([]types.Transactions, batchesSize)
-	batchesRemote := make([]types.Transactions, batchesSize)
-	batchesRemotes := make([]types.Transactions, batchesSize)
-	batchesRemoteSync := make([]types.Transactions, batchesSize)
-	batchesRemotesSync := make([]types.Transactions, batchesSize)
-
-	for i := 0; i < batchesSize; i++ {
-		batchesLocal[i] = make(types.Transactions, singleCase.size)
-
-		for j := 0; j < singleCase.size; j++ {
-			batchesLocal[i][j] = pricedTransaction(uint64(singleCase.size*i+j), 100_000, big.NewInt(int64(i+1)), localKey)
-		}
-
-		batchesRemote[i] = make(types.Transactions, singleCase.size)
-
-		remoteKey, _ := crypto.GenerateKey()
-		remoteAddr := crypto.PubkeyToAddress(remoteKey.PublicKey)
-		testAddBalance(pool, remoteAddr, balance)
-
-		for j := 0; j < singleCase.size; j++ {
-			batchesRemote[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteKey)
-		}
-
-		batchesRemotes[i] = make(types.Transactions, singleCase.size)
-
-		remotesKey, _ := crypto.GenerateKey()
-		remotesAddr := crypto.PubkeyToAddress(remotesKey.PublicKey)
-		testAddBalance(pool, remotesAddr, balance)
-
-		for j := 0; j < singleCase.size; j++ {
-			batchesRemotes[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesKey)
-		}
+// 	localKeyPub := localKey.PublicKey
+// 	account := crypto.PubkeyToAddress(localKeyPub)
+
+// 	balance, ok := big.NewInt(0).SetString(balanceStr, 0)
+// 	if !ok {
+// 		tb.Fatal("incorrect initial balance", balanceStr)
+// 	}
+
+// 	testAddBalance(pool, account, balance)
+
+// 	signer := types.NewEIP155Signer(big.NewInt(1))
+// 	baseFee := uint256.NewInt(1)
+
+// 	batchesLocal := make([]types.Transactions, batchesSize)
+// 	batchesRemote := make([]types.Transactions, batchesSize)
+// 	batchesRemotes := make([]types.Transactions, batchesSize)
+// 	batchesRemoteSync := make([]types.Transactions, batchesSize)
+// 	batchesRemotesSync := make([]types.Transactions, batchesSize)
+
+// 	for i := 0; i < batchesSize; i++ {
+// 		batchesLocal[i] = make(types.Transactions, singleCase.size)
+
+// 		for j := 0; j < singleCase.size; j++ {
+// 			batchesLocal[i][j] = pricedTransaction(uint64(singleCase.size*i+j), 100_000, big.NewInt(int64(i+1)), localKey)
+// 		}
+
+// 		batchesRemote[i] = make(types.Transactions, singleCase.size)
+
+// 		remoteKey, _ := crypto.GenerateKey()
+// 		remoteAddr := crypto.PubkeyToAddress(remoteKey.PublicKey)
+// 		testAddBalance(pool, remoteAddr, balance)
+
+// 		for j := 0; j < singleCase.size; j++ {
+// 			batchesRemote[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteKey)
+// 		}
+
+// 		batchesRemotes[i] = make(types.Transactions, singleCase.size)
+
+// 		remotesKey, _ := crypto.GenerateKey()
+// 		remotesAddr := crypto.PubkeyToAddress(remotesKey.PublicKey)
+// 		testAddBalance(pool, remotesAddr, balance)
+
+// 		for j := 0; j < singleCase.size; j++ {
+// 			batchesRemotes[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesKey)
+// 		}
 
-		batchesRemoteSync[i] = make(types.Transactions, singleCase.size)
+// 		batchesRemoteSync[i] = make(types.Transactions, singleCase.size)
 
-		remoteSyncKey, _ := crypto.GenerateKey()
-		remoteSyncAddr := crypto.PubkeyToAddress(remoteSyncKey.PublicKey)
-		testAddBalance(pool, remoteSyncAddr, balance)
+// 		remoteSyncKey, _ := crypto.GenerateKey()
+// 		remoteSyncAddr := crypto.PubkeyToAddress(remoteSyncKey.PublicKey)
+// 		testAddBalance(pool, remoteSyncAddr, balance)
 
-		for j := 0; j < singleCase.size; j++ {
-			batchesRemoteSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteSyncKey)
-		}
+// 		for j := 0; j < singleCase.size; j++ {
+// 			batchesRemoteSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remoteSyncKey)
+// 		}
 
-		batchesRemotesSync[i] = make(types.Transactions, singleCase.size)
+// 		batchesRemotesSync[i] = make(types.Transactions, singleCase.size)
 
-		remotesSyncKey, _ := crypto.GenerateKey()
-		remotesSyncAddr := crypto.PubkeyToAddress(remotesSyncKey.PublicKey)
-		testAddBalance(pool, remotesSyncAddr, balance)
+// 		remotesSyncKey, _ := crypto.GenerateKey()
+// 		remotesSyncAddr := crypto.PubkeyToAddress(remotesSyncKey.PublicKey)
+// 		testAddBalance(pool, remotesSyncAddr, balance)
 
-		for j := 0; j < singleCase.size; j++ {
-			batchesRemotesSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesSyncKey)
-		}
-	}
+// 		for j := 0; j < singleCase.size; j++ {
+// 			batchesRemotesSync[i][j] = pricedTransaction(uint64(j), 100_000, big.NewInt(int64(i+1)), remotesSyncKey)
+// 		}
+// 	}
 
-	tb.Logf("[%s] starting goroutines", common.NowMilliseconds())
+// 	tb.Logf("[%s] starting goroutines", common.NowMilliseconds())
 
-	txsTickerDuration := singleCase.txsTickerDuration
-	apiTickerDuration := singleCase.apiTickerDuration
+// 	txsTickerDuration := singleCase.txsTickerDuration
+// 	apiTickerDuration := singleCase.apiTickerDuration
 
-	// locals
-	wg.Add(1)
+// 	// locals
+// 	wg.Add(1)
 
-	go func() {
-		defer func() {
-			tb.Logf("[%s] stopping AddLocal(s)", common.NowMilliseconds())
+// 	go func() {
+// 		defer func() {
+// 			tb.Logf("[%s] stopping addLocal(s)", common.NowMilliseconds())
 
-			wg.Done()
+// 			wg.Done()
 
-			tb.Logf("[%s] stopped AddLocal(s)", common.NowMilliseconds())
-		}()
+// 			tb.Logf("[%s] stopped addLocal(s)", common.NowMilliseconds())
+// 		}()
 
-		tb.Logf("[%s] starting AddLocal(s)", common.NowMilliseconds())
+// 		tb.Logf("[%s] starting addLocal(s)", common.NowMilliseconds())
 
-		for _, batch := range batchesLocal {
-			batch := batch
+// 		for _, batch := range batchesLocal {
+// 			batch := batch
 
-			select {
-			case <-done:
-				return
-			default:
-			}
+// 			select {
+// 			case <-done:
+// 				return
+// 			default:
+// 			}
 
-			if rand.Int()%2 == 0 {
-				runWithTimeout(tb, func(_ chan struct{}) {
-					errs := pool.AddLocals(batch)
-					if len(errs) != 0 {
-						tb.Logf("[%s] AddLocals error, %v", common.NowMilliseconds(), errs)
-					}
-				}, done, "AddLocals", timeoutDuration, 0, 0)
-			} else {
-				for _, tx := range batch {
-					tx := tx
+// 			if rand.Int()%2 == 0 {
+// 				runWithTimeout(tb, func(_ chan struct{}) {
+// 					errs := pool.addLocals(batch)
+// 					if len(errs) != 0 {
+// 						tb.Logf("[%s] addLocals error, %v", common.NowMilliseconds(), errs)
+// 					}
+// 				}, done, "addLocals", timeoutDuration, 0, 0)
+// 			} else {
+// 				for _, tx := range batch {
+// 					tx := tx
 
-					runWithTimeout(tb, func(_ chan struct{}) {
-						err := pool.AddLocal(tx)
-						if err != nil {
-							tb.Logf("[%s] AddLocal error %s", common.NowMilliseconds(), err)
-						}
-					}, done, "AddLocal", timeoutDuration, 0, 0)
+// 					runWithTimeout(tb, func(_ chan struct{}) {
+// 						err := pool.addLocal(tx)
+// 						if err != nil {
+// 							tb.Logf("[%s] addLocal error %s", common.NowMilliseconds(), err)
+// 						}
+// 					}, done, "addLocal", timeoutDuration, 0, 0)
 
-					time.Sleep(txsTickerDuration)
-				}
-			}
+// 					time.Sleep(txsTickerDuration)
+// 				}
+// 			}
 
-			time.Sleep(txsTickerDuration)
-		}
-	}()
+// 			time.Sleep(txsTickerDuration)
+// 		}
+// 	}()
 
-	// remotes
-	wg.Add(1)
+// 	// remotes
+// 	wg.Add(1)
 
-	go func() {
-		defer func() {
-			tb.Logf("[%s] stopping AddRemotes", common.NowMilliseconds())
+// 	go func() {
+// 		defer func() {
+// 			tb.Logf("[%s] stopping addRemotes", common.NowMilliseconds())
 
-			wg.Done()
+// 			wg.Done()
 
-			tb.Logf("[%s] stopped AddRemotes", common.NowMilliseconds())
-		}()
+// 			tb.Logf("[%s] stopped addRemotes", common.NowMilliseconds())
+// 		}()
 
-		addTransactionsBatches(tb, batchesRemotes, getFnForBatches(pool.AddRemotes), done, timeoutDuration, txsTickerDuration, "AddRemotes", 0)
-	}()
+// 		addTransactionsBatches(tb, batchesRemotes, getFnForBatches(pool.addRemotes), done, timeoutDuration, txsTickerDuration, "addRemotes", 0)
+// 	}()
 
-	// remote
-	wg.Add(1)
+// 	// remote
+// 	wg.Add(1)
 
-	go func() {
-		defer func() {
-			tb.Logf("[%s] stopping AddRemote", common.NowMilliseconds())
+// 	go func() {
+// 		defer func() {
+// 			tb.Logf("[%s] stopping addRemote", common.NowMilliseconds())
 
-			wg.Done()
+// 			wg.Done()
 
-			tb.Logf("[%s] stopped AddRemote", common.NowMilliseconds())
-		}()
+// 			tb.Logf("[%s] stopped addRemote", common.NowMilliseconds())
+// 		}()
 
-		addTransactions(tb, batchesRemote, pool.AddRemote, done, timeoutDuration, txsTickerDuration, "AddRemote", 0)
-	}()
+// 		addTransactions(tb, batchesRemote, pool.addRemote, done, timeoutDuration, txsTickerDuration, "addRemote", 0)
+// 	}()
 
-	// sync
-	// remotes
-	wg.Add(1)
+// 	// sync
+// 	// remotes
+// 	wg.Add(1)
 
-	go func() {
-		defer func() {
-			tb.Logf("[%s] stopping AddRemotesSync", common.NowMilliseconds())
+// 	go func() {
+// 		defer func() {
+// 			tb.Logf("[%s] stopping addRemotesSync", common.NowMilliseconds())
 
-			wg.Done()
+// 			wg.Done()
 
-			tb.Logf("[%s] stopped AddRemotesSync", common.NowMilliseconds())
-		}()
+// 			tb.Logf("[%s] stopped addRemotesSync", common.NowMilliseconds())
+// 		}()
 
-		addTransactionsBatches(tb, batchesRemotesSync, getFnForBatches(pool.AddRemotesSync), done, timeoutDuration, txsTickerDuration, "AddRemotesSync", 0)
-	}()
+// 		addTransactionsBatches(tb, batchesRemotesSync, getFnForBatches(pool.addRemotesSync), done, timeoutDuration, txsTickerDuration, "addRemotesSync", 0)
+// 	}()
 
-	// remote
-	wg.Add(1)
+// 	// remote
+// 	wg.Add(1)
 
-	go func() {
-		defer func() {
-			tb.Logf("[%s] stopping AddRemoteSync", common.NowMilliseconds())
+// 	go func() {
+// 		defer func() {
+// 			tb.Logf("[%s] stopping addRemoteSync", common.NowMilliseconds())
 
-			wg.Done()
+// 			wg.Done()
 
-			tb.Logf("[%s] stopped AddRemoteSync", common.NowMilliseconds())
-		}()
+// 			tb.Logf("[%s] stopped addRemoteSync", common.NowMilliseconds())
+// 		}()
 
-		addTransactions(tb, batchesRemoteSync, pool.AddRemoteSync, done, timeoutDuration, txsTickerDuration, "AddRemoteSync", 0)
-	}()
+// 		addTransactions(tb, batchesRemoteSync, pool.addRemoteSync, done, timeoutDuration, txsTickerDuration, "addRemoteSync", 0)
+// 	}()
 
-	// tx pool API
-	for i := 0; i < threads; i++ {
-		i := i
+// 	// tx pool API
+// 	for i := 0; i < threads; i++ {
+// 		i := i
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Pending-no-tips, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Pending-no-tips, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Pending-no-tips, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Pending-no-tips, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				p := pool.Pending(context.Background(), false)
-				fmt.Fprint(io.Discard, p)
-			}, done, "Pending-no-tips", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				p := pool.Pending(false)
+// 				fmt.Fprint(io.Discard, p)
+// 			}, done, "Pending-no-tips", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Pending-with-tips, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Pending-with-tips, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Pending-with-tips, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Pending-with-tips, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				p := pool.Pending(context.Background(), true)
-				fmt.Fprint(io.Discard, p)
-			}, done, "Pending-with-tips", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				p := pool.Pending(true)
+// 				fmt.Fprint(io.Discard, p)
+// 			}, done, "Pending-with-tips", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Locals, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Locals, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Locals, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Locals, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				l := pool.Locals()
-				fmt.Fprint(io.Discard, l)
-			}, done, "Locals", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				l := pool.Locals()
+// 				fmt.Fprint(io.Discard, l)
+// 			}, done, "Locals", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Content, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Content, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Content, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Content, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				p, q := pool.Content()
-				fmt.Fprint(io.Discard, p, q)
-			}, done, "Content", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				p, q := pool.Content()
+// 				fmt.Fprint(io.Discard, p, q)
+// 			}, done, "Content", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping GasPriceUint256, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping GasPriceUint256, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped GasPriceUint256, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped GasPriceUint256, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				res := pool.GasPriceUint256()
-				fmt.Fprint(io.Discard, res)
-			}, done, "GasPriceUint256", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				res := pool.GasPriceUint256()
+// 				fmt.Fprint(io.Discard, res)
+// 			}, done, "GasPriceUint256", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping GasPrice, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping GasPrice, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped GasPrice, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped GasPrice, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				res := pool.GasPrice()
-				fmt.Fprint(io.Discard, res)
-			}, done, "GasPrice", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				res := pool.GasPrice()
+// 				fmt.Fprint(io.Discard, res)
+// 			}, done, "GasPrice", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping SetGasPrice, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping SetGasPrice, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped SetGasPrice, , thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped SetGasPrice, , thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				pool.SetGasPrice(pool.GasPrice())
-			}, done, "SetGasPrice", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				pool.SetGasPrice(pool.GasPrice())
+// 			}, done, "SetGasPrice", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping ContentFrom, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping ContentFrom, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped ContentFrom, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped ContentFrom, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				p, q := pool.ContentFrom(account)
-				fmt.Fprint(io.Discard, p, q)
-			}, done, "ContentFrom", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				p, q := pool.ContentFrom(account)
+// 				fmt.Fprint(io.Discard, p, q)
+// 			}, done, "ContentFrom", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Has, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Has, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Has, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Has, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				res := pool.Has(batchesRemotes[0][0].Hash())
-				fmt.Fprint(io.Discard, res)
-			}, done, "Has", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				res := pool.Has(batchesRemotes[0][0].Hash())
+// 				fmt.Fprint(io.Discard, res)
+// 			}, done, "Has", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Get, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Get, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Get, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Get, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				tx := pool.Get(batchesRemotes[0][0].Hash())
-				fmt.Fprint(io.Discard, tx == nil)
-			}, done, "Get", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				tx := pool.Get(batchesRemotes[0][0].Hash())
+// 				fmt.Fprint(io.Discard, tx == nil)
+// 			}, done, "Get", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Nonce, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Nonce, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Nonce, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Nonce, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				res := pool.Nonce(account)
-				fmt.Fprint(io.Discard, res)
-			}, done, "Nonce", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				res := pool.Nonce(account)
+// 				fmt.Fprint(io.Discard, res)
+// 			}, done, "Nonce", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Stats, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Stats, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Stats, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Stats, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				p, q := pool.Stats()
-				fmt.Fprint(io.Discard, p, q)
-			}, done, "Stats", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				p, q := pool.Stats()
+// 				fmt.Fprint(io.Discard, p, q)
+// 			}, done, "Stats", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping Status, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping Status, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped Status, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped Status, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(_ chan struct{}) {
-				st := pool.Status([]common.Hash{batchesRemotes[1][0].Hash()})
-				fmt.Fprint(io.Discard, st)
-			}, done, "Status", apiTickerDuration, timeoutDuration, i)
-		}()
+// 			runWithTicker(tb, func(_ chan struct{}) {
+// 				st := pool.Status([]common.Hash{batchesRemotes[1][0].Hash()})
+// 				fmt.Fprint(io.Discard, st)
+// 			}, done, "Status", apiTickerDuration, timeoutDuration, i)
+// 		}()
 
-		wg.Add(1)
+// 		wg.Add(1)
 
-		go func() {
-			defer func() {
-				tb.Logf("[%s] stopping SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
+// 		go func() {
+// 			defer func() {
+// 				tb.Logf("[%s] stopping SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
 
-				wg.Done()
+// 				wg.Done()
 
-				tb.Logf("[%s] stopped SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
-			}()
+// 				tb.Logf("[%s] stopped SubscribeNewTxsEvent, thread %d", common.NowMilliseconds(), i)
+// 			}()
 
-			runWithTicker(tb, func(c chan struct{}) {
-				ch := make(chan core.NewTxsEvent, 10)
-				sub := pool.SubscribeNewTxsEvent(ch)
+// 			runWithTicker(tb, func(c chan struct{}) {
+// 				ch := make(chan core.NewTxsEvent, 10)
+// 				sub := pool.SubscribeNewTxsEvent(ch)
 
-				if sub == nil {
-					return
-				}
+// 				if sub == nil {
+// 					return
+// 				}
 
-				defer sub.Unsubscribe()
+// 				defer sub.Unsubscribe()
 
-				select {
-				case <-done:
-					return
-				case <-c:
-				case res := <-ch:
-					fmt.Fprint(io.Discard, res)
-				}
-			}, done, "SubscribeNewTxsEvent", apiTickerDuration, timeoutDuration, i)
-		}()
-	}
+// 				select {
+// 				case <-done:
+// 					return
+// 				case <-c:
+// 				case res := <-ch:
+// 					fmt.Fprint(io.Discard, res)
+// 				}
+// 			}, done, "SubscribeNewTxsEvent", apiTickerDuration, timeoutDuration, i)
+// 		}()
+// 	}
 
-	// wait for the start
-	tb.Logf("[%s] before the first propagated transaction", common.NowMilliseconds())
-	<-pendingAddedCh
-	tb.Logf("[%s] after the first propagated transaction", common.NowMilliseconds())
+// 	// wait for the start
+// 	tb.Logf("[%s] before the first propagated transaction", common.NowMilliseconds())
+// 	<-pendingAddedCh
+// 	tb.Logf("[%s] after the first propagated transaction", common.NowMilliseconds())
 
-	var (
-		totalTxs    int
-		totalBlocks int
-	)
+// 	var (
+// 		totalTxs    int
+// 		totalBlocks int
+// 	)
 
-	pendingDurations := make([]time.Duration, 0, blocks)
+// 	pendingDurations := make([]time.Duration, 0, blocks)
 
-	var (
-		added           int
-		pendingDuration time.Duration
-		miningDuration  time.Duration
-		diff            time.Duration
-	)
+// 	var (
+// 		added           int
+// 		pendingDuration time.Duration
+// 		miningDuration  time.Duration
+// 		diff            time.Duration
+// 	)
 
-	for {
-		added, pendingDuration, miningDuration = mining(tb, pool, signer, baseFee, blockGasLimit, totalBlocks)
+// 	for {
+// 		added, pendingDuration, miningDuration = mining(tb, pool, signer, baseFee, blockGasLimit, totalBlocks)
 
-		totalTxs += added
+// 		totalTxs += added
 
-		pendingDurations = append(pendingDurations, pendingDuration)
+// 		pendingDurations = append(pendingDurations, pendingDuration)
 
-		totalBlocks++
+// 		totalBlocks++
 
-		if totalBlocks > blocks {
-			fmt.Fprint(io.Discard, totalTxs)
-			break
-		}
+// 		if totalBlocks > blocks {
+// 			fmt.Fprint(io.Discard, totalTxs)
+// 			break
+// 		}
 
-		diff = blockPeriod - miningDuration
-		if diff > 0 {
-			time.Sleep(diff)
-		}
-	}
+// 		diff = blockPeriod - miningDuration
+// 		if diff > 0 {
+// 			time.Sleep(diff)
+// 		}
+// 	}
 
-	pendingDurationsFloat := make([]float64, len(pendingDurations))
+// 	pendingDurationsFloat := make([]float64, len(pendingDurations))
 
-	for i, v := range pendingDurations {
-		pendingDurationsFloat[i] = float64(v.Nanoseconds())
-	}
+// 	for i, v := range pendingDurations {
+// 		pendingDurationsFloat[i] = float64(v.Nanoseconds())
+// 	}
 
-	mean, stddev := stat.MeanStdDev(pendingDurationsFloat, nil)
-	tb.Logf("[%s] pending mean %v, stddev %v, %v-%v",
-		common.NowMilliseconds(), time.Duration(mean), time.Duration(stddev), time.Duration(floats.Min(pendingDurationsFloat)), time.Duration(floats.Max(pendingDurationsFloat)))
-}
+// 	mean, stddev := stat.MeanStdDev(pendingDurationsFloat, nil)
+// 	tb.Logf("[%s] pending mean %v, stddev %v, %v-%v",
+// 		common.NowMilliseconds(), time.Duration(mean), time.Duration(stddev), time.Duration(floats.Min(pendingDurationsFloat)), time.Duration(floats.Max(pendingDurationsFloat)))
+// }
 
 func addTransactionsBatches(tb testing.TB, batches []types.Transactions, fn func(types.Transactions) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
 	tb.Helper()

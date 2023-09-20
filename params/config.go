@@ -360,6 +360,7 @@ var (
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 		IsDevMode:                     true,
+		Bor:                           &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced

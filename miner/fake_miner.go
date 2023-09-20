@@ -1,40 +1,33 @@
 package miner
 
+import (
+	"github.com/golang/mock/gomock"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/bor/api"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
+)
+
+type DefaultBorMiner struct {
+	Miner   *Miner
+	Mux     *event.TypeMux //nolint:staticcheck
+	Cleanup func(skipMiner bool)
+
+	Ctrl               *gomock.Controller
+	EthAPIMock         api.Caller
+	HeimdallClientMock bor.IHeimdallClient
+	ContractMock       bor.GenesisContract
+}
+
 // TODO - Arpit
-// import (
-// 	"testing"
-
-// 	"github.com/golang/mock/gomock"
-
-// 	"github.com/ethereum/go-ethereum/common"
-// 	"github.com/ethereum/go-ethereum/consensus"
-// 	"github.com/ethereum/go-ethereum/consensus/bor"
-// 	"github.com/ethereum/go-ethereum/consensus/bor/api"
-// 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
-// 	"github.com/ethereum/go-ethereum/core"
-// 	"github.com/ethereum/go-ethereum/core/rawdb"
-// 	"github.com/ethereum/go-ethereum/core/state"
-// 	"github.com/ethereum/go-ethereum/core/txpool"
-// 	"github.com/ethereum/go-ethereum/core/vm"
-// 	"github.com/ethereum/go-ethereum/ethdb"
-// 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-// 	"github.com/ethereum/go-ethereum/event"
-// 	"github.com/ethereum/go-ethereum/params"
-// 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-// 	"github.com/ethereum/go-ethereum/trie"
-// )
-
-// type DefaultBorMiner struct {
-// 	Miner   *Miner
-// 	Mux     *event.TypeMux //nolint:staticcheck
-// 	Cleanup func(skipMiner bool)
-
-// 	Ctrl               *gomock.Controller
-// 	EthAPIMock         api.Caller
-// 	HeimdallClientMock bor.IHeimdallClient
-// 	ContractMock       bor.GenesisContract
-// }
-
 // func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 // 	t.Helper()
 
@@ -71,20 +64,10 @@ package miner
 // 	}
 // }
 
+// TODO - Arpit
 // //nolint:staticcheck
 // func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 // 	t.Helper()
-
-// 	// addr0 := common.Address{0x1}
-
-// 	// genspec := &core.Genesis{
-// 	// 	Alloc: map[common.Address]core.GenesisAccount{
-// 	// 		addr0: {
-// 	// 			Balance: big.NewInt(0),
-// 	// 			Code:    []byte{0x1, 0x1},
-// 	// 		},
-// 	// 	},
-// 	// }
 
 // 	// Create Ethash config
 // 	chainDB, genspec, chainConfig := NewDBForFakes(t)
@@ -100,8 +83,22 @@ package miner
 // 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
 // 	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
 
-// 	pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
-// 	backend := NewMockBackend(bc, pool)
+// 	// blockchain := &blobpool.testBlockChain{
+// 	// 	config:  blobpool.testChainConfig,
+// 	// 	basefee: uint256.NewInt(params.InitialBaseFee),
+// 	// 	blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+// 	// 	statedb: statedb,
+// 	// }
+
+// 	// pool := legacypool.New(testTxPoolConfig, blockchain)
+// 	// pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+
+// 	pool := legacypool.New(testTxPoolConfig, blockchain)
+// 	txpool, _ := txpool.New(new(big.Int).SetUint64(blobpool.testTxPoolConfig.PriceLimit), blockchain, []txpool.SubPool{pool})
+// 	defer pool.Close()
+
+// 	// pool := txpool.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
+// 	backend := NewMockBackend(bc, txpool)
 
 // 	// Create event Mux
 // 	mux := new(event.TypeMux)
@@ -116,7 +113,6 @@ package miner
 // 	cleanup := func(skipMiner bool) {
 // 		bc.Stop()
 // 		engine.Close()
-// 		pool.Stop()
 
 // 		if !skipMiner {
 // 			miner.Close()
@@ -126,42 +122,42 @@ package miner
 // 	return miner, mux, cleanup
 // }
 
-// type TensingObject interface {
-// 	Helper()
-// 	Fatalf(format string, args ...any)
-// }
+type TensingObject interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
 
-// func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
-// 	t.Helper()
+func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
+	t.Helper()
 
-// 	memdb := memorydb.New()
-// 	chainDB := rawdb.NewDatabase(memdb)
-// 	genesis := core.DeveloperGenesisBlock(11_500_000, common.HexToAddress("12345"))
+	memdb := memorydb.New()
+	chainDB := rawdb.NewDatabase(memdb)
+	genesis := core.DeveloperGenesisBlock(11_500_000, common.HexToAddress("12345"))
 
-// 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
-// 	if err != nil {
-// 		t.Fatalf("can't create new chain config: %v", err)
-// 	}
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
+	if err != nil {
+		t.Fatalf("can't create new chain config: %v", err)
+	}
 
-// 	chainConfig.Bor.Period = map[string]uint64{
-// 		"0": 1,
-// 	}
-// 	chainConfig.Bor.Sprint = map[string]uint64{
-// 		"0": 64,
-// 	}
+	chainConfig.Bor.Period = map[string]uint64{
+		"0": 1,
+	}
+	chainConfig.Bor.Sprint = map[string]uint64{
+		"0": 64,
+	}
 
-// 	return chainDB, genesis, chainConfig
-// }
+	return chainDB, genesis, chainConfig
+}
 
-// func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
-// 	t.Helper()
+func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
+	t.Helper()
 
-// 	if chainConfig.Bor == nil {
-// 		chainConfig.Bor = params.BorUnittestChainConfig.Bor
-// 	}
+	if chainConfig.Bor == nil {
+		chainConfig.Bor = params.BorUnittestChainConfig.Bor
+	}
 
-// 	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
-// }
+	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
+}
 
 // type mockBackend struct {
 // 	bc     *core.BlockChain
@@ -217,40 +213,41 @@ package miner
 // 	return bc.chainHeadFeed.Subscribe(ch)
 // }
 
-// var (
-// 	// Test chain configurations
-// 	testTxPoolConfig  txpool.Config
-// 	ethashChainConfig *params.ChainConfig
-// 	cliqueChainConfig *params.ChainConfig
+var (
+// Test chain configurations
+// testTxPoolConfig txpool.Config
 
-// 	// Test accounts
-// 	testBankKey, _  = crypto.GenerateKey()
-// 	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-// 	testBankFunds   = big.NewInt(9000000000000000000)
+// ethashChainConfig *params.ChainConfig
+// cliqueChainConfig *params.ChainConfig
 
-// 	testUserKey, _  = crypto.GenerateKey()
-// 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
+// // Test accounts
+// testBankKey, _  = crypto.GenerateKey()
+// testBankFunds   = big.NewInt(9000000000000000000)
 
-// 	// Test transactions
-// 	pendingTxs []*types.Transaction
-// 	newTxs     []*types.Transaction
+// testUserKey, _  = crypto.GenerateKey()
+// testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
 
-// 	testConfig = &Config{
-// 		Recommit:            time.Second,
-// 		GasCeil:             params.GenesisGasLimit,
-// 		CommitInterruptFlag: true,
-// 	}
-// )
+// // Test transactions
+// pendingTxs []*types.Transaction
+// newTxs     []*types.Transaction
 
-// func init() {
-// 	testTxPoolConfig = txpool.DefaultConfig
-// 	testTxPoolConfig.Journal = ""
-// 	ethashChainConfig = new(params.ChainConfig)
-// 	*ethashChainConfig = *params.TestChainConfig
-// 	cliqueChainConfig = new(params.ChainConfig)
-// 	*cliqueChainConfig = *params.TestChainConfig
-// 	cliqueChainConfig.Clique = &params.CliqueConfig{
-// 		Period: 10,
-// 		Epoch:  30000,
-// 	}
-// }
+//	testConfig = &Config{
+//		Recommit:            time.Second,
+//		GasCeil:             params.GenesisGasLimit,
+//		CommitInterruptFlag: true,
+//	}
+)
+
+func init() {
+	// testTxPoolConfig = txpool.DefaultConfig
+	// testTxPoolConfig.Journal = ""
+	// ethashChainConfig = new(params.ChainConfig)
+	// *ethashChainConfig = *params.TestChainConfig
+	// cliqueChainConfig = new(params.ChainConfig)
+	// *cliqueChainConfig = *params.TestChainConfig
+	//
+	//	cliqueChainConfig.Clique = &params.CliqueConfig{
+	//		Period: 10,
+	//		Epoch:  30000,
+	//	}
+}

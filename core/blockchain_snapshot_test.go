@@ -17,7 +17,7 @@
 // Tests that abnormal program termination (i.e.crash) and restart can recovery
 // the snapshot properly if the snapshot is enabled.
 
-package tests
+package core
 
 import (
 	"bytes"
@@ -30,7 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -55,12 +54,10 @@ type snapshotTestBasic struct {
 	db      ethdb.Database
 	genDb   ethdb.Database
 	engine  consensus.Engine
-	gspec   *core.Genesis
+	gspec   *Genesis
 }
 
-func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*types.Block) {
-	t.Helper()
-
+func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Block) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
@@ -73,7 +70,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 	}
 	// Initialize a fresh chain
 	var (
-		gspec = &core.Genesis{
+		gspec = &Genesis{
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  params.AllEthashProtocolChanges,
 		}
@@ -82,15 +79,13 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 		// Snapshot is enabled, the first snapshot is created from the Genesis.
 		// The snapshot memory allowance is 256MB, it means no snapshot flush
 		// will happen during the block insertion.
-		cacheConfig = core.DefaultCacheConfig
+		cacheConfig = defaultCacheConfig
 	)
-
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil, nil)
+	chain, err := NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
-
-	genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, basic.chainBlocks, func(i int, b *core.BlockGen) {})
+	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, basic.chainBlocks, func(i int, b *BlockGen) {})
 
 	// Insert the blocks with configured settings.
 	var breakpoints []uint64
@@ -99,38 +94,27 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 	} else {
 		breakpoints = append(breakpoints, basic.commitBlock, basic.snapshotBlock)
 	}
-
 	var startPoint uint64
 	for _, point := range breakpoints {
 		if _, err := chain.InsertChain(blocks[startPoint:point]); err != nil {
 			t.Fatalf("Failed to import canonical chain start: %v", err)
 		}
-
 		startPoint = point
 
 		if basic.commitBlock > 0 && basic.commitBlock == point {
-			err = chain.StateCache().TrieDB().Commit(blocks[point-1].Root(), true)
-			if err != nil {
-				t.Fatal("on trieDB.Commit", err)
-			}
+			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(), false)
 		}
-
 		if basic.snapshotBlock > 0 && basic.snapshotBlock == point {
 			// Flushing the entire snap tree into the disk, the
 			// relevant (a) snapshot root and (b) snapshot generator
 			// will be persisted atomically.
-			err = chain.Snaps().Cap(blocks[point-1].Root(), 0)
-			if err != nil {
-				t.Fatal("on Snaps.Cap", err)
-			}
-
-			diskRoot, blockRoot := chain.Snaps().DiskRoot(), blocks[point-1].Root()
+			chain.snaps.Cap(blocks[point-1].Root(), 0)
+			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
 			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
 				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
 			}
 		}
 	}
-
 	if _, err := chain.InsertChain(blocks[startPoint:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
@@ -141,13 +125,10 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*core.BlockChain, []*type
 	basic.genDb = genDb
 	basic.engine = engine
 	basic.gspec = gspec
-
 	return chain, blocks
 }
 
-func (basic *snapshotTestBasic) verify(t *testing.T, chain *core.BlockChain, blocks []*types.Block) {
-	t.Helper()
-
+func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks []*types.Block) {
 	// Iterate over all the remaining blocks and ensure there are no gaps
 	verifyNoGaps(t, chain, true, blocks)
 	verifyCutoff(t, chain, true, blocks, basic.expCanonicalBlocks)
@@ -155,11 +136,9 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *core.BlockChain, blo
 	if head := chain.CurrentHeader(); head.Number.Uint64() != basic.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadHeader)
 	}
-
 	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != basic.expHeadFastBlock {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, basic.expHeadFastBlock)
 	}
-
 	if head := chain.CurrentBlock(); head.Number.Uint64() != basic.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, basic.expHeadBlock)
 	}
@@ -168,12 +147,12 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *core.BlockChain, blo
 	block := chain.GetBlockByNumber(basic.expSnapshotBottom)
 	if block == nil {
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
-	} else if !bytes.Equal(chain.Snaps().DiskRoot().Bytes(), block.Root().Bytes()) {
-		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.Snaps().DiskRoot())
+	} else if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
+		t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
 	}
 
 	// Check the snapshot, ensure it's integrated
-	if err := chain.Snaps().Verify(block.Root()); err != nil {
+	if err := chain.snaps.Verify(block.Root()); err != nil {
 		t.Errorf("The disk layer is not integrated %v", err)
 	}
 }
@@ -183,26 +162,21 @@ func (basic *snapshotTestBasic) dump() string {
 	buffer := new(strings.Builder)
 
 	fmt.Fprint(buffer, "Chain:\n  G")
-
 	for i := 0; i < basic.chainBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
 	fmt.Fprint(buffer, " (HEAD)\n\n")
 
 	fmt.Fprintf(buffer, "Commit:   G")
-
 	if basic.commitBlock > 0 {
 		fmt.Fprintf(buffer, ", C%d", basic.commitBlock)
 	}
-
 	fmt.Fprint(buffer, "\n")
 
 	fmt.Fprintf(buffer, "Snapshot: G")
-
 	if basic.snapshotBlock > 0 {
 		fmt.Fprintf(buffer, ", C%d", basic.snapshotBlock)
 	}
-
 	fmt.Fprint(buffer, "\n")
 
 	//if crash {
@@ -213,26 +187,22 @@ func (basic *snapshotTestBasic) dump() string {
 	fmt.Fprintf(buffer, "------------------------------\n\n")
 
 	fmt.Fprint(buffer, "Expected in leveldb:\n  G")
-
 	for i := 0; i < basic.expCanonicalBlocks; i++ {
 		fmt.Fprintf(buffer, "->C%d", i+1)
 	}
 	fmt.Fprintf(buffer, "\n\n")
 	fmt.Fprintf(buffer, "Expected head header    : C%d\n", basic.expHeadHeader)
 	fmt.Fprintf(buffer, "Expected head fast block: C%d\n", basic.expHeadFastBlock)
-
 	if basic.expHeadBlock == 0 {
 		fmt.Fprintf(buffer, "Expected head block     : G\n")
 	} else {
 		fmt.Fprintf(buffer, "Expected head block     : C%d\n", basic.expHeadBlock)
 	}
-
 	if basic.expSnapshotBottom == 0 {
 		fmt.Fprintf(buffer, "Expected snapshot disk  : G\n")
 	} else {
 		fmt.Fprintf(buffer, "Expected snapshot disk  : C%d\n", basic.expSnapshotBottom)
 	}
-
 	return buffer.String()
 }
 
@@ -256,8 +226,7 @@ func (snaptest *snapshotTest) test(t *testing.T) {
 
 	// Restart the chain normally
 	chain.Stop()
-
-	newchain, err := core.NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err := NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -279,8 +248,9 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	chain, blocks := snaptest.prepare(t)
 
 	// Pull the plug on the database, simulating a hard crash
-	db := chain.DB()
+	db := chain.db
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
@@ -291,21 +261,19 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
-
 	defer newdb.Close()
 
 	// The interesting thing is: instead of starting the blockchain after
 	// the crash, we do restart twice here: one after the crash and one
 	// after the normal stop. It's used to ensure the broken snapshot
 	// can be detected all the time.
-	newchain, err := core.NewBlockChain(newdb, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err := NewBlockChain(newdb, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
 	newchain.Stop()
 
-	newchain, err = core.NewBlockChain(newdb, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err = NewBlockChain(newdb, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -332,27 +300,24 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 
 	// Insert blocks without enabling snapshot if gapping is required.
 	chain.Stop()
-
-	gappedBlocks, _ := core.GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.gapped, func(i int, b *core.BlockGen) {})
+	gappedBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.gapped, func(i int, b *BlockGen) {})
 
 	// Insert a few more blocks without enabling snapshot
-	var cacheConfig = &core.CacheConfig{
+	var cacheConfig = &CacheConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 	}
-
-	newchain, err := core.NewBlockChain(snaptest.db, cacheConfig, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err := NewBlockChain(snaptest.db, cacheConfig, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
 	newchain.InsertChain(gappedBlocks)
 	newchain.Stop()
 
 	// Restart the chain with enabling the snapshot
-	newchain, err = core.NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err = NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -380,7 +345,7 @@ func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 	chain.SetHead(snaptest.setHead)
 	chain.Stop()
 
-	newchain, err := core.NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err := NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -409,41 +374,40 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	// and state committed.
 	chain.Stop()
 
-	config := &core.CacheConfig{
+	config := &CacheConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 	}
-
-	newchain, err := core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	newchain, err := NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
-	newBlocks, _ := core.GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.newBlocks, func(i int, b *core.BlockGen) {})
+	newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.newBlocks, func(i int, b *BlockGen) {})
 	newchain.InsertChain(newBlocks)
 	newchain.Stop()
 
 	// Restart the chain, the wiper should starts working
-	config = &core.CacheConfig{
+	config = &CacheConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  256,
 		SnapshotWait:   false, // Don't wait rebuild
 	}
-
-	_, err = core.NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	tmp, err := NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
 
-	newchain, err = core.NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
+	// Simulate the blockchain crash.
+	tmp.stopWithoutSaving()
+
+	newchain, err = NewBlockChain(snaptest.db, nil, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
-
 	defer newchain.Stop()
 	snaptest.verify(t, newchain, blocks)
 }

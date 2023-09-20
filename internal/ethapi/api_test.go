@@ -536,6 +536,51 @@ func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.Match
 	panic("implement me")
 }
 
+// GetBorBlockTransaction returns bor block tx
+func (b testBackend) GetBorBlockTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetWhitelistedCheckpoint() (bool, uint64, common.Hash) {
+	panic("implement me")
+}
+
+func (b testBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
+	panic("implement me")
+}
+
+func (b testBackend) PurgeWhitelistedMilestone() {
+	panic("implement me")
+}
+
+func (b testBackend) PurgeWhitelistedCheckpoint() {
+	panic("implement me")
+}
+
+func (b testBackend) RPCRpcReturnDataLimit() uint64 {
+	panic("implement me")
+}
+
+func (b testBackend) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	panic("implement me")
+}
+
+func (b testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	panic("implement me")
+}
+
 func (b testBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
 	receipt, err := b.GetBorBlockReceipt(ctx, hash)
 	if err != nil || receipt == nil {
@@ -1055,7 +1100,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig)
+		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.MainnetChainConfig, nil)
 		out, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
