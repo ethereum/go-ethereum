@@ -50,6 +50,46 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
+	t.Helper()
+	t.Parallel()
+
+	var (
+		signer = types.LatestSigner(config)
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	)
+
+	for i, tt := range tests {
+		var tx2 types.Transaction
+
+		tx, err := types.SignNewTx(key, signer, tt.Tx)
+		if err != nil {
+			t.Fatalf("test %d: signing failed: %v", i, err)
+		}
+		// Regular transaction
+		if data, err := json.Marshal(tx); err != nil {
+			t.Fatalf("test %d: marshalling failed; %v", i, err)
+		} else if err = tx2.UnmarshalJSON(data); err != nil {
+			t.Fatalf("test %d: sunmarshal failed: %v", i, err)
+		} else if want, have := tx.Hash(), tx2.Hash(); want != have {
+			t.Fatalf("test %d: stx changed, want %x have %x", i, want, have)
+		}
+
+		// rpcTransaction
+		rpcTx := newRPCTransaction(tx, common.Hash{}, 0, 0, 0, big.NewInt(0), config)
+		if data, err := json.Marshal(rpcTx); err != nil {
+			t.Fatalf("test %d: marshalling failed; %v", i, err)
+		} else if err = tx2.UnmarshalJSON(data); err != nil {
+			t.Fatalf("test %d: unmarshal failed: %v", i, err)
+		} else if want, have := tx.Hash(), tx2.Hash(); want != have {
+			t.Fatalf("test %d: tx changed, want %x have %x", i, want, have)
+		} else {
+			want, have := tt.Want, string(data)
+			require.JSONEqf(t, want, have, "test %d: rpc json not match, want %s have %s", i, want, have)
+		}
+	}
+}
+
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 	var (
 		config = params.AllEthashProtocolChanges
@@ -58,7 +98,7 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 		tests  = allTransactionTypes(common.Address{0xde, 0xad}, config)
 	)
 
-	t.Parallel()
+	testTransactionMarshal(t, tests, config)
 
 	for i, tt := range tests {
 		var tx2 types.Transaction

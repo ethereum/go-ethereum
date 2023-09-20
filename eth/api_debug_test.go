@@ -101,11 +101,9 @@ func TestAccountRange(t *testing.T) {
 		if addr1 == (common.Address{}) {
 			continue
 		}
-
 		if _, duplicate := secondResult.Accounts[addr1]; duplicate {
 			t.Fatalf("pagination test failed:  results should not overlap")
 		}
-
 		hList = append(hList, crypto.Keccak256Hash(addr1.Bytes()))
 	}
 	// Test to see if it's possible to recover from the middle of the previous
@@ -114,7 +112,6 @@ func TestAccountRange(t *testing.T) {
 	middleH := hList[AccountRangeMaxResults/2]
 	middleResult := accountRangeTest(t, &trie, sdb, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
 	missing, infirst, insecond := 0, 0, 0
-
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
 			infirst++
@@ -124,15 +121,12 @@ func TestAccountRange(t *testing.T) {
 			missing++
 		}
 	}
-
 	if missing != 0 {
 		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", missing)
 	}
-
 	if infirst != AccountRangeMaxResults/2 {
 		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, AccountRangeMaxResults/2)
 	}
-
 	if insecond != AccountRangeMaxResults/2 {
 		t.Fatalf("Imbalance in the number of second-test results: %d != %d", insecond, AccountRangeMaxResults/2)
 	}

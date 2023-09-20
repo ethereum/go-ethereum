@@ -348,6 +348,7 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
+// PeerCount returns the number of connected peers.
 func (s *Ethereum) PeerCount() int {
 	return s.p2pServer.PeerCount()
 }

@@ -29,8 +29,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -66,6 +67,12 @@ func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
 // HexToHash sets byte representation of s to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
+
+func HexToRefHash(s string) *Hash {
+	v := BytesToHash(FromHex(s))
+
+	return &v
+}
 
 // Cmp compares two hashes.
 func (h Hash) Cmp(other Hash) int {
