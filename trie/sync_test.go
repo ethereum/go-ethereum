@@ -732,6 +732,13 @@ func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database
 	}
 }
 
+// Tests that the syncing target is keeping moving which may overwrite the stale
+// states synced in the last cycle.
+func TestSyncMovingTarget(t *testing.T) {
+	testSyncMovingTarget(t, rawdb.HashScheme)
+	testSyncMovingTarget(t, rawdb.PathScheme)
+}
+
 func testSyncMovingTarget(t *testing.T, scheme string) {
 	// Create a random trie to copy
 	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
