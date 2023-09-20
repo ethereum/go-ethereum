@@ -531,11 +531,11 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	if feeCap.BitLen() != 0 {
 		balance := b.pendingState.GetBalance(call.From) // from can't be nil
 		available := new(big.Int).Set(balance)
-		if call.Value != nil {
-			if call.Value.Cmp(available) >= 0 {
-				return 0, core.ErrInsufficientFundsForTransfer
+		if value := call.Value; value != nil {
+			if value.Cmp(available) >= 0 {
+				return 0, fmt.Errorf("%w: address: %s, have: %v, want: %v", core.ErrInsufficientFundsForTransfer, call.From, available, value)
 			}
-			available.Sub(available, call.Value)
+			available.Sub(available, value)
 		}
 		allowance := new(big.Int).Div(available, feeCap)
 		if allowance.IsUint64() && hi > allowance.Uint64() {
