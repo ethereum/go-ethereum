@@ -1243,8 +1243,12 @@ type multicallOpts struct {
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blockNrOrHash rpc.BlockNumberOrHash) ([]blockResult, error) {
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]blockResult, error) {
+	if blockNrOrHash == nil {
+		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNrOrHash = &n
+	}
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}

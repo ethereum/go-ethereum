@@ -1659,7 +1659,7 @@ func TestMulticallV1(t *testing.T) {
 			if tc.validation != nil && *tc.validation {
 				opts.Validation = true
 			}
-			result, err := api.MulticallV1(context.Background(), opts, tc.tag)
+			result, err := api.MulticallV1(context.Background(), opts, &tc.tag)
 			if tc.expectErr != nil {
 				if err == nil {
 					t.Fatalf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
