@@ -74,8 +74,46 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
+func (args *TransactionArgs) validateAll() error {
+	if err := args.validate(); err != nil {
+		return err
+	}
+	return args.validateFees()
+}
+
+func (args *TransactionArgs) validate() error {
+	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
+		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
+	}
+	if args.To == nil && len(args.data()) == 0 {
+		return errors.New(`contract creation without any data provided`)
+	}
+	return nil
+}
+
+func (args *TransactionArgs) validateFees() error {
+	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
+	// who are not yet synced past London to get defaults for other tx values. See
+	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
+	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
+	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
+		// Sanity check the EIP-1559 fee parameters if present.
+		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+	}
+	return nil
+}
+
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+	if err := args.validate(); err != nil {
+		return err
+	}
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
@@ -88,12 +126,6 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			return err
 		}
 		args.Nonce = (*hexutil.Uint64)(&nonce)
-	}
-	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
-		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
-	}
-	if args.To == nil && len(args.data()) == 0 {
-		return errors.New(`contract creation without any data provided`)
 	}
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
@@ -133,19 +165,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	if err := args.validateFees(); err != nil {
+		return err
 	}
-	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
-	// who are not yet synced past London to get defaults for other tx values. See
-	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
-	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
-		// Sanity check the EIP-1559 fee parameters if present.
-		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
-		}
+	if args.GasPrice != nil && args.MaxFeePerGas == nil && args.MaxPriorityFeePerGas == nil {
 		return nil
 	}
 	// Now attempt to fill in default value depending on whether London is active or not.

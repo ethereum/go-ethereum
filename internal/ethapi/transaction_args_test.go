@@ -19,6 +19,7 @@ package ethapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -195,10 +196,15 @@ func TestSetFeeDefaults(t *testing.T) {
 		}
 		got := test.in
 		err := got.setFeeDefaults(ctx, b)
-		if err != nil && err.Error() == test.err.Error() {
-			// Test threw expected error.
-			continue
-		} else if err != nil {
+		fmt.Printf("err: %v\n", err)
+		if err != nil {
+			if test.err == nil {
+				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
+			}
+			if err.Error() == test.err.Error() {
+				// Test threw expected error.
+				continue
+			}
 			t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
 		}
 		if !reflect.DeepEqual(got, test.want) {

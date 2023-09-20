@@ -1312,10 +1312,11 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 				call.Gas = (*hexutil.Uint64)(&remaining)
 			}
 			if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
-				call.GasPrice = (*hexutil.Big)(big.NewInt(0))
+				call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
+				call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
 			}
-			// TODO: Tx and message used for executing will probably have different values.
-			if err := call.setDefaults(ctx, s.b); err != nil {
+			// TODO: check chainID and against current header for london fees
+			if err := call.validateAll(); err != nil {
 				return nil, err
 			}
 			tx := call.ToTransaction(true)
