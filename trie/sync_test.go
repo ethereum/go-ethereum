@@ -814,7 +814,6 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 		deleteFn = func(key []byte, tr *Trie, states map[string][]byte) {
 			tr.Delete(key)
 			delete(states, string(key))
-			return
 		}
 		writeFn = func(key []byte, val []byte, tr *Trie, states map[string][]byte) {
 			if val == nil {
