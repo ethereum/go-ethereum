@@ -1214,7 +1214,7 @@ type blockResult struct {
 }
 
 type callResult struct {
-	ReturnValue hexutil.Bytes  `json:"return"`
+	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
 	Status      hexutil.Uint64 `json:"status"`
