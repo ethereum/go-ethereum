@@ -127,8 +127,7 @@ When Geth is started using `--datadir data` the genesis block defined in `genesi
 geth --datadir data --networkid 12345
 ```
 
-The default value for the storage scheme is `hash.` In case the plan is to use the `path` based storage scheme, the `--state.scheme=path` needs to be passed during the `init` 
-step. This will ensure that the database is initialized with the correct storage scheme for the network. 
+The default value for the storage scheme is `hash.` In case the plan is to use the `path` based storage scheme, the `--state.scheme=path` needs to be passed during the `init` step. This will ensure that the database is initialized with the correct storage scheme for the network. 
 
 ```sh
 geth --state.scheme=path init --datadir data genesis.json
