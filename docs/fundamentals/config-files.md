@@ -83,7 +83,6 @@ GasFloor = 0
 GasCeil = 30000000
 GasPrice = 1000000000
 Recommit = 3000000000
-Noverify = false
 
 [Eth.Ethash]
 CacheDir = "ethash"
