@@ -284,29 +284,6 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 	}
 }
 
-// ExistsTrieNode checks for the presence of the trie node with the specified
-// account hash and node path, regardless of the node hash.
-//
-// hashScheme-based lookup requires the following:
-//   - hash
-//
-// pathScheme-based lookup requires the following:
-//   - owner
-//   - path
-func ExistsTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash, scheme string) bool {
-	switch scheme {
-	case HashScheme:
-		return HasLegacyTrieNode(db, hash)
-	case PathScheme:
-		if owner == (common.Hash{}) {
-			return ExistsAccountTrieNode(db, path)
-		}
-		return ExistsStorageTrieNode(db, owner, path)
-	default:
-		panic(fmt.Sprintf("Unknown scheme %v", scheme))
-	}
-}
-
 // ReadStateScheme reads the state scheme of persistent state, or none
 // if the state is not present in database.
 func ReadStateScheme(db ethdb.Reader) string {

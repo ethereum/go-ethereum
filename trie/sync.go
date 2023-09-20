@@ -44,11 +44,11 @@ var ErrAlreadyProcessed = errors.New("already processed")
 const maxFetchesPerDepth = 16384
 
 var (
-	// deletionGauge is the metric to track how many trie nodes are deleted
-	// in total during the sync process.
+	// deletionGauge is the metric to track how many trie node deletions
+	// are performed in total during the sync process.
 	deletionGauge = metrics.NewRegisteredGauge("trie/sync/delete", nil)
 
-	// lookupGauge is the metric to track how many trie nodes lookup are
+	// lookupGauge is the metric to track how many trie node lookups are
 	// performed to determine if node needs to be deleted.
 	lookupGauge = metrics.NewRegisteredGauge("trie/sync/lookup", nil)
 )
