@@ -510,26 +510,26 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("e09fface"),
 		}, 21275, nil, nil},
 	}
-	for _, c := range cases {
+	for i, c := range cases {
 		got, err := sim.EstimateGas(context.Background(), c.message)
 		if c.expectError != nil {
 			if err == nil {
-				t.Fatalf("Expect error, got nil")
+				t.Fatalf("test: %d expect error, got nil", i)
 			}
-			if c.expectError.Error() != err.Error() {
-				t.Fatalf("Expect error, want %v, got %v", c.expectError, err)
+			if c.expectError.Error() != err.Error() && !errors.Is(err, c.expectError) {
+				t.Fatalf("test: %d expect error, want %v, got %v", i, c.expectError, err)
 			}
 			if c.expectData != nil {
 				if err, ok := err.(*revertError); !ok {
-					t.Fatalf("Expect revert error, got %T", err)
+					t.Fatalf("test: %d expect revert error, got %T", i, err)
 				} else if !reflect.DeepEqual(err.ErrorData(), c.expectData) {
-					t.Fatalf("Error data mismatch, want %v, got %v", c.expectData, err.ErrorData())
+					t.Fatalf("test: %d error data mismatch, want %v, got %v", i, c.expectData, err.ErrorData())
 				}
 			}
 			continue
 		}
 		if got != c.expect {
-			t.Fatalf("Gas estimation mismatch, want %d, got %d", c.expect, got)
+			t.Fatalf("test: %d gas estimation mismatch, want %d, got %d", i, c.expect, got)
 		}
 	}
 }
@@ -584,6 +584,15 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, errors.New("gas required exceeds allowance (10999)")}, // 10999=(2.2ether-1000wei)/(2e14)
 
+		{"EstimateWithInsufficientFund", ethereum.CallMsg{
+			From:     addr,
+			To:       &recipient,
+			Gas:      0,
+			GasPrice: big.NewInt(1),
+			Value:    big.NewInt(3 * params.Ether),
+			Data:     nil,
+		}, 0, core.ErrInsufficientFundsForTransfer},
+
 		{"EstimateEIP1559WithHighFees", ethereum.CallMsg{
 			From:      addr,
 			To:        &addr,
@@ -610,7 +619,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			if err == nil {
 				t.Fatalf("test %d: expect error, got nil", i)
 			}
-			if c.expectError.Error() != err.Error() {
+			if c.expectError.Error() != err.Error() && !errors.Is(err, c.expectError) {
 				t.Fatalf("test %d: expect error, want %v, got %v", i, c.expectError, err)
 			}
 			continue
