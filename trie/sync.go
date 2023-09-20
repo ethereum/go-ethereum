@@ -361,20 +361,23 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 // Commit flushes the data stored in the internal membatch out to persistent
 // storage, returning any occurred error.
 func (s *Sync) Commit(dbw ethdb.Batch) error {
-	// Dump the membatch into a database dbw
+	// Flush the pending node writes into database batch.
 	for path, value := range s.membatch.nodes {
 		owner, inner := ResolvePath([]byte(path))
 		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
+	// Flush the pending node deletes into the database batch.
+	// Please note that each written and deleted node has a
+	// unique path, ensuring no duplication occurs.
 	for path := range s.membatch.deletes {
 		owner, inner := ResolvePath([]byte(path))
 		rawdb.DeleteTrieNode(dbw, owner, inner, common.Hash{} /* unused */, s.scheme)
 	}
+	// Flush the pending code writes into database batch.
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
 	}
-	// Drop the membatch data and return
-	s.membatch = newSyncMemBatch()
+	s.membatch = newSyncMemBatch() // reset the batch
 	return nil
 }
 
@@ -464,7 +467,13 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				// Pebble doesn't use a bloom filter to enhance read performance
 				// for non-existent items, this check would significantly slow down
 				// overall performance. FIX IT(rjl493456442)
-				if rawdb.HasTrieNodeInPath(s.database, owner, append(inner, key[:i]...)) {
+				var exists bool
+				if owner == (common.Hash{}) {
+					exists = rawdb.ExistsAccountTrieNode(s.database, append(inner, key[:i]...))
+				} else {
+					exists = rawdb.ExistsStorageTrieNode(s.database, owner, append(inner, key[:i]...))
+				}
+				if exists {
 					req.deletes = append(req.deletes, key[:i])
 					deletionGauge.Inc(1)
 					log.Info("Detected dangling node", "owner", owner, "path", append(inner, key[:i]...))
