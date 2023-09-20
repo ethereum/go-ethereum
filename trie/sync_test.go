@@ -732,16 +732,73 @@ func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database
 	}
 }
 
-// Tests that the syncing target is keeping moving which may overwrite the stale
-// states synced in the last cycle.
-func TestSyncMovingTarget(t *testing.T) {
-	testSyncMovingTarget(t, rawdb.HashScheme, true)
-	testSyncMovingTarget(t, rawdb.HashScheme, false)
-	testSyncMovingTarget(t, rawdb.PathScheme, true)
-	testSyncMovingTarget(t, rawdb.PathScheme, false)
+func testSyncMovingTarget(t *testing.T, scheme string) {
+	// Create a random trie to copy
+	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+
+	// Create a destination trie and sync with the scheduler
+	diskdb := rawdb.NewMemoryDatabase()
+	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
+	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData, false)
+
+	// Push more modifications into the src trie, to see if dest trie can still
+	// sync with it(overwrite stale states)
+	var (
+		preRoot = srcTrie.Hash()
+		diff    = make(map[string][]byte)
+	)
+	for i := byte(0); i < 10; i++ {
+		key, val := randBytes(32), randBytes(32)
+		srcTrie.MustUpdate(key, val)
+		diff[string(key)] = val
+	}
+	root, nodes, _ := srcTrie.Commit(false)
+	if err := srcDb.Update(root, preRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		panic(err)
+	}
+	if err := srcDb.Commit(root, false); err != nil {
+		panic(err)
+	}
+	preRoot = root
+	srcTrie, _ = NewStateTrie(TrieID(root), srcDb)
+
+	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
+	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), diff, false)
+
+	// Revert added modifications from the src trie, to see if dest trie can still
+	// sync with it(overwrite reverted states)
+	var reverted = make(map[string][]byte)
+	for k := range diff {
+		srcTrie.MustDelete([]byte(k))
+		reverted[k] = nil
+	}
+	for k := range srcData {
+		val := randBytes(32)
+		srcTrie.MustUpdate([]byte(k), val)
+		reverted[k] = val
+	}
+	root, nodes, _ = srcTrie.Commit(false)
+	if err := srcDb.Update(root, preRoot, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		panic(err)
+	}
+	if err := srcDb.Commit(root, false); err != nil {
+		panic(err)
+	}
+	srcTrie, _ = NewStateTrie(TrieID(root), srcDb)
+
+	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
+	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), reverted, false)
 }
 
-func testSyncMovingTarget(t *testing.T, scheme string, tiny bool) {
+// Tests if state syncer can correctly catch up the pivot move.
+func TestPivotMove(t *testing.T) {
+	testPivotMove(t, rawdb.HashScheme, true)
+	testPivotMove(t, rawdb.HashScheme, false)
+	testPivotMove(t, rawdb.PathScheme, true)
+	testPivotMove(t, rawdb.PathScheme, false)
+}
+
+func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	var (
 		srcDisk    = rawdb.NewMemoryDatabase()
 		srcTrieDB  = newTestDatabase(srcDisk, scheme)

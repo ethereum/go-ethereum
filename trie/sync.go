@@ -462,11 +462,9 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		if _, ok := node.Val.(hashNode); ok && s.scheme == rawdb.PathScheme {
 			owner, inner := ResolvePath(req.path)
 			for i := 1; i < len(key); i++ {
-				// Theoretically, it's necessary to check for the presence before
-				// blindly caching deletion commands. However, due to the fact that
-				// Pebble doesn't use a bloom filter to enhance read performance
-				// for non-existent items, this check would significantly slow down
-				// overall performance. FIX IT(rjl493456442)
+				// While checking for a non-existent item in Pebble can be less efficient
+				// without a bloom filter, the relatively low frequency of lookups makes
+				// the performance impact negligible.
 				var exists bool
 				if owner == (common.Hash{}) {
 					exists = rawdb.ExistsAccountTrieNode(s.database, append(inner, key[:i]...))
@@ -476,7 +474,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				if exists {
 					req.deletes = append(req.deletes, key[:i])
 					deletionGauge.Inc(1)
-					log.Info("Detected dangling node", "owner", owner, "path", append(inner, key[:i]...))
+					log.Debug("Detected dangling node", "owner", owner, "path", append(inner, key[:i]...))
 				}
 			}
 			lookupGauge.Inc(int64(len(key) - 1))
