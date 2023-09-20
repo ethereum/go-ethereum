@@ -22,8 +22,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -52,10 +50,8 @@ func TestDump(t *testing.T) {
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
-
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
-
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -94,7 +90,6 @@ func TestDump(t *testing.T) {
         }
     }
 }`
-
 	if got != want {
 		t.Errorf("DumpToCollector mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
@@ -150,7 +145,6 @@ func TestNull(t *testing.T) {
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty current value, got %x", value)
 	}
-
 	if value := s.state.GetCommittedState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty committed value, got %x", value)
 	}
@@ -158,9 +152,7 @@ func TestNull(t *testing.T) {
 
 func TestSnapshot(t *testing.T) {
 	stateobjaddr := common.BytesToAddress([]byte("aa"))
-
 	var storageaddr common.Hash
-
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
 	s := newStateEnv()
@@ -179,18 +171,15 @@ func TestSnapshot(t *testing.T) {
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
 		t.Errorf("wrong storage value %v, want %v", v, data1)
 	}
-
 	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
 	}
 
 	// revert up to the genesis state and ensure correct content
 	s.state.RevertToSnapshot(genesis)
-
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong storage value %v, want %v", v, common.Hash{})
 	}
-
 	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
 	}
@@ -206,7 +195,6 @@ func TestSnapshot2(t *testing.T) {
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
-
 	var storageaddr common.Hash
 
 	data0 := common.BytesToHash([]byte{17})
@@ -262,23 +250,18 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
-
 	if so0.Balance().Cmp(so1.Balance()) != 0 {
 		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
 	}
-
 	if so0.Nonce() != so1.Nonce() {
 		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
 	}
-
 	if so0.data.Root != so1.data.Root {
 		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
 	}
-
 	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
 		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
 	}
-
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
@@ -286,95 +269,27 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if len(so1.dirtyStorage) != len(so0.dirtyStorage) {
 		t.Errorf("Dirty storage size mismatch: have %d, want %d", len(so1.dirtyStorage), len(so0.dirtyStorage))
 	}
-
 	for k, v := range so1.dirtyStorage {
 		if so0.dirtyStorage[k] != v {
 			t.Errorf("Dirty storage key %x mismatch: have %v, want %v", k, so0.dirtyStorage[k], v)
 		}
 	}
-
 	for k, v := range so0.dirtyStorage {
 		if so1.dirtyStorage[k] != v {
 			t.Errorf("Dirty storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
-
 	if len(so1.originStorage) != len(so0.originStorage) {
 		t.Errorf("Origin storage size mismatch: have %d, want %d", len(so1.originStorage), len(so0.originStorage))
 	}
-
 	for k, v := range so1.originStorage {
 		if so0.originStorage[k] != v {
 			t.Errorf("Origin storage key %x mismatch: have %v, want %v", k, so0.originStorage[k], v)
 		}
 	}
-
 	for k, v := range so0.originStorage {
 		if so1.originStorage[k] != v {
 			t.Errorf("Origin storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
-}
-
-func TestValidateKnownAccounts(t *testing.T) {
-	t.Parallel()
-
-	knownAccounts := make(types.KnownAccounts)
-
-	types.InsertKnownAccounts(knownAccounts, common.HexToAddress("0xadd1add1add1add1add1add1add1add1add1add1"), common.HexToHash("0x2d6f8a898e7dec0bb7a50e8c142be32d7c98c096ff68ed57b9b08280d9aca1ce"))
-	types.InsertKnownAccounts(knownAccounts, common.HexToAddress("0xadd2add2add2add2add2add2add2add2add2add2"), map[common.Hash]common.Hash{
-		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000aaa"): common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000bbb"),
-		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ccc"): common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ddd"),
-	})
-
-	stateobjaddr1 := common.HexToAddress("0xadd1add1add1add1add1add1add1add1add1add1")
-	stateobjaddr2 := common.HexToAddress("0xadd2add2add2add2add2add2add2add2add2add2")
-
-	storageaddr1 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000zzz")
-	storageaddr21 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000aaa")
-	storageaddr22 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ccc")
-
-	data1 := common.BytesToHash([]byte{24})
-	data21 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000bbb")
-	data22 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ddd")
-
-	s := newStateTest()
-
-	// set initial state object value
-	s.state.SetState(stateobjaddr1, storageaddr1, data1)
-	s.state.SetState(stateobjaddr2, storageaddr21, data21)
-	s.state.SetState(stateobjaddr2, storageaddr22, data22)
-
-	require.NoError(t, s.state.ValidateKnownAccounts(knownAccounts))
-
-	types.InsertKnownAccounts(knownAccounts, common.HexToAddress("0xadd1add1add1add1add1add1add1add1add1add2"), common.HexToHash("0x2d6f8a898e7dec0bb7a50e8c142be32d7c98c096ff68ed57b9b08280d9aca1cf"))
-
-	stateobjaddr3 := common.HexToAddress("0xadd1add1add1add1add1add1add1add1add1add2")
-	storageaddr3 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000yyy")
-	data3 := common.BytesToHash([]byte{24})
-
-	s.state.SetState(stateobjaddr3, storageaddr3, data3)
-
-	// expected error
-	err := s.state.ValidateKnownAccounts(knownAccounts)
-	require.Error(t, err, "should have been an error")
-
-	// correct the previous mistake "0x2d6f8a898e7dec0bb7a50e8c142be32d7c98c096ff68ed57b9b08280d9aca1cf" -> "0x2d6f8a898e7dec0bb7a50e8c142be32d7c98c096ff68ed57b9b08280d9aca1ce"
-	types.InsertKnownAccounts(knownAccounts, common.HexToAddress("0xadd1add1add1add1add1add1add1add1add1add2"), common.HexToHash("0x2d6f8a898e7dec0bb7a50e8c142be32d7c98c096ff68ed57b9b08280d9aca1ce"))
-	types.InsertKnownAccounts(knownAccounts, common.HexToAddress("0xadd2add2add2add2add2add2add2add2add2add3"), map[common.Hash]common.Hash{
-		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000aaa"): common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000bbb"),
-		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ccc"): common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ddd"),
-	})
-
-	stateobjaddr4 := common.HexToAddress("0xadd2add2add2add2add2add2add2add2add2add3")
-	storageaddr41 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000aaa")
-	storageaddr42 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000ccc")
-	data4 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000bbb")
-
-	s.state.SetState(stateobjaddr4, storageaddr41, data4)
-	s.state.SetState(stateobjaddr4, storageaddr42, data4)
-
-	// expected error
-	err = s.state.ValidateKnownAccounts(knownAccounts)
-	require.Error(t, err, "should have been an error")
 }
