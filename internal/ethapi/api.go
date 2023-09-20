@@ -998,6 +998,7 @@ type BlockOverrides struct {
 	Coinbase   *common.Address
 	Random     *common.Hash
 	BaseFee    *hexutil.Big
+	BlobFee    *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1025,6 +1026,9 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	}
+	if diff.BlobFee != nil {
+		blockCtx.BlobFee = diff.BlobFee.ToInt()
 	}
 }
 
