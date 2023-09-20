@@ -126,6 +126,12 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
+	// Database - LevelDB options
+	LevelDbCompactionTableSize           uint64
+	LevelDbCompactionTableSizeMultiplier float64
+	LevelDbCompactionTotalSize           uint64
+	LevelDbCompactionTotalSizeMultiplier float64
+
 	TrieCleanCache int
 	TrieDirtyCache int
 	TrieTimeout    time.Duration
@@ -201,7 +207,6 @@ type Config struct {
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
 func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, db ethdb.Database, blockchainAPI *ethapi.BlockChainAPI) (consensus.Engine, error) {
-	var engine consensus.Engine
 	// nolint:nestif
 	if chainConfig.Clique != nil {
 		return beacon.New(clique.New(chainConfig.Clique, db)), nil
@@ -230,11 +235,9 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 
 			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false), nil
 		}
-	} else if !chainConfig.TerminalTotalDifficultyPassed {
-		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
-	} else {
-		engine = ethash.NewFaker()
 	}
-
-	return beacon.New(engine), nil
+	if !chainConfig.TerminalTotalDifficultyPassed {
+		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
+	}
+	return beacon.New(ethash.NewFaker()), nil
 }

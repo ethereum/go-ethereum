@@ -570,7 +570,7 @@ func (b testBackend) PurgeWhitelistedCheckpoint() {
 }
 
 func (b testBackend) RPCRpcReturnDataLimit() uint64 {
-	panic("implement me")
+	return 0
 }
 
 func (b testBackend) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {

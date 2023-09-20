@@ -200,7 +200,6 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	// We need to properly set the terminal total difficulty
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[9].Difficulty())
 	n, ethservice := startEthService(t, genesis, blocks[:9])
-
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
@@ -221,13 +220,11 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		FinalizedBlockHash: common.Hash{},
 	}
 	_, err := api.ForkchoiceUpdatedV1(fcState, &blockParams)
-
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 	// give the payload some time to be built
 	time.Sleep(100 * time.Millisecond)
-
 	payloadID := (&miner.BuildPayloadArgs{
 		Parent:       fcState.HeadBlockHash,
 		Timestamp:    blockParams.Timestamp,
@@ -235,21 +232,17 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		Random:       blockParams.Random,
 	}).Id()
 	execData, err := api.GetPayloadV1(payloadID)
-
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-
 	if len(execData.Transactions) != blocks[9].Transactions().Len() {
 		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
 	}
 	// Test invalid payloadID
 	var invPayload engine.PayloadID
-
 	copy(invPayload[:], payloadID[:])
 	invPayload[0] = ^invPayload[0]
 	_, err = api.GetPayloadV1(invPayload)
-
 	if err == nil {
 		t.Fatal("expected error retrieving invalid payload")
 	}

@@ -26,10 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type helloRPC string
@@ -49,7 +48,6 @@ type authTest struct {
 
 func (at *authTest) Run(t *testing.T) {
 	ctx := context.Background()
-
 	cl, err := rpc.DialOptions(ctx, at.endpoint, rpc.WithHTTPAuth(at.prov))
 	if at.expectDialFail {
 		if err == nil {
@@ -58,13 +56,11 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
-
 	if err != nil {
 		t.Fatalf("failed to dial rpc endpoint: %v", err)
 	}
 
 	var x string
-
 	err = cl.CallContext(ctx, &x, "engine_helloWorld")
 	if at.expectCall1Fail {
 		if err == nil {
@@ -73,11 +69,9 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
-
 	if err != nil {
 		t.Fatalf("failed to call rpc endpoint: %v", err)
 	}
-
 	if x != "hello engine" {
 		t.Fatalf("method was silent but did not return expected value: %q", x)
 	}
@@ -90,17 +84,14 @@ func (at *authTest) Run(t *testing.T) {
 			return
 		}
 	}
-
 	if err != nil {
 		t.Fatalf("failed to call rpc endpoint: %v", err)
 	}
-
 	if x != "hello eth" {
 		t.Fatalf("method was silent but did not return expected value: %q", x)
 	}
 }
 
-// nolint: tparallel, paralleltest
 func TestAuthEndpoints(t *testing.T) {
 	var secret [32]byte
 	if _, err := crand.Read(secret[:]); err != nil {
@@ -211,27 +202,22 @@ func noneAuth(secret [32]byte) rpc.HTTPAuth {
 		token := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now()},
 		})
-
 		s, err := token.SignedString(secret[:])
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
-
 		header.Set("Authorization", "Bearer "+s)
-
 		return nil
 	}
 }
 
 func changingAuth(provs ...rpc.HTTPAuth) rpc.HTTPAuth {
 	i := 0
-
 	return func(header http.Header) error {
 		i += 1
 		if i > len(provs) {
 			i = len(provs)
 		}
-
 		return provs[i-1](header)
 	}
 }
@@ -241,14 +227,11 @@ func offsetTimeAuth(secret [32]byte, offset time.Duration) rpc.HTTPAuth {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now().Add(offset)},
 		})
-
 		s, err := token.SignedString(secret[:])
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
-
 		header.Set("Authorization", "Bearer "+s)
-
 		return nil
 	}
 }

@@ -1187,18 +1187,13 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 //
 // This logic should not hold for local transactions, unless the local tracking
 // mechanism is disabled.
-
-// nolint : paralleltest
 func TestQueueTimeLimiting(t *testing.T) {
 	testQueueTimeLimiting(t, false)
 }
-
-// nolint : paralleltest
 func TestQueueTimeLimitingNoLocals(t *testing.T) {
 	testQueueTimeLimiting(t, true)
 }
 
-// nolint:gocognit,thelper
 func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	// Reduce the eviction interval to a testable amount
 	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
@@ -1230,16 +1225,13 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if err := pool.addRemote(pricedTransaction(1, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-
 	pending, queued := pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
-
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1252,11 +1244,9 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
-
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1268,7 +1258,6 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
-
 	if nolocals {
 		if queued != 0 {
 			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
@@ -1278,7 +1267,6 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 		}
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1293,11 +1281,9 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
-
 	if queued != 0 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1306,22 +1292,18 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if err := pool.addLocal(pricedTransaction(4, 100000, big.NewInt(1), local)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-
 	if err := pool.addRemoteSync(pricedTransaction(4, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-
 	time.Sleep(5 * evictionInterval) // A half lifetime pass
 
 	// Queue executable transactions, the life cycle should be restarted.
 	if err := pool.addLocal(pricedTransaction(2, 100000, big.NewInt(1), local)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-
 	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-
 	time.Sleep(6 * evictionInterval)
 
 	// All gapped transactions shouldn't be kicked out
@@ -1329,23 +1311,19 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
-
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 
 	// The whole life time pass after last promotion, kick out stale transactions
 	time.Sleep(2 * config.Lifetime)
-
 	pending, queued = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
-
 	if nolocals {
 		if queued != 0 {
 			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
@@ -1355,7 +1333,6 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 		}
 	}
-
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}

@@ -195,7 +195,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, rawdb.ExtraDBConfig{})
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -229,7 +229,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		db, err := stack.OpenDatabase(name, 0, 0, "", true)
+		db, err := stack.OpenDatabase(name, 0, 0, "", true, rawdb.ExtraDBConfig{})
 
 		if err != nil {
 			if !os.IsNotExist(err) {

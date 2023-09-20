@@ -366,6 +366,14 @@ type OpenOptions struct {
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
+	ExtraDBConfig     ExtraDBConfig
+}
+
+type ExtraDBConfig struct {
+	LevelDBCompactionTableSize           uint64  // LevelDB SSTable/file size in mebibytes
+	LevelDBCompactionTableSizeMultiplier float64 // Multiplier on LevelDB SSTable/file size
+	LevelDBCompactionTotalSize           uint64  // Total size in mebibytes of SSTables in a given LevelDB level
+	LevelDBCompactionTotalSizeMultiplier float64 // Multiplier on level size on LevelDB levels
 }
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.

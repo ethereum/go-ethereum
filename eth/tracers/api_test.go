@@ -497,6 +497,12 @@ func TestTraceBlock(t *testing.T) {
 	}
 }
 
+// txTraceResult is the result of a single transaction trace.
+type txTraceResultTest struct {
+	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
 func TestIOdump(t *testing.T) {
 	t.Parallel()
 
@@ -558,12 +564,22 @@ func TestIOdump(t *testing.T) {
 			continue
 		}
 
+		// Done As txTraceResult struct was changed during Cancun changes
+		resArr := make([]*txTraceResultTest, 0)
+		for _, res := range result {
+			res := &txTraceResultTest{
+				Result: res.Result,
+				Error:  res.Error,
+			}
+			resArr = append(resArr, res)
+		}
+
 		if err != nil {
 			t.Errorf("test %d, want no error, have %v", i, err)
 			continue
 		}
 
-		have, err := json.Marshal(result)
+		have, err := json.Marshal(resArr)
 		if err != nil {
 			t.Errorf("Error in Marshal: %v", err)
 		}
