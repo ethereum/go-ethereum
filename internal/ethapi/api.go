@@ -1240,7 +1240,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		if args.Value != nil {
 			value := args.Value.ToInt()
 			if value.Cmp(available) >= 0 {
-				return 0, fmt.Errorf("%v: address: %s, have: %v, want: %v+(gas)", core.ErrInsufficientFundsForTransfer, *args.From, available, value)
+				return 0, fmt.Errorf("%w: address: %s, have: %v, want: %v+(gas)", core.ErrInsufficientFunds, *args.From, available, value)
 			}
 			available.Sub(available, value)
 		}
