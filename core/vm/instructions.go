@@ -817,6 +817,26 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	return ret, nil
 }
 
+func opYield(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+  // Save current Environment as coroutine
+  coroutine := NewCoroutine(*pc + 1, *scope.Stack)
+
+  // Push coroutine to the stack
+  scope.PushCoroutine(coroutine)
+
+  log.Printf("Coroutine %d yielded with %v", coroutine.PC, coroutine.Stack)
+
+  // Call the next coroutine
+  nextCoroutine, err := scope.PopCoroutine()
+  if err != nil {
+    return nil, err
+  }
+  ret, err := nextCoroutine.ExecuteCoroutine(interpreter, scope)
+  log.Printf("Coroutine %d returned with %v", nextCoroutine.PC, ret)
+
+  return nil, errStopToken
+}
+
 func opReturn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.pop()
 	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))

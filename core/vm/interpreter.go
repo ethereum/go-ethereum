@@ -275,7 +275,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		err = nil // clear stop token error
 	}
 
-  log2.Println("returning from run with", res, err)
   // Res is array of bytes located in scope.Memory
 	return res, err
 }

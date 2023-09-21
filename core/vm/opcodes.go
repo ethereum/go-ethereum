@@ -219,6 +219,7 @@ const (
 
 	STATICCALL   OpCode = 0xfa
   SPAWN        OpCode = 0xfb
+  YIELD        OpCode = 0xfc
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
 	SELFDESTRUCT OpCode = 0xff
@@ -393,6 +394,7 @@ var opCodeToString = map[OpCode]string{
 	DELEGATECALL: "DELEGATECALL",
 	CREATE2:      "CREATE2",
 	STATICCALL:   "STATICCALL",
+  YIELD:        "YIELD",
 	REVERT:       "REVERT",
 	INVALID:      "INVALID",
 	SELFDESTRUCT: "SELFDESTRUCT",
@@ -448,6 +450,7 @@ var stringToOp = map[string]OpCode{
 	"BLOBHASH":       BLOBHASH,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
+  "YIELD":          YIELD,
 	"CODESIZE":       CODESIZE,
 	"CODECOPY":       CODECOPY,
 	"GASPRICE":       GASPRICE,
