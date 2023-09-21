@@ -10,7 +10,7 @@ Bor is the Official Golang implementation of the Matic protocol. It is a fork of
 ![contributors](https://img.shields.io/github/contributors-anon/maticnetwork/bor)
 ![size](https://img.shields.io/github/languages/code-size/maticnetwork/bor)
 ![lines](https://img.shields.io/tokei/lines/github/maticnetwork/bor)
-[![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.gg/zdwkdvMNY2)
+[![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.com/invite/0xPolygonDevs)
 [![Twitter Follow](https://img.shields.io/twitter/follow/0xPolygon.svg?style=social)](https://twitter.com/0xPolygon)
 
 ## How to contribute
@@ -91,7 +91,7 @@ them using your favourite package manager. Once the dependencies are installed, 
 - After your changes are committed to your GitHub fork, submit a pull request (PR) to the `master` branch of the `maticnetwork/bor` repo
 - In your PR description, reference the issue it resolves (see [linking a pull request to an issue using a keyword](https://docs.github.com/en/free-pro-team@latest/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword))
   - ex. `Updates out of date content [Fixes #1234]`
-- Why not say hi and draw attention to your PR in [our discord server](https://discord.gg/0xpolygon)?
+- Why not say hi and draw attention to your PR in [our discord server](https://discord.com/invite/0xPolygonDevs)?
 
 ### Wait for review
 
@@ -121,4 +121,4 @@ included in our repository in the `COPYING` file.
 
 ## Join our Discord server
 
-Join Polygon community  – share your ideas or just say hi over [on Discord](https://discord.gg/zdwkdvMNY2).
+Join Polygon community  – share your ideas or just say hi over [on Discord](https://discord.com/invite/0xPolygonDevs).
