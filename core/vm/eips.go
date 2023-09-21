@@ -282,10 +282,10 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-// opBlobFee implements BLOBBASEFEE opcode
-func opBlobFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	blobFee, _ := uint256.FromBig(interpreter.evm.Context.BlobFee)
-	scope.Stack.push(blobFee)
+// opBlobBaseFee implements BLOBBASEFEE opcode
+func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	blobBaseFee, _ := uint256.FromBig(interpreter.evm.Context.BlobBaseFee)
+	scope.Stack.push(blobBaseFee)
 	return nil, nil
 }
 
@@ -299,7 +299,7 @@ func enable4844(jt *JumpTable) {
 		maxStack:    maxStack(1, 1),
 	}
 	jt[BLOBBASEFEE] = &operation{
-		execute:     opBlobFee,
+		execute:     opBlobBaseFee,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),

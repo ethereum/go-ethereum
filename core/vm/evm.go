@@ -73,7 +73,7 @@ type BlockContext struct {
 	Time          uint64         // Provides information for TIME
 	Difficulty    *big.Int       // Provides information for DIFFICULTY
 	BaseFee       *big.Int       // Provides information for BASEFEE
-	BlobFee       *big.Int       // Provides information for BLOBBASEFEE
+	BlobBaseFee   *big.Int       // Provides information for BLOBBASEFEE
 	Random        *common.Hash   // Provides information for PREVRANDAO
 	ExcessBlobGas *uint64        // ExcessBlobGas field in the header, needed to compute the data
 }
