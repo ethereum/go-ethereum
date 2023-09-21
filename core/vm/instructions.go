@@ -579,8 +579,6 @@ func opSpawn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
   // Add coroutine to queue
   scope.PushCoroutine(coroutine)
 
-  log.Printf("Spawned coroutine %v", coroutine)
-
   return nil, nil
 }
 
@@ -824,15 +822,12 @@ func opYield(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
   // Push coroutine to the stack
   scope.PushCoroutine(coroutine)
 
-  log.Printf("Coroutine %d yielded with %v", coroutine.PC, coroutine.Stack)
-
   // Call the next coroutine
   nextCoroutine, err := scope.PopCoroutine()
   if err != nil {
     return nil, err
   }
-  ret, err := nextCoroutine.ExecuteCoroutine(interpreter, scope)
-  log.Printf("Coroutine %d returned with %v", nextCoroutine.PC, ret)
+  nextCoroutine.ExecuteCoroutine(interpreter, scope)
 
   return nil, errStopToken
 }

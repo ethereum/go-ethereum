@@ -1,8 +1,6 @@
 package vm
 
 import (
-	"log"
-
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -18,8 +16,6 @@ func NewCoroutine(pc uint64, stack Stack) Coroutine {
 }
 
 func (co *Coroutine) ExecuteCoroutine(interpreter *EVMInterpreter, scope *ScopeContext) (ret []byte, err error) {
-  log.Println("ExecuteCoroutine: ", co.PC, co.Stack)
-
   // Don't bother with the execution if there's no code.
   if len(scope.Contract.Code) == 0 {
     return nil, nil

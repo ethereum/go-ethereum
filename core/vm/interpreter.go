@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	log2 "log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -61,16 +60,9 @@ func (scope *ScopeContext) AwaitTermination(interpreter *EVMInterpreter) {
   coroutine, err := scope.PopCoroutine()
   for err == nil {
     // TODO: Propogate returns and errors?
-    ret, err2 := coroutine.ExecuteCoroutine(interpreter, scope)
-    if err2 != nil {
-      log2.Println("Coroutine execution failed", "error", err2)
-    }
-    if ret != nil {
-      log2.Println("Coroutine returned", "ret", ret)
-    }
+    coroutine.ExecuteCoroutine(interpreter, scope)
 
     coroutine, err = scope.PopCoroutine()
-    log2.Println("Awaiting coroutine termination", "coroutine", coroutine, "err", err)
   }
 }
 
