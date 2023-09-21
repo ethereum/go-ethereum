@@ -825,6 +825,9 @@ func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	// 	return core.ErrInsufficientFunds
 	// }
 	// Verify that replacing transactions will not result in overdraft
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+
 	list := pool.pending[from]
 	if list != nil { // Sender already has pending txs
 		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
