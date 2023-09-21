@@ -55,6 +55,7 @@ func BenchmarkSearch512Layers(b *testing.B) { benchmarkSearch(b, 0, 512) }
 func BenchmarkSearch1Layer(b *testing.B) { benchmarkSearch(b, 127, 128) }
 
 func benchmarkSearch(b *testing.B, depth int, total int) {
+	b.Helper()
 	var (
 		npath []byte
 		nhash common.Hash

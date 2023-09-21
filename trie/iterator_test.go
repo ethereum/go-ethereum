@@ -140,6 +140,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 }
 
 func testNodeIteratorCoverage(t *testing.T, scheme string) {
+	t.Helper()
 	// Create some arbitrary test trie to iterate
 	db, nodeDb, trie, _ := makeTestTrie(scheme)
 
@@ -492,6 +493,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 }
 
 func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme string) {
+	t.Helper()
 	// Commit test trie to db, then remove the node containing "bars".
 	var (
 		barNodePath []byte
@@ -660,6 +662,7 @@ func TestNodeIteratorLargeTrie(t *testing.T) {
 }
 
 func testIteratorNodeBlob(t *testing.T, scheme string) {
+	t.Helper()
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		triedb = newTestDatabase(db, scheme)

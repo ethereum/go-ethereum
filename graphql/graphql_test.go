@@ -423,6 +423,7 @@ func TestWithdrawals(t *testing.T) {
 }
 
 func createNode(t *testing.T) *node.Node {
+	t.Helper()
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
 		HTTPPort:     0,
@@ -437,6 +438,7 @@ func createNode(t *testing.T) *node.Node {
 }
 
 func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
+	t.Helper()
 	ethConf := &ethconfig.Config{
 		Genesis:        gspec,
 		NetworkId:      1337,

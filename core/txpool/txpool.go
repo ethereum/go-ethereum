@@ -70,8 +70,7 @@ type TxPool struct {
 	reservations map[common.Address]SubPool // Map with the account to pool reservations
 	reserveLock  sync.Mutex                 // Lock protecting the account reservations
 
-	subs event.SubscriptionScope // Subscription scope to unscubscribe all on shutdown
-	quit chan chan error         // Quit channel to tear down the head updater
+	quit chan chan error // Quit channel to tear down the head updater
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound

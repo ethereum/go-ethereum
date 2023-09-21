@@ -109,9 +109,9 @@ func (m *Memory) Data() []byte {
 // The source and destination may overlap.
 // OBS: This operation assumes that any necessary memory expansion has already been performed,
 // and this method may panic otherwise.
-func (m *Memory) Copy(dst, src, len uint64) {
-	if len == 0 {
+func (m *Memory) Copy(dst, src, length uint64) {
+	if length == 0 {
 		return
 	}
-	copy(m.store[dst:], m.store[src:src+len])
+	copy(m.store[dst:], m.store[src:src+length])
 }

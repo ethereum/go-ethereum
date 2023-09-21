@@ -58,6 +58,7 @@ type snapshotTestBasic struct {
 }
 
 func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Block) {
+	t.Helper()
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
@@ -129,6 +130,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 }
 
 func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks []*types.Block) {
+	t.Helper()
 	// Iterate over all the remaining blocks and ensure there are no gaps
 	verifyNoGaps(t, chain, true, blocks)
 	verifyCutoff(t, chain, true, blocks, basic.expCanonicalBlocks)

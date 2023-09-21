@@ -47,6 +47,7 @@ var (
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+	t.Helper()
 	// Generate test chain.
 	genesis, blocks := generateTestChain()
 	// Create node
@@ -168,6 +169,7 @@ func TestGethClient(t *testing.T) {
 }
 
 func testAccessList(t *testing.T, client *rpc.Client) {
+	t.Helper()
 	ec := New(client)
 	// Test transfer
 	msg := ethereum.CallMsg{
@@ -271,6 +273,7 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 }
 
 func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
+	t.Helper()
 	ec := New(client)
 
 	// Tests with non-canon input for storage keys.
@@ -533,6 +536,7 @@ func TestBlockOverridesMarshal(t *testing.T) {
 }
 
 func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
+	t.Helper()
 	ec := New(client)
 	msg := ethereum.CallMsg{
 		From:     testAddr,

@@ -86,6 +86,7 @@ func TestMissingNode(t *testing.T) {
 }
 
 func testMissingNode(t *testing.T, memonly bool, scheme string) {
+	t.Helper()
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := newTestDatabase(diskdb, scheme)
 

@@ -929,11 +929,11 @@ func TestOpMCopy(t *testing.T) {
 		mem.Resize(uint64(len(data)))
 		mem.Set(0, uint64(len(data)), data)
 		// Push stack args
-		len, _ := uint256.FromHex(tc.len)
+		length, _ := uint256.FromHex(tc.len)
 		src, _ := uint256.FromHex(tc.src)
 		dst, _ := uint256.FromHex(tc.dst)
 
-		stack.push(len)
+		stack.push(length)
 		stack.push(src)
 		stack.push(dst)
 		wantErr := (tc.wantGas == 0)

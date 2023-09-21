@@ -349,15 +349,15 @@ func testSetNonce(pool *LegacyPool, addr common.Address, nonce uint64) {
 	pool.mu.Unlock()
 }
 
-func getBalance(pool *LegacyPool, addr common.Address) *big.Int {
-	bal := big.NewInt(0)
+// func getBalance(pool *LegacyPool, addr common.Address) *big.Int {
+// 	bal := big.NewInt(0)
 
-	pool.mu.Lock()
-	bal.Set(pool.currentState.GetBalance(addr))
-	pool.mu.Unlock()
+// 	pool.mu.Lock()
+// 	bal.Set(pool.currentState.GetBalance(addr))
+// 	pool.mu.Unlock()
 
-	return bal
-}
+// 	return bal
+// }
 
 func TestInvalidTransactions(t *testing.T) {
 	t.Parallel()
@@ -3263,15 +3263,15 @@ func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
 // 	<-done
 // }
 
-func newTxs(pool *LegacyPool) *types.Transaction {
-	key, _ := crypto.GenerateKey()
-	account := crypto.PubkeyToAddress(key.PublicKey)
-	tx := transaction(uint64(0), 100000, key)
+// func newTxs(pool *LegacyPool) *types.Transaction {
+// 	key, _ := crypto.GenerateKey()
+// 	account := crypto.PubkeyToAddress(key.PublicKey)
+// 	tx := transaction(uint64(0), 100000, key)
 
-	pool.currentState.AddBalance(account, big.NewInt(1_000_000_000))
+// 	pool.currentState.AddBalance(account, big.NewInt(1_000_000_000))
 
-	return tx
-}
+// 	return tx
+// }
 
 type acc struct {
 	nonce   uint64

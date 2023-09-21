@@ -387,6 +387,7 @@ type testBackend struct {
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+	t.Helper()
 	var (
 		engine      = ethash.NewFaker()
 		cacheConfig = &core.CacheConfig{

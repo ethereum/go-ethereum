@@ -184,6 +184,7 @@ func BenchmarkPriceHeapReinit50GB(b *testing.B)  { benchmarkPriceHeapReinit(b, 5
 func BenchmarkPriceHeapReinit100GB(b *testing.B) { benchmarkPriceHeapReinit(b, 100*1024*1024*1024) }
 
 func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
+	b.Helper()
 	// Calculate how many unique transactions we can fit into the provided disk
 	// data cap
 	blobs := datacap / (params.BlobTxBytesPerFieldElement * params.BlobTxFieldElementsPerBlob)
@@ -244,6 +245,7 @@ func BenchmarkPriceHeapOverflow50GB(b *testing.B)  { benchmarkPriceHeapOverflow(
 func BenchmarkPriceHeapOverflow100GB(b *testing.B) { benchmarkPriceHeapOverflow(b, 100*1024*1024*1024) }
 
 func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
+	b.Helper()
 	// Calculate how many unique transactions we can fit into the provided disk
 	// data cap
 	blobs := datacap / (params.BlobTxBytesPerFieldElement * params.BlobTxFieldElementsPerBlob)

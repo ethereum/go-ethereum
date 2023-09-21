@@ -407,6 +407,7 @@ func TestEmptyWorkClique(t *testing.T) {
 }
 
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+	t.Helper()
 	defer engine.Close()
 
 	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
