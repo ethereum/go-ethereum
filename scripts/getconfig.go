@@ -699,7 +699,7 @@ func main() {
 	args, ignoreForNow := beautifyArgs(args)
 
 	c := server.Command{}
-	flags := c.Flags()
+	flags := c.Flags(nil)
 	allFlags := flags.GetAllFlags()
 	flagsToCheck := getFlagsToCheck(args)
 

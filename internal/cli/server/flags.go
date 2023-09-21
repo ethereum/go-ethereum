@@ -4,8 +4,12 @@ import (
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
-func (c *Command) Flags() *flagset.Flagset {
-	c.cliConfig = DefaultConfig()
+func (c *Command) Flags(config *Config) *flagset.Flagset {
+	if config != nil {
+		c.cliConfig = config
+	} else {
+		c.cliConfig = DefaultConfig()
+	}
 
 	f := flagset.NewFlagSet("server")
 
