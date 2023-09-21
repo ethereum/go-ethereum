@@ -25,10 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -155,46 +152,19 @@ func (m *sortedMap) Filter(filter func(*types.Transaction) bool) types.Transacti
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
-		m.reheap(false)
+		m.reheap()
 	}
 
 	return removed
 }
 
-func (m *sortedMap) reheap(withRlock bool) {
-	index := make(nonceHeap, 0, len(m.items))
-
-	if withRlock {
-		m.m.RLock()
-		log.Debug("Acquired lock over txpool map while performing reheap")
-	}
-
+func (m *sortedMap) reheap() {
+	*m.index = make([]uint64, 0, len(m.items))
 	for nonce := range m.items {
-		index = append(index, nonce)
+		*m.index = append(*m.index, nonce)
 	}
-
-	if withRlock {
-		m.m.RUnlock()
-	}
-
-	heap.Init(&index)
-
-	if withRlock {
-		m.m.Lock()
-	}
-
-	m.index = &index
-
-	if withRlock {
-		m.m.Unlock()
-	}
-
-	m.cacheMu.Lock()
+	heap.Init(m.index)
 	m.cache = nil
-	m.isEmpty = true
-	m.cacheMu.Unlock()
-
-	resetCacheGauge.Inc(1)
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
@@ -431,9 +401,9 @@ type list struct {
 	strict bool       // Whether nonces are strictly continuous or not
 	txs    *sortedMap // Heap indexed sorted hash map of the transactions
 
-	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
-	totalcost *big.Int     // Total cost of all transactions in the list
+	costcap   *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	gascap    uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	totalcost *big.Int // Total cost of all transactions in the list
 }
 
 // newList create a new transaction list for maintaining nonce-indexable fast,
@@ -442,6 +412,7 @@ func newList(strict bool) *list {
 	return &list{
 		strict:    strict,
 		txs:       newSortedMap(),
+		costcap:   new(big.Int),
 		totalcost: new(big.Int),
 	}
 }
@@ -487,10 +458,8 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 	l.totalcost.Add(l.totalcost, tx.Cost())
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	cost := tx.Cost()
-	costUint256, _ := uint256.FromBig(cost)
-	if cost = tx.Cost(); l.costcap.Cmp(costUint256) < 0 {
-		l.costcap = costUint256
+	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
+		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
@@ -517,26 +486,22 @@ func (l *list) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactions, types.Transactions) {
+func (l *list) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
-	if cmath.U256LTE(l.costcap, costLimit) && l.gascap <= gasLimit {
+	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
 	}
-
-	l.costcap = costLimit.Clone() // Lower the caps to the thresholds
+	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	cost := uint256.NewInt(0)
 	removed := l.txs.Filter(func(tx *types.Transaction) bool {
-		cost.SetFromBig(tx.Cost())
-		return tx.Gas() > gasLimit || cost.Gt(costLimit)
+		return tx.Gas() > gasLimit || tx.Cost().Cmp(costLimit) > 0
 	})
 
 	if len(removed) == 0 {
 		return nil, nil
 	}
-
 	var invalids types.Transactions
 	// If the list was strict, filter anything above the lowest nonce
 	if l.strict {
@@ -546,17 +511,12 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 				lowest = nonce
 			}
 		}
-
-		l.txs.m.Lock()
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
-		l.txs.m.Unlock()
 	}
 	// Reset total cost
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
-
-	l.txs.reheap(true)
-
+	l.txs.reheap()
 	return removed, invalids
 }
 
@@ -581,7 +541,7 @@ func (l *list) FilterTxConditional(state *state.StateDB) types.Transactions {
 		return nil
 	}
 
-	l.txs.reheap(true)
+	l.txs.reheap()
 
 	return removed
 }

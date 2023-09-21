@@ -21,9 +21,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
-
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // NewJWTAuth creates an rpc client authentication provider that uses JWT. The
@@ -36,14 +35,11 @@ func NewJWTAuth(jwtsecret [32]byte) rpc.HTTPAuth {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now()},
 		})
-
 		s, err := token.SignedString(jwtsecret[:])
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
-
 		h.Set("Authorization", "Bearer "+s)
-
 		return nil
 	}
 }

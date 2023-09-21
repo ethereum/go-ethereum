@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -70,15 +69,12 @@ func BenchmarkListAdd(b *testing.B) {
 	}
 	// Insert the transactions in a random order
 	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
-
 	b.ResetTimer()
-	b.ReportAllocs()
-
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
 		for _, v := range rand.Perm(len(txs)) {
 			list.Add(txs[v], DefaultConfig.PriceBump)
-			list.Filter(uint256.NewInt(priceLimit.Uint64()), DefaultConfig.PriceBump)
+			list.Filter(priceLimit, DefaultConfig.PriceBump)
 		}
 	}
 }
