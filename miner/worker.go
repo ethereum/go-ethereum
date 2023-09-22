@@ -1469,7 +1469,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 				baseFee = cmath.FromBig(env.header.BaseFee)
 			}
 
-			txs := newTransactionsByPriceAndNonce(env.signer, localTxs, baseFee.ToBig())
+			txs = newTransactionsByPriceAndNonce(env.signer, localTxs, baseFee.ToBig())
 
 			tracing.SetAttributes(
 				span,
