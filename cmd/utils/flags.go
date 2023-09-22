@@ -2065,7 +2065,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
 
-	filterAPI := filters.NewFilterAPI(filterSystem, isLightClient, ethconfig.Defaults.BorLogs)
+	filterAPI := filters.NewFilterAPI(filterSystem, isLightClient, ethcfg.BorLogs)
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filterAPI,
