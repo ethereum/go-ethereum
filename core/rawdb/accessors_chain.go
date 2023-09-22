@@ -37,17 +37,14 @@ import (
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
-
-	_ = db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerHashTable, number)
 		if len(data) == 0 {
 			// Get it by hash from leveldb
 			data, _ = db.Get(headerHashKey(number))
 		}
-
 		return nil
 	})
-
 	return common.BytesToHash(data)
 }
 

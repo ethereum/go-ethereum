@@ -323,21 +323,12 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions66(t *testing.T) {
-	t.Parallel()
-	testSendTransactions(t, eth.ETH66)
-}
-func TestSendTransactions67(t *testing.T) {
-	t.Parallel()
-	testSendTransactions(t, eth.ETH67)
-}
-func TestSendTransactions68(t *testing.T) {
-	t.Parallel()
-	testSendTransactions(t, eth.ETH68)
-}
+func TestSendTransactions66(t *testing.T) { testSendTransactions(t, eth.ETH66) }
+func TestSendTransactions67(t *testing.T) { testSendTransactions(t, eth.ETH67) }
+func TestSendTransactions68(t *testing.T) { testSendTransactions(t, eth.ETH68) }
 
 func testSendTransactions(t *testing.T, protocol uint) {
-	t.Helper()
+	t.Parallel()
 
 	// Create a message handler and fill the pool with big transactions
 	handler := newTestHandler()
@@ -360,7 +351,6 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 	src := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pSrc), p2pSrc, handler.txpool)
 	sink := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pSink), p2pSink, handler.txpool)
-
 	defer src.Close()
 	defer sink.Close()
 
@@ -373,7 +363,6 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		head    = handler.chain.CurrentBlock()
 		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-
 	if err := sink.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
@@ -382,12 +371,10 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	backend := new(testEthHandler)
 
 	anns := make(chan []common.Hash)
-
 	annSub := backend.txAnnounces.Subscribe(anns)
 	defer annSub.Unsubscribe()
 
 	bcasts := make(chan []*types.Transaction)
-
 	bcastSub := backend.txBroadcasts.Subscribe(bcasts)
 	defer bcastSub.Unsubscribe()
 
@@ -404,7 +391,6 @@ func testSendTransactions(t *testing.T, protocol uint) {
 					if _, ok := seen[hash]; ok {
 						t.Errorf("duplicate transaction announced: %x", hash)
 					}
-
 					seen[hash] = struct{}{}
 				}
 			case <-bcasts:
@@ -415,7 +401,6 @@ func testSendTransactions(t *testing.T, protocol uint) {
 			panic("unsupported protocol, please extend test")
 		}
 	}
-
 	for _, tx := range insert {
 		if _, ok := seen[tx.Tx.Hash()]; !ok {
 			t.Errorf("missing transaction: %x", tx.Tx.Hash())
@@ -425,21 +410,12 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
-func TestTransactionPropagation66(t *testing.T) {
-	t.Parallel()
-	testTransactionPropagation(t, eth.ETH66)
-}
-func TestTransactionPropagation67(t *testing.T) {
-	t.Parallel()
-	testTransactionPropagation(t, eth.ETH67)
-}
-func TestTransactionPropagation68(t *testing.T) {
-	t.Parallel()
-	testTransactionPropagation(t, eth.ETH68)
-}
+func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, eth.ETH66) }
+func TestTransactionPropagation67(t *testing.T) { testTransactionPropagation(t, eth.ETH67) }
+func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
-	t.Helper()
+	t.Parallel()
 
 	// Create a source handler to send transactions from and a number of sinks
 	// to receive them. We need multiple sinks since a one-to-one peering would
@@ -457,7 +433,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
-		sink := sink // Closure for gorotuine below
+		sink := sink // Closure for goroutine below
 
 		sourcePipe, sinkPipe := p2p.MsgPipe()
 		defer sourcePipe.Close()
@@ -465,7 +441,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 
 		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i + 1)}, "", nil, sourcePipe), sourcePipe, source.txpool)
 		sinkPeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, sink.txpool)
-
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
 
@@ -502,7 +477,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 				arrived += len(event.Txs)
 			case <-time.After(2 * time.Second):
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
-
 				timeout = true
 			}
 		}

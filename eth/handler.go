@@ -374,13 +374,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		number  = head.Number.Uint64()
 		td      = h.chain.GetTd(hash, number)
 	)
-
 	forkID := forkid.NewID(h.chain.Config(), genesis.Hash(), number, head.Time)
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
-
 	reject := false // reserved peer slots
 	if h.snapSync.Load() {
 		if snap == nil {
@@ -398,7 +396,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return p2p.DiscTooManyPeers
 		}
 	}
-
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
 
 	// Register the peer locally
@@ -417,7 +414,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
 	}
-
 	if snap != nil {
 		if err := h.downloader.SnapSyncer.Register(snap); err != nil {
 			peer.Log().Error("Failed to register peer in snap syncer", "err", err)
@@ -442,7 +438,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		if err != nil {
 			return err
 		}
-
 		go func(number uint64, hash common.Hash, req *eth.Request) {
 			// Ensure the request gets cancelled in case of error/drop
 			defer req.Close()
@@ -464,14 +459,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 					res.Done <- errors.New("too many headers in required block response")
 					return
 				}
-
 				if headers[0].Number.Uint64() != number || headers[0].Hash() != hash {
 					peer.Log().Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
 					res.Done <- errors.New("required block mismatch")
-
 					return
 				}
-
 				peer.Log().Debug("Peer required block verified", "number", number, "hash", hash)
 				res.Done <- nil
 			case <-timeout.C:

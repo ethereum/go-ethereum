@@ -70,7 +70,8 @@ type TxPool struct {
 	reservations map[common.Address]SubPool // Map with the account to pool reservations
 	reserveLock  sync.Mutex                 // Lock protecting the account reservations
 
-	quit chan chan error // Quit channel to tear down the head updater
+	subs event.SubscriptionScope // Subscription scope to unscubscribe all on shutdown
+	quit chan chan error         // Quit channel to tear down the head updater
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -312,7 +313,6 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 			txs[addr] = set
 		}
 	}
-
 	return txs
 }
 
@@ -323,24 +323,8 @@ func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscrip
 	for i, subpool := range p.subpools {
 		subs[i] = subpool.SubscribeTransactions(ch)
 	}
-	return subs[0]
+	return p.subs.Track(event.JoinSubscriptions(subs...))
 }
-
-// // validateTxBasics checks whether a transaction is valid according to the consensus
-// // rules, but does not check state-dependent validation such as sufficient balance.
-// // This check is meant as an early check which only needs to be performed once,
-// // and does not require the pool mutex to be held.
-// // nolint:gocognit
-// func (pool *TxPool) validateTxBasics(tx *types.Transaction, local bool) error {
-// 	pool.currentStateMutex.Lock()
-// 	defer pool.currentStateMutex.Unlock()
-
-// 	// Accept only legacy transactions until EIP-2718/2930 activates.
-// 	if !pool.eip2718.Load() && tx.Type() != types.LegacyTxType {
-// 		return core.ErrTxTypeNotSupported
-// 	}
-// 	return p.subs.Track(event.JoinSubscriptions(subs...))
-// }
 
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
@@ -369,40 +353,6 @@ func (p *TxPool) Stats() (int, int) {
 	}
 	return runnable, blocked
 }
-
-// // Stats retrieves the current pool stats, namely the number of pending and the
-// // number of queued (non-executable) transactions.
-// func (p *TxPool) Stats() (int, int) {
-// 	var runnable, blocked int
-// 	for _, subpool := range p.subpools {
-// 		run, block := subpool.Stats()
-// 	}
-// 	runnable += run
-// 	blocked += block
-// 	// }
-// 	return runnable, blocked
-// }
-
-// // validateTx checks whether a transaction is valid according to the consensus
-// // rules and adheres to some heuristic limits of the local node (price and size).
-// func (pool *TxPool) validateTx(tx *types.Transaction, _ bool) error {
-// 	pool.currentStateMutex.Lock()
-// 	defer pool.currentStateMutex.Unlock()
-
-// 	// Signature has been checked already, this cannot error.
-// 	from, _ := types.Sender(pool.signer, tx)
-// 	// Ensure the transaction adheres to nonce ordering
-// 	if pool.currentState.GetNonce(from) > tx.Nonce() {
-// 		return core.ErrNonceTooLow
-// 	}
-// 	// Transactor should have enough funds to cover the costs
-// 	// cost == V + GP * GL
-// 	balance := pool.currentState.GetBalance(from)
-// 	if balance.Cmp(tx.Cost()) < 0 {
-// 		return core.ErrInsufficientFunds
-// 	}
-
-// }
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.

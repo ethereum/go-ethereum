@@ -42,7 +42,6 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
-	jwtSecret          []byte // optional JWT secret
 
 	// Execution pool config
 	executionPoolSize           uint64
