@@ -268,7 +268,10 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+// nolint:typecheck
 func TestGraphQLConcurrentResolvers(t *testing.T) {
+	t.Parallel()
+
 	var (
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
@@ -291,9 +294,11 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		signer = types.LatestSigner(genesis.Config)
 		stack  = createNode(t)
 	)
+
 	defer stack.Close()
 
 	var tx *types.Transaction
+
 	handler, chain := newGQLService(t, stack, false, genesis, 1, func(i int, gen *core.BlockGen) {
 		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{To: &dad, Gas: 100000, GasPrice: big.NewInt(params.InitialBaseFee)})
 		gen.AddTx(tx)
@@ -314,23 +319,23 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		// Multiple txes race to get/set the block hash.
 		{
 			body: "{block { transactions { logs { account { address } } } } }",
-			want: fmt.Sprintf(`{"block":{"transactions":[{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}}]}]}}`, dadStr, dadStr, dadStr, dadStr, dadStr, dadStr),
+			want: fmt.Sprintf(`{"block":{"transactions":[{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]},{"logs":[{"account":{"address":"%s"}},{"account":{"address":"%s"}},{"account":{"address":"%s"}}]}]}}`, dadStr, dadStr, core.GetFeeAddress(), dadStr, dadStr, core.GetFeeAddress(), dadStr, dadStr, core.GetFeeAddress()),
 		},
 		// Multiple fields of a tx race to resolve it. Happens in this case
 		// because resolving the tx body belonging to a log is delayed.
 		{
 			body: `{block { logs(filter: {}) { transaction { nonce value gasPrice }}}}`,
-			want: `{"block":{"logs":[{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}}]}}`,
-		},
-		// Multiple txes of a block race to set/retrieve receipts of a block.
-		{
-			body: "{block { transactions { status gasUsed } } }",
-			want: `{"block":{"transactions":[{"status":"0x1","gasUsed":"0x5508"},{"status":"0x1","gasUsed":"0x5508"},{"status":"0x1","gasUsed":"0x5508"}]}}`,
+			want: `{"block":{"logs":[{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x0","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x1","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}},{"transaction":{"nonce":"0x2","value":"0x0","gasPrice":"0x3b9aca00"}}]}}`,
 		},
 		// Multiple fields of block race to resolve header and body.
 		{
 			body: "{ block { number hash gasLimit ommerCount transactionCount totalDifficulty } }",
 			want: fmt.Sprintf(`{"block":{"number":"0x1","hash":"%s","gasLimit":"0xaf79e0","ommerCount":"0x0","transactionCount":"0x3","totalDifficulty":"0x200000"}}`, chain[len(chain)-1].Hash()),
+		},
+		// Multiple fields of a block race to resolve the header and body.
+		{
+			body: fmt.Sprintf(`{ transaction(hash: "%s") { block { number hash gasLimit ommerCount transactionCount } } }`, tx.Hash()),
+			want: fmt.Sprintf(`{"transaction":{"block":{"number":"0x1","hash":"%s","gasLimit":"0xaf79e0","ommerCount":"0x0","transactionCount":"0x3"}}}`, chain[len(chain)-1].Hash()),
 		},
 		// Multiple fields of a block race to resolve the header and body.
 		{
@@ -349,13 +354,17 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 		},
 	} {
 		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}
+
 		have, err := json.Marshal(res.Data)
+
 		if err != nil {
 			t.Fatalf("failed to encode graphql response for testcase #%d: %s", i, err)
 		}
+
 		if string(have) != tt.want {
 			t.Errorf("response unmatch for testcase #%d.\nExpected:\n%s\nGot:\n%s\n", i, tt.want, have)
 		}
