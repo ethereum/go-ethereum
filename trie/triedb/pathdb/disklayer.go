@@ -150,7 +150,7 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	if nHash != hash {
 		diskFalseMeter.Mark(1)
 		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
-		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path)
+		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path, nBlob)
 	}
 	if dl.cleans != nil && len(nBlob) > 0 {
 		dl.cleans.Set(key, nBlob)
