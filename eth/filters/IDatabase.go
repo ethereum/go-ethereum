@@ -355,11 +355,12 @@ func (mr *MockDatabaseMockRecorder) Tail() *gomock.Call {
 }
 
 // TruncateHead mocks base method.
-func (m *MockDatabase) TruncateHead(arg0 uint64) error {
+func (m *MockDatabase) TruncateHead(arg0 uint64) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TruncateHead", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // TruncateHead indicates an expected call of TruncateHead.
@@ -369,11 +370,12 @@ func (mr *MockDatabaseMockRecorder) TruncateHead(arg0 interface{}) *gomock.Call 
 }
 
 // TruncateTail mocks base method.
-func (m *MockDatabase) TruncateTail(arg0 uint64) error {
+func (m *MockDatabase) TruncateTail(arg0 uint64) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TruncateTail", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // TruncateTail indicates an expected call of TruncateTail.
