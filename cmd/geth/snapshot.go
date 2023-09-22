@@ -332,6 +332,11 @@ func traverseState(ctx *cli.Context) error {
 			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
 				slots += 1
+
+				if time.Since(lastReport) > time.Second*8 {
+					log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+					lastReport = time.Now()
+				}
 			}
 			if storageIter.Err != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
@@ -485,6 +490,10 @@ func traverseRawState(ctx *cli.Context) error {
 					// Bump the counter if it's leaf node.
 					if storageIter.Leaf() {
 						slots += 1
+					}
+					if time.Since(lastReport) > time.Second*8 {
+						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+						lastReport = time.Now()
 					}
 				}
 				if storageIter.Error() != nil {
