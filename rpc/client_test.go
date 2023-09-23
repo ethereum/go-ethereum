@@ -814,14 +814,11 @@ func TestClientHTTP(t *testing.T) {
 func TestClientReconnect(t *testing.T) {
 	startServer := func(addr string) (*Server, net.Listener) {
 		srv := newTestServer()
-
 		l, err := net.Listen("tcp", addr)
 		if err != nil {
 			t.Fatal("can't listen:", err)
 		}
-
 		go http.Serve(l, srv.WebsocketHandler([]string{"*"}))
-
 		return srv, l
 	}
 
@@ -830,14 +827,10 @@ func TestClientReconnect(t *testing.T) {
 
 	// Start a server and corresponding client.
 	s1, l1 := startServer("127.0.0.1:0")
-
 	client, err := DialContext(ctx, "ws://"+l1.Addr().String())
-	defer client.Close()
-
 	if err != nil {
 		t.Fatal("can't dial", err)
 	}
-
 	defer client.Close()
 
 	// Perform a call. This should work because the server is up.
@@ -865,27 +858,22 @@ func TestClientReconnect(t *testing.T) {
 	defer s2.Stop()
 
 	start := make(chan struct{})
-
 	errors := make(chan error, 20)
 	for i := 0; i < cap(errors); i++ {
 		go func() {
 			<-start
-
 			var resp echoResult
 			errors <- client.CallContext(ctx, &resp, "test_echo", "", 3, nil)
 		}()
 	}
 	close(start)
-
 	errcount := 0
-
 	for i := 0; i < cap(errors); i++ {
 		if err = <-errors; err != nil {
 			errcount++
 		}
 	}
 	t.Logf("%d errors, last error: %v", errcount, err)
-
 	if errcount > 1 {
 		t.Errorf("expected one error after disconnect, got %d", errcount)
 	}

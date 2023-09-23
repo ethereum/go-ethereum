@@ -92,7 +92,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 
 		if borTx {
 			callmsg := prepareCallMessage(*message)
-			execRes, err = statefull.ApplyBorMessage(*vmenv, callmsg)
+			execRes, err = statefull.ApplyBorMessage(vmenv, callmsg)
 		} else {
 			execRes, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit), nil)
 		}

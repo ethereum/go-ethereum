@@ -99,10 +99,6 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	return tester
 }
 
-func (dl *downloadTester) setWhitelist(w ethereum.ChainValidator) {
-	dl.downloader.ChainValidator = w
-}
-
 // terminate aborts any operations on the embedded downloader and releases all
 // held resources.
 func (dl *downloadTester) terminate() {

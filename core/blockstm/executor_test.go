@@ -471,7 +471,7 @@ func runParallelGetMetadata(t *testing.T, tasks []ExecTask, validation PropertyC
 
 func TestLessConflicts(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{10, 50, 100, 200, 300}
 	numReads := []int{20, 100, 200}
@@ -495,7 +495,7 @@ func TestLessConflicts(t *testing.T) {
 
 func TestLessConflictsWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{300}
 	numReads := []int{100, 200}
@@ -541,7 +541,7 @@ func TestLessConflictsWithMetadata(t *testing.T) {
 
 func TestZeroTx(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{0}
 	numReads := []int{20}
@@ -562,7 +562,7 @@ func TestZeroTx(t *testing.T) {
 
 func TestAlternatingTx(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{200}
 	numReads := []int{20}
@@ -583,7 +583,7 @@ func TestAlternatingTx(t *testing.T) {
 
 func TestAlternatingTxWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{200}
 	numReads := []int{20}
@@ -626,7 +626,7 @@ func TestAlternatingTxWithMetadata(t *testing.T) {
 
 func TestMoreConflicts(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{10, 50, 100, 200, 300}
 	numReads := []int{20, 100, 200}
@@ -650,7 +650,7 @@ func TestMoreConflicts(t *testing.T) {
 
 func TestMoreConflictsWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{300}
 	numReads := []int{100, 200}
@@ -696,7 +696,7 @@ func TestMoreConflictsWithMetadata(t *testing.T) {
 
 func TestRandomTx(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{10, 50, 100, 200, 300}
 	numReads := []int{20, 100, 200}
@@ -718,7 +718,7 @@ func TestRandomTx(t *testing.T) {
 
 func TestRandomTxWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{300}
 	numReads := []int{100, 200}
@@ -762,7 +762,7 @@ func TestRandomTxWithMetadata(t *testing.T) {
 
 func TestTxWithLongTailRead(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{10, 50, 100, 200, 300}
 	numReads := []int{20, 100, 200}
@@ -789,7 +789,7 @@ func TestTxWithLongTailRead(t *testing.T) {
 
 func TestTxWithLongTailReadWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{300}
 	numReads := []int{100, 200}
@@ -838,7 +838,7 @@ func TestTxWithLongTailReadWithMetadata(t *testing.T) {
 
 func TestDexScenario(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{10, 50, 100, 200, 300}
 	numReads := []int{20, 100, 200}
@@ -873,7 +873,7 @@ func TestDexScenario(t *testing.T) {
 
 func TestDexScenarioWithMetadata(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	totalTxs := []int{300}
 	numReads := []int{100, 200}
@@ -930,7 +930,7 @@ func TestDexScenarioWithMetadata(t *testing.T) {
 
 func TestBreakFromCircularDependency(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	tasks := make([]ExecTask, 5)
 
@@ -956,7 +956,7 @@ func TestBreakFromCircularDependency(t *testing.T) {
 
 func TestBreakFromPartialCircularDependency(t *testing.T) {
 	t.Parallel()
-	rand.Seed(0)
+	rand.New(rand.NewSource(0))
 
 	tasks := make([]ExecTask, 5)
 

@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -888,7 +887,7 @@ txloop:
 				if *config.BorTraceEnabled {
 					callmsg := prepareCallMessage(*msg)
 					// nolint : contextcheck
-					if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
+					if _, err := statefull.ApplyBorMessage(vmenv, callmsg); err != nil {
 						failed = err
 						break txloop
 					}
@@ -957,7 +956,7 @@ txloop:
 		}
 
 		// make sure that the file exists and write IOdump
-		err = ioutil.WriteFile(filepath.Join(path, "data.csv"), []byte(fmt.Sprint(IOdump)), 0600)
+		err = os.WriteFile(filepath.Join(path, "data.csv"), []byte(fmt.Sprint(IOdump)), 0600)
 		if err != nil {
 			return nil, err
 		}
@@ -1095,7 +1094,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		if stateSyncPresent && i == len(txs)-1 {
 			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(*msg)
-				_, err = statefull.ApplyBorMessage(*vmenv, callmsg)
+				_, err = statefull.ApplyBorMessage(vmenv, callmsg)
 
 				if writer != nil {
 					writer.Flush()
@@ -1340,7 +1339,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Conte
 	if *config.BorTx {
 		callmsg := prepareCallMessage(*message)
 		// nolint : contextcheck
-		if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
+		if _, err := statefull.ApplyBorMessage(vmenv, callmsg); err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}
 	} else {

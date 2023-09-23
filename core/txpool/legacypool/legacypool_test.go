@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,12 +31,8 @@ import (
 
 	"github.com/holiman/uint256"
 	"github.com/maticnetwork/crand"
-	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
-	"pgregory.net/rapid"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/debug"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -59,7 +54,7 @@ var (
 )
 
 const (
-	txPoolGasLimit = 10_000_000
+// txPoolGasLimit = 10_000_000
 )
 
 func init() {
@@ -3274,131 +3269,131 @@ func newTxs(pool *LegacyPool) *types.Transaction {
 	return tx
 }
 
-type acc struct {
-	nonce   uint64
-	key     *ecdsa.PrivateKey
-	account common.Address
-}
+// type acc struct {
+// 	nonce   uint64
+// 	key     *ecdsa.PrivateKey
+// 	account common.Address
+// }
 
-type testTx struct {
-	tx      *types.Transaction
-	idx     int
-	isLocal bool
-}
+// type testTx struct {
+// 	tx      *types.Transaction
+// 	idx     int
+// 	isLocal bool
+// }
 
-const localIdx = 0
+// const localIdx = 0
 
-func getTransactionGen(t *rapid.T, keys []*acc, nonces []uint64, localKey *acc, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64) *testTx {
-	idx := rapid.IntRange(0, len(keys)-1).Draw(t, "accIdx").(int)
+// func getTransactionGen(t *rapid.T, keys []*acc, nonces []uint64, localKey *acc, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64) *testTx {
+// 	idx := rapid.IntRange(0, len(keys)-1).Draw(t, "accIdx").(int)
 
-	var (
-		isLocal bool
-		key     *ecdsa.PrivateKey
-	)
+// 	var (
+// 		isLocal bool
+// 		key     *ecdsa.PrivateKey
+// 	)
 
-	if idx == localIdx {
-		isLocal = true
-		key = localKey.key
-	} else {
-		key = keys[idx].key
-	}
+// 	if idx == localIdx {
+// 		isLocal = true
+// 		key = localKey.key
+// 	} else {
+// 		key = keys[idx].key
+// 	}
 
-	nonces[idx]++
+// 	nonces[idx]++
 
-	gasPriceUint := rapid.Uint64Range(gasPriceMin, gasPriceMax).Draw(t, "gasPrice").(uint64)
-	gasPrice := big.NewInt(0).SetUint64(gasPriceUint)
-	gasLimit := rapid.Uint64Range(gasLimitMin, gasLimitMax).Draw(t, "gasLimit").(uint64)
+// 	gasPriceUint := rapid.Uint64Range(gasPriceMin, gasPriceMax).Draw(t, "gasPrice").(uint64)
+// 	gasPrice := big.NewInt(0).SetUint64(gasPriceUint)
+// 	gasLimit := rapid.Uint64Range(gasLimitMin, gasLimitMax).Draw(t, "gasLimit").(uint64)
 
-	return &testTx{
-		tx:      pricedTransaction(nonces[idx]-1, gasLimit, gasPrice, key),
-		idx:     idx,
-		isLocal: isLocal,
-	}
-}
+// 	return &testTx{
+// 		tx:      pricedTransaction(nonces[idx]-1, gasLimit, gasPrice, key),
+// 		idx:     idx,
+// 		isLocal: isLocal,
+// 	}
+// }
 
-type transactionBatches struct {
-	txs      []*testTx
-	totalTxs int
-}
+// type transactionBatches struct {
+// 	txs      []*testTx
+// 	totalTxs int
+// }
 
-func transactionsGen(keys []*acc, nonces []uint64, localKey *acc, minTxs int, maxTxs int, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64, caseParams *strings.Builder) func(t *rapid.T) *transactionBatches {
-	return func(t *rapid.T) *transactionBatches {
-		totalTxs := rapid.IntRange(minTxs, maxTxs).Draw(t, "totalTxs").(int)
-		txs := make([]*testTx, totalTxs)
+// func transactionsGen(keys []*acc, nonces []uint64, localKey *acc, minTxs int, maxTxs int, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64, caseParams *strings.Builder) func(t *rapid.T) *transactionBatches {
+// 	return func(t *rapid.T) *transactionBatches {
+// 		totalTxs := rapid.IntRange(minTxs, maxTxs).Draw(t, "totalTxs").(int)
+// 		txs := make([]*testTx, totalTxs)
 
-		gasValues := make([]float64, totalTxs)
+// 		gasValues := make([]float64, totalTxs)
 
-		fmt.Fprintf(caseParams, " totalTxs = %d;", totalTxs)
+// 		fmt.Fprintf(caseParams, " totalTxs = %d;", totalTxs)
 
-		keys = keys[:len(nonces)]
+// 		keys = keys[:len(nonces)]
 
-		for i := 0; i < totalTxs; i++ {
-			txs[i] = getTransactionGen(t, keys, nonces, localKey, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax)
+// 		for i := 0; i < totalTxs; i++ {
+// 			txs[i] = getTransactionGen(t, keys, nonces, localKey, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax)
 
-			gasValues[i] = float64(txs[i].tx.Gas())
-		}
+// 			gasValues[i] = float64(txs[i].tx.Gas())
+// 		}
 
-		mean, stddev := stat.MeanStdDev(gasValues, nil)
-		fmt.Fprintf(caseParams, " gasValues mean %d, stdev %d, %d-%d);", int64(mean), int64(stddev), int64(floats.Min(gasValues)), int64(floats.Max(gasValues)))
+// 		mean, stddev := stat.MeanStdDev(gasValues, nil)
+// 		fmt.Fprintf(caseParams, " gasValues mean %d, stdev %d, %d-%d);", int64(mean), int64(stddev), int64(floats.Min(gasValues)), int64(floats.Max(gasValues)))
 
-		return &transactionBatches{txs, totalTxs}
-	}
-}
+// 		return &transactionBatches{txs, totalTxs}
+// 	}
+// }
 
-type txPoolRapidConfig struct {
-	gasLimit    uint64
-	avgBlockTxs uint64
+// type txPoolRapidConfig struct {
+// 	gasLimit    uint64
+// 	avgBlockTxs uint64
 
-	minTxs int
-	maxTxs int
+// 	minTxs int
+// 	maxTxs int
 
-	minAccs int
-	maxAccs int
+// 	minAccs int
+// 	maxAccs int
 
-	// less tweakable, more like constants
-	gasPriceMin uint64
-	gasPriceMax uint64
+// 	// less tweakable, more like constants
+// 	gasPriceMin uint64
+// 	gasPriceMax uint64
 
-	gasLimitMin uint64
-	gasLimitMax uint64
+// 	gasLimitMin uint64
+// 	gasLimitMax uint64
 
-	balance int64
+// 	balance int64
 
-	blockTime      time.Duration
-	maxEmptyBlocks int
-	maxStuckBlocks int
-}
+// 	blockTime      time.Duration
+// 	maxEmptyBlocks int
+// 	maxStuckBlocks int
+// }
 
-func defaultTxPoolRapidConfig() txPoolRapidConfig {
-	gasLimit := uint64(30_000_000)
-	avgBlockTxs := gasLimit/params.TxGas + 1
-	maxTxs := int(25 * avgBlockTxs)
+// func defaultTxPoolRapidConfig() txPoolRapidConfig {
+// 	gasLimit := uint64(30_000_000)
+// 	avgBlockTxs := gasLimit/params.TxGas + 1
+// 	maxTxs := int(25 * avgBlockTxs)
 
-	return txPoolRapidConfig{
-		gasLimit: gasLimit,
+// 	return txPoolRapidConfig{
+// 		gasLimit: gasLimit,
 
-		avgBlockTxs: avgBlockTxs,
+// 		avgBlockTxs: avgBlockTxs,
 
-		minTxs: 1,
-		maxTxs: maxTxs,
+// 		minTxs: 1,
+// 		maxTxs: maxTxs,
 
-		minAccs: 1,
-		maxAccs: maxTxs,
+// 		minAccs: 1,
+// 		maxAccs: maxTxs,
 
-		// less tweakable, more like constants
-		gasPriceMin: 1,
-		gasPriceMax: 1_000,
+// 		// less tweakable, more like constants
+// 		gasPriceMin: 1,
+// 		gasPriceMax: 1_000,
 
-		gasLimitMin: params.TxGas,
-		gasLimitMax: gasLimit / 2,
+// 		gasLimitMin: params.TxGas,
+// 		gasLimitMax: gasLimit / 2,
 
-		balance: 0xffffffffffffff,
+// 		balance: 0xffffffffffffff,
 
-		blockTime:      2 * time.Second,
-		maxEmptyBlocks: 10,
-		maxStuckBlocks: 10,
-	}
-}
+// 		blockTime:      2 * time.Second,
+// 		maxEmptyBlocks: 10,
+// 		maxStuckBlocks: 10,
+// 	}
+// }
 
 // TODO - Fix Later
 // TestSmallTxPool is not something to run in parallel as far it uses all CPUs
@@ -4558,163 +4553,163 @@ func BenchmarkBigs(b *testing.B) {
 // 		common.NowMilliseconds(), time.Duration(mean), time.Duration(stddev), time.Duration(floats.Min(pendingDurationsFloat)), time.Duration(floats.Max(pendingDurationsFloat)))
 // }
 
-func addTransactionsBatches(tb testing.TB, batches []types.Transactions, fn func(types.Transactions) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
-	tb.Helper()
+// func addTransactionsBatches(tb testing.TB, batches []types.Transactions, fn func(types.Transactions) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
+// 	tb.Helper()
 
-	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
+// 	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
 
-	defer func() {
-		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
-	}()
+// 	defer func() {
+// 		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
+// 	}()
 
-	for _, batch := range batches {
-		batch := batch
+// 	for _, batch := range batches {
+// 		batch := batch
 
-		select {
-		case <-done:
-			return
-		default:
-		}
+// 		select {
+// 		case <-done:
+// 			return
+// 		default:
+// 		}
 
-		runWithTimeout(tb, func(_ chan struct{}) {
-			err := fn(batch)
-			if err != nil {
-				tb.Logf("[%s] %s error: %s", common.NowMilliseconds(), name, err)
-			}
-		}, done, name, timeoutDuration, 0, thread)
+// 		runWithTimeout(tb, func(_ chan struct{}) {
+// 			err := fn(batch)
+// 			if err != nil {
+// 				tb.Logf("[%s] %s error: %s", common.NowMilliseconds(), name, err)
+// 			}
+// 		}, done, name, timeoutDuration, 0, thread)
 
-		time.Sleep(tickerDuration)
-	}
-}
+// 		time.Sleep(tickerDuration)
+// 	}
+// }
 
-func addTransactions(tb testing.TB, batches []types.Transactions, fn func(*types.Transaction) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
-	tb.Helper()
+// func addTransactions(tb testing.TB, batches []types.Transactions, fn func(*types.Transaction) error, done chan struct{}, timeoutDuration time.Duration, tickerDuration time.Duration, name string, thread int) {
+// 	tb.Helper()
 
-	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
+// 	tb.Logf("[%s] starting %s", common.NowMilliseconds(), name)
 
-	defer func() {
-		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
-	}()
+// 	defer func() {
+// 		tb.Logf("[%s] stop %s", common.NowMilliseconds(), name)
+// 	}()
 
-	for _, batch := range batches {
-		for _, tx := range batch {
-			tx := tx
+// 	for _, batch := range batches {
+// 		for _, tx := range batch {
+// 			tx := tx
 
-			select {
-			case <-done:
-				return
-			default:
-			}
+// 			select {
+// 			case <-done:
+// 				return
+// 			default:
+// 			}
 
-			runWithTimeout(tb, func(_ chan struct{}) {
-				err := fn(tx)
-				if err != nil {
-					tb.Logf("%s error: %s", name, err)
-				}
-			}, done, name, timeoutDuration, 0, thread)
+// 			runWithTimeout(tb, func(_ chan struct{}) {
+// 				err := fn(tx)
+// 				if err != nil {
+// 					tb.Logf("%s error: %s", name, err)
+// 				}
+// 			}, done, name, timeoutDuration, 0, thread)
 
-			time.Sleep(tickerDuration)
-		}
+// 			time.Sleep(tickerDuration)
+// 		}
 
-		time.Sleep(tickerDuration)
-	}
-}
+// 		time.Sleep(tickerDuration)
+// 	}
+// }
 
-func getFnForBatches(fn func([]*types.Transaction) []error) func(types.Transactions) error {
-	return func(batch types.Transactions) error {
-		errs := fn(batch)
-		if len(errs) != 0 {
-			return errs[0]
-		}
+// func getFnForBatches(fn func([]*types.Transaction) []error) func(types.Transactions) error {
+// 	return func(batch types.Transactions) error {
+// 		errs := fn(batch)
+// 		if len(errs) != 0 {
+// 			return errs[0]
+// 		}
 
-		return nil
-	}
-}
+// 		return nil
+// 	}
+// }
 
 //nolint:unparam
-func runWithTicker(tb testing.TB, fn func(c chan struct{}), done chan struct{}, name string, tickerDuration, timeoutDuration time.Duration, thread int) {
-	tb.Helper()
+// func runWithTicker(tb testing.TB, fn func(c chan struct{}), done chan struct{}, name string, tickerDuration, timeoutDuration time.Duration, thread int) {
+// 	tb.Helper()
 
-	select {
-	case <-done:
-		tb.Logf("[%s] Short path. finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
+// 	select {
+// 	case <-done:
+// 		tb.Logf("[%s] Short path. finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
 
-		return
-	default:
-	}
+// 		return
+// 	default:
+// 	}
 
-	defer func() {
-		tb.Logf("[%s] finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
-	}()
+// 	defer func() {
+// 		tb.Logf("[%s] finishing outer runWithTicker for %q, thread %d", common.NowMilliseconds(), name, thread)
+// 	}()
 
-	localTicker := time.NewTicker(tickerDuration)
-	defer localTicker.Stop()
+// 	localTicker := time.NewTicker(tickerDuration)
+// 	defer localTicker.Stop()
 
-	n := 0
+// 	n := 0
 
-	for range localTicker.C {
-		select {
-		case <-done:
-			return
-		default:
-		}
+// 	for range localTicker.C {
+// 		select {
+// 		case <-done:
+// 			return
+// 		default:
+// 		}
 
-		runWithTimeout(tb, fn, done, name, timeoutDuration, n, thread)
+// 		runWithTimeout(tb, fn, done, name, timeoutDuration, n, thread)
 
-		n++
-	}
-}
+// 		n++
+// 	}
+// }
 
-func runWithTimeout(tb testing.TB, fn func(chan struct{}), outerDone chan struct{}, name string, timeoutDuration time.Duration, n, thread int) {
-	tb.Helper()
+// func runWithTimeout(tb testing.TB, fn func(chan struct{}), outerDone chan struct{}, name string, timeoutDuration time.Duration, n, thread int) {
+// 	tb.Helper()
 
-	select {
-	case <-outerDone:
-		tb.Logf("[%s] Short path. exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+// 	select {
+// 	case <-outerDone:
+// 		tb.Logf("[%s] Short path. exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
 
-		return
-	default:
-	}
+// 		return
+// 	default:
+// 	}
 
-	timeout := time.NewTimer(timeoutDuration)
-	defer timeout.Stop()
+// 	timeout := time.NewTimer(timeoutDuration)
+// 	defer timeout.Stop()
 
-	doneCh := make(chan struct{})
+// 	doneCh := make(chan struct{})
 
-	isError := new(int32)
-	*isError = 0
+// 	isError := new(int32)
+// 	*isError = 0
 
-	go func() {
-		defer close(doneCh)
+// 	go func() {
+// 		defer close(doneCh)
 
-		select {
-		case <-outerDone:
-			return
-		default:
-			fn(doneCh)
-		}
-	}()
+// 		select {
+// 		case <-outerDone:
+// 			return
+// 		default:
+// 			fn(doneCh)
+// 		}
+// 	}()
 
-	const isDebug = false
+// 	const isDebug = false
 
-	var stack string
+// 	var stack string
 
-	select {
-	case <-outerDone:
-		tb.Logf("[%s] exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
-	case <-doneCh:
-		// only for debug
-		//tb.Logf("[%s] exiting inner runWithTimeout by successful call for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
-	case <-timeout.C:
-		atomic.StoreInt32(isError, 1)
+// 	select {
+// 	case <-outerDone:
+// 		tb.Logf("[%s] exiting inner runWithTimeout by outer exit event for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+// 	case <-doneCh:
+// 		// only for debug
+// 		//tb.Logf("[%s] exiting inner runWithTimeout by successful call for %q, thread %d, iteration %d", common.NowMilliseconds(), name, thread, n)
+// 	case <-timeout.C:
+// 		atomic.StoreInt32(isError, 1)
 
-		if isDebug {
-			stack = string(debug.Stack(true))
-		}
+// 		if isDebug {
+// 			stack = string(debug.Stack(true))
+// 		}
 
-		tb.Errorf("[%s] %s timeouted, thread %d, iteration %d. Stack %s", common.NowMilliseconds(), name, thread, n, stack)
-	}
-}
+// 		tb.Errorf("[%s] %s timeouted, thread %d, iteration %d. Stack %s", common.NowMilliseconds(), name, thread, n, stack)
+// 	}
+// }
 
 // Benchmarks the speed of batch transaction insertion in case of multiple accounts.
 func BenchmarkMultiAccountBatchInsert(b *testing.B) {

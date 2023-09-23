@@ -894,7 +894,6 @@ func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
-
 	// Check the validity of peer from which the chain is to be downloaded
 	if d.ChainValidator != nil {
 		if _, err := d.IsValidPeer(d.getFetchHeadersByNumber(p)); err != nil {

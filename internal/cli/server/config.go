@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
@@ -1093,7 +1092,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 				mem.Total = 2 * 1024 * 1024 * 1024
 			}
 
-			allowance := uint64(mem.Total / 1024 / 1024 / 3)
+			allowance := mem.Total / 1024 / 1024 / 3
 			if cache > allowance {
 				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
 				cache = allowance
@@ -1525,7 +1524,7 @@ func Hostname() string {
 }
 
 func MakePasswordListFromFile(path string) ([]string, error) {
-	text, err := ioutil.ReadFile(path)
+	text, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read password file: %v", err)
 	}

@@ -1811,17 +1811,6 @@ func newRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.By
 	return blob
 }
 
-// newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
-func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, config *params.ChainConfig, db ethdb.Database) *RPCTransaction {
-	for idx, tx := range b.Transactions() {
-		if tx.Hash() == hash {
-			return newRPCTransactionFromBlockIndex(b, uint64(idx), config, db)
-		}
-	}
-
-	return nil
-}
-
 // accessListResult returns an optional accesslist
 // It's the result of the `debug_createAccessList` RPC call.
 // It contains an error if the transaction itself failed.

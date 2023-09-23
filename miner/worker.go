@@ -77,10 +77,6 @@ const (
 	// any newly arrived transactions.
 	minRecommitInterval = 1 * time.Second
 
-	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
-	// any newly arrived transactions.
-	maxRecommitInterval = 15 * time.Second
-
 	// intervalAdjustRatio is the impact a single interval adjustment has on sealing work
 	// resubmitting interval.
 	intervalAdjustRatio = 0.1
@@ -362,16 +358,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	}
 
 	return worker
-}
-
-// disablePreseal disables pre-sealing feature
-func (w *worker) disablePreseal() {
-	w.noempty.Store(true)
-}
-
-// enablePreseal enables pre-sealing feature
-func (w *worker) enablePreseal() {
-	w.noempty.Store(false)
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
@@ -1175,7 +1161,6 @@ mainloop:
 		env.header.Extra = append(tempVanity, blockExtraDataBytes...)
 
 		env.header.Extra = append(env.header.Extra, tempSeal...)
-
 	}
 
 	if !w.IsRunning() && len(coalescedLogs) > 0 {

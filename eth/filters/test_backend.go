@@ -96,7 +96,6 @@ func (b *TestBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 }
 
 func (b *TestBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-
 	if number := rawdb.ReadHeaderNumber(b.DB, hash); number != nil {
 		block := rawdb.ReadBlock(b.DB, hash, *number)
 		return rawdb.ReadReceipts(b.DB, hash, *number, block.Time(), params.TestChainConfig), nil

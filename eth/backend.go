@@ -146,11 +146,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
-	// Transfer mining-related config to the ethash config.
-	chainConfig, err := core.LoadChainConfig(chainDb, config.Genesis)
-	if err != nil {
-		return nil, err
-	}
 
 	// START: Bor changes
 	eth := &Ethereum{

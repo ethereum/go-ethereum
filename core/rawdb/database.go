@@ -424,11 +424,6 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 		log.Info("Defaulting to leveldb as the backing database")
 		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
 	}
-
-	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
-	log.Info("Using leveldb as the backing database")
-
-	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
 }
 
 // Open opens both a disk-based key-value database such as leveldb or pebble, but also

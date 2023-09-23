@@ -205,11 +205,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
 	_, cfg := makeConfigNode(ctx)
-	comment := ""
 
 	if cfg.Eth.Genesis != nil {
 		cfg.Eth.Genesis = nil
-		comment += "# Note: this config doesn't contain the genesis block.\n\n"
 	}
 
 	if err := toml.NewEncoder(os.Stdout).Encode(&cfg); err != nil {
@@ -274,21 +272,6 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
-	}
-}
-
-func deprecated(field string) bool {
-	switch field {
-	case "ethconfig.Config.EVMInterpreter":
-		return true
-	case "ethconfig.Config.EWASMInterpreter":
-		return true
-	case "ethconfig.Config.TrieCleanCacheJournal":
-		return true
-	case "ethconfig.Config.TrieCleanCacheRejournal":
-		return true
-	default:
-		return false
 	}
 }
 
