@@ -654,11 +654,8 @@ We expect
 	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
-	t.Parallel()
-
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-
 	defer n.Close()
 
 	var (
@@ -668,7 +665,6 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		// This EVM code generates a log when the contract is created.
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
-
 	for i := 0; i < 10; i++ {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
@@ -694,59 +690,45 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 			resp    engine.ForkChoiceResponse
 			err     error
 		)
-
 		for i := 0; ; i++ {
 			if resp, err = api.ForkchoiceUpdatedV1(fcState, &params); err != nil {
 				t.Fatalf("error preparing payload, err=%v", err)
 			}
-
 			if resp.PayloadStatus.Status != engine.VALID {
 				t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 			}
-
 			// give the payload some time to be built
 			time.Sleep(50 * time.Millisecond)
-
 			if payload, err = api.GetPayloadV1(*resp.PayloadID); err != nil {
 				t.Fatalf("can't get payload: %v", err)
 			}
-
 			if len(payload.Transactions) > 0 {
 				break
 			}
-
 			// No luck this time we need to update the params and try again.
 			params.Timestamp = params.Timestamp + 1
-
 			if i > 10 {
 				t.Fatalf("payload should not be empty")
 			}
 		}
-
 		execResp, err := api.NewPayloadV1(*payload)
-
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
-
 		if execResp.Status != engine.VALID {
 			t.Fatalf("invalid status: %v", execResp.Status)
 		}
-
 		fcState = engine.ForkchoiceStateV1{
 			HeadBlockHash:      payload.BlockHash,
 			SafeBlockHash:      payload.ParentHash,
 			FinalizedBlockHash: payload.ParentHash,
 		}
-
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-
 		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.Number {
 			t.Fatalf("Chain head should be updated")
 		}
-
 		parent = ethservice.BlockChain().CurrentBlock()
 	}
 }
