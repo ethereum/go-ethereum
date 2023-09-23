@@ -18,6 +18,7 @@ package miner
 
 import (
 	"math/big"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/bor/api"
+	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -36,170 +40,154 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/tests/bor/mocks"
+	"github.com/golang/mock/gomock"
+	"gotest.tools/assert"
 )
 
-// TODO(raneet10): Duplicate initialization from miner/test_backend.go . Recheck whether we need both
-// func init() {
-// 	testTxPoolConfig = txpool.DefaultConfig
-// 	testTxPoolConfig.Journal = ""
-// 	ethashChainConfig = new(params.ChainConfig)
-// 	*ethashChainConfig = *params.TestChainConfig
-// 	cliqueChainConfig = new(params.ChainConfig)
-// 	*cliqueChainConfig = *params.TestChainConfig
-// 	cliqueChainConfig.Clique = &params.CliqueConfig{
-// 		Period: 10,
-// 		Epoch:  30000,
-// 	}
+// nolint : paralleltest
+func TestGenerateBlockAndImportEthash(t *testing.T) {
+	testGenerateBlockAndImport(t, false, false)
+}
 
-// 	signer := types.LatestSigner(params.TestChainConfig)
-// 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-// 		ChainID:  params.TestChainConfig.ChainID,
-// 		Nonce:    0,
-// 		To:       &testUserAddress,
-// 		Value:    big.NewInt(1000),
-// 		Gas:      params.TxGas,
-// 		GasPrice: big.NewInt(params.InitialBaseFee),
-// 	})
-// 	pendingTxs = append(pendingTxs, tx1)
+// nolint : paralleltest
+func TestGenerateBlockAndImportClique(t *testing.T) {
+	testGenerateBlockAndImport(t, true, false)
+}
 
-// 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
-// 		Nonce:    1,
-// 		To:       &testUserAddress,
-// 		Value:    big.NewInt(1000),
-// 		Gas:      params.TxGas,
-// 		GasPrice: big.NewInt(params.InitialBaseFee),
-// 	})
-// 	newTxs = append(newTxs, tx2)
-// }
+// nolint : paralleltest
+func TestGenerateBlockAndImportBor(t *testing.T) {
+	testGenerateBlockAndImport(t, false, true)
+}
 
-// newTestWorker creates a new test worker with the given parameters.
-// nolint:unparam
-// func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
-// 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-// 	backend.txPool.addLocals(pendingTxs)
+//nolint:thelper
+func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
+	var (
+		engine      consensus.Engine
+		chainConfig params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
+	)
 
-// 	var w *worker
+	if isBor {
+		chainConfig = *params.BorUnittestChainConfig
 
-// 	if delay != 0 || opcodeDelay != 0 {
-// 		//nolint:staticcheck
-// 		w = newWorkerWithDelay(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, delay, opcodeDelay)
+		engine, ctrl = getFakeBorFromConfig(t, &chainConfig)
+		defer ctrl.Finish()
+	} else {
+		if isClique {
+			chainConfig = *params.AllCliqueProtocolChanges
+			chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+			engine = clique.New(chainConfig.Clique, db)
+		} else {
+			chainConfig = *params.AllEthashProtocolChanges
+			engine = ethash.NewFaker()
+		}
+	}
+
+	defer engine.Close()
+
+	w, b, _ := newTestWorker(t, &chainConfig, engine, db, 0, false, 0, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil, nil)
+	defer chain.Stop()
+
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Start mining!
+	w.start()
+
+	var (
+		err error
+	)
+
+	for i := 0; i < 5; i++ {
+		err = b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(true)}}, true, false)[0]
+		if err != nil {
+			t.Fatal("while adding a local transaction", err)
+		}
+
+		err = b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTx(false)}}, true, false)[0]
+		if err != nil {
+			t.Fatal("while adding a remote transaction", err)
+		}
+
+		// TODO - Arpit, Check if required
+		// uncle, err = b.newRandomUncle()
+		// if err != nil {
+		// 	t.Fatal("while making an uncle block", err)
+		// }
+
+		// w.postSideBlock(core.ChainSideEvent{Block: uncle})
+
+		// uncle, err = b.newRandomUncle()
+		// if err != nil {
+		// 	t.Fatal("while making an uncle block", err)
+		// }
+
+		// w.postSideBlock(core.ChainSideEvent{Block: uncle})
+
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
+		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
+			t.Fatalf("timeout")
+		}
+	}
+}
+
+// func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
+// 	var parent *types.Block
+
+// 	cur := b.chain.CurrentBlock()
+
+// 	if cur.Number.Uint64() == 0 {
+// 		parent = b.chain.Genesis()
 // 	} else {
-// 		//nolint:staticcheck
-// 		w = newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+// 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
 // 	}
 
-// 	w.setEtherbase(TestBankAddress)
+// 	var err error
 
-// 	// enable empty blocks
-// 	w.noempty.Store(noempty)
+// 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.DB, 1, func(i int, gen *core.BlockGen) {
+// 		var addr = make([]byte, common.AddressLength)
 
-// 	return w, backend, w.close
-// }
-
-// TODO - Arpit
-// // nolint : paralleltest
-// func TestGenerateBlockAndImportEthash(t *testing.T) {
-// 	testGenerateBlockAndImport(t, false, false)
-// }
-
-// // nolint : paralleltest
-// func TestGenerateBlockAndImportClique(t *testing.T) {
-// 	testGenerateBlockAndImport(t, true, false)
-// }
-
-// // nolint : paralleltest
-// func TestGenerateBlockAndImportBor(t *testing.T) {
-// 	testGenerateBlockAndImport(t, false, true)
-// }
-
-// //nolint:thelper
-// func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
-// 	var (
-// 		engine      consensus.Engine
-// 		chainConfig params.ChainConfig
-// 		db          = rawdb.NewMemoryDatabase()
-// 		ctrl        *gomock.Controller
-// 	)
-
-// 	if isBor {
-// 		chainConfig = *params.BorUnittestChainConfig
-
-// 		engine, ctrl = getFakeBorFromConfig(t, &chainConfig)
-// 		defer ctrl.Finish()
-// 	} else {
-// 		if isClique {
-// 			chainConfig = *params.AllCliqueProtocolChanges
-// 			chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-// 			engine = clique.New(chainConfig.Clique, db)
-// 		} else {
-// 			chainConfig = *params.AllEthashProtocolChanges
-// 			engine = ethash.NewFaker()
-// 		}
-// 	}
-
-// 	defer engine.Close()
-
-// 	w, b, _ := newTestWorker(t, &chainConfig, engine, db, 0, false, 0, 0)
-// 	defer w.close()
-
-// 	// This test chain imports the mined blocks.
-// 	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.Genesis, nil, engine, vm.Config{}, nil, nil, nil)
-// 	defer chain.Stop()
-
-// 	// Ignore empty commit here for less noise.
-// 	w.skipSealHook = func(task *task) bool {
-// 		return len(task.receipts) == 0
-// 	}
-
-// 	// Wait for mined blocks.
-// 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-// 	defer sub.Unsubscribe()
-
-// 	// Start mining!
-// 	w.start()
-
-// 	var (
-// 		err   error
-// 		uncle *types.Block
-// 	)
-
-// 	for i := 0; i < 5; i++ {
-// 		err = b.txPool.AddLocal(b.newRandomTx(true))
+// 		_, err = rand.Read(addr)
 // 		if err != nil {
-// 			t.Fatal("while adding a local transaction", err)
+// 			return
 // 		}
 
-// 		err = b.txPool.AddLocal(b.newRandomTx(false))
-// 		if err != nil {
-// 			t.Fatal("while adding a remote transaction", err)
-// 		}
+// 		gen.SetCoinbase(common.BytesToAddress(addr))
+// 	})
 
-// 		uncle, err = b.newRandomUncle()
-// 		if err != nil {
-// 			t.Fatal("while making an uncle block", err)
-// 		}
-
-// 		w.postSideBlock(core.ChainSideEvent{Block: uncle})
-
-// 		uncle, err = b.newRandomUncle()
-// 		if err != nil {
-// 			t.Fatal("while making an uncle block", err)
-// 		}
-
-// 		w.postSideBlock(core.ChainSideEvent{Block: uncle})
-
-// 		select {
-// 		case ev := <-sub.Chan():
-// 			block := ev.Data.(core.NewMinedBlockEvent).Block
-// 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-// 				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
-// 			}
-// 		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
-// 			t.Fatalf("timeout")
-// 		}
-// 	}
+// 	return blocks[0], err
 // }
+
+const (
+	// testCode is the testing contract binary code which will initialises some
+	// variables in constructor
+	testCode = "0x60806040527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060005534801561003457600080fd5b5060fc806100436000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80630c4dae8814603757806398a213cf146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506084565b005b60005481565b806000819055507fe9e44f9f7da8c559de847a3232b57364adc0354f15a2cd8dc636d54396f9587a6000546040518082815260200191505060405180910390a15056fea265627a7a723058208ae31d9424f2d0bc2a3da1a5dd659db2d71ec322a17db8f87e19e209e3a1ff4a64736f6c634300050a0032"
+
+	// testGas is the gas required for contract deployment.
+	testGas                   = 144109
+	storageContractByteCode   = "608060405234801561001057600080fd5b50610150806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100a1565b60405180910390f35b610073600480360381019061006e91906100ed565b61007e565b005b60008054905090565b8060008190555050565b6000819050919050565b61009b81610088565b82525050565b60006020820190506100b66000830184610092565b92915050565b600080fd5b6100ca81610088565b81146100d557600080fd5b50565b6000813590506100e7816100c1565b92915050565b600060208284031215610103576101026100bc565b5b6000610111848285016100d8565b9150509291505056fea2646970667358221220322c78243e61b783558509c9cc22cb8493dde6925aa5e89a08cdf6e22f279ef164736f6c63430008120033"
+	storageContractTxCallData = "0x6057361d0000000000000000000000000000000000000000000000000000000000000001"
+	storageCallTxGas          = 100000
+)
 
 var (
 	// Test chain configurations
@@ -267,12 +255,18 @@ type testWorkerBackend struct {
 	genesis *core.Genesis
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database) *testWorkerBackend {
 	var gspec = &core.Genesis{
 		Config: chainConfig,
 		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 	}
 	switch e := engine.(type) {
+	case *bor.Bor:
+		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
+		copy(gspec.ExtraData[32:32+common.AddressLength], TestBankAddress.Bytes())
+		e.Authorize(TestBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		})
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
@@ -283,6 +277,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
+	// genesis := gspec.MustCommit(db)
 	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
@@ -315,12 +310,58 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
+// newRandomTxWithNonce creates a new transaction with the given nonce.
+func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(100 * params.InitialBaseFee)
+
+	if creation {
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+	} else {
+		tx, _ = types.SignTx(types.NewTransaction(nonce, testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	}
+
+	return tx
+}
+
+// newStorageCreateContractTx creates a new transaction to deploy a storage smart contract.
+func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(storageContractByteCode)), types.HomesteadSigner{}, testBankKey)
+	contractAddr := crypto.CreateAddress(TestBankAddress, b.txPool.Nonce(TestBankAddress))
+
+	return tx, contractAddr
+}
+
+// newStorageContractCallTx creates a new transaction to call a storage smart contract.
+func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce uint64) *types.Transaction {
+	var tx *types.Transaction
+
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
+	tx, _ = types.SignTx(types.NewTransaction(nonce, to, nil, storageCallTxGas, gasPrice, common.FromHex(storageContractTxCallData)), types.HomesteadSigner{}, testBankKey)
+
+	return tx
+}
+
+func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db)
 	backend.txPool.Add(pendingTxs, true, false)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+	var w *worker
+	if delay != 0 || opcodeDelay != 0 {
+		//nolint:staticcheck
+		w = newWorkerWithDelay(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, delay, opcodeDelay)
+	} else {
+		//nolint:staticcheck
+		w = newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+	}
 	w.setEtherbase(testBankAddress)
-	return w, backend
+	// enable empty blocks
+	return w, backend, w.close
 }
 
 func TestGenerateAndImportBlock(t *testing.T) {
@@ -331,7 +372,7 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	config.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine := clique.New(config.Clique, db)
 
-	w, b := newTestWorker(t, &config, engine, db, 0)
+	w, b, _ := newTestWorker(t, &config, engine, db, 0, false, 0, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -366,36 +407,35 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	}
 }
 
-// TODO - Arpit
-// func getFakeBorFromConfig(t *testing.T, chainConfig *params.ChainConfig) (consensus.Engine, *gomock.Controller) {
-// 	t.Helper()
+func getFakeBorFromConfig(t *testing.T, chainConfig *params.ChainConfig) (consensus.Engine, *gomock.Controller) {
+	t.Helper()
 
-// 	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(t)
 
-// 	ethAPIMock := api.NewMockCaller(ctrl)
-// 	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	ethAPIMock := api.NewMockCaller(ctrl)
+	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-// 	spanner := bor.NewMockSpanner(ctrl)
-// 	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
-// 		{
-// 			ID:               0,
-// 			Address:          TestBankAddress,
-// 			VotingPower:      100,
-// 			ProposerPriority: 0,
-// 		},
-// 	}, nil).AnyTimes()
+	spanner := bor.NewMockSpanner(ctrl)
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+		{
+			ID:               0,
+			Address:          TestBankAddress,
+			VotingPower:      100,
+			ProposerPriority: 0,
+		},
+	}, nil).AnyTimes()
 
-// 	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
-// 	heimdallClientMock.EXPECT().Close().Times(1)
+	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClientMock.EXPECT().Close().Times(1)
 
-// 	contractMock := bor.NewMockGenesisContract(ctrl)
+	contractMock := bor.NewMockGenesisContract(ctrl)
 
-// 	db, _, _ := NewDBForFakes(t)
+	db, _, _ := NewDBForFakes(t)
 
-// 	engine := NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	engine := NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 
-// 	return engine, ctrl
-// }
+	return engine, ctrl
+}
 
 func TestEmptyWorkEthash(t *testing.T) {
 	t.Skip()
@@ -410,7 +450,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	t.Helper()
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	taskCh := make(chan struct{}, 2)
@@ -457,7 +497,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -559,7 +599,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
@@ -678,348 +718,348 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
-// // TODO - Arpit
-// // nolint : paralleltest
-// // TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
-// func TestCommitInterruptExperimentBor(t *testing.T) {
-// 	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
-// 	testCommitInterruptExperimentBor(t, 200, 5, 0)
+// nolint : paralleltest
+// TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
+func TestCommitInterruptExperimentBor(t *testing.T) {
+	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
+	testCommitInterruptExperimentBor(t, 200, 5, 0)
 
-// 	time.Sleep(2 * time.Second)
+	time.Sleep(2 * time.Second)
 
-// 	// with 1 sec block time and 100 millisec tx delay we should get 10 txs per block
-// 	testCommitInterruptExperimentBor(t, 100, 10, 0)
-// }
+	// with 1 sec block time and 100 millisec tx delay we should get 10 txs per block
+	testCommitInterruptExperimentBor(t, 100, 10, 0)
+}
 
-// // TODO - Arpit
-// // nolint : paralleltest
-// // TestCommitInterruptExperimentBorContract tests the commit interrupt experiment for bor consensus by inducing an artificial delay at OPCODE level.
-// func TestCommitInterruptExperimentBorContract(t *testing.T) {
-// 	// pre-calculated number of OPCODES = 123. 7*123=861 < 1000, 1 tx is possible but 2 tx per block will not be possible.
-// 	testCommitInterruptExperimentBorContract(t, 0, 1, 7)
-// 	time.Sleep(2 * time.Second)
-// 	// pre-calculated number of OPCODES = 123. 2*123=246 < 1000, 4 tx is possible but 5 tx per block will not be possible. But 3 happen due to other overheads.
-// 	testCommitInterruptExperimentBorContract(t, 0, 3, 2)
-// 	time.Sleep(2 * time.Second)
-// 	// pre-calculated number of OPCODES = 123. 3*123=369 < 1000, 2 tx is possible but 3 tx per block will not be possible.
-// 	testCommitInterruptExperimentBorContract(t, 0, 2, 3)
-// }
+// nolint : paralleltest
+// TestCommitInterruptExperimentBorContract tests the commit interrupt experiment for bor consensus by inducing an artificial delay at OPCODE level.
+func TestCommitInterruptExperimentBorContract(t *testing.T) {
+	// pre-calculated number of OPCODES = 123. 7*123=861 < 1000, 1 tx is possible but 2 tx per block will not be possible.
+	testCommitInterruptExperimentBorContract(t, 0, 1, 7)
+	time.Sleep(2 * time.Second)
+	// pre-calculated number of OPCODES = 123. 2*123=246 < 1000, 4 tx is possible but 5 tx per block will not be possible. But 3 happen due to other overheads.
+	testCommitInterruptExperimentBorContract(t, 0, 3, 2)
+	time.Sleep(2 * time.Second)
+	// pre-calculated number of OPCODES = 123. 3*123=369 < 1000, 2 tx is possible but 3 tx per block will not be possible.
+	testCommitInterruptExperimentBorContract(t, 0, 2, 3)
+}
 
-// // TODO - Arpit
+// nolint : thelper
+// testCommitInterruptExperimentBorContract is a helper function for testing the commit interrupt experiment for bor consensus.
+func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		txInTxpool  = 100
+		txs         = make([]*types.Transaction, 0, txInTxpool)
+	)
+
+	chainConfig = params.BorUnittestChainConfig
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	engine, _ = getFakeBorFromConfig(t, chainConfig)
+
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
+	defer w.close()
+
+	// nonce 0 tx
+	tx, addr := b.newStorageCreateContractTx()
+	if err := b.txPool.Add([]*txpool.Transaction{{Tx: tx}}, false, false)[0]; err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(4 * time.Second)
+
+	// nonce starts from 1 because we already have one tx
+	initNonce := uint64(1)
+
+	for i := 0; i < txInTxpool; i++ {
+		tx := b.newStorageContractCallTx(addr, initNonce+uint64(i))
+		txs = append(txs, tx)
+	}
+
+	wrapped := make([]*txpool.Transaction, len(txs))
+	for i, tx := range txs {
+		wrapped[i] = &txpool.Transaction{Tx: tx}
+	}
+
+	b.TxPool().Add(wrapped, false, false)
+
+	// Start mining!
+	w.start()
+	time.Sleep(5 * time.Second)
+	w.stop()
+
+	currentBlockNumber := w.current.header.Number.Uint64()
+	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len()+1)
+}
+
 // // nolint : thelper
-// // testCommitInterruptExperimentBorContract is a helper function for testing the commit interrupt experiment for bor consensus.
-// func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
-// 	var (
-// 		engine      consensus.Engine
-// 		chainConfig *params.ChainConfig
-// 		db          = rawdb.NewMemoryDatabase()
-// 		ctrl        *gomock.Controller
-// 		txInTxpool  = 100
-// 		txs         = make([]*types.Transaction, 0, txInTxpool)
-// 	)
+// testCommitInterruptExperimentBor is a helper function for testing the commit interrupt experiment for bor consensus.
+func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
+		txInTxpool  = 100
+		txs         = make([]*types.Transaction, 0, txInTxpool)
+	)
 
-// 	chainConfig = params.BorUnittestChainConfig
+	chainConfig = params.BorUnittestChainConfig
 
-// 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-// 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 
-// 	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
-// 	defer w.close()
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
+	defer func() {
+		w.close()
+		engine.Close()
+		db.Close()
+		ctrl.Finish()
+	}()
 
-// 	// nonce 0 tx
-// 	tx, addr := b.newStorageCreateContractTx()
-// 	if err := b.TxPool().AddRemote(tx); err != nil {
-// 		t.Fatal(err)
-// 	}
+	// nonce starts from 0 because have no txs yet
+	initNonce := uint64(0)
 
-// 	time.Sleep(4 * time.Second)
+	for i := 0; i < txInTxpool; i++ {
+		tx := b.newRandomTxWithNonce(false, initNonce+uint64(i))
+		txs = append(txs, tx)
+	}
 
-// 	// nonce starts from 1 because we already have one tx
-// 	initNonce := uint64(1)
+	wrapped := make([]*txpool.Transaction, len(txs))
+	for i, tx := range txs {
+		wrapped[i] = &txpool.Transaction{Tx: tx}
+	}
 
-// 	for i := 0; i < txInTxpool; i++ {
-// 		tx := b.newStorageContractCallTx(addr, initNonce+uint64(i))
-// 		txs = append(txs, tx)
-// 	}
+	b.TxPool().Add(wrapped, false, false)
 
-// 	b.TxPool().AddRemotes(txs)
+	// Start mining!
+	w.start()
+	time.Sleep(5 * time.Second)
+	w.stop()
 
-// 	// Start mining!
-// 	w.start()
-// 	time.Sleep(5 * time.Second)
-// 	w.stop()
+	currentBlockNumber := w.current.header.Number.Uint64()
+	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+}
 
-// 	currentBlockNumber := w.current.header.Number.Uint64()
-// 	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
-// 	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len()+1)
-// }
+func BenchmarkBorMining(b *testing.B) {
+	chainConfig := params.BorUnittestChainConfig
 
-// // TODO - Arpit
-// // nolint : thelper
-// // testCommitInterruptExperimentBor is a helper function for testing the commit interrupt experiment for bor consensus.
-// func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opcodeDelay uint) {
-// 	var (
-// 		engine      consensus.Engine
-// 		chainConfig *params.ChainConfig
-// 		db          = rawdb.NewMemoryDatabase()
-// 		ctrl        *gomock.Controller
-// 		txInTxpool  = 100
-// 		txs         = make([]*types.Transaction, 0, txInTxpool)
-// 	)
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
 
-// 	chainConfig = params.BorUnittestChainConfig
+	ethAPIMock := api.NewMockCaller(ctrl)
+	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-// 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	spanner := bor.NewMockSpanner(ctrl)
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+		{
+			ID:               0,
+			Address:          TestBankAddress,
+			VotingPower:      100,
+			ProposerPriority: 0,
+		},
+	}, nil).AnyTimes()
 
-// 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClientMock.EXPECT().Close().Times(1)
 
-// 	w, b, _ := newTestWorker(t, chainConfig, engine, db, 0, true, delay, opcodeDelay)
-// 	defer func() {
-// 		w.close()
-// 		engine.Close()
-// 		db.Close()
-// 		ctrl.Finish()
-// 	}()
+	contractMock := bor.NewMockGenesisContract(ctrl)
 
-// 	// nonce starts from 0 because have no txs yet
-// 	initNonce := uint64(0)
+	db, _, _ := NewDBForFakes(b)
 
-// 	for i := 0; i < txInTxpool; i++ {
-// 		tx := b.newRandomTxWithNonce(false, initNonce+uint64(i))
-// 		txs = append(txs, tx)
-// 	}
+	engine := NewFakeBor(b, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	defer engine.Close()
 
-// 	b.TxPool().AddRemotes(txs)
+	chainConfig.LondonBlock = big.NewInt(0)
 
-// 	// Start mining!
-// 	w.start()
-// 	time.Sleep(5 * time.Second)
-// 	w.stop()
+	w, back, _ := newTestWorker(b, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
+	defer w.close()
 
-// 	currentBlockNumber := w.current.header.Number.Uint64()
-// 	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
-// 	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
-// }
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil)
+	defer chain.Stop()
 
-// TODO - Arpit
-// func BenchmarkBorMining(b *testing.B) {
-// 	chainConfig := params.BorUnittestChainConfig
+	// fulfill tx pool
+	const (
+		totalGas    = testGas + params.TxGas
+		totalBlocks = 10
+	)
 
-// 	ctrl := gomock.NewController(b)
-// 	defer ctrl.Finish()
+	var err error
 
-// 	ethAPIMock := api.NewMockCaller(ctrl)
-// 	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	txInBlock := int(back.genesis.GasLimit/totalGas) + 1
 
-// 	spanner := bor.NewMockSpanner(ctrl)
-// 	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
-// 		{
-// 			ID:               0,
-// 			Address:          TestBankAddress,
-// 			VotingPower:      100,
-// 			ProposerPriority: 0,
-// 		},
-// 	}, nil).AnyTimes()
+	// a bit risky
+	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
+		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(true)}}, true, false)[0]
+		if err != nil {
+			b.Fatal("while adding a local transaction", err)
+		}
 
-// 	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
-// 	heimdallClientMock.EXPECT().Close().Times(1)
+		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(false)}}, false, false)[0]
+		if err != nil {
+			b.Fatal("while adding a remote transaction", err)
+		}
+	}
 
-// 	contractMock := bor.NewMockGenesisContract(ctrl)
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
 
-// 	db, _, _ := NewDBForFakes(b)
+	b.ResetTimer()
 
-// 	engine := NewFakeBor(b, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
-// 	defer engine.Close()
+	prev := uint64(time.Now().Unix())
 
-// 	chainConfig.LondonBlock = big.NewInt(0)
+	// Start mining!
+	w.start()
 
-// 	w, back, _ := newTestWorker(b, chainConfig, engine, db, 0, false, 0, 0)
-// 	defer w.close()
+	blockPeriod, ok := back.genesis.Config.Bor.Period["0"]
+	if !ok {
+		blockPeriod = 1
+	}
 
-// 	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.Genesis, nil, engine, vm.Config{}, nil, nil, nil)
-// 	defer chain.Stop()
+	for i := 0; i < totalBlocks; i++ {
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
 
-// 	// fulfill tx pool
-// 	const (
-// 		totalGas    = testGas + params.TxGas
-// 		totalBlocks = 10
-// 	)
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
 
-// 	var err error
+			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())
 
-// 	txInBlock := int(back.Genesis.GasLimit/totalGas) + 1
+			prev = block.Time()
+		case <-time.After(time.Duration(blockPeriod) * time.Second):
+			b.Fatalf("timeout")
+		}
+	}
+}
 
-// 	// a bit risky
-// 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-// 		err = back.txPool.AddLocal(back.newRandomTx(true))
-// 		if err != nil {
-// 			b.Fatal("while adding a local transaction", err)
-// 		}
-
-// 		err = back.txPool.AddLocal(back.newRandomTx(false))
-// 		if err != nil {
-// 			b.Fatal("while adding a remote transaction", err)
-// 		}
-// 	}
-
-// 	// Wait for mined blocks.
-// 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-// 	defer sub.Unsubscribe()
-
-// 	b.ResetTimer()
-
-// 	prev := uint64(time.Now().Unix())
-
-// 	// Start mining!
-// 	w.start()
-
-// 	blockPeriod, ok := back.Genesis.Config.Bor.Period["0"]
-// 	if !ok {
-// 		blockPeriod = 1
-// 	}
-
-// 	for i := 0; i < totalBlocks; i++ {
-// 		select {
-// 		case ev := <-sub.Chan():
-// 			block := ev.Data.(core.NewMinedBlockEvent).Block
-
-// 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-// 				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
-// 			}
-
-// 			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())
-
-// 			prev = block.Time()
-// 		case <-time.After(time.Duration(blockPeriod) * time.Second):
-// 			b.Fatalf("timeout")
-// 		}
-// 	}
-// }
-
-// TODO - Arpit
 // uses core.NewParallelBlockChain to use the dependencies present in the block header
 // params.BorUnittestChainConfig contains the ParallelUniverseBlock ad big.NewInt(5), so the first 4 blocks will not have metadata.
 // nolint: gocognit
-// func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
-// 	chainConfig := params.BorUnittestChainConfig
+func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
+	chainConfig := params.BorUnittestChainConfig
 
-// 	ctrl := gomock.NewController(b)
-// 	defer ctrl.Finish()
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
 
-// 	ethAPIMock := api.NewMockCaller(ctrl)
-// 	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	ethAPIMock := api.NewMockCaller(ctrl)
+	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-// 	spanner := bor.NewMockSpanner(ctrl)
-// 	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
-// 		{
-// 			ID:               0,
-// 			Address:          TestBankAddress,
-// 			VotingPower:      100,
-// 			ProposerPriority: 0,
-// 		},
-// 	}, nil).AnyTimes()
+	spanner := bor.NewMockSpanner(ctrl)
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+		{
+			ID:               0,
+			Address:          TestBankAddress,
+			VotingPower:      100,
+			ProposerPriority: 0,
+		},
+	}, nil).AnyTimes()
 
-// 	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
-// 	heimdallClientMock.EXPECT().Close().Times(1)
+	heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClientMock.EXPECT().Close().Times(1)
 
-// 	contractMock := bor.NewMockGenesisContract(ctrl)
+	contractMock := bor.NewMockGenesisContract(ctrl)
 
-// 	db, _, _ := NewDBForFakes(b)
+	db, _, _ := NewDBForFakes(b)
 
-// 	engine := NewFakeBor(b, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
-// 	defer engine.Close()
+	engine := NewFakeBor(b, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	defer engine.Close()
 
-// 	chainConfig.LondonBlock = big.NewInt(0)
+	chainConfig.LondonBlock = big.NewInt(0)
 
-// 	w, back := newTestWorker(b, chainConfig, engine, db, 0)
+	w, back, _ := newTestWorker(b, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, false, 0, 0)
+	defer w.close()
 
-// 	// w, back, _ := NewTestWorker(b, chainConfig, engine, db, 0, false, 0, 0)
-// 	defer w.close()
+	// This test chain imports the mined blocks.
+	db2 := rawdb.NewMemoryDatabase()
+	back.genesis.MustCommit(db2)
 
-// 	// This test chain imports the mined blocks.
-// 	db2 := rawdb.NewMemoryDatabase()
-// 	back.Genesis.MustCommit(db2)
+	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+	defer chain.Stop()
 
-// 	chain, _ := core.NewParallelBlockChain(db2, nil, back.Genesis, nil, engine, vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
-// 	defer chain.Stop()
+	// Ignore empty commit here for less noise.
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
 
-// 	// Ignore empty commit here for less noise.
-// 	w.skipSealHook = func(task *task) bool {
-// 		return len(task.receipts) == 0
-// 	}
+	// fulfill tx pool
+	const (
+		totalGas    = testGas + params.TxGas
+		totalBlocks = 10
+	)
 
-// 	// fulfill tx pool
-// 	const (
-// 		totalGas    = testGas + params.TxGas
-// 		totalBlocks = 10
-// 	)
+	var err error
 
-// 	var err error
+	txInBlock := int(back.genesis.GasLimit/totalGas) + 1
 
-// 	txInBlock := int(back.Genesis.GasLimit/totalGas) + 1
+	// a bit risky
+	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
+		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(true)}}, true, false)[0]
+		if err != nil {
+			b.Fatal("while adding a local transaction", err)
+		}
 
-// 	// a bit risky
-// 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-// 		err = back.txPool.AddLocal(back.newRandomTx(true))
-// 		if err != nil {
-// 			b.Fatal("while adding a local transaction", err)
-// 		}
+		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(false)}}, false, false)[0]
+		if err != nil {
+			b.Fatal("while adding a remote transaction", err)
+		}
+	}
 
-// 		err = back.txPool.AddLocal(back.newRandomTx(false))
-// 		if err != nil {
-// 			b.Fatal("while adding a remote transaction", err)
-// 		}
-// 	}
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
 
-// 	// Wait for mined blocks.
-// 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-// 	defer sub.Unsubscribe()
+	b.ResetTimer()
 
-// 	b.ResetTimer()
+	prev := uint64(time.Now().Unix())
 
-// 	prev := uint64(time.Now().Unix())
+	// Start mining!
+	w.start()
 
-// 	// Start mining!
-// 	w.start()
+	blockPeriod, ok := back.genesis.Config.Bor.Period["0"]
+	if !ok {
+		blockPeriod = 1
+	}
 
-// 	blockPeriod, ok := back.Genesis.Config.Bor.Period["0"]
-// 	if !ok {
-// 		blockPeriod = 1
-// 	}
+	for i := 0; i < totalBlocks; i++ {
+		select {
+		case ev := <-sub.Chan():
+			block := ev.Data.(core.NewMinedBlockEvent).Block
 
-// 	for i := 0; i < totalBlocks; i++ {
-// 		select {
-// 		case ev := <-sub.Chan():
-// 			block := ev.Data.(core.NewMinedBlockEvent).Block
+			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+			}
 
-// 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-// 				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
-// 			}
+			// check for dependencies for block number > 4
+			if block.NumberU64() <= 4 {
+				if block.GetTxDependency() != nil {
+					b.Fatalf("dependency not nil")
+				}
+			} else {
+				deps := block.GetTxDependency()
+				if len(deps[0]) != 0 {
+					b.Fatalf("wrong dependency")
+				}
 
-// 			// check for dependencies for block number > 4
-// 			if block.NumberU64() <= 4 {
-// 				if block.GetTxDependency() != nil {
-// 					b.Fatalf("dependency not nil")
-// 				}
-// 			} else {
-// 				deps := block.GetTxDependency()
-// 				if len(deps[0]) != 0 {
-// 					b.Fatalf("wrong dependency")
-// 				}
+				for i := 1; i < block.Transactions().Len(); i++ {
+					if deps[i][0] != uint64(i-1) || len(deps[i]) != 1 {
+						b.Fatalf("wrong dependency")
+					}
+				}
+			}
 
-// 				for i := 1; i < block.Transactions().Len(); i++ {
-// 					if deps[i][0] != uint64(i-1) || len(deps[i]) != 1 {
-// 						b.Fatalf("wrong dependency")
-// 					}
-// 				}
-// 			}
+			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())
 
-// 			b.Log("block", block.NumberU64(), "time", block.Time()-prev, "txs", block.Transactions().Len(), "gasUsed", block.GasUsed(), "gasLimit", block.GasLimit())
-
-// 			prev = block.Time()
-// 		case <-time.After(time.Duration(blockPeriod) * time.Second):
-// 			b.Fatalf("timeout")
-// 		}
-// 	}
-// }
+			prev = block.Time()
+		case <-time.After(time.Duration(blockPeriod) * time.Second):
+			b.Fatalf("timeout")
+		}
+	}
+}

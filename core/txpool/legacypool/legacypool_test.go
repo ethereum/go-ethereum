@@ -172,12 +172,12 @@ func setupPool() (*LegacyPool, *ecdsa.PrivateKey) {
 	return setupPoolWithConfig(params.TestChainConfig)
 }
 
-func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.PrivateKey) {
+func setupPoolWithConfig(config *params.ChainConfig, options ...func(pool *LegacyPool)) (*LegacyPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(config, 10000000, statedb, new(event.Feed))
 
 	key, _ := crypto.GenerateKey()
-	pool := New(testTxPoolConfig, blockchain)
+	pool := New(testTxPoolConfig, blockchain, options...)
 	if err := pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver()); err != nil {
 		panic(err)
 	}
@@ -2982,105 +2982,109 @@ func BenchmarkPoolAccountMultiBatchInsert(b *testing.B) {
 	}
 }
 
-// TODO - Arpit
-// func BenchmarkPoolAccountMultiBatchInsertRace(b *testing.B) {
-// 	// Generate a batch of transactions to enqueue into the pool
-// 	pool, _ := setupPool()
-// 	defer pool.Close()
+func BenchmarkPoolAccountMultiBatchInsertRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupPool()
+	defer pool.Close()
 
-// 	batches := make(types.Transactions, b.N)
+	batches := make(types.Transactions, b.N)
 
-// 	for i := 0; i < b.N; i++ {
-// 		key, _ := crypto.GenerateKey()
-// 		account := crypto.PubkeyToAddress(key.PublicKey)
-// 		tx := transaction(uint64(0), 100000, key)
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
 
-// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-// 		batches[i] = tx
-// 	}
+		batches[i] = tx
+	}
 
-// 	done := make(chan struct{})
+	done := make(chan struct{})
 
-// 	go func() {
-// 		t := time.NewTicker(time.Microsecond)
-// 		defer t.Stop()
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
 
-// 		var pending map[common.Address]types.Transactions
+		var pending map[common.Address][]*txpool.LazyTransaction
 
-// 	loop:
-// 		for {
-// 			select {
-// 			case <-t.C:
-// 				pending = pool.Pending(true)
-// 			case <-done:
-// 				break loop
-// 			}
-// 		}
+	loop:
+		for {
+			select {
+			case <-t.C:
+				pending = pool.Pending(true)
+			case <-done:
+				break loop
+			}
+		}
 
-// 		fmt.Fprint(io.Discard, pending)
-// 	}()
+		fmt.Fprint(io.Discard, pending)
+	}()
 
-// 	b.ReportAllocs()
-// 	b.ResetTimer()
+	b.ReportAllocs()
+	b.ResetTimer()
 
-// 	for _, tx := range batches {
-// 		pool.addRemotesSync([]*types.Transaction{tx})
-// 	}
+	for _, tx := range batches {
+		pool.addRemotesSync([]*types.Transaction{tx})
+	}
 
-// 	close(done)
-// }
+	close(done)
+}
 
-// TODO - Arpit
-// func BenchmarkPoolAccountMultiBatchInsertNoLockRace(b *testing.B) {
-// 	// Generate a batch of transactions to enqueue into the pool
-// 	pendingAddedCh := make(chan struct{}, 1024)
+func MakeWithPromoteTxCh(ch chan struct{}) func(*LegacyPool) {
+	return func(pool *LegacyPool) {
+		pool.promoteTxCh = ch
+	}
+}
 
-// 	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-// 	defer pool.Close()
+func BenchmarkPoolAccountMultiBatchInsertNoLockRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pendingAddedCh := make(chan struct{}, 1024)
 
-// 	_ = localKey
+	pool, localKey := setupPoolWithConfig(params.TestChainConfig, MakeWithPromoteTxCh(pendingAddedCh))
+	defer pool.Close()
 
-// 	batches := make(types.Transactions, b.N)
+	_ = localKey
 
-// 	for i := 0; i < b.N; i++ {
-// 		key, _ := crypto.GenerateKey()
-// 		account := crypto.PubkeyToAddress(key.PublicKey)
-// 		tx := transaction(uint64(0), 100000, key)
+	batches := make(types.Transactions, b.N)
 
-// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
 
-// 		batches[i] = tx
-// 	}
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-// 	done := make(chan struct{})
+		batches[i] = tx
+	}
 
-// 	go func() {
-// 		t := time.NewTicker(time.Microsecond)
-// 		defer t.Stop()
+	done := make(chan struct{})
 
-// 		var pending map[common.Address]types.Transactions
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
 
-// 		for range t.C {
-// 			pending = pool.Pending(true)
+		var pending map[common.Address][]*txpool.LazyTransaction
 
-// 			if len(pending) >= b.N/2 {
-// 				close(done)
+		for range t.C {
+			pending = pool.Pending(true)
 
-// 				return
-// 			}
-// 		}
-// 	}()
+			if len(pending) >= b.N/2 {
+				close(done)
 
-// 	b.ReportAllocs()
-// 	b.ResetTimer()
+				return
+			}
+		}
+	}()
 
-// 	for _, tx := range batches {
-// 		pool.addRemotes([]*types.Transaction{tx})
-// 	}
+	b.ReportAllocs()
+	b.ResetTimer()
 
-// 	<-done
-// }
+	for _, tx := range batches {
+		pool.addRemotes([]*types.Transaction{tx})
+	}
+
+	<-done
+}
 
 func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
@@ -3109,169 +3113,166 @@ func BenchmarkPoolAccountsBatchInsert(b *testing.B) {
 	}
 }
 
-// TODO - Arpit
-// func BenchmarkPoolAccountsBatchInsertRace(b *testing.B) {
-// 	// Generate a batch of transactions to enqueue into the pool
-// 	pool, _ := setupPool()
-// 	defer pool.Close()
+func BenchmarkPoolAccountsBatchInsertRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupPool()
+	defer pool.Close()
 
-// 	batches := make(types.Transactions, b.N)
+	batches := make(types.Transactions, b.N)
 
-// 	for i := 0; i < b.N; i++ {
-// 		key, _ := crypto.GenerateKey()
-// 		account := crypto.PubkeyToAddress(key.PublicKey)
-// 		tx := transaction(uint64(0), 100000, key)
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
 
-// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-// 		batches[i] = tx
-// 	}
+		batches[i] = tx
+	}
 
-// 	done := make(chan struct{})
+	done := make(chan struct{})
 
-// 	go func() {
-// 		t := time.NewTicker(time.Microsecond)
-// 		defer t.Stop()
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
 
-// 		var pending map[common.Address]types.Transactions
+		var pending map[common.Address][]*txpool.LazyTransaction
 
-// 	loop:
-// 		for {
-// 			select {
-// 			case <-t.C:
-// 				pending = pool.Pending(true)
-// 			case <-done:
-// 				break loop
-// 			}
-// 		}
+	loop:
+		for {
+			select {
+			case <-t.C:
+				pending = pool.Pending(true)
+			case <-done:
+				break loop
+			}
+		}
 
-// 		fmt.Fprint(io.Discard, pending)
-// 	}()
+		fmt.Fprint(io.Discard, pending)
+	}()
 
-// 	b.ReportAllocs()
-// 	b.ResetTimer()
+	b.ReportAllocs()
+	b.ResetTimer()
 
-// 	for _, tx := range batches {
-// 		_ = pool.addRemoteSync(tx)
-// 	}
+	for _, tx := range batches {
+		_ = pool.addRemoteSync(tx)
+	}
 
-// 	close(done)
-// }
+	close(done)
+}
 
-// TODO - Arpit
-// func BenchmarkPoolAccountsBatchInsertNoLockRace(b *testing.B) {
-// 	// Generate a batch of transactions to enqueue into the pool
-// 	pendingAddedCh := make(chan struct{}, 1024)
+func BenchmarkPoolAccountsBatchInsertNoLockRace(b *testing.B) {
+	// Generate a batch of transactions to enqueue into the pool
+	pendingAddedCh := make(chan struct{}, 1024)
 
-// 	pool, localKey := setupPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit, MakeWithPromoteTxCh(pendingAddedCh))
-// 	defer pool.Close()
+	pool, localKey := setupPoolWithConfig(params.TestChainConfig, MakeWithPromoteTxCh(pendingAddedCh))
+	defer pool.Close()
 
-// 	_ = localKey
+	_ = localKey
 
-// 	batches := make(types.Transactions, b.N)
+	batches := make(types.Transactions, b.N)
 
-// 	for i := 0; i < b.N; i++ {
-// 		key, _ := crypto.GenerateKey()
-// 		account := crypto.PubkeyToAddress(key.PublicKey)
-// 		tx := transaction(uint64(0), 100000, key)
+	for i := 0; i < b.N; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		tx := transaction(uint64(0), 100000, key)
 
-// 		pool.currentState.AddBalance(account, big.NewInt(1000000))
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
 
-// 		batches[i] = tx
-// 	}
+		batches[i] = tx
+	}
 
-// 	done := make(chan struct{})
+	done := make(chan struct{})
 
-// 	go func() {
-// 		t := time.NewTicker(time.Microsecond)
-// 		defer t.Stop()
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
 
-// 		var pending map[common.Address]types.Transactions
+		var pending map[common.Address][]*txpool.LazyTransaction
 
-// 		for range t.C {
-// 			pending = pool.Pending(true)
+		for range t.C {
+			pending = pool.Pending(true)
 
-// 			if len(pending) >= b.N/2 {
-// 				close(done)
+			if len(pending) >= b.N/2 {
+				close(done)
 
-// 				return
-// 			}
-// 		}
-// 	}()
+				return
+			}
+		}
+	}()
 
-// 	b.ReportAllocs()
-// 	b.ResetTimer()
+	b.ReportAllocs()
+	b.ResetTimer()
 
-// 	for _, tx := range batches {
-// 		_ = pool.addRemote(tx)
-// 	}
+	for _, tx := range batches {
+		_ = pool.addRemote(tx)
+	}
 
-// 	<-done
-// }
+	<-done
+}
 
-// TODO - Arpit
-// func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
-// 	t.Parallel()
+func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
+	t.Parallel()
 
-// 	// Generate a batch of transactions to enqueue into the pool
-// 	pool, _ := setupPool()
-// 	defer pool.Close()
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupPool()
+	defer pool.Close()
 
-// 	const n = 5000
+	const n = 5000
 
-// 	batches := make(types.Transactions, n)
-// 	batchesSecond := make(types.Transactions, n)
+	batches := make(types.Transactions, n)
+	batchesSecond := make(types.Transactions, n)
 
-// 	for i := 0; i < n; i++ {
-// 		batches[i] = newTxs(pool)
-// 		batchesSecond[i] = newTxs(pool)
-// 	}
+	for i := 0; i < n; i++ {
+		batches[i] = newTxs(pool)
+		batchesSecond[i] = newTxs(pool)
+	}
 
-// 	done := make(chan struct{})
+	done := make(chan struct{})
 
-// 	go func() {
-// 		t := time.NewTicker(time.Microsecond)
-// 		defer t.Stop()
+	go func() {
+		t := time.NewTicker(time.Microsecond)
+		defer t.Stop()
 
-// 		var (
-// 			pending map[common.Address]types.Transactions
-// 			total   int
-// 		)
+		var (
+			pending map[common.Address][]*txpool.LazyTransaction
+			total   int
+		)
 
-// 		for range t.C {
-// 			pending = pool.Pending(true)
-// 			total = len(pending)
+		for range t.C {
+			pending = pool.Pending(true)
+			total = len(pending)
 
-// 			_ = pool.Locals()
+			_ = pool.Locals()
 
-// 			if total >= n {
-// 				close(done)
+			if total >= n {
+				close(done)
 
-// 				return
-// 			}
-// 		}
-// 	}()
+				return
+			}
+		}
+	}()
 
-// 	for _, tx := range batches {
-// 		pool.addRemotesSync([]*types.Transaction{tx})
-// 	}
+	for _, tx := range batches {
+		pool.addRemotesSync([]*types.Transaction{tx})
+	}
 
-// 	for _, tx := range batchesSecond {
-// 		pool.addRemotes([]*types.Transaction{tx})
-// 	}
+	for _, tx := range batchesSecond {
+		pool.addRemotes([]*types.Transaction{tx})
+	}
 
-// 	<-done
-// }
+	<-done
+}
 
-// func newTxs(pool *LegacyPool) *types.Transaction {
-// 	key, _ := crypto.GenerateKey()
-// 	account := crypto.PubkeyToAddress(key.PublicKey)
-// 	tx := transaction(uint64(0), 100000, key)
+func newTxs(pool *LegacyPool) *types.Transaction {
+	key, _ := crypto.GenerateKey()
+	account := crypto.PubkeyToAddress(key.PublicKey)
+	tx := transaction(uint64(0), 100000, key)
 
-// 	pool.currentState.AddBalance(account, big.NewInt(1_000_000_000))
+	pool.currentState.AddBalance(account, big.NewInt(1_000_000_000))
 
-// 	return tx
-// }
+	return tx
+}
 
 type acc struct {
 	nonce   uint64
@@ -3399,7 +3400,7 @@ func defaultTxPoolRapidConfig() txPoolRapidConfig {
 	}
 }
 
-// TODO - Arpit
+// TODO - Fix Later
 // TestSmallTxPool is not something to run in parallel as far it uses all CPUs
 // nolint:paralleltest
 // func TestSmallTxPool(t *testing.T) {
@@ -3421,6 +3422,7 @@ func defaultTxPoolRapidConfig() txPoolRapidConfig {
 // 	testPoolBatchInsert(t, cfg)
 // }
 
+// TODO - Fix Later
 // // This test is not something to run in parallel as far it uses all CPUs
 // // nolint:paralleltest
 // func TestBigTxPool(t *testing.T) {
@@ -3893,6 +3895,7 @@ func BenchmarkBigs(b *testing.B) {
 // 	return total, pendingDuration, miningDuration
 // }
 
+// TODO - Fix Later
 //nolint:paralleltest
 // func TestPoolMiningDataRaces(t *testing.T) {
 // 	if testing.Short() {

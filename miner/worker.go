@@ -1027,31 +1027,30 @@ mainloop:
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx.Tx)
 
-		// TODO - Arpit
 		// not prioritising conditional transaction, yet.
 		//nolint:nestif
-		// if options := tx.GetOptions(); options != nil {
-		// 	if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
-		// 		log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
-		// 		txs.Pop()
+		if options := tx.Tx.GetOptions(); options != nil {
+			if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				txs.Pop()
 
-		// 		continue
-		// 	}
+				continue
+			}
 
-		// 	if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
-		// 		log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
-		// 		txs.Pop()
+			if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				txs.Pop()
 
-		// 		continue
-		// 	}
+				continue
+			}
 
-		// 	if err := env.state.ValidateKnownAccounts(options.KnownAccounts); err != nil {
-		// 		log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
-		// 		txs.Pop()
+			if err := env.state.ValidateKnownAccounts(options.KnownAccounts); err != nil {
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				txs.Pop()
 
-		// 		continue
-		// 	}
-		// }
+				continue
+			}
+		}
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
@@ -1477,7 +1476,6 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 			)
 		})
 
-		// TODO - Arpit whether commitTransaction with delay?
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
 			err = w.commitTransactions(env, txs, interrupt, interruptCtx)
 		})

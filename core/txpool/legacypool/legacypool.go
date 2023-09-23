@@ -241,6 +241,8 @@ type LegacyPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	promoteTxCh chan struct{} // should be used only for tests
 }
 
 type txpoolResetRequest struct {
@@ -249,7 +251,7 @@ type txpoolResetRequest struct {
 
 // New creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func New(config Config, chain BlockChain) *LegacyPool {
+func New(config Config, chain BlockChain, options ...func(pool *LegacyPool)) *LegacyPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -279,6 +281,11 @@ func New(config Config, chain BlockChain) *LegacyPool {
 
 	if !config.NoLocals && config.Journal != "" {
 		pool.journal = newTxJournal(config.Journal)
+	}
+
+	// apply options
+	for _, fn := range options {
+		fn(pool)
 	}
 	return pool
 }

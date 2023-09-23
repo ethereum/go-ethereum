@@ -319,8 +319,11 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 	return b.eth.BlockChain().SubscribeLogsEvent(ch)
 }
 
-// TODO - Arpit
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	if signedTx.GetOptions() != nil && !b.eth.Miner().GetWorker().IsRunning() {
+		return errors.New("bundled transactions are not broadcasted therefore they will not submitted to the transaction pool")
+	}
+
 	return b.eth.txPool.Add([]*txpool.Transaction{{Tx: signedTx}}, true, false)[0]
 }
 

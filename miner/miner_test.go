@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -97,234 +98,227 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent)
 	return bc.chainHeadFeed.Subscribe(ch)
 }
 
-// // TODO - Arpit
-// func TestMiner(t *testing.T) {
-// 	t.Parallel()
+func TestMiner(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
-// 	mux := minerBor.Mux
+	miner := minerBor.Miner
+	mux := minerBor.Mux
 
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	// Start the downloader
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Stop the downloader and wait for the update loop to run
-// 	mux.Post(downloader.DoneEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	// Subsequent downloader events after a successful DoneEvent should not cause the
-// 	// miner to start or stop. This prevents a security vulnerability
-// 	// that would allow entities to present fake high blocks that would
-// 	// stop mining operations by causing a downloader sync
-// 	// until it was discovered they were invalid, whereon mining would resume.
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Subsequent downloader events after a successful DoneEvent should not cause the
+	// miner to start or stop. This prevents a security vulnerability
+	// that would allow entities to present fake high blocks that would
+	// stop mining operations by causing a downloader sync
+	// until it was discovered they were invalid, whereon mining would resume.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	mux.Post(downloader.FailedEvent{})
-// 	waitForMiningState(t, miner, true)
-// }
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+}
 
-// // TODO - Arpit
-// // TestMinerDownloaderFirstFails tests that mining is only
-// // permitted to run indefinitely once the downloader sees a DoneEvent (success).
-// // An initial FailedEvent should allow mining to stop on a subsequent
-// // downloader StartEvent.
-// func TestMinerDownloaderFirstFails(t *testing.T) {
-// 	t.Parallel()
+// TestMinerDownloaderFirstFails tests that mining is only
+// permitted to run indefinitely once the downloader sees a DoneEvent (success).
+// An initial FailedEvent should allow mining to stop on a subsequent
+// downloader StartEvent.
+func TestMinerDownloaderFirstFails(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
-// 	mux := minerBor.Mux
+	miner := minerBor.Miner
+	mux := minerBor.Mux
 
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	// Start the downloader
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Stop the downloader and wait for the update loop to run
-// 	mux.Post(downloader.FailedEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	// Since the downloader hasn't yet emitted a successful DoneEvent,
-// 	// we expect the miner to stop on next StartEvent.
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Since the downloader hasn't yet emitted a successful DoneEvent,
+	// we expect the miner to stop on next StartEvent.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Downloader finally succeeds.
-// 	mux.Post(downloader.DoneEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Downloader finally succeeds.
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	// Downloader starts again.
-// 	// Since it has achieved a DoneEvent once, we expect miner
-// 	// state to be unchanged.
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Downloader starts again.
+	// Since it has achieved a DoneEvent once, we expect miner
+	// state to be unchanged.
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	mux.Post(downloader.FailedEvent{})
-// 	waitForMiningState(t, miner, true)
-// }
+	mux.Post(downloader.FailedEvent{})
+	waitForMiningState(t, miner, true)
+}
 
-// // TODO - Arpit
-// func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
-// 	t.Parallel()
+func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
-// 	mux := minerBor.Mux
+	miner := minerBor.Miner
+	mux := minerBor.Mux
 
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	// Start the downloader
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Downloader finally succeeds.
-// 	mux.Post(downloader.DoneEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Downloader finally succeeds.
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	ch := make(chan struct{})
-// 	miner.Stop(ch)
-// 	waitForMiningState(t, miner, false)
+	ch := make(chan struct{})
+	miner.Stop(ch)
+	waitForMiningState(t, miner, false)
 
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	ch = make(chan struct{})
-// 	miner.Stop(ch)
-// 	waitForMiningState(t, miner, false)
-// }
+	ch = make(chan struct{})
+	miner.Stop(ch)
+	waitForMiningState(t, miner, false)
+}
 
-// // TODO - Arpit
-// func TestStartWhileDownload(t *testing.T) {
-// 	t.Parallel()
+func TestStartWhileDownload(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
-// 	mux := minerBor.Mux
+	miner := minerBor.Miner
+	mux := minerBor.Mux
 
-// 	waitForMiningState(t, miner, false)
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	waitForMiningState(t, miner, false)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	// Stop the downloader and wait for the update loop to run
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Starting the miner after the downloader should not work
-// 	miner.Start()
-// 	waitForMiningState(t, miner, false)
-// }
+	// Starting the miner after the downloader should not work
+	miner.Start()
+	waitForMiningState(t, miner, false)
+}
 
-// // TODO - Arpit
-// func TestStartStopMiner(t *testing.T) {
-// 	t.Parallel()
+func TestStartStopMiner(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
+	miner := minerBor.Miner
 
-// 	waitForMiningState(t, miner, false)
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	waitForMiningState(t, miner, false)
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	ch := make(chan struct{})
-// 	miner.Stop(ch)
+	ch := make(chan struct{})
+	miner.Stop(ch)
 
-// 	waitForMiningState(t, miner, false)
-// }
+	waitForMiningState(t, miner, false)
+}
 
-// // TODO - Arpit
-// func TestCloseMiner(t *testing.T) {
-// 	t.Parallel()
+func TestCloseMiner(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(true)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(true)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
+	miner := minerBor.Miner
 
-// 	waitForMiningState(t, miner, false)
-// 	miner.Start()
+	waitForMiningState(t, miner, false)
+	miner.Start()
 
-// 	miner.Start()
+	miner.Start()
 
-// 	waitForMiningState(t, miner, true)
+	waitForMiningState(t, miner, true)
 
-// 	// Terminate the miner and wait for the update loop to run
-// 	miner.Close()
+	// Terminate the miner and wait for the update loop to run
+	miner.Close()
 
-// 	waitForMiningState(t, miner, false)
-// }
+	waitForMiningState(t, miner, false)
+}
 
 // // TestMinerSetEtherbase checks that etherbase becomes set even if mining isn't
 // // possible at the moment
-// // TODO - Arpit
-// func TestMinerSetEtherbase(t *testing.T) {
-// 	t.Parallel()
+func TestMinerSetEtherbase(t *testing.T) {
+	t.Parallel()
 
-// 	minerBor := NewBorDefaultMiner(t)
-// 	defer func() {
-// 		minerBor.Cleanup(false)
-// 		minerBor.Ctrl.Finish()
-// 	}()
+	minerBor := NewBorDefaultMiner(t)
+	defer func() {
+		minerBor.Cleanup(false)
+		minerBor.Ctrl.Finish()
+	}()
 
-// 	miner := minerBor.Miner
-// 	mux := minerBor.Mux
+	miner := minerBor.Miner
+	mux := minerBor.Mux
 
-// 	// Start with a 'bad' mining address
-// 	miner.Start()
-// 	waitForMiningState(t, miner, true)
+	// Start with a 'bad' mining address
+	miner.Start()
+	waitForMiningState(t, miner, true)
 
-// 	// Start the downloader
-// 	mux.Post(downloader.StartEvent{})
-// 	waitForMiningState(t, miner, false)
+	// Start the downloader
+	mux.Post(downloader.StartEvent{})
+	waitForMiningState(t, miner, false)
 
-// 	// Now user tries to configure proper mining address
-// 	miner.Start()
-// 	// Stop the downloader and wait for the update loop to run
-// 	mux.Post(downloader.DoneEvent{})
-// 	waitForMiningState(t, miner, true)
+	// Now user tries to configure proper mining address
+	miner.Start()
+	// Stop the downloader and wait for the update loop to run
+	mux.Post(downloader.DoneEvent{})
+	waitForMiningState(t, miner, true)
 
-// 	coinbase := common.HexToAddress("0xdeedbeef")
-// 	miner.SetEtherbase(coinbase)
+	coinbase := common.HexToAddress("0xdeedbeef")
+	miner.SetEtherbase(coinbase)
 
-// 	if addr := miner.worker.etherbase(); addr != coinbase {
-// 		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
-// 	}
-// }
+	if addr := miner.worker.etherbase(); addr != coinbase {
+		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
+	}
+}
 
 // waitForMiningState waits until either
 // * the desired mining state was reached

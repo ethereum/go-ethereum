@@ -189,6 +189,10 @@ func makeAddressReserver() txpool.AddressReserver {
 	}
 }
 
+func MakeAddressReserver() {
+	makeAddressReserver()
+}
+
 // makeTx is a utility method to construct a random blob transaction and sign it
 // with a valid key, only setting the interesting fields from the perspective of
 // the blob pool.
