@@ -270,8 +270,6 @@ func TestGraphQLHTTPOnSamePort_GQLRequest_Unsuccessful(t *testing.T) {
 
 // nolint:typecheck
 func TestGraphQLConcurrentResolvers(t *testing.T) {
-	t.Parallel()
-
 	var (
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
