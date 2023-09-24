@@ -398,7 +398,14 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 		log.Info("Block synchronisation started")
 	}
 	if mode == SnapSync {
-		// Snap sync uses the snapshot namespace to store potentially flakey data until
+		// Snap sync will directly modify the persistent state, making the entire
+		// trie database unusable until the state is fully synced. To prevent any
+		// subsequent state reads, explicitly disable the trie database and state
+		// syncer is responsible to address and correct any state missing.
+		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
+			d.blockchain.TrieDB().Reset(types.EmptyRootHash)
+		}
+		// Snap sync uses the snapshot namespace to store potentially flaky data until
 		// sync completely heals and finishes. Pause snapshot maintenance in the mean-
 		// time to prevent access.
 		if snapshots := d.blockchain.Snapshots(); snapshots != nil { // Only nil in tests
@@ -1606,17 +1613,30 @@ func (d *Downloader) processSnapSyncContent() error {
 
 	// To cater for moving pivot points, track the pivot block and subsequently
 	// accumulated download results separately.
+	//
+	// These will be nil up to the point where we reach the pivot, and will only
+	// be set temporarily if the synced blocks are piling up, but the pivot is
+	// still busy downloading. In that case, we need to occasionally check for
+	// pivot moves, so need to unblock the loop. These fields will accumulate
+	// the results in the meantime.
+	//
+	// Note, there's no issue with memory piling up since after 64 blocks the
+	// pivot will forcefully move so these accumulators will be dropped.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
 	)
 	for {
-		// Wait for the next batch of downloaded data to be available, and if the pivot
-		// block became stale, move the goalpost
-		results := d.queue.Results(oldPivot == nil) // Block if we're not monitoring pivot staleness
+		// Wait for the next batch of downloaded data to be available. If we have
+		// not yet reached the pivot point, wait blockingly as there's no need to
+		// spin-loop check for pivot moves. If we reached the pivot but have not
+		// yet processed it, check for results async, so we might notice pivot
+		// moves while state syncing. If the pivot was passed fully, block again
+		// as there's no more reason to check for pivot moves at all.
+		results := d.queue.Results(oldPivot == nil)
 		if len(results) == 0 {
 			// If pivot sync is done, stop
-			if oldPivot == nil {
+			if d.committed.Load() {
 				d.reportSnapSyncProgress(true)
 				return sync.Cancel()
 			}
@@ -1639,21 +1659,23 @@ func (d *Downloader) processSnapSyncContent() error {
 		pivot := d.pivotHeader
 		d.pivotLock.RUnlock()
 
-		if oldPivot == nil {
-			if pivot.Root != sync.root {
-				sync.Cancel()
-				sync = d.syncState(pivot.Root)
+		if oldPivot == nil { // no results piling up, we can move the pivot
+			if !d.committed.Load() { // not yet passed the pivot, we can move the pivot
+				if pivot.Root != sync.root { // pivot position changed, we can move the pivot
+					sync.Cancel()
+					sync = d.syncState(pivot.Root)
 
-				go closeOnErr(sync)
+					go closeOnErr(sync)
+				}
 			}
-		} else {
+		} else { // results already piled up, consume before handling pivot move
 			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
 		}
 		// Split around the pivot block and process the two sides via snap/full sync
 		if !d.committed.Load() {
 			latest := results[len(results)-1].Header
 			// If the height is above the pivot block by 2 sets, it means the pivot
-			// become stale in the network and it was garbage collected, move to a
+			// become stale in the network, and it was garbage collected, move to a
 			// new pivot.
 			//
 			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those

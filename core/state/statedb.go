@@ -135,6 +135,9 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	// Testing hooks
+	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // New creates a new state from a given trie.
@@ -970,7 +973,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 			return true, size, nil, nil, nil
 		}
 		slot := common.CopyBytes(iter.Slot())
-		if iter.Error() != nil { // error might occur after Slot function
+		if err := iter.Error(); err != nil { // error might occur after Slot function
 			return false, 0, nil, nil, err
 		}
 		size += common.StorageSize(common.HashLength + len(slot))
@@ -980,7 +983,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 			return false, 0, nil, nil, err
 		}
 	}
-	if iter.Error() != nil { // error might occur during iteration
+	if err := iter.Error(); err != nil { // error might occur during iteration
 		return false, 0, nil, nil, err
 	}
 	if stack.Hash() != root {
@@ -1058,12 +1061,10 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 			slotDeletionSkip.Inc(1)
 		}
 		n := int64(len(slots))
-		if n > slotDeletionMaxCount.Value() {
-			slotDeletionMaxCount.Update(n)
-		}
-		if int64(size) > slotDeletionMaxSize.Value() {
-			slotDeletionMaxSize.Update(int64(size))
-		}
+
+		slotDeletionMaxCount.UpdateIfGt(int64(len(slots)))
+		slotDeletionMaxSize.UpdateIfGt(int64(size))
+
 		slotDeletionTimer.UpdateSince(start)
 		slotDeletionCount.Mark(n)
 		slotDeletionSize.Mark(int64(size))
@@ -1276,12 +1277,16 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	if root != origin {
 		start := time.Now()
-		if err := s.db.TrieDB().Update(root, origin, block, nodes, triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)); err != nil {
+		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
+		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
 		if metrics.EnabledExpensive {
 			s.TrieDBCommits += time.Since(start)
+		}
+		if s.onCommit != nil {
+			s.onCommit(set)
 		}
 	}
 	// Clear all internal flags at the end of commit operation.

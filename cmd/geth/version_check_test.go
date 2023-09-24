@@ -30,17 +30,24 @@ import (
 )
 
 func TestVerification(t *testing.T) {
-	// Signatures generated with `minisign`
-	t.Run("minisig", func(t *testing.T) {
-		// For this test, the pubkey is in testdata/minisign.pub
+	// Signatures generated with `minisign`. Legacy format, not pre-hashed file.
+	t.Run("minisig-legacy", func(t *testing.T) {
+		// For this test, the pubkey is in testdata/vcheck/minisign.pub
 		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
 		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
 		testVerification(t, pub, "./testdata/vcheck/minisig-sigs/")
 	})
+	t.Run("minisig-new", func(t *testing.T) {
+		// For this test, the pubkey is in testdata/vcheck/minisign.pub
+		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
+		// `minisign -S -s ./minisign.sec  -m data.json  -x ./minisig-sigs-new/data.json.minisig`
+		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
+		testVerification(t, pub, "./testdata/vcheck/minisig-sigs-new/")
+	})
 	// Signatures generated with `signify-openbsd`
 	t.Run("signify-openbsd", func(t *testing.T) {
 		t.Skip("This currently fails, minisign expects 4 lines of data, signify provides only 2")
-		// For this test, the pubkey is in testdata/signifykey.pub
+		// For this test, the pubkey is in testdata/vcheck/signifykey.pub
 		// (the privkey is `signifykey.sec`, if we want to expand this test. Password 'test' )
 		pub := "RWSKLNhZb0KdATtRT7mZC/bybI3t3+Hv/O2i3ye04Dq9fnT9slpZ1a2/"
 		testVerification(t, pub, "./testdata/vcheck/signify-sigs/")
@@ -57,6 +64,9 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 	files, err := os.ReadDir(sigdir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("Missing tests")
 	}
 	for _, f := range files {
 		sig, err := os.ReadFile(filepath.Join(sigdir, f.Name()))

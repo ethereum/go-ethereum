@@ -139,7 +139,7 @@ var (
 	// This is the version of Go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.21.0"
+	dlgoVersion = "1.21.1"
 
 	// This is the version of Go that will be used to bootstrap the PPA builder.
 	//
