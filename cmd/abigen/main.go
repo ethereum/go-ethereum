@@ -72,11 +72,11 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
 	}
-	contractFlag = cli.StringFlag{
+	contractFlag = &cli.StringFlag{
 		Name:  "contract",
 		Usage: "Name of the contract to generate the bindings for",
 	}
-	tmplFlag = cli.StringFlag{
+	tmplFlag = &cli.StringFlag{
 		Name:  "tmpl",
 		Usage: "Template file if a user wants to customize",
 	}
@@ -96,6 +96,8 @@ func init() {
 		outFlag,
 		langFlag,
 		aliasFlag,
+		contractFlag,
+		tmplFlag,
 	}
 	app.Action = abigen
 }
