@@ -91,8 +91,8 @@ var (
 	// transitionStatusKey tracks the eth2 transition status.
 	transitionStatusKey = []byte("eth2-transition")
 
-	// syncStatusFlagKey flags that status of state sync.
-	syncStatusFlagKey = []byte("sync-status")
+	// snapSyncStatusFlagKey flags that status of snap sync.
+	snapSyncStatusFlagKey = []byte("snapSync-status")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header

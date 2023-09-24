@@ -212,6 +212,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	if !cs.handler.chain.HasState(head.Root) {
 		block := cs.handler.chain.CurrentSnapBlock()
 		td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
+		log.Info("Reenabled snap sync as chain is stateless")
 		return downloader.SnapSync, td
 	}
 	// Nope, we're really full syncing

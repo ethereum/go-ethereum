@@ -78,22 +78,23 @@ func DeleteSkeletonHeader(db ethdb.KeyValueWriter, number uint64) {
 }
 
 const (
-	StateSyncing = uint8(1) // flags the state snap sync is not completed yet
-	StateSynced  = uint8(2) // flags the state snap sync is completed
+	StateSyncUnknown  = uint8(0) // flags the state snap sync is unknown
+	StateSyncRunning  = uint8(1) // flags the state snap sync is not completed yet
+	StateSyncFinished = uint8(2) // flags the state snap sync is completed
 )
 
 // ReadSnapSyncStatusFlag retrieves the state snap sync status flag.
 func ReadSnapSyncStatusFlag(db ethdb.KeyValueReader) uint8 {
-	blob, err := db.Get(syncStatusFlagKey)
+	blob, err := db.Get(snapSyncStatusFlagKey)
 	if err != nil || len(blob) != 1 {
-		return 0
+		return StateSyncUnknown
 	}
 	return blob[0]
 }
 
 // WriteSnapSyncStatusFlag stores the state snap sync status flag into database.
 func WriteSnapSyncStatusFlag(db ethdb.KeyValueWriter, flag uint8) {
-	if err := db.Put(syncStatusFlagKey, []byte{flag}); err != nil {
+	if err := db.Put(snapSyncStatusFlagKey, []byte{flag}); err != nil {
 		log.Crit("Failed to store sync status flag", "err", err)
 	}
 }

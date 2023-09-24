@@ -181,7 +181,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		}
 	}
 	// Disable database in case node is still in the initial state sync stage.
-	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncing && !db.readOnly {
+	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
 		db.Deactivate()
 	}
 	log.Warn("Path-based state scheme is an experimental feature")
@@ -260,8 +260,8 @@ func (db *Database) Deactivate() error {
 	db.tree.bottom().markStale()
 
 	// Write the initial sync flag to persist it across restarts.
-	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncing)
-	log.Info("Disabled trie database")
+	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
+	log.Info("Disabled trie database due to ongoing sync")
 	return nil
 }
 
@@ -304,7 +304,7 @@ func (db *Database) Activate(root common.Hash) error {
 
 	// Re-enable the database as the final step.
 	db.disabled = false
-	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSynced)
+	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }

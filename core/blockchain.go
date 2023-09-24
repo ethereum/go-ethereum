@@ -656,10 +656,10 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	pivot := rawdb.ReadLastPivotNumber(bc.db)
 	frozen, _ := bc.db.Ancients()
 
-	// Rewind the blockchain, ensuring we don't end up with a stateless head
-	// block. Note, depth equality is permitted to allow using SetHead as a
-	// chain reparation mechanism without deleting any data!
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
+		// Rewind the blockchain, ensuring we don't end up with a stateless head
+		// block. Note, depth equality is permitted to allow using SetHead as a
+		// chain reparation mechanism without deleting any data!
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			newHeadBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
 			if newHeadBlock == nil {
@@ -708,20 +708,21 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			}
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
-			// The genesis state is missing, which is only possible in the path-based
-			// scheme. This situation occurs when the chain head is rewound below the
-			// pivot point. In this scenario, there is no possible recovery approach
-			// except for rerunning a snap sync. Do nothing here until the state syncer
-			// picks it up.
-			if newHeadBlock.NumberU64() == 0 && !bc.HasState(newHeadBlock.Root()) {
-				log.Info("Genesis state is missing, wait state sync")
-			}
 			// Degrade the chain markers if they are explicitly reverted.
 			// In theory we should update all in-memory markers in the
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe to update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock.Header())
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
+
+			// The head state is missing, which is only possible in the path-based
+			// scheme. This situation occurs when the chain head is rewound below
+			// the pivot point. In this scenario, there is no possible recovery
+			// approach except for rerunning a snap sync. Do nothing here until the
+			// state syncer picks it up.
+			if !bc.HasState(newHeadBlock.Root()) {
+				log.Info("Chain is stateless, wait state sync", "number", newHeadBlock.Number(), "hash", newHeadBlock.Hash())
+			}
 		}
 		// Rewind the snap block in a simpleton way to the target head
 		if currentSnapBlock := bc.CurrentSnapBlock(); currentSnapBlock != nil && header.Number.Uint64() < currentSnapBlock.Number.Uint64() {

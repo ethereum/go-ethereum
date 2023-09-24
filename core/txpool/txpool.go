@@ -93,7 +93,9 @@ func New(gasTip *big.Int, chain BlockChain, subpools []SubPool) (*TxPool, error)
 		quit:         make(chan chan error),
 	}
 	if chain.HasState(head.Root) {
-		pool.init(gasTip, head)
+		if err := pool.init(gasTip, head); err != nil {
+			return nil, err
+		}
 		go pool.loop(head, chain)
 	} else {
 		go pool.lazyInit(gasTip, chain)
@@ -102,17 +104,18 @@ func New(gasTip *big.Int, chain BlockChain, subpools []SubPool) (*TxPool, error)
 }
 
 // init performs the initialization for subpools.
-func (p *TxPool) init(gasTip *big.Int, head *types.Header) {
+func (p *TxPool) init(gasTip *big.Int, head *types.Header) error {
 	for i, subpool := range p.subpools {
 		if err := subpool.Init(gasTip, head, p.reserver(i, subpool)); err != nil {
 			for j := i - 1; j >= 0; j-- {
 				p.subpools[j].Close()
 			}
-			// TODO(rjl493456442) can we shutdown the node gracefully?
-			log.Crit("Failed to initialize subpool", "err", err)
+			return err
 		}
 	}
 	p.inited.Store(true)
+	log.Info("Initialized subpools", "head", head.Number, "hash", head.Hash())
+	return nil
 }
 
 // lazyInit waits the signal that state sync is completed and initializes the subpools.
@@ -131,7 +134,10 @@ func (p *TxPool) lazyInit(gasTip *big.Int, chain BlockChain) {
 			if !chain.HasState(head.Root) {
 				continue // shouldn't happen
 			}
-			p.init(gasTip, head)
+			if err := p.init(gasTip, head); err != nil {
+				// TODO(rjl493456442) can we shutdown the node gracefully?
+				log.Crit("Failed to lazy init subpools", "err", err)
+			}
 			go p.loop(head, chain)
 			return
 
@@ -279,7 +285,7 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 // new transaction, and drops all transactions below this threshold.
 func (p *TxPool) SetGasTip(tip *big.Int) {
 	if !p.inited.Load() {
-		log.Info("Skip tip adjustment as txpool hasn't been initialized")
+		log.Info("Skip tip adjustment as txpool hasn't been initialized", "provided", tip)
 		return
 	}
 	for _, subpool := range p.subpools {
