@@ -152,7 +152,6 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 			t.Fatalf("timeout")
 		}
 	}
-
 }
 
 // func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
