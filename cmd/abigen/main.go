@@ -72,6 +72,14 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
 	}
+	contractFlag = cli.StringFlag{
+		Name:  "contract",
+		Usage: "Name of the contract to generate the bindings for",
+	}
+	tmplFlag = cli.StringFlag{
+		Name:  "tmpl",
+		Usage: "Template file if a user wants to customize",
+	}
 )
 
 var app = flags.NewApp("Ethereum ABI wrapper code generator")
@@ -182,6 +190,10 @@ func abigen(c *cli.Context) error {
 			// fully qualified name is of the form <solFilePath>:<type>
 			nameParts := strings.Split(name, ":")
 			typeName := nameParts[len(nameParts)-1]
+			// If a contract name is provided then ignore all other contracts
+			if c.IsSet(contractFlag.Name) && c.String(contractFlag.Name) != typeName {
+				continue
+			}
 			if exclude != nil && exclude.Matches(name) {
 				fmt.Fprintf(os.Stderr, "excluding: %v\n", name)
 				continue
@@ -214,6 +226,15 @@ func abigen(c *cli.Context) error {
 		for _, match := range submatches {
 			aliases[match[1]] = match[2]
 		}
+	}
+	// Set customize template file.
+	if c.IsSet(tmplFlag.Name) {
+		tmplFile := c.String(tmplFlag.Name)
+		data, err := os.ReadFile(tmplFile)
+		if err != nil {
+			utils.Fatalf("Failed to read template file: %v", err)
+		}
+		bind.SetTmplSource(lang, string(data))
 	}
 	// Generate the contract binding
 	code, err := bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)

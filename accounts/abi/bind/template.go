@@ -78,6 +78,13 @@ var tmplSource = map[Lang]string{
 	LangGo: tmplSourceGo,
 }
 
+// SetTmplSource supports this func in order to set special template file.
+func SetTmplSource(lang Lang, source string) {
+	if _, ok := tmplSource[lang]; ok {
+		tmplSource[lang] = source
+	}
+}
+
 // tmplSourceGo is the Go source template that the generated Go contract binding
 // is based on.
 const tmplSourceGo = `
