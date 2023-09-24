@@ -1152,13 +1152,15 @@ func (c *p256Verify) RequiredGas(input []byte) uint64 {
 	return params.P256VerifyGas
 }
 
-// Run executes the precompiled contract, returning the output and the used gas
+// Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
 	// Required input length is 160 bytes
 	const p256VerifyInputLength = 160
-
-	// "input" is (hash, r, s, x, y), each 32 bytes
-	input = common.RightPadBytes(input, p256VerifyInputLength)
+	// Check the input length
+	if len(input) != p256VerifyInputLength {
+		// Input length is invalid
+		return nil, nil
+	}
 
 	// Extract the hash, r, s, x, y from the input
 	hash := input[0:32]
