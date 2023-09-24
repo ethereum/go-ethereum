@@ -205,7 +205,6 @@ func (p *TxPool) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
-
 	// Terminate each subpool if they are initialized
 	if p.inited.Load() {
 		for _, subpool := range p.subpools {
@@ -214,6 +213,9 @@ func (p *TxPool) Close() error {
 			}
 		}
 	}
+	// Terminate all the subpool subscriptions
+	p.subs.Close()
+
 	if len(errs) > 0 {
 		return fmt.Errorf("txpool close errors: %v", errs)
 	}

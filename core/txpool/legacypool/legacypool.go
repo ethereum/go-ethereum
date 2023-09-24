@@ -208,7 +208,6 @@ type LegacyPool struct {
 	chain       BlockChain
 	gasTip      atomic.Pointer[big.Int]
 	txFeed      event.Feed
-	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
 
@@ -391,9 +390,6 @@ func (pool *LegacyPool) loop() {
 
 // Close terminates the transaction pool.
 func (pool *LegacyPool) Close() error {
-	// Unsubscribe all subscriptions registered from txpool
-	pool.scope.Close()
-
 	// Terminate the pool reorger and return
 	close(pool.reorgShutdownCh)
 	pool.wg.Wait()
@@ -415,7 +411,7 @@ func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 // SubscribeTransactions registers a subscription of NewTxsEvent and
 // starts sending event to the given channel.
 func (pool *LegacyPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+	return pool.txFeed.Subscribe(ch)
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a

@@ -261,7 +261,7 @@ func (db *Database) Deactivate() error {
 
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
-	log.Info("Disabled trie database due to ongoing sync")
+	log.Info("Disabled trie database due to state sync")
 	return nil
 }
 
