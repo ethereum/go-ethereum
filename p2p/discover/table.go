@@ -34,6 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
@@ -80,7 +81,8 @@ type Table struct {
 	closeReq   chan struct{}
 	closed     chan struct{}
 
-	nodeAddedHook func(*node) // for testing
+	nodeAddedHook   func(*bucket, *node)
+	nodeRemovedHook func(*bucket, *node)
 }
 
 // transport is implemented by the UDP transports.
@@ -98,6 +100,7 @@ type bucket struct {
 	entries      []*node // live entries, sorted by time of last contact
 	replacements []*node // recently seen nodes to be used if revalidation fails
 	ips          netutil.DistinctNetSet
+	index        int
 }
 
 func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
@@ -119,12 +122,29 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 	}
 	for i := range tab.buckets {
 		tab.buckets[i] = &bucket{
-			ips: netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
+			index: i,
+			ips:   netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
 		}
 	}
 	tab.seedRand()
 	tab.loadSeedNodes()
 
+	return tab, nil
+}
+
+func newMeteredTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
+	tab, err := newTable(t, db, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if metrics.Enabled {
+		tab.nodeAddedHook = func(b *bucket, n *node) {
+			bucketsCounter[b.index].Inc(1)
+		}
+		tab.nodeRemovedHook = func(b *bucket, n *node) {
+			bucketsCounter[b.index].Dec(1)
+		}
+	}
 	return tab, nil
 }
 
@@ -183,12 +203,18 @@ func (tab *Table) close() {
 // are used to connect to the network if the table is empty and there
 // are no known nodes in the database.
 func (tab *Table) setFallbackNodes(nodes []*enode.Node) error {
+	nursery := make([]*node, 0, len(nodes))
 	for _, n := range nodes {
 		if err := n.ValidateComplete(); err != nil {
 			return fmt.Errorf("bad bootstrap node %q: %v", n, err)
 		}
+		if tab.cfg.NetRestrict != nil && !tab.cfg.NetRestrict.Contains(n.IP()) {
+			tab.log.Error("Bootstrap node filtered by netrestrict", "id", n.ID(), "ip", n.IP())
+			continue
+		}
+		nursery = append(nursery, wrapNode(n))
 	}
-	tab.nursery = wrapNodes(nodes)
+	tab.nursery = nursery
 	return nil
 }
 
@@ -495,7 +521,7 @@ func (tab *Table) addSeenNode(n *node) {
 	n.addedAt = time.Now()
 
 	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
+		tab.nodeAddedHook(b, n)
 	}
 }
 
@@ -539,7 +565,7 @@ func (tab *Table) addVerifiedNode(n *node) {
 	n.addedAt = time.Now()
 
 	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
+		tab.nodeAddedHook(b, n)
 	}
 }
 
@@ -638,8 +664,16 @@ func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 }
 
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
+	// Check if the node is actually in the bucket so the removed hook
+	// isn't called multiple times for the same node.
+	if !contains(b.entries, n.ID()) {
+		return
+	}
 	b.entries = deleteNode(b.entries, n)
 	tab.removeIP(b, n.IP())
+	if tab.nodeRemovedHook != nil {
+		tab.nodeRemovedHook(b, n)
+	}
 }
 
 func contains(ns []*node, id enode.ID) bool {

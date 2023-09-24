@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -525,7 +525,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 			dl.accountList = append(dl.accountList, hash)
 		}
 	}
-	sort.Sort(hashes(dl.accountList))
+	slices.SortFunc(dl.accountList, common.Hash.Cmp)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
@@ -563,7 +563,7 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	for k := range storageMap {
 		storageList = append(storageList, k)
 	}
-	sort.Sort(hashes(storageList))
+	slices.SortFunc(storageList, common.Hash.Cmp)
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList, destructed

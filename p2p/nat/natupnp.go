@@ -19,6 +19,8 @@ package nat
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -40,6 +42,7 @@ type upnp struct {
 	client      upnpClient
 	mu          sync.Mutex
 	lastReqTime time.Time
+	rand        *rand.Rand
 }
 
 type upnpClient interface {
@@ -76,18 +79,50 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 	return ip, nil
 }
 
-func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) error {
+func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) (uint16, error) {
 	ip, err := n.internalAddress()
 	if err != nil {
-		return nil // TODO: Shouldn't we return the error?
+		return 0, nil // TODO: Shouldn't we return the error?
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
 	n.DeleteMapping(protocol, extport, intport)
 
-	return n.withRateLimit(func() error {
+	err = n.withRateLimit(func() error {
 		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 	})
+	if err == nil {
+		return uint16(extport), nil
+	}
+
+	return uint16(extport), n.withRateLimit(func() error {
+		p, err := n.addAnyPortMapping(protocol, extport, intport, ip, desc, lifetimeS)
+		if err == nil {
+			extport = int(p)
+		}
+		return err
+	})
+}
+
+func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.IP, desc string, lifetimeS uint32) (uint16, error) {
+	if client, ok := n.client.(*internetgateway2.WANIPConnection2); ok {
+		return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	}
+	// It will retry with a random port number if the client does
+	// not support AddAnyPortMapping.
+	extport = n.randomPort()
+	err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(extport), nil
+}
+
+func (n *upnp) randomPort() int {
+	if n.rand == nil {
+		n.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return n.rand.Intn(math.MaxUint16-10000) + 10000
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {

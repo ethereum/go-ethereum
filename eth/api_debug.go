@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -62,13 +63,14 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		return stateDb.RawDump(opts), nil
 	}
 	var header *types.Header
-	if blockNr == rpc.LatestBlockNumber {
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		header = api.eth.blockchain.CurrentBlock()
-	} else if blockNr == rpc.FinalizedBlockNumber {
+	case rpc.FinalizedBlockNumber:
 		header = api.eth.blockchain.CurrentFinalBlock()
-	} else if blockNr == rpc.SafeBlockNumber {
+	case rpc.SafeBlockNumber:
 		header = api.eth.blockchain.CurrentSafeBlock()
-	} else {
+	default:
 		block := api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
@@ -146,13 +148,14 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			}
 		} else {
 			var header *types.Header
-			if number == rpc.LatestBlockNumber {
+			switch number {
+			case rpc.LatestBlockNumber:
 				header = api.eth.blockchain.CurrentBlock()
-			} else if number == rpc.FinalizedBlockNumber {
+			case rpc.FinalizedBlockNumber:
 				header = api.eth.blockchain.CurrentFinalBlock()
-			} else if number == rpc.SafeBlockNumber {
+			case rpc.SafeBlockNumber:
 				header = api.eth.blockchain.CurrentSafeBlock()
-			} else {
+			default:
 				block := api.eth.blockchain.GetBlockByNumber(uint64(number))
 				if block == nil {
 					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
@@ -214,7 +217,6 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
@@ -224,18 +226,24 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	}
 	defer release()
 
-	st, err := statedb.StorageTrie(contractAddress)
+	return storageRangeAt(statedb, block.Root(), contractAddress, keyStart, maxResult)
+}
+
+func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
+	storageRoot := statedb.GetStorageRoot(address)
+	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
+		return StorageRangeResult{}, nil // empty storage
+	}
+	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
+	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	if st == nil {
-		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
+	trieIt, err := tr.NodeIterator(start)
+	if err != nil {
+		return StorageRangeResult{}, err
 	}
-	return storageRangeAt(st, keyStart, maxResult)
-}
-
-func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
-	it := trie.NewIterator(st.NodeIterator(start))
+	it := trie.NewIterator(trieIt)
 	result := StorageRangeResult{Storage: storageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)
@@ -243,7 +251,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 			return StorageRangeResult{}, err
 		}
 		e := storageEntry{Value: common.BytesToHash(content)}
-		if preimage := st.GetKey(it.Key); preimage != nil {
+		if preimage := tr.GetKey(it.Key); preimage != nil {
 			preimage := common.BytesToHash(preimage)
 			e.Key = &preimage
 		}
@@ -316,7 +324,7 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
-	triedb := api.eth.BlockChain().StateCache().TrieDB()
+	triedb := api.eth.BlockChain().TrieDB()
 
 	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
 	if err != nil {
@@ -326,7 +334,15 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if err != nil {
 		return nil, err
 	}
-	diff, _ := trie.NewDifferenceIterator(oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}))
+	oldIt, err := oldTrie.NodeIterator([]byte{})
+	if err != nil {
+		return nil, err
+	}
+	newIt, err := newTrie.NodeIterator([]byte{})
+	if err != nil {
+		return nil, err
+	}
+	diff, _ := trie.NewDifferenceIterator(oldIt, newIt)
 	iter := trie.NewIterator(diff)
 
 	var dirty []common.Address
@@ -346,6 +362,9 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 // The (from, to) parameters are the sequence of blocks to search, which can go
 // either forwards or backwards
 func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
+	if api.eth.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
+		return 0, errors.New("state history is not yet available in path-based scheme")
+	}
 	db := api.eth.ChainDb()
 	var pivot uint64
 	if p := rawdb.ReadLastPivotNumber(db); p != nil {
@@ -406,6 +425,9 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 // If the value is shorter than the block generation time, or even 0 or negative,
 // the node will flush trie after processing each block (effectively archive mode).
 func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
+	if api.eth.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
+		return errors.New("trie flush interval is undefined for path-based scheme")
+	}
 	t, err := time.ParseDuration(interval)
 	if err != nil {
 		return err
@@ -415,6 +437,9 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 }
 
 // GetTrieFlushInterval gets the current value of in-memory trie flush interval
-func (api *DebugAPI) GetTrieFlushInterval() string {
-	return api.eth.blockchain.GetTrieFlushInterval().String()
+func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
+	if api.eth.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
+		return "", errors.New("trie flush interval is undefined for path-based scheme")
+	}
+	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }

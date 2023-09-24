@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"golang.org/x/exp/slices"
 )
 
 var nullNode *enode.Node
@@ -217,14 +217,14 @@ func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
 }
 
 func sortByID(nodes []*enode.Node) {
-	sort.Slice(nodes, func(i, j int) bool {
-		return string(nodes[i].ID().Bytes()) < string(nodes[j].ID().Bytes())
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 }
 
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
-	return sort.SliceIsSorted(slice, func(i, j int) bool {
-		return enode.DistCmp(distbase, slice[i].ID(), slice[j].ID()) < 0
+	return slices.IsSortedFunc(slice, func(a, b *node) int {
+		return enode.DistCmp(distbase, a.ID(), b.ID())
 	})
 }
 

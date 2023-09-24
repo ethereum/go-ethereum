@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/exp/slices"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -58,46 +58,40 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 	return result
 }
 
-type resultHash []common.Hash
-
-func (h resultHash) Len() int           { return len(h) }
-func (h resultHash) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h resultHash) Less(i, j int) bool { return bytes.Compare(h[i].Bytes(), h[j].Bytes()) < 0 }
-
 func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
-		state, _ = state.New(types.EmptyRootHash, statedb, nil)
-		addrs    = [AccountRangeMaxResults * 2]common.Address{}
-		m        = map[common.Address]bool{}
+		statedb = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		sdb, _  = state.New(types.EmptyRootHash, statedb, nil)
+		addrs   = [AccountRangeMaxResults * 2]common.Address{}
+		m       = map[common.Address]bool{}
 	)
 
 	for i := range addrs {
 		hash := common.HexToHash(fmt.Sprintf("%x", i))
 		addr := common.BytesToAddress(crypto.Keccak256Hash(hash.Bytes()).Bytes())
 		addrs[i] = addr
-		state.SetBalance(addrs[i], big.NewInt(1))
+		sdb.SetBalance(addrs[i], big.NewInt(1))
 		if _, ok := m[addr]; ok {
 			t.Fatalf("bad")
 		} else {
 			m[addr] = true
 		}
 	}
-	state.Commit(true)
-	root := state.IntermediateRoot(true)
+	root, _ := sdb.Commit(0, true)
+	sdb, _ = state.New(root, statedb, nil)
 
 	trie, err := statedb.OpenTrie(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
+	accountRangeTest(t, &trie, sdb, common.Hash{}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
 	// test pagination
-	firstResult := accountRangeTest(t, &trie, state, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
-	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
+	firstResult := accountRangeTest(t, &trie, sdb, common.Hash{}, AccountRangeMaxResults, AccountRangeMaxResults)
+	secondResult := accountRangeTest(t, &trie, sdb, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
 
-	hList := make(resultHash, 0)
+	hList := make([]common.Hash, 0)
 	for addr1 := range firstResult.Accounts {
 		// If address is empty, then it makes no sense to compare
 		// them as they might be two different accounts.
@@ -111,9 +105,9 @@ func TestAccountRange(t *testing.T) {
 	}
 	// Test to see if it's possible to recover from the middle of the previous
 	// set and get an even split between the first and second sets.
-	sort.Sort(hList)
+	slices.SortFunc(hList, common.Hash.Cmp)
 	middleH := hList[AccountRangeMaxResults/2]
-	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
+	middleResult := accountRangeTest(t, &trie, sdb, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
 	missing, infirst, insecond := 0, 0, 0
 	for h := range middleResult.Accounts {
 		if _, ok := firstResult.Accounts[h]; ok {
@@ -142,8 +136,10 @@ func TestEmptyAccountRange(t *testing.T) {
 		statedb = state.NewDatabase(rawdb.NewMemoryDatabase())
 		st, _   = state.New(types.EmptyRootHash, statedb, nil)
 	)
-	st.Commit(true)
-	st.IntermediateRoot(true)
+	// Commit(although nothing to flush) and re-init the statedb
+	st.Commit(0, true)
+	st, _ = state.New(types.EmptyRootHash, statedb, nil)
+
 	results := st.IteratorDump(&state.DumpConfig{
 		SkipCode:          true,
 		SkipStorage:       true,
@@ -163,9 +159,10 @@ func TestStorageRangeAt(t *testing.T) {
 
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		state, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		addr     = common.Address{0x01}
-		keys     = []common.Hash{ // hashes of Keys of storage
+		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		sdb, _ = state.New(types.EmptyRootHash, db, nil)
+		addr   = common.Address{0x01}
+		keys   = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),
 			common.HexToHash("426fcb404ab2d5d8e61a3d918108006bbb0a9be65e92235bb10eefbdb6dcd053"),
 			common.HexToHash("48078cfed56339ea54962e72c37c7f588fc4f8e5bc173827ba75cb10a63a96a5"),
@@ -179,8 +176,10 @@ func TestStorageRangeAt(t *testing.T) {
 		}
 	)
 	for _, entry := range storage {
-		state.SetState(addr, *entry.Key, entry.Value)
+		sdb.SetState(addr, *entry.Key, entry.Value)
 	}
+	root, _ := sdb.Commit(0, false)
+	sdb, _ = state.New(root, db, nil)
 
 	// Check a few combinations of limit and start/end.
 	tests := []struct {
@@ -210,11 +209,7 @@ func TestStorageRangeAt(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		tr, err := state.StorageTrie(addr)
-		if err != nil {
-			t.Error(err)
-		}
-		result, err := storageRangeAt(tr, test.start, test.limit)
+		result, err := storageRangeAt(sdb, root, addr, test.start, test.limit)
 		if err != nil {
 			t.Error(err)
 		}

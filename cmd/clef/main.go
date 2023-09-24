@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -743,7 +744,7 @@ func signer(c *cli.Context) error {
 		port := c.Int(rpcPortFlag.Name)
 
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.HTTPListenAddrFlag.Name), port)
+		httpEndpoint := net.JoinHostPort(c.String(utils.HTTPListenAddrFlag.Name), fmt.Sprintf("%d", port))
 		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)

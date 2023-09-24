@@ -205,7 +205,7 @@ func (sb *blockNumberOrHashOrRLP) UnmarshalJSON(data []byte) error {
 }
 
 // GetSigner returns the signer for a specific clique block.
-// Can be called with either a blocknumber, blockhash or an rlp encoded blob.
+// Can be called with a block number, a block hash or a rlp encoded blob.
 // The RLP encoded blob can either be a block or a header.
 func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address, error) {
 	if len(rlpOrBlockNr.RLP) == 0 {

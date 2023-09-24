@@ -192,7 +192,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		// First reset and write 100 items.
-		if err := f.TruncateHead(0); err != nil {
+		if _, err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -227,7 +227,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			truncateErr = f.TruncateHead(10)
+			_, truncateErr = f.TruncateHead(10)
 			wg.Done()
 		}()
 		go func() {
@@ -280,6 +280,57 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
+	}
+}
+
+func TestFreezerConcurrentReadonly(t *testing.T) {
+	t.Parallel()
+
+	tables := map[string]bool{"a": true}
+	dir := t.TempDir()
+
+	f, err := NewFreezer(dir, "", false, 2049, tables)
+	if err != nil {
+		t.Fatal("can't open freezer", err)
+	}
+	var item = make([]byte, 1024)
+	batch := f.tables["a"].newBatch()
+	items := uint64(10)
+	for i := uint64(0); i < items; i++ {
+		require.NoError(t, batch.AppendRaw(i, item))
+	}
+	require.NoError(t, batch.commit())
+	if loaded := f.tables["a"].items.Load(); loaded != items {
+		t.Fatalf("unexpected number of items in table, want: %d, have: %d", items, loaded)
+	}
+	require.NoError(t, f.Close())
+
+	var (
+		wg   sync.WaitGroup
+		fs   = make([]*Freezer, 5)
+		errs = make([]error, 5)
+	)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			f, err := NewFreezer(dir, "", true, 2049, tables)
+			if err == nil {
+				fs[i] = f
+			} else {
+				errs[i] = err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := range fs {
+		if err := errs[i]; err != nil {
+			t.Fatal("failed to open freezer", err)
+		}
+		require.NoError(t, fs[i].Close())
 	}
 }
 

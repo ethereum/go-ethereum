@@ -68,6 +68,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
 	}
+
 	// Withdrawals are present after the Shanghai fork.
 	if header.WithdrawalsHash != nil {
 		// Withdrawals list must be present in body after Shanghai.
@@ -81,33 +82,34 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		// Withdrawals are not allowed prior to Shanghai fork
 		return errors.New("withdrawals present in block body")
 	}
+
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
-	for _, tx := range block.Transactions() {
-		// Count the number of blobs to validate against the header's dataGasUsed
+	for i, tx := range block.Transactions() {
+		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 
-		// Validate the data blobs individually too
-		if tx.Type() == types.BlobTxType {
-			if len(tx.BlobHashes()) == 0 {
-				return errors.New("no-blob blob transaction present in block body")
-			}
-			for _, hash := range tx.BlobHashes() {
-				if hash[0] != params.BlobTxHashVersion {
-					return fmt.Errorf("blob hash version mismatch (have %d, supported %d)", hash[0], params.BlobTxHashVersion)
-				}
-			}
+		// If the tx is a blob tx, it must NOT have a sidecar attached to be valid in a block.
+		if tx.BlobTxSidecar() != nil {
+			return fmt.Errorf("unexpected blob sidecar in transaction at index %d", i)
 		}
+
+		// The individual checks for blob validity (version-check + not empty)
+		// happens in StateTransition.
 	}
-	if header.DataGasUsed != nil {
-		if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-			return fmt.Errorf("data gas used mismatch (header %v, calculated %v)", *header.DataGasUsed, blobs*params.BlobTxDataGasPerBlob)
+
+	// Check blob gas usage.
+	if header.BlobGasUsed != nil {
+		if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+			return fmt.Errorf("blob gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
 		}
 	} else {
 		if blobs > 0 {
 			return errors.New("data blobs present in block body")
 		}
 	}
+
+	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor

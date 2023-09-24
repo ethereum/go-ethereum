@@ -38,6 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -70,24 +73,27 @@ type btBlock struct {
 //go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
 
 type btHeader struct {
-	Bloom            types.Bloom
-	Coinbase         common.Address
-	MixHash          common.Hash
-	Nonce            types.BlockNonce
-	Number           *big.Int
-	Hash             common.Hash
-	ParentHash       common.Hash
-	ReceiptTrie      common.Hash
-	StateRoot        common.Hash
-	TransactionsTrie common.Hash
-	UncleHash        common.Hash
-	ExtraData        []byte
-	Difficulty       *big.Int
-	GasLimit         uint64
-	GasUsed          uint64
-	Timestamp        uint64
-	BaseFeePerGas    *big.Int
-	WithdrawalsRoot  *common.Hash
+	Bloom                 types.Bloom
+	Coinbase              common.Address
+	MixHash               common.Hash
+	Nonce                 types.BlockNonce
+	Number                *big.Int
+	Hash                  common.Hash
+	ParentHash            common.Hash
+	ReceiptTrie           common.Hash
+	StateRoot             common.Hash
+	TransactionsTrie      common.Hash
+	UncleHash             common.Hash
+	ExtraData             []byte
+	Difficulty            *big.Int
+	GasLimit              uint64
+	GasUsed               uint64
+	Timestamp             uint64
+	BaseFeePerGas         *big.Int
+	WithdrawalsRoot       *common.Hash
+	BlobGasUsed           *uint64
+	ExcessBlobGas         *uint64
+	ParentBeaconBlockRoot *common.Hash
 }
 
 type btHeaderMarshaling struct {
@@ -98,18 +104,34 @@ type btHeaderMarshaling struct {
 	GasUsed       math.HexOrDecimal64
 	Timestamp     math.HexOrDecimal64
 	BaseFeePerGas *math.HexOrDecimal256
+	BlobGasUsed   *math.HexOrDecimal64
+	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, tracer vm.EVMLogger) error {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
-
 	// import pre accounts & construct test genesis block & state root
-	db := rawdb.NewMemoryDatabase()
+	var (
+		db    = rawdb.NewMemoryDatabase()
+		tconf = &trie.Config{}
+	)
+	if scheme == rawdb.PathScheme {
+		tconf.PathDB = pathdb.Defaults
+	} else {
+		tconf.HashDB = hashdb.Defaults
+	}
+	// Commit genesis state
 	gspec := t.genesis(config)
-	gblock := gspec.MustCommit(db)
+	triedb := trie.NewDatabase(db, tconf)
+	gblock, err := gspec.Commit(db, triedb)
+	if err != nil {
+		return err
+	}
+	triedb.Close() // close the db to prevent memory leak
+
 	if gblock.Hash() != t.json.Genesis.Hash {
 		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
 	}
@@ -119,7 +141,7 @@ func (t *BlockTest) Run(snapshotter bool, tracer vm.EVMLogger) error {
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
@@ -158,18 +180,20 @@ func (t *BlockTest) Run(snapshotter bool, tracer vm.EVMLogger) error {
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
-		Config:     config,
-		Nonce:      t.json.Genesis.Nonce.Uint64(),
-		Timestamp:  t.json.Genesis.Timestamp,
-		ParentHash: t.json.Genesis.ParentHash,
-		ExtraData:  t.json.Genesis.ExtraData,
-		GasLimit:   t.json.Genesis.GasLimit,
-		GasUsed:    t.json.Genesis.GasUsed,
-		Difficulty: t.json.Genesis.Difficulty,
-		Mixhash:    t.json.Genesis.MixHash,
-		Coinbase:   t.json.Genesis.Coinbase,
-		Alloc:      t.json.Pre,
-		BaseFee:    t.json.Genesis.BaseFeePerGas,
+		Config:        config,
+		Nonce:         t.json.Genesis.Nonce.Uint64(),
+		Timestamp:     t.json.Genesis.Timestamp,
+		ParentHash:    t.json.Genesis.ParentHash,
+		ExtraData:     t.json.Genesis.ExtraData,
+		GasLimit:      t.json.Genesis.GasLimit,
+		GasUsed:       t.json.Genesis.GasUsed,
+		Difficulty:    t.json.Genesis.Difficulty,
+		Mixhash:       t.json.Genesis.MixHash,
+		Coinbase:      t.json.Genesis.Coinbase,
+		Alloc:         t.json.Pre,
+		BaseFee:       t.json.Genesis.BaseFeePerGas,
+		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
+		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
 	}
 }
 
@@ -277,6 +301,15 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.WithdrawalsRoot, h2.WithdrawalsHash) {
 		return fmt.Errorf("withdrawalsRoot: want: %v have: %v", h.WithdrawalsRoot, h2.WithdrawalsHash)
+	}
+	if !reflect.DeepEqual(h.BlobGasUsed, h2.BlobGasUsed) {
+		return fmt.Errorf("blobGasUsed: want: %v have: %v", h.BlobGasUsed, h2.BlobGasUsed)
+	}
+	if !reflect.DeepEqual(h.ExcessBlobGas, h2.ExcessBlobGas) {
+		return fmt.Errorf("excessBlobGas: want: %v have: %v", h.ExcessBlobGas, h2.ExcessBlobGas)
+	}
+	if !reflect.DeepEqual(h.ParentBeaconBlockRoot, h2.ParentBeaconRoot) {
+		return fmt.Errorf("parentBeaconBlockRoot: want: %v have: %v", h.ParentBeaconBlockRoot, h2.ParentBeaconRoot)
 	}
 	return nil
 }

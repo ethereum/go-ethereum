@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/les/downloader"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -295,8 +295,8 @@ func testGetCode(t *testing.T, protocol int) {
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
-			BHash:  header.Hash(),
-			AccKey: crypto.Keccak256(testContractAddr[:]),
+			BHash:          header.Hash(),
+			AccountAddress: testContractAddr[:],
 		}
 		codereqs = append(codereqs, req)
 		if i >= testContractDeployed {
@@ -331,8 +331,8 @@ func testGetStaleCode(t *testing.T, protocol int) {
 
 	check := func(number uint64, expected [][]byte) {
 		req := &CodeReq{
-			BHash:  bc.GetHeaderByNumber(number).Hash(),
-			AccKey: crypto.Keccak256(testContractAddr[:]),
+			BHash:          bc.GetHeaderByNumber(number).Hash(),
+			AccountAddress: testContractAddr[:],
 		}
 		sendRequest(rawPeer.app, GetCodeMsg, 42, []*CodeReq{req})
 		if err := expectResponse(rawPeer.app, CodeMsg, 42, testBufLimit, expected); err != nil {
@@ -406,7 +406,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().Number.Uint64(); i++ {
 		header := bc.GetHeaderByNumber(i)
-		trie, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
+		trie, _ := trie.New(trie.StateTrieID(header.Root), server.backend.Blockchain().TrieDB())
 
 		for _, acc := range accounts {
 			req := ProofReq{
@@ -414,7 +414,7 @@ func testGetProofs(t *testing.T, protocol int) {
 				Key:   crypto.Keccak256(acc[:]),
 			}
 			proofreqs = append(proofreqs, req)
-			trie.Prove(crypto.Keccak256(acc[:]), 0, proofsV2)
+			trie.Prove(crypto.Keccak256(acc[:]), proofsV2)
 		}
 	}
 	// Send the proof request and verify the response
@@ -457,8 +457,8 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		var expected []rlp.RawValue
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
-			t, _ := trie.New(trie.StateTrieID(header.Root), trie.NewDatabase(server.db))
-			t.Prove(account, 0, proofsV2)
+			t, _ := trie.New(trie.StateTrieID(header.Root), server.backend.Blockchain().TrieDB())
+			t.Prove(account, proofsV2)
 			expected = proofsV2.NodeList()
 		}
 		if err := expectResponse(rawPeer.app, ProofsV2Msg, 42, testBufLimit, expected); err != nil {
@@ -513,8 +513,8 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		AuxData: [][]byte{rlp},
 	}
 	root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
-	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.ChtTablePrefix))))
-	trie.Prove(key, 0, &proofsV2.Proofs)
+	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.ChtTablePrefix)), trie.HashDefaults))
+	trie.Prove(key, &proofsV2.Proofs)
 	// Assemble the requests for the different protocols
 	requestsV2 := []HelperTrieReq{{
 		Type:    htCanonical,
@@ -578,8 +578,8 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 		var proofs HelperTrieResps
 
 		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomTrieSize-1).Hash())
-		trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.BloomTrieTablePrefix))))
-		trie.Prove(key, 0, &proofs.Proofs)
+		trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(server.db, string(rawdb.BloomTrieTablePrefix)), trie.HashDefaults))
+		trie.Prove(key, &proofs.Proofs)
 
 		// Send the proof request and verify the response
 		sendRequest(rawPeer.app, GetHelperTrieProofsMsg, 42, requests)
