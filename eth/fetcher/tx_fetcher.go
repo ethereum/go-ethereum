@@ -256,6 +256,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	}
 }
 
+// isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
 	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
