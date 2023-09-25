@@ -332,7 +332,7 @@ func (kvm *keyValueMigrator) prepare() {
 		}
 		wg.Wait()
 
-		// Step 2: Now that we have all stems (i.e: tree keys) calcualted, we can create the new leaves.
+		// Step 2: Now that we have all stems (i.e: tree keys) calculated, we can create the new leaves.
 		nodeValues := make([]verkle.BatchNewLeafNodeData, len(kvm.leafData))
 		for i := range kvm.leafData {
 			nodeValues[i] = kvm.leafData[i].leafNodeData

@@ -286,7 +286,6 @@ func GetTreeKeyStorageSlotTreeIndexes(storageKey []byte) (*uint256.Int, byte) {
 		// In this branch, the tree-index is zero since we're in the account header,
 		// and the sub-index is the LSB of the modified storage key.
 		return zero, byte(pos[0] & 0xFF)
-
 	}
 	// If the storage slot is in the main storage, we need to add the main storage offset.
 
