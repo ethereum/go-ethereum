@@ -226,25 +226,16 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	// still valuable to check here because it runs concurrent  to the internal
 	// loop, so anything caught here is time saved internally.
 	var (
-		unknowns               = make([]common.Hash, 0, len(hashes))
-		duplicate, underpriced int64
+		unknowns    = make([]common.Hash, 0, len(hashes))
+		duplicate   int64
+		underpriced int64
 	)
-	isUnderpriced := func(hash common.Hash) bool {
-		prevTime, ok := f.underpriced.Peek(hash)
-		if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
-			f.underpriced.Remove(hash)
-			return false
-		}
-		return ok
-	}
 	for _, hash := range hashes {
 		switch {
 		case f.hasTx(hash):
 			duplicate++
-
-		case isUnderpriced(hash):
+		case f.isKnownUnderpriced(hash):
 			underpriced++
-
 		default:
 			unknowns = append(unknowns, hash)
 		}
@@ -256,16 +247,22 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	if len(unknowns) == 0 {
 		return nil
 	}
-	announce := &txAnnounce{
-		origin: peer,
-		hashes: unknowns,
-	}
+	announce := &txAnnounce{origin: peer, hashes: unknowns}
 	select {
 	case f.notify <- announce:
 		return nil
 	case <-f.quit:
 		return errTerminated
 	}
+}
+
+func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
+	prevTime, ok := f.underpriced.Peek(hash)
+	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
+		f.underpriced.Remove(hash)
+		return false
+	}
+	return ok
 }
 
 // Enqueue imports a batch of received transaction into the transaction pool
