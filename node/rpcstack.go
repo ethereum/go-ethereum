@@ -475,19 +475,18 @@ type gzipResponseWriter struct {
 	resp http.ResponseWriter
 
 	gz            *gzip.Writer
-	contentLength uint64 // total length of the uncompressed response
-	written       uint64 // amount of written bytes from the uncompressed response
-	hasLength     bool   // true if uncompressed response had Content-Length
-	inited        bool   // true after init was called for the first time
+	contentLength uint64      // total length of the uncompressed response
+	written       uint64      // amount of written bytes from the uncompressed response
+	hasLength     bool        // true if uncompressed response had Content-Length
+	inited        atomic.Bool // true after init was called for the first time
 }
 
 // init runs just before response headers are written. Among other things, this function
 // also decides whether compression will be applied at all.
 func (w *gzipResponseWriter) init() {
-	if w.inited {
+	if w.inited.CompareAndSwap(false, true) {
 		return
 	}
-	w.inited = true
 
 	hdr := w.resp.Header()
 	length := hdr.Get("content-length")
