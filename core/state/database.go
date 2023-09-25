@@ -250,7 +250,6 @@ func (db *cachingDB) EndVerkleTransition() {
 	db.ended = true
 }
 
-
 type cachingDB struct {
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache[common.Hash, int]
