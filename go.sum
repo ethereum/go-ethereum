@@ -45,6 +45,8 @@ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bits-and-blooms/bitset v1.8.0 h1:FD+XqgOZDUxxZ8hzoBFuV9+cGWY9CslN6d5MS5JVb4c=
 github.com/bits-and-blooms/bitset v1.8.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
+github.com/bits-and-blooms/bitset v1.9.0 h1:g1YivPG8jOtrN013Fe8OBXubkiTwvm7/vG2vXz03ANU=
+github.com/bits-and-blooms/bitset v1.9.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0 h1:fzn1qaOt32TuLjFlkzYSsBC35Q3KUjT1SwPxiMSCF5k=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0/go.mod h1:U7MHm051Al6XmscBQ0BoNydpOTsFAn707034b5nY8zU=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=
@@ -170,6 +172,8 @@ github.com/gballet/go-verkle v0.1.1-0.20230921123058-fb04943e860f h1:v/wHViCd+qL
 github.com/gballet/go-verkle v0.1.1-0.20230921123058-fb04943e860f/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
 github.com/gballet/go-verkle v0.1.1-0.20230921123936-6a6b1f7a751c h1:sa+wcZ/O1bvCd4Zr5OJvKlvDSdwtNSXrgKxw48t3GPs=
 github.com/gballet/go-verkle v0.1.1-0.20230921123936-6a6b1f7a751c/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
+github.com/gballet/go-verkle v0.1.1-0.20230921190644-1a60d228f7b2 h1:LYkA2UpEkEAnhP5RJx/JHOBvYI2O9cYJi36WUMsiuxQ=
+github.com/gballet/go-verkle v0.1.1-0.20230921190644-1a60d228f7b2/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getsentry/sentry-go v0.12.0/go.mod h1:NSap0JBYWzHND8oMbyi0+XZhUalc1TBdRL1M71JZW2c=

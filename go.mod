@@ -26,7 +26,7 @@ require (
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
-	github.com/gballet/go-verkle v0.1.1-0.20230921123936-6a6b1f7a751c
+	github.com/gballet/go-verkle v0.1.1-0.20230921190644-1a60d228f7b2
 	github.com/go-stack/stack v1.8.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang-jwt/jwt/v4 v4.3.0
@@ -86,7 +86,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.1.1 // indirect
 	github.com/aws/smithy-go v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.8.0 // indirect
+	github.com/bits-and-blooms/bitset v1.9.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect

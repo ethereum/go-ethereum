@@ -69,11 +69,15 @@ func TestReproduceTree(t *testing.T) {
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
 	}
+	root.Commit()
 
-	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, nil, append(presentKeys, absentKeys...), nil)
+	proof, Cs, zis, yis, err := verkle.MakeVerkleMultiProof(root, nil, append(presentKeys, absentKeys...), nil)
+	if err != nil {
+		t.Fatalf("could not create proof: %v", err)
+	}
 	cfg := verkle.GetConfig()
 	if ok, err := verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg); !ok || err != nil {
-		t.Fatal("could not verify proof")
+		t.Fatalf("could not verify proof: %v", err)
 	}
 
 	t.Log("commitments returned by proof:")
@@ -288,6 +292,7 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
 	}
+	root.Commit()
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, nil, append(presentKeys, absentKeys...), nil)
 	cfg := verkle.GetConfig()
@@ -333,6 +338,7 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	for i, key := range presentKeys {
 		root.Insert(key, values[i], nil)
 	}
+	root.Commit()
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, nil, append(presentKeys, absentKeys...), nil)
 	cfg := verkle.GetConfig()
