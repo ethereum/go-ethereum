@@ -179,7 +179,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 	}
 	if vmContext.ExcessBlobGas != nil {
-		vmContext.BlobFee = eip4844.CalcBlobFee(*vmContext.ExcessBlobGas)
+		vmContext.BlobBaseFee = eip4844.CalcBlobFee(*vmContext.ExcessBlobGas)
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
