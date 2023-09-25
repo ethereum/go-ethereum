@@ -587,10 +587,9 @@ func DefaultHoleskyGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.HoleskyChainConfig,
 		Nonce:      0x1234,
-		ExtraData:  hexutil.MustDecode("0x686f77206d7563682069732074686520666973683f"),
 		GasLimit:   0x17d7840,
 		Difficulty: big.NewInt(0x01),
-		Timestamp:  1694786100,
+		Timestamp:  1695902100,
 		Alloc:      decodePrealloc(holeskyAllocData),
 	}
 }
