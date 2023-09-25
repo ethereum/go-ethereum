@@ -245,7 +245,9 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	return snapshot.CheckDanglingStorage(utils.MakeChainDatabase(ctx, stack, true))
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+	return snapshot.CheckDanglingStorage(db)
 }
 
 // traverseState is a helper function used for pruning verification.
