@@ -258,12 +258,8 @@ type cachingDB struct {
 
 	// Verkle specific fields
 	// TODO ensure that this info is in the DB
-	started, ended      bool
-	translatedRoots     [32]common.Hash // hash of the translated root, for opening
-	origRoots           [32]common.Hash
-	translationIndex    int
-	translatedRootsLock sync.RWMutex
-	LastMerkleRoot      common.Hash // root hash of the read-only base tree
+	started, ended bool
+	LastMerkleRoot common.Hash // root hash of the read-only base tree
 
 	addrToPoint *utils.PointCache
 

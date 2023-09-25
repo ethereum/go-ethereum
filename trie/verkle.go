@@ -63,7 +63,6 @@ func (trie *VerkleTrie) InsertMigratedLeaves(leaves []verkle.LeafNode) error {
 }
 
 var (
-	errInvalidProof    = errors.New("invalid proof")
 	errInvalidRootType = errors.New("invalid node type for root")
 
 	// WORKAROUND: this special error is returned if it has been
