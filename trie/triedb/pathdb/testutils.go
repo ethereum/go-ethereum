@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // testHasher is a test utility for computing root hash of a batch of state

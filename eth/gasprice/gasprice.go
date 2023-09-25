@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block

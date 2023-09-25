@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the

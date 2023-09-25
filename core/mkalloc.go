@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 type allocItem struct {

@@ -50,7 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 var (

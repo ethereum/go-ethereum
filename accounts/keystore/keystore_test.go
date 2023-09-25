@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 var testSigData = make([]byte, 32)

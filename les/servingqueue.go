@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // servingQueue allows running tasks in a limited number of threads and puts the

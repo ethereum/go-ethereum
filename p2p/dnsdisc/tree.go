@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // Tree is a merkle tree of node records.

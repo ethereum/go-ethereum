@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does

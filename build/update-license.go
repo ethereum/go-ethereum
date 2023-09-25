@@ -52,7 +52,7 @@ import (
 	"text/template"
 	"time"
 
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 var (

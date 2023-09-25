@@ -22,7 +22,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise

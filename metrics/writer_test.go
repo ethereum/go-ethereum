@@ -3,7 +3,7 @@ package metrics
 import (
 	"testing"
 
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 func TestMetricsSorting(t *testing.T) {

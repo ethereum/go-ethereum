@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 const maxSelectionWeight = 1000000000 // maximum selection weight of each individual node/address group

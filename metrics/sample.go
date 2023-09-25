@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 const rescaleThreshold = time.Hour

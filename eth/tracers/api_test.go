@@ -43,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 var (

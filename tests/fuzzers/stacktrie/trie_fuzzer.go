@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 type fuzzer struct {

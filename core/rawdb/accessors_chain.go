@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.

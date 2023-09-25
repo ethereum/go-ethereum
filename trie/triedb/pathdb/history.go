@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // State history records the state changes involved in executing a block. The

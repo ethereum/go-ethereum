@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // testerAccountPool is a pool to maintain currently active tester accounts,

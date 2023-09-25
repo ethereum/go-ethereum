@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // Write sorts writes each metric in the given registry periodically to the
