@@ -301,7 +301,7 @@ type ChainConfig struct {
 	IsDevMode bool          `json:"isDev,omitempty"`
 
 	// Proof in block
-	ProofInBlock bool `json:"proofInBlock,omitempty"`
+	ProofInBlocks bool `json:"proofInBlocks,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

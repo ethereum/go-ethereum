@@ -398,7 +398,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 		k    verkle.StateDiff
 		keys = state.Witness().Keys()
 	)
-	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlock {
+	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlocks {
 		// Open the pre-tree to prove the pre-state against
 		parent := chain.GetHeaderByNumber(header.Number.Uint64() - 1)
 		if parent == nil {
@@ -448,7 +448,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 	// Assemble and return the final block.
 	block := types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil))
-	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlock {
+	if chain.Config().IsPrague(header.Number, header.Time) && chain.Config().ProofInBlocks {
 		block.SetVerkleProof(p, k)
 	}
 	return block, nil
