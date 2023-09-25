@@ -80,8 +80,7 @@ var (
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  newUint64(1694790240),
-		CancunTime:                    newUint64(2000000000),
+		ShanghaiTime:                  newUint64(1696000704),
 		Ethash:                        new(EthashConfig),
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
