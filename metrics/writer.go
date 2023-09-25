@@ -3,10 +3,9 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
-
-	"slices"
 )
 
 // Write sorts writes each metric in the given registry periodically to the

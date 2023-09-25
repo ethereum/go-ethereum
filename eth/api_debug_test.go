@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
-	"slices"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}

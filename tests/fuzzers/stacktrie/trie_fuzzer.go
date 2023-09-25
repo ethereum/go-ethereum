@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
-	"slices"
 )
 
 type fuzzer struct {

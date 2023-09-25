@@ -3,10 +3,9 @@ package metrics
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
-
-	"slices"
 )
 
 const rescaleThreshold = time.Hour

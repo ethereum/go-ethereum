@@ -1,9 +1,8 @@
 package metrics
 
 import (
-	"testing"
-
 	"slices"
+	"testing"
 )
 
 func TestMetricsSorting(t *testing.T) {
