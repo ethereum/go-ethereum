@@ -175,24 +175,11 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	if tr.IsVerkle() {
 		sdb.witness = sdb.NewAccessWitness()
-		// if sdb.snaps == nil {
-		// snapconfig := snapshot.Config{
-		// 	CacheSize:  256,
-		// 	Recovery:   false,
-		// 	NoBuild:    false,
-		// 	AsyncBuild: false,
-		// 	Verkle:     true,
-		// }
-		// sdb.snaps, err = snapshot.New(snapconfig, db.DiskDB(), db.TrieDB(), root)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// }
 	}
-	if sdb.snaps != nil {
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap == nil {
-		}
-	}
+	// if sdb.snaps != nil {
+	// 	if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap == nil {
+	// 	}
+	// }
 	return sdb, nil
 }
 
