@@ -908,7 +908,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		core.OverlayVerkleTransition(state)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
-	if err := w.engine.Prepare(w.chain, header, state); err != nil {
+	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
