@@ -129,7 +129,7 @@ type Database struct {
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
 	readOnly   bool                     // Flag if database is opened in read only mode
-	disabled   bool                     // Flag if database is deactivated due to initial state sync
+	waitSync   bool                     // Flag if database is deactivated due to initial state sync
 	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
 	config     *Config                  // Configuration for database
 	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
@@ -251,10 +251,10 @@ func (db *Database) Deactivate() error {
 		return errDatabaseReadOnly
 	}
 	// Prevent duplicated disable operation.
-	if db.disabled {
+	if db.waitSync {
 		return nil
 	}
-	db.disabled = true
+	db.waitSync = true
 
 	// Mark the disk layer as stale to prevent access to persistent state.
 	db.tree.bottom().markStale()
@@ -303,7 +303,7 @@ func (db *Database) Activate(root common.Hash) error {
 	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0)))
 
 	// Re-enable the database as the final step.
-	db.disabled = false
+	db.waitSync = false
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
@@ -455,8 +455,8 @@ func (db *Database) modifyAllowed() error {
 	if db.readOnly {
 		return errDatabaseReadOnly
 	}
-	if db.disabled {
-		return errDatabaseDisabled
+	if db.waitSync {
+		return errDatabaseWaitSync
 	}
 	return nil
 }

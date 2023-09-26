@@ -92,7 +92,7 @@ var (
 	transitionStatusKey = []byte("eth2-transition")
 
 	// snapSyncStatusFlagKey flags that status of snap sync.
-	snapSyncStatusFlagKey = []byte("snapSync-status")
+	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header

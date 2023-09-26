@@ -29,9 +29,9 @@ var (
 	// to prevent any mutation.
 	errDatabaseReadOnly = errors.New("read only")
 
-	// errDatabaseDisabled is returned if database is disabled due to an ongoing
-	// state sync process.
-	errDatabaseDisabled = errors.New("disabled")
+	// errDatabaseWaitSync is returned if the initial state sync is not completed
+	// yet and database is disabled to prevent accessing state.
+	errDatabaseWaitSync = errors.New("waiting for sync")
 
 	// errSnapshotStale is returned from data accessors if the underlying layer
 	// layer had been invalidated due to the chain progressing forward far enough
