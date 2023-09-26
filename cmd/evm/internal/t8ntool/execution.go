@@ -163,16 +163,18 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
-	// If excessBlobGas is defined, add it to the vmContext.
+	// Calculate the BlobBaseFee
+	var excessBlobGas uint64
 	if pre.Env.ExcessBlobGas != nil {
-		vmContext.BlobBaseFee = eip4844.CalcBlobFee(*pre.Env.ExcessBlobGas)
+		excessBlobGas := *pre.Env.ExcessBlobGas
+		vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 	} else {
 		// If it is not explicitly defined, but we have the parent values, we try
 		// to calculate it ourselves.
 		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
 		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
 		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas := eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
+			excessBlobGas = eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
 			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 		}
 	}
@@ -323,11 +325,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.WithdrawalsRoot = &h
 	}
 	if vmContext.BlobBaseFee != nil {
-		// TODO (MariusVanDerWijden): I have no idea why we have this field at all.
-		var excessBlobGas uint64
-		if pre.Env.ExcessBlobGas != nil {
-			excessBlobGas = *pre.Env.ExcessBlobGas
-		}
 		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
