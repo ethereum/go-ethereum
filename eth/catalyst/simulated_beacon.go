@@ -17,8 +17,10 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
+	"math/big"
 	"sync"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -131,8 +134,7 @@ func (c *SimulatedBeacon) Stop() error {
 
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
-func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
-	tstamp := uint64(time.Now().Unix())
+func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, tstamp uint64) error {
 	if tstamp <= c.lastBlockTime {
 		tstamp = c.lastBlockTime + 1
 	}
@@ -205,12 +207,12 @@ func (c *SimulatedBeacon) loopOnDemand() {
 			return
 		case w := <-c.withdrawals.pending:
 			withdrawals := append(c.withdrawals.gatherPending(9), w)
-			if err := c.sealBlock(withdrawals); err != nil {
+			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			}
 		case <-newTxs:
 			withdrawals := c.withdrawals.gatherPending(10)
-			if err := c.sealBlock(withdrawals); err != nil {
+			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			}
 		}
@@ -226,7 +228,7 @@ func (c *SimulatedBeacon) loop() {
 			return
 		case <-timer.C:
 			withdrawals := c.withdrawals.gatherPending(10)
-			if err := c.sealBlock(withdrawals); err != nil {
+			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			} else {
 				timer.Reset(time.Second * time.Duration(c.period))
@@ -259,6 +261,46 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 		SafeBlockHash:      headHash,
 		FinalizedBlockHash: finalizedHash,
 	}
+}
+
+func (c *SimulatedBeacon) Commit() common.Hash {
+	withdrawals := c.withdrawals.gatherPending(10)
+	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
+		log.Warn("Error performing sealing work", "err", err)
+	}
+	return c.eth.BlockChain().CurrentBlock().Hash()
+}
+
+// Rollback un-sends previously added transactions
+func (c *SimulatedBeacon) Rollback() {
+	// Flush all transactions from the transaction pools
+	c.eth.TxPool().SetGasTip(big.NewInt(-1))
+	// Set the gas tip back to accept new transactions
+	// TODO (Marius van der Wijden): set gas tip to parameter passed by config
+	c.eth.TxPool().SetGasTip(big.NewInt(params.GWei))
+}
+
+func (c *SimulatedBeacon) Fork(ctx context.Context, parentHash common.Hash) error {
+	if len(c.eth.TxPool().Pending(false)) != 0 {
+		return errors.New("pending block dirty")
+	}
+	parent := c.eth.BlockChain().GetBlockByHash(parentHash)
+	if parent == nil {
+		return errors.New("parent not found")
+	}
+	return c.eth.BlockChain().SetHead(parent.NumberU64())
+}
+
+func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
+	if len(c.eth.TxPool().Pending(false)) != 0 {
+		return errors.New("could not adjust time on non-empty block")
+	}
+	parent := c.eth.BlockChain().CurrentBlock()
+	if parent == nil {
+		return errors.New("parent not found")
+	}
+	withdrawals := c.withdrawals.gatherPending(10)
+	return c.sealBlock(withdrawals, parent.Time+uint64(adjustment))
 }
 
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
