@@ -560,7 +560,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
-	// Another cornercase: if the node is in snap sync mode, but the CL client
+	// Another corner case: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
@@ -776,7 +776,7 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBodyV1 {
-	var bodies = make([]*engine.ExecutionPayloadBodyV1, len(hashes))
+	bodies := make([]*engine.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		bodies[i] = getBody(block)
