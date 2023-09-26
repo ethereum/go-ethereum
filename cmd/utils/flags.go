@@ -2082,6 +2082,17 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
 		readonly = false
 	}
+
+	// If the freeze database is not initialized or corrupted,
+	// we need to open it in write-mode to apply the initialization or repair process
+	if readonly && !ctx.IsSet(RemoteDBFlag.Name) && ctx.String(SyncModeFlag.Name) != "light" {
+		ancient := stack.ResolveAncient("chaindata", ctx.String(AncientFlag.Name))
+		frdb, err := rawdb.NewChainFreezer(ancient, "", readonly)
+		if err != nil {
+			readonly = false
+		}
+		frdb.Close()
+	}
 	return MakeChainDatabase(ctx, stack, readonly)
 }
 
