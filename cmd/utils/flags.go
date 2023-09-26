@@ -1867,7 +1867,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// Create a new developer genesis block or reuse existing one
 		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
-			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
+			chaindb := tryMakeReadOnlyChainDB(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
@@ -2057,7 +2057,8 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	switch {
 	case ctx.IsSet(RemoteDBFlag.Name):
 		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
-		client, err := DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
+		var client *rpc.Client
+		client, err = DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
 		if err != nil {
 			break
 		}
@@ -2073,9 +2074,9 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	return chainDb
 }
 
-// tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
+// tryMakeReadOnlyChainDB try to open the chain database(without ancient) in read-only mode,
 // or fallback to write mode if the database is not initialized.
-func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
+func tryMakeReadOnlyChainDB(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	// If the database doesn't exist we need to open it in write-mode to allow
 	// the engine to create files.
 	readonly := true
@@ -2083,19 +2084,29 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 		readonly = false
 	}
 
-	// If the freeze database is not initialized or corrupted,
-	// we need to open it in write-mode to apply the initialization or repair process
-	if readonly && !ctx.IsSet(RemoteDBFlag.Name) && ctx.String(SyncModeFlag.Name) != "light" {
-		ancient := stack.ResolveAncient("chaindata", ctx.String(AncientFlag.Name))
-		frdb, err := rawdb.NewChainFreezer(ancient, "", readonly)
-		if err != nil {
-			readonly = false
+	var (
+		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
+		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
+
+		err     error
+		chainDb ethdb.Database
+	)
+	if ctx.IsSet(RemoteDBFlag.Name) {
+		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
+		var client *rpc.Client
+		client, err = DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
+		chainDb = remotedb.New(client)
+	} else {
+		name := "chaindata"
+		if ctx.String(SyncModeFlag.Name) == "light" {
+			name = "lightchaindata"
 		}
-		if frdb != nil {
-			frdb.Close()
-		}
+		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
 	}
-	return MakeChainDatabase(ctx, stack, readonly)
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return chainDb
 }
 
 func IsNetworkPreset(ctx *cli.Context) bool {
