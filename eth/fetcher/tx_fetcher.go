@@ -24,8 +24,8 @@ import (
 	"sort"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -52,6 +52,9 @@ const (
 	// is used to track recent transactions that have been dropped so we don't
 	// re-request them.
 	maxTxUnderpricedSetSize = 32768
+
+	// maxTxUnderpricedTimeout is the max time a transaction should be stuck in the underpriced set.
+	maxTxUnderpricedTimeout = int64(5 * time.Minute)
 
 	// txArriveTimeout is the time allowance before an announced transaction is
 	// explicitly requested.
@@ -148,7 +151,7 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	underpriced mapset.Set[common.Hash] // Transactions discarded as too cheap (don't re-fetch)
+	underpriced *lru.Cache[common.Hash, int64] // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
@@ -202,7 +205,7 @@ func NewTxFetcherForTests(
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
 		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: mapset.NewSet[common.Hash](),
+		underpriced: lru.NewCache[common.Hash, int64](maxTxUnderpricedSetSize),
 		hasTx:       hasTx,
 		addTxs:      addTxs,
 		fetchTxs:    fetchTxs,
@@ -223,17 +226,16 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	// still valuable to check here because it runs concurrent  to the internal
 	// loop, so anything caught here is time saved internally.
 	var (
-		unknowns               = make([]common.Hash, 0, len(hashes))
-		duplicate, underpriced int64
+		unknowns    = make([]common.Hash, 0, len(hashes))
+		duplicate   int64
+		underpriced int64
 	)
 	for _, hash := range hashes {
 		switch {
 		case f.hasTx(hash):
 			duplicate++
-
-		case f.underpriced.Contains(hash):
+		case f.isKnownUnderpriced(hash):
 			underpriced++
-
 		default:
 			unknowns = append(unknowns, hash)
 		}
@@ -245,16 +247,23 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	if len(unknowns) == 0 {
 		return nil
 	}
-	announce := &txAnnounce{
-		origin: peer,
-		hashes: unknowns,
-	}
+	announce := &txAnnounce{origin: peer, hashes: unknowns}
 	select {
 	case f.notify <- announce:
 		return nil
 	case <-f.quit:
 		return errTerminated
 	}
+}
+
+// isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
+func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
+	prevTime, ok := f.underpriced.Peek(hash)
+	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
+		f.underpriced.Remove(hash)
+		return false
+	}
+	return ok
 }
 
 // Enqueue imports a batch of received transaction into the transaction pool
@@ -300,10 +309,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
-				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
-					f.underpriced.Pop()
-				}
-				f.underpriced.Add(batch[j].Hash())
+				f.underpriced.Add(batch[j].Hash(), batch[j].Time().Unix())
 			}
 			// Track a few interesting failure types
 			switch {
