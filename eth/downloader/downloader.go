@@ -1280,41 +1280,13 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
-	// Keep a count of uncertain headers to roll back
 	var (
-		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
-		rollbackErr error
-		mode        = d.getMode()
+		mode       = d.getMode()
+		gotHeaders = false // Wait for batches of headers to process
 	)
-	defer func() {
-		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
-			if mode != LightSync {
-				lastFastBlock = d.blockchain.CurrentSnapBlock().Number
-				lastBlock = d.blockchain.CurrentBlock().Number
-			}
-			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
-				// We're already unwinding the stack, only print the error to make it more visible
-				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
-			}
-			curFastBlock, curBlock := common.Big0, common.Big0
-			if mode != LightSync {
-				curFastBlock = d.blockchain.CurrentSnapBlock().Number
-				curBlock = d.blockchain.CurrentBlock().Number
-			}
-			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
-				"snap", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
-				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
-		}
-	}()
-	// Wait for batches of headers to process
-	gotHeaders := false
-
 	for {
 		select {
 		case <-d.cancelCh:
-			rollbackErr = errCanceled
 			return errCanceled
 
 		case task := <-d.headerProcCh:
@@ -1363,8 +1335,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						}
 					}
 				}
-				// Disable any rollback and return
-				rollback = 0
 				return nil
 			}
 			// Otherwise split the chunk of headers into batches and process them
@@ -1375,7 +1345,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 				// Terminate if something failed in between processing chunks
 				select {
 				case <-d.cancelCh:
-					rollbackErr = errCanceled
 					return errCanceled
 				default:
 				}
@@ -1422,29 +1391,11 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					}
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders); err != nil {
-							rollbackErr = err
-
-							// If some headers were inserted, track them as uncertain
-							if mode == SnapSync && n > 0 && rollback == 0 {
-								rollback = chunkHeaders[0].Number.Uint64()
-							}
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
 						}
-						// All verifications passed, track all headers within the allowed limits
-						if mode == SnapSync {
-							head := chunkHeaders[len(chunkHeaders)-1].Number.Uint64()
-							if head-rollback > uint64(fsHeaderSafetyNet) {
-								rollback = head - uint64(fsHeaderSafetyNet)
-							} else {
-								rollback = 1
-							}
-						}
 					}
 					if len(rejected) != 0 {
-						// Merge threshold reached, stop importing, but don't roll back
-						rollback = 0
-
 						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
 						return ErrMergeTransition
 					}
@@ -1455,7 +1406,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					for d.queue.PendingBodies() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
 						select {
 						case <-d.cancelCh:
-							rollbackErr = errCanceled
 							return errCanceled
 						case <-time.After(time.Second):
 						}
@@ -1463,7 +1413,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					// Otherwise insert the headers for content retrieval
 					inserts := d.queue.Schedule(chunkHeaders, chunkHashes, origin)
 					if len(inserts) != len(chunkHeaders) {
-						rollbackErr = fmt.Errorf("stale headers: len inserts %v len(chunk) %v", len(inserts), len(chunkHeaders))
 						return fmt.Errorf("%w: stale headers", errBadPeer)
 					}
 				}
