@@ -182,7 +182,9 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	}
 	// Disable database in case node is still in the initial state sync stage.
 	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
-		db.Deactivate()
+		if err := db.Deactivate(); err != nil {
+			log.Crit("Failed to disable database", "err", err) // impossible to happen
+		}
 	}
 	log.Warn("Path-based state scheme is an experimental feature")
 	return db
@@ -252,6 +254,7 @@ func (db *Database) Deactivate() error {
 	}
 	// Prevent duplicated disable operation.
 	if db.waitSync {
+		log.Error("Reject duplicated disable operation")
 		return nil
 	}
 	db.waitSync = true
@@ -279,7 +282,7 @@ func (db *Database) Activate(root common.Hash) error {
 	root = types.TrieRootHash(root)
 	_, stored := rawdb.ReadAccountTrieNode(db.diskdb, nil)
 	if stored != root {
-		return fmt.Errorf("state is mismatched, stored: %x, target: %x", stored, root)
+		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
 	// Drop the stale state journal in persistent database and
 	// reset the persistent state id back to zero.
