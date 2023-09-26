@@ -2091,7 +2091,9 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 		if err != nil {
 			readonly = false
 		}
-		frdb.Close()
+		if frdb != nil {
+			frdb.Close()
+		}
 	}
 	return MakeChainDatabase(ctx, stack, readonly)
 }
