@@ -423,7 +423,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
-	// Nofity any tester listening for startup events
+	// Notify any tester listening for startup events
 	if s.syncStarting != nil {
 		s.syncStarting()
 	}
