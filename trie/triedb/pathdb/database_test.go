@@ -444,13 +444,13 @@ func TestDisable(t *testing.T) {
 	defer tester.release()
 
 	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
-	if err := tester.db.Deactivate(); err != nil {
+	if err := tester.db.Disable(); err != nil {
 		t.Fatal("Failed to deactivate database")
 	}
-	if err := tester.db.Activate(types.EmptyRootHash); err == nil {
+	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
 		t.Fatalf("Invalid activation should be rejected")
 	}
-	if err := tester.db.Activate(stored); err != nil {
+	if err := tester.db.Enable(stored); err != nil {
 		t.Fatal("Failed to activate database")
 	}
 

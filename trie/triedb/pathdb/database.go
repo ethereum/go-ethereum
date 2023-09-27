@@ -182,7 +182,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	}
 	// Disable database in case node is still in the initial state sync stage.
 	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
-		if err := db.Deactivate(); err != nil {
+		if err := db.Disable(); err != nil {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
 	}
@@ -241,10 +241,10 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.tree.cap(root, 0)
 }
 
-// Deactivate disables the database and invalidates all available state layers
+// Disable deactivates the database and invalidates all available state layers
 // as stale to prevent access to the persistent state, which is in the syncing
 // stage.
-func (db *Database) Deactivate() error {
+func (db *Database) Disable() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -268,9 +268,9 @@ func (db *Database) Deactivate() error {
 	return nil
 }
 
-// Activate re-enables database and resets the state tree with the provided.
-// persistent state root once the state sync is finished.
-func (db *Database) Activate(root common.Hash) error {
+// Enable activates database and resets the state tree with the provided persistent
+// state root once the state sync is finished.
+func (db *Database) Enable(root common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 

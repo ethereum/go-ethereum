@@ -822,7 +822,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		if err := bc.triedb.Activate(root); err != nil {
+		if err := bc.triedb.Enable(root); err != nil {
 			return err
 		}
 	}
