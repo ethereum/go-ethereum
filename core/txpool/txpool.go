@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -56,9 +55,6 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
-	// HasState checks if state is present in the database or not.
-	HasState(common.Hash) bool
-
 	// SubscribeChainHeadEvent subscribes to new blocks being added to the chain.
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
@@ -69,8 +65,7 @@ type BlockChain interface {
 // They exit the pool when they are included in the blockchain or evicted due to
 // resource constraints.
 type TxPool struct {
-	inited   atomic.Bool // Flag whether the subpools are initialized
-	subpools []SubPool   // List of subpools for specialized transaction handling
+	subpools []SubPool // List of subpools for specialized transaction handling
 
 	reservations map[common.Address]SubPool // Map with the account to pool reservations
 	reserveLock  sync.Mutex                 // Lock protecting the account reservations
@@ -92,61 +87,16 @@ func New(gasTip *big.Int, chain BlockChain, subpools []SubPool) (*TxPool, error)
 		reservations: make(map[common.Address]SubPool),
 		quit:         make(chan chan error),
 	}
-	if chain.HasState(head.Root) {
-		if err := pool.init(gasTip, head); err != nil {
+	for i, subpool := range subpools {
+		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool)); err != nil {
+			for j := i - 1; j >= 0; j-- {
+				subpools[j].Close()
+			}
 			return nil, err
 		}
-		go pool.loop(head, chain)
-	} else {
-		go pool.lazyInit(gasTip, chain)
 	}
+	go pool.loop(head, chain)
 	return pool, nil
-}
-
-// init performs the initialization for subpools.
-func (p *TxPool) init(gasTip *big.Int, head *types.Header) error {
-	for i, subpool := range p.subpools {
-		if err := subpool.Init(gasTip, head, p.reserver(i, subpool)); err != nil {
-			for j := i - 1; j >= 0; j-- {
-				p.subpools[j].Close()
-			}
-			return err
-		}
-	}
-	p.inited.Store(true)
-	log.Info("Initialized subpools", "head", head.Number, "hash", head.Hash())
-	return nil
-}
-
-// lazyInit waits the signal that state sync is completed and initializes the subpools.
-func (p *TxPool) lazyInit(gasTip *big.Int, chain BlockChain) {
-	var (
-		newHeadCh  = make(chan core.ChainHeadEvent)
-		newHeadSub = chain.SubscribeChainHeadEvent(newHeadCh)
-	)
-	defer newHeadSub.Unsubscribe()
-
-	var errc chan error
-	for errc == nil {
-		select {
-		case event := <-newHeadCh:
-			head := event.Block.Header()
-			if !chain.HasState(head.Root) {
-				continue // shouldn't happen
-			}
-			if err := p.init(gasTip, head); err != nil {
-				// TODO(rjl493456442) can we shutdown the node gracefully?
-				log.Crit("Failed to lazy init subpools", "err", err)
-			}
-			go p.loop(head, chain)
-			return
-
-		case errc = <-p.quit:
-			// Termination requested, break out on the next loop round
-		}
-	}
-	// Notify the closer of termination (no error possible for now)
-	errc <- nil
 }
 
 // reserver is a method to create an address reservation callback to exclusively
@@ -205,19 +155,15 @@ func (p *TxPool) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
-	// Terminate each subpool if they are initialized
-	if p.inited.Load() {
-		for _, subpool := range p.subpools {
-			if err := subpool.Close(); err != nil {
-				errs = append(errs, err)
-			}
+
+	// Terminate each subpool
+	for _, subpool := range p.subpools {
+		if err := subpool.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
-	// Terminate all the subpool subscriptions
-	p.subs.Close()
-
 	if len(errs) > 0 {
-		return fmt.Errorf("txpool close errors: %v", errs)
+		return fmt.Errorf("subpool close errors: %v", errs)
 	}
 	return nil
 }
@@ -286,10 +232,6 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (p *TxPool) SetGasTip(tip *big.Int) {
-	if !p.inited.Load() {
-		log.Info("Skip tip adjustment as txpool hasn't been initialized", "provided", tip)
-		return
-	}
 	for _, subpool := range p.subpools {
 		subpool.SetGasTip(tip)
 	}
@@ -298,9 +240,6 @@ func (p *TxPool) SetGasTip(tip *big.Int) {
 // Has returns an indicator whether the pool has a transaction cached with the
 // given hash.
 func (p *TxPool) Has(hash common.Hash) bool {
-	if !p.inited.Load() {
-		return false
-	}
 	for _, subpool := range p.subpools {
 		if subpool.Has(hash) {
 			return true
@@ -311,9 +250,6 @@ func (p *TxPool) Has(hash common.Hash) bool {
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
 func (p *TxPool) Get(hash common.Hash) *types.Transaction {
-	if !p.inited.Load() {
-		return nil
-	}
 	for _, subpool := range p.subpools {
 		if tx := subpool.Get(hash); tx != nil {
 			return tx
@@ -326,13 +262,6 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.
 func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
-	if !p.inited.Load() {
-		errs := make([]error, len(txs))
-		for i := 0; i < len(errs); i++ {
-			errs[i] = errors.New("txpool is not initialized")
-		}
-		return errs
-	}
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.
@@ -378,9 +307,6 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 // Pending retrieves all currently processable transactions, grouped by origin
 // account and sorted by nonce.
 func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction {
-	if !p.inited.Load() {
-		return nil
-	}
 	txs := make(map[common.Address][]*LazyTransaction)
 	for _, subpool := range p.subpools {
 		for addr, set := range subpool.Pending(enforceTips) {
@@ -403,9 +329,6 @@ func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscrip
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (p *TxPool) Nonce(addr common.Address) uint64 {
-	if !p.inited.Load() {
-		return 0
-	}
 	// Since (for now) accounts are unique to subpools, only one pool will have
 	// (at max) a non-state nonce. To avoid stateful lookups, just return the
 	// highest nonce for now.
@@ -421,9 +344,6 @@ func (p *TxPool) Nonce(addr common.Address) uint64 {
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (p *TxPool) Stats() (int, int) {
-	if !p.inited.Load() {
-		return 0, 0
-	}
 	var runnable, blocked int
 	for _, subpool := range p.subpools {
 		run, block := subpool.Stats()
@@ -437,9 +357,6 @@ func (p *TxPool) Stats() (int, int) {
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (p *TxPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
-	if !p.inited.Load() {
-		return nil, nil
-	}
 	var (
 		runnable = make(map[common.Address][]*types.Transaction)
 		blocked  = make(map[common.Address][]*types.Transaction)
@@ -460,9 +377,6 @@ func (p *TxPool) Content() (map[common.Address][]*types.Transaction, map[common.
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
 func (p *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
-	if !p.inited.Load() {
-		return nil, nil
-	}
 	for _, subpool := range p.subpools {
 		run, block := subpool.ContentFrom(addr)
 		if len(run) != 0 || len(block) != 0 {
@@ -474,9 +388,6 @@ func (p *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*type
 
 // Locals retrieves the accounts currently considered local by the pool.
 func (p *TxPool) Locals() []common.Address {
-	if !p.inited.Load() {
-		return nil
-	}
 	// Retrieve the locals from each subpool and deduplicate them
 	locals := make(map[common.Address]struct{})
 	for _, subpool := range p.subpools {
@@ -495,18 +406,10 @@ func (p *TxPool) Locals() []common.Address {
 // Status returns the known status (unknown/pending/queued) of a transaction
 // identified by their hashes.
 func (p *TxPool) Status(hash common.Hash) TxStatus {
-	if !p.inited.Load() {
-		return TxStatusUnknown
-	}
 	for _, subpool := range p.subpools {
 		if status := subpool.Status(hash); status != TxStatusUnknown {
 			return status
 		}
 	}
 	return TxStatusUnknown
-}
-
-// Inited returns the indicator if txpool is fully initialized.
-func (p *TxPool) Inited() bool {
-	return p.inited.Load()
 }

@@ -208,6 +208,7 @@ type LegacyPool struct {
 	chain       BlockChain
 	gasTip      atomic.Pointer[big.Int]
 	txFeed      event.Feed
+	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
 
@@ -297,7 +298,20 @@ func (pool *LegacyPool) Init(gasTip *big.Int, head *types.Header, reserve txpool
 
 	// Set the basic pool parameters
 	pool.gasTip.Store(gasTip)
-	pool.reset(nil, head)
+
+	// Initialize the state with head block, or fallback to empty one in
+	// case the head state is not available(might occur when node is not
+	// fully synced).
+	statedb, err := pool.chain.StateAt(head.Root)
+	if err != nil {
+		statedb, err = pool.chain.StateAt(types.EmptyRootHash)
+	}
+	if err != nil {
+		return err
+	}
+	pool.currentHead.Store(head)
+	pool.currentState = statedb
+	pool.pendingNonces = newNoncer(statedb)
 
 	// Start the reorg loop early, so it can handle requests generated during
 	// journal loading.
@@ -390,6 +404,9 @@ func (pool *LegacyPool) loop() {
 
 // Close terminates the transaction pool.
 func (pool *LegacyPool) Close() error {
+	// Unsubscribe all subscriptions registered from txpool
+	pool.scope.Close()
+
 	// Terminate the pool reorger and return
 	close(pool.reorgShutdownCh)
 	pool.wg.Wait()
@@ -411,7 +428,7 @@ func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 // SubscribeTransactions registers a subscription of NewTxsEvent and
 // starts sending event to the given channel.
 func (pool *LegacyPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
-	return pool.txFeed.Subscribe(ch)
+	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
