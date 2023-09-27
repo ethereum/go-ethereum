@@ -125,6 +125,7 @@ var (
 		Usage:    "pprof HTTP server listening port",
 		Value:    6060,
 		Category: flags.LoggingCategory,
+		Action:   flags.ValidatePort("pprof.port"),
 	}
 	pprofAddrFlag = &cli.StringFlag{
 		Name:     "pprof.addr",
