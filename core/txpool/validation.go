@@ -114,7 +114,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if sidecar == nil {
 			return fmt.Errorf("missing sidecar in blob transaction")
 		}
-		// Ensure the number of items in the blob transaction and vairous side
+		// Ensure the number of items in the blob transaction and various side
 		// data match up before doing any expensive validations
 		hashes := tx.BlobHashes()
 		if len(hashes) == 0 {
