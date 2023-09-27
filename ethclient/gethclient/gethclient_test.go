@@ -20,7 +20,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -31,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -39,11 +45,13 @@ import (
 )
 
 var (
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testSlot    = common.HexToHash("0xdeadbeef")
-	testValue   = crypto.Keccak256Hash(testSlot[:])
-	testBalance = big.NewInt(2e15)
+	testKey, _          = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr            = crypto.PubkeyToAddress(testKey.PublicKey)
+	testSlot            = common.HexToHash("0xdeadbeef")
+	testValue           = crypto.Keccak256Hash(testSlot[:])
+	testBalance         = big.NewInt(2e15)
+	testBlocks          []*types.Block
+	testTransactionHash common.Hash
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
@@ -64,6 +72,9 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, false),
+	}, {
+		Namespace: "debug",
+		Service:   tracers.NewAPI(ethservice.APIBackend),
 	}})
 
 	// Import the test chain.
@@ -83,12 +94,26 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
+
+	signer := types.HomesteadSigner{}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
+
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &testAddr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: g.BaseFee(),
+			Data:     nil,
+		}), signer, testKey)
+		g.AddTx(tx)
+		testTransactionHash = tx.Hash()
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
 	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
+	testBlocks = blocks
 	return genesis, blocks
 }
 
@@ -129,6 +154,24 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContractWithBlockOverrides",
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
+		}, {
+			"TestTraceTransaction",
+			func(t *testing.T) { testTraceTransaction(t, client) },
+		}, {
+			"TestTraceCall",
+			func(t *testing.T) { testTraceCall(t, client) },
+		}, {
+			"TestTraceChain",
+			func(t *testing.T) { testTraceChain(t, client) },
+		}, {
+			"TestTraceBlock",
+			func(t *testing.T) { testTraceBlock(t, client) },
+		}, {
+			"TestTraceBlockByNumber",
+			func(t *testing.T) { testTraceBlockByNumber(t, client) },
+		}, {
+			"TestTraceBlockByHash",
+			func(t *testing.T) { testTraceBlockByHash(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
 		// one block. The `testAcessList` fails if the miner has not yet created a
@@ -154,7 +197,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       &common.Address{},
 		Gas:      21000,
-		GasPrice: big.NewInt(765625000),
+		GasPrice: big.NewInt(766599825),
 		Value:    big.NewInt(1),
 	}
 	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
@@ -317,7 +360,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
@@ -351,7 +394,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Create transaction
-	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(2, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
@@ -516,5 +559,292 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	}
 	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
 		t.Fatalf("unexpected result: %x", res)
+	}
+}
+
+func testTraceTransaction(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	var testSuite = []struct {
+		txHash    common.Hash
+		config    *tracers.TraceConfig
+		expectErr error
+		expect    interface{}
+	}{
+		{
+			txHash:    testTransactionHash,
+			config:    nil,
+			expectErr: nil,
+			expect: map[string]interface{}{
+				"gas":         21000,
+				"failed":      false,
+				"returnValue": "",
+				"structLogs":  nil,
+			},
+		},
+		{
+			txHash: testTransactionHash,
+			config: &tracers.TraceConfig{
+				Config: &logger.Config{
+					EnableMemory: true,
+				},
+			},
+			expectErr: nil,
+			expect: map[string]interface{}{
+				"gas":         21000,
+				"failed":      false,
+				"returnValue": "",
+				"structLogs":  nil,
+			},
+		},
+	}
+	for i, testspec := range testSuite {
+		result, err := ec.TraceTransaction(context.Background(), testspec.txHash, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expect no error, got %v", i, err)
+				continue
+			}
+			if reflect.DeepEqual(testspec, result) {
+				t.Errorf("test %d: result mismatch, want %v, get %v", i, testspec.expect, result)
+			}
+		}
+	}
+}
+
+func testTraceCall(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		call        ethapi.TransactionArgs
+		config      *tracers.TraceCallConfig
+		expectErr   error
+		expect      interface{}
+	}{
+		{
+			call: ethapi.TransactionArgs{
+				From: &testAddr,
+				To:   &testAddr,
+			},
+			config:    nil,
+			expectErr: nil,
+			expect: map[string]interface{}{
+				"gas":         21000,
+				"failed":      false,
+				"returnValue": "",
+				"structLogs":  nil,
+			},
+		},
+		// with config
+		{
+			call: ethapi.TransactionArgs{
+				From: &testAddr,
+				To:   &testAddr,
+			},
+			config: &tracers.TraceCallConfig{
+				TraceConfig: tracers.TraceConfig{
+					Config: &logger.Config{
+						EnableMemory: true,
+					},
+				},
+			},
+			expectErr: nil,
+			expect: map[string]interface{}{
+				"gas":         21000,
+				"failed":      false,
+				"returnValue": "",
+				"structLogs":  nil,
+			}},
+	}
+	for i, testspec := range testSuite {
+		result, err := ec.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expect no error, got %v", i, err)
+				continue
+			}
+			if reflect.DeepEqual(testspec, result) {
+				t.Errorf("test %d: result mismatch, want %v, get %v", i, testspec.expect, result)
+			}
+		}
+	}
+}
+
+func testTraceChain(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	ch := make(chan BlockTraceResult)
+	_, err := ec.TraceChain(context.Background(), ch, 0, 1, nil)
+	if err != nil {
+		t.Fatalf("testTraceChain error: %v", err)
+	}
+
+	traceBlock := <-ch
+	traceTxHash := common.HexToHash(traceBlock.Traces[0].(map[string]interface{})["txHash"].(string))
+	if traceTxHash != testTransactionHash {
+		t.Errorf("result mismatch, want %v, get %v", testTransactionHash, traceTxHash)
+	}
+}
+
+func testTraceBlock(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	block := testBlocks[1]
+	b, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		t.Fatalf("")
+	}
+	var testSuite = []struct {
+		blob      hexutil.Bytes
+		config    *tracers.TraceConfig
+		expectErr error
+		expect    []*TxTraceResult
+	}{
+		{
+			blob:      b,
+			config:    nil,
+			expectErr: nil,
+			expect:    []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+		{
+			blob:      b,
+			config:    nil,
+			expectErr: nil,
+			expect:    []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+	}
+	for i, testspec := range testSuite {
+		result, err := ec.TraceBlock(context.Background(), testspec.blob, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expect no error, got %v", i, err)
+				continue
+			}
+			if testspec.expect[0].TxHash != result[0].TxHash {
+				t.Errorf("test %d: result mismatch, want %v, get %v", i, testspec.expect[0].TxHash, testspec.expect[0].TxHash)
+			}
+		}
+	}
+}
+
+func testTraceBlockByNumber(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		config      *tracers.TraceConfig
+		expectErr   error
+		expect      []*TxTraceResult
+	}{
+		{
+			blockNumber: 1,
+			config:      nil,
+			expectErr:   nil,
+			expect:      []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+		{
+			blockNumber: 1,
+			config: &tracers.TraceConfig{
+				Config: &logger.Config{
+					EnableMemory: true,
+				},
+			},
+			expectErr: nil,
+			expect:    []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+	}
+	for i, testspec := range testSuite {
+		result, err := ec.TraceBlockByNumber(context.Background(), testspec.blockNumber, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expect no error, got %v", i, err)
+				continue
+			}
+			if testspec.expect[0].TxHash != result[0].TxHash {
+				t.Errorf("test %d: result mismatch, want %v, get %v", i, testspec.expect[0].TxHash, testspec.expect[0].TxHash)
+			}
+		}
+	}
+}
+
+func testTraceBlockByHash(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		hash        common.Hash
+		config      *tracers.TraceConfig
+		expectErr   error
+		expect      []*TxTraceResult
+	}{
+		{
+			hash:      testBlocks[1].Hash(),
+			config:    nil,
+			expectErr: nil,
+			expect:    []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+		{
+			hash: testBlocks[1].Hash(),
+			config: &tracers.TraceConfig{
+				Config: &logger.Config{
+					EnableMemory: true,
+				},
+			},
+			expectErr: nil,
+			expect:    []*TxTraceResult{{TxHash: testTransactionHash}},
+		},
+	}
+	for i, testspec := range testSuite {
+		result, err := ec.TraceBlockByHash(context.Background(), testspec.hash, testspec.config)
+		if testspec.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, testspec.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("test %d: expect no error, got %v", i, err)
+				continue
+			}
+			if testspec.expect[0].TxHash != result[0].TxHash {
+				t.Errorf("test %d: result mismatch, want %v, get %v", i, testspec.expect[0].TxHash, testspec.expect[0].TxHash)
+			}
+		}
 	}
 }
