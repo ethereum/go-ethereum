@@ -341,23 +341,23 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
-	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
-		if genesis == nil {
-			genesis = DefaultGenesisBlock()
-		}
-		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock().Hash()
-		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
-		}
-		block, err := genesis.Commit(db, triedb)
-		if err != nil {
-			return genesis.Config, hash, err
-		}
-		applyOverrides(genesis.Config)
-		return genesis.Config, block.Hash(), nil
-	}
+	// header := rawdb.ReadHeader(db, stored, 0)
+	// if header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
+	// 	if genesis == nil {
+	// 		genesis = DefaultGenesisBlock()
+	// 	}
+	// 	// Ensure the stored genesis matches with the given one.
+	// 	hash := genesis.ToBlock().Hash()
+	// 	if hash != stored {
+	// 		return genesis.Config, hash, &GenesisMismatchError{stored, hash}
+	// 	}
+	// 	block, err := genesis.Commit(db, triedb)
+	// 	if err != nil {
+	// 		return genesis.Config, hash, err
+	// 	}
+	// 	applyOverrides(genesis.Config)
+	// 	return genesis.Config, block.Hash(), nil
+	// }
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock().Hash()
