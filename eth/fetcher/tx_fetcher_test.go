@@ -1509,8 +1509,8 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 
 		case isUnderpriced:
-			if fetcher.underpriced.Cardinality() != int(step) {
-				t.Errorf("step %d: underpriced set size mismatch: have %d, want %d", i, fetcher.underpriced.Cardinality(), step)
+			if fetcher.underpriced.Len() != int(step) {
+				t.Errorf("step %d: underpriced set size mismatch: have %d, want %d", i, fetcher.underpriced.Len(), step)
 			}
 
 		default:

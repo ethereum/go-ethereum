@@ -1,4 +1,4 @@
-put pre.elite.count 978307200 0 host=hal9000
+put pre.elite.count 978307200 1337 host=hal9000
 put pre.elite.one-minute 978307200 0.00 host=hal9000
 put pre.elite.five-minute 978307200 0.00 host=hal9000
 put pre.elite.fifteen-minute 978307200 0.00 host=hal9000

@@ -89,6 +89,16 @@ func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) 
 	return h.hash(data) == hash
 }
 
+// ExistsAccountTrieNode checks the presence of the account trie node with the
+// specified node path, regardless of the node hash.
+func ExistsAccountTrieNode(db ethdb.KeyValueReader, path []byte) bool {
+	has, err := db.Has(accountTrieNodeKey(path))
+	if err != nil {
+		return false
+	}
+	return has
+}
+
 // WriteAccountTrieNode writes the provided account trie node into database.
 func WriteAccountTrieNode(db ethdb.KeyValueWriter, path []byte, node []byte) {
 	if err := db.Put(accountTrieNodeKey(path), node); err != nil {
@@ -125,6 +135,16 @@ func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path [
 	h := newHasher()
 	defer h.release()
 	return h.hash(data) == hash
+}
+
+// ExistsStorageTrieNode checks the presence of the storage trie node with the
+// specified account hash and node path, regardless of the node hash.
+func ExistsStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) bool {
+	has, err := db.Has(storageTrieNodeKey(accountHash, path))
+	if err != nil {
+		return false
+	}
+	return has
 }
 
 // WriteStorageTrieNode writes the provided storage trie node into database.

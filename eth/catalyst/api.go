@@ -207,21 +207,21 @@ func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes)
 	c := api.eth.BlockChain().Config()
 
 	// Verify withdrawals attribute for Shanghai.
-	if err := checkAttribute(c.IsShanghai, attr.Withdrawals != nil, attr.Timestamp); err != nil {
+	if err := checkAttribute(c.IsShanghai, attr.Withdrawals != nil, c.LondonBlock, attr.Timestamp); err != nil {
 		return fmt.Errorf("invalid withdrawals: %w", err)
 	}
 	// Verify beacon root attribute for Cancun.
-	if err := checkAttribute(c.IsCancun, attr.BeaconRoot != nil, attr.Timestamp); err != nil {
+	if err := checkAttribute(c.IsCancun, attr.BeaconRoot != nil, c.LondonBlock, attr.Timestamp); err != nil {
 		return fmt.Errorf("invalid parent beacon block root: %w", err)
 	}
 	return nil
 }
 
-func checkAttribute(active func(*big.Int, uint64) bool, exists bool, time uint64) error {
-	if active(common.Big0, time) && !exists {
+func checkAttribute(active func(*big.Int, uint64) bool, exists bool, block *big.Int, time uint64) error {
+	if active(block, time) && !exists {
 		return errors.New("fork active, missing expected attribute")
 	}
-	if !active(common.Big0, time) && exists {
+	if !active(block, time) && exists {
 		return errors.New("fork inactive, unexpected attribute set")
 	}
 	return nil

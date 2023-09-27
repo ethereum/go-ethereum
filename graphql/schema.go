@@ -71,8 +71,8 @@ const schema string = `
         transaction: Transaction!
     }
 
-    #EIP-2718
-    type AccessTuple{
+    # EIP-2718
+    type AccessTuple {
         address: Address!
         storageKeys : [Bytes32!]!
     }
@@ -112,6 +112,8 @@ const schema string = `
         maxFeePerGas: BigInt
         # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei.
         maxPriorityFeePerGas: BigInt
+        # MaxFeePerBlobGas is the maximum blob gas fee cap per blob the sender is willing to pay for blob transaction, in wei.
+        maxFeePerBlobGas: BigInt
         # EffectiveTip is the actual amount of reward going to miner after considering the max fee cap.
         effectiveTip: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
@@ -141,6 +143,10 @@ const schema string = `
         # coerced into the EIP-1559 format by setting both maxFeePerGas and
         # maxPriorityFeePerGas as the transaction's gas price.
         effectiveGasPrice: BigInt
+        # BlobGasUsed is the amount of blob gas used by this transaction.
+        blobGasUsed: Long
+        # blobGasPrice is the actual value per blob gas deducted from the senders account.
+        blobGasPrice: BigInt
         # CreatedContract is the account that was created by a contract creation
         # transaction. If the transaction was not a contract creation transaction,
         # or it has not yet been mined, this field will be null.
@@ -162,6 +168,8 @@ const schema string = `
         # RawReceipt is the canonical encoding of the receipt. For post EIP-2718 typed transactions
         # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
+        # BlobVersionedHashes is a set of hash outputs from the blobs in the transaction.
+        blobVersionedHashes: [Bytes32!]
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
@@ -171,16 +179,16 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-      # of topics. Topics matches a prefix of that list. An empty element array matches any
-      # topic. Non-empty elements represent an alternative that matches any of the
-      # contained topics.
-      #
-      # Examples:
-      #  - [] or nil          matches any topic list
-      #  - [[A]]              matches topic A in first position
-      #  - [[], [B]]          matches any topic in first position, B in second position
-      #  - [[A], [B]]         matches topic A in first position, B in second position
-      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+        # of topics. Topics matches a prefix of that list. An empty element array matches any
+        # topic. Non-empty elements represent an alternative that matches any of the
+        # contained topics.
+        #
+        # Examples:
+        #  - [] or nil          matches any topic list
+        #  - [[A]]              matches topic A in first position
+        #  - [[], [B]]          matches any topic in first position, B in second position
+        #  - [[A], [B]]         matches topic A in first position, B in second position
+        #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
@@ -267,6 +275,10 @@ const schema string = `
         # Withdrawals is a list of withdrawals associated with this block. If
         # withdrawals are unavailable for this block, this field will be null.
         withdrawals: [Withdrawal!]
+        # BlobGasUsed is the total amount of gas used by the transactions.
+        blobGasUsed: Long
+        # ExcessBlobGas is a running total of blob gas consumed in excess of the target, prior to the block.
+        excessBlobGas: Long
     }
 
     # CallData represents the data associated with a local contract call.
@@ -312,21 +324,21 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-      # of topics. Topics matches a prefix of that list. An empty element array matches any
-      # topic. Non-empty elements represent an alternative that matches any of the
-      # contained topics.
-      #
-      # Examples:
-      #  - [] or nil          matches any topic list
-      #  - [[A]]              matches topic A in first position
-      #  - [[], [B]]          matches any topic in first position, B in second position
-      #  - [[A], [B]]         matches topic A in first position, B in second position
-      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+        # of topics. Topics matches a prefix of that list. An empty element array matches any
+        # topic. Non-empty elements represent an alternative that matches any of the
+        # contained topics.
+        #
+        # Examples:
+        #  - [] or nil          matches any topic list
+        #  - [[A]]              matches topic A in first position
+        #  - [[], [B]]          matches any topic in first position, B in second position
+        #  - [[A], [B]]         matches topic A in first position, B in second position
+        #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
     # SyncState contains the current synchronisation state of the client.
-    type SyncState{
+    type SyncState {
         # StartingBlock is the block number at which synchronisation started.
         startingBlock: Long!
         # CurrentBlock is the point at which synchronisation has presently reached.
@@ -337,17 +349,17 @@ const schema string = `
 
     # Pending represents the current pending state.
     type Pending {
-      # TransactionCount is the number of transactions in the pending state.
-      transactionCount: Long!
-      # Transactions is a list of transactions in the current pending state.
-      transactions: [Transaction!]
-      # Account fetches an Ethereum account for the pending state.
-      account(address: Address!): Account!
-      # Call executes a local call operation for the pending state.
-      call(data: CallData!): CallResult
-      # EstimateGas estimates the amount of gas that will be required for
-      # successful execution of a transaction for the pending state.
-      estimateGas(data: CallData!): Long!
+        # TransactionCount is the number of transactions in the pending state.
+        transactionCount: Long!
+        # Transactions is a list of transactions in the current pending state.
+        transactions: [Transaction!]
+        # Account fetches an Ethereum account for the pending state.
+        account(address: Address!): Account!
+        # Call executes a local call operation for the pending state.
+        call(data: CallData!): CallResult
+        # EstimateGas estimates the amount of gas that will be required for
+        # successful execution of a transaction for the pending state.
+        estimateGas(data: CallData!): Long!
     }
 
     type Query {
