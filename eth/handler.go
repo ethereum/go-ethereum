@@ -220,7 +220,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return h.chain.Engine().VerifyHeader(h.chain, header)
 	}
-	height := func() uint64 {
+	heighter := func() uint64 {
 		return h.chain.CurrentBlock().Number.Uint64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
@@ -276,7 +276,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, height, nil, inserter, h.removePeer)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
