@@ -375,3 +375,13 @@ func eachName(f cli.Flag, fn func(string)) {
 		fn(name)
 	}
 }
+
+// ValidatePort validates the port number is in the valid range.
+func ValidatePort(name string) func(*cli.Context, int) error {
+	return func(ctx *cli.Context, port int) error {
+		if port < 0 || port >= 65535 {
+			return fmt.Errorf("Flag %s value %v out of range[0-65535]", name, port)
+		}
+		return nil
+	}
+}
