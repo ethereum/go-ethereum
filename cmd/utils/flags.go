@@ -569,6 +569,7 @@ var (
 		Usage:    "Listening port for authenticated APIs",
 		Value:    node.DefaultConfig.AuthPort,
 		Category: flags.APICategory,
+		Action:   flags.ValidatePort("authrpc.port"),
 	}
 	AuthVirtualHostsFlag = &cli.StringFlag{
 		Name:     "authrpc.vhosts",
@@ -629,6 +630,7 @@ var (
 		Usage:    "HTTP-RPC server listening port",
 		Value:    node.DefaultHTTPPort,
 		Category: flags.APICategory,
+		Action:   flags.ValidatePort("http.port"),
 	}
 	HTTPCORSDomainFlag = &cli.StringFlag{
 		Name:     "http.corsdomain",
@@ -687,6 +689,7 @@ var (
 		Usage:    "WS-RPC server listening port",
 		Value:    node.DefaultWSPort,
 		Category: flags.APICategory,
+		Action:   flags.ValidatePort("ws.port"),
 	}
 	WSApiFlag = &cli.StringFlag{
 		Name:     "ws.api",
@@ -757,6 +760,7 @@ var (
 		Usage:    "Network listening port",
 		Value:    30303,
 		Category: flags.NetworkingCategory,
+		Action:   flags.ValidatePort("port"),
 	}
 	BootnodesFlag = &cli.StringFlag{
 		Name:     "bootnodes",
@@ -813,6 +817,7 @@ var (
 		Usage:    "Use a custom UDP port for P2P discovery",
 		Value:    30303,
 		Category: flags.NetworkingCategory,
+		Action:   flags.ValidatePort("discovery.port"),
 	}
 
 	// Console
@@ -882,6 +887,7 @@ var (
 Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.`,
 		Value:    metrics.DefaultConfig.Port,
 		Category: flags.MetricsCategory,
+		Action:   flags.ValidatePort("metrics.port"),
 	}
 	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
 		Name:     "metrics.influxdb",
