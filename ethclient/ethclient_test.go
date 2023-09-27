@@ -281,9 +281,6 @@ func TestEthClient(t *testing.T) {
 		"CallContractAtHash": {
 			func(t *testing.T) { testCallContractAtHash(t, client) },
 		},
-		"CodeAtHash": {
-			func(t *testing.T) { testCodeAtHash(t, client) },
-		},
 		"AtFunctions": {
 			func(t *testing.T) { testAtFunctions(t, client) },
 		},
@@ -556,19 +553,6 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testCodeAtHash(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
-
-	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
-	if err != nil {
-		t.Fatalf("BlockByNumber error: %v", err)
-	}
-	// CodeAtHash
-	if _, err := ec.CodeAtHash(context.Background(), common.Address{}, block.Hash()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func testCallContract(t *testing.T, client *rpc.Client) {
 	ec := NewClient(client)
 
@@ -599,6 +583,11 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func testAtFunctions(t *testing.T, client *rpc.Client) {
 	ec := NewClient(client)
 
+	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
+	if err != nil {
+		t.Fatalf("BlockByNumber error: %v", err)
+	}
+
 	// send a transaction for some interesting pending status
 	sendTransaction(ec)
 	time.Sleep(100 * time.Millisecond)
@@ -616,6 +605,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	hashBalance, err := ec.BalanceAtHash(context.Background(), testAddr, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if balance.Cmp(hashBalance) == 0 {
+		t.Fatalf("unexpected balance at hash: %v %v", balance, hashBalance)
+	}
 	penBalance, err := ec.PendingBalanceAt(context.Background(), testAddr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -627,6 +623,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	nonce, err := ec.NonceAt(context.Background(), testAddr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	hashNonce, err := ec.NonceAtHash(context.Background(), testAddr, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hashNonce == nonce {
+		t.Fatalf("unexpected nonce at hash: %v %v", nonce, hashNonce)
 	}
 	penNonce, err := ec.PendingNonceAt(context.Background(), testAddr)
 	if err != nil {
@@ -640,6 +643,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	hashStorage, err := ec.StorageAtHash(context.Background(), testAddr, common.Hash{}, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(storage, hashStorage) {
+		t.Fatalf("unexpected storage at hash: %v %v", storage, hashStorage)
+	}
 	penStorage, err := ec.PendingStorageAt(context.Background(), testAddr, common.Hash{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -651,6 +661,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	code, err := ec.CodeAt(context.Background(), testAddr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	hashCode, err := ec.CodeAtHash(context.Background(), common.Address{}, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(code, hashCode) {
+		t.Fatalf("unexpected code at hash: %v %v", code, hashCode)
 	}
 	penCode, err := ec.PendingCodeAt(context.Background(), testAddr)
 	if err != nil {
