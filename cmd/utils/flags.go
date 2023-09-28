@@ -949,6 +949,12 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	NoEnvironmentFlag = &cli.BoolFlag{
+		Name:     "noenv",
+		Usage:    "Disables the use of environment variables for configuration",
+		Category: flags.MiscCategory,
+	}
 )
 
 var (

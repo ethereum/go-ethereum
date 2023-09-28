@@ -242,8 +242,22 @@ func init() {
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,
+		[]cli.Flag{utils.NoEnvironmentFlag},
 	)
-	flags.AutoEnvVars(app.Flags, "GETH")
+
+	noenv := false
+	for _, arg := range os.Args {
+		flag := strings.TrimLeft(arg, "-")
+		if flag == utils.NoEnvironmentFlag.Name {
+			log.Info("Disables the use of environment variables for configuration")
+			noenv = true
+			break
+		}
+	}
+
+	if !noenv {
+		flags.AutoEnvVars(app.Flags, "GETH")
+	}
 
 	app.Before = func(ctx *cli.Context) error {
 		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
@@ -251,7 +265,9 @@ func init() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
-		flags.CheckEnvVars(ctx, app.Flags, "GETH")
+		if !noenv {
+			flags.CheckEnvVars(ctx, app.Flags, "GETH")
+		}
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
