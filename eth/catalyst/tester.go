@@ -34,19 +34,21 @@ import (
 // This tester can be applied to different networks, no matter it's pre-merge or
 // post-merge, but only for full-sync.
 type FullSyncTester struct {
-	api    *ConsensusAPI
-	target common.Hash
-	closed chan struct{}
-	wg     sync.WaitGroup
+	stack   *node.Node
+	backend *eth.Ethereum
+	target  common.Hash
+	closed  chan struct{}
+	wg      sync.WaitGroup
 }
 
 // RegisterFullSyncTester registers the full-sync tester service into the node
 // stack for launching and stopping the service controlled by node.
 func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, target common.Hash) (*FullSyncTester, error) {
 	cl := &FullSyncTester{
-		api:    newConsensusAPIWithoutHeartbeat(backend),
-		target: target,
-		closed: make(chan struct{}),
+		stack:   stack,
+		backend: backend,
+		target:  target,
+		closed:  make(chan struct{}),
 	}
 	stack.RegisterLifecycle(cl)
 	return cl, nil
@@ -60,7 +62,7 @@ func (tester *FullSyncTester) Start() error {
 
 		// Trigger beacon sync with the provided block hash as trusted
 		// chain head.
-		err := tester.api.eth.Downloader().BeaconDevSync(downloader.FullSync, tester.target, tester.closed)
+		err := tester.backend.Downloader().BeaconDevSync(downloader.FullSync, tester.target, tester.closed)
 		if err != nil {
 			log.Info("Failed to trigger beacon sync", "err", err)
 		}
@@ -72,11 +74,12 @@ func (tester *FullSyncTester) Start() error {
 			select {
 			case <-ticker.C:
 				// Stop in case the target block is already stored locally.
-				// TODO(somehow terminate the node stack if target is reached).
-				if block := tester.api.eth.BlockChain().GetBlockByHash(tester.target); block != nil {
+				if block := tester.backend.BlockChain().GetBlockByHash(tester.target); block != nil {
 					log.Info("Full-sync target reached", "number", block.NumberU64(), "hash", block.Hash())
+					go tester.stack.Close() // async since we need to close ourselves
 					return
 				}
+
 			case <-tester.closed:
 				return
 			}

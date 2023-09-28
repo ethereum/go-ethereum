@@ -1687,7 +1687,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
-	if ctx.IsSet(SyncModeFlag.Name) {
+	if ctx.IsSet(SyncTargetFlag.Name) {
+		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+	} else if ctx.IsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
