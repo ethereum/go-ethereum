@@ -25,9 +25,13 @@ import (
 )
 
 var (
-	// errSnapshotReadOnly is returned if the database is opened in read only mode
-	// and mutation is requested.
-	errSnapshotReadOnly = errors.New("read only")
+	// errDatabaseReadOnly is returned if the database is opened in read only mode
+	// to prevent any mutation.
+	errDatabaseReadOnly = errors.New("read only")
+
+	// errDatabaseWaitSync is returned if the initial state sync is not completed
+	// yet and database is disabled to prevent accessing state.
+	errDatabaseWaitSync = errors.New("waiting for sync")
 
 	// errSnapshotStale is returned from data accessors if the underlying layer
 	// layer had been invalidated due to the chain progressing forward far enough
