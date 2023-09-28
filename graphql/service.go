@@ -88,7 +88,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
-	timer.Stop()
+	if timer != nil {
+		timer.Stop()
+	}
 	responded.Do(func() {
 		responseJSON, err := json.Marshal(response)
 		if err != nil {

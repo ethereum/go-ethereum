@@ -51,7 +51,7 @@ func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 // AcceptTxs retrieves whether transaction processing is enabled on the node
 // or if inbound transactions should simply be dropped.
 func (h *ethHandler) AcceptTxs() bool {
-	return h.acceptTxs.Load()
+	return h.synced.Load()
 }
 
 // Handle is invoked from a peer's message handler when it receives a new remote

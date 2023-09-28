@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -249,7 +248,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	handler.handler.acceptTxs.Store(true) // mark synced to accept transactions
+	handler.handler.synced.Store(true) // mark synced to accept transactions
 
 	txs := make(chan core.NewTxsEvent)
 	sub := handler.txpool.SubscribeNewTxsEvent(txs)
@@ -308,12 +307,11 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	insert := make([]*txpool.Transaction, 100)
+	insert := make([]*types.Transaction, 100)
 	for nonce := range insert {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-
-		insert[nonce] = &txpool.Transaction{Tx: tx}
+		insert[nonce] = tx
 	}
 	go handler.txpool.Add(insert, false, false) // Need goroutine to not block on feed
 	time.Sleep(250 * time.Millisecond)          // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
@@ -376,8 +374,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		}
 	}
 	for _, tx := range insert {
-		if _, ok := seen[tx.Tx.Hash()]; !ok {
-			t.Errorf("missing transaction: %x", tx.Tx.Hash())
+		if _, ok := seen[tx.Hash()]; !ok {
+			t.Errorf("missing transaction: %x", tx.Hash())
 		}
 	}
 }
@@ -403,7 +401,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		sinks[i] = newTestHandler()
 		defer sinks[i].close()
 
-		sinks[i].handler.acceptTxs.Store(true) // mark synced to accept transactions
+		sinks[i].handler.synced.Store(true) // mark synced to accept transactions
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
@@ -434,12 +432,11 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
-	txs := make([]*txpool.Transaction, 1024)
+	txs := make([]*types.Transaction, 1024)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-
-		txs[nonce] = &txpool.Transaction{Tx: tx}
+		txs[nonce] = tx
 	}
 	source.txpool.Add(txs, false, false)
 

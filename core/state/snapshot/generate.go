@@ -356,7 +356,8 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	var resolver trie.NodeResolver
 	if len(result.keys) > 0 {
 		mdb := rawdb.NewMemoryDatabase()
-		tdb := trie.NewDatabase(mdb)
+		tdb := trie.NewDatabase(mdb, trie.HashDefaults)
+		defer tdb.Close()
 		snapTrie := trie.NewEmpty(tdb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
@@ -445,6 +446,10 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		internal += time.Since(istart)
 	}
 	if iter.Err != nil {
+		// Trie errors should never happen. Still, in case of a bug, expose the
+		// error here, as the outer code will presume errors are interrupts, not
+		// some deeper issues.
+		log.Error("State snapshotter failed to iterate trie", "err", err)
 		return false, nil, iter.Err
 	}
 	// Delete all stale snapshot states remaining

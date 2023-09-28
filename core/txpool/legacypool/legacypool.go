@@ -298,7 +298,20 @@ func (pool *LegacyPool) Init(gasTip *big.Int, head *types.Header, reserve txpool
 
 	// Set the basic pool parameters
 	pool.gasTip.Store(gasTip)
-	pool.reset(nil, head)
+
+	// Initialize the state with head block, or fallback to empty one in
+	// case the head state is not available(might occur when node is not
+	// fully synced).
+	statedb, err := pool.chain.StateAt(head.Root)
+	if err != nil {
+		statedb, err = pool.chain.StateAt(types.EmptyRootHash)
+	}
+	if err != nil {
+		return err
+	}
+	pool.currentHead.Store(head)
+	pool.currentState = statedb
+	pool.pendingNonces = newNoncer(statedb)
 
 	// Start the reorg loop early, so it can handle requests generated during
 	// journal loading.
@@ -406,7 +419,7 @@ func (pool *LegacyPool) Close() error {
 }
 
 // Reset implements txpool.SubPool, allowing the legacy pool's internal state to be
-// kept in sync with the main transacion pool's internal state.
+// kept in sync with the main transaction pool's internal state.
 func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 	wait := pool.requestReset(oldHead, newHead)
 	<-wait
@@ -535,7 +548,7 @@ func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.L
 				lazies[i] = &txpool.LazyTransaction{
 					Pool:      pool,
 					Hash:      txs[i].Hash(),
-					Tx:        &txpool.Transaction{Tx: txs[i]},
+					Tx:        txs[i],
 					Time:      txs[i].Time(),
 					GasFeeCap: txs[i].GasFeeCap(),
 					GasTipCap: txs[i].GasTipCap(),
@@ -588,7 +601,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 	if local {
 		opts.MinTip = new(big.Int)
 	}
-	if err := txpool.ValidateTransaction(tx, nil, nil, nil, pool.currentHead.Load(), pool.signer, opts); err != nil {
+	if err := txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
 		return err
 	}
 	return nil
@@ -637,7 +650,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 // pending or queued one, it overwrites the previous transaction if its price is higher.
 //
 // If a newly added transaction is marked as local, its sending account will be
-// be added to the allowlist, preventing any associated transaction from being dropped
+// added to the allowlist, preventing any associated transaction from being dropped
 // out of the pool due to pricing constraints.
 func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
@@ -900,26 +913,13 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	return true
 }
 
-// Add enqueues a batch of transactions into the pool if they are valid. Depending
-// on the local flag, full pricing contraints will or will not be applied.
-//
-// If sync is set, the method will block until all internal maintenance related
-// to the add is finished. Only use this during tests for determinism!
-func (pool *LegacyPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
-	unwrapped := make([]*types.Transaction, len(txs))
-	for i, tx := range txs {
-		unwrapped[i] = tx.Tx
-	}
-	return pool.addTxs(unwrapped, local, sync)
-}
-
 // addLocals enqueues a batch of transactions into the pool if they are valid, marking the
-// senders as a local ones, ensuring they go around the local pricing constraints.
+// senders as local ones, ensuring they go around the local pricing constraints.
 //
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
 func (pool *LegacyPool) addLocals(txs []*types.Transaction) []error {
-	return pool.addTxs(txs, !pool.config.NoLocals, true)
+	return pool.Add(txs, !pool.config.NoLocals, true)
 }
 
 // addLocal enqueues a single local transaction into the pool if it is valid. This is
@@ -935,7 +935,7 @@ func (pool *LegacyPool) addLocal(tx *types.Transaction) error {
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
 func (pool *LegacyPool) addRemotes(txs []*types.Transaction) []error {
-	return pool.addTxs(txs, false, false)
+	return pool.Add(txs, false, false)
 }
 
 // addRemote enqueues a single transaction into the pool if it is valid. This is a convenience
@@ -947,16 +947,20 @@ func (pool *LegacyPool) addRemote(tx *types.Transaction) error {
 
 // addRemotesSync is like addRemotes, but waits for pool reorganization. Tests use this method.
 func (pool *LegacyPool) addRemotesSync(txs []*types.Transaction) []error {
-	return pool.addTxs(txs, false, true)
+	return pool.Add(txs, false, true)
 }
 
 // This is like addRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
 func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
-	return pool.addTxs([]*types.Transaction{tx}, false, true)[0]
+	return pool.Add([]*types.Transaction{tx}, false, true)[0]
 }
 
-// addTxs attempts to queue a batch of transactions if they are valid.
-func (pool *LegacyPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
+// Add enqueues a batch of transactions into the pool if they are valid. Depending
+// on the local flag, full pricing constraints will or will not be applied.
+//
+// If sync is set, the method will block until all internal maintenance related
+// to the add is finished. Only use this during tests for determinism!
+func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
 		errs = make([]error, len(txs))
@@ -1042,12 +1046,12 @@ func (pool *LegacyPool) Status(hash common.Hash) txpool.TxStatus {
 }
 
 // Get returns a transaction if it is contained in the pool and nil otherwise.
-func (pool *LegacyPool) Get(hash common.Hash) *txpool.Transaction {
+func (pool *LegacyPool) Get(hash common.Hash) *types.Transaction {
 	tx := pool.get(hash)
 	if tx == nil {
 		return nil
 	}
-	return &txpool.Transaction{Tx: tx}
+	return tx
 }
 
 // get returns a transaction if it is contained in the pool and nil otherwise.

@@ -25,11 +25,16 @@ import (
 
 // newTestDatabase initializes the trie database with specified scheme.
 func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
-	db := prepare(diskdb, nil)
+	config := &Config{Preimages: false}
 	if scheme == rawdb.HashScheme {
-		db.backend = hashdb.New(diskdb, 0, mptResolver{})
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: 0,
+		} // disable clean cache
 	} else {
-		db.backend = pathdb.New(diskdb, &pathdb.Config{}) // disable clean/dirty cache
+		config.PathDB = &pathdb.Config{
+			CleanCacheSize: 0,
+			DirtyCacheSize: 0,
+		} // disable clean/dirty cache
 	}
-	return db
+	return NewDatabase(diskdb, config)
 }
