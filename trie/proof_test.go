@@ -430,7 +430,7 @@ func TestAllElementsProof(t *testing.T) {
 		k = append(k, entries[i].k)
 		v = append(v, entries[i].v)
 	}
-	_, err := VerifyRangeProof(trie.Hash(), nil, nil, k, v, nil)
+	err := VerifyStandaloneRange(trie.Hash(), k, v)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -895,8 +895,7 @@ func TestAllElementsEmptyValueRangeProof(t *testing.T) {
 		keys = append(keys, entries[i].k)
 		vals = append(vals, entries[i].v)
 	}
-	_, err := VerifyRangeProof(trie.Hash(), nil, nil, keys, vals, nil)
-	if err == nil {
+	if err := VerifyStandaloneRange(trie.Hash(), keys, vals); err == nil {
 		t.Fatalf("Expected failure on noop entry")
 	}
 }
@@ -1028,8 +1027,7 @@ func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, values, nil)
-		if err != nil {
+		if err := VerifyStandaloneRange(trie.Hash(), keys, values); err != nil {
 			b.Fatalf("Expected no error, got %v", err)
 		}
 	}
