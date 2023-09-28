@@ -1993,3 +1993,34 @@ func containsHash(slice []common.Hash, hash common.Hash) bool {
 	}
 	return false
 }
+
+// Tests that a transaction is forgotten after the timeout.
+func TestTransactionForgotten(t *testing.T) {
+	fetcher := NewTxFetcher(
+		func(common.Hash) bool { return false },
+		func(txs []*types.Transaction) []error {
+			errs := make([]error, len(txs))
+			for i := 0; i < len(errs); i++ {
+				errs[i] = txpool.ErrUnderpriced
+			}
+			return errs
+		},
+		func(string, []common.Hash) error { return nil },
+	)
+	go fetcher.loop()
+	tx1 := types.NewTransaction(0, common.Address{}, common.Big0, 0, common.Big0, nil)
+	tx1.SetTime(time.Now().Add(-5 * time.Minute))
+	tx2 := types.NewTransaction(1, common.Address{}, common.Big0, 0, common.Big0, nil)
+	if fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Fatal("unknown hash can not be underpriced")
+	}
+	if err := fetcher.Enqueue("asdf", []*types.Transaction{tx1, tx2}, false); err != nil {
+		t.Fatal(err)
+	}
+	if fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Fatal("transaction should be evicted by this point")
+	}
+	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Fatal("transaction should not be known underpriced")
+	}
+}

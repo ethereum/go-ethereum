@@ -284,7 +284,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 // isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
-	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
+	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().UnixNano() {
 		f.underpriced.Remove(hash)
 		return false
 	}
@@ -335,7 +335,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
-				f.underpriced.Add(batch[j].Hash(), batch[j].Time().Unix())
+				f.underpriced.Add(batch[j].Hash(), batch[j].Time().UnixNano())
 			}
 			// Track a few interesting failure types
 			switch {
