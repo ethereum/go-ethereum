@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -224,6 +225,8 @@ type storageResponse struct {
 	slots  [][][]byte      // Storage slot values in the returned range
 
 	cont bool // Whether the last storage range has a continuation
+
+	tr *trie.Trie // Trie of any non-complete storage chuunk.
 }
 
 // trienodeHealRequest tracks a pending state trie request to ensure responses
@@ -2086,11 +2089,32 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
 
+			_, nodes, err := res.tr.Commit(false)
+			if err != nil {
+				log.Error("Failed to commit stack slots", "err", err)
+				continue
+			}
+			// OBS! TODO: Do not write incomplete nodes
+			// - nodes which contain unresolved hashes,
+			// - or their parents,
+			var boundaryRight []byte
+			//var boundaryLeft []byte TODO
+
+			nodes.ForEachWithOrder(func(path string, n *trienode.Node) {
+				if boundaryRight == nil {
+					boundaryRight = []byte(path)
+				}
+				if bytes.HasPrefix(boundaryRight, []byte(path)) {
+					return // a right-hand boundary
+				}
+				rawdb.WriteTrieNode(batch, nodes.Owner, []byte(path), n.Hash, n.Blob, s.scheme)
+			})
+
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
-			if i == len(res.hashes)-1 && res.subTask != nil {
-				res.subTask.genTrie.Update(res.hashes[i][j][:], res.slots[i][j])
-			}
+			//if i == len(res.hashes)-1 && res.subTask != nil {
+			//	res.subTask.genTrie.Update(res.hashes[i][j][:], res.slots[i][j])
+			//}
 		}
 	}
 	// Large contracts could have generated new trie nodes, flush them to disk
@@ -2632,7 +2656,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 
 	// Reconstruct the partial tries from the response and verify them
 	var cont bool
-
+	var tr *trie.Trie
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
 		keys := make([][]byte, len(hashes[i]))
@@ -2640,6 +2664,8 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 			keys[j] = common.CopyBytes(key[:])
 		}
 		nodes := make(light.NodeList, 0, len(proof))
+		// Proofs always concern only the _last_ account (which, in the case
+		// of a non-zero origin, is also the first).
 		if i == len(hashes)-1 {
 			for _, node := range proof {
 				nodes = append(nodes, node)
@@ -2664,7 +2690,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 			if len(keys) > 0 {
 				end = keys[len(keys)-1]
 			}
-			cont, trie, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
+			cont, tr, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], end, keys, slots[i], proofdb)
 			if err != nil {
 				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage range failed proof", "err", err)
@@ -2681,6 +2707,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		hashes:   hashes,
 		slots:    slots,
 		cont:     cont,
+		tr:       tr,
 	}
 	select {
 	case req.deliver <- response:
