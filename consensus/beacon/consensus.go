@@ -435,6 +435,19 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 				if err != nil {
 					panic(err)
 				}
+
+				// WORKAROUND: the post trie would normally not
+				// need to be searched for keys, as all of them
+				// were resolved during block execution.
+				// But since the prefetcher isn't currently used
+				// with verkle, the values that are read but not
+				// written to, are not resolved as they are read
+				// straight from the snapshot. They must be read
+				// in order to build the proof.
+				_, err = vtrpost.GetWithHashedKey(key)
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			if len(keys) > 0 {
