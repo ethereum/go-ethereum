@@ -481,24 +481,24 @@ func hasRightElement(node node, key []byte) bool {
 // Note: This method does not verify that the proof is of minimal form. If the input
 // proofs are 'bloated' with neighbour leaves or random data, aside from the 'useful'
 // data, then the proof will still be accepted.
-func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, error) {
+func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, *Trie, error) {
 	if proof == nil {
 		// Special case, there is no edge proof at all. The given range is expected
 		// to be the whole leaf-set in the trie.
-		return false, VerifyStandaloneRange(rootHash, keys, values)
+		return false, nil, VerifyStandaloneRange(rootHash, keys, values)
 	}
 	if len(keys) != len(values) {
-		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
+		return false, nil, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
 	// Ensure the received batch is monotonic increasing and contains no deletions
 	for i := 0; i < len(keys)-1; i++ {
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
-			return false, errors.New("range is not monotonically increasing")
+			return false, nil, errors.New("range is not monotonically increasing")
 		}
 	}
 	for _, value := range values {
 		if len(value) == 0 {
-			return false, errors.New("range contains deletion")
+			return false, nil, errors.New("range contains deletion")
 		}
 	}
 	// Special case, there is a provided edge proof but zero key/value
@@ -506,56 +506,59 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if len(keys) == 0 {
 		root, val, err := proofToPath(rootHash, nil, firstKey, proof, true)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		if val != nil || hasRightElement(root, firstKey) {
-			return false, errors.New("more entries available")
+			return false, nil, errors.New("more entries available")
 		}
-		return false, nil
+		tr := &Trie{root: root, reader: newEmptyReader(), tracer: newTracer()}
+		return false, tr, nil
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
 	if len(keys) == 1 && bytes.Equal(firstKey, lastKey) {
 		root, val, err := proofToPath(rootHash, nil, firstKey, proof, false)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		if !bytes.Equal(firstKey, keys[0]) {
-			return false, errors.New("correct proof but invalid key")
+			return false, nil, errors.New("correct proof but invalid key")
 		}
 		if !bytes.Equal(val, values[0]) {
-			return false, errors.New("correct proof but invalid data")
+			return false, nil, errors.New("correct proof but invalid data")
 		}
-		return hasRightElement(root, firstKey), nil
+		tr := &Trie{root: root, reader: newEmptyReader(), tracer: newTracer()}
+		tr.Update(keys[0], values[0])
+		return hasRightElement(root, firstKey), tr, nil
 	}
 	// Ok, in all other cases, we require two edge paths available.
 	// First check the validity of edge keys.
 	if bytes.Compare(firstKey, lastKey) >= 0 {
-		return false, errors.New("invalid edge keys")
+		return false, nil, errors.New("invalid edge keys")
 	}
 	// todo(rjl493456442) different length edge keys should be supported
 	if len(firstKey) != len(lastKey) {
-		return false, errors.New("inconsistent edge keys")
+		return false, nil, errors.New("inconsistent edge keys")
 	}
 	// Convert the edge proofs to edge trie paths. Then we can
 	// have the same tree architecture with the original one.
 	// For the first edge proof, non-existent proof is allowed.
 	root, _, err := proofToPath(rootHash, nil, firstKey, proof, true)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	// Pass the root node here, the second path will be merged
 	// with the first one. For the last edge proof, non-existent
 	// proof is also allowed.
 	root, _, err = proofToPath(rootHash, root, lastKey, proof, true)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	// Remove all internal references. All the removed parts should
 	// be re-filled(or re-constructed) by the given leaves range.
 	empty, err := unsetInternal(root, firstKey, lastKey)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
@@ -567,9 +570,9 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		tr.Update(key, values[index])
 	}
 	if tr.Hash() != rootHash {
-		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
+		return false, nil, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
-	return hasRightElement(tr.root, keys[len(keys)-1]), nil
+	return hasRightElement(tr.root, keys[len(keys)-1]), tr, nil
 }
 
 // VerifyStandaloneRange checks whether a trie built with the given leaf nodes
