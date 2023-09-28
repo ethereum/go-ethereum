@@ -627,11 +627,13 @@ func benchGet(b *testing.B) {
 
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
-	k := make([]byte, 32)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
+		k := make([]byte, 32)
+		v := make([]byte, 32)
 		e.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
+		e.PutUint64(v, uint64(i))
+		trie.MustUpdate(k, v)
 	}
 	return trie
 }
