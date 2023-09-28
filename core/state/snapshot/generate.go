@@ -228,16 +228,8 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	// The snap state is exhausted, pass the entire key/val set for verification
 	root := trieId.Root
 	if origin == nil && !diskMore {
-		stackTr := trie.NewStackTrie(nil)
-		for i, key := range keys {
-			stackTr.Update(key, vals[i])
-		}
-		if gotRoot := stackTr.Hash(); gotRoot != root {
-			return &proofResult{
-				keys:     keys,
-				vals:     vals,
-				proofErr: fmt.Errorf("wrong root: have %#x want %#x", gotRoot, root),
-			}, nil
+		if err := trie.VerifyStandaloneRange(root, keys, vals); err != nil {
+			return &proofResult{keys: keys, vals: vals, proofErr: err}, nil
 		}
 		return &proofResult{keys: keys, vals: vals}, nil
 	}

@@ -482,6 +482,11 @@ func hasRightElement(node node, key []byte) bool {
 // proofs are 'bloated' with neighbour leaves or random data, aside from the 'useful'
 // data, then the proof will still be accepted.
 func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, error) {
+	if proof == nil {
+		// Special case, there is no edge proof at all. The given range is expected
+		// to be the whole leaf-set in the trie.
+		return false, VerifyStandaloneRange(rootHash, keys, values)
+	}
 	if len(keys) != len(values) {
 		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
@@ -495,18 +500,6 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		if len(value) == 0 {
 			return false, errors.New("range contains deletion")
 		}
-	}
-	// Special case, there is no edge proof at all. The given range is expected
-	// to be the whole leaf-set in the trie.
-	if proof == nil {
-		tr := NewStackTrie(nil)
-		for index, key := range keys {
-			tr.Update(key, values[index])
-		}
-		if have, want := tr.Hash(), rootHash; have != want {
-			return false, fmt.Errorf("invalid proof, want hash %x, got %x", want, have)
-		}
-		return false, nil // No more elements
 	}
 	// Special case, there is a provided edge proof but zero key/value
 	// pairs, ensure there are no more accounts / slots in the trie.
@@ -577,6 +570,34 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
 	return hasRightElement(tr.root, keys[len(keys)-1]), nil
+}
+
+// VerifyStandaloneRange checks whether a trie built with the given leaf nodes
+// matches with the specific root.
+// The range must be monotonically increasing and contain no deletions.
+func VerifyStandaloneRange(rootHash common.Hash, keys [][]byte, values [][]byte) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
+	}
+	// Ensure the received batch is monotonic increasing and contains no deletions
+	for i := 0; i < len(keys)-1; i++ {
+		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
+			return errors.New("range is not monotonically increasing")
+		}
+	}
+	for _, value := range values {
+		if len(value) == 0 {
+			return errors.New("range contains deletion")
+		}
+	}
+	tr := NewStackTrie(nil)
+	for index, key := range keys {
+		tr.Update(key, values[index])
+	}
+	if have, want := tr.Hash(), rootHash; have != want {
+		return fmt.Errorf("invalid proof, want hash %x, got %x", want, have)
+	}
+	return nil // No more elements
 }
 
 // get returns the child of the given node. Return nil if the

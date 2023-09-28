@@ -2645,12 +2645,10 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 				nodes = append(nodes, node)
 			}
 		}
-		var err error
 		if len(nodes) == 0 {
 			// No proof has been attached, the response must cover the entire key
 			// space and hash to the origin root.
-			_, err = trie.VerifyRangeProof(req.roots[i], nil, nil, keys, slots[i], nil)
-			if err != nil {
+			if err := trie.VerifyStandaloneRange(req.roots[i], keys, slots[i]); err != nil {
 				s.scheduleRevertStorageRequest(req) // reschedule request
 				logger.Warn("Storage slots failed proof", "err", err)
 				return err
@@ -2658,9 +2656,11 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		} else {
 			// A proof was attached, the response is only partial, check that the
 			// returned data is indeed part of the storage trie
-			proofdb := nodes.NodeSet()
-
-			var end []byte
+			var (
+				proofdb = nodes.NodeSet()
+				err     error
+				end     []byte
+			)
 			if len(keys) > 0 {
 				end = keys[len(keys)-1]
 			}
