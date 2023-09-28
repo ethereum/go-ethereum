@@ -55,9 +55,7 @@ const (
 	txMaxBroadcastSize = 4096
 )
 
-var (
-	syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
-)
+var syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
 
 // txPool defines the methods needed from a transaction pool implementation to
 // support all the operations needed by the Ethereum chain protocols.
@@ -89,7 +87,7 @@ type handlerConfig struct {
 	Chain          *core.BlockChain       // Blockchain to serve data from
 	TxPool         txPool                 // Transaction pool to propagate from
 	Merger         *consensus.Merger      // The manager for eth1/2 transition
-	Network        uint64                 // Network identifier to adfvertise
+	Network        uint64                 // Network identifier to advertise
 	Sync           downloader.SyncMode    // Whether to snap or full sync
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
@@ -255,7 +253,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 				}
 				td := new(big.Int).Add(ptd, block.Difficulty())
 				if !h.chain.Config().IsTerminalPoWBlock(ptd, td) {
-					log.Info("Filtered out non-termimal pow block", "number", block.NumberU64(), "hash", block.Hash())
+					log.Info("Filtered out non-terminal pow block", "number", block.NumberU64(), "hash", block.Hash())
 					return 0, nil
 				}
 				if err := h.chain.InsertBlockWithoutSetHead(block); err != nil {
