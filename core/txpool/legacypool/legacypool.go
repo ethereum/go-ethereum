@@ -901,7 +901,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 }
 
 // addLocals enqueues a batch of transactions into the pool if they are valid, marking the
-// senders as a local ones, ensuring they go around the local pricing constraints.
+// senders as local ones, ensuring they go around the local pricing constraints.
 //
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
