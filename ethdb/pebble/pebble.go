@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -118,6 +119,18 @@ func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 }
 
+// panicLogger is just a noop logger to disable Pebble's internal logger.
+//
+// TODO(karalabe): Remove when Pebble sets this as teh default.
+type panicLogger struct{}
+
+func (l panicLogger) Infof(format string, args ...interface{}) {
+}
+
+func (l panicLogger) Fatalf(format string, args ...interface{}) {
+	panic(errors.Errorf("fatal: "+format, args...))
+}
+
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool) (*Database, error) {
@@ -158,7 +171,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 
 		// The size of memory table(as well as the write buffer).
 		// Note, there may have more than two memory tables in the system.
-		MemTableSize: memTableSize,
+		MemTableSize: uint64(memTableSize),
 
 		// MemTableStopWritesThreshold places a hard limit on the size
 		// of the existent MemTables(including the frozen one).
@@ -189,6 +202,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 			WriteStallBegin: db.onWriteStallBegin,
 			WriteStallEnd:   db.onWriteStallEnd,
 		},
+		Logger: panicLogger{}, // TODO(karalabe): Delete when this is upstreamed in Pebble
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
@@ -305,12 +319,9 @@ func (d *Database) NewBatch() ethdb.Batch {
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
-// It's not supported by pebble, but pebble has better memory allocation strategy
-// which turns out a lot faster than leveldb. It's performant enough to construct
-// batch object without any pre-allocated space.
-func (d *Database) NewBatchWithSize(_ int) ethdb.Batch {
+func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
 	return &batch{
-		b:  d.db.NewBatch(),
+		b:  d.db.NewBatchWithSize(size),
 		db: d,
 	}
 }
@@ -582,7 +593,7 @@ type pebbleIterator struct {
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
 func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	iter := d.db.NewIter(&pebble.IterOptions{
+	iter, _ := d.db.NewIter(&pebble.IterOptions{
 		LowerBound: append(prefix, start...),
 		UpperBound: upperBound(prefix),
 	})
