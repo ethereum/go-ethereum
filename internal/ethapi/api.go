@@ -1303,7 +1303,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		for i, call := range block.Calls {
 			// setDefaults will consult txpool's nonce tracker. Work around that.
 			if call.Nonce == nil {
-				nonce := state.GetNonce(*call.From)
+				nonce := state.GetNonce(call.from())
 				call.Nonce = (*hexutil.Uint64)(&nonce)
 			}
 			// Let the call run wild unless explicitly specified.
