@@ -34,7 +34,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// freezerdb is a database wrapper that enabled freezer data retrievals.
+// freezerdb is a database wrapper that enables freezer data retrievals.
 type freezerdb struct {
 	ancientRoot string
 	ethdb.KeyValueStore
@@ -141,7 +141,7 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) 
 	// Unlike other ancient-related methods, this method does not return
 	// errNotSupported when invoked.
 	// The reason for this is that the caller might want to do several things:
-	// 1. Check if something is in freezer,
+	// 1. Check if something is in the freezer,
 	// 2. If not, check leveldb.
 	//
 	// This will work, since the ancient-checks inside 'fn' will return errors,
@@ -209,7 +209,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// of the freezer and database. Ensure that we don't shoot ourselves in the foot
 	// by serving up conflicting data, leading to both datastores getting corrupted.
 	//
-	//   - If both the freezer and key-value store is empty (no genesis), we just
+	//   - If both the freezer and key-value store are empty (no genesis), we just
 	//     initialized a new empty freezer, so everything's fine.
 	//   - If the key-value store is empty, but the freezer is not, we need to make
 	//     sure the user's genesis matches the freezer. That will be checked in the
@@ -218,7 +218,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	//   - If neither the key-value store nor the freezer is empty, cross validate
 	//     the genesis hashes to make sure they are compatible. If they are, also
 	//     ensure that there's no gap between the freezer and subsequently leveldb.
-	//   - If the key-value store is not empty, but the freezer is we might just be
+	//   - If the key-value store is not empty, but the freezer is, we might just be
 	//     upgrading to the freezer release, or we might have had a small chain and
 	//     not frozen anything yet. Ensure that no blocks are missing yet from the
 	//     key-value store, since that would mean we already had an old freezer.
@@ -634,7 +634,7 @@ func printChainMetadata(db ethdb.KeyValueStore) {
 	fmt.Fprintf(os.Stderr, "\n\n")
 }
 
-// ReadChainMetadata returns a set of key/value pairs that contains informatin
+// ReadChainMetadata returns a set of key/value pairs that contains information
 // about the database chain status. This can be used for diagnostic purposes
 // when investigating the state of the node.
 func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
