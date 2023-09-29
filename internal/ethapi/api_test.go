@@ -1035,6 +1035,8 @@ func TestMulticallV1(t *testing.T) {
 					From:  &randomAccounts[1].addr,
 					To:    &randomAccounts[2].addr,
 					Value: (*hexutil.Big)(big.NewInt(1000)),
+				}, {
+					To: &randomAccounts[3].addr,
 				}},
 			}},
 			want: []blockRes{{
