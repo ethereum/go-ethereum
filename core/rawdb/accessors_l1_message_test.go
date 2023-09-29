@@ -48,6 +48,11 @@ func TestReadWriteL1Message(t *testing.T) {
 	if got == nil || got.QueueIndex != queueIndex {
 		t.Fatal("L1 message mismatch", "expected", queueIndex, "got", got)
 	}
+
+	max := ReadHighestSyncedQueueIndex(db)
+	if max != 123 {
+		t.Fatal("max index mismatch", "expected", 123, "got", max)
+	}
 }
 
 func TestIterateL1Message(t *testing.T) {
@@ -61,6 +66,11 @@ func TestIterateL1Message(t *testing.T) {
 
 	db := NewMemoryDatabase()
 	WriteL1Messages(db, msgs)
+
+	max := ReadHighestSyncedQueueIndex(db)
+	if max != 1000 {
+		t.Fatal("max index mismatch", "expected", 1000, "got", max)
+	}
 
 	it := IterateL1MessagesFrom(db, 103)
 	defer it.Release()
@@ -123,5 +133,27 @@ func TestReadWriteLastL1MessageInL2Block(t *testing.T) {
 		if got == nil || *got != num {
 			t.Fatal("Enqueue index mismatch", "expected", num, "got", got)
 		}
+	}
+}
+
+func TestIterationStopsAtMaxQueueIndex(t *testing.T) {
+	msgs := []types.L1MessageTx{
+		newL1MessageTx(100),
+		newL1MessageTx(101),
+		newL1MessageTx(102),
+		newL1MessageTx(103),
+	}
+
+	db := NewMemoryDatabase()
+	WriteL1Messages(db, msgs)
+
+	// artificially change max index from 103 to 102
+	WriteHighestSyncedQueueIndex(db, 102)
+
+	// iteration should terminate at 102 and not read 103
+	got := ReadL1MessagesFrom(db, 100, 10)
+
+	if len(got) != 3 {
+		t.Fatal("Invalid length", "expected", 3, "got", len(got))
 	}
 }

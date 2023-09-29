@@ -43,7 +43,38 @@ func ReadSyncedL1BlockNumber(db ethdb.Reader) *uint64 {
 	return &value
 }
 
+// WriteHighestSyncedQueueIndex writes the highest synced L1 message queue index to the database.
+func WriteHighestSyncedQueueIndex(db ethdb.KeyValueWriter, queueIndex uint64) {
+	value := big.NewInt(0).SetUint64(queueIndex).Bytes()
+
+	if err := db.Put(highestSyncedQueueIndexKey, value); err != nil {
+		log.Crit("Failed to update highest synced L1 message queue index", "err", err)
+	}
+}
+
+// ReadHighestSyncedQueueIndex retrieves the highest synced L1 message queue index.
+func ReadHighestSyncedQueueIndex(db ethdb.Reader) uint64 {
+	data, err := db.Get(highestSyncedQueueIndexKey)
+	if err != nil && isNotFoundErr(err) {
+		return 0
+	}
+	if err != nil {
+		log.Crit("Failed to read highest synced L1 message queue index from database", "err", err)
+	}
+	if len(data) == 0 {
+		return 0
+	}
+
+	number := new(big.Int).SetBytes(data)
+	if !number.IsUint64() {
+		log.Crit("Unexpected highest synced L1 block number in database", "number", number)
+	}
+
+	return number.Uint64()
+}
+
 // WriteL1Message writes an L1 message to the database.
+// We assume that L1 messages are written to DB following their queue index order.
 func WriteL1Message(db ethdb.KeyValueWriter, l1Msg types.L1MessageTx) {
 	bytes, err := rlp.EncodeToBytes(l1Msg)
 	if err != nil {
@@ -52,6 +83,8 @@ func WriteL1Message(db ethdb.KeyValueWriter, l1Msg types.L1MessageTx) {
 	if err := db.Put(L1MessageKey(l1Msg.QueueIndex), bytes); err != nil {
 		log.Crit("Failed to store L1 message", "err", err)
 	}
+
+	WriteHighestSyncedQueueIndex(db, l1Msg.QueueIndex)
 }
 
 // WriteL1Messages writes an array of L1 messages to the database.
@@ -91,20 +124,23 @@ func ReadL1Message(db ethdb.Reader, queueIndex uint64) *types.L1MessageTx {
 // allows us to iterate over L1 messages in the database. It
 // implements an interface similar to ethdb.Iterator.
 type L1MessageIterator struct {
-	inner     ethdb.Iterator
-	keyLength int
+	inner         ethdb.Iterator
+	keyLength     int
+	maxQueueIndex uint64
 }
 
 // IterateL1MessagesFrom creates an L1MessageIterator that iterates over
 // all L1 message in the database starting at the provided enqueue index.
-func IterateL1MessagesFrom(db ethdb.Iteratee, fromQueueIndex uint64) L1MessageIterator {
+func IterateL1MessagesFrom(db ethdb.Database, fromQueueIndex uint64) L1MessageIterator {
 	start := encodeBigEndian(fromQueueIndex)
 	it := db.NewIterator(l1MessagePrefix, start)
 	keyLength := len(l1MessagePrefix) + 8
+	maxQueueIndex := ReadHighestSyncedQueueIndex(db)
 
 	return L1MessageIterator{
-		inner:     it,
-		keyLength: keyLength,
+		inner:         it,
+		keyLength:     keyLength,
+		maxQueueIndex: maxQueueIndex,
 	}
 }
 
@@ -145,7 +181,7 @@ func (it *L1MessageIterator) Release() {
 }
 
 // ReadL1MessagesFrom retrieves up to `maxCount` L1 messages starting at `startIndex`.
-func ReadL1MessagesFrom(db ethdb.Iteratee, startIndex, maxCount uint64) []types.L1MessageTx {
+func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.L1MessageTx {
 	msgs := make([]types.L1MessageTx, 0, maxCount)
 	it := IterateL1MessagesFrom(db, startIndex)
 	defer it.Release()
@@ -170,6 +206,10 @@ func ReadL1MessagesFrom(db ethdb.Iteratee, startIndex, maxCount uint64) []types.
 		msgs = append(msgs, msg)
 		index += 1
 		count -= 1
+
+		if msg.QueueIndex == it.maxQueueIndex {
+			break
+		}
 	}
 
 	return msgs

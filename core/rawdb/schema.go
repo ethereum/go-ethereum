@@ -107,6 +107,7 @@ var (
 	syncedL1BlockNumberKey            = []byte("LastSyncedL1BlockNumber")
 	l1MessagePrefix                   = []byte("l1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
 	firstQueueIndexNotInL2BlockPrefix = []byte("q")  // firstQueueIndexNotInL2BlockPrefix + L2 block hash -> enqueue index
+	highestSyncedQueueIndexKey        = []byte("HighestSyncedQueueIndex")
 
 	// Row consumption
 	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
