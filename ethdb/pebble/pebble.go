@@ -121,7 +121,7 @@ func (d *Database) onWriteStallEnd() {
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
 //
-// TODO(karalabe): Remove when Pebble sets this as teh default.
+// TODO(karalabe): Remove when Pebble sets this as the default.
 type panicLogger struct{}
 
 func (l panicLogger) Infof(format string, args ...interface{}) {
