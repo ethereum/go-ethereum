@@ -1267,9 +1267,7 @@ func TestNilWithdrawals(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error getting payload, err=%v", err)
 		}
-		var (
-			status engine.PayloadStatusV1
-		)
+		var status engine.PayloadStatusV1
 		if !shanghai {
 			status, err = api.NewPayloadV1(*execData.ExecutionPayload)
 		} else {
