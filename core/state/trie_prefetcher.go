@@ -37,7 +37,7 @@ var (
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
-	fetches  map[string]Trie        // Partially or fully fetcher tries
+	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	deliveryMissMeter metrics.Meter
@@ -197,7 +197,10 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	return string(append(owner.Bytes(), root.Bytes()...))
+	trieID := make([]byte, common.HashLength*2)
+	copy(trieID, owner.Bytes())
+	copy(trieID[common.HashLength:], root.Bytes())
+	return string(trieID)
 }
 
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
