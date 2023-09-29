@@ -42,7 +42,7 @@ func TestServerRegisterName(t *testing.T) {
 	}
 
 	svc, ok := server.services.services[svcName]
-	if ok {
+	if !ok {
 		t.Fatalf("Expected service %s to be registered", svcName)
 	}
 
