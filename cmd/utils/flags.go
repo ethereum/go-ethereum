@@ -2092,7 +2092,9 @@ func tryMakeReadOnlyChainDB(ctx *cli.Context, stack *node.Node) ethdb.Database {
 		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
 		var client *rpc.Client
 		client, err = DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
-		chainDb = remotedb.New(client)
+		if err == nil {
+			chainDb = remotedb.New(client)
+		}
 	} else {
 		name := "chaindata"
 		if ctx.String(SyncModeFlag.Name) == "light" {
