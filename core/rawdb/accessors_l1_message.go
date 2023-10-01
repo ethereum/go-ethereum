@@ -4,12 +4,24 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/big"
+	"time"
+	"unsafe"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/rlp"
+)
+
+var (
+	// L1 message iterator metrics
+	iteratorNextCalledCounter      = metrics.NewRegisteredCounter("rawdb/l1_message/iterator/next_called", nil)
+	iteratorInnerNextCalledCounter = metrics.NewRegisteredCounter("rawdb/l1_message/iterator/inner_next_called", nil)
+	iteratorLengthMismatchCounter  = metrics.NewRegisteredCounter("rawdb/l1_message/iterator/length_mismatch", nil)
+	iteratorNextDurationTimer      = metrics.NewRegisteredTimer("rawdb/l1_message/iterator/next_time", nil)
+	iteratorL1MessageSizeGauge     = metrics.NewRegisteredGauge("rawdb/l1_message/size", nil)
 )
 
 // WriteSyncedL1BlockNumber writes the highest synced L1 block number to the database.
@@ -148,10 +160,20 @@ func IterateL1MessagesFrom(db ethdb.Database, fromQueueIndex uint64) L1MessageIt
 // It returns false when the iterator is exhausted.
 // TODO: Consider reading items in batches.
 func (it *L1MessageIterator) Next() bool {
+	iteratorNextCalledCounter.Inc(1)
+
+	defer func(t0 time.Time) {
+		iteratorNextDurationTimer.Update(time.Since(t0))
+	}(time.Now())
+
 	for it.inner.Next() {
+		iteratorInnerNextCalledCounter.Inc(1)
+
 		key := it.inner.Key()
 		if len(key) == it.keyLength {
 			return true
+		} else {
+			iteratorLengthMismatchCounter.Inc(1)
 		}
 	}
 	return false
@@ -206,6 +228,8 @@ func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.
 		msgs = append(msgs, msg)
 		index += 1
 		count -= 1
+
+		iteratorL1MessageSizeGauge.Update(int64(unsafe.Sizeof(msg) + uintptr(cap(msg.Data))))
 
 		if msg.QueueIndex == it.maxQueueIndex {
 			break

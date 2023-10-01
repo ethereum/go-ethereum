@@ -189,9 +189,9 @@ func WriteSkippedTransaction(db ethdb.Database, tx *types.Transaction, traces *t
 
 	// update in a batch
 	batch := db.NewBatch()
-	writeSkippedTransaction(db, tx, traces, reason, blockNumber, blockHash)
-	writeSkippedTransactionHash(db, index, tx.Hash())
-	writeNumSkippedTransactions(db, index+1)
+	writeSkippedTransaction(batch, tx, traces, reason, blockNumber, blockHash)
+	writeSkippedTransactionHash(batch, index, tx.Hash())
+	writeNumSkippedTransactions(batch, index+1)
 
 	// write to DB
 	if err := batch.Write(); err != nil {
