@@ -2009,7 +2009,7 @@ func TestTransactionForgotten(t *testing.T) {
 	)
 	go fetcher.loop()
 	tx1 := types.NewTransaction(0, common.Address{}, common.Big0, 0, common.Big0, nil)
-	tx1.SetTime(time.Now().Add(-5 * time.Minute))
+	tx1.SetTime(time.Now().Add(-maxTxUnderpricedTimeout))
 	tx2 := types.NewTransaction(1, common.Address{}, common.Big0, 0, common.Big0, nil)
 	if fetcher.isKnownUnderpriced(tx1.Hash()) {
 		t.Fatal("unknown hash can not be underpriced")

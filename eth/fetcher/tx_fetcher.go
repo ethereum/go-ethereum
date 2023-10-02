@@ -61,7 +61,7 @@ const (
 	maxTxUnderpricedSetSize = 32768
 
 	// maxTxUnderpricedTimeout is the max time a transaction should be stuck in the underpriced set.
-	maxTxUnderpricedTimeout = int64(5 * time.Minute)
+	maxTxUnderpricedTimeout = 5 * time.Minute
 
 	// txArriveTimeout is the time allowance before an announced transaction is
 	// explicitly requested.
@@ -284,7 +284,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 // isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
-	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().UnixNano() {
+	if ok && prevTime < time.Now().Add(-maxTxUnderpricedTimeout).UnixNano() {
 		f.underpriced.Remove(hash)
 		return false
 	}
