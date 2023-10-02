@@ -614,7 +614,9 @@ func benchGet(b *testing.B) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
+		v := make([]byte, 32)
+		binary.LittleEndian.PutUint64(v, uint64(i))
+		trie.MustUpdate(k, v)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 
@@ -627,9 +629,9 @@ func benchGet(b *testing.B) {
 
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	k := make([]byte, 32)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		k := make([]byte, 32)
 		v := make([]byte, 32)
 		e.PutUint64(k, uint64(i))
 		e.PutUint64(v, uint64(i))
