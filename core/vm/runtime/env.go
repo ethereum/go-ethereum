@@ -37,6 +37,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
 		BaseFee:     cfg.BaseFee,
+		BlobBaseFee: cfg.BlobBaseFee,
 		Random:      cfg.Random,
 	}
 
