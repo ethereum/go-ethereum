@@ -75,9 +75,10 @@ type txPool interface {
 	// The slice should be modifiable by the caller.
 	Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction
 
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events. The subscriber
+	// can decide whether to receive notifications only for newly seen transactions
+	// or also for reorged out ones.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -509,10 +510,10 @@ func (h *handler) unregisterPeer(id string) {
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
-	// broadcast transactions
+	// broadcast and announce transactions (only new ones, not resurrected ones)
 	h.wg.Add(1)
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
 	// broadcast mined blocks
@@ -592,7 +593,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 }
 
 // BroadcastTransactions will propagate a batch of transactions
-// - To a square root of all peers
+// - To a square root of all peers for non-blob transactions
 // - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
 func (h *handler) BroadcastTransactions(txs types.Transactions) {
@@ -608,6 +609,10 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
+		// Blob transactions are never broadcast, only ever announced
+		if tx.Type() == types.BlobTxType {
+			continue
+		}
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int

@@ -426,11 +426,11 @@ func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsRequest, peer)
+	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsRequest)
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
 }
 
-func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsRequest, peer *Peer) ([]common.Hash, []rlp.RawValue) {
+func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsRequest) ([]common.Hash, []rlp.RawValue) {
 	// Gather transactions until the fetch or network limits is reached
 	var (
 		bytes  int

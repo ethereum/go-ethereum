@@ -263,8 +263,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
-	// Subscribe NewTxsEvent for tx pool
-	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+	// Subscribe for transaction insertion events (whether from network or resurrects)
+	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 

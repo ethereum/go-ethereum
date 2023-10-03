@@ -99,8 +99,10 @@ type SubPool interface {
 	// account and sorted by nonce.
 	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 
-	// SubscribeTransactions subscribes to new transaction events.
-	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events. The subscriber
+	// can decide whether to receive notifications only for newly seen transactions
+	// or also for reorged out ones.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
 
 	// Nonce returns the next nonce of an account, with all transactions executable
 	// by the pool already applied on top.
