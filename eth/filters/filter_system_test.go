@@ -33,8 +33,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/bloombits"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	"github.com/scroll-tech/go-ethereum/core/vm"
-	"github.com/scroll-tech/go-ethereum/eth/ethconfig"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/params"
@@ -170,7 +168,7 @@ func TestBlockSubscription(t *testing.T) {
 	var (
 		db          = rawdb.NewMemoryDatabase()
 		backend     = &testBackend{db: db}
-		api         = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api         = NewPublicFilterAPI(backend, false, deadline)
 		genesis     = (&core.Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
@@ -222,7 +220,7 @@ func TestPendingTxFilter(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, deadline)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -277,7 +275,7 @@ func TestLogFilterCreation(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, deadline)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -321,7 +319,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, deadline)
 	)
 
 	// different situations where log filter creation should fail.
@@ -343,7 +341,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		backend   = &testBackend{db: db}
-		api       = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api       = NewPublicFilterAPI(backend, false, deadline)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
@@ -361,50 +359,6 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	}
 }
 
-func TestGetLogsRange(t *testing.T) {
-	var (
-		db      = rawdb.NewMemoryDatabase()
-		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, 2)
-	)
-	(&core.Genesis{
-		Config: params.TestChainConfig,
-	}).MustCommit(db)
-	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, false)
-	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), db, 10, nil)
-	if _, err := chain.InsertChain(bs); err != nil {
-		panic(err)
-	}
-	// those test cases should fail because block range is greater then limit
-	failTestCases := []FilterCriteria{
-		// from 0 to 2 block
-		0: {FromBlock: big.NewInt(0), ToBlock: big.NewInt(2)},
-		// from 8 to latest block (10)
-		1: {FromBlock: big.NewInt(8)},
-		// from 0 to latest block (10)
-		2: {FromBlock: big.NewInt(0)},
-	}
-	for i, test := range failTestCases {
-		if _, err := api.GetLogs(context.Background(), test); err == nil {
-			t.Errorf("Expected Logs for failing case #%d to fail", i)
-		}
-	}
-
-	okTestCases := []FilterCriteria{
-		// from latest to latest block
-		0: {},
-		// from 9 to last block (10)
-		1: {FromBlock: big.NewInt(9)},
-		// from 3 to 4 block
-		2: {FromBlock: big.NewInt(3), ToBlock: big.NewInt(4)},
-	}
-	for i, test := range okTestCases {
-		if _, err := api.GetLogs(context.Background(), test); err != nil {
-			t.Errorf("Expected Logs for ok case #%d not to fail", i)
-		}
-	}
-}
-
 // TestLogFilter tests whether log filters match the correct logs that are posted to the event feed.
 func TestLogFilter(t *testing.T) {
 	t.Parallel()
@@ -412,7 +366,7 @@ func TestLogFilter(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, deadline)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -526,7 +480,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, deadline)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -710,7 +664,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, timeout, ethconfig.Defaults.MaxBlockRange)
+		api     = NewPublicFilterAPI(backend, false, timeout)
 		done    = make(chan struct{})
 	)
 

@@ -48,26 +48,24 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend       Backend
-	mux           *event.TypeMux
-	quit          chan struct{}
-	chainDb       ethdb.Database
-	events        *EventSystem
-	filtersMu     sync.Mutex
-	filters       map[rpc.ID]*filter
-	timeout       time.Duration
-	maxBlockRange int64
+	backend   Backend
+	mux       *event.TypeMux
+	quit      chan struct{}
+	chainDb   ethdb.Database
+	events    *EventSystem
+	filtersMu sync.Mutex
+	filters   map[rpc.ID]*filter
+	timeout   time.Duration
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, maxBlockRange int64) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		backend:       backend,
-		chainDb:       backend.ChainDb(),
-		events:        NewEventSystem(backend, lightMode),
-		filters:       make(map[rpc.ID]*filter),
-		timeout:       timeout,
-		maxBlockRange: maxBlockRange,
+		backend: backend,
+		chainDb: backend.ChainDb(),
+		events:  NewEventSystem(backend, lightMode),
+		filters: make(map[rpc.ID]*filter),
+		timeout: timeout,
 	}
 	go api.timeoutLoop(timeout)
 
@@ -346,20 +344,6 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
-		}
-
-		beginBlock, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(begin))
-		if err != nil {
-			return nil, fmt.Errorf("couldn't find fromBlock, fromBlock: %d", begin)
-		}
-		endBlock, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(end))
-		if err != nil {
-			return nil, fmt.Errorf("couldn't find toBlock, toBlock: %d", end)
-		}
-		realBegin := beginBlock.Number.Int64()
-		realEnd := endBlock.Number.Int64()
-		if realEnd-realBegin+1 > api.maxBlockRange {
-			return nil, fmt.Errorf("block range is bigger than maxBlockRange, block range: %d, maxBlockRange: %d", realEnd-realBegin+1, api.maxBlockRange)
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
