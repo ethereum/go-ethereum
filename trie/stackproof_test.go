@@ -2,10 +2,12 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
@@ -55,8 +57,8 @@ func testStRangeProofLeftside(t *testing.T, trie *Trie, vals map[string]*kv) {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
 		// Initiate the stacktrie with the proof
-		stTrie, err := newStackTrieFromProof(trie.Hash(), entries[start].k, proof, func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(haveSponge, owner, path, hash, blob, "path")
+		stTrie, err := newStackTrieFromProof(trie.Hash(), entries[start].k, proof, func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(haveSponge, common.Hash{}, path, hash, blob, "path")
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -67,8 +69,8 @@ func testStRangeProofLeftside(t *testing.T, trie *Trie, vals map[string]*kv) {
 			k, v := common.CopyBytes(entries[i].k), common.CopyBytes(entries[i].v)
 			refTrie.Update(k, v)
 		}
-		refTrie.writeFn = func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(wantSponge, owner, path, hash, blob, "path")
+		refTrie.writeFn = func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(wantSponge, common.Hash{}, path, hash, blob, "path")
 		}
 		// Feed the remaining values into them both
 		for i := start + 1; i < len(vals); i++ {
@@ -140,5 +142,68 @@ func testStackInsertHash(t *testing.T, trie *Trie, vals map[string]*kv) {
 		if have := stTrie.Hash(); have != want {
 			t.Fatalf("wrong hash, have %x want %x\n", have, want)
 		}
+	}
+}
+
+func TestStackRangeProof(t *testing.T) {
+	trie, vals := randomTrie(4096)
+	var entries []*kv
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	slices.SortFunc(entries, (*kv).cmp)
+	proof := memorydb.New()
+	entries = entries[1000 : len(entries)-1000] // We snip off 1000 entries on either side
+	// Provide the proof for both first and last entry
+	if err := trie.Prove(entries[0].k, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[len(entries)-1].k, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	testStackRangeProof(t, trie.Hash(), proof, entries)
+}
+
+func testStackRangeProof(
+	t *testing.T, rootHash common.Hash,
+	proof ethdb.KeyValueReader, entries []*kv) {
+
+	var leftBorder = keybytesToHex(entries[0].k)
+	var rightBorder = keybytesToHex(entries[len(entries)-1].k)
+	writeFn := func(_ common.Hash, path []byte, hash common.Hash, blob []byte) {
+		if bytes.HasPrefix(leftBorder, path) {
+			fmt.Printf("path %x  tainted left (parent to %x)\n", path, leftBorder)
+			return
+		}
+		if bytes.HasPrefix(rightBorder, path) {
+			fmt.Printf("path %x  tainted right (parent to %x)\n", path, rightBorder)
+			return
+		}
+		//fmt.Printf("Committing path %x\n", path)
+	}
+
+	// Use the proof initiate the stacktrie with the first entry
+	stTrie, err := newStackTrieFromProof(rootHash, entries[0].k, proof, writeFn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Feed in the standalone values
+	for i := 1; i < len(entries); i++ {
+		stTrie.Update(entries[i].k, common.CopyBytes(entries[i].v))
+	}
+	// For the right-hand-side, we need a list of hashes ot inject
+	// Obtain the hashes
+	hps, err := iterateProof(rootHash, entries[len(entries)-1].k, false, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Reverse(hps)
+	// Insert into stacktrie
+	for _, hp := range hps {
+		stTrie.insert(stTrie.root, hp.path, hp.hash[:], nil, newHashed)
+	}
+	have := stTrie.Hash()
+	if have != rootHash {
+		t.Fatalf("have %v want %v", have, rootHash)
 	}
 }

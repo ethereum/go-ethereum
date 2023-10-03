@@ -195,6 +195,10 @@ func TestRangeProof(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
+		_, err = VerifyRangeProofWithStack(trie.Hash(), keys[0], keys, vals, proof)
+		if err != nil {
+			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
+		}
 	}
 }
 
@@ -234,6 +238,10 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 			vals = append(vals, entries[i].v)
 		}
 		_, err := VerifyRangeProof(trie.Hash(), first, keys, vals, proof)
+		if err != nil {
+			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
+		}
+		_, err = VerifyRangeProofWithStack(trie.Hash(), first, keys, vals, proof)
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
@@ -872,16 +880,17 @@ func BenchmarkVerifyRangeProof10(b *testing.B)   { benchmarkVerifyRangeProof(b, 
 func BenchmarkVerifyRangeProof100(b *testing.B)  { benchmarkVerifyRangeProof(b, 100) }
 func BenchmarkVerifyRangeProof1000(b *testing.B) { benchmarkVerifyRangeProof(b, 1000) }
 func BenchmarkVerifyRangeProof5000(b *testing.B) { benchmarkVerifyRangeProof(b, 5000) }
+func BenchmarkVerifyRangeProof10K(b *testing.B)  { benchmarkVerifyRangeProof(b, 10000) }
 
 func benchmarkVerifyRangeProof(b *testing.B, size int) {
-	trie, vals := randomTrie(8192)
+	trie, vals := randomTrie(size * 3)
 	var entries []*kv
 	for _, kv := range vals {
 		entries = append(entries, kv)
 	}
 	slices.SortFunc(entries, (*kv).cmp)
 
-	start := 2
+	start := size
 	end := start + size
 	proof := memorydb.New()
 	if err := trie.Prove(entries[start].k, proof); err != nil {
@@ -896,8 +905,8 @@ func benchmarkVerifyRangeProof(b *testing.B, size int) {
 		keys = append(keys, entries[i].k)
 		values = append(values, entries[i].v)
 	}
-
 	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_, err := VerifyRangeProof(trie.Hash(), keys[0], keys, values, proof)
 		if err != nil {

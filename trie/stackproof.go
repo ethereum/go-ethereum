@@ -1,11 +1,13 @@
 package trie
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"golang.org/x/exp/slices"
 )
 
 // nodeToStNode converts from `node` to `*stNode`.
@@ -221,4 +223,118 @@ func iterateProof(rootHash common.Hash, path []byte, ascending bool, proof ethdb
 		}
 	}
 	return paths, nil
+}
+
+// RootFromLeafs calculates the trie root for the trie built up with the key/values
+// given as input.
+// This method errors if
+// 1. The keys/values are not of equal length
+// 2. The keys are not monotonically increasing
+func RootFromLeafs(keys [][]byte, values [][]byte) (common.Hash, error) {
+	var (
+		tr   = NewStackTrie(nil)
+		pKey []byte
+	)
+	for i, key := range keys {
+		// Ensure the received batch is monotonic increasing and contains no deletions
+		if bytes.Compare(pKey, key) >= 0 {
+			return common.Hash{}, errors.New("range is not monotonically increasing")
+		}
+		if len(values[i]) == 0 {
+			return common.Hash{}, errors.New("range contains deletion")
+		}
+		tr.Update(key, values[i])
+		pKey = key
+	}
+	return tr.Hash(), nil
+}
+
+func VerifyRootFromLeafs(root common.Hash, keys [][]byte, values [][]byte) error {
+	have, err := RootFromLeafs(keys, values)
+	if err != nil {
+		return err
+	}
+	if have != root {
+		return fmt.Errorf("want root %x, have %x", root, have)
+	}
+	return nil
+}
+
+// TODO @holiman make this handle proofs-of-nonexistence
+func VerifyRangeProofWithStack(rootHash common.Hash, firstKey []byte, keys [][]byte, values [][]byte, proof ethdb.KeyValueReader) (bool, error) {
+	if len(keys) != len(values) {
+		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
+	}
+	// Special case, there is no edge proof at all. The given range is expected
+	// to be the whole leaf-set in the trie.
+	if proof == nil {
+		return false, VerifyRootFromLeafs(rootHash, keys, values)
+	}
+	// Special case, there is a provided edge proof but zero key/value
+	// pairs, ensure there are no more accounts / slots in the trie.
+	if len(keys) == 0 {
+		root, val, err := proofToPath(rootHash, nil, firstKey, proof, true)
+		if err != nil {
+			return false, err
+		}
+		if val != nil || hasRightElement(root, firstKey) {
+			return false, errors.New("more entries available")
+		}
+		return false, nil
+	}
+	lastKey := keys[len(keys)-1]
+	// Special case, there is only one element and two edge keys are same.
+	// In this case, we can't construct two edge paths. So handle it here.
+	if len(keys) == 1 && bytes.Equal(firstKey, lastKey) {
+		root, val, err := proofToPath(rootHash, nil, firstKey, proof, false)
+		if err != nil {
+			return false, err
+		}
+		if !bytes.Equal(firstKey, keys[0]) {
+			return false, errors.New("correct proof but invalid key")
+		}
+		if !bytes.Equal(val, values[0]) {
+			return false, errors.New("correct proof but invalid data")
+		}
+		return hasRightElement(root, firstKey), nil
+	}
+	// Ok, in all other cases, we require two edge paths available.
+	// First check the validity of edge keys.
+	if bytes.Compare(firstKey, lastKey) >= 0 {
+		return false, errors.New("invalid edge keys")
+	}
+	// todo(rjl493456442) different length edge keys should be supported
+	if len(firstKey) != len(lastKey) {
+		return false, errors.New("inconsistent edge keys")
+	}
+	// Use the proof to initiate a stacktrie along the first path/value
+	stTrie, err := newStackTrieFromProof(rootHash, firstKey, proof, nil)
+	if err != nil {
+		return false, fmt.Errorf("could not initate stacktrie: %v", err)
+	}
+	// Feed in the values, starting from 1 (do not re-add the proof-leaf)
+	for i := 1; i < len(keys); i++ {
+		if bytes.Compare(keys[i-1], keys[i]) >= 0 {
+			return false, errors.New("range is not monotonically increasing")
+		}
+		if len(values[i]) == 0 {
+			return false, errors.New("range contains deletion")
+		}
+		stTrie.Update(keys[i], values[i])
+	}
+	// For the right-hand-side, we need a list of hashes ot inject
+	hps, err := iterateProof(rootHash, lastKey, false, proof)
+	if err != nil {
+		return false, fmt.Errorf("proof iteration failed: %v", err)
+	}
+	slices.Reverse(hps)
+	// Insert into stacktrie
+	for _, hp := range hps {
+		stTrie.insert(stTrie.root, hp.path, hp.hash[:], nil, newHashed)
+	}
+	if have := stTrie.Hash(); have != rootHash {
+		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, have)
+	}
+	// hasRightElement is true if the hashes we inserted are non-0
+	return len(hps) > 0, nil
 }
