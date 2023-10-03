@@ -234,8 +234,8 @@ func (ec *Client) TraceTransaction(ctx context.Context, hash common.Hash, config
 	return result, err
 }
 
-// TraceChain TraceChaiin subscribes to chain, receiving results from channel BlockTraceResult
-func (ec *Client) TraceChain(ctx context.Context, ch chan<- BlockTraceResult, start, end rpc.BlockNumber, config *tracers.TraceConfig) (*rpc.ClientSubscription, error) {
+// TraceChain subscribes to chain, receiving results from channel BlockTraceResult
+func (ec *Client) TraceChain(ctx context.Context, ch chan<- *BlockTraceResult, start, end rpc.BlockNumber, config *tracers.TraceConfig) (*rpc.ClientSubscription, error) {
 	return ec.c.Subscribe(ctx, "debug", ch, "traceChain", start, end, config)
 }
 

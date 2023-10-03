@@ -598,6 +598,19 @@ func testTraceTransaction(t *testing.T, client *rpc.Client) {
 				"structLogs":  nil,
 			},
 		},
+		{
+			txHash: testTransactionHash,
+			config: &tracers.TraceConfig{
+				TracerConfig: json.RawMessage(`{"tracer":"callTracer"}`),
+			},
+			expectErr: nil,
+			expect: map[string]interface{}{
+				"gas":         21000,
+				"failed":      false,
+				"returnValue": "",
+				"structLogs":  nil,
+			},
+		},
 	}
 	for i, testspec := range testSuite {
 		result, err := ec.TraceTransaction(context.Background(), testspec.txHash, testspec.config)
@@ -691,7 +704,7 @@ func testTraceCall(t *testing.T, client *rpc.Client) {
 func testTraceChain(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 
-	ch := make(chan BlockTraceResult)
+	ch := make(chan *BlockTraceResult)
 	_, err := ec.TraceChain(context.Background(), ch, 0, 1, nil)
 	if err != nil {
 		t.Fatalf("testTraceChain error: %v", err)
