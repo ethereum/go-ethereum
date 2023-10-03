@@ -17,21 +17,24 @@
 package eth
 
 import (
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"sync"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
+	bloom "github.com/ethereum/go-ethereum/common/expbloom"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	// maxKnownTxs is the maximum transactions hashes to keep in the known list
-	// before starting to randomly evict them.
-	maxKnownTxs = 32768
+	// transactionEvictionInterval specifies the interval in which a previously recorded
+	// transaction hash is forgotten.
+	transactionEvictionInterval = 10 * time.Minute
 
 	// maxKnownBlocks is the maximum block hashes to keep in the known list
 	// before starting to randomly evict them.
@@ -79,10 +82,10 @@ type Peer struct {
 	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
 	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
 
-	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
-	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
-	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
-	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
+	txpool      TxPool               // Transaction pool used by the broadcasters for liveness checks
+	knownTxs    *bloom.ExpiringBloom // Set of transaction hashes known to be known by this peer
+	txBroadcast chan []common.Hash   // Channel used to queue transaction propagation requests
+	txAnnounce  chan []common.Hash   // Channel used to queue transaction announcement requests
 
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfilment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
@@ -95,12 +98,14 @@ type Peer struct {
 // NewPeer create a wrapper for a network connection and negotiated  protocol
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
+	// https://hur.st/bloomfilter/?n=32768&p=1.0E-2&m=&k=4
+	txBloom, _ := bloom.NewExpiringBloom(10, 42*1024, transactionEvictionInterval/10)
 	peer := &Peer{
 		id:              p.ID().String(),
 		Peer:            p,
 		rw:              rw,
 		version:         version,
-		knownTxs:        newKnownCache(maxKnownTxs),
+		knownTxs:        txBloom,
 		knownBlocks:     newKnownCache(maxKnownBlocks),
 		queuedBlocks:    make(chan *blockPropagation, maxQueuedBlocks),
 		queuedBlockAnns: make(chan *types.Block, maxQueuedBlockAnns),
@@ -163,7 +168,7 @@ func (p *Peer) KnownBlock(hash common.Hash) bool {
 
 // KnownTransaction returns whether peer is known to already have a transaction.
 func (p *Peer) KnownTransaction(hash common.Hash) bool {
-	return p.knownTxs.Contains(hash)
+	return p.knownTxs.Contains(bloomHashWrapper(hash))
 }
 
 // markBlock marks a block as known for the peer, ensuring that the block will
@@ -177,7 +182,7 @@ func (p *Peer) markBlock(hash common.Hash) {
 // will never be propagated to this particular peer.
 func (p *Peer) markTransaction(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
-	p.knownTxs.Add(hash)
+	p.knownTxs.Add(bloomHashWrapper(hash))
 }
 
 // SendTransactions sends transactions to the peer and includes the hashes
@@ -190,9 +195,9 @@ func (p *Peer) markTransaction(hash common.Hash) {
 // The reasons this is public is to allow packages using this protocol to write
 // tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.Transactions) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
+	// Mark all the transactions as known
 	for _, tx := range txs {
-		p.knownTxs.Add(tx.Hash())
+		p.knownTxs.Add(bloomHashWrapper(tx.Hash()))
 	}
 	return p2p.Send(p.rw, TransactionsMsg, txs)
 }
@@ -203,8 +208,10 @@ func (p *Peer) SendTransactions(txs types.Transactions) error {
 func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 	select {
 	case p.txBroadcast <- hashes:
-		// Mark all the transactions as known, but ensure we don't overflow our limits
-		p.knownTxs.Add(hashes...)
+		// Mark all the transactions as known
+		for _, hash := range hashes {
+			p.knownTxs.Add(bloomHashWrapper(hash))
+		}
 	case <-p.term:
 		p.Log().Debug("Dropping transaction propagation", "count", len(hashes))
 	}
@@ -217,8 +224,10 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
 func (p *Peer) sendPooledTransactionHashes66(hashes []common.Hash) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
-	p.knownTxs.Add(hashes...)
+	// Mark all the transactions as known
+	for _, hash := range hashes {
+		p.knownTxs.Add(bloomHashWrapper(hash))
+	}
 	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket66(hashes))
 }
 
@@ -230,8 +239,10 @@ func (p *Peer) sendPooledTransactionHashes66(hashes []common.Hash) error {
 // directly as the queueing (memory) and transmission (bandwidth) costs should
 // not be managed directly.
 func (p *Peer) sendPooledTransactionHashes68(hashes []common.Hash, types []byte, sizes []uint32) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
-	p.knownTxs.Add(hashes...)
+	// Mark all the transactions as known
+	for _, hash := range hashes {
+		p.knownTxs.Add(bloomHashWrapper(hash))
+	}
 	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket68{Types: types, Sizes: sizes, Hashes: hashes})
 }
 
@@ -241,8 +252,10 @@ func (p *Peer) sendPooledTransactionHashes68(hashes []common.Hash, types []byte,
 func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 	select {
 	case p.txAnnounce <- hashes:
-		// Mark all the transactions as known, but ensure we don't overflow our limits
-		p.knownTxs.Add(hashes...)
+		// Mark all the transactions as known
+		for _, hash := range hashes {
+			p.knownTxs.Add(bloomHashWrapper(hash))
+		}
 	case <-p.term:
 		p.Log().Debug("Dropping transaction announcement", "count", len(hashes))
 	}
@@ -250,8 +263,10 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 
 // ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
-	// Mark all the transactions as known, but ensure we don't overflow our limits
-	p.knownTxs.Add(hashes...)
+	// Mark all the transactions as known
+	for _, hash := range hashes {
+		p.knownTxs.Add(bloomHashWrapper(hash))
+	}
 
 	// Not packed into PooledTransactionsPacket to avoid RLP decoding
 	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket66{
@@ -532,4 +547,17 @@ func (k *knownCache) Contains(hash common.Hash) bool {
 // Cardinality returns the number of elements in the set.
 func (k *knownCache) Cardinality() int {
 	return k.hashes.Cardinality()
+}
+
+// bloomHashWrapper wraps a common.Hash to be used in the bloom filter library.
+// It converts the common.Hash to a mini hash of size 8 bytes.
+type bloomHashWrapper common.Hash
+
+func (h bloomHashWrapper) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (h bloomHashWrapper) Sum(b []byte) []byte               { panic("not implemented") }
+func (h bloomHashWrapper) Reset()                            { panic("not implemented") }
+func (h bloomHashWrapper) BlockSize() int                    { panic("not implemented") }
+func (h bloomHashWrapper) Size() int                         { return 8 }
+func (h bloomHashWrapper) Sum64() uint64 {
+	return binary.BigEndian.Uint64(h[0:8])
 }
