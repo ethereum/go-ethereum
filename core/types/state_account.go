@@ -87,7 +87,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	return data
 }
 
-// FullAccount decodes the data on the 'slim RLP' format and return
+// FullAccount decodes the data on the 'slim RLP' format and returns
 // the consensus format account.
 func FullAccount(data []byte) (*StateAccount, error) {
 	var slim SlimAccount
