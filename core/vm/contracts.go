@@ -104,11 +104,17 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
+var PrecompiledContractsMina = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{0x50}): &MinaHasher{},
+	common.BytesToAddress([]byte{0x51}): &MinaSigner{},
+}
+
 var (
 	PrecompiledAddressesBerlin    []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
+	PrecompiledAddressesMina      []common.Address
 )
 
 func init() {
@@ -124,19 +130,24 @@ func init() {
 	for k := range PrecompiledContractsBerlin {
 		PrecompiledAddressesBerlin = append(PrecompiledAddressesBerlin, k)
 	}
+	for k := range PrecompiledContractsMina {
+		PrecompiledAddressesMina = append(PrecompiledAddressesMina, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
+	result := PrecompiledAddressesMina
+
 	switch {
 	case rules.IsBerlin:
-		return PrecompiledAddressesBerlin
+		return append(result, PrecompiledAddressesBerlin...)
 	case rules.IsIstanbul:
-		return PrecompiledAddressesIstanbul
+		return append(result, PrecompiledAddressesIstanbul...)
 	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
+		return append(result, PrecompiledAddressesByzantium...)
 	default:
-		return PrecompiledAddressesHomestead
+		return append(result, PrecompiledAddressesHomestead...)
 	}
 }
 
