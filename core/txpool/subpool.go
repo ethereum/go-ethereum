@@ -30,7 +30,7 @@ import (
 // enough for the miner and other APIs to handle large batches of transactions;
 // and supports pulling up the entire transaction when really needed.
 type LazyTransaction struct {
-	Pool SubPool            // Transaction subpool to pull the real transaction up
+	Pool LazyResolver       // Transaction resolver to pull the real transaction up
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
@@ -49,6 +49,14 @@ func (ltx *LazyTransaction) Resolve() *types.Transaction {
 		ltx.Tx = ltx.Pool.Get(ltx.Hash)
 	}
 	return ltx.Tx
+}
+
+// LazyResolver is a minimal interface needed for a transaction pool to satisfy
+// resolving lazy transactions. It's mostly a helper to avoid the entire sub-
+// pool being injected into the lazy transaction.
+type LazyResolver interface {
+	// Get returns a transaction if it is contained in the pool, or nil otherwise.
+	Get(hash common.Hash) *types.Transaction
 }
 
 // AddressReserver is passed by the main transaction pool to subpools, so they
