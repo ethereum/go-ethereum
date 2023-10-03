@@ -37,33 +37,38 @@ import (
 
 //go:generate go run github.com/fjl/gencodec -type header -field-override headerMarshaling -out gen_header.go
 type header struct {
-	ParentHash      common.Hash       `json:"parentHash"`
-	OmmerHash       *common.Hash      `json:"sha3Uncles"`
-	Coinbase        *common.Address   `json:"miner"`
-	Root            common.Hash       `json:"stateRoot"        gencodec:"required"`
-	TxHash          *common.Hash      `json:"transactionsRoot"`
-	ReceiptHash     *common.Hash      `json:"receiptsRoot"`
-	Bloom           types.Bloom       `json:"logsBloom"`
-	Difficulty      *big.Int          `json:"difficulty"`
-	Number          *big.Int          `json:"number"           gencodec:"required"`
-	GasLimit        uint64            `json:"gasLimit"         gencodec:"required"`
-	GasUsed         uint64            `json:"gasUsed"`
-	Time            uint64            `json:"timestamp"        gencodec:"required"`
-	Extra           []byte            `json:"extraData"`
-	MixDigest       common.Hash       `json:"mixHash"`
-	Nonce           *types.BlockNonce `json:"nonce"`
-	BaseFee         *big.Int          `json:"baseFeePerGas" rlp:"optional"`
-	WithdrawalsHash *common.Hash      `json:"withdrawalsRoot" rlp:"optional"`
+	ParentHash            common.Hash       `json:"parentHash"`
+	OmmerHash             *common.Hash      `json:"sha3Uncles"`
+	Coinbase              *common.Address   `json:"miner"`
+	Root                  common.Hash       `json:"stateRoot"        gencodec:"required"`
+	TxHash                *common.Hash      `json:"transactionsRoot"`
+	ReceiptHash           *common.Hash      `json:"receiptsRoot"`
+	Bloom                 types.Bloom       `json:"logsBloom"`
+	Difficulty            *big.Int          `json:"difficulty"`
+	Number                *big.Int          `json:"number"           gencodec:"required"`
+	GasLimit              uint64            `json:"gasLimit"         gencodec:"required"`
+	GasUsed               uint64            `json:"gasUsed"`
+	Time                  uint64            `json:"timestamp"        gencodec:"required"`
+	Extra                 []byte            `json:"extraData"`
+	MixDigest             common.Hash       `json:"mixHash"`
+	Nonce                 *types.BlockNonce `json:"nonce"`
+	BaseFee               *big.Int          `json:"baseFeePerGas" rlp:"optional"`
+	WithdrawalsHash       *common.Hash      `json:"withdrawalsRoot" rlp:"optional"`
+	BlobGasUsed           *uint64           `json:"blobGasUsed"   rlp:"optional"`
+	ExcessBlobGas         *uint64           `json:"excessBlobGas"   rlp:"optional"`
+	ParentBeaconBlockRoot *common.Hash      `json:"parentBeaconBlockRoot" rlp:"optional"`
 }
 
 type headerMarshaling struct {
-	Difficulty *math.HexOrDecimal256
-	Number     *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	GasUsed    math.HexOrDecimal64
-	Time       math.HexOrDecimal64
-	Extra      hexutil.Bytes
-	BaseFee    *math.HexOrDecimal256
+	Difficulty    *math.HexOrDecimal256
+	Number        *math.HexOrDecimal256
+	GasLimit      math.HexOrDecimal64
+	GasUsed       math.HexOrDecimal64
+	Time          math.HexOrDecimal64
+	Extra         hexutil.Bytes
+	BaseFee       *math.HexOrDecimal256
+	BlobGasUsed   *math.HexOrDecimal64
+	ExcessBlobGas *math.HexOrDecimal64
 }
 
 type bbInput struct {
@@ -113,22 +118,25 @@ func (c *cliqueInput) UnmarshalJSON(input []byte) error {
 // ToBlock converts i into a *types.Block
 func (i *bbInput) ToBlock() *types.Block {
 	header := &types.Header{
-		ParentHash:      i.Header.ParentHash,
-		UncleHash:       types.EmptyUncleHash,
-		Coinbase:        common.Address{},
-		Root:            i.Header.Root,
-		TxHash:          types.EmptyTxsHash,
-		ReceiptHash:     types.EmptyReceiptsHash,
-		Bloom:           i.Header.Bloom,
-		Difficulty:      common.Big0,
-		Number:          i.Header.Number,
-		GasLimit:        i.Header.GasLimit,
-		GasUsed:         i.Header.GasUsed,
-		Time:            i.Header.Time,
-		Extra:           i.Header.Extra,
-		MixDigest:       i.Header.MixDigest,
-		BaseFee:         i.Header.BaseFee,
-		WithdrawalsHash: i.Header.WithdrawalsHash,
+		ParentHash:       i.Header.ParentHash,
+		UncleHash:        types.EmptyUncleHash,
+		Coinbase:         common.Address{},
+		Root:             i.Header.Root,
+		TxHash:           types.EmptyTxsHash,
+		ReceiptHash:      types.EmptyReceiptsHash,
+		Bloom:            i.Header.Bloom,
+		Difficulty:       common.Big0,
+		Number:           i.Header.Number,
+		GasLimit:         i.Header.GasLimit,
+		GasUsed:          i.Header.GasUsed,
+		Time:             i.Header.Time,
+		Extra:            i.Header.Extra,
+		MixDigest:        i.Header.MixDigest,
+		BaseFee:          i.Header.BaseFee,
+		WithdrawalsHash:  i.Header.WithdrawalsHash,
+		BlobGasUsed:      i.Header.BlobGasUsed,
+		ExcessBlobGas:    i.Header.ExcessBlobGas,
+		ParentBeaconRoot: i.Header.ParentBeaconBlockRoot,
 	}
 
 	// Fill optional values.
