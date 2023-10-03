@@ -113,6 +113,8 @@ func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.Lazy
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
+				Gas:       tx.Gas(),
+				BlobGas:   tx.BlobGas(),
 			})
 		}
 	}

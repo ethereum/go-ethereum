@@ -97,6 +97,8 @@ type blobTxMeta struct {
 	execTipCap *uint256.Int // Needed to prioritize inclusion order across accounts and validate replacement price bump
 	execFeeCap *uint256.Int // Needed to validate replacement price bump
 	blobFeeCap *uint256.Int // Needed to validate replacement price bump
+	execGas    uint64       // Needed to check inclusion validity before reading the blob
+	blobGas    uint64       // Needed to check inclusion validity before reading the blob
 
 	basefeeJumps float64 // Absolute number of 1559 fee adjustments needed to reach the tx's fee cap
 	blobfeeJumps float64 // Absolute number of 4844 fee adjustments needed to reach the tx's blob fee cap
@@ -118,6 +120,8 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
 		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
 		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
+		execGas:    tx.Gas(),
+		blobGas:    tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -1399,6 +1403,8 @@ func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTr
 				Time:      time.Now(), // TODO(karalabe): Maybe save these and use that?
 				GasFeeCap: tx.execFeeCap.ToBig(),
 				GasTipCap: tx.execTipCap.ToBig(),
+				Gas:       tx.execGas,
+				BlobGas:   tx.blobGas,
 			})
 		}
 		if len(lazies) > 0 {

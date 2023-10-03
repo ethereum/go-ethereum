@@ -37,6 +37,9 @@ type LazyTransaction struct {
 	Time      time.Time // Time when the transaction was first seen
 	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
 	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
+
+	Gas     uint64 // Amount of gas required by the transaction
+	BlobGas uint64 // Amount of blob gas required by the transaction
 }
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still

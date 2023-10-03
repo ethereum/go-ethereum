@@ -552,6 +552,8 @@ func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.L
 					Time:      txs[i].Time(),
 					GasFeeCap: txs[i].GasFeeCap(),
 					GasTipCap: txs[i].GasTipCap(),
+					Gas:       txs[i].Gas(),
+					BlobGas:   txs[i].BlobGas(),
 				}
 			}
 			pending[addr] = lazies

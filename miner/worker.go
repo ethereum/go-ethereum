@@ -543,10 +543,11 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], &txpool.LazyTransaction{
 						Hash:      tx.Hash(),
-						Tx:        tx.WithoutBlobTxSidecar(),
 						Time:      tx.Time(),
 						GasFeeCap: tx.GasFeeCap(),
 						GasTipCap: tx.GasTipCap(),
+						Gas:       tx.Gas(),
+						BlobGas:   tx.BlobGas(),
 					})
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
@@ -742,7 +743,6 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	if tx.Type() == types.BlobTxType {
 		return w.commitBlobTransaction(env, tx)
 	}
-
 	receipt, err := w.applyTransaction(env, tx)
 	if err != nil {
 		return nil, err
@@ -764,7 +764,6 @@ func (w *worker) commitBlobTransaction(env *environment, tx *types.Transaction) 
 	if (env.blobs+len(sc.Blobs))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
 		return nil, errors.New("max data blobs reached")
 	}
-
 	receipt, err := w.applyTransaction(env, tx)
 	if err != nil {
 		return nil, err
@@ -815,13 +814,24 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 		if ltx == nil {
 			break
 		}
+		// If we don't have enough space for the next transaction, skip the account.
+		if env.gasPool.Gas() < ltx.Gas {
+			log.Trace("Not enough gas left for transaction", "left", env.gasPool.Gas(), "needed", ltx.Gas)
+			txs.Pop()
+			continue
+		}
+		if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
+			log.Trace("Not enough blob gas left for transaction", "left", left, "needed", ltx.BlobGas)
+			txs.Pop()
+			continue
+		}
+		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
 			log.Warn("Ignoring evicted transaction")
 			txs.Pop()
 			continue
 		}
-
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -833,7 +843,6 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 			txs.Pop()
 			continue
 		}
-
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
