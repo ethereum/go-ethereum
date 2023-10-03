@@ -414,7 +414,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 			select {
 			case res := <-resCh:
-				headers := ([]*types.Header)(*res.Res.(*eth.BlockHeadersPacket))
+				headers := ([]*types.Header)(*res.Res.(*eth.BlockHeadersRequest))
 				if len(headers) == 0 {
 					// Required blocks are allowed to be missing if the remote
 					// node is not yet synced
