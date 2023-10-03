@@ -447,21 +447,28 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if params.Withdrawals == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
-	}
-	if params.ExcessBlobGas != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil excessBlobGas pre-cancun"))
-	}
-	if params.BlobGasUsed != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil params.BlobGasUsed pre-cancun"))
-	}
-
 	c := api.eth.BlockChain().Config()
-	if !active(c.IsShanghai, c.IsCancun, c.LondonBlock, params.Timestamp) {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV2 must only be called for shanghai payloads"))
+	if active(c.IsShanghai, c.IsCancun, c.LondonBlock, params.Timestamp) {
+		if params.Withdrawals == nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+		}
+		if params.ExcessBlobGas != nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil excessBlobGas pre-cancun"))
+		}
+		if params.BlobGasUsed != nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil params.BlobGasUsed pre-cancun"))
+		}
+	} else {
+		if params.Withdrawals != nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
+		}
+		if params.ExcessBlobGas != nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil excessBlobGas pre-cancun"))
+		}
+		if params.BlobGasUsed != nil {
+			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil params.BlobGasUsed pre-cancun"))
+		}
 	}
-
 	return api.newPayload(params, nil, nil)
 }
 
