@@ -44,10 +44,6 @@ const (
 	// nowadays, the practical limit will always be softResponseLimit.
 	maxBodiesServe = 1024
 
-	// maxNodeDataServe is the maximum number of state trie nodes to serve. This
-	// number is there to limit the number of disk lookups.
-	maxNodeDataServe = 1024
-
 	// maxReceiptsServe is the maximum number of block receipts to serve. This
 	// number is mostly there to limit the number of disk lookups. With block
 	// containing 200+ transactions nowadays, the practical limit will always
