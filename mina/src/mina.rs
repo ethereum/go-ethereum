@@ -1,6 +1,5 @@
 use mina_hasher::{DomainParameter, Hashable, Hasher, ROInput};
 use mina_signer::{BaseField, PubKey, Signature, Signer};
-use mina_tree::scan_state::transaction_logic::zkapp_command::{AccountUpdate, ZkAppCommand};
 use o1_utils::{field_helpers::FieldHelpersError, FieldHelpers};
 
 #[derive(Debug, Clone)]
@@ -59,26 +58,6 @@ impl Hashable for Message {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct TransactionCommitment(pub BaseField);
-
-impl TransactionCommitment {
-    fn create(account_updates_hash: BaseField) -> Self {
-        Self(account_updates_hash)
-    }
-
-    fn create_complete(&self, memo_hash: BaseField, fee_payer_hash: BaseField) -> Self {
-        let mut hasher =
-            mina_hasher::create_kimchi::<Message>(HashParameter::TransactionCommitment);
-
-        let msg = &Message {
-            fields: vec![memo_hash, fee_payer_hash, self.0],
-        };
-
-        TransactionCommitment(hasher.hash(msg))
-    }
-}
-
 pub fn poseidon(msg: &Message, network_id: HashParameter) -> BaseField {
     let mut hasher = mina_hasher::create_kimchi::<Message>(network_id);
 
@@ -94,14 +73,4 @@ pub fn verify(
     let mut signer = mina_signer::create_kimchi::<Message>(network_id);
 
     signer.verify(signature, pubkey, msg)
-}
-
-pub fn full_transaction_commitment(zkapp_command: &ZkAppCommand) -> TransactionCommitment {
-    let memo_hash = zkapp_command.memo.hash();
-    let fee_payer_hash = AccountUpdate::of_fee_payer(zkapp_command.fee_payer.clone()).digest();
-    let account_updates_hash = zkapp_command.account_updates_hash();
-
-    let txn_commitment = TransactionCommitment::create(account_updates_hash);
-
-    txn_commitment.create_complete(memo_hash, fee_payer_hash)
 }

@@ -2,13 +2,8 @@ mod mina;
 
 use std::array::TryFromSliceError;
 
-use binprot::BinProtRead;
-use mina::{full_transaction_commitment, HashParameter, Message};
-use mina_p2p_messages::v2::{
-    MinaBaseUserCommandStableV2, MinaBaseZkappCommandTStableV1WireStableV1,
-};
+use mina::{HashParameter, Message};
 use mina_signer::{BaseField, CurvePoint, PubKey, ScalarField, Signature};
-use mina_tree::scan_state::transaction_logic::zkapp_command::ZkAppCommand;
 use o1_utils::FieldHelpers;
 
 pub const FIELD_SIZE: usize = 32;
@@ -144,44 +139,6 @@ pub unsafe extern "C" fn verify(
     true
 }
 
-/**
- * # Safety
- * this functions accepts raw pointer from golang
- */
-#[no_mangle]
-pub unsafe extern "C" fn transaction_commitment(
-    zkapp_command_ptr: *const u8,
-    zkapp_command_len: usize,
-    output_ptr: *mut u8, // 32 bytes
-) -> bool {
-    if zkapp_command_ptr.is_null() || zkapp_command_len == 0 || output_ptr.is_null() {
-        return false;
-    }
-
-    let mut raw_zkapp_command =
-        unsafe { std::slice::from_raw_parts(zkapp_command_ptr, zkapp_command_len * FIELD_SIZE) };
-
-    let p2p_user_command = match MinaBaseUserCommandStableV2::binprot_read(&mut raw_zkapp_command) {
-        Ok(p2p_user_command) => p2p_user_command,
-        Err(_) => return false,
-    };
-
-    let p2p_zkapp_command: MinaBaseZkappCommandTStableV1WireStableV1 = match p2p_user_command {
-        MinaBaseUserCommandStableV2::ZkappCommand(zkapp_command) => zkapp_command,
-        _ => return false,
-    };
-
-    let zkapp_command = ZkAppCommand::from(&p2p_zkapp_command);
-
-    let commitment = full_transaction_commitment(&zkapp_command);
-
-    let output = unsafe { std::slice::from_raw_parts_mut(output_ptr, FIELD_SIZE) };
-
-    output.copy_from_slice(&commitment.0.to_bytes());
-
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -309,56 +266,6 @@ mod tests {
                 0,
                 std::ptr::null_mut()
             ));
-            assert!(!transaction_commitment(
-                std::ptr::null(),
-                0,
-                std::ptr::null_mut()
-            ));
         }
-    }
-
-    #[test]
-    fn test_transaction_commitment() {
-        let expected_commitment = BaseField::from_str(
-            "28213846620687386246595472357080373779104425260189267168855581893969578656916",
-        )
-        .expect("valid field element");
-
-        let zkapp_command_bytes: Vec<u8> = vec![
-            1, 117, 106, 233, 195, 214, 114, 13, 78, 4, 4, 187, 51, 84, 152, 229, 147, 112, 219,
-            84, 167, 23, 180, 8, 136, 152, 72, 59, 251, 63, 30, 133, 10, 0, 0, 0, 0, 210, 144, 249,
-            36, 112, 95, 183, 20, 233, 31, 237, 185, 190, 215, 126, 133, 188, 232, 245, 217, 50,
-            195, 244, 214, 146, 178, 14, 76, 62, 95, 154, 51, 67, 194, 186, 255, 206, 154, 176,
-            194, 57, 30, 47, 61, 232, 172, 137, 22, 51, 51, 141, 130, 126, 111, 212, 242, 105, 51,
-            28, 36, 128, 41, 177, 6, 1, 117, 106, 233, 195, 214, 114, 13, 78, 4, 4, 187, 51, 84,
-            152, 229, 147, 112, 219, 84, 167, 23, 180, 8, 136, 152, 72, 59, 251, 63, 30, 133, 10,
-            0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 10, 1, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-            1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 0, 0, 0, 1, 210, 144, 249,
-            36, 112, 95, 183, 20, 233, 31, 237, 185, 190, 215, 126, 133, 188, 232, 245, 217, 50,
-            195, 244, 214, 146, 178, 14, 76, 62, 95, 154, 51, 67, 194, 186, 255, 206, 154, 176,
-            194, 57, 30, 47, 61, 232, 172, 137, 22, 51, 51, 141, 130, 126, 111, 212, 242, 105, 51,
-            28, 36, 128, 41, 177, 6, 0, 1, 79, 247, 47, 247, 191, 152, 36, 85, 26, 27, 43, 213,
-            162, 190, 189, 176, 35, 71, 50, 246, 249, 103, 245, 215, 39, 253, 128, 134, 74, 53,
-            168, 16, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 10, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 0, 0, 0, 2, 2, 0, 0,
-            0, 0, 34, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-
-        let mut output = [0u8; 32];
-
-        assert!(unsafe {
-            transaction_commitment(
-                zkapp_command_bytes.as_ptr(),
-                zkapp_command_bytes.len(),
-                output.as_mut_ptr(),
-            )
-        });
-
-        assert_eq!(BaseField::from_bytes(&output).unwrap(), expected_commitment);
     }
 }

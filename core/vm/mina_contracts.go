@@ -13,10 +13,6 @@ package vm
 //         HashParameter hashParameter,
 //         bytes32[] memory fields
 //     ) external view returns (bytes32);
-//
-//     function transasctionCommitment(
-//         bytes memory zkappCommand
-//     ) external view returns (bytes32);
 // }
 //
 // interface ISigner {
@@ -46,7 +42,6 @@ import (
 var sol_bool, _ = abi.NewType("bool", "", nil)
 var sol_uint8, _ = abi.NewType("uint8", "", nil)
 var sol_string, _ = abi.NewType("string", "", nil)
-var sol_bytes, _ = abi.NewType("bytes", "", nil)
 var sol_bytes32, _ = abi.NewType("bytes32", "", nil)
 var sol_bytes32Arr, _ = abi.NewType("bytes32[]", "", nil)
 
@@ -107,51 +102,15 @@ func poseidonHash(calldata []byte) ([]byte, error) {
 	return output_buffer[:], nil
 }
 
-func transasctionCommitment(calldata []byte) ([]byte, error) {
-	unpacked, err := (abi.Arguments{{Type: sol_bytes}}).Unpack(calldata)
-
-	if err != nil {
-		return packErr("Unable to unpack calldata"), err
-	}
-
-	zkappCommand := unpacked[0].([]uint8)
-
-	output_buffer := [32]byte{}
-
-	if !C.transaction_commitment(
-		(*C.uint8_t)(&zkappCommand[0]),
-		C.uintptr_t(len(zkappCommand)),
-		(*C.uint8_t)(&output_buffer[0]),
-	) {
-		return packErr("Calling Transaction Commitment failed"), errMinaCallingRustLibFailed
-	}
-
-	return output_buffer[:], nil
-}
-
 // 0x1f831f84
 var poseidonHashSignature = crypto.Keccak256([]byte("poseidonHash(uint8,bytes32[])"))[:4]
 
-// 0x1a7f99b6
-var transasctionCommitmentSignature = crypto.Keccak256([]byte("transasctionCommitment(bytes)"))[:4]
-
 func (c *MinaHasher) Run(input []byte) ([]byte, error) {
-	if len(input) < 4 {
+	if len(input) < 4 || !bytes.Equal(input[:4], poseidonHashSignature) {
 		return packErr("Invalid signature"), errMinaInvalidSignature
 	}
 
-	signature := input[:4]
-	calldata := input[4:]
-
-	if bytes.Equal(signature, poseidonHashSignature) {
-		return poseidonHash(calldata)
-	}
-
-	if bytes.Equal(signature, transasctionCommitmentSignature) {
-		return transasctionCommitment(calldata)
-	}
-
-	return packErr("Invalid signature"), errMinaInvalidSignature	
+	return poseidonHash(input[4:])
 }
 
 type MinaSigner struct{}
