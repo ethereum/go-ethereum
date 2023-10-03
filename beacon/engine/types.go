@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// PayloadVersion denotes the version of PayloadAttributes used to request the
+// building of the payload to commence.
 type PayloadVersion byte
 
 var (
