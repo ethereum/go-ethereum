@@ -190,7 +190,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("missing withdrawals"))
 		}
 		if params.BeaconRoot != nil {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("missing beacon root"))
+			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("unexpected beacon root"))
 		}
 		c := api.eth.BlockChain().Config()
 		if !active(c.IsShanghai, c.IsCancun, c.LondonBlock, params.Timestamp) {
