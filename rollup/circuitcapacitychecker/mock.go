@@ -15,8 +15,10 @@ type CircuitCapacityChecker struct {
 }
 
 // NewCircuitCapacityChecker creates a new CircuitCapacityChecker
-func NewCircuitCapacityChecker() *CircuitCapacityChecker {
-	return &CircuitCapacityChecker{ID: rand.Uint64()}
+func NewCircuitCapacityChecker(lightMode bool) *CircuitCapacityChecker {
+	ccc := &CircuitCapacityChecker{ID: rand.Uint64()}
+	ccc.SetLightMode(lightMode)
+	return ccc
 }
 
 // Reset resets a ccc, but need to do nothing in mock_ccc.
@@ -53,6 +55,11 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 // Will alway return true in mock_ccc.
 func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error) {
 	return true, uint64(expected), nil
+}
+
+// SetLightMode sets to ccc light mode
+func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
+	return nil
 }
 
 // ScheduleError schedules an error for a tx (see `ApplyTransaction`), only used in tests.

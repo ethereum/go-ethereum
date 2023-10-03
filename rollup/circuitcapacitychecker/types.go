@@ -11,6 +11,10 @@ var (
 	ErrBlockRowConsumptionOverflow = errors.New("block row consumption overflow")
 )
 
+type WrappedCommonResult struct {
+	Error string `json:"error,omitempty"`
+}
+
 type WrappedRowUsage struct {
 	AccRowUsage *types.RowUsage `json:"acc_row_usage,omitempty"`
 	Error       string          `json:"error,omitempty"`

@@ -56,7 +56,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 		bc:                     blockchain,
 		checkCircuitCapacity:   checkCircuitCapacity,
 		db:                     db,
-		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(),
+		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(false),
 	}
 	log.Info("created new BlockValidator", "CircuitCapacityChecker ID", validator.circuitCapacityChecker.ID)
 	return validator
