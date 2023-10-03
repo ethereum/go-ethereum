@@ -26,6 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+type PayloadVersion byte
+
+var (
+	PayloadV1 PayloadVersion = 0x1
+	PayloadV2 PayloadVersion = 0x2
+	PayloadV3 PayloadVersion = 0x3
+)
+
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
 // PayloadAttributes describes the environment context in which a block should
