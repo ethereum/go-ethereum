@@ -246,9 +246,9 @@ func (ec *Client) TraceBlock(ctx context.Context, blob []byte, config *tracers.T
 }
 
 // TraceBlockByNumber returns the structured logs created during the execution of EVM
-func (ec *Client) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *tracers.TraceConfig) ([]*TxTraceResult, error) {
+func (ec *Client) TraceBlockByNumber(ctx context.Context, number *big.Int, config *tracers.TraceConfig) ([]*TxTraceResult, error) {
 	var result []*TxTraceResult
-	err := ec.c.CallContext(ctx, &result, "debug_traceBlockByNumber", number, config)
+	err := ec.c.CallContext(ctx, &result, "debug_traceBlockByNumber", toBlockNumArg(number), config)
 	return result, err
 }
 

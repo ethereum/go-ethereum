@@ -768,19 +768,19 @@ func testTraceBlockByNumber(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 
 	var testSuite = []struct {
-		blockNumber rpc.BlockNumber
+		blockNumber *big.Int
 		config      *tracers.TraceConfig
 		expectErr   error
 		expect      []*TxTraceResult
 	}{
 		{
-			blockNumber: 1,
+			blockNumber: big.NewInt(1),
 			config:      nil,
 			expectErr:   nil,
 			expect:      []*TxTraceResult{{TxHash: testTransactionHash}},
 		},
 		{
-			blockNumber: 1,
+			blockNumber: big.NewInt(1),
 			config: &tracers.TraceConfig{
 				Config: &logger.Config{
 					EnableMemory: true,
