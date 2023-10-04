@@ -1619,6 +1619,10 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 	}
 }
 
+func TestRPCGetRequiredBlockState(t *testing.T) {
+	//
+}
+
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
