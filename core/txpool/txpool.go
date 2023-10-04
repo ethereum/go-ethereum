@@ -155,13 +155,15 @@ func (p *TxPool) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
-
 	// Terminate each subpool
 	for _, subpool := range p.subpools {
 		if err := subpool.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	// Unsubscribe anyone still listening for tx events
+	p.subs.Close()
+
 	if len(errs) > 0 {
 		return fmt.Errorf("subpool close errors: %v", errs)
 	}
