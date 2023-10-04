@@ -991,9 +991,13 @@ func TestMulticallV1(t *testing.T) {
 		BlockHash common.Hash  `json:"blockHash"`
 		Index     hexutil.Uint `json:"logIndex"`
 	}
+	type callErr struct {
+		Message string
+		Code    int
+	}
 	type callRes struct {
 		ReturnValue string `json:"returnData"`
-		Error       string
+		Error       callErr
 		Logs        []log
 		GasUsed     string
 		Status      string
@@ -1043,9 +1047,14 @@ func TestMulticallV1(t *testing.T) {
 				Number:       "0xb",
 				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xa410",
+				GasUsed:      "0xf618",
 				FeeRecipient: coinbase,
 				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
 					Logs:        []log{},
@@ -1125,7 +1134,7 @@ func TestMulticallV1(t *testing.T) {
 					GasUsed:     "0x0",
 					Logs:        []log{},
 					Status:      "0x0",
-					Error:       fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4691388)", randomAccounts[3].addr.String()),
+					Error:       callErr{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4691388)", randomAccounts[3].addr.String()), Code: errCodeInsufficientFunds},
 				}},
 			}},
 		}, {
@@ -1576,7 +1585,7 @@ func TestMulticallV1(t *testing.T) {
 					GasUsed:     "0x0",
 					Logs:        []log{},
 					Status:      "0x0",
-					Error:       fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr),
+					Error:       callErr{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
 				}},
 			}},
 		},

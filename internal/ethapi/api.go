@@ -1218,7 +1218,7 @@ type callResult struct {
 	Logs        []*types.Log   `json:"logs"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
 	Status      hexutil.Uint64 `json:"status"`
-	Error       string         `json:"error,omitempty"`
+	Error       *callError     `json:"error,omitempty"`
 }
 
 func (r *callResult) MarshalJSON() ([]byte, error) {
@@ -1326,7 +1326,8 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			}
 			result, err := applyMessage(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
-				results[bi].Calls[i] = callResult{Error: err.Error(), Status: hexutil.Uint64(types.ReceiptStatusFailed)}
+				callErr := callErrorFromError(err)
+				results[bi].Calls[i] = callResult{Error: callErr, Status: hexutil.Uint64(types.ReceiptStatusFailed)}
 				continue
 			}
 			// If the result contains a revert reason, try to unpack it.
@@ -1337,7 +1338,11 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			callRes := callResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 			if result.Failed() {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
-				callRes.Error = result.Err.Error()
+				if errors.Is(result.Err, vm.ErrExecutionReverted) {
+					callRes.Error = &callError{Message: result.Err.Error(), Code: -32000}
+				} else {
+					callRes.Error = &callError{Message: result.Err.Error(), Code: -32015}
+				}
 			} else {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
 			}
