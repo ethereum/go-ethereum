@@ -324,6 +324,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		bloomBits       stat
 		cliqueSnaps     stat
 		l1Messages      stat
+		l1MessagesOld   stat
 		lastL1Message   stat
 
 		// Ancient store statistics
@@ -386,6 +387,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			cliqueSnaps.Add(size)
 		case bytes.HasPrefix(key, l1MessagePrefix) && len(key) == len(l1MessagePrefix)+8:
 			l1Messages.Add(size)
+		case bytes.HasPrefix(key, l1MessageLegacyPrefix) && len(key) == len(l1MessageLegacyPrefix)+8:
+			l1MessagesOld.Add(size)
 		case bytes.HasPrefix(key, firstQueueIndexNotInL2BlockPrefix) && len(key) == len(firstQueueIndexNotInL2BlockPrefix)+common.HashLength:
 			lastL1Message.Add(size)
 		case bytes.HasPrefix(key, []byte("cht-")) ||
@@ -451,6 +454,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
 		{"Key-Value store", "L1 messages", l1Messages.Size(), l1Messages.Count()},
+		{"Key-Value store", "L1 messages (legacy prefix)", l1MessagesOld.Size(), l1MessagesOld.Count()},
 		{"Key-Value store", "Last L1 message", lastL1Message.Size(), lastL1Message.Count()},
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},
 		{"Ancient store", "Bodies", ancientBodiesSize.String(), ancients.String()},

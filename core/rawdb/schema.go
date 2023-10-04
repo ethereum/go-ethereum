@@ -105,7 +105,8 @@ var (
 
 	// Scroll L1 message store
 	syncedL1BlockNumberKey            = []byte("LastSyncedL1BlockNumber")
-	l1MessagePrefix                   = []byte("l1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
+	l1MessageLegacyPrefix             = []byte("l1")
+	l1MessagePrefix                   = []byte("L1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
 	firstQueueIndexNotInL2BlockPrefix = []byte("q")  // firstQueueIndexNotInL2BlockPrefix + L2 block hash -> enqueue index
 	highestSyncedQueueIndexKey        = []byte("HighestSyncedQueueIndex")
 
@@ -117,6 +118,13 @@ var (
 	skippedTransactionPrefix     = []byte("skip") // skippedTransactionPrefix + tx hash -> skipped transaction
 	skippedTransactionHashPrefix = []byte("sh")   // skippedTransactionHashPrefix + index -> tx hash
 )
+
+// Use the updated "L1" prefix on all new networks
+// to avoid overlap with txLookupPrefix.
+// Use the legacy "l1" prefix on Scroll Sepolia.
+func SetL1MessageLegacyPrefix() {
+	l1MessagePrefix = l1MessageLegacyPrefix
+}
 
 const (
 	// freezerHeaderTable indicates the name of the freezer header table.

@@ -1828,6 +1828,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
+
+	// set db prefix for backward-compatibility
+	if cfg.NetworkId == 534351 {
+		log.Warn("Using legacy db prefix for L1 messages")
+		rawdb.SetL1MessageLegacyPrefix()
+	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
