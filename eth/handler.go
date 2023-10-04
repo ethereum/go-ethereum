@@ -609,14 +609,10 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
-		// Blob transactions are never broadcast, only ever announced
-		if tx.Type() == types.BlobTxType {
-			continue
-		}
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int
-		if tx.Size() <= txMaxBroadcastSize {
+		if tx.Type() != types.BlobTxType && tx.Size() <= txMaxBroadcastSize {
 			numDirect = int(math.Sqrt(float64(len(peers))))
 		}
 		// Send the tx unconditionally to a subset of our peers

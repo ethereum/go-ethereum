@@ -1169,7 +1169,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 	)
 	for i, tx := range txs {
 		errs[i] = p.add(tx)
-		if errs[0] == nil {
+		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
 		}
 	}
