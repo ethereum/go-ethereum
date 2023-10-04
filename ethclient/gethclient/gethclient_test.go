@@ -24,24 +24,22 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -639,14 +637,14 @@ func testTraceCall(t *testing.T, client *rpc.Client) {
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
-		call        ethapi.TransactionArgs
+		call        ethereum.CallMsg
 		config      *tracers.TraceCallConfig
 		expectErr   error
 		expect      interface{}
 	}{
 		{
-			call: ethapi.TransactionArgs{
-				From: &testAddr,
+			call: ethereum.CallMsg{
+				From: testAddr,
 				To:   &testAddr,
 			},
 			config:    nil,
@@ -660,8 +658,8 @@ func testTraceCall(t *testing.T, client *rpc.Client) {
 		},
 		// with config
 		{
-			call: ethapi.TransactionArgs{
-				From: &testAddr,
+			call: ethereum.CallMsg{
+				From: testAddr,
 				To:   &testAddr,
 			},
 			config: &tracers.TraceCallConfig{
@@ -705,13 +703,13 @@ func testTraceChain(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 
 	ch := make(chan *BlockTraceResult)
-	_, err := ec.TraceChain(context.Background(), ch, 0, 1, nil)
+	_, err := ec.TraceChain(context.Background(), ch, big.NewInt(0), big.NewInt(1), nil)
 	if err != nil {
 		t.Fatalf("testTraceChain error: %v", err)
 	}
 
 	traceBlock := <-ch
-	traceTxHash := common.HexToHash(traceBlock.Traces[0].(map[string]interface{})["txHash"].(string))
+	traceTxHash := traceBlock.Traces[0].TxHash
 	if traceTxHash != testTransactionHash {
 		t.Errorf("result mismatch, want %v, get %v", testTransactionHash, traceTxHash)
 	}

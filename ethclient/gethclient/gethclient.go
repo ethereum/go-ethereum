@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -89,9 +88,9 @@ type TxTraceResult struct {
 
 // BlockTraceResult is the result of TraceChain
 type BlockTraceResult struct {
-	Block  hexutil.Uint64 `json:"block"`  // Block number corresponding to this trace
-	Hash   common.Hash    `json:"hash"`   // Block hash corresponding to this trace
-	Traces []interface{}  `json:"traces"` // Trace results produced by the task
+	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
+	Hash   common.Hash      `json:"hash"`   // Block hash corresponding to this trace
+	Traces []*TxTraceResult `json:"traces"` // Trace results produced by the task
 }
 
 // GetProof returns the account and storage values of the specified account including the Merkle-proof.
@@ -221,9 +220,9 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 }
 
 // TraceCall lets you trace a given eth_call
-func (ec *Client) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *tracers.TraceCallConfig) (interface{}, error) {
+func (ec *Client) TraceCall(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash, config *tracers.TraceCallConfig) (interface{}, error) {
 	var result interface{}
-	err := ec.c.CallContext(ctx, &result, "debug_traceCall", args, blockNrOrHash, config)
+	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, config)
 	return result, err
 }
 
@@ -235,14 +234,14 @@ func (ec *Client) TraceTransaction(ctx context.Context, hash common.Hash, config
 }
 
 // TraceChain subscribes to chain, receiving results from channel BlockTraceResult
-func (ec *Client) TraceChain(ctx context.Context, ch chan<- *BlockTraceResult, start, end rpc.BlockNumber, config *tracers.TraceConfig) (*rpc.ClientSubscription, error) {
-	return ec.c.Subscribe(ctx, "debug", ch, "traceChain", start, end, config)
+func (ec *Client) TraceChain(ctx context.Context, ch chan<- *BlockTraceResult, start, end *big.Int, config *tracers.TraceConfig) (*rpc.ClientSubscription, error) {
+	return ec.c.Subscribe(ctx, "debug", ch, "traceChain", toBlockNumArg(start), toBlockNumArg(end), config)
 }
 
 // TraceBlock returns the structured logs created during the execution of EVM
-func (ec *Client) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *tracers.TraceConfig) ([]*TxTraceResult, error) {
+func (ec *Client) TraceBlock(ctx context.Context, blob []byte, config *tracers.TraceConfig) ([]*TxTraceResult, error) {
 	var result []*TxTraceResult
-	err := ec.c.CallContext(ctx, &result, "debug_traceBlock", blob, config)
+	err := ec.c.CallContext(ctx, &result, "debug_traceBlock", hexutil.Bytes(blob), config)
 	return result, err
 }
 
