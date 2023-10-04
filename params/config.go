@@ -798,7 +798,11 @@ func (c *BorConfig) CalculateBurntContract(number uint64) string {
 		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
 		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
 
-		if number > valUint && number < valUintNext {
+		if i == 0 && number <= valUint {
+			return c.BurntContract[keys[i]]
+		}
+
+		if number >= valUint && number < valUintNext {
 			return c.BurntContract[keys[i]]
 		}
 	}
