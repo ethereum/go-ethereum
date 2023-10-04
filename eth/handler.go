@@ -75,9 +75,10 @@ type txPool interface {
 	// The slice should be modifiable by the caller.
 	Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction
 
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events. The subscriber
+	// can decide whether to receive notifications only for newly seen transactions
+	// or also for reorged out ones.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -509,10 +510,10 @@ func (h *handler) unregisterPeer(id string) {
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
-	// broadcast transactions
+	// broadcast and announce transactions (only new ones, not resurrected ones)
 	h.wg.Add(1)
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
 	// broadcast mined blocks
@@ -592,26 +593,33 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 }
 
 // BroadcastTransactions will propagate a batch of transactions
-// - To a square root of all peers
+// - To a square root of all peers for non-blob transactions
 // - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
 func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	var (
-		annoCount   int // Count of announcements made
-		annoPeers   int
-		directCount int // Count of the txs sent directly to peers
-		directPeers int // Count of the peers that were sent transactions directly
+		blobTxs  int // Number of blob transactions to announce only
+		largeTxs int // Number of large transactions to announce only
+
+		directCount int // Number of transactions sent directly to peers (duplicates included)
+		directPeers int // Number of peers that were sent transactions directly
+		annCount    int // Number of transactions announced across all peers (duplicates included)
+		annPeers    int // Number of peers announced about transactions
 
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
-
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int
-		if tx.Size() <= txMaxBroadcastSize {
+		switch {
+		case tx.Type() == types.BlobTxType:
+			blobTxs++
+		case tx.Size() > txMaxBroadcastSize:
+			largeTxs++
+		default:
 			numDirect = int(math.Sqrt(float64(len(peers))))
 		}
 		// Send the tx unconditionally to a subset of our peers
@@ -629,13 +637,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		peer.AsyncSendTransactions(hashes)
 	}
 	for peer, hashes := range annos {
-		annoPeers++
-		annoCount += len(hashes)
+		annPeers++
+		annCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
-	log.Debug("Transaction broadcast", "txs", len(txs),
-		"announce packs", annoPeers, "announced hashes", annoCount,
-		"tx packs", directPeers, "broadcast txs", directCount)
+	log.Debug("Distributed transactions", "plaintxs", len(txs)-blobTxs-largeTxs, "blobtxs", blobTxs, "largetxs", largeTxs,
+		"bcastpeers", directPeers, "bcastcount", directCount, "annpeers", annPeers, "anncount", annCount)
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.
