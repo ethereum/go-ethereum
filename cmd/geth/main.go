@@ -190,6 +190,7 @@ var (
 		utils.RPCGlobalEVMTimeoutFlag,
 		utils.RPCGlobalTxFeeCapFlag,
 		utils.AllowUnprotectedTxs,
+		utils.MaxBlockRangeFlag,
 	}
 
 	metricsFlags = []cli.Flag{

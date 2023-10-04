@@ -301,7 +301,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true, 5*time.Minute),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true, 5*time.Minute, s.config.MaxBlockRange),
 			Public:    true,
 		}, {
 			Namespace: "net",

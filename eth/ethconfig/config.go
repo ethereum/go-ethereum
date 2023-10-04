@@ -91,7 +91,8 @@ var Defaults = Config{
 	RPCGasCap:     50000000,
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
-	RPCTxFeeCap:   1, // 1 ether
+	RPCTxFeeCap:   1,  // 1 ether
+	MaxBlockRange: -1, // Default unconfigured value: no block range limit for backward compatibility
 }
 
 func init() {
@@ -210,6 +211,9 @@ type Config struct {
 
 	// Check circuit capacity in block validator
 	CheckCircuitCapacity bool
+
+	// Max block range for eth_getLogs api method
+	MaxBlockRange int64
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
