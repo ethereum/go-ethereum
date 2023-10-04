@@ -88,6 +88,17 @@ func (b *BlockGen) SetPoS() {
 	b.header.Difficulty = new(big.Int)
 }
 
+// SetParentBeaconRoot sets the parent beacon root field of the generated
+// block.
+func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
+	b.header.ParentBeaconRoot = &root
+	var (
+		blockContext = NewEVMBlockContext(b.header, nil, &b.header.Coinbase)
+		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.config, vm.Config{})
+	)
+	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
+}
+
 // addTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
