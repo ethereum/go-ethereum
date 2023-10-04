@@ -155,13 +155,15 @@ func (p *TxPool) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
-
 	// Terminate each subpool
 	for _, subpool := range p.subpools {
 		if err := subpool.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	// Unsubscribe anyone still listening for tx events
+	p.subs.Close()
+
 	if len(errs) > 0 {
 		return fmt.Errorf("subpool close errors: %v", errs)
 	}
@@ -316,12 +318,12 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 	return txs
 }
 
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and starts sending
-// events to the given channel.
-func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+// SubscribeTransactions registers a subscription for new transaction events,
+// supporting feeding only newly seen or also resurrected transactions.
+func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	subs := make([]event.Subscription, len(p.subpools))
 	for i, subpool := range p.subpools {
-		subs[i] = subpool.SubscribeTransactions(ch)
+		subs[i] = subpool.SubscribeTransactions(ch, reorgs)
 	}
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }

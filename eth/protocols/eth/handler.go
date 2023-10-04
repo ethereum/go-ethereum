@@ -93,6 +93,10 @@ type TxPool interface {
 func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2p.Protocol {
 	protocols := make([]p2p.Protocol, 0, len(ProtocolVersions))
 	for _, version := range ProtocolVersions {
+		// Blob transactions require eth/68 announcements, disable everything else
+		if version <= ETH67 && backend.Chain().Config().CancunTime != nil {
+			continue
+		}
 		version := version // Closure
 
 		protocols = append(protocols, p2p.Protocol{

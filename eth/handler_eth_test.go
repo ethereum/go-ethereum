@@ -249,7 +249,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	handler.handler.synced.Store(true) // mark synced to accept transactions
 
 	txs := make(chan core.NewTxsEvent)
-	sub := handler.txpool.SubscribeNewTxsEvent(txs)
+	sub := handler.txpool.SubscribeTransactions(txs, false)
 	defer sub.Unsubscribe()
 
 	// Create a source peer to send messages through and a sink handler to receive them
@@ -424,7 +424,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	for i := 0; i < len(sinks); i++ {
 		txChs[i] = make(chan core.NewTxsEvent, 1024)
 
-		sub := sinks[i].txpool.SubscribeNewTxsEvent(txChs[i])
+		sub := sinks[i].txpool.SubscribeTransactions(txChs[i], false)
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
