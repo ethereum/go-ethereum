@@ -598,21 +598,28 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 // already have the given transaction.
 func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	var (
-		annoCount   int // Count of announcements made
-		annoPeers   int
-		directCount int // Count of the txs sent directly to peers
-		directPeers int // Count of the peers that were sent transactions directly
+		blobTxs  int // Number of blob transactions to announce only
+		largeTxs int // Number of large transactions to announce only
+
+		directCount int // Number of transactions sent directly to peers (duplicates included)
+		directPeers int // Number of peers that were sent transactions directly
+		annCount    int // Number of transactions announced across all peers (duplicates included)
+		annPeers    int // Number of peers announced about transactions
 
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
-
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int
-		if tx.Type() != types.BlobTxType && tx.Size() <= txMaxBroadcastSize {
+		switch {
+		case tx.Type() == types.BlobTxType:
+			blobTxs++
+		case tx.Size() > txMaxBroadcastSize:
+			largeTxs++
+		default:
 			numDirect = int(math.Sqrt(float64(len(peers))))
 		}
 		// Send the tx unconditionally to a subset of our peers
@@ -630,13 +637,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		peer.AsyncSendTransactions(hashes)
 	}
 	for peer, hashes := range annos {
-		annoPeers++
-		annoCount += len(hashes)
+		annPeers++
+		annCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
-	log.Debug("Transaction broadcast", "txs", len(txs),
-		"announce packs", annoPeers, "announced hashes", annoCount,
-		"tx packs", directPeers, "broadcast txs", directCount)
+	log.Debug("Distributed transactions", "plaintxs", len(txs)-blobTxs-largeTxs, "blobtxs", blobTxs, "largetxs", largeTxs,
+		"bcastpeers", directPeers, "bcastcount", directCount, "annpeers", annPeers, "anncount", annCount)
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.
