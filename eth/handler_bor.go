@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -63,6 +64,11 @@ func (h *ethHandler) fetchWhitelistMilestone(ctx context.Context, bor *bor.Bor, 
 
 	// fetch latest milestone
 	milestone, err := bor.HeimdallClient.FetchMilestone(ctx)
+	if errors.Is(err, heimdall.ErrServiceUnavailable) {
+		log.Debug("Failed to fetch latest milestone for whitelisting", "err", err)
+		return num, hash, err
+	}
+
 	if err != nil {
 		log.Error("Failed to fetch latest milestone for whitelisting", "err", err)
 		return num, hash, errMilestone
@@ -92,9 +98,13 @@ func (h *ethHandler) fetchNoAckMilestone(ctx context.Context, bor *bor.Bor) (str
 
 	// fetch latest milestone
 	milestoneID, err := bor.HeimdallClient.FetchLastNoAckMilestone(ctx)
+	if errors.Is(err, heimdall.ErrServiceUnavailable) {
+		log.Debug("Failed to fetch latest no-ack milestone", "err", err)
+		return milestoneID, err
+	}
+
 	if err != nil {
 		log.Error("Failed to fetch latest no-ack milestone", "err", err)
-
 		return milestoneID, errMilestone
 	}
 
@@ -104,6 +114,10 @@ func (h *ethHandler) fetchNoAckMilestone(ctx context.Context, bor *bor.Bor) (str
 func (h *ethHandler) fetchNoAckMilestoneByID(ctx context.Context, bor *bor.Bor, milestoneID string) error {
 	// fetch latest milestone
 	err := bor.HeimdallClient.FetchNoAckMilestone(ctx, milestoneID)
+	if errors.Is(err, heimdall.ErrServiceUnavailable) {
+		log.Debug("Failed to fetch no-ack milestone by ID", "milestoneID", milestoneID, "err", err)
+		return err
+	}
 
 	// fixme: handle different types of errors
 	if errors.Is(err, ErrNotInRejectedList) {
