@@ -83,6 +83,7 @@ func Fuzz(input []byte) int {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
+		nil,
 		clock, rand,
 	)
 	f.Start()
@@ -128,7 +129,7 @@ func Fuzz(input []byte) int {
 			if verbose {
 				fmt.Println("Notify", peer, announceIdxs)
 			}
-			if err := f.Notify(peer, announces); err != nil {
+			if err := f.Notify(peer, nil, nil, announces); err != nil {
 				panic(err)
 			}
 

@@ -68,10 +68,10 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
 
 	case *eth.NewPooledTransactionHashesPacket67:
-		return h.txFetcher.Notify(peer.ID(), *packet)
+		return h.txFetcher.Notify(peer.ID(), nil, nil, *packet)
 
 	case *eth.NewPooledTransactionHashesPacket68:
-		return h.txFetcher.Notify(peer.ID(), packet.Hashes)
+		return h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
 
 	case *eth.TransactionsPacket:
 		for _, tx := range *packet {

@@ -81,6 +81,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -171,6 +172,7 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -234,6 +236,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -313,6 +316,7 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -382,6 +386,7 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -421,6 +426,7 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -459,6 +465,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -505,6 +512,7 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -543,6 +551,7 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -591,6 +600,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -648,6 +658,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -713,6 +724,7 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -772,6 +784,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -810,6 +823,7 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -877,6 +891,7 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -946,6 +961,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: append(steps, []interface{}{
@@ -968,6 +984,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1021,6 +1038,7 @@ func TestTransactionFetcherDrop(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1087,6 +1105,7 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1120,6 +1139,12 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 	})
 }
 
+// Tests that announced transactions with the wrong transaction type or size will
+// result in a dropped peer.
+func TestInvalidAnnounceMetadata(t *testing.T) {
+
+}
+
 // This test reproduces a crash caught by the fuzzer. The root cause was a
 // dangling transaction timing out and clashing on re-add with a concurrently
 // announced one.
@@ -1132,6 +1157,7 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1159,6 +1185,7 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1188,6 +1215,7 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1224,6 +1252,7 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
+				nil,
 			)
 		},
 		steps: []interface{}{
@@ -1276,7 +1305,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 	for i, step := range tt.steps {
 		switch step := step.(type) {
 		case doTxNotify:
-			if err := fetcher.Notify(step.peer, step.hashes); err != nil {
+			if err := fetcher.Notify(step.peer, nil, nil, step.hashes); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done
