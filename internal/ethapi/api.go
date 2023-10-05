@@ -1044,6 +1044,34 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
+// ApplyToHeader overrides the given fields into a header.
+func (diff *BlockOverrides) ApplyToHeader(header *types.Header) {
+	if diff == nil {
+		return
+	}
+	if diff.Number != nil {
+		header.Number = diff.Number.ToInt()
+	}
+	if diff.Difficulty != nil {
+		header.Difficulty = diff.Difficulty.ToInt()
+	}
+	if diff.Time != nil {
+		header.Time = uint64(*diff.Time)
+	}
+	if diff.GasLimit != nil {
+		header.GasLimit = uint64(*diff.GasLimit)
+	}
+	if diff.FeeRecipient != nil {
+		header.Coinbase = *diff.FeeRecipient
+	}
+	if diff.PrevRandao != nil {
+		header.MixDigest = *diff.PrevRandao
+	}
+	if diff.BaseFeePerGas != nil {
+		header.BaseFee = diff.BaseFeePerGas.ToInt()
+	}
+}
+
 // ChainContextBackend provides methods required to implement ChainContext.
 type ChainContextBackend interface {
 	Engine() consensus.Engine
@@ -1213,6 +1241,20 @@ type blockResult struct {
 	Calls        []callResult   `json:"calls"`
 }
 
+func mcBlockResultFromHeader(header *types.Header, callResults []callResult) blockResult {
+	return blockResult{
+		Number:       hexutil.Uint64(header.Number.Uint64()),
+		Hash:         header.Hash(),
+		Time:         hexutil.Uint64(header.Time),
+		GasLimit:     hexutil.Uint64(header.GasLimit),
+		GasUsed:      hexutil.Uint64(header.GasUsed),
+		FeeRecipient: header.Coinbase,
+		BaseFee:      (*hexutil.Big)(header.BaseFee),
+		PrevRandao:   header.MixDigest,
+		Calls:        callResults,
+	}
+}
+
 type callResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
@@ -1267,7 +1309,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	blockContexts, err := makeBlockContexts(ctx, s.b, blocks, header)
+	headers, err := makeHeaders(ctx, s.b.ChainConfig(), blocks, header)
 	if err != nil {
 		return nil, err
 	}
@@ -1281,27 +1323,25 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
 	)
 	for bi, block := range blocks {
-		blockContext = blockContexts[bi]
+		prevHeader := header
+		header = headers[bi]
+		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		// TODO: GetHashFn
 		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		// State overrides are applied prior to execution of a block
 		if err := block.StateOverrides.Apply(state, precompiles); err != nil {
 			return nil, err
 		}
-		results[bi] = blockResult{
-			Number:       hexutil.Uint64(blockContext.BlockNumber.Uint64()),
-			Hash:         hash,
-			Time:         hexutil.Uint64(blockContext.Time),
-			GasLimit:     hexutil.Uint64(blockContext.GasLimit),
-			FeeRecipient: blockContext.Coinbase,
-			BaseFee:      (*hexutil.Big)(blockContext.BaseFee),
-			Calls:        make([]callResult, len(block.Calls)),
-		}
-		if blockContext.Random != nil {
-			results[bi].PrevRandao = *blockContext.Random
-		}
-		var gasUsed uint64
+
+		var (
+			gasUsed     uint64
+			root        common.Hash
+			txes        = make([]*types.Transaction, len(block.Calls))
+			callResults = make([]callResult, len(block.Calls))
+		)
 		for i, call := range block.Calls {
-			// setDefaults will consult txpool's nonce tracker. Work around that.
+			// TODO: Track nonce by counting txes from sender
+			// Because then we can pre-populate the tx object.
 			if call.Nonce == nil {
 				nonce := state.GetNonce(call.from())
 				call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -1320,6 +1360,8 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 				return nil, err
 			}
 			tx := call.ToTransaction(true)
+			txes[i] = tx
+			// TODO: repair log block hashes post execution.
 			vmConfig := &vm.Config{
 				NoBaseFee: true,
 				Tracer:    newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), hash, tx.Hash(), uint(i)),
@@ -1327,7 +1369,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			result, err := applyMessage(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
 				callErr := callErrorFromError(err)
-				results[bi].Calls[i] = callResult{Error: callErr, Status: hexutil.Uint64(types.ReceiptStatusFailed)}
+				callResults[i] = callResult{Error: callErr, Status: hexutil.Uint64(types.ReceiptStatusFailed)}
 				continue
 			}
 			// If the result contains a revert reason, try to unpack it.
@@ -1346,44 +1388,79 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			} else {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
 			}
-			results[bi].Calls[i] = callRes
+			callResults[i] = callRes
 			gasUsed += result.UsedGas
-			state.Finalise(true)
+			root = state.IntermediateRoot(true)
 		}
-		results[bi].GasUsed = hexutil.Uint64(gasUsed)
+		// If last non-phantom block is parent of current block, set parent hash.
+		if header.Number.Uint64()-prevHeader.Number.Uint64() == 1 {
+			header.ParentHash = prevHeader.Hash()
+		}
+		header.Root = root
+		header.GasUsed = gasUsed
+		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
+		results[bi] = mcBlockResultFromHeader(header, callResults)
 	}
 	return results, nil
 }
 
-func makeBlockContexts(ctx context.Context, b Backend, blocks []CallBatch, header *types.Header) ([]vm.BlockContext, error) {
-	res := make([]vm.BlockContext, len(blocks))
+func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallBatch, base *types.Header) ([]*types.Header, error) {
+	res := make([]*types.Header, len(blocks))
 	var (
-		prevNumber    = header.Number.Uint64()
-		prevTimestamp = header.Time
+		prevNumber    = base.Number.Uint64()
+		prevTimestamp = base.Time
+		header        = base
 	)
 	for bi, block := range blocks {
-		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 		if block.BlockOverrides == nil {
 			block.BlockOverrides = new(BlockOverrides)
 		}
+		// Sanitize block number and timestamp
 		if block.BlockOverrides.Number == nil {
 			n := new(big.Int).Add(big.NewInt(int64(prevNumber)), big.NewInt(1))
 			block.BlockOverrides.Number = (*hexutil.Big)(n)
+		} else if block.BlockOverrides.Number.ToInt().Uint64() <= prevNumber {
+			return nil, fmt.Errorf("block numbers must be in order")
 		}
+		prevNumber = block.BlockOverrides.Number.ToInt().Uint64()
+
 		if block.BlockOverrides.Time == nil {
 			t := prevTimestamp + 1
 			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
-		}
-		block.BlockOverrides.Apply(&blockContext)
-		if blockContext.BlockNumber.Uint64() <= prevNumber {
-			return nil, fmt.Errorf("block numbers must be in order")
-		}
-		prevNumber = blockContext.BlockNumber.Uint64()
-		if blockContext.Time <= prevTimestamp {
+		} else if time := (*uint64)(block.BlockOverrides.Time); *time <= prevTimestamp {
 			return nil, fmt.Errorf("timestamps must be in order")
 		}
-		prevTimestamp = blockContext.Time
-		res[bi] = blockContext
+		prevTimestamp = uint64(*block.BlockOverrides.Time)
+
+		// ParentHash for non-phantom blocks can only be computed
+		// after the previous block is executed.
+		var (
+			parentHash = common.Hash{}
+			baseFee    *big.Int
+		)
+		// Calculate parentHash for phantom blocks.
+		if block.BlockOverrides.Number.ToInt().Uint64()-header.Number.Uint64() > 1 {
+			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
+			hashData, err := rlp.EncodeToBytes([][]byte{header.Hash().Bytes(), block.BlockOverrides.Number.ToInt().Bytes()})
+			if err != nil {
+				return nil, err
+			}
+			parentHash = crypto.Keccak256Hash(hashData)
+		}
+		if config.IsLondon(block.BlockOverrides.Number.ToInt()) {
+			baseFee = eip1559.CalcBaseFee(config, header)
+		}
+		header = &types.Header{
+			ParentHash: parentHash,
+			UncleHash:  types.EmptyUncleHash,
+			Coinbase:   base.Coinbase,
+			Difficulty: base.Difficulty,
+			GasLimit:   base.GasLimit,
+			//MixDigest:  header.MixDigest,
+			BaseFee: baseFee,
+		}
+		block.BlockOverrides.ApplyToHeader(header)
+		res[bi] = header
 	}
 	return res, nil
 }

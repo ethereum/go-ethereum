@@ -956,7 +956,6 @@ func TestMulticallV1(t *testing.T) {
 				},
 			},
 		}
-		n11hash       = crypto.Keccak256Hash([]byte{0xb}).Hex()
 		sha256Address = common.BytesToAddress([]byte{0x02})
 	)
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
@@ -987,9 +986,9 @@ func TestMulticallV1(t *testing.T) {
 		BlockNumber hexutil.Uint64 `json:"blockNumber"`
 		// Skip txHash
 		//TxHash common.Hash `json:"transactionHash" gencodec:"required"`
-		TxIndex   hexutil.Uint `json:"transactionIndex"`
-		BlockHash common.Hash  `json:"blockHash"`
-		Index     hexutil.Uint `json:"logIndex"`
+		TxIndex hexutil.Uint `json:"transactionIndex"`
+		//BlockHash common.Hash  `json:"blockHash"`
+		Index hexutil.Uint `json:"logIndex"`
 	}
 	type callErr struct {
 		Message string
@@ -1004,7 +1003,7 @@ func TestMulticallV1(t *testing.T) {
 	}
 	type blockRes struct {
 		Number string
-		Hash   string
+		//Hash   string
 		// Ignore timestamp
 		GasLimit     string
 		GasUsed      string
@@ -1045,7 +1044,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xf618",
 				FeeRecipient: coinbase,
@@ -1103,7 +1101,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa410",
 				FeeRecipient: coinbase,
@@ -1120,7 +1117,6 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xc",
-				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5208",
 				FeeRecipient: coinbase,
@@ -1171,7 +1167,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
 				FeeRecipient: strings.ToLower(cac.String()),
@@ -1183,7 +1178,6 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xc",
-				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
 				FeeRecipient: coinbase,
@@ -1252,7 +1246,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x10683",
 				FeeRecipient: coinbase,
@@ -1294,7 +1287,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x5508",
 				FeeRecipient: coinbase,
@@ -1305,7 +1297,6 @@ func TestMulticallV1(t *testing.T) {
 						Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
 						BlockNumber: hexutil.Uint64(11),
 						Data:        hexutil.Bytes{},
-						BlockHash:   hex2Hash(n11hash),
 					}},
 					GasUsed: "0x5508",
 					Status:  "0x1",
@@ -1364,7 +1355,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x52f6",
 				FeeRecipient: coinbase,
@@ -1415,7 +1405,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xa58c",
 				FeeRecipient: coinbase,
@@ -1464,7 +1453,6 @@ func TestMulticallV1(t *testing.T) {
 			includeTransfers: &includeTransfers,
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xd984",
 				FeeRecipient: coinbase,
@@ -1480,7 +1468,6 @@ func TestMulticallV1(t *testing.T) {
 						},
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(50)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
-						BlockHash:   hex2Hash(n11hash),
 					}, {
 						Address: common.Address{},
 						Topics: []common.Hash{
@@ -1490,7 +1477,6 @@ func TestMulticallV1(t *testing.T) {
 						},
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(100)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
-						BlockHash:   hex2Hash(n11hash),
 						Index:       hexutil.Uint(1),
 					}},
 					Status: "0x1",
@@ -1533,7 +1519,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x1b83f",
 				FeeRecipient: coinbase,
@@ -1550,7 +1535,6 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xc",
-				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe6d9",
 				FeeRecipient: coinbase,
@@ -1576,7 +1560,6 @@ func TestMulticallV1(t *testing.T) {
 			validation: &validation,
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x0",
 				FeeRecipient: coinbase,
@@ -1630,7 +1613,6 @@ func TestMulticallV1(t *testing.T) {
 			}},
 			want: []blockRes{{
 				Number:       "0xb",
-				Hash:         n11hash,
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xc542",
 				FeeRecipient: coinbase,
@@ -1647,7 +1629,6 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}, {
 				Number:       "0xc",
-				Hash:         crypto.Keccak256Hash([]byte{0xc}).Hex(),
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0x62a1",
 				FeeRecipient: coinbase,
