@@ -1326,6 +1326,10 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		prevHeader := header
 		header = headers[bi]
 		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		blockContext.GetHash = func(uint64) common.Hash {
+			// TODO
+			return header.Hash()
+		}
 		// TODO: GetHashFn
 		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		// State overrides are applied prior to execution of a block
@@ -1335,13 +1339,10 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 
 		var (
 			gasUsed     uint64
-			root        common.Hash
 			txes        = make([]*types.Transaction, len(block.Calls))
 			callResults = make([]callResult, len(block.Calls))
 		)
 		for i, call := range block.Calls {
-			// TODO: Track nonce by counting txes from sender
-			// Because then we can pre-populate the tx object.
 			if call.Nonce == nil {
 				nonce := state.GetNonce(call.from())
 				call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -1390,20 +1391,33 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			}
 			callResults[i] = callRes
 			gasUsed += result.UsedGas
-			root = state.IntermediateRoot(true)
+			state.Finalise(true)
 		}
 		// If last non-phantom block is parent of current block, set parent hash.
 		if header.Number.Uint64()-prevHeader.Number.Uint64() == 1 {
 			header.ParentHash = prevHeader.Hash()
 		}
-		header.Root = root
+		header.Root = state.IntermediateRoot(true)
 		header.GasUsed = gasUsed
 		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
 		results[bi] = mcBlockResultFromHeader(header, callResults)
+		repairLogs(results, header.Hash())
 	}
 	return results, nil
 }
 
+// repairLogs updates the block hash in the logs present in a multicall
+// result object. This is needed as during execution when logs are collected
+// the block hash is not known.
+func repairLogs(results []blockResult, blockHash common.Hash) {
+	for i := range results {
+		for j := range results[i].Calls {
+			for k := range results[i].Calls[j].Logs {
+				results[i].Calls[j].Logs[k].BlockHash = blockHash
+			}
+		}
+	}
+}
 func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallBatch, base *types.Header) ([]*types.Header, error) {
 	res := make([]*types.Header, len(blocks))
 	var (
@@ -1412,25 +1426,26 @@ func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallB
 		header        = base
 	)
 	for bi, block := range blocks {
-		if block.BlockOverrides == nil {
-			block.BlockOverrides = new(BlockOverrides)
+		overrides := new(BlockOverrides)
+		if block.BlockOverrides != nil {
+			overrides = block.BlockOverrides
 		}
 		// Sanitize block number and timestamp
-		if block.BlockOverrides.Number == nil {
+		if overrides.Number == nil {
 			n := new(big.Int).Add(big.NewInt(int64(prevNumber)), big.NewInt(1))
-			block.BlockOverrides.Number = (*hexutil.Big)(n)
-		} else if block.BlockOverrides.Number.ToInt().Uint64() <= prevNumber {
+			overrides.Number = (*hexutil.Big)(n)
+		} else if overrides.Number.ToInt().Uint64() <= prevNumber {
 			return nil, fmt.Errorf("block numbers must be in order")
 		}
-		prevNumber = block.BlockOverrides.Number.ToInt().Uint64()
+		prevNumber = overrides.Number.ToInt().Uint64()
 
-		if block.BlockOverrides.Time == nil {
+		if overrides.Time == nil {
 			t := prevTimestamp + 1
-			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
-		} else if time := (*uint64)(block.BlockOverrides.Time); *time <= prevTimestamp {
+			overrides.Time = (*hexutil.Uint64)(&t)
+		} else if time := (*uint64)(overrides.Time); *time <= prevTimestamp {
 			return nil, fmt.Errorf("timestamps must be in order")
 		}
-		prevTimestamp = uint64(*block.BlockOverrides.Time)
+		prevTimestamp = uint64(*overrides.Time)
 
 		// ParentHash for non-phantom blocks can only be computed
 		// after the previous block is executed.
@@ -1439,15 +1454,15 @@ func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallB
 			baseFee    *big.Int
 		)
 		// Calculate parentHash for phantom blocks.
-		if block.BlockOverrides.Number.ToInt().Uint64()-header.Number.Uint64() > 1 {
+		if overrides.Number.ToInt().Uint64()-header.Number.Uint64() > 1 {
 			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
-			hashData, err := rlp.EncodeToBytes([][]byte{header.Hash().Bytes(), block.BlockOverrides.Number.ToInt().Bytes()})
+			hashData, err := rlp.EncodeToBytes([][]byte{header.Hash().Bytes(), overrides.Number.ToInt().Bytes()})
 			if err != nil {
 				return nil, err
 			}
 			parentHash = crypto.Keccak256Hash(hashData)
 		}
-		if config.IsLondon(block.BlockOverrides.Number.ToInt()) {
+		if config.IsLondon(overrides.Number.ToInt()) {
 			baseFee = eip1559.CalcBaseFee(config, header)
 		}
 		header = &types.Header{
@@ -1459,7 +1474,7 @@ func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallB
 			//MixDigest:  header.MixDigest,
 			BaseFee: baseFee,
 		}
-		block.BlockOverrides.ApplyToHeader(header)
+		overrides.ApplyToHeader(header)
 		res[bi] = header
 	}
 	return res, nil
