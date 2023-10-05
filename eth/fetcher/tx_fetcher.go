@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	mrand "math/rand"
 	"sort"
 	"time"
@@ -581,7 +582,14 @@ func (f *TxFetcher) loop() {
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
 								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
-								f.dropPeer(peer)
+								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									// Normally we should drop a peer considering this is a protocol violation.
+									// However, due to the RLP vs consensus format messyness, allow a few bytes
+									// wiggle-room where we only warn, but don't drop.
+									//
+									// TODO(karalabe): Get rid of this relaxation when clients are proven stable.
+									f.dropPeer(peer)
+								}
 							}
 						}
 						delete(txset, hash)
@@ -599,7 +607,14 @@ func (f *TxFetcher) loop() {
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
 								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
-								f.dropPeer(peer)
+								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									// Normally we should drop a peer considering this is a protocol violation.
+									// However, due to the RLP vs consensus format messyness, allow a few bytes
+									// wiggle-room where we only warn, but don't drop.
+									//
+									// TODO(karalabe): Get rid of this relaxation when clients are proven stable.
+									f.dropPeer(peer)
+								}
 							}
 						}
 						delete(txset, hash)
