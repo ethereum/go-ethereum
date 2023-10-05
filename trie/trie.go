@@ -60,6 +60,9 @@ func (t *Trie) newFlag() nodeFlag {
 
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
+	t.tracerMutex.Lock()
+	defer t.tracerMutex.Unlock()
+
 	return &Trie{
 		root:     t.root,
 		owner:    t.owner,
@@ -366,7 +369,9 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New branch node is created as a child of the original short node.
 		// Track the newly inserted node in the tracer. The node identifier
 		// passed is the path from the root node.
+		t.tracerMutex.Lock()
 		t.tracer.onInsert(append(prefix, key[:matchlen]...))
+		t.tracerMutex.Unlock()
 
 		// Replace it with a short node leading up to the branch.
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
@@ -387,7 +392,9 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New short node is created and track it in the tracer. The node identifier
 		// passed is the path from the root node. Note the valueNode won't be tracked
 		// since it's always embedded in its parent.
+		t.tracerMutex.Lock()
 		t.tracer.onInsert(prefix)
+		t.tracerMutex.Unlock()
 
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
@@ -453,7 +460,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// The matched short node is deleted entirely and track
 			// it in the deletion set. The same the valueNode doesn't
 			// need to be tracked at all since it's always embedded.
+			t.tracerMutex.Lock()
 			t.tracer.onDelete(prefix)
+			t.tracerMutex.Unlock()
 
 			return true, nil, nil // remove n entirely for whole matches
 		}
@@ -470,7 +479,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		case *shortNode:
 			// The child shortNode is merged into its parent, track
 			// is deleted as well.
+			t.tracerMutex.Lock()
 			t.tracer.onDelete(append(prefix, n.Key...))
+			t.tracerMutex.Unlock()
 
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
@@ -540,7 +551,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
+					t.tracerMutex.Lock()
 					t.tracer.onDelete(append(prefix, byte(pos)))
+					t.tracerMutex.Unlock()
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 
@@ -630,6 +643,9 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
+	t.tracerMutex.Lock()
+	defer t.tracerMutex.Unlock()
+
 	defer t.tracer.reset()
 
 	nodes := NewNodeSet(t.owner, t.tracer.accessList)
@@ -682,5 +698,8 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
+
+	t.tracerMutex.Lock()
 	t.tracer.reset()
+	t.tracerMutex.Unlock()
 }
