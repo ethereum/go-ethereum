@@ -172,7 +172,7 @@ type mockBackend struct {
 	txPool *txpool.TxPool
 }
 
-// PeerCount implements Backend.
+// PeerCount implements mockBackend.
 func (*mockBackend) PeerCount() int {
 	panic("unimplemented")
 }

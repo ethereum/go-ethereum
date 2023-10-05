@@ -463,3 +463,167 @@ func TestRlpDecodeParentHash(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBlockNumberOptions4337(t *testing.T) {
+	t.Parallel()
+
+	testsPass := []struct {
+		number         string
+		header         Header
+		minBlockNumber *big.Int
+		maxBlockNumber *big.Int
+	}{
+		{
+			"1",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(0),
+			big.NewInt(20),
+		},
+		{
+			"2",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(10),
+			big.NewInt(10),
+		},
+		{
+			"3",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(10),
+			big.NewInt(11),
+		},
+		{
+			"4",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(0),
+			big.NewInt(10),
+		},
+	}
+
+	testsFail := []struct {
+		number         string
+		header         Header
+		minBlockNumber *big.Int
+		maxBlockNumber *big.Int
+	}{
+		{
+			"5",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(0),
+			big.NewInt(0),
+		},
+		{
+			"6",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(0),
+			big.NewInt(9),
+		},
+		{
+			"7",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(11),
+			big.NewInt(9),
+		},
+		{
+			"8",
+			Header{Number: big.NewInt(10)},
+			big.NewInt(11),
+			big.NewInt(20),
+		},
+	}
+
+	for _, test := range testsPass {
+		if err := test.header.ValidateBlockNumberOptions4337(test.minBlockNumber, test.maxBlockNumber); err != nil {
+			t.Fatalf("test number %v should not have failed. err: %v", test.number, err)
+		}
+	}
+
+	for _, test := range testsFail {
+		if err := test.header.ValidateBlockNumberOptions4337(test.minBlockNumber, test.maxBlockNumber); err == nil {
+			t.Fatalf("test number %v should have failed. err is nil", test.number)
+		}
+	}
+}
+
+func TestValidateTimestampOptions4337(t *testing.T) {
+	t.Parallel()
+
+	u64Ptr := func(n uint64) *uint64 {
+		return &n
+	}
+
+	testsPass := []struct {
+		number       string
+		header       Header
+		minTimestamp *uint64
+		maxTimestamp *uint64
+	}{
+		{
+			"1",
+			Header{Time: 1600000000},
+			u64Ptr(1500000000),
+			u64Ptr(1700000000),
+		},
+		{
+			"2",
+			Header{Time: 1600000000},
+			u64Ptr(1600000000),
+			u64Ptr(1600000000),
+		},
+		{
+			"3",
+			Header{Time: 1600000000},
+			u64Ptr(1600000000),
+			u64Ptr(1700000000),
+		},
+		{
+			"4",
+			Header{Time: 1600000000},
+			u64Ptr(1500000000),
+			u64Ptr(1600000000),
+		},
+	}
+
+	testsFail := []struct {
+		number       string
+		header       Header
+		minTimestamp *uint64
+		maxTimestamp *uint64
+	}{
+		{
+			"5",
+			Header{Time: 1600000000},
+			u64Ptr(1500000000),
+			u64Ptr(1500000000),
+		},
+		{
+			"6",
+			Header{Time: 1600000000},
+			u64Ptr(1400000000),
+			u64Ptr(1500000000),
+		},
+		{
+			"7",
+			Header{Time: 1600000000},
+			u64Ptr(1700000000),
+			u64Ptr(1500000000),
+		},
+		{
+			"8",
+			Header{Time: 1600000000},
+			u64Ptr(1700000000),
+			u64Ptr(1800000000),
+		},
+	}
+
+	for _, test := range testsPass {
+		if err := test.header.ValidateTimestampOptions4337(test.minTimestamp, test.maxTimestamp); err != nil {
+			t.Fatalf("test number %v should not have failed. err: %v", test.number, err)
+		}
+	}
+
+	for _, test := range testsFail {
+		if err := test.header.ValidateTimestampOptions4337(test.minTimestamp, test.maxTimestamp); err == nil {
+			t.Fatalf("test number %v should have failed. err is nil", test.number)
+		}
+	}
+}
