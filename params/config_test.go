@@ -99,17 +99,6 @@ func TestCheckCompatible(t *testing.T) {
 			headTimestamp: 9,
 			wantErr:       nil,
 		},
-		{
-			stored:        &ChainConfig{ShanghaiBlock: big.NewInt(30)},
-			new:           &ChainConfig{ShanghaiBlock: big.NewInt(30)},
-			headTimestamp: 25,
-			wantErr: &ConfigCompatError{
-				What:         "Shanghai fork Block",
-				StoredTime:   newUint64(10),
-				NewTime:      newUint64(20),
-				RewindToTime: 9,
-			},
-		},
 	}
 
 	for _, test := range tests {
@@ -127,7 +116,7 @@ func TestConfigRules(t *testing.T) {
 		ShanghaiBlock: big.NewInt(10),
 	}
 
-	var block *big.Int
+	block := new(big.Int)
 
 	if r := c.Rules(block, true, 0); r.IsShanghai {
 		t.Errorf("expected %v to not be shanghai", 0)
