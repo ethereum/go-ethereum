@@ -3,6 +3,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -11,7 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
+
+var errBorEngineNotAvailable error = errors.New("Only available in Bor engine")
 
 // GetRootHash returns root hash for given start and end block
 func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
@@ -24,7 +28,7 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 	}
 
 	if api == nil {
-		return "", errors.New("Only available in Bor engine")
+		return "", errBorEngineNotAvailable
 	}
 
 	root, err := api.GetRootHash(starBlockNr, endBlockNr)
@@ -33,6 +37,70 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 	}
 
 	return root, nil
+}
+
+// GetRootHash returns root hash for given start and end block
+func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	var api *bor.API
+
+	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
+		if _api.Namespace == "bor" {
+			api = _api.Service.(*bor.API)
+		}
+	}
+
+	if api == nil {
+		return false, errBorEngineNotAvailable
+	}
+
+	//Confirmation of 16 blocks on the endblock
+	tipConfirmationBlockNr := endBlockNr + uint64(16)
+
+	//Check if tipConfirmation block exit
+	_, err := b.BlockByNumber(ctx, rpc.BlockNumber(tipConfirmationBlockNr))
+	if err != nil {
+		return false, errTipConfirmationBlock
+	}
+
+	//Check if end block exist
+	localEndBlock, err := b.BlockByNumber(ctx, rpc.BlockNumber(endBlockNr))
+	if err != nil {
+		return false, errEndBlock
+	}
+
+	localEndBlockHash := localEndBlock.Hash().String()
+
+	downloader := b.eth.handler.downloader
+	isLocked := downloader.LockMutex(endBlockNr)
+
+	if !isLocked {
+		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
+		return false, errors.New("Whitelisted number or locked sprint number is more than the received end block number")
+	}
+
+	if localEndBlockHash != hash {
+		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
+		return false, fmt.Errorf("Hash mismatch: localChainHash %s, milestoneHash %s", localEndBlockHash, hash)
+	}
+
+	ethHandler := (*ethHandler)(b.eth.handler)
+
+	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
+
+	if !ok {
+		return false, fmt.Errorf("Bor not available")
+	}
+
+	err = bor.HeimdallClient.FetchMilestoneID(ctx, milestoneId)
+
+	if err != nil {
+		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
+		return false, fmt.Errorf("Milestone ID doesn't exist in Heimdall")
+	}
+
+	downloader.UnlockMutex(true, milestoneId, endBlockNr, localEndBlock.Hash())
+
+	return true, nil
 }
 
 // GetBorBlockReceipt returns bor block receipt

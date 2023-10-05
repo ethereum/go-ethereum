@@ -2105,6 +2105,10 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
+	if receipt.EffectiveGasPrice == nil {
+		fields["effectiveGasPrice"] = new(hexutil.Big)
+	}
+
 	// Assign receipt status or post state.
 	if len(receipt.PostState) > 0 {
 		fields["root"] = hexutil.Bytes(receipt.PostState)
@@ -2556,17 +2560,6 @@ func (api *DebugAPI) ChaindbCompact() error {
 // SetHead rewinds the head of the blockchain to a previous block.
 func (api *DebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
-}
-
-// GetCheckpointWhitelist retrieves the current checkpoint whitelist
-// entries (of the form block number -> block hash)
-func (api *DebugAPI) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return api.b.GetCheckpointWhitelist()
-}
-
-// PurgeCheckpointWhitelist purges the current checkpoint whitelist entries
-func (api *DebugAPI) PurgeCheckpointWhitelist() {
-	api.b.PurgeCheckpointWhitelist()
 }
 
 // GetTraceStack returns the current trace stack

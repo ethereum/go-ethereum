@@ -76,14 +76,15 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 
 	if number == rpc.FinalizedBlockNumber {
-		if !b.eth.Merger().TDDReached() {
-			return nil, errors.New("'finalized' tag not supported on pre-merge network")
+		finalBlockNumber, err := getFinalizedBlockNumber(b.eth)
+		if err != nil {
+			return nil, errors.New("finalized block not found")
 		}
 
-		block := b.eth.blockchain.CurrentFinalBlock()
+		block := b.eth.blockchain.CurrentFinalizedBlock(finalBlockNumber)
 
 		if block != nil {
-			return block, nil
+			return block.Header(), nil
 		}
 
 		return nil, errors.New("finalized block not found")
@@ -144,13 +145,12 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 
 	if number == rpc.FinalizedBlockNumber {
-		if !b.eth.Merger().TDDReached() {
-			return nil, errors.New("'finalized' tag not supported on pre-merge network")
+		finalBlocknumber, err := getFinalizedBlockNumber(b.eth)
+		if err != nil {
+			return nil, errors.New("finalized block not found")
 		}
 
-		header := b.eth.blockchain.CurrentFinalBlock()
-
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		return b.eth.blockchain.CurrentFinalizedBlock(finalBlocknumber), nil
 	}
 
 	if number == rpc.SafeBlockNumber {
@@ -313,6 +313,10 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	if signedTx.GetOptions() != nil && !b.eth.Miner().GetWorker().IsRunning() {
+		return errors.New("bundled transactions are not broadcasted therefore they will not submitted to the transaction pool")
+	}
+
 	err := b.eth.txPool.AddLocal(signedTx)
 	if err != nil {
 		if unwrapped := errors.Unwrap(err); unwrapped != nil {
@@ -451,10 +455,18 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
 
-func (b *EthAPIBackend) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return b.eth.Downloader().ChainValidator.GetCheckpointWhitelist()
+func (b *EthAPIBackend) GetWhitelistedCheckpoint() (bool, uint64, common.Hash) {
+	return b.eth.Downloader().ChainValidator.GetWhitelistedCheckpoint()
 }
 
-func (b *EthAPIBackend) PurgeCheckpointWhitelist() {
-	b.eth.Downloader().ChainValidator.PurgeCheckpointWhitelist()
+func (b *EthAPIBackend) PurgeWhitelistedCheckpoint() {
+	b.eth.Downloader().ChainValidator.PurgeWhitelistedCheckpoint()
+}
+
+func (b *EthAPIBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
+	return b.eth.Downloader().ChainValidator.GetWhitelistedMilestone()
+}
+
+func (b *EthAPIBackend) PurgeWhitelistedMilestone() {
+	b.eth.Downloader().ChainValidator.PurgeWhitelistedMilestone()
 }

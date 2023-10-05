@@ -35,7 +35,7 @@ func (c *Command) MarkDown() string {
 	items := []string{
 		"# Server",
 		"The ```bor server``` command runs the Bor client.",
-		c.Flags().MarkDown(),
+		c.Flags(nil).MarkDown(),
 	}
 
 	return strings.Join(items, "\n\n")
@@ -46,7 +46,7 @@ func (c *Command) Help() string {
 	return `Usage: bor [options]
 
 	Run the Bor server.
-  ` + c.Flags().Help()
+  ` + c.Flags(nil).Help()
 }
 
 // Synopsis implements the cli.Command interface
@@ -54,40 +54,69 @@ func (c *Command) Synopsis() string {
 	return "Run the Bor server"
 }
 
+// checkConfigFlag checks if the config flag is set or not. If set,
+// it returns the value else an empty string.
+func checkConfigFlag(args []string) string {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		// Check for single or double dashes
+		if strings.HasPrefix(arg, "-config") || strings.HasPrefix(arg, "--config") {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				return parts[1]
+			}
+
+			// If there's no equal sign, check the next argument
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		}
+	}
+
+	return ""
+}
+
 func (c *Command) extractFlags(args []string) error {
-	config := *DefaultConfig()
+	// Check if config file is provided or not
+	configFilePath := checkConfigFlag(args)
 
-	flags := c.Flags()
-	if err := flags.Parse(args); err != nil {
-		c.UI.Error(err.Error())
-		c.config = &config
+	if configFilePath != "" {
+		log.Info("Reading config file", "path", configFilePath)
 
-		return err
-	}
-
-	// TODO: Check if this can be removed or not
-	// read cli flags
-	if err := config.Merge(c.cliConfig); err != nil {
-		c.UI.Error(err.Error())
-		c.config = &config
-
-		return err
-	}
-	// read if config file is provided, this will overwrite the cli flags, if provided
-	if c.configFile != "" {
-		log.Warn("Config File provided, this will overwrite the cli flags", "path", c.configFile)
-
-		cfg, err := readConfigFile(c.configFile)
+		// Parse the config file
+		cfg, err := readConfigFile(configFilePath)
 		if err != nil {
 			c.UI.Error(err.Error())
-			c.config = &config
 
 			return err
 		}
 
-		if err := config.Merge(cfg); err != nil {
+		log.Warn("Config set via config file will be overridden by cli flags")
+
+		// Initialse a flagset based on the config created above
+		flags := c.Flags(cfg)
+
+		// Check for explicit cli args
+		cmd := Command{} // use a new variable to keep the original config intact
+
+		cliFlags := cmd.Flags(nil)
+		if err := cliFlags.Parse(args); err != nil {
 			c.UI.Error(err.Error())
-			c.config = &config
+
+			return err
+		}
+
+		// Get the list of flags set explicitly
+		names, values := cliFlags.Visit()
+
+		// Set these flags using the flagset created earlier
+		flags.UpdateValue(names, values)
+	} else {
+		flags := c.Flags(nil)
+
+		if err := flags.Parse(args); err != nil {
+			c.UI.Error(err.Error())
 
 			return err
 		}
@@ -95,33 +124,33 @@ func (c *Command) extractFlags(args []string) error {
 
 	// nolint: nestif
 	// check for log-level and verbosity here
-	if c.configFile != "" {
-		data, _ := toml.LoadFile(c.configFile)
+	if configFilePath != "" {
+		data, _ := toml.LoadFile(configFilePath)
 		if data.Has("verbosity") && data.Has("log-level") {
 			log.Warn("Config contains both, verbosity and log-level, log-level will be deprecated soon. Use verbosity only.", "using", data.Get("verbosity"))
 		} else if !data.Has("verbosity") && data.Has("log-level") {
 			log.Warn("Config contains log-level only, note that log-level will be deprecated soon. Use verbosity instead.", "using", data.Get("log-level"))
-			config.Verbosity = VerbosityStringToInt(strings.ToLower(data.Get("log-level").(string)))
+			c.cliConfig.Verbosity = VerbosityStringToInt(strings.ToLower(data.Get("log-level").(string)))
 		}
 	} else {
 		tempFlag := 0
 
 		for _, val := range args {
-			if (strings.HasPrefix(val, "-verbosity") || strings.HasPrefix(val, "--verbosity")) && config.LogLevel != "" {
+			if (strings.HasPrefix(val, "-verbosity") || strings.HasPrefix(val, "--verbosity")) && c.cliConfig.LogLevel != "" {
 				tempFlag = 1
 				break
 			}
 		}
 
 		if tempFlag == 1 {
-			log.Warn("Both, verbosity and log-level flags are provided, log-level will be deprecated soon. Use verbosity only.", "using", config.Verbosity)
-		} else if tempFlag == 0 && config.LogLevel != "" {
-			log.Warn("Only log-level flag is provided, note that log-level will be deprecated soon. Use verbosity instead.", "using", config.LogLevel)
-			config.Verbosity = VerbosityStringToInt(strings.ToLower(config.LogLevel))
+			log.Warn("Both, verbosity and log-level flags are provided, log-level will be deprecated soon. Use verbosity only.", "using", c.cliConfig.Verbosity)
+		} else if tempFlag == 0 && c.cliConfig.LogLevel != "" {
+			log.Warn("Only log-level flag is provided, note that log-level will be deprecated soon. Use verbosity instead.", "using", c.cliConfig.LogLevel)
+			c.cliConfig.Verbosity = VerbosityStringToInt(strings.ToLower(c.cliConfig.LogLevel))
 		}
 	}
 
-	c.config = &config
+	c.config = c.cliConfig
 
 	return nil
 }

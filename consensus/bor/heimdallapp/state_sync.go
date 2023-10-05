@@ -7,22 +7,18 @@ import (
 	"github.com/maticnetwork/heimdall/clerk/types"
 
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
-
-	abci "github.com/tendermint/tendermint/abci/types"
 )
 
 func (h *HeimdallAppClient) StateSyncEvents(ctx context.Context, fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
 	totalRecords := make([]*clerk.EventRecordWithTime, 0)
 
-	hCtx := h.hApp.NewContext(true, abci.Header{Height: h.hApp.LastBlockHeight()})
-
 	for {
-		fromRecord, err := h.hApp.ClerkKeeper.GetEventRecord(hCtx, fromID)
+		fromRecord, err := h.hApp.ClerkKeeper.GetEventRecord(h.NewContext(), fromID)
 		if err != nil {
 			return nil, err
 		}
 
-		events, err := h.hApp.ClerkKeeper.GetEventRecordListWithTime(hCtx, fromRecord.RecordTime, time.Unix(to, 0), 1, stateFetchLimit)
+		events, err := h.hApp.ClerkKeeper.GetEventRecordListWithTime(h.NewContext(), fromRecord.RecordTime, time.Unix(to, 0), 1, stateFetchLimit)
 		if err != nil {
 			return nil, err
 		}

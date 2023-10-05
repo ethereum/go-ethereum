@@ -84,7 +84,10 @@ func (p *Peer) broadcastTransactions() {
 			)
 
 			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
-				if tx := p.txpool.Get(queue[i]); tx != nil {
+				tx := p.txpool.Get(queue[i])
+
+				// Skip EIP-4337 bundled transactions
+				if tx != nil && tx.GetOptions() == nil {
 					txs = append(txs, tx)
 					size += common.StorageSize(tx.Size())
 				}
@@ -158,7 +161,10 @@ func (p *Peer) announceTransactions() {
 			)
 
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
-				if tx := p.txpool.Get(queue[count]); tx != nil {
+				tx := p.txpool.Get(queue[count])
+
+				// Skip EIP-4337 bundled transactions
+				if tx != nil && tx.GetOptions() == nil {
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, tx.Type())
 					pendingSizes = append(pendingSizes, uint32(tx.Size()))

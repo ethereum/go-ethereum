@@ -12,9 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on:
-      group: ubuntu-runners
-      labels: 18.04RunnerT2Large
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -98,7 +96,7 @@ jobs:
           NODE: bootnode
           NETWORK: mumbai
       - name: Copying systemd file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
-        run: cp -rp packaging/templates/systemd/bor_bootnode.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/
+        run: cp -rp packaging/templates/systemd/bor_bootnode.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/bor.service
         env:
           ARCH: amd64
           NODE: bootnode
@@ -153,7 +151,7 @@ jobs:
           NODE: bootnode
           NETWORK: mainnet
       - name: Copying systemd file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
-        run: cp -rp packaging/templates/systemd/bor_bootnode.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/
+        run: cp -rp packaging/templates/systemd/bor_bootnode.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/bor.service
         env:
           ARCH: amd64
           NODE: bootnode

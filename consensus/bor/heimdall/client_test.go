@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/network"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/milestone"
 
 	"github.com/stretchr/testify/require"
 )
@@ -23,12 +24,33 @@ import (
 // requests to the mock heimdal server for specific functions. Add more handlers
 // according to requirements.
 type HttpHandlerFake struct {
-	handleFetchCheckpoint http.HandlerFunc
+	handleFetchCheckpoint         http.HandlerFunc
+	handleFetchMilestone          http.HandlerFunc
+	handleFetchNoAckMilestone     http.HandlerFunc
+	handleFetchLastNoAckMilestone http.HandlerFunc
 }
 
 func (h *HttpHandlerFake) GetCheckpointHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.handleFetchCheckpoint.ServeHTTP(w, r)
+	}
+}
+
+func (h *HttpHandlerFake) GetMilestoneHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.handleFetchMilestone.ServeHTTP(w, r)
+	}
+}
+
+func (h *HttpHandlerFake) GetNoAckMilestoneHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.handleFetchNoAckMilestone.ServeHTTP(w, r)
+	}
+}
+
+func (h *HttpHandlerFake) GetLastNoAckMilestoneHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.handleFetchLastNoAckMilestone.ServeHTTP(w, r)
 	}
 }
 
@@ -39,6 +61,21 @@ func CreateMockHeimdallServer(wg *sync.WaitGroup, port int, listener net.Listene
 	// Create a route for fetching latest checkpoint
 	mux.HandleFunc("/checkpoints/latest", func(w http.ResponseWriter, r *http.Request) {
 		handler.GetCheckpointHandler()(w, r)
+	})
+
+	// Create a route for fetching milestone
+	mux.HandleFunc("/milestone/latest", func(w http.ResponseWriter, r *http.Request) {
+		handler.GetMilestoneHandler()(w, r)
+	})
+
+	// Create a route for fetching milestone
+	mux.HandleFunc("/milestone/noAck/{id}", func(w http.ResponseWriter, r *http.Request) {
+		handler.GetNoAckMilestoneHandler()(w, r)
+	})
+
+	// Create a route for fetching milestone
+	mux.HandleFunc("/milestone/lastNoAck", func(w http.ResponseWriter, r *http.Request) {
+		handler.GetLastNoAckMilestoneHandler()(w, r)
 	})
 
 	// Add other routes as per requirement
@@ -118,9 +155,59 @@ func TestFetchCheckpointFromMockHeimdall(t *testing.T) {
 	wg.Wait()
 }
 
+// TestFetchMilestoneFromMockHeimdall tests the heimdall client side logic
+// to fetch milestone from a mock heimdall server.
+// It can be used for debugging purpose (like response fields, marshalling/unmarshalling, etc).
+func TestFetchMilestoneFromMockHeimdall(t *testing.T) {
+	t.Parallel()
+
+	// Create a wait group for sending across the mock server
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	// Initialize the fake handler and add a fake milestone handler function
+	handler := &HttpHandlerFake{}
+	handler.handleFetchMilestone = func(w http.ResponseWriter, _ *http.Request) {
+		err := json.NewEncoder(w).Encode(milestone.MilestoneResponse{
+			Height: "0",
+			Result: milestone.Milestone{
+				Proposer:   common.Address{},
+				StartBlock: big.NewInt(0),
+				EndBlock:   big.NewInt(512),
+				Hash:       common.Hash{},
+				BorChainID: "15001",
+				Timestamp:  0,
+			},
+		})
+
+		if err != nil {
+			w.WriteHeader(500) // Return 500 Internal Server Error.
+		}
+	}
+
+	// Fetch available port
+	port, listener, err := network.FindAvailablePort()
+	require.NoError(t, err, "expect no error in finding available port")
+
+	// Create mock heimdall server and pass handler instance for setting up the routes
+	srv, err := CreateMockHeimdallServer(wg, port, listener, handler)
+	require.NoError(t, err, "expect no error in starting mock heimdall server")
+
+	// Create a new heimdall client and use same port for connection
+	client := NewHeimdallClient(fmt.Sprintf("http://localhost:%d", port))
+	_, err = client.FetchMilestone(context.Background())
+	require.NoError(t, err, "expect no error in fetching milestone")
+
+	// Shutdown the server
+	err = srv.Shutdown(context.TODO())
+	require.NoError(t, err, "expect no error in shutting down mock heimdall server")
+
+	// Wait for `wg.Done()` to be called in the mock server's routine.
+	wg.Wait()
+}
+
 // TestFetchShutdown tests the heimdall client side logic for context timeout and
-// interrupt handling while fetching checkpoints (latest for the scope of test)
-// from a mock heimdall server.
+// interrupt handling while fetching data from a mock heimdall server.
 func TestFetchShutdown(t *testing.T) {
 	t.Parallel()
 
@@ -135,7 +222,7 @@ func TestFetchShutdown(t *testing.T) {
 	// greater than `retryDelay`. This should cause the request to timeout and trigger shutdown
 	// due to `ctx.Done()`. Expect context timeout error.
 	handler.handleFetchCheckpoint = func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(6 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		err := json.NewEncoder(w).Encode(checkpoint.CheckpointResponse{
 			Height: "0",
@@ -165,7 +252,7 @@ func TestFetchShutdown(t *testing.T) {
 	// Create a new heimdall client and use same port for connection
 	client := NewHeimdallClient(fmt.Sprintf("http://localhost:%d", port))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 
 	// Expect this to fail due to timeout
 	_, err = client.FetchCheckpoint(ctx, -1)
@@ -182,7 +269,7 @@ func TestFetchShutdown(t *testing.T) {
 		w.WriteHeader(500) // Return 500 Internal Server Error.
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // Use some high value for timeout
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond) // Use some high value for timeout
 
 	// Cancel the context after a delay until we make request
 	go func(cancel context.CancelFunc) {

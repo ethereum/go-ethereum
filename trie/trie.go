@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,7 +49,8 @@ type Trie struct {
 
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
-	tracer *tracer
+	tracer      *tracer
+	tracerMutex sync.Mutex
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -605,7 +607,9 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 		return nil, err
 	}
 
+	t.tracerMutex.Lock()
 	t.tracer.onRead(prefix, blob)
+	t.tracerMutex.Unlock()
 
 	return mustDecodeNode(n, blob), nil
 }

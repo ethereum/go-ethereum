@@ -231,17 +231,37 @@ func (c *chainReaderFake) GetTd(hash common.Hash, number uint64) *big.Int {
 }
 
 // Mock chain validator functions
-func (w *chainValidatorFake) IsValidPeer(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
+func (w *chainValidatorFake) IsValidPeer(fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
 	return true, nil
 }
 func (w *chainValidatorFake) IsValidChain(current *types.Header, headers []*types.Header) (bool, error) {
 	return w.validate(current, headers)
 }
 func (w *chainValidatorFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
-func (w *chainValidatorFake) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return nil
+func (w *chainValidatorFake) ProcessMilestone(endBlockNum uint64, endBlockHash common.Hash)  {}
+func (w *chainValidatorFake) ProcessFutureMilestone(num uint64, hash common.Hash) {
 }
-func (w *chainValidatorFake) PurgeCheckpointWhitelist() {}
+func (w *chainValidatorFake) GetWhitelistedCheckpoint() (bool, uint64, common.Hash) {
+	return false, 0, common.Hash{}
+}
+
+func (w *chainValidatorFake) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
+	return false, 0, common.Hash{}
+}
+func (w *chainValidatorFake) PurgeWhitelistedCheckpoint() {}
+func (w *chainValidatorFake) PurgeWhitelistedMilestone()  {}
 func (w *chainValidatorFake) GetCheckpoints(current, sidechainHeader *types.Header, sidechainCheckpoints []*types.Header) (map[uint64]*types.Header, error) {
 	return map[uint64]*types.Header{}, nil
+}
+func (w *chainValidatorFake) LockMutex(endBlockNum uint64) bool {
+	return false
+}
+func (w *chainValidatorFake) UnlockMutex(doLock bool, milestoneId string, endBlockNum uint64, endBlockHash common.Hash) {
+}
+func (w *chainValidatorFake) UnlockSprint(endBlockNum uint64) {
+}
+func (w *chainValidatorFake) RemoveMilestoneID(milestoneId string) {
+}
+func (w *chainValidatorFake) GetMilestoneIDsList() []string {
+	return nil
 }

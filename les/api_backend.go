@@ -370,6 +370,9 @@ func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *LesApiBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	return nil, errors.New("not implemented")
 }
+func (b *LesApiBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	return false, errors.New("not implemented")
+}
 
 func (b *LesApiBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
 	return nil, errors.New("not implemented")
@@ -383,9 +386,16 @@ func (b *LesApiBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context,
 	return nil, common.Hash{}, 0, 0, errors.New("not implemented")
 }
 
-func (b *LesApiBackend) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return nil
+func (b *LesApiBackend) GetWhitelistedCheckpoint() (bool, uint64, common.Hash) {
+	return false, 0, common.Hash{}
 }
 
-func (b *LesApiBackend) PurgeCheckpointWhitelist() {
+func (b *LesApiBackend) PurgeWhitelistedCheckpoint() {
+}
+
+func (b *LesApiBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
+	return false, 0, common.Hash{}
+}
+
+func (b *LesApiBackend) PurgeWhitelistedMilestone() {
 }

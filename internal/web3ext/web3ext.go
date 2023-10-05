@@ -515,13 +515,23 @@ web3._extend({
 			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
-			name: 'getCheckpointWhitelist',
-			call: 'debug_getCheckpointWhitelist',
+			name: 'getWhitelistedCheckpoint',
+			call: 'debug_getWhitelistedCheckpoint',
 			params: 0,
 		}),
 		new web3._extend.Method({
-			name: 'purgeCheckpointWhitelist',
-			call: 'debug_purgeCheckpointWhitelist',
+			name: 'purgeWhitelistedCheckpoint',
+			call: 'debug_purgeWhitelistedCheckpoint',
+			params: 0,
+		}),  
+		new web3._extend.Method({
+			name: 'getWhitelistedMilestone',
+			call: 'debug_getWhitelistedMilestone',
+			params: 0,
+		}),
+		new web3._extend.Method({
+			name: 'purgeWhitelistedMilestone',
+			call: 'debug_purgeWhitelistedMilestone',
 			params: 0,
 		}),
 		new web3._extend.Method({

@@ -302,6 +302,7 @@ func (h *handler) close(err error, inflightReq *requestOp) {
 	h.callWG.Wait()
 	h.cancelRoot()
 	h.cancelServerSubscriptions(err)
+	h.executionPool.Stop()
 }
 
 // addRequestOp registers a request operation.
@@ -375,6 +376,7 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 	h.executionPool.Submit(context.Background(), func() error {
 		defer h.callWG.Done()
 		defer cancel()
+
 		fn(&callProc{ctx: ctx})
 
 		h.executionPool.processed.Add(1)

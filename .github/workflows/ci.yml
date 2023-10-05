@@ -15,7 +15,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests:
+  build:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - uses: actions/checkout@v3
+        - run: |
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.20.x
+
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: sudo apt update && sudo apt install build-essential
+
+        - uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              ~/Library/Caches/go-build
+              ~/go/pkg/mod
+            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+            restore-keys: ${{ runner.os }}-go-
+
+        - name: Build
+          run: make all
+
+  lint:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
@@ -39,6 +71,30 @@ jobs:
           if: runner.os == 'Linux'
           run: make lintci-deps
 
+        - name: Lint
+          if: runner.os == 'Linux'
+          run: make lint
+
+  unit-tests:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - uses: actions/checkout@v3
+        - run: |
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.20.x
+
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: sudo apt update && sudo apt install build-essential
+
         - uses: actions/cache@v3
           with:
             path: |
@@ -48,26 +104,11 @@ jobs:
             key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
             restore-keys: ${{ runner.os }}-go-
 
-        - name: Build
-          run: make all
-
-        - name: Lint
-          if: runner.os == 'Linux'
-          run: make lint
-
         - name: Test
           run: make test
 
         #- name: Data race tests
         #  run: make test-race
-
-        - name: test-integration
-          run: make test-integration
-
-        - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v1
-          with:
-            file: ./cover.out
 
         # # TODO: make it work
         # - name: Reproducible build test
@@ -81,6 +122,50 @@ jobs:
         #       fi
 
   integration-tests:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - uses: actions/checkout@v3
+        - run: |
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.20.x
+
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: sudo apt update && sudo apt install build-essential
+
+        - uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              ~/Library/Caches/go-build
+              ~/go/pkg/mod
+            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+            restore-keys: ${{ runner.os }}-go-
+
+        - name: test-integration
+          run: make test-integration
+
+  codecov:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - name: Upload coverage to Codecov
+          uses: codecov/codecov-action@v1
+          with:
+            file: ./cover.out
+
+  e2e-tests:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
@@ -154,7 +239,7 @@ jobs:
             cd matic-cli/devnet/code/contracts
             npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
             cd -
-            timeout 20m bash bor/integration-tests/smoke_test.sh
+            timeout 60m bash bor/integration-tests/smoke_test.sh
 
         - name: Upload logs
           if: always()

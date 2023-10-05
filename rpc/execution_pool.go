@@ -21,7 +21,8 @@ type SafePool struct {
 	service   string       // the service using ep
 	processed atomic.Int64 // keeps count of total processed requests
 
-	close chan struct{}
+	close     chan struct{}
+	closeOnce sync.Once
 
 	// Skip sending task to execution pool
 	fastPath bool
@@ -103,7 +104,9 @@ func (s *SafePool) Size() int {
 }
 
 func (s *SafePool) Stop() {
-	close(s.close)
+	s.closeOnce.Do(func() {
+		close(s.close)
+	})
 
 	if s.executionPool.Load() != nil {
 		s.executionPool.Load().Stop()

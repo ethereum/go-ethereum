@@ -67,6 +67,9 @@ type Config struct {
 	// Ancient is the directory to store the state in
 	Ancient string `hcl:"ancient,optional" toml:"ancient,optional"`
 
+	// DBEngine is used to select leveldb or pebble as database
+	DBEngine string `hcl:"db.engine,optional" toml:"db.engine,optional"`
+
 	// KeyStoreDir is the directory to store keystores
 	KeyStoreDir string `hcl:"keystore,optional" toml:"keystore,optional"`
 
@@ -117,6 +120,8 @@ type Config struct {
 
 	// Cache has the cache related settings
 	Cache *CacheConfig `hcl:"cache,block" toml:"cache,block"`
+
+	ExtraDB *ExtraDBConfig `hcl:"leveldb,block" toml:"leveldb,block"`
 
 	// Account has the validator account related settings
 	Accounts *AccountsConfig `hcl:"accounts,block" toml:"accounts,block"`
@@ -548,6 +553,13 @@ type CacheConfig struct {
 	FDLimit int `hcl:"fdlimit,optional" toml:"fdlimit,optional"`
 }
 
+type ExtraDBConfig struct {
+	LevelDbCompactionTableSize           uint64  `hcl:"compactiontablesize,optional" toml:"compactiontablesize,optional"`
+	LevelDbCompactionTableSizeMultiplier float64 `hcl:"compactiontablesizemultiplier,optional" toml:"compactiontablesizemultiplier,optional"`
+	LevelDbCompactionTotalSize           uint64  `hcl:"compactiontotalsize,optional" toml:"compactiontotalsize,optional"`
+	LevelDbCompactionTotalSizeMultiplier float64 `hcl:"compactiontotalsizemultiplier,optional" toml:"compactiontotalsizemultiplier,optional"`
+}
+
 type AccountsConfig struct {
 	// Unlock is the list of addresses to unlock in the node
 	Unlock []string `hcl:"unlock,optional" toml:"unlock,optional"`
@@ -592,6 +604,7 @@ func DefaultConfig() *Config {
 		EnablePreimageRecording: false,
 		DataDir:                 DefaultDataDir(),
 		Ancient:                 "",
+		DBEngine:                "leveldb",
 		Logging: &LoggingConfig{
 			Vmodule:   "",
 			Json:      false,
@@ -737,6 +750,14 @@ func DefaultConfig() *Config {
 			TriesInMemory: 128,
 			TrieTimeout:   60 * time.Minute,
 			FDLimit:       0,
+		},
+		ExtraDB: &ExtraDBConfig{
+			// These are LevelDB defaults, specifying here for clarity in code and in logging.
+			// See: https://github.com/syndtr/goleveldb/blob/126854af5e6d8295ef8e8bee3040dd8380ae72e8/leveldb/opt/options.go
+			LevelDbCompactionTableSize:           2, // MiB
+			LevelDbCompactionTableSizeMultiplier: 1,
+			LevelDbCompactionTotalSize:           10, // MiB
+			LevelDbCompactionTotalSizeMultiplier: 10,
 		},
 		Accounts: &AccountsConfig{
 			Unlock:              []string{},
@@ -1097,6 +1118,14 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.TriesInMemory = c.Cache.TriesInMemory
 	}
 
+	// LevelDB
+	{
+		n.LevelDbCompactionTableSize = c.ExtraDB.LevelDbCompactionTableSize
+		n.LevelDbCompactionTableSizeMultiplier = c.ExtraDB.LevelDbCompactionTableSizeMultiplier
+		n.LevelDbCompactionTotalSize = c.ExtraDB.LevelDbCompactionTotalSize
+		n.LevelDbCompactionTotalSizeMultiplier = c.ExtraDB.LevelDbCompactionTotalSizeMultiplier
+	}
+
 	n.RPCGasCap = c.JsonRPC.GasCap
 	if n.RPCGasCap != 0 {
 		log.Info("Set global gas cap", "cap", n.RPCGasCap)
@@ -1278,6 +1307,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 	cfg := &node.Config{
 		Name:                  clientIdentifier,
 		DataDir:               c.DataDir,
+		DBEngine:              c.DBEngine,
 		KeyStoreDir:           c.KeyStoreDir,
 		UseLightweightKDF:     c.Accounts.UseLightweightKDF,
 		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,
