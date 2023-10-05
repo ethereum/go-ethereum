@@ -2021,6 +2021,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 			// newRPCTransaction calculates hash based on RLP of the transaction data.
 			// In case of bor block tx, we need simple derived tx hash (same as function argument) instead of RLP hash
 			resultTx.Hash = hash
+			resultTx.ChainID = nil
 		}
 
 		return resultTx, nil
