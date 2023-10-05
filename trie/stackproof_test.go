@@ -2,7 +2,6 @@ package trie
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -57,9 +56,11 @@ func testStRangeProofLeftside(t *testing.T, trie *Trie, vals map[string]*kv) {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
 		// Initiate the stacktrie with the proof
-		stTrie, err := newStackTrieFromProof(trie.Hash(), entries[start].k, proof, func(path []byte, hash common.Hash, blob []byte) {
+		t.Logf("Start: %d\nPrev %x\n\nFirst%x\n", start, entries[start-1].k, entries[start].k)
+		writeFn := wrapWriteFunction(entries[start].k, entries[len(entries)-1].k, func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(haveSponge, common.Hash{}, path, hash, blob, "path")
 		})
+		stTrie, err := newStackTrieFromProof(trie.Hash(), entries[start].k, proof, writeFn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,9 +70,29 @@ func testStRangeProofLeftside(t *testing.T, trie *Trie, vals map[string]*kv) {
 			k, v := common.CopyBytes(entries[i].k), common.CopyBytes(entries[i].v)
 			refTrie.Update(k, v)
 		}
-		refTrie.writeFn = func(path []byte, hash common.Hash, blob []byte) {
+		// Determine the origin-border, and lop off the terminator
+		hexStart := keybytesToHex(entries[start].k)[:2*len(entries[start].k)]
+
+		w := func(path []byte, hash common.Hash, blob []byte) {
+			// the refTrie _might_ have an unhashed sibling still not comitted, in case
+			// the proof is between two elements. In that case, it should not be committed,
+			// because the proof-initiated one will not have it (only hashed).
+			//
+			// It might even have a "sibling parent" still uncomitted
+			//              1
+			//         d                        e
+			//  0 1 2 3 4 .. f                  0
+			//  a b c d e .. n                  x <-- the one we're about to insert
+			//
+			// In this case, as soon as we submit 0x...1e0, 0x...0d will be hashed and comitted
+			// by the reftrie (but not the proof-initalized one).
+			if bytes.Compare(path, hexStart[:len(path)]) < 0 {
+				t.Logf("Ignoring path %x", path)
+				return
+			}
 			rawdb.WriteTrieNode(wantSponge, common.Hash{}, path, hash, blob, "path")
 		}
+		refTrie.writeFn = wrapWriteFunction(entries[start].k, entries[len(entries)-1].k, w)
 		// Feed the remaining values into them both
 		for i := start + 1; i < len(vals); i++ {
 			stTrie.Update(entries[i].k, common.CopyBytes(entries[i].v))
@@ -88,14 +109,10 @@ func testStRangeProofLeftside(t *testing.T, trie *Trie, vals map[string]*kv) {
 		if have, want := haveSponge.sponge.Sum(nil), wantSponge.sponge.Sum(nil); !bytes.Equal(have, want) {
 			// Show the journal
 			t.Logf("Want:")
-			for i, v := range wantSponge.journal {
-				t.Logf("op %d: %v", i, v)
-			}
+			wantSponge.PrettyPrint(t)
 			t.Logf("Have:")
-			for i, v := range haveSponge.journal {
-				t.Logf("op %d: %v", i, v)
-			}
-			t.Errorf("proof from %d: disk write sequence wrong:\nhave %x want %x\n", start, have, want)
+			haveSponge.PrettyPrint(t)
+			t.Fatalf("proof from %d: disk write sequence wrong:\nhave %x want %x\n", start, have, want)
 		}
 	}
 }
@@ -168,19 +185,7 @@ func testStackRangeProof(
 	t *testing.T, rootHash common.Hash,
 	proof ethdb.KeyValueReader, entries []*kv) {
 
-	var leftBorder = keybytesToHex(entries[0].k)
-	var rightBorder = keybytesToHex(entries[len(entries)-1].k)
-	writeFn := func(path []byte, hash common.Hash, blob []byte) {
-		if bytes.HasPrefix(leftBorder, path) {
-			fmt.Printf("path %x  tainted left (parent to %x)\n", path, leftBorder)
-			return
-		}
-		if bytes.HasPrefix(rightBorder, path) {
-			fmt.Printf("path %x  tainted right (parent to %x)\n", path, rightBorder)
-			return
-		}
-		//fmt.Printf("Committing path %x\n", path)
-	}
+	writeFn := wrapWriteFunction(entries[0].k, entries[len(entries)-1].k, func(path []byte, hash common.Hash, blob []byte) {})
 
 	// Use the proof initiate the stacktrie with the first entry
 	stTrie, err := newStackTrieFromProof(rootHash, entries[0].k, proof, writeFn)
