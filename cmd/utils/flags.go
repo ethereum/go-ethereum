@@ -219,6 +219,11 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+	TreeRootFlag = &cli.StringFlag{
+		Name:  "roothash",
+		Usage: "Root hash of the tree (if empty, use that of current block)",
+		Value: "",
+	}
 
 	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SnapshotFlag    = &cli.BoolFlag{

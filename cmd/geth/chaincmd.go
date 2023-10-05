@@ -167,6 +167,17 @@ It's deprecated, please use "geth db export" instead.
 This command dumps out the state for a given block (or latest, if none provided).
 `,
 	}
+	exportSnapshotPreimagesCommand = &cli.Command{
+		Action:    exportSnapshotPreimages,
+		Name:      "export-snapshot-preimages",
+		Usage:     "Export the preimage in snapshot enumeration order",
+		ArgsUsage: "<dumpfile>",
+		Flags:     flags.Merge([]cli.Flag{utils.TreeRootFlag}, utils.DatabaseFlags),
+		Description: `
+The export-overlay-preimages command exports hash preimages to a flat file, in exactly
+the expected order for the overlay tree migration.
+`,
+	}
 )
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
@@ -400,6 +411,33 @@ func exportPreimages(ctx *cli.Context) error {
 	start := time.Now()
 
 	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	fmt.Printf("Export done in %v\n", time.Since(start))
+	return nil
+}
+
+// exportSnapshotPreimages dumps the preimage data to a flat file.
+func exportSnapshotPreimages(ctx *cli.Context) error {
+	if ctx.Args().Len() < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, _ := utils.MakeChain(ctx, stack, true)
+
+	var root common.Hash
+	if ctx.String(utils.TreeRootFlag.Name) != "" {
+		rootBytes := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
+		if len(rootBytes) != common.HashLength {
+			return fmt.Errorf("invalid root hash length")
+		}
+		root = common.BytesToHash(rootBytes)
+	}
+
+	start := time.Now()
+	if err := utils.ExportSnapshotPreimages(chain, ctx.Args().First(), root); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))

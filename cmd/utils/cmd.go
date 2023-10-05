@@ -374,6 +374,75 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+// ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
+// the snapshot for a given root.
+func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	writer := bufio.NewWriter(fh)
+	defer writer.Flush()
+
+	statedb, err := chain.State()
+	if err != nil {
+		return fmt.Errorf("failed to open statedb: %w", err)
+	}
+
+	if root == (common.Hash{}) {
+		root = chain.CurrentBlock().Root
+	}
+
+	accIt, err := chain.Snapshots().AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIt.Release()
+
+	count := 0
+	for accIt.Next() {
+		acc, err := types.FullAccount(accIt.Account())
+		if err != nil {
+			return fmt.Errorf("invalid account encountered during traversal: %s", err)
+		}
+		addr := rawdb.ReadPreimage(statedb.Database().DiskDB(), accIt.Hash())
+		if len(addr) != 20 {
+			return fmt.Errorf("addr len is zero is not 32: %d", len(addr))
+		}
+		if _, err := writer.Write(addr); err != nil {
+			return fmt.Errorf("failed to write addr preimage: %w", err)
+		}
+
+		if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
+			stIt, err := chain.Snapshots().StorageIterator(root, accIt.Hash(), common.Hash{})
+			if err != nil {
+				return fmt.Errorf("failed to create storage iterator: %w", err)
+			}
+			for stIt.Next() {
+				slotnr := rawdb.ReadPreimage(statedb.Database().DiskDB(), stIt.Hash())
+				if len(slotnr) != 32 {
+					return fmt.Errorf("slotnr not 32 len")
+				}
+				if _, err := writer.Write(slotnr); err != nil {
+					return fmt.Errorf("failed to write slotnr preimage: %w", err)
+				}
+			}
+			stIt.Release()
+		}
+		count++
+		if count%100000 == 0 {
+			log.Info("Last exported account", "account", accIt.Hash())
+		}
+	}
+
+	log.Info("Exported preimages", "file", fn)
+	return nil
+}
+
 // exportHeader is used in the export/import flow. When we do an export,
 // the first element we output is the exportHeader.
 // Whenever a backwards-incompatible change is made, the Version header
