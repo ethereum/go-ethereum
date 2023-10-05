@@ -19,6 +19,7 @@ package ethapi
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -934,15 +935,104 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 }
 
 // GetRequiredBlockState returns all state required to execute a single historical block.
-func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*txTraceResult, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if block == nil || err != nil {
 		// When the block doesn't exist, the RPC method should return JSON null
 		return nil, nil
 	}
+	return s.traceBlock(ctx, block)
+}
 
-	result := make([]map[string]interface{}, 1)
-	return result, nil
+// txTraceResult is the result of a single transaction trace.
+type txTraceResult struct {
+	TxHash common.Hash `json:"txHash"`           // transaction hash
+	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
+const (
+	// defaultTraceTimeout is the amount of time a single transaction can execute
+	// by default before being forcefully aborted.
+	defaultTraceTimeout = 5 * time.Second
+)
+
+// traceBlock configures a new tracer according to the provided configuration, and
+// executes all the transactions contained within. The return value will be one item
+// per transaction, dependent on the requested tracer.
+func (s *BlockChainAPI) traceBlock(ctx context.Context, block *types.Block) ([]*txTraceResult, error) {
+	if block.NumberU64() == 0 {
+		return nil, errors.New("genesis is not traceable")
+	}
+	// Prepare base state
+	statedb, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(block.NumberU64()-1))
+	if err != nil {
+		return nil, err
+	}
+
+	// Native tracers have low overhead
+	var (
+		txs      = block.Transactions()
+		is158    = s.b.ChainConfig().IsEIP158(block.Number())
+		blockCtx = core.NewEVMBlockContext(block.Header(), NewChainContext(ctx, s.b), nil)
+		signer   = types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
+		results  = make([]*txTraceResult, len(txs))
+	)
+	for i, tx := range txs {
+		// Generate the next state snapshot fast without tracing
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		res, err := s.traceTx(ctx, msg, blockCtx, statedb)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+		// Finalize the state so any modifications are written to the trie
+		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+		statedb.Finalise(is158)
+	}
+	return results, nil
+}
+
+// Tracer interface extends vm.EVMLogger and additionally
+// allows collecting the tracing result.
+type Tracer interface {
+	vm.EVMLogger
+	GetResult() (json.RawMessage, error)
+	// Stop terminates execution of the tracer at the first opportune moment.
+	Stop(err error)
+}
+
+// traceTx configures a new tracer according to the provided configuration, and
+// executes the given message in the provided environment. The return value will
+// be tracer dependent.
+func (s *BlockChainAPI) traceTx(ctx context.Context, message *core.Message, vmctx vm.BlockContext, statedb *state.StateDB) (interface{}, error) {
+	var (
+		tracer    Tracer
+		err       error
+		timeout   = defaultTraceTimeout
+		txContext = core.NewEVMTxContext(message)
+	)
+	// Default tracer is the struct logger
+	tracer = logger.NewStructLogger(&logger.Config{})
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, s.b.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
+
+	// Define a meaningful timeout of a single transaction trace
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	go func() {
+		<-deadlineCtx.Done()
+		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			tracer.Stop(errors.New("execution timeout"))
+			// Stop evm execution. Note cancellation is not necessarily immediate.
+			vmenv.Cancel()
+		}
+	}()
+	defer cancel()
+
+	// Call Prepare to clear out the statedb access list
+	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit)); err != nil {
+		return nil, fmt.Errorf("tracing failed: %w", err)
+	}
+	return tracer.GetResult()
 }
 
 // OverrideAccount indicates the overriding fields of account during the execution
