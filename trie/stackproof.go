@@ -394,3 +394,29 @@ func VerifyRangeProofWithStack(rootHash common.Hash, firstKey []byte, keys [][]b
 	// hasRightElement is true if the hashes we inserted are non-0
 	return len(hps) > 0, nil
 }
+
+// wrarpWriteFunction returns a NodeWriteFunc which filters away writes that are
+// on the boundary: parents of first/last.
+func wrapWriteFunction(origin, first, last []byte, w NodeWriteFunc) NodeWriteFunc {
+	if w == nil {
+		return nil
+	}
+	var originBorder = keybytesToHex(origin)
+	var leftBorder = keybytesToHex(first)
+	var rightBorder = keybytesToHex(last)
+	return func(origin common.Hash, path []byte, hash common.Hash, blob []byte) {
+		if bytes.HasPrefix(originBorder, path) {
+			//fmt.Printf("path %x  tainted left (parent to %x)\n", path, leftBorder)
+			return
+		}
+		if bytes.HasPrefix(leftBorder, path) {
+			//fmt.Printf("path %x  tainted left (parent to %x)\n", path, leftBorder)
+			return
+		}
+		if bytes.HasPrefix(rightBorder, path) {
+			//fmt.Printf("path %x  tainted right (parent to %x)\n", path, rightBorder)
+			return
+		}
+		w(origin, path, hash, blob)
+	}
+}
