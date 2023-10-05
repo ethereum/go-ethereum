@@ -104,7 +104,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	// Legacy rules should be applied if we are in Petersburg (removal of EIP-1283)
 	// OR Constantinople is not active
 	if evm.chainRules.IsPetersburg || !evm.chainRules.IsConstantinople {
-		// This checks for 3 scenario's and calculates gas accordingly:
+		// This checks for 3 scenarios and calculates gas accordingly:
 		//
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
 		// 2. From a non-zero value address to a zero-value address (DELETE)
@@ -165,7 +165,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	return params.NetSstoreDirtyGas, nil
 }
 
-// Here come the EIP2200 rules:
+// Here comes the EIP2200 rules:
 //
 //	(0.) If *gasleft* is less than or equal to 2300, fail the current call.
 //	(1.) If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
