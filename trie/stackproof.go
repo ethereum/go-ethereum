@@ -87,6 +87,7 @@ func newStackTrieFromProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyVa
 	if parent, err = resolveFromProof(proofDb, rootHash); err != nil {
 		return nil, err
 	}
+	var lastResolved common.Hash
 	stParent = nodeToStNode(parent, key)
 	stack.root = stParent
 	// Now we pursue the given key downwards, and populate the stacktrie too
@@ -94,9 +95,40 @@ func newStackTrieFromProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyVa
 		keyrest, child = get(parent, key, false)
 		switch cld := child.(type) {
 		case nil:
-			return nil, errors.New("no node at given path")
+			/*
+				If the parent is a shortnode, it means that the 'next' key is not
+				going in here (because then the parent would be a fullnode). We cannot
+				leave the parent shortnode dangling without value: either we
+				revert it back to hashed form, or we leave it as an empty node.
+
+				There are a few cases to consider, this shortnode does prove the inexistence
+				of the 'origin', it does so by proving that the extension does not
+				point to 'origin'. However: it may point to
+				1. An existing leaf to the left of the 'origin'
+				2. An existing leaft to the right of the 'origin'.
+
+				In the former case, we do not want it here, it does not belong. We need
+				to replace it with it's hash.
+
+				In the latter case, we cannot replace it with a hash, because as soon
+				as we start feeding the leafs, the first one will hit the "trying to insert into hash" case.
+				So instead we must make it an emptyNode.
+			*/
+
+			if sn, ok := parent.(*shortNode); ok {
+				if bytes.Compare(sn.Key, key) < 0 {
+					// This is on the lower side of the proof-border. We must replace
+					// this with a hash, not an empty node
+					stParent.typ = hashedNode
+					stParent.val = lastResolved[:]
+				} else {
+					stParent.typ = emptyNode
+				}
+			}
+			return stack, nil
 		case hashNode:
-			child, err = resolveFromProof(proofDb, common.BytesToHash(cld))
+			lastResolved = common.BytesToHash(cld)
+			child, err = resolveFromProof(proofDb, lastResolved)
 			if err != nil {
 				return nil, err
 			}
@@ -217,9 +249,15 @@ func iterateProof(rootHash common.Hash, path []byte, ascending bool, proof ethdb
 		}
 		if hn, ok := n.(hashNode); ok {
 			n, _ = resolveFromProof(proof, common.Hash(hn))
-			if n == nil {
-				return nil, fmt.Errorf("proof node (hash %064x) missing", rootHash)
-			}
+		}
+		if n == nil {
+			// n is nil!
+			// At this point, we are following a path of nonexistence.
+			// nothing more to iterate here
+			// However, while iterating towards a non-present end leaf,
+			// we may have encountered an actual leaf here. Must we
+			// restore the hash for that one?
+			break
 		}
 	}
 	return paths, nil
@@ -312,15 +350,30 @@ func VerifyRangeProofWithStack(rootHash common.Hash, firstKey []byte, keys [][]b
 	if err != nil {
 		return false, fmt.Errorf("could not initate stacktrie: %v", err)
 	}
-	// Feed in the values, starting from 1 (do not re-add the proof-leaf)
-	for i := 1; i < len(keys); i++ {
-		if bytes.Compare(keys[i-1], keys[i]) >= 0 {
+	// Feed in the values
+	if bytes.Compare(firstKey, keys[0]) > 0 {
+		return false, errors.New("range is not monotonically increasing")
+	}
+	var pKey []byte
+	for i := 0; i < len(keys); i++ {
+		if bytes.Compare(pKey, keys[i]) >= 0 {
 			return false, errors.New("range is not monotonically increasing")
 		}
+		pKey = keys[i]
 		if len(values[i]) == 0 {
 			return false, errors.New("range contains deletion")
 		}
-		stTrie.Update(keys[i], values[i])
+		if err := stTrie.Update(keys[i], values[i]); err != nil {
+			return false, err
+		}
+	}
+	if !bytes.Equal(lastKey, keys[len(keys)-1]) {
+		// The method we have of inserting right-hand hashes only works
+		// if the proof indeed concerns the last element: otherwise it forces
+		// restructurings on the trie which result in insertion-into-hash.
+		// However, for snap-sync, we do not expect "right side proof-of-inexistence":
+		// the rhs proof should prove the last element that was sent along.
+		return false, fmt.Errorf("proofs must prove the last item")
 	}
 	// For the right-hand-side, we need a list of hashes ot inject
 	hps, err := iterateProof(rootHash, lastKey, false, proof)
@@ -330,7 +383,10 @@ func VerifyRangeProofWithStack(rootHash common.Hash, firstKey []byte, keys [][]b
 	slices.Reverse(hps)
 	// Insert into stacktrie
 	for _, hp := range hps {
-		stTrie.insert(stTrie.root, hp.path, hp.hash[:], nil, newHashed)
+		//fmt.Printf("Inserting at %x: hash %x \n", hp.path, hp.hash)
+		if err := stTrie.insert(stTrie.root, hp.path, hp.hash[:], nil, newHashed); err != nil {
+			return false, err
+		}
 	}
 	if have := stTrie.Hash(); have != rootHash {
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, have)

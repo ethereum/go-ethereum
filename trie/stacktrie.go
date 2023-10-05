@@ -17,9 +17,11 @@
 package trie
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -59,8 +61,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		panic("deletion not supported")
 	}
-	t.insert(t.root, k[:len(k)-1], value, nil, newLeaf)
-	return nil
+	return t.insert(t.root, k[:len(k)-1], value, nil, newLeaf)
 }
 
 // MustUpdate is a wrapper of Update and will omit any encountered error but
@@ -148,7 +149,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCtor func([]byte, []byte) *stNode) {
+func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCtor func([]byte, []byte) *stNode) error {
 	switch st.typ {
 	case branchNode: /* Branch */
 		idx := int(key[0])
@@ -167,9 +168,8 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCto
 		if st.children[idx] == nil {
 			st.children[idx] = leafCtor(key[1:], value)
 		} else {
-			t.insert(st.children[idx], key[1:], value, append(prefix, key[0]), leafCtor)
+			return t.insert(st.children[idx], key[1:], value, append(prefix, key[0]), leafCtor)
 		}
-
 	case extNode: /* Ext */
 		// Compare both key chunks and see where they differ
 		diffidx := st.getDiffIndex(key)
@@ -182,8 +182,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCto
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			t.insert(st.children[0], key[diffidx:], value, append(prefix, key[:diffidx]...), leafCtor)
-			return
+			return t.insert(st.children[0], key[diffidx:], value, append(prefix, key[:diffidx]...), leafCtor)
 		}
 		// Save the original part. Depending if the break is
 		// at the extension's last byte or not, create an
@@ -240,8 +239,16 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCto
 		// keys, 2) a fullnode selecting the path on which the
 		// keys differ, and 3) one leaf for the differentiated
 		// component of each key.
+
 		if diffidx >= len(st.key) {
-			panic("Trying to insert into existing key")
+			if diffidx == len(st.key) && bytes.Equal(st.val, value) {
+				// We can ignore this: it's not an overwrite, just reinsert.
+				//
+				// Sometimes a proof is initialized with a value, the
+				// same value is then fed in to the trie.
+				return nil
+			}
+			return errors.New("trying to insert into existing key")
 		}
 
 		// Check if the split occurs at the first nibble of the
@@ -283,11 +290,12 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte, leafCto
 		st.val = value
 
 	case hashedNode:
-		panic("trying to insert into hash")
+		return fmt.Errorf("trying to insert into hash %x path %x %x", st.val, key, value)
 
 	default:
 		panic("invalid type")
 	}
+	return nil
 }
 
 // hash converts st into a 'hashedNode', if possible. Possible outcomes:

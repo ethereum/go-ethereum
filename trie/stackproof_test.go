@@ -170,7 +170,7 @@ func testStackRangeProof(
 
 	var leftBorder = keybytesToHex(entries[0].k)
 	var rightBorder = keybytesToHex(entries[len(entries)-1].k)
-	writeFn := func(_ common.Hash, path []byte, hash common.Hash, blob []byte) {
+	writeFn := func(path []byte, hash common.Hash, blob []byte) {
 		if bytes.HasPrefix(leftBorder, path) {
 			fmt.Printf("path %x  tainted left (parent to %x)\n", path, leftBorder)
 			return
