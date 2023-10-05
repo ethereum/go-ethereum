@@ -787,6 +787,18 @@ type spongeDb struct {
 	journal []string
 }
 
+func (s *spongeDb) PrettyPrint(t *testing.T) {
+	t.Helper()
+	limit := 4
+	for i := 0; i < len(s.journal); i++ {
+		if i == limit && len(s.journal) > 2+limit {
+			t.Logf("... omitting %d ops", len(s.journal)-3*limit)
+			i += len(s.journal) - 2*limit
+		}
+		t.Logf("op %d: %v", i, s.journal[i])
+	}
+
+}
 func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement me") }
 func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
 func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
@@ -798,16 +810,18 @@ func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement 
 func (s *spongeDb) Close() error                             { return nil }
 func (s *spongeDb) Put(key []byte, value []byte) error {
 	var (
-		keybrief = key
-		valbrief = value
+		keybrief  = key
+		keybrief2 []byte
+		valbrief  = value
 	)
 	if len(keybrief) > 8 {
 		keybrief = keybrief[:8]
+		keybrief2 = key[len(key)-4:]
 	}
 	if len(valbrief) > 8 {
 		valbrief = valbrief[:8]
 	}
-	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...], [%d bytes] %x...)\n", s.id, keybrief, len(value), valbrief))
+	s.journal = append(s.journal, fmt.Sprintf("%v: PUT([%x...%x], [%d bytes] %x...)\n", s.id, keybrief, keybrief2, len(value), valbrief))
 	s.sponge.Write(key)
 	s.sponge.Write(value)
 	return nil
@@ -946,14 +960,10 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		}
 		if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
 			// Show the journal
-			t.Logf("Expected:")
-			for i, v := range s.journal {
-				t.Logf("op %d: %v", i, v)
-			}
-			t.Logf("Stacktrie:")
-			for i, v := range stackTrieSponge.journal {
-				t.Logf("op %d: %v", i, v)
-			}
+			t.Logf("Want:")
+			s.PrettyPrint(t)
+			t.Logf("Have:")
+			stackTrieSponge.PrettyPrint(t)
 			t.Fatalf("test %d, disk write sequence wrong:\ngot %x exp %x\n", count, got, exp)
 		}
 	}
