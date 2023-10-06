@@ -1742,6 +1742,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *param
 	// If the transaction is a bor transaction, we need to set the hash to the derived bor tx hash. BorTx is always the last index.
 	if borReceipt != nil && index == uint64(len(txs)-1) {
 		rpcTx.Hash = borReceipt.TxHash
+		rpcTx.ChainID = nil
 	}
 
 	return rpcTx
