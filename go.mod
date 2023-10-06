@@ -13,7 +13,7 @@ require (
 	github.com/cespare/cp v0.1.0
 	github.com/cloudflare/cloudflare-go v0.14.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
-	github.com/consensys/gnark-crypto v0.11.3-0.20230906172141-49815a21349a
+	github.com/consensys/gnark-crypto v0.12.1
 	github.com/crate-crypto/go-ipa v0.0.0-20230914135612-d1b03fcb8e58
 	github.com/crate-crypto/go-kzg-4844 v0.3.0
 	github.com/davecgh/go-spew v1.1.1
@@ -26,7 +26,7 @@ require (
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
-	github.com/gballet/go-verkle v0.1.1-0.20230921190644-1a60d228f7b2
+	github.com/gballet/go-verkle v0.1.1-0.20231004173727-0a4e93ed640b
 	github.com/go-stack/stack v1.8.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang-jwt/jwt/v4 v4.3.0
@@ -65,8 +65,8 @@ require (
 	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.10.0
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
-	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.12.0
+	golang.org/x/sync v0.4.0
+	golang.org/x/sys v0.13.0
 	golang.org/x/text v0.10.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.9.1
