@@ -126,3 +126,32 @@ func DownloadGo(csdb *ChecksumDB, version string) string {
 	}
 	return goroot
 }
+
+// DownloadAndVerifyChecksums downloads all files and checks that they match
+// the checksum given in checksums.txt.
+// This task can be used to sanity-check new checksums.
+func DownloadAndVerifyChecksums(csdb *ChecksumDB) {
+	var (
+		base   = ""
+		ucache = os.TempDir()
+	)
+	for _, l := range csdb.allChecksums {
+		if strings.HasPrefix(l, "# https://") {
+			base = l[2:]
+			continue
+		}
+		if strings.HasPrefix(l, "#") {
+			continue
+		}
+		hashFile := strings.Split(l, "  ")
+		if len(hashFile) != 2 {
+			continue
+		}
+		file := hashFile[1]
+		url := base + file
+		dst := filepath.Join(ucache, file)
+		if err := csdb.DownloadFile(url, dst); err != nil {
+			log.Print(err)
+		}
+	}
+}

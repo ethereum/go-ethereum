@@ -192,6 +192,8 @@ func main() {
 		doWindowsInstaller(os.Args[2:])
 	case "purge":
 		doPurge(os.Args[2:])
+	case "sanitycheck":
+		doSanityCheck()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -1098,4 +1100,8 @@ func doPurge(cmdline []string) {
 	if err := build.AzureBlobstoreDelete(auth, blobs); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func doSanityCheck() {
+	build.DownloadAndVerifyChecksums(build.MustLoadChecksums("build/checksums.txt"))
 }
