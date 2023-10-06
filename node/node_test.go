@@ -24,12 +24,15 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -479,6 +482,93 @@ func TestWebsocketHTTPOnSeparatePort_WSRequest(t *testing.T) {
 	}
 }
 
+func TestWebSocketRouting(t *testing.T) {
+	node := startHTTP(t, 8544, 8545)
+	defer node.Close()
+	// Start both the HTTP and WS servers
+	httpServer := node.http
+	wsServer := node.ws
+
+	// Define the number of requests you'll be sending to each server
+	numRequests := 1000
+
+	// Use wait groups to synchronize the end of our goroutines
+	var wg sync.WaitGroup
+
+	hs := "http://" + httpServer.endpoint
+
+	// HTTP requests
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numRequests; i++ {
+			resp, err := http.Get(hs)
+			if err != nil {
+				t.Error(err)
+			}
+			// Add additional checks on the response if necessary
+			resp.Body.Close()
+		}
+	}()
+
+	s := "ws://" + wsServer.endpoint
+
+	// WebSocket requests
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numRequests; i++ {
+			// Create a new WebSocket connection and make sure it's successful
+			conn, _, err := websocket.DefaultDialer.Dial(s, nil)
+			if err != nil {
+				t.Error(err)
+			}
+			conn.Close()
+		}
+	}()
+
+	wg.Wait()
+}
+
+func TestWebSocketStartup(t *testing.T) {
+	// Define the number of startup cycles
+	numCycles := 1000
+
+	for cycle := 0; cycle < numCycles; cycle++ {
+		testFunc(t, cycle)
+		fmt.Println("Cycle", cycle, "complete")
+	}
+}
+
+func testFunc(t *testing.T, cycle int) {
+	// Start the WS server
+	node := startHTTP(t, 8544, 8545)
+	defer node.Close()
+	// Start both the HTTP and WS servers
+	// httpServer := node.http
+	wsServer := node.ws
+	ws := "ws://" + wsServer.endpoint
+
+	// Introduce a slight delay before sending the first request
+	time.Sleep(50 * time.Millisecond) // Adjust this delay as necessary
+
+	// Define the number of requests you'll be sending to the WS server during each cycle
+	numRequests := 2
+
+	// Send requests to the WebSocket server
+	for i := 0; i < numRequests; i++ {
+		// Create a new WebSocket connection and make sure it's successful
+		conn, _, err := websocket.DefaultDialer.Dial(ws, nil)
+		if err != nil {
+			t.Errorf("Error during cycle %d, request %d: %v", cycle, i, err)
+		}
+		conn.Close()
+	}
+
+	// Stop the WS server
+	node.Close()
+}
+
 type rpcPrefixTest struct {
 	httpPrefix, wsPrefix string
 	// These lists paths on which JSON-RPC should be served / not served.
@@ -586,11 +676,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
-		HTTPHost:     "127.0.0.1",
-		HTTPPort:     httpPort,
-		WSHost:       "127.0.0.1",
-		WSPort:       wsPort,
-		HTTPTimeouts: rpc.DefaultHTTPTimeouts,
+		HTTPHost:         "0.0.0.0",
+		HTTPPort:         httpPort,
+		HTTPVirtualHosts: []string{"*"},
+		WSHost:           "0.0.0.0",
+		WSPort:           wsPort,
+		WSOrigins:        []string{"*"},
+		HTTPTimeouts:     rpc.DefaultHTTPTimeouts,
 	}
 	node, err := New(conf)
 	if err != nil {

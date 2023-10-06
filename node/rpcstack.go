@@ -64,6 +64,7 @@ type rpcHandler struct {
 }
 
 type httpServer struct {
+	name     string
 	log      log.Logger
 	timeouts rpc.HTTPTimeouts
 	mux      http.ServeMux // registered handlers go here
@@ -97,8 +98,21 @@ func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
-	h.wsHandler.Store((*rpcHandler)(nil))
+	h.storeWsHandler((*rpcHandler)(nil), "newHTTPServer")
 	return h
+}
+
+func (h *httpServer) storeWsHandler(val any, where string) {
+	h.wsHandler.Store(val)
+	if val != nil {
+		h.log.Info(fmt.Sprintf("storeWsHandler %s", where), "ws", val, "h", h)
+	}
+}
+
+func (h *httpServer) loadWsHandler(where string) *rpcHandler {
+	ws := h.wsHandler.Load().(*rpcHandler)
+	h.log.Info(fmt.Sprintf("loadWsHandler %s", where), "ws", ws, "h", h)
+	return ws
 }
 
 // setListenAddr configures the listening address of the server.
@@ -131,6 +145,7 @@ func (h *httpServer) listenAddr() string {
 func (h *httpServer) start() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.log.Info("RUN start()")
 
 	if h.endpoint == "" || h.listener != nil {
 		return nil // already running or not configured
@@ -156,19 +171,31 @@ func (h *httpServer) start() error {
 		return err
 	}
 	h.listener = listener
-	go h.server.Serve(listener)
+	// go func() {
+	// 	h.log.Info("STARTING RPC SERVER")
+	// 	h.server.Serve(listener)
+	// }()
 
-	if h.wsAllowed() {
+	if h.wsAllowed("start") {
 		url := fmt.Sprintf("ws://%v", listener.Addr())
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
 		h.log.Info("WebSocket enabled", "url", url)
+		h.name = "ws"
+		// go func() {
+		// 	h.log.Info("STARTING RPC SERVER")
+		// 	h.server.Serve(listener)
+		// }()
+	} else {
+		h.name = "http"
 	}
-	// if server is websocket only, return after logging
-	if !h.rpcAllowed() {
-		return nil
-	}
+
+	go func() {
+		h.log.Info("STARTING RPC SERVER")
+		h.server.Serve(listener)
+	}()
+
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
 		"endpoint", listener.Addr(), "auth", (h.httpConfig.jwtSecret != nil),
@@ -176,6 +203,18 @@ func (h *httpServer) start() error {
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
+
+	// if server is websocket only, return after logging
+	if !h.rpcAllowed() {
+		return nil
+	}
+	// // Log http endpoint.
+	// h.log.Info("HTTP server started",
+	// 	"endpoint", listener.Addr(), "auth", (h.httpConfig.jwtSecret != nil),
+	// 	"prefix", h.httpConfig.prefix,
+	// 	"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
+	// 	"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
+	// )
 
 	// Log all handlers mounted on server.
 	var paths []string
@@ -191,17 +230,34 @@ func (h *httpServer) start() error {
 			logged[name] = true
 		}
 	}
+
 	return nil
 }
 
-func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// check if ws request and serve if ws enabled
-	ws := h.wsHandler.Load().(*rpcHandler)
-	if ws != nil && isWebsocket(r) {
-		if checkPath(r, h.wsConfig.prefix) {
-			ws.ServeHTTP(w, r)
+func printHeaders(h *httpServer, headers http.Header) {
+	for key, values := range headers {
+		for _, value := range values {
+			h.log.Info("HEADER", key, value)
 		}
-		return
+	}
+}
+
+func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	h.log.Info("REQUEST", "r", r)
+	ws := h.loadWsHandler("ServeHTTP")
+	h.log.Info("TRIAGE", "name", h.name, "ws", ws, "h", h, "isWebsocket", isWebsocket(r), "upgrade", r.Header.Get("Upgrade"), "connection", r.Header.Get("Connection"))
+	printHeaders(h, r.Header)
+	// check if ws request and serve if ws enabled
+	// if ws != nil && isWebsocket(r) {
+	if isWebsocket(r) {
+		if ws != nil {
+			if checkPath(r, h.wsConfig.prefix) {
+				ws.ServeHTTP(w, r)
+			}
+			return
+		}
+		panic("TRIAGE FAILED WS")
 	}
 
 	// if http-rpc is enabled, try to serve request
@@ -266,13 +322,13 @@ func (h *httpServer) doStop() {
 
 	// Shut down the server.
 	httpHandler := h.httpHandler.Load().(*rpcHandler)
-	wsHandler := h.wsHandler.Load().(*rpcHandler)
+	wsHandler := h.loadWsHandler("doStop")
 	if httpHandler != nil {
 		h.httpHandler.Store((*rpcHandler)(nil))
 		httpHandler.server.Stop()
 	}
 	if wsHandler != nil {
-		h.wsHandler.Store((*rpcHandler)(nil))
+		h.storeWsHandler((*rpcHandler)(nil), "doStop")
 		wsHandler.server.Stop()
 	}
 
@@ -330,7 +386,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.wsAllowed() {
+	if h.wsAllowed("enableWS") {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
 	// Create RPC server and handler.
@@ -340,10 +396,14 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 		return err
 	}
 	h.wsConfig = config
-	h.wsHandler.Store(&rpcHandler{
+
+	h.storeWsHandler(&rpcHandler{
 		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
 		server:  srv,
-	})
+	}, "enableWS")
+	// ws := h.loadWsHandler("enableWS")
+	// h.log.Info("enableWS wsHandler = YES", "ws", ws)
+	// h.startRoutineToCheckWsHandler()
 	return nil
 }
 
@@ -359,11 +419,21 @@ func (h *httpServer) stopWS() {
 	}
 }
 
+// func (h *httpServer) startRoutineToCheckWsHandler() {
+// 	// Goroutine to check the value every second
+// 	go func() {
+// 		for range time.Tick(1 * time.Second) {
+// 			ws := h.loadWsHandler()
+// 			h.log.Info("check wsHandler", "ws", ws, "h", h)
+// 		}
+// 	}()
+// }
+
 // disableWS disables the WebSocket handler. This is internal, the caller must hold h.mu.
 func (h *httpServer) disableWS() bool {
-	ws := h.wsHandler.Load().(*rpcHandler)
+	ws := h.loadWsHandler("disableWS")
 	if ws != nil {
-		h.wsHandler.Store((*rpcHandler)(nil))
+		h.storeWsHandler((*rpcHandler)(nil), "disableWS")
 		ws.server.Stop()
 	}
 	return ws != nil
@@ -375,8 +445,8 @@ func (h *httpServer) rpcAllowed() bool {
 }
 
 // wsAllowed returns true when JSON-RPC over WebSocket is enabled.
-func (h *httpServer) wsAllowed() bool {
-	return h.wsHandler.Load().(*rpcHandler) != nil
+func (h *httpServer) wsAllowed(where string) bool {
+	return h.loadWsHandler(fmt.Sprintf("wsAllowed %s", where)) != nil
 }
 
 // isWebsocket checks the header of an http request for a websocket upgrade request.

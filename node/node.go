@@ -521,8 +521,10 @@ func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
 		httpServer, wsServer = n.httpAuth, n.wsAuth
 	}
 	if n.config.HTTPHost == "" || httpServer.port == port {
+		n.log.Info("CONFIGURED HTTP SERVER INSTEAD OF WS SERVER")
 		return httpServer
 	}
+	n.log.Info("PROPERLY RETURNED THE WS SERVER")
 	return wsServer
 }
 
@@ -683,7 +685,7 @@ func (n *Node) HTTPEndpoint() string {
 
 // WSEndpoint returns the current JSON-RPC over WebSocket endpoint.
 func (n *Node) WSEndpoint() string {
-	if n.http.wsAllowed() {
+	if n.http.wsAllowed("WSEndpoint") {
 		return "ws://" + n.http.listenAddr() + n.http.wsConfig.prefix
 	}
 	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.prefix
@@ -696,7 +698,7 @@ func (n *Node) HTTPAuthEndpoint() string {
 
 // WSAuthEndpoint returns the current authenticated JSON-RPC over WebSocket endpoint.
 func (n *Node) WSAuthEndpoint() string {
-	if n.httpAuth.wsAllowed() {
+	if n.httpAuth.wsAllowed("WSAuthEndpoint") {
 		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.prefix
 	}
 	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
