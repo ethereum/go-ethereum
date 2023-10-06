@@ -936,7 +936,7 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 
 type RequiredBlockState struct {
 	CompactEip1186Proofs []CompactEip1186Proof `json:"compact_eip1186_proofs"` // sorted by address
-	Contracts            []Contract            `json:"sorted"`                 // sorted by address
+	Contracts            []Contract            `json:"contracts"`              // sorted by address
 	AccountNodes         []TrieNode            `json:"account_nodes"`          // sorted by address
 	StorageNodes         []TrieNode            `json:"storage_nodes"`          // sorted by address
 	BlockHashes          []RecentBlockHash     `json:"block_hashes"`           // sorted by address
