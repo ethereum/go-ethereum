@@ -47,7 +47,7 @@ type announce struct {
 	size *uint32
 }
 
-func typeptr(t byte) *byte     { b := byte(t); return &b }
+func typeptr(t byte) *byte     { return &t }
 func sizeptr(n uint32) *uint32 { return &n }
 
 type doTxNotify struct {
