@@ -934,6 +934,32 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 	return result, nil
 }
 
+type RequiredBlockState struct {
+	CompactEip1186Proofs []CompactEip1186Proof `json:"compact_eip1186_proofs"` // sorted by address
+	Contracts            []Contract            `json:"sorted"`                 // sorted by address
+	AccountNodes         []TrieNode            `json:"account_nodes"`          // sorted by address
+	StorageNodes         []TrieNode            `json:"storage_nodes"`          // sorted by address
+	BlockHashes          []RecentBlockHash     `json:"block_hashes"`           // sorted by address
+}
+
+type CompactEip1186Proof struct {
+	Address       common.Address  `json:"address"`
+	Balance       big.Int         `json:"balance"`
+	CodeHash      common.Hash     `json:"code_hash"`
+	Nonce         uint64          `json:"nonce"`
+	StorageHash   common.Hash     `json:"storage_hash"`
+	AccountProof  []string        `json:"account_proof"`  // sorted: node nearest to root first
+	StorageProofs []StorageResult `json:"storage_proofs"` // sorted
+}
+
+type Contract []byte
+type TrieNode []byte
+
+type RecentBlockHash struct {
+	BlockNumber big.Int     `json:"block_number"`
+	BlockHash   common.Hash `json:"block_hash"`
+}
+
 // GetRequiredBlockState returns all state required to execute a single historical block.
 func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*txTraceResult, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
