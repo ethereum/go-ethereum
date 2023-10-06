@@ -458,6 +458,12 @@ func (f *TxFetcher) loop() {
 				// yet downloading, add the peer as an alternate origin in the
 				// waiting list.
 				if f.waitlist[hash] != nil {
+					// Ignore double announcements from the same peer. This is
+					// especially important if metadata is also passed along to
+					// prevent malicious peers flip-flopping good/bad values.
+					if _, ok := f.waitlist[hash][ann.origin]; ok {
+						continue
+					}
 					f.waitlist[hash][ann.origin] = struct{}{}
 
 					if waitslots := f.waitslots[ann.origin]; waitslots != nil {
