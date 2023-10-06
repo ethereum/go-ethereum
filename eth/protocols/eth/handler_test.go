@@ -74,7 +74,6 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 		engine consensus.Engine = ethash.NewFaker()
 	)
 
-	// TODO marcello double check
 	if shanghai {
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(1),

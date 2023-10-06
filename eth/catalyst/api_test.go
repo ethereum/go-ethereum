@@ -16,35 +16,15 @@
 
 package catalyst
 
-import (
-	"fmt"
-	"math/big"
-	"testing"
-	"time"
+// var (
+// 	// testKey is a private key to use for funding a tester account.
+// 	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/trie"
-)
+// 	// testAddr is the Ethereum address of the tester account.
+// 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 
-var (
-	// testKey is a private key to use for funding a tester account.
-	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-
-	// testAddr is the Ethereum address of the tester account.
-	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
-
-	testBalance = big.NewInt(2e18)
-)
+// 	testBalance = big.NewInt(2e18)
+// )
 
 // func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 // 	config := *params.AllEthashProtocolChanges
@@ -235,25 +215,25 @@ var (
 // 	}
 // }
 
-func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan core.RemovedLogsEvent, wantNew, wantRemoved int) {
-	t.Helper()
+// func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan core.RemovedLogsEvent, wantNew, wantRemoved int) {
+// 	t.Helper()
 
-	if len(logsCh) != wantNew {
-		t.Fatalf("wrong number of log events: got %d, want %d", len(logsCh), wantNew)
-	}
+// 	if len(logsCh) != wantNew {
+// 		t.Fatalf("wrong number of log events: got %d, want %d", len(logsCh), wantNew)
+// 	}
 
-	if len(rmLogsCh) != wantRemoved {
-		t.Fatalf("wrong number of removed log events: got %d, want %d", len(rmLogsCh), wantRemoved)
-	}
-	// Drain events.
-	for i := 0; i < len(logsCh); i++ {
-		<-logsCh
-	}
+// 	if len(rmLogsCh) != wantRemoved {
+// 		t.Fatalf("wrong number of removed log events: got %d, want %d", len(rmLogsCh), wantRemoved)
+// 	}
+// 	// Drain events.
+// 	for i := 0; i < len(logsCh); i++ {
+// 		<-logsCh
+// 	}
 
-	for i := 0; i < len(rmLogsCh); i++ {
-		<-rmLogsCh
-	}
-}
+// 	for i := 0; i < len(rmLogsCh); i++ {
+// 		<-rmLogsCh
+// 	}
+// }
 
 // func TestInvalidPayloadTimestamp(t *testing.T) {
 // 	genesis, preMergeBlocks := generateMergeChain(10, false)
@@ -424,87 +404,87 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 // 	}
 // }
 
-func TestEth2DeepReorg(t *testing.T) {
-	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
-	// before the totalTerminalDifficulty threshold
-	/*
-				genesis, preMergeBlocks := generateMergeChain(core.TriesInMemory * 2, false)
-				n, ethservice := startEthService(t, genesis, preMergeBlocks)
-				defer n.Close()
+// func TestEth2DeepReorg(t *testing.T) {
+// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
+// before the totalTerminalDifficulty threshold
+/*
+			genesis, preMergeBlocks := generateMergeChain(core.TriesInMemory * 2, false)
+			n, ethservice := startEthService(t, genesis, preMergeBlocks)
+			defer n.Close()
 
-				var (
-					api    = NewConsensusAPI(ethservice, nil)
-					parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
-					head   = ethservice.BlockChain().CurrentBlock().Number.Uint64()()
-				)
-				if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
-					t.Errorf("Block %d not pruned", parent.NumberU64())
-			}
-				for i := 0; i < 10; i++ {
-					execData, err := api.assembleBlock(AssembleBlockParams{
-						ParentHash: parent.Hash(),
-						Timestamp:  parent.Time() + 5,
-					})
-					if err != nil {
-						t.Fatalf("Failed to create the executable data %v", err)
-					}
-					block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
-					if err != nil {
-						t.Fatalf("Failed to convert executable data to block %v", err)
-					}
-					newResp, err := api.ExecutePayload(*execData)
-					if err != nil || newResp.Status != "VALID" {
-						t.Fatalf("Failed to insert block: %v", err)
-					}
-					if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != head {
-						t.Fatalf("Chain head shouldn't be updated")
-					}
-					if err := api.setHead(block.Hash()); err != nil {
-						t.Fatalf("Failed to set head: %v", err)
-					}
-					if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != block.NumberU64() {
-						t.Fatalf("Chain head should be updated")
-					}
-					parent, head = block, block.NumberU64()
+			var (
+				api    = NewConsensusAPI(ethservice, nil)
+				parent = preMergeBlocks[len(preMergeBlocks)-core.TriesInMemory-1]
+				head   = ethservice.BlockChain().CurrentBlock().Number.Uint64()()
+			)
+			if ethservice.BlockChain().HasBlockAndState(parent.Hash(), parent.NumberU64()) {
+				t.Errorf("Block %d not pruned", parent.NumberU64())
 		}
-	*/
-}
+			for i := 0; i < 10; i++ {
+				execData, err := api.assembleBlock(AssembleBlockParams{
+					ParentHash: parent.Hash(),
+					Timestamp:  parent.Time() + 5,
+				})
+				if err != nil {
+					t.Fatalf("Failed to create the executable data %v", err)
+				}
+				block, err := ExecutableDataToBlock(ethservice.BlockChain().Config(), parent.Header(), *execData)
+				if err != nil {
+					t.Fatalf("Failed to convert executable data to block %v", err)
+				}
+				newResp, err := api.ExecutePayload(*execData)
+				if err != nil || newResp.Status != "VALID" {
+					t.Fatalf("Failed to insert block: %v", err)
+				}
+				if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != head {
+					t.Fatalf("Chain head shouldn't be updated")
+				}
+				if err := api.setHead(block.Hash()); err != nil {
+					t.Fatalf("Failed to set head: %v", err)
+				}
+				if ethservice.BlockChain().CurrentBlock().Number.Uint64()() != block.NumberU64() {
+					t.Fatalf("Chain head should be updated")
+				}
+				parent, head = block, block.NumberU64()
+	}
+*/
+// }
 
 // startEthService creates a full node instance for testing.
-func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
-	t.Helper()
+// func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+// 	t.Helper()
 
-	n, err := node.New(&node.Config{
-		P2P: p2p.Config{
-			ListenAddr:  "0.0.0.0:0",
-			NoDiscovery: true,
-			MaxPeers:    25,
-		}})
-	if err != nil {
-		t.Fatal("can't create node:", err)
-	}
+// 	n, err := node.New(&node.Config{
+// 		P2P: p2p.Config{
+// 			ListenAddr:  "0.0.0.0:0",
+// 			NoDiscovery: true,
+// 			MaxPeers:    25,
+// 		}})
+// 	if err != nil {
+// 		t.Fatal("can't create node:", err)
+// 	}
 
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
+// 	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
 
-	ethservice, err := eth.New(n, ethcfg)
-	if err != nil {
-		t.Fatal("can't create eth service:", err)
-	}
+// 	ethservice, err := eth.New(n, ethcfg)
+// 	if err != nil {
+// 		t.Fatal("can't create eth service:", err)
+// 	}
 
-	if err := n.Start(); err != nil {
-		t.Fatal("can't start node:", err)
-	}
+// 	if err := n.Start(); err != nil {
+// 		t.Fatal("can't start node:", err)
+// 	}
 
-	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
-		n.Close()
-		t.Fatal("can't import test blocks:", err)
-	}
+// 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
+// 		n.Close()
+// 		t.Fatal("can't import test blocks:", err)
+// 	}
 
-	ethservice.SetEtherbase(testAddr)
-	ethservice.SetSynced()
+// 	ethservice.SetEtherbase(testAddr)
+// 	ethservice.SetSynced()
 
-	return n, ethservice
-}
+// 	return n, ethservice
+// }
 
 // func TestFullAPI(t *testing.T) {
 // 	genesis, preMergeBlocks := generateMergeChain(10, false)
@@ -848,48 +828,48 @@ We expect
 
 // setBlockhash sets the blockhash of a modified ExecutableData.
 // Can be used to make modified payloads look valid.
-func setBlockhash(data *engine.ExecutableData) *engine.ExecutableData {
-	txs, _ := decodeTransactions(data.Transactions)
-	number := big.NewInt(0)
-	number.SetUint64(data.Number)
+// func setBlockhash(data *engine.ExecutableData) *engine.ExecutableData {
+// 	txs, _ := decodeTransactions(data.Transactions)
+// 	number := big.NewInt(0)
+// 	number.SetUint64(data.Number)
 
-	header := &types.Header{
-		ParentHash:  data.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    data.FeeRecipient,
-		Root:        data.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: data.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(data.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      number,
-		GasLimit:    data.GasLimit,
-		GasUsed:     data.GasUsed,
-		Time:        data.Timestamp,
-		BaseFee:     data.BaseFeePerGas,
-		Extra:       data.ExtraData,
-		MixDigest:   data.Random,
-	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
-	data.BlockHash = block.Hash()
+// 	header := &types.Header{
+// 		ParentHash:  data.ParentHash,
+// 		UncleHash:   types.EmptyUncleHash,
+// 		Coinbase:    data.FeeRecipient,
+// 		Root:        data.StateRoot,
+// 		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+// 		ReceiptHash: data.ReceiptsRoot,
+// 		Bloom:       types.BytesToBloom(data.LogsBloom),
+// 		Difficulty:  common.Big0,
+// 		Number:      number,
+// 		GasLimit:    data.GasLimit,
+// 		GasUsed:     data.GasUsed,
+// 		Time:        data.Timestamp,
+// 		BaseFee:     data.BaseFeePerGas,
+// 		Extra:       data.ExtraData,
+// 		MixDigest:   data.Random,
+// 	}
+// 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+// 	data.BlockHash = block.Hash()
 
-	return data
-}
+// 	return data
+// }
 
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
+// func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+// 	var txs = make([]*types.Transaction, len(enc))
 
-	for i, encTx := range enc {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
-		}
+// 	for i, encTx := range enc {
+// 		var tx types.Transaction
+// 		if err := tx.UnmarshalBinary(encTx); err != nil {
+// 			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+// 		}
 
-		txs[i] = &tx
-	}
+// 		txs[i] = &tx
+// 	}
 
-	return txs, nil
-}
+// 	return txs, nil
+// }
 
 // func TestTrickRemoteBlockCache(t *testing.T) {
 // 	t.Parallel()

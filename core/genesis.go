@@ -326,7 +326,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 
 	applyOverrides := func(config *params.ChainConfig) {
 		if config != nil {
-			// TODO marcello double check
 			if overrides != nil && overrides.OverrideShanghai != nil {
 				config.ShanghaiBlock = overrides.OverrideShanghai
 			}

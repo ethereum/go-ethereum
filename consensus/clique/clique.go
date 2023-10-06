@@ -308,7 +308,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
 	}
-	// TODO marcello double check
+
 	if chain.Config().IsShanghai(header.Number) {
 		return fmt.Errorf("clique does not support shanghai fork")
 	}

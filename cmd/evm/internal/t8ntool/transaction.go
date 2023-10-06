@@ -190,7 +190,6 @@ func Transaction(ctx *cli.Context) error {
 		case new(big.Int).Mul(tx.GasFeeCap(), new(big.Int).SetUint64(tx.Gas())).BitLen() > 256:
 			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
 		}
-		// TODO marcello double check
 		// Check whether the init code size has been exceeded.
 		if chainConfig.IsShanghai(new(big.Int)) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 			r.Error = errors.New("max initcode size exceeded")

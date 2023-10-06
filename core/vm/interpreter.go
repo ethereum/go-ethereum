@@ -132,7 +132,6 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	var table *JumpTable
 
 	switch {
-	// TODO marcello double check
 	case evm.chainRules.IsShanghai:
 		table = &shanghaiInstructionSet
 	case evm.chainRules.IsMerge:
