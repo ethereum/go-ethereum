@@ -44,6 +44,7 @@ func (s *BlockChainAPI) appendRPCMarshalBorTransaction(ctx context.Context, bloc
 				// newRPCTransaction calculates hash based on RLP of the transaction data.
 				// In case of bor block tx, we need simple derived tx hash (same as function argument) instead of RLP hash
 				marshalledTx.Hash = txHash
+				marshalledTx.ChainID = nil
 				fields["transactions"] = append(formattedTxs, marshalledTx)
 			} else {
 				fields["transactions"] = append(formattedTxs, txHash)
