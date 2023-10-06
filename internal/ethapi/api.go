@@ -1290,7 +1290,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
 	}
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
+	state, base, err := s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
@@ -1309,7 +1309,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	headers, err := makeHeaders(ctx, s.b.ChainConfig(), blocks, header)
+	headers, err := makeHeaders(ctx, s.b.ChainConfig(), blocks, base)
 	if err != nil {
 		return nil, err
 	}
@@ -1318,25 +1318,34 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		globalGasCap = s.b.RPCGasCap()
 		gp           = new(core.GasPool).AddGas(globalGasCap)
+		header       = base
 		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
 		rules        = s.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
+		numHashes    = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64()
+		// Cache for simulated and phantom block hashes.
+		hashes = make([]common.Hash, numHashes)
 	)
 	for bi, block := range blocks {
-		prevHeader := header
 		header = headers[bi]
 		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
-		blockContext.GetHash = func(uint64) common.Hash {
-			// TODO
-			return header.Hash()
+		// Respond to BLOCKHASH requests.
+		blockContext.GetHash = func(n uint64) common.Hash {
+			var (
+				h   common.Hash
+				err error
+			)
+			h, hashes, err = getHash(ctx, n, base, headers, s.b, hashes)
+			if err != nil {
+				log.Warn(err.Error())
+				return common.Hash{}
+			}
+			return h
 		}
-		// TODO: GetHashFn
-		hash := crypto.Keccak256Hash(blockContext.BlockNumber.Bytes())
 		// State overrides are applied prior to execution of a block
 		if err := block.StateOverrides.Apply(state, precompiles); err != nil {
 			return nil, err
 		}
-
 		var (
 			gasUsed     uint64
 			txes        = make([]*types.Transaction, len(block.Calls))
@@ -1365,7 +1374,8 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			// TODO: repair log block hashes post execution.
 			vmConfig := &vm.Config{
 				NoBaseFee: true,
-				Tracer:    newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), hash, tx.Hash(), uint(i)),
+				// Block hash will be repaired after execution.
+				Tracer: newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, tx.Hash(), uint(i)),
 			}
 			result, err := applyMessage(ctx, s.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
@@ -1393,10 +1403,15 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 			gasUsed += result.UsedGas
 			state.Finalise(true)
 		}
-		// If last non-phantom block is parent of current block, set parent hash.
-		if header.Number.Uint64()-prevHeader.Number.Uint64() == 1 {
-			header.ParentHash = prevHeader.Hash()
+		var (
+			parentHash common.Hash
+			err        error
+		)
+		parentHash, hashes, err = getHash(ctx, header.Number.Uint64()-1, base, headers, s.b, hashes)
+		if err != nil {
+			return nil, err
 		}
+		header.ParentHash = parentHash
 		header.Root = state.IntermediateRoot(true)
 		header.GasUsed = gasUsed
 		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
@@ -1404,6 +1419,59 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		repairLogs(results, header.Hash())
 	}
 	return results, nil
+}
+
+// getHash returns the hash for the block of the given number. Block can be
+// part of the canonical chain, a simulated block or a phantom block.
+// Note getHash assumes `n` is smaller than the last already simulated block
+// and smaller than the last block to be simulated.
+func getHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header, backend Backend, hashes []common.Hash) (common.Hash, []common.Hash, error) {
+	getIndex := func(n uint64) int {
+		return int(n - base.Number.Uint64())
+	}
+	index := getIndex(n)
+	if h := hashes[index]; h != (common.Hash{}) {
+		return h, hashes, nil
+	}
+	if n == base.Number.Uint64() {
+		return base.Hash(), hashes, nil
+	} else if n < base.Number.Uint64() {
+		h, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(n))
+		if err != nil {
+			return common.Hash{}, hashes, fmt.Errorf("failed to load block hash for number %d. Err: %v\n", n, err)
+		}
+		return h.Hash(), hashes, nil
+	}
+	h := base
+	for i, _ := range headers {
+		tmp := headers[i]
+		// BLOCKHASH will only allow numbers prior to current block
+		// so no need to check that condition.
+		if tmp.Number.Uint64() == n {
+			hash := tmp.Hash()
+			hashes[index] = hash
+			return hash, hashes, nil
+		} else if tmp.Number.Uint64() > n {
+			// Phantom block.
+			var lastNonPhantomHash common.Hash
+			if hash := hashes[getIndex(h.Number.Uint64()-1)]; hash != (common.Hash{}) {
+				lastNonPhantomHash = hash
+			} else {
+				lastNonPhantomHash = h.Hash()
+				hashes[getIndex(h.Number.Uint64()-1)] = lastNonPhantomHash
+			}
+			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
+			hashData, err := rlp.EncodeToBytes([][]byte{lastNonPhantomHash.Bytes(), big.NewInt(int64(n)).Bytes()})
+			if err != nil {
+				return common.Hash{}, hashes, err
+			}
+			hash := crypto.Keccak256Hash(hashData)
+			hashes[index] = hash
+			return hash, hashes, nil
+		}
+		h = tmp
+	}
+	return common.Hash{}, hashes, errors.New("requested block is in future")
 }
 
 // repairLogs updates the block hash in the logs present in a multicall
@@ -1447,26 +1515,11 @@ func makeHeaders(ctx context.Context, config *params.ChainConfig, blocks []CallB
 		}
 		prevTimestamp = uint64(*overrides.Time)
 
-		// ParentHash for non-phantom blocks can only be computed
-		// after the previous block is executed.
-		var (
-			parentHash = common.Hash{}
-			baseFee    *big.Int
-		)
-		// Calculate parentHash for phantom blocks.
-		if overrides.Number.ToInt().Uint64()-header.Number.Uint64() > 1 {
-			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
-			hashData, err := rlp.EncodeToBytes([][]byte{header.Hash().Bytes(), overrides.Number.ToInt().Bytes()})
-			if err != nil {
-				return nil, err
-			}
-			parentHash = crypto.Keccak256Hash(hashData)
-		}
+		var baseFee *big.Int
 		if config.IsLondon(overrides.Number.ToInt()) {
 			baseFee = eip1559.CalcBaseFee(config, header)
 		}
 		header = &types.Header{
-			ParentHash: parentHash,
 			UncleHash:  types.EmptyUncleHash,
 			Coinbase:   base.Coinbase,
 			Difficulty: base.Difficulty,
