@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -564,6 +565,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 func testTraceTransaction(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 
+	tracer := "callTracer"
 	var testSuite = []struct {
 		txHash    common.Hash
 		config    *tracers.TraceConfig
@@ -599,7 +601,7 @@ func testTraceTransaction(t *testing.T, client *rpc.Client) {
 		{
 			txHash: testTransactionHash,
 			config: &tracers.TraceConfig{
-				TracerConfig: json.RawMessage(`{"tracer":"callTracer"}`),
+				Tracer: &tracer,
 			},
 			expectErr: nil,
 			expect: map[string]interface{}{
