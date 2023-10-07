@@ -216,7 +216,7 @@ Returns the bytes of the transaction.
 
 | Client  | Method invocation                                                    |
 | :------ | -------------------------------------------------------------------- |
-| Console | `debug.getRawTransaction(blockNrOrHash)`                             |
+| Console | `debug.getRawTransaction(hash)`                                      |
 | RPC     | `{"method": "debug_getRawTransaction", "params": [transactionHash]}` |
 
 ### debug_getModifiedAccountsByHash
