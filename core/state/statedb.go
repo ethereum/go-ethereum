@@ -1177,6 +1177,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
 		nodes                   = trienode.NewMergedNodeSet()
+		witnesses               = trienode.NewWitnesses()
 		codeWriter              = s.db.DiskDB().NewBatch()
 	)
 	// Handle all state deletions first
@@ -1196,7 +1197,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			obj.dirtyCode = false
 		}
 		// Write any storage changes in the state object to its storage trie
-		set, err := obj.commit()
+		set, witness, err := obj.commit()
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -1211,6 +1212,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			storageTrieNodesUpdated += updates
 			storageTrieNodesDeleted += deleted
 		}
+		if witness != nil {
+			witnesses.Merge(witness)
+		}
 	}
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
@@ -1222,7 +1226,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	root, set, _, err := s.trie.Commit(true)
+	root, set, witness, err := s.trie.Commit(true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1232,6 +1236,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			return common.Hash{}, err
 		}
 		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
+	}
+	if witness != nil {
+		witnesses.Merge(witness)
 	}
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)

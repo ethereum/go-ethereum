@@ -59,3 +59,24 @@ func (w *Witness) Copy() *Witness {
 	}
 	return cpy
 }
+
+// Witnesses represents a set of witness for a group of tries.
+type Witnesses struct {
+	witness map[common.Hash]*Witness
+}
+
+// NewWitnesses initializes an empty witness set.
+func NewWitnesses() *Witnesses {
+	return &Witnesses{witness: make(map[common.Hash]*Witness)}
+}
+
+// Merge merges the provided dirty nodes of a trie into the set. The assumption
+// is held that no duplicated set belonging to the same trie will be merged twice.
+func (set *Witnesses) Merge(other *Witness) error {
+	_, present := set.witness[other.Owner]
+	if present {
+		//return subset.Merge(other.Owner, other.Nodes)
+	}
+	set.witness[other.Owner] = other
+	return nil
+}
