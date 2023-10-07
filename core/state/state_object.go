@@ -388,7 +388,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
-	root, nodes, err := s.trie.Commit(false)
+	root, nodes, _, err := s.trie.Commit(false)
 	if err != nil {
 		return nil, err
 	}

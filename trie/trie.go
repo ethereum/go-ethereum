@@ -53,7 +53,8 @@ type Trie struct {
 
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
-	tracer *tracer
+	tracer  *tracer
+	witness *trienode.Witness
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -70,6 +71,7 @@ func (t *Trie) Copy() *Trie {
 		unhashed:  t.unhashed,
 		reader:    t.reader,
 		tracer:    t.tracer.copy(),
+		witness:   t.witness.Copy(),
 	}
 }
 
@@ -85,9 +87,10 @@ func New(id *ID, db *Database) (*Trie, error) {
 		return nil, err
 	}
 	trie := &Trie{
-		owner:  id.Owner,
-		reader: reader,
-		tracer: newTracer(),
+		owner:   id.Owner,
+		reader:  reader,
+		tracer:  newTracer(),
+		witness: trienode.NewWitness(id.Owner),
 	}
 	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
@@ -589,7 +592,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.onRead(prefix, blob)
+	t.witness.Add(string(prefix), blob)
 	return mustDecodeNode(n, blob), nil
 }
 
@@ -607,9 +610,11 @@ func (t *Trie) Hash() common.Hash {
 // The returned nodeset can be nil if the trie is clean (nothing to commit).
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
-	defer t.tracer.reset()
+func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, *trienode.Witness, error) {
+	// Reset the trie internal states at the end.
 	defer func() {
+		t.tracer = newTracer()
+		t.witness = trienode.NewWitness(t.owner)
 		t.committed = true
 	}()
 	// Trie is empty and can be classified into two types of situations:
@@ -617,15 +622,22 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 	// (b) The trie was non-empty and all nodes are dropped => return
 	//     the node set includes all deleted nodes
 	if t.root == nil {
-		paths := t.tracer.deletedNodes()
+		// It's possible a few deleted nodes were embedded in their parent before,
+		// the deletions can be no effect by deleting nothing, filter them out.
+		var paths []string
+		for _, p := range t.tracer.deleteList() {
+			if t.witness.Has(p) {
+				paths = append(paths, p)
+			}
+		}
 		if len(paths) == 0 {
-			return types.EmptyRootHash, nil, nil // case (a)
+			return types.EmptyRootHash, nil, nil, nil // case (a)
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
 			nodes.AddNode([]byte(path), trienode.NewDeleted())
 		}
-		return types.EmptyRootHash, nodes, nil // case (b)
+		return types.EmptyRootHash, nodes, t.witness, nil // case (b)
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
@@ -637,14 +649,19 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		// Replace the root node with the origin hash in order to
 		// ensure all resolved nodes are dropped after the commit.
 		t.root = hashedNode
-		return rootHash, nil, nil
+		return rootHash, nil, t.witness, nil
 	}
 	nodes := trienode.NewNodeSet(t.owner)
-	for _, path := range t.tracer.deletedNodes() {
-		nodes.AddNode([]byte(path), trienode.NewDeleted())
+
+	// It's possible a few deleted nodes were embedded in their parent before,
+	// the deletions can be no effect by deleting nothing, filter them out.
+	for _, p := range t.tracer.deleteList() {
+		if t.witness.Has(p) {
+			nodes.AddNode([]byte(p), trienode.NewDeleted())
+		}
 	}
-	t.root = newCommitter(nodes, t.tracer, collectLeaf).Commit(t.root)
-	return rootHash, nodes, nil
+	t.root = newCommitter(nodes, t.witness, collectLeaf).Commit(t.root)
+	return rootHash, nodes, t.witness, nil
 }
 
 // hashRoot calculates the root hash of the given trie
@@ -667,6 +684,7 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
-	t.tracer.reset()
+	t.tracer = newTracer()
+	t.witness = trienode.NewWitness(common.Hash{})
 	t.committed = false
 }

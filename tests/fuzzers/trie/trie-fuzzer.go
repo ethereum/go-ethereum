@@ -165,7 +165,7 @@ func runRandTest(rt randTest) error {
 		case opHash:
 			tr.Hash()
 		case opCommit:
-			hash, nodes, err := tr.Commit(false)
+			hash, nodes, _, err := tr.Commit(false)
 			if err != nil {
 				return err
 			}

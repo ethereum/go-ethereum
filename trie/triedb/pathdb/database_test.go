@@ -46,7 +46,7 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 			h.Update(key.Bytes(), val)
 		}
 	}
-	root, nodes, _ := h.Commit(false)
+	root, nodes, _, _ := h.Commit(false)
 	return root, nodes
 }
 

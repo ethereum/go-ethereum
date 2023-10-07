@@ -177,9 +177,9 @@ func (t *odrTrie) DeleteAccount(address common.Address) error {
 	})
 }
 
-func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, *trienode.Witness, error) {
 	if t.trie == nil {
-		return t.id.Root, nil, nil
+		return t.id.Root, nil, nil, nil
 	}
 	return t.trie.Commit(collectLeaf)
 }

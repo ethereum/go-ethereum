@@ -28,15 +28,15 @@ import (
 // insertion order.
 type committer struct {
 	nodes       *trienode.NodeSet
-	tracer      *tracer
+	witness     *trienode.Witness
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *committer {
+func newCommitter(nodeset *trienode.NodeSet, witness *trienode.Witness, collectLeaf bool) *committer {
 	return &committer{
 		nodes:       nodeset,
-		tracer:      tracer,
+		witness:     witness,
 		collectLeaf: collectLeaf,
 	}
 }
@@ -131,8 +131,7 @@ func (c *committer) store(path []byte, n node) node {
 		// The node is embedded in its parent, in other words, this node
 		// will not be stored in the database independently, mark it as
 		// deleted only if the node was existent in database before.
-		_, ok := c.tracer.accessList[string(path)]
-		if ok {
+		if c.witness.Has(string(path)) {
 			c.nodes.AddNode(path, trienode.NewDeleted())
 		}
 		return n

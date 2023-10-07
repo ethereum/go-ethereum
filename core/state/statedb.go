@@ -1222,7 +1222,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	root, set, err := s.trie.Commit(true)
+	root, set, _, err := s.trie.Commit(true)
 	if err != nil {
 		return common.Hash{}, err
 	}

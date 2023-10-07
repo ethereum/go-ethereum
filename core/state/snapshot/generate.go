@@ -362,7 +362,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes, err := snapTrie.Commit(false)
+		root, nodes, _, err := snapTrie.Commit(false)
 		if err != nil {
 			return false, nil, err
 		}
