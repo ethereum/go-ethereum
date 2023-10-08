@@ -171,27 +171,65 @@ var (
 		}
 	{{end}}
 
+	// {{.Type}}Methods is an auto generated interface around an Ethereum contract.
+	type {{.Type}}Methods interface {
+		{{$contract.Type}}Calls
+		{{$contract.Type}}Transacts
+		{{$contract.Type}}Filters
+	}
+
+	// {{$contract.Type}}Calls is an auto generated interface that defines the call methods available for an Ethereum contract.
+	type {{$contract.Type}}Calls interface {
+		{{range .Calls}}
+		{{.Normalized.Name}}(opts *bind.CallOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error)
+		{{end}}
+	}
+
+	// {{$contract.Type}}Transacts is an auto generated interface that defines the transact methods available for an Ethereum contract.
+	type {{$contract.Type}}Transacts interface {
+		{{range .Transacts}}
+		{{.Normalized.Name}}(opts *bind.TransactOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) (*types.Transaction, error)
+		{{end}}
+	}
+
+	// {{$contract.Type}}Filterer is an auto generated interface that defines the log filtering methods available for an Ethereum contract.
+	type {{$contract.Type}}Filters interface {
+		{{range .Events}}
+		Filter{{.Normalized.Name}}(opts *bind.FilterOpts{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type $structs}}{{end}}{{end}}) (*{{$contract.Type}}{{.Normalized.Name}}Iterator, error)
+		Watch{{.Normalized.Name}}(opts *bind.WatchOpts, sink chan<- *{{$contract.Type}}{{.Normalized.Name}}{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type $structs}}{{end}}{{end}}) (event.Subscription, error)
+		Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error)
+		{{end}}
+	}
+
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
 	type {{.Type}} struct {
 	  {{.Type}}Caller     // Read-only binding to the contract
 	  {{.Type}}Transactor // Write-only binding to the contract
 	  {{.Type}}Filterer   // Log filterer for contract events
 	}
+	// {{.Type}} implements the {{.Type}}Methods interface.
+	var _ {{.Type}}Methods = (*{{.Type}})(nil)
 
 	// {{.Type}}Caller is an auto generated read-only Go binding around an Ethereum contract.
 	type {{.Type}}Caller struct {
 	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
+	// {{.Type}}Caller implements the {{.Type}}Calls interface.
+	var _ {{.Type}}Calls = (*{{.Type}}Caller)(nil)
 
 	// {{.Type}}Transactor is an auto generated write-only Go binding around an Ethereum contract.
 	type {{.Type}}Transactor struct {
 	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
+	// {{.Type}}Transactor implements the {{.Type}}Transacts interface.
+	var _ {{.Type}}Transacts = (*{{.Type}}Transactor)(nil)
 
 	// {{.Type}}Filterer is an auto generated log filtering Go binding around an Ethereum contract events.
 	type {{.Type}}Filterer struct {
 	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
+	// {{.Type}}Filterer implements the {{.Type}}Filters interface.
+	var _ {{.Type}}Filters = (*{{.Type}}Filterer)(nil)
 
 	// {{.Type}}Session is an auto generated Go binding around an Ethereum contract,
 	// with pre-set call and transact options.
