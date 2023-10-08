@@ -423,7 +423,6 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 	if tx.Hash() != testTx2.Hash() {
 		t.Fatalf("unexpected transaction: %v", tx)
 	}
-	t.Error("test")
 }
 
 func testChainID(t *testing.T, client *rpc.Client) {
