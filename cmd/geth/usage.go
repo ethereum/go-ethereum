@@ -49,6 +49,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.SepoliaFlag,
 			utils.ScrollAlphaFlag,
 			utils.ScrollSepoliaFlag,
+			utils.ScrollFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
 			utils.GCModeFlag,

@@ -83,11 +83,20 @@ var ScrollAlphaBootnodes = []string{
 	"enode://cf85bfa5828239b1f6b21758579ee8aaaba2a1fb4c658d6967c5f7ed4f040d95dee5b5cef0c77d656a191f6b0875dd03f05b30a3b2b3e15bfcf18b500d8f634c@35.155.117.77:30303",
 }
 
-// ScrollSepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Alpha test network.
+// ScrollSepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Sepolia test network.
 var ScrollSepoliaBootnodes = []string{
 	"enode://ceb1636bac5cbb262e5ad5b2cd22014bdb35ffe7f58b3506970d337a63099481814a338dbcd15f2d28757151e3ecd40ba38b41350b793cd0d910ff0436654f8c@35.85.84.250:30303",
 	"enode://29cee709c400533ae038a875b9ca975c8abef9eade956dcf3585e940acd5c0ae916968f514bd37d1278775aad1b7db30f7032a70202a87fd7365bd8de3c9f5fc@44.242.39.33:30303",
 	"enode://dd1ac5433c5c2b04ca3166f4cb726f8ff6d2da83dbc16d9b68b1ea83b7079b371eb16ef41c00441b6e85e32e33087f3b7753ea9e8b1e3f26d3e4df9208625e7f@54.148.111.168:30303",
+}
+
+// ScrollMainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll mainnet.
+var ScrollMainnetBootnodes = []string{
+	"enode://11f62f1592352bdf47fcd1521a5b4b753e31cedbff5c2ff3f5aafb028c1d774ef3fd5880d73aa871c0f571733cd0dcc93af3ad21e65281794de0c26c96aee2c0@54.186.123.248:30303",
+	"enode://f2fe493a112d0c5ded394e288be1e95edac0c422f60fc00b6c23ee3c39a6fd91e9c6f62289fd519da692a6f0ff0805c4466715642770c83d215a0ce8224b7eb1@44.227.91.206:30303",
+	"enode://5bb85c970acff2eff7327d06616434fe50489f0e994e82abdcd7b9d61ebc0e0801f2b931ad0d8b0e9cfc7eac994d729974b9930c2e13c33822406b82f08f1be2@44.237.194.52:30303",
+	"enode://f15a5982a9fdfc5eb88b1471aeeb4656fb8fa62339769c024af2cd7f57cca9be82d6f49d9c4c77166d706f9d7a7fc748ac7c2e4b14f661b88f9507df015d3b0a@52.35.203.107:30303",
+	"enode://5623eb16ae4412bead2504d419ccf58a8e3690613531951110e1aa53a65a7bdede1dc02b7b7f05119aa314d1898d1e8fb994c97b445328261624a0b8049ff580@54.70.236.187:30303",
 }
 
 var V5Bootnodes = []string{

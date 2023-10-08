@@ -175,6 +175,7 @@ func TestGenesisHashes(t *testing.T) {
 		// {DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 		// {DefaultScrollAlphaGenesisBlock(), params.ScrollAlphaGenesisHash},
 		{DefaultScrollSepoliaGenesisBlock(), params.ScrollSepoliaGenesisHash},
+		{DefaultScrollMainnetGenesisBlock(), params.ScrollMainnetGenesisHash},
 	} {
 		// Test via MustCommit
 		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {
