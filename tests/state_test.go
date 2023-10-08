@@ -83,7 +83,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/hash/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state state.StateDBI) {
 							result = st.checkFailure(t, err)
 						})
 						return result
@@ -92,7 +92,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/hash/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state state.StateDBI) {
 							if snaps != nil && state != nil {
 								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
 									result = err
@@ -107,7 +107,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/path/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state state.StateDBI) {
 							result = st.checkFailure(t, err)
 						})
 						return result
@@ -116,7 +116,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/path/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state state.StateDBI) {
 							if snaps != nil && state != nil {
 								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
 									result = err
@@ -276,7 +276,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				snapshot := statedb.Snapshot()
-				statedb.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+				statedb.Prepare(rules, msg.From, context.Coinbase, msg.To, evm.PrecompileManager.GetActive(&rules), msg.AccessList)
 				b.StartTimer()
 				start := time.Now()
 

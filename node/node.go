@@ -65,6 +65,9 @@ type Node struct {
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
 	databases map[*closeTrackingDB]struct{} // All open databases
+
+	// for Polaris
+	disableP2P bool
 }
 
 const (
@@ -200,6 +203,11 @@ func (n *Node) Start() error {
 	return err
 }
 
+// SetP2PDisabled sets the P2P disabled flag.
+func (n *Node) SetP2PDisabled(disableP2P bool) {
+	n.disableP2P = disableP2P
+}
+
 // Close stops the Node and releases resources acquired in
 // Node constructor New.
 func (n *Node) Close() error {
@@ -265,9 +273,11 @@ func (n *Node) doClose(errs []error) error {
 // openEndpoints starts all network and RPC endpoints.
 func (n *Node) openEndpoints() error {
 	// start networking endpoints
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-	if err := n.server.Start(); err != nil {
-		return convertFileLockError(err)
+	if !n.disableP2P {
+		n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+		if err := n.server.Start(); err != nil {
+			return convertFileLockError(err)
+		}
 	}
 	// start RPC endpoints
 	err := n.startRPC()

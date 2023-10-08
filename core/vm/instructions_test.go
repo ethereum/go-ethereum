@@ -595,7 +595,7 @@ func TestOpTstore(t *testing.T) {
 		value          = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
 	)
 
-	// Add a stateObject for the caller and the contract being called
+	// Add a StateObject for the caller and the contract being called
 	statedb.CreateAccount(caller)
 	statedb.CreateAccount(to)
 

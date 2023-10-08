@@ -116,14 +116,15 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer      vm.EVMLogger
-		debugLogger *logger.StructLogger
-		statedb     *state.StateDB
-		chainConfig *params.ChainConfig
-		sender      = common.BytesToAddress([]byte("sender"))
-		receiver    = common.BytesToAddress([]byte("receiver"))
-		preimages   = ctx.Bool(DumpFlag.Name)
-		blobHashes  []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
+		tracer        vm.EVMLogger
+		debugLogger   *logger.StructLogger
+		statedb       state.StateDBI
+		chainConfig   *params.ChainConfig
+		sender        = common.BytesToAddress([]byte("sender"))
+		receiver      = common.BytesToAddress([]byte("receiver"))
+		genesisConfig *core.Genesis
+		preimages     = ctx.Bool(DumpFlag.Name)
+		blobHashes    []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)

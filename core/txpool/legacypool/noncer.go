@@ -27,13 +27,13 @@ import (
 // accounts in the pool, falling back to reading from a real state database if
 // an account is unknown.
 type noncer struct {
-	fallback *state.StateDB
+	fallback state.StateDBI
 	nonces   map[common.Address]uint64
 	lock     sync.Mutex
 }
 
 // newNoncer creates a new virtual state database to track the pool nonces.
-func newNoncer(statedb *state.StateDB) *noncer {
+func newNoncer(statedb state.StateDBI) *noncer {
 	return &noncer{
 		fallback: statedb.Copy(),
 		nonces:   make(map[common.Address]uint64),

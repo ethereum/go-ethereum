@@ -36,7 +36,7 @@ var (
 	sha3Nil = crypto.Keccak256Hash(nil)
 )
 
-func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
+func NewState(ctx context.Context, head *types.Header, odr OdrBackend) state.StateDBI {
 	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), nil)
 	return state
 }

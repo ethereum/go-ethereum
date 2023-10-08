@@ -100,7 +100,7 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state state.StateDBI) {
 				if state != nil {
 					root := state.IntermediateRoot(false)
 					result.Root = &root

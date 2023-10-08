@@ -314,7 +314,7 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	return nil
 }
 
-func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
+func (t *BlockTest) validatePostState(statedb state.StateDBI) error {
 	// validate post state accounts in test file against what we have in state db
 	for addr, acct := range t.json.Post {
 		// address is indirectly verified by the other fields, as it's the db key
