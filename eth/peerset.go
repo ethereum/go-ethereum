@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -74,7 +75,7 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	// Reject the peer if it advertises `snap` without `eth` as `snap` is only a
 	// satellite protocol meaningful with the chain selection of `eth`
 	if !peer.RunningCap(eth.ProtocolName, eth.ProtocolVersions) {
-		return errSnapWithoutEth
+		return fmt.Errorf("%w: have %v", errSnapWithoutEth, peer.Caps())
 	}
 	// Ensure nobody can double connect
 	ps.lock.Lock()

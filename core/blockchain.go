@@ -337,17 +337,17 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-	// Make sure the state associated with the block is available
+	// Make sure the state associated with the block is available, or log out
+	// if there is no available state, waiting for state sync.
 	head := bc.CurrentBlock()
 	if !bc.HasState(head.Root) {
 		if head.Number.Uint64() == 0 {
 			// The genesis state is missing, which is only possible in the path-based
-			// scheme. This situation occurs when the state syncer overwrites it.
-			//
-			// The solution is to reset the state to the genesis state. Although it may not
-			// match the sync target, the state healer will later address and correct any
-			// inconsistencies.
-			bc.resetState()
+			// scheme. This situation occurs when the initial state sync is not finished
+			// yet, or the chain head is rewound below the pivot point. In both scenario,
+			// there is no possible recovery approach except for rerunning a snap sync.
+			// Do nothing here until the state syncer picks it up.
+			log.Info("Genesis state is missing, wait state sync")
 		} else {
 			// Head state is missing, before the state recovery, find out the
 			// disk layer point of snapshot(if it's enabled). Make sure the
@@ -576,7 +576,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	header := bc.CurrentBlock()
 	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
 	if block == nil {
-		// This should never happen. In practice, previsouly currentBlock
+		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
@@ -598,7 +598,7 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	header := bc.CurrentBlock()
 	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
 	if block == nil {
-		// This should never happen. In practice, previsouly currentBlock
+		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
@@ -628,28 +628,6 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 	} else {
 		headSafeBlockGauge.Update(0)
 	}
-}
-
-// resetState resets the persistent state to genesis state if it's not present.
-func (bc *BlockChain) resetState() {
-	// Short circuit if the genesis state is already present.
-	root := bc.genesisBlock.Root()
-	if bc.HasState(root) {
-		return
-	}
-	// Reset the state database to empty for committing genesis state.
-	// Note, it should only happen in path-based scheme and Reset function
-	// is also only call-able in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		if err := bc.triedb.Reset(types.EmptyRootHash); err != nil {
-			log.Crit("Failed to clean state", "err", err) // Shouldn't happen
-		}
-	}
-	// Write genesis state into database.
-	if err := CommitGenesisState(bc.db, bc.triedb, bc.genesisBlock.Hash()); err != nil {
-		log.Crit("Failed to commit genesis state", "err", err)
-	}
-	log.Info("Reset state to genesis", "root", root)
 }
 
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
@@ -687,7 +665,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			if newHeadBlock == nil {
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
 				newHeadBlock = bc.genesisBlock
-				bc.resetState()
 			} else {
 				// Block exists, keep rewinding until we find one with state,
 				// keeping rewinding until we exceed the optional threshold
@@ -715,16 +692,14 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 						}
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
-						if newHeadBlock.NumberU64() == 0 {
-							bc.resetState()
-						} else if !bc.HasState(newHeadBlock.Root()) {
+						if !bc.HasState(newHeadBlock.Root()) && bc.stateRecoverable(newHeadBlock.Root()) {
 							// Rewind to a block with recoverable state. If the state is
 							// missing, run the state recovery here.
 							if err := bc.triedb.Recover(newHeadBlock.Root()); err != nil {
 								log.Crit("Failed to rollback state", "err", err) // Shouldn't happen
 							}
+							log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						}
-						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
 					}
 					log.Debug("Skipping block with threshold state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
@@ -739,6 +714,15 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			// to low, so it's safe to update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock.Header())
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
+
+			// The head state is missing, which is only possible in the path-based
+			// scheme. This situation occurs when the chain head is rewound below
+			// the pivot point. In this scenario, there is no possible recovery
+			// approach except for rerunning a snap sync. Do nothing here until the
+			// state syncer picks it up.
+			if !bc.HasState(newHeadBlock.Root()) {
+				log.Info("Chain is stateless, wait state sync", "number", newHeadBlock.Number(), "hash", newHeadBlock.Hash())
+			}
 		}
 		// Rewind the snap block in a simpleton way to the target head
 		if currentSnapBlock := bc.CurrentSnapBlock(); currentSnapBlock != nil && header.Number.Uint64() < currentSnapBlock.Number.Uint64() {
@@ -838,7 +822,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		if err := bc.triedb.Reset(root); err != nil {
+		if err := bc.triedb.Enable(root); err != nil {
 			return err
 		}
 	}
@@ -998,7 +982,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 func (bc *BlockChain) Stop() {
 	bc.stopWithoutSaving()
 
-	// Ensure that the entirety of the state snapshot is journalled to disk.
+	// Ensure that the entirety of the state snapshot is journaled to disk.
 	var snapBase common.Hash
 	if bc.snaps != nil {
 		var err error
@@ -1209,7 +1193,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// a background routine to re-indexed all indices in [ancients - txlookupLimit, ancients)
 		// range. In this case, all tx indices of newly imported blocks should be
 		// generated.
-		var batch = bc.db.NewBatch()
+		batch := bc.db.NewBatch()
 		for i, block := range blockChain {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
@@ -2601,7 +2585,7 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 	bc.flushInterval.Store(int64(interval))
 }
 
-// GetTrieFlushInterval gets the in-memroy tries flush interval
+// GetTrieFlushInterval gets the in-memory tries flush interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }

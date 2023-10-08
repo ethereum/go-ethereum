@@ -423,7 +423,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
-	// Nofity any tester listening for startup events
+	// Notify any tester listening for startup events
 	if s.syncStarting != nil {
 		s.syncStarting()
 	}
@@ -794,7 +794,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
-		headers := *res.Res.(*eth.BlockHeadersPacket)
+		headers := *res.Res.(*eth.BlockHeadersRequest)
 
 		headerReqTimer.Update(time.Since(start))
 		s.peers.rates.Update(peer.id, eth.BlockHeadersMsg, res.Time, len(headers))

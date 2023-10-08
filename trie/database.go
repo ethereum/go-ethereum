@@ -273,15 +273,27 @@ func (db *Database) Recoverable(root common.Hash) (bool, error) {
 	return pdb.Recoverable(root), nil
 }
 
-// Reset wipes all available journal from the persistent database and discard
-// all caches and diff layers. Using the given root to create a new disk layer.
+// Disable deactivates the database and invalidates all available state layers
+// as stale to prevent access to the persistent state, which is in the syncing
+// stage.
+//
 // It's only supported by path-based database and will return an error for others.
-func (db *Database) Reset(root common.Hash) error {
+func (db *Database) Disable() error {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
 		return errors.New("not supported")
 	}
-	return pdb.Reset(root)
+	return pdb.Disable()
+}
+
+// Enable activates database and resets the state tree with the provided persistent
+// state root once the state sync is finished.
+func (db *Database) Enable(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Enable(root)
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal entry.

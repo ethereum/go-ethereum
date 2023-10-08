@@ -18,7 +18,6 @@
 package utils
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -39,11 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -72,7 +69,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -595,9 +591,9 @@ var (
 	}
 
 	// MISC settings
-	SyncTargetFlag = &cli.PathFlag{
+	SyncTargetFlag = &cli.StringFlag{
 		Name:      "synctarget",
-		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
+		Usage:     `Hash of the block to full sync to (dev testing feature)`,
 		TakesFile: true,
 		Category:  flags.MiscCategory,
 	}
@@ -1032,35 +1028,45 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
+// Priority order for bootnodes configuration:
+//
+// 1. --bootnodes flag
+// 2. Config file
+// 3. Network preset flags (e.g. --goerli)
+// 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
-	switch {
-	case ctx.IsSet(BootnodesFlag.Name):
+	if ctx.IsSet(BootnodesFlag.Name) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
-	case ctx.Bool(HoleskyFlag.Name):
-		urls = params.HoleskyBootnodes
-	case ctx.Bool(SepoliaFlag.Name):
-		urls = params.SepoliaBootnodes
-	case ctx.Bool(GoerliFlag.Name):
-		urls = params.GoerliBootnodes
+	} else {
+		if cfg.BootstrapNodes != nil {
+			return // Already set by config file, don't apply defaults.
+		}
+		switch {
+		case ctx.Bool(HoleskyFlag.Name):
+			urls = params.HoleskyBootnodes
+		case ctx.Bool(SepoliaFlag.Name):
+			urls = params.SepoliaBootnodes
+		case ctx.Bool(GoerliFlag.Name):
+			urls = params.GoerliBootnodes
+		}
 	}
+	cfg.BootstrapNodes = mustParseBootnodes(urls)
+}
 
-	// don't apply defaults if BootstrapNodes is already set
-	if cfg.BootstrapNodes != nil {
-		return
-	}
-
-	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
+func mustParseBootnodes(urls []string) []*enode.Node {
+	nodes := make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
-				continue
+				return nil
 			}
-			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
+			nodes = append(nodes, node)
 		}
 	}
+	return nodes
 }
 
 // setBootstrapNodesV5 creates a list of bootstrap nodes from the command line
@@ -1681,7 +1687,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
-	if ctx.IsSet(SyncModeFlag.Name) {
+	if ctx.IsSet(SyncTargetFlag.Name) {
+		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+	} else if ctx.IsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
@@ -1966,21 +1974,9 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
-	blob, err := os.ReadFile(path)
-	if err != nil {
-		Fatalf("Failed to read block file: %v", err)
-	}
-	rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
-	if err != nil {
-		Fatalf("Failed to decode block blob: %v", err)
-	}
-	var block types.Block
-	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
-		Fatalf("Failed to decode block: %v", err)
-	}
-	catalyst.RegisterFullSyncTester(stack, eth, &block)
-	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
+	catalyst.RegisterFullSyncTester(stack, eth, target)
+	log.Info("Registered full-sync tester", "hash", target)
 }
 
 func SetupMetrics(ctx *cli.Context) {
