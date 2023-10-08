@@ -83,7 +83,7 @@ var Defaults = Config{
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
-// Config contains configuration options for of the ETH and LES protocols.
+// Config contains configuration options for ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
