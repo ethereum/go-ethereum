@@ -36,7 +36,7 @@ var (
 	GoerliGenesisHash        = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	ScrollAlphaGenesisHash   = common.HexToHash("0xa4fc62b9b0643e345bdcebe457b3ae898bef59c7203c3db269200055e037afda")
 	ScrollSepoliaGenesisHash = common.HexToHash("0xaa62d1a8b2bffa9e5d2368b63aae0d98d54928bd713125e3fd9e5c896c68592c")
-	ScrollMainnetGenesisHash = common.HexToHash("0xb0763bf0c49a41cf260a5d58113cbd4f2ae630a27ed8d7f260d57593bf4dd407")
+	ScrollMainnetGenesisHash = common.HexToHash("0xbbc05efd412b7cd47a2ed0e5ddfcf87af251e414ea4c801d78b6784513180a80")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -336,7 +336,7 @@ var (
 	}
 
 	ScrollMainnetChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(53435222224),
+		ChainID:             big.NewInt(534352),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -366,7 +366,7 @@ var (
 			EnableEIP1559:             false,
 			L1Config: &L1Config{
 				L1ChainId:             1,
-				L1MessageQueueAddress: common.HexToAddress("0x72FF472b663Bb201B02258c4d2a34cD75867A6E3"),
+				L1MessageQueueAddress: common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
 				NumL1MessagesPerBlock: 10,
 			},
 		},

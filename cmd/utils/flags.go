@@ -1789,14 +1789,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.NoPrefetch = true
 	case ctx.GlobalBool(ScrollFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 53435222224
+			cfg.NetworkId = 534352
 		}
 		cfg.Genesis = core.DefaultScrollMainnetGenesisBlock()
 		// forced for mainnet
 		log.Info("Setting flag", "--l1.confirmations", "finalized")
 		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
-		log.Info("Setting flag", "--l1.sync.startblock", "18305000")
-		stack.Config().L1DeploymentBlock = 18305000
+		log.Info("Setting flag", "--l1.sync.startblock", "18306000")
+		stack.Config().L1DeploymentBlock = 18306000
 		// disable pruning
 		if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
 			log.Crit("Must use --gcmode=archive")
