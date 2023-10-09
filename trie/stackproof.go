@@ -395,7 +395,7 @@ func VerifyRangeProofWithStack(rootHash common.Hash, firstKey []byte, keys [][]b
 	return len(hps) > 0, nil
 }
 
-// wrarpWriteFunction returns a NodeWriteFunc which filters away writes that are
+// wrapWriteFunction returns a NodeWriteFunc which filters away writes that are
 // on the boundary: parents of first/last.
 func wrapWriteFunction(origin, last []byte, w NodeWriteFunc) NodeWriteFunc {
 	if w == nil {
@@ -414,4 +414,59 @@ func wrapWriteFunction(origin, last []byte, w NodeWriteFunc) NodeWriteFunc {
 		}
 		w(path, hash, blob)
 	}
+}
+
+type GenerativeTrie struct {
+	proofsSet bool
+	owner     common.Hash
+	writeFn   NodeWriteFunc
+	stack     *StackTrie
+
+	rightHandBorder []byte
+}
+
+func NewGentrieWithOwner(origin, end, owner common.Hash, writeFn NodeWriteFunc) *GenerativeTrie {
+	// Wrap the write function
+	var originBorder = keybytesToHex(origin[:])
+	var g = &GenerativeTrie{}
+	wrapper := func(origin common.Hash, path []byte, hash common.Hash, blob []byte) {
+		if bytes.HasPrefix(originBorder, path) {
+			return
+		}
+		if bytes.HasPrefix(g.rightHandBorder, path) {
+			return
+		}
+		writeFn(origin, path, hash, blob)
+	}
+	return &GenerativeTrie{writeFn: wrapper}
+}
+
+func (g *GenerativeTrie) AddProof(rootHash common.Hash, origin []byte, proof ethdb.KeyValueReader) {
+	if g.stack == nil {
+		g.proofsSet = true
+		stack, err := newStackTrieFromProof(rootHash, origin[:], proof, g.writeFn)
+		if err != nil {
+			panic(err)
+		}
+		g.stack = stack
+		g.stack.owner = g.owner
+	}
+}
+
+func (g *GenerativeTrie) UpdateAll(keys []common.Hash, values [][]byte) error {
+	for i := 0; i < len(keys); i++ {
+		g.stack.Update(keys[i][:], values[i])
+	}
+	last := keys[len(keys)-1]
+	g.rightHandBorder = last[:]
+	return nil
+}
+
+// Update inserts a (key, value) pair into the stack trie.
+func (g *GenerativeTrie) Update(key, value []byte) error {
+	return g.stack.Update(key, value)
+}
+
+func (g *GenerativeTrie) Commit() (common.Hash, error) {
+	return g.stack.Commit()
 }
