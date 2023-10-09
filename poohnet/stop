@@ -1,0 +1,4 @@
+#!/bin/sh
+
+docker stop pow-node
+docker rm pow-node

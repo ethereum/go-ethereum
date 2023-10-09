@@ -1,0 +1,31 @@
+version: '2.4'
+services:
+    postgres:
+        image: postgres:12.0
+        container_name: postgres
+        restart: always
+        environment:
+            - POSTGRES_PASSWORD=pass
+            - POSTGRES_USER=postgres
+            - POSTGRES_DB=db
+            - PGDATA=/postgresql/data
+        volumes:
+            - db:/postgresql/data
+        network_mode: host
+
+    go:
+        image: golang:1.18
+        container_name: golang
+        restart: always
+        volumes:
+            - ~/agora-scan/:/usr/src/app
+        working_dir: /usr/src/app
+        network_mode: host
+        depends_on:
+            - postgres
+        command: /bin/sh
+        stdin_open: true
+        tty: true
+
+volumes:
+    db:

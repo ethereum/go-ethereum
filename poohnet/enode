@@ -1,0 +1,29 @@
+#!/bin/sh
+if [ -z $1 ]
+then
+    echo "No parameter passed"
+    exit
+elsef
+    echo "Chain: $1"
+fi
+chain=$1
+
+if [ -z $2 ]
+then
+    echo "No second parameter passed"
+    exit
+elsef
+    echo "Node service: $2"
+fi
+service=$2
+
+if [ "$chain" = "pow" ]
+then
+  docker compose -f docker-compose-node.yml up $service -d
+elif [ "$chain" = "pos" ]
+then
+  docker compose -f docker-compose-node-pos.yml up $service -d
+else
+  echo "Invalid config parameter"
+  exit
+fi
