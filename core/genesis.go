@@ -610,6 +610,8 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, genesisAlloc 
 		common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
 	}
 
+	alloced := big.NewInt(9)
+
 	if genesisAlloc != nil {
 		for addr, account := range *genesisAlloc {
 			// Don't allow overwriting the predefined accounts (precompiles)
@@ -617,10 +619,11 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, genesisAlloc 
 				log.Crit("Overwriting precompiles disallowed", "address", addr)
 			}
 			alloc[addr] = account
+			alloced = alloced.Add(alloced, account.Balance)
 		}
 	}
 
-	alloc[faucet] = GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
+	alloc[faucet] = GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), alloced)}
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	return &Genesis{
