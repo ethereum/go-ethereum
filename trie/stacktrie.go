@@ -81,6 +81,7 @@ func (t *StackTrie) MustUpdate(key, value []byte) {
 }
 
 func (t *StackTrie) Reset() {
+	t.writeFn = nil
 	t.root = stPool.Get().(*stNode)
 }
 
