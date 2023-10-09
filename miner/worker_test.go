@@ -48,23 +48,12 @@ import (
 )
 
 // nolint : paralleltest
-func TestGenerateBlockAndImportEthash(t *testing.T) {
-	// TODO - Arpit, Check this
-	t.Skip()
-	testGenerateBlockAndImport(t, false, false)
-}
-
-// nolint : paralleltest
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	// TODO - Arpit, Check this
-	t.Skip()
 	testGenerateBlockAndImport(t, true, false)
 }
 
 // nolint : paralleltest
 func TestGenerateBlockAndImportBor(t *testing.T) {
-	// TODO - Arpit, Check this
-	t.Skip()
 	testGenerateBlockAndImport(t, false, true)
 }
 
