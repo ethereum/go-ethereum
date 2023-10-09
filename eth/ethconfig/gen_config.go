@@ -19,60 +19,64 @@ import (
 // MarshalTOML marshals as TOML.
 func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
-		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               uint64
-		SyncMode                downloader.SyncMode
-		EthDiscoveryURLs        []string
-		SnapDiscoveryURLs       []string
-		NoPruning               bool
-		NoPrefetch              bool
-		TxLookupLimit           uint64                 `toml:",omitempty"`
-		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
-		LightServ               int                    `toml:",omitempty"`
-		LightIngress            int                    `toml:",omitempty"`
-		LightEgress             int                    `toml:",omitempty"`
-		LightPeers              int                    `toml:",omitempty"`
-		LightNoPrune            bool                   `toml:",omitempty"`
-		LightNoSyncServe        bool                   `toml:",omitempty"`
-		SyncFromCheckpoint      bool                   `toml:",omitempty"`
-		UltraLightServers       []string               `toml:",omitempty"`
-		UltraLightFraction      int                    `toml:",omitempty"`
-		UltraLightOnlyAnnounce  bool                   `toml:",omitempty"`
-		SkipBcVersionCheck      bool                   `toml:"-"`
-		DatabaseHandles         int                    `toml:"-"`
-		DatabaseCache           int
-		DatabaseFreezer         string
-		TrieCleanCache          int
-		TrieCleanCacheJournal   string        `toml:",omitempty"`
-		TrieCleanCacheRejournal time.Duration `toml:",omitempty"`
-		TrieDirtyCache          int
-		TrieTimeout             time.Duration
-		SnapshotCache           int
-		Preimages               bool
-		TriesInMemory           uint64
-		FilterLogCacheSize      int
-		Miner                   miner.Config
-		Ethash                  ethash.Config
-		TxPool                  txpool.Config
-		GPO                     gasprice.Config
-		EnablePreimageRecording bool
-		DocRoot                 string `toml:"-"`
-		RPCGasCap               uint64
-		RPCReturnDataLimit      uint64
-		RPCEVMTimeout           time.Duration
-		RPCTxFeeCap             float64
-		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
-		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
-		OverrideShanghai        *big.Int                       `toml:",omitempty"`
-		HeimdallURL             string
-		WithoutHeimdall         bool
-		HeimdallgRPCAddress     string
-		RunHeimdall             bool
-		RunHeimdallArgs         string
-		UseHeimdallApp          bool
-		BorLogs                 bool
-		ParallelEVM             core.ParallelEVMConfig `toml:",omitempty"`
-		DevFakeAuthor           bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
+		Genesis                              *core.Genesis `toml:",omitempty"`
+		NetworkId                            uint64
+		SyncMode                             downloader.SyncMode
+		EthDiscoveryURLs                     []string
+		SnapDiscoveryURLs                    []string
+		NoPruning                            bool
+		NoPrefetch                           bool
+		TxLookupLimit                        uint64                 `toml:",omitempty"`
+		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
+		LightServ                            int                    `toml:",omitempty"`
+		LightIngress                         int                    `toml:",omitempty"`
+		LightEgress                          int                    `toml:",omitempty"`
+		LightPeers                           int                    `toml:",omitempty"`
+		LightNoPrune                         bool                   `toml:",omitempty"`
+		LightNoSyncServe                     bool                   `toml:",omitempty"`
+		SyncFromCheckpoint                   bool                   `toml:",omitempty"`
+		UltraLightServers                    []string               `toml:",omitempty"`
+		UltraLightFraction                   int                    `toml:",omitempty"`
+		UltraLightOnlyAnnounce               bool                   `toml:",omitempty"`
+		SkipBcVersionCheck                   bool                   `toml:"-"`
+		DatabaseHandles                      int                    `toml:"-"`
+		DatabaseCache                        int
+		DatabaseFreezer                      string
+		LevelDbCompactionTableSize           uint64
+		LevelDbCompactionTableSizeMultiplier float64
+		LevelDbCompactionTotalSize           uint64
+		LevelDbCompactionTotalSizeMultiplier float64
+		TrieCleanCache                       int
+		TrieCleanCacheJournal                string        `toml:",omitempty"`
+		TrieCleanCacheRejournal              time.Duration `toml:",omitempty"`
+		TrieDirtyCache                       int
+		TrieTimeout                          time.Duration
+		SnapshotCache                        int
+		Preimages                            bool
+		TriesInMemory                        uint64
+		FilterLogCacheSize                   int
+		Miner                                miner.Config
+		Ethash                               ethash.Config
+		TxPool                               txpool.Config
+		GPO                                  gasprice.Config
+		EnablePreimageRecording              bool
+		DocRoot                              string `toml:"-"`
+		RPCGasCap                            uint64
+		RPCReturnDataLimit                   uint64
+		RPCEVMTimeout                        time.Duration
+		RPCTxFeeCap                          float64
+		Checkpoint                           *params.TrustedCheckpoint      `toml:",omitempty"`
+		CheckpointOracle                     *params.CheckpointOracleConfig `toml:",omitempty"`
+		OverrideShanghai                     *big.Int                       `toml:",omitempty"`
+		HeimdallURL                          string
+		WithoutHeimdall                      bool
+		HeimdallgRPCAddress                  string
+		RunHeimdall                          bool
+		RunHeimdallArgs                      string
+		UseHeimdallApp                       bool
+		BorLogs                              bool
+		ParallelEVM                          core.ParallelEVMConfig `toml:",omitempty"`
+		DevFakeAuthor                        bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -98,6 +102,10 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
 	enc.DatabaseFreezer = c.DatabaseFreezer
+	enc.LevelDbCompactionTableSize = c.LevelDbCompactionTableSize
+	enc.LevelDbCompactionTableSizeMultiplier = c.LevelDbCompactionTableSizeMultiplier
+	enc.LevelDbCompactionTotalSize = c.LevelDbCompactionTotalSize
+	enc.LevelDbCompactionTotalSizeMultiplier = c.LevelDbCompactionTotalSizeMultiplier
 	enc.TrieCleanCache = c.TrieCleanCache
 	enc.TrieCleanCacheJournal = c.TrieCleanCacheJournal
 	enc.TrieCleanCacheRejournal = c.TrieCleanCacheRejournal
@@ -135,60 +143,64 @@ func (c Config) MarshalTOML() (interface{}, error) {
 // UnmarshalTOML unmarshals from TOML.
 func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
-		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               *uint64
-		SyncMode                *downloader.SyncMode
-		EthDiscoveryURLs        []string
-		SnapDiscoveryURLs       []string
-		NoPruning               *bool
-		NoPrefetch              *bool
-		TxLookupLimit           *uint64                `toml:",omitempty"`
-		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
-		LightServ               *int                   `toml:",omitempty"`
-		LightIngress            *int                   `toml:",omitempty"`
-		LightEgress             *int                   `toml:",omitempty"`
-		LightPeers              *int                   `toml:",omitempty"`
-		LightNoPrune            *bool                  `toml:",omitempty"`
-		LightNoSyncServe        *bool                  `toml:",omitempty"`
-		SyncFromCheckpoint      *bool                  `toml:",omitempty"`
-		UltraLightServers       []string               `toml:",omitempty"`
-		UltraLightFraction      *int                   `toml:",omitempty"`
-		UltraLightOnlyAnnounce  *bool                  `toml:",omitempty"`
-		SkipBcVersionCheck      *bool                  `toml:"-"`
-		DatabaseHandles         *int                   `toml:"-"`
-		DatabaseCache           *int
-		DatabaseFreezer         *string
-		TrieCleanCache          *int
-		TrieCleanCacheJournal   *string        `toml:",omitempty"`
-		TrieCleanCacheRejournal *time.Duration `toml:",omitempty"`
-		TrieDirtyCache          *int
-		TrieTimeout             *time.Duration
-		SnapshotCache           *int
-		Preimages               *bool
-		TriesInMemory           *uint64
-		FilterLogCacheSize      *int
-		Miner                   *miner.Config
-		Ethash                  *ethash.Config
-		TxPool                  *txpool.Config
-		GPO                     *gasprice.Config
-		EnablePreimageRecording *bool
-		DocRoot                 *string `toml:"-"`
-		RPCGasCap               *uint64
-		RPCReturnDataLimit      *uint64
-		RPCEVMTimeout           *time.Duration
-		RPCTxFeeCap             *float64
-		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
-		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
-		OverrideShanghai        *big.Int                       `toml:",omitempty"`
-		HeimdallURL             *string
-		WithoutHeimdall         *bool
-		HeimdallgRPCAddress     *string
-		RunHeimdall             *bool
-		RunHeimdallArgs         *string
-		UseHeimdallApp          *bool
-		BorLogs                 *bool
-		ParallelEVM             *core.ParallelEVMConfig `toml:",omitempty"`
-		DevFakeAuthor           *bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
+		Genesis                              *core.Genesis `toml:",omitempty"`
+		NetworkId                            *uint64
+		SyncMode                             *downloader.SyncMode
+		EthDiscoveryURLs                     []string
+		SnapDiscoveryURLs                    []string
+		NoPruning                            *bool
+		NoPrefetch                           *bool
+		TxLookupLimit                        *uint64                `toml:",omitempty"`
+		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
+		LightServ                            *int                   `toml:",omitempty"`
+		LightIngress                         *int                   `toml:",omitempty"`
+		LightEgress                          *int                   `toml:",omitempty"`
+		LightPeers                           *int                   `toml:",omitempty"`
+		LightNoPrune                         *bool                  `toml:",omitempty"`
+		LightNoSyncServe                     *bool                  `toml:",omitempty"`
+		SyncFromCheckpoint                   *bool                  `toml:",omitempty"`
+		UltraLightServers                    []string               `toml:",omitempty"`
+		UltraLightFraction                   *int                   `toml:",omitempty"`
+		UltraLightOnlyAnnounce               *bool                  `toml:",omitempty"`
+		SkipBcVersionCheck                   *bool                  `toml:"-"`
+		DatabaseHandles                      *int                   `toml:"-"`
+		DatabaseCache                        *int
+		DatabaseFreezer                      *string
+		LevelDbCompactionTableSize           *uint64
+		LevelDbCompactionTableSizeMultiplier *float64
+		LevelDbCompactionTotalSize           *uint64
+		LevelDbCompactionTotalSizeMultiplier *float64
+		TrieCleanCache                       *int
+		TrieCleanCacheJournal                *string        `toml:",omitempty"`
+		TrieCleanCacheRejournal              *time.Duration `toml:",omitempty"`
+		TrieDirtyCache                       *int
+		TrieTimeout                          *time.Duration
+		SnapshotCache                        *int
+		Preimages                            *bool
+		TriesInMemory                        *uint64
+		FilterLogCacheSize                   *int
+		Miner                                *miner.Config
+		Ethash                               *ethash.Config
+		TxPool                               *txpool.Config
+		GPO                                  *gasprice.Config
+		EnablePreimageRecording              *bool
+		DocRoot                              *string `toml:"-"`
+		RPCGasCap                            *uint64
+		RPCReturnDataLimit                   *uint64
+		RPCEVMTimeout                        *time.Duration
+		RPCTxFeeCap                          *float64
+		Checkpoint                           *params.TrustedCheckpoint      `toml:",omitempty"`
+		CheckpointOracle                     *params.CheckpointOracleConfig `toml:",omitempty"`
+		OverrideShanghai                     *big.Int                       `toml:",omitempty"`
+		HeimdallURL                          *string
+		WithoutHeimdall                      *bool
+		HeimdallgRPCAddress                  *string
+		RunHeimdall                          *bool
+		RunHeimdallArgs                      *string
+		UseHeimdallApp                       *bool
+		BorLogs                              *bool
+		ParallelEVM                          *core.ParallelEVMConfig `toml:",omitempty"`
+		DevFakeAuthor                        *bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -262,6 +274,18 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.DatabaseFreezer != nil {
 		c.DatabaseFreezer = *dec.DatabaseFreezer
+	}
+	if dec.LevelDbCompactionTableSize != nil {
+		c.LevelDbCompactionTableSize = *dec.LevelDbCompactionTableSize
+	}
+	if dec.LevelDbCompactionTableSizeMultiplier != nil {
+		c.LevelDbCompactionTableSizeMultiplier = *dec.LevelDbCompactionTableSizeMultiplier
+	}
+	if dec.LevelDbCompactionTotalSize != nil {
+		c.LevelDbCompactionTotalSize = *dec.LevelDbCompactionTotalSize
+	}
+	if dec.LevelDbCompactionTotalSizeMultiplier != nil {
+		c.LevelDbCompactionTotalSizeMultiplier = *dec.LevelDbCompactionTotalSizeMultiplier
 	}
 	if dec.TrieCleanCache != nil {
 		c.TrieCleanCache = *dec.TrieCleanCache
