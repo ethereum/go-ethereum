@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package trienode
 
 import (
 	"errors"
@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// NodeSet stores a set of trie nodes. It implements trie.Database and can also
+// ProofSet stores a set of trie nodes. It implements trie.Database and can also
 // act as a cache for another trie.Database.
-type NodeSet struct {
+type ProofSet struct {
 	nodes map[string][]byte
 	order []string
 
@@ -36,15 +36,15 @@ type NodeSet struct {
 	lock     sync.RWMutex
 }
 
-// NewNodeSet creates an empty node set
-func NewNodeSet() *NodeSet {
-	return &NodeSet{
+// NewProofSet creates an empty node set
+func NewProofSet() *ProofSet {
+	return &ProofSet{
 		nodes: make(map[string][]byte),
 	}
 }
 
 // Put stores a new node in the set
-func (db *NodeSet) Put(key []byte, value []byte) error {
+func (db *ProofSet) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -61,7 +61,7 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 }
 
 // Delete removes a node from the set
-func (db *NodeSet) Delete(key []byte) error {
+func (db *ProofSet) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -70,7 +70,7 @@ func (db *NodeSet) Delete(key []byte) error {
 }
 
 // Get returns a stored node
-func (db *NodeSet) Get(key []byte) ([]byte, error) {
+func (db *ProofSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -81,13 +81,13 @@ func (db *NodeSet) Get(key []byte) ([]byte, error) {
 }
 
 // Has returns true if the node set contains the given key
-func (db *NodeSet) Has(key []byte) (bool, error) {
+func (db *ProofSet) Has(key []byte) (bool, error) {
 	_, err := db.Get(key)
 	return err == nil, nil
 }
 
 // KeyCount returns the number of nodes in the set
-func (db *NodeSet) KeyCount() int {
+func (db *ProofSet) KeyCount() int {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -95,7 +95,7 @@ func (db *NodeSet) KeyCount() int {
 }
 
 // DataSize returns the aggregated data size of nodes in the set
-func (db *NodeSet) DataSize() int {
+func (db *ProofSet) DataSize() int {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -103,7 +103,7 @@ func (db *NodeSet) DataSize() int {
 }
 
 // NodeList converts the node set to a NodeList
-func (db *NodeSet) NodeList() NodeList {
+func (db *ProofSet) NodeList() NodeList {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -115,7 +115,7 @@ func (db *NodeSet) NodeList() NodeList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
+func (db *ProofSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -134,9 +134,9 @@ func (n NodeList) Store(db ethdb.KeyValueWriter) {
 	}
 }
 
-// NodeSet converts the node list to a NodeSet
-func (n NodeList) NodeSet() *NodeSet {
-	db := NewNodeSet()
+// ProofSet converts the node list to a ProofSet
+func (n NodeList) ProofSet() *ProofSet {
+	db := NewProofSet()
 	n.Store(db)
 	return db
 }

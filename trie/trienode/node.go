@@ -119,7 +119,7 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 	return nil
 }
 
-// AddLeaf adds the provided leaf node into set. TODO(rjl493456442) how can
+// AddLeaf adds the provided leaf node into set. TODNodeSetO(rjl493456442) how can
 // we get rid of it?
 func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
 	set.Leaves = append(set.Leaves, &leaf{Blob: blob, Parent: parent})
