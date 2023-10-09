@@ -39,7 +39,7 @@ syncmode = "full"
         # bootnodesv4 = []
         # bootnodesv5 = []
         # static-nodes = []
-        # trusted-nodes = []
+        # trusted-nodes = ["<validator-ip>:<validator-p2p-port>"] # Recommended setting with sentry <> validator architecture
         # dns = []
 
 # [heimdall]
