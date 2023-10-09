@@ -766,7 +766,7 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 	return field[keys[len(keys)-1]]
 }
 
-func borKeyValueConfigHelper(field map[string]uint64, number uint64) uint64 {
+func borKeyValueConfigHelper[T uint64 | string](field map[string]T, number uint64) T {
 	keys := make([]string, 0, len(field))
 	for k := range field {
 		keys = append(keys, k)
@@ -787,23 +787,7 @@ func borKeyValueConfigHelper(field map[string]uint64, number uint64) uint64 {
 }
 
 func (c *BorConfig) CalculateBurntContract(number uint64) string {
-	keys := make([]string, 0, len(c.BurntContract))
-	for k := range c.BurntContract {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	for i := 0; i < len(keys)-1; i++ {
-		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
-		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
-
-		if number >= valUint && number < valUintNext {
-			return c.BurntContract[keys[i]]
-		}
-	}
-
-	return c.BurntContract[keys[len(keys)-1]]
+	return borKeyValueConfigHelper(c.BurntContract, number)
 }
 
 // Description returns a human-readable description of ChainConfig.
