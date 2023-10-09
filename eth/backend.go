@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -758,6 +759,10 @@ func (s *Ethereum) handleMilestone(ctx context.Context, ethHandler *ethHandler, 
 		ethHandler.downloader.ProcessFutureMilestone(num, hash)
 	}
 
+	if errors.Is(err, heimdall.ErrServiceUnavailable) {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
@@ -770,7 +775,10 @@ func (s *Ethereum) handleMilestone(ctx context.Context, ethHandler *ethHandler, 
 func (s *Ethereum) handleNoAckMilestone(ctx context.Context, ethHandler *ethHandler, bor *bor.Bor) error {
 	milestoneID, err := ethHandler.fetchNoAckMilestone(ctx, bor)
 
-	//If failed to fetch the no-ack milestone then it give the error.
+	if errors.Is(err, heimdall.ErrServiceUnavailable) {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
