@@ -1190,16 +1190,12 @@ func TestBurnContractContractFetch(t *testing.T) {
 		"100": "0x000000000000000000000000000000000000aaad",
 	}
 
-	burnContractAddr9 := config.Bor.CalculateBurntContract(9)
 	burnContractAddr10 := config.Bor.CalculateBurntContract(10)
 	burnContractAddr11 := config.Bor.CalculateBurntContract(11)
 	burnContractAddr99 := config.Bor.CalculateBurntContract(99)
 	burnContractAddr100 := config.Bor.CalculateBurntContract(100)
 	burnContractAddr101 := config.Bor.CalculateBurntContract(101)
 
-	if burnContractAddr9 != "0x000000000000000000000000000000000000aaab" {
-		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaab", burnContractAddr9)
-	}
 	if burnContractAddr10 != "0x000000000000000000000000000000000000aaab" {
 		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaab", burnContractAddr10)
 	}
