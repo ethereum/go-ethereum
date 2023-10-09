@@ -145,6 +145,11 @@ type accountResponse struct {
 	hashes   []common.Hash         // Account hashes in the returned range
 	accounts []*types.StateAccount // Expanded accounts in the returned range
 
+	// origin requested, and, more importantly, the path for which the proof is valid.
+	origin common.Hash
+	root   common.Hash          // root for which this response is valid
+	proof  ethdb.KeyValueReader // proof for origin and last value.
+
 	cont bool // Whether the account range has a continuation
 }
 
@@ -222,6 +227,10 @@ type storageResponse struct {
 
 	hashes [][]common.Hash // Storage slot hashes in the returned range
 	slots  [][][]byte      // Storage slot values in the returned range
+
+	// origin requested, and, more importantly, the path for which the proof is valid.
+	origin common.Hash
+	proof  ethdb.KeyValueReader // proof for origin and last value.
 
 	cont bool // Whether the last storage range has a continuation
 }
@@ -312,8 +321,8 @@ type accountTask struct {
 	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
 	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
 
-	genBatch ethdb.Batch     // Batch used by the node generator
-	genTrie  *trie.StackTrie // Node generator from storage slots
+	genBatch ethdb.Batch          // Batch used by the node generator
+	genTrie  *trie.GenerativeTrie // Node generator from storage slots
 
 	done bool // Flag whether the task can be removed
 }
@@ -327,8 +336,8 @@ type storageTask struct {
 	root common.Hash     // Storage root hash for this instance
 	req  *storageRequest // Pending request to fill this task
 
-	genBatch ethdb.Batch     // Batch used by the node generator
-	genTrie  *trie.StackTrie // Node generator from storage slots
+	genBatch ethdb.Batch          // Batch used by the node generator
+	genTrie  *trie.GenerativeTrie // Node generator from storage slots
 
 	done bool // Flag whether the task can be removed
 }
@@ -738,7 +747,7 @@ func (s *Syncer) loadSyncStatus() {
 						s.accountBytes += common.StorageSize(len(key) + len(value))
 					},
 				}
-				task.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
+				task.genTrie = trie.NewGentrie(task.Next, task.Last, func(path []byte, hash common.Hash, val []byte) {
 					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, val, s.scheme)
 				})
 				for accountHash, subtasks := range task.SubTasks {
@@ -752,7 +761,7 @@ func (s *Syncer) loadSyncStatus() {
 							},
 						}
 						owner := accountHash // local assignment for stacktrie writer closure
-						subtask.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
+						subtask.genTrie = trie.NewGentrie(subtask.Next, subtask.Last, func(path []byte, hash common.Hash, val []byte) {
 							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, val, s.scheme)
 						})
 					}
@@ -811,7 +820,7 @@ func (s *Syncer) loadSyncStatus() {
 			Last:     last,
 			SubTasks: make(map[common.Hash][]*storageTask),
 			genBatch: batch,
-			genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
+			genTrie: trie.NewGentrie(next, last, func(path []byte, hash common.Hash, val []byte) {
 				rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, val, s.scheme)
 			}),
 		})
@@ -2011,7 +2020,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						Last:     r.End(),
 						root:     acc.Root,
 						genBatch: batch,
-						genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
+						genTrie: trie.NewGentrie((common.Hash{}), r.End(), func(path []byte, hash common.Hash, val []byte) {
 							rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
 						}),
 					})
@@ -2027,7 +2036,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							Last:     r.End(),
 							root:     acc.Root,
 							genBatch: batch,
-							genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
+							genTrie: trie.NewGentrie(r.Start(), r.End(), func(path []byte, hash common.Hash, val []byte) {
 								rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
 							}),
 						})
@@ -2083,17 +2092,17 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 			tr.Commit()
 		}
+		// If we're storing large contracts, generate the trie nodes
+		// on the fly to not trash the gluing points
+		if i == len(res.hashes)-1 && res.subTask != nil {
+			res.subTask.genTrie.AddProof(res.roots[i], res.origin[:], res.proof)
+			res.subTask.genTrie.UpdateAll(res.hashes[i], res.slots[i])
+		}
 		// Persist the received storage segments. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
-
-			// If we're storing large contracts, generate the trie nodes
-			// on the fly to not trash the gluing points
-			if i == len(res.hashes)-1 && res.subTask != nil {
-				res.subTask.genTrie.Update(res.hashes[i][j][:], res.slots[i][j])
-			}
 		}
 	}
 	// Large contracts could have generated new trie nodes, flush them to disk
@@ -2279,6 +2288,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			s.accountBytes += common.StorageSize(len(key) + len(value))
 		},
 	}
+	task.genTrie.AddProof(res.root, res.origin[:], res.proof)
 	for i, hash := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
 			break
@@ -2420,6 +2430,9 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 		task:     req.task,
 		hashes:   hashes,
 		accounts: accs,
+		proof:    nodes.Set(),
+		origin:   req.origin,
+		root:     root,
 		cont:     cont,
 	}
 	select {
@@ -2637,6 +2650,8 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		hashes = append(hashes, []common.Hash{})
 		slots = append(slots, [][]byte{})
 	}
+	var proofdb ethdb.KeyValueReader
+
 	for i := 0; i < len(hashes); i++ {
 		// Convert the keys and proofs into an internal format
 		keys := make([][]byte, len(hashes[i]))
@@ -2662,7 +2677,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		} else {
 			// A proof was attached, the response is only partial, check that the
 			// returned data is indeed part of the storage trie
-			proofdb := nodes.Set()
+			proofdb = nodes.Set()
 
 			cont, err = trie.VerifyRangeProof(req.roots[i], req.origin[:], keys, slots[i], proofdb)
 			if err != nil {
@@ -2680,6 +2695,8 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		roots:    req.roots,
 		hashes:   hashes,
 		slots:    slots,
+		origin:   req.origin,
+		proof:    proofdb,
 		cont:     cont,
 	}
 	select {

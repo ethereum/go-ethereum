@@ -418,25 +418,24 @@ func wrapWriteFunction(origin, last []byte, w NodeWriteFunc) NodeWriteFunc {
 
 type GenerativeTrie struct {
 	proofsSet bool
-	owner     common.Hash
 	writeFn   NodeWriteFunc
 	stack     *StackTrie
 
 	rightHandBorder []byte
 }
 
-func NewGentrieWithOwner(origin, end, owner common.Hash, writeFn NodeWriteFunc) *GenerativeTrie {
+func NewGentrie(origin, end common.Hash, writeFn NodeWriteFunc) *GenerativeTrie {
 	// Wrap the write function
 	var originBorder = keybytesToHex(origin[:])
 	var g = &GenerativeTrie{}
-	wrapper := func(origin common.Hash, path []byte, hash common.Hash, blob []byte) {
+	wrapper := func(path []byte, hash common.Hash, blob []byte) {
 		if bytes.HasPrefix(originBorder, path) {
 			return
 		}
 		if bytes.HasPrefix(g.rightHandBorder, path) {
 			return
 		}
-		writeFn(origin, path, hash, blob)
+		writeFn(path, hash, blob)
 	}
 	return &GenerativeTrie{writeFn: wrapper}
 }
@@ -449,7 +448,6 @@ func (g *GenerativeTrie) AddProof(rootHash common.Hash, origin []byte, proof eth
 			panic(err)
 		}
 		g.stack = stack
-		g.stack.owner = g.owner
 	}
 }
 
