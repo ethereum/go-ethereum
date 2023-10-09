@@ -1218,6 +1218,11 @@ func TestBurnContractContractFetch(t *testing.T) {
 		"1000": "0x000000000000000000000000000000000000aaae",
 	}
 
+	burnContractAddr10 = config.Bor.CalculateBurntContract(10)
+	burnContractAddr11 = config.Bor.CalculateBurntContract(11)
+	burnContractAddr99 = config.Bor.CalculateBurntContract(99)
+	burnContractAddr100 = config.Bor.CalculateBurntContract(100)
+	burnContractAddr101 = config.Bor.CalculateBurntContract(101)
 	burnContractAddr999 := config.Bor.CalculateBurntContract(999)
 	burnContractAddr1000 := config.Bor.CalculateBurntContract(1000)
 	burnContractAddr1001 := config.Bor.CalculateBurntContract(1001)
