@@ -284,6 +284,7 @@ func (trie *VerkleTrie) Copy() *VerkleTrie {
 	}
 }
 
+// IsVerkle indicates if the trie is a Verkle trie.
 func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }

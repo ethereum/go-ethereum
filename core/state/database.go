@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 )
 
 const (
@@ -172,7 +173,19 @@ type cachingDB struct {
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(nil, db.triedb, utils.NewPointCache(), true)
+		reader, err := db.triedb.Reader(root)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get node reader in OpenTrie: %w", err)
+		}
+		verklerootbytes, err := reader.Node(common.Hash{}, nil, common.Hash{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get serialized root node in OpenTrie: %w", err)
+		}
+		verkleroot, err := verkle.ParseNode(verklerootbytes, 0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize root node in OpenTrie: %w", err)
+		}
+		return trie.NewVerkleTrie(verkleroot, db.triedb, utils.NewPointCache(), true)
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
