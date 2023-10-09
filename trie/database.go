@@ -320,6 +320,7 @@ func (db *Database) SetBufferSize(size int) error {
 	return pdb.SetBufferSize(size)
 }
 
+// IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
 }
