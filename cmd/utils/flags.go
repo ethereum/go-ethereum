@@ -1885,6 +1885,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 		var alloc core.GenesisAlloc
 		if allocPath := ctx.Path(DeveloperAllocFlag.Name); allocPath != "" {
+			allocPath = stack.ResolvePath(allocPath)
 			data, err := os.ReadFile(allocPath)
 			if err != nil {
 				Fatalf("Failed to read developer genesis alloc file: %v", err)
