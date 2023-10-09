@@ -410,7 +410,7 @@ func TestStacktrieSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		newSt, err := NewFromBinaryV2(blob, nil)
+		newSt, err := NewFromBinaryV2(blob)
 		if err != nil {
 			t.Fatal(err)
 		}
