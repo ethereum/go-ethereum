@@ -452,6 +452,9 @@ func (g *GenerativeTrie) AddProof(rootHash common.Hash, origin []byte, proof eth
 }
 
 func (g *GenerativeTrie) UpdateAll(keys []common.Hash, values [][]byte) error {
+	if len(keys) == 0 {
+		return nil
+	}
 	for i := 0; i < len(keys); i++ {
 		g.stack.Update(keys[i][:], values[i])
 	}
