@@ -1211,6 +1211,41 @@ func TestBurnContractContractFetch(t *testing.T) {
 	if burnContractAddr101 != "0x000000000000000000000000000000000000aaad" {
 		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaad", burnContractAddr101)
 	}
+
+	config.Bor.BurntContract = map[string]string{
+		"10":   "0x000000000000000000000000000000000000aaab",
+		"100":  "0x000000000000000000000000000000000000aaad",
+		"1000": "0x000000000000000000000000000000000000aaae",
+	}
+
+	burnContractAddr999 := config.Bor.CalculateBurntContract(999)
+	burnContractAddr1000 := config.Bor.CalculateBurntContract(1000)
+	burnContractAddr1001 := config.Bor.CalculateBurntContract(1001)
+
+	if burnContractAddr10 != "0x000000000000000000000000000000000000aaab" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaab", burnContractAddr10)
+	}
+	if burnContractAddr11 != "0x000000000000000000000000000000000000aaab" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaab", burnContractAddr11)
+	}
+	if burnContractAddr99 != "0x000000000000000000000000000000000000aaab" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaab", burnContractAddr99)
+	}
+	if burnContractAddr100 != "0x000000000000000000000000000000000000aaad" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaad", burnContractAddr100)
+	}
+	if burnContractAddr101 != "0x000000000000000000000000000000000000aaad" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaad", burnContractAddr101)
+	}
+	if burnContractAddr999 != "0x000000000000000000000000000000000000aaad" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaad", burnContractAddr999)
+	}
+	if burnContractAddr1000 != "0x000000000000000000000000000000000000aaae" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaae", burnContractAddr1000)
+	}
+	if burnContractAddr1001 != "0x000000000000000000000000000000000000aaae" {
+		t.Fatalf("incorrect burnt contract address: expected %s, got %s", "0x000000000000000000000000000000000000aaae", burnContractAddr1001)
+	}
 }
 
 // EIP1559 is not supported without EIP155. An error is expected
