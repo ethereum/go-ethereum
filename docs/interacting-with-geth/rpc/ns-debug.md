@@ -374,8 +374,8 @@ Returns a printed representation of the stacks of all goroutines. Note that the 
 
 | Client  | Method invocation                          |
 | :------ | ------------------------------------------ |
-| Console | `debug.stacks()`                           |
-| RPC     | `{"method": "debug_stacks", "params": []}` |
+| Console | `debug.stacks(filter *string)`                           |
+| RPC     | `{"method": "debug_stacks", "params": [filter]}` |
 
 ### debug_standardTraceBlockToFile
 
