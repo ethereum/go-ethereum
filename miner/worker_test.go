@@ -143,33 +143,6 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	}
 }
 
-// func (b *testWorkerBackend) newRandomUncle() (*types.Block, error) {
-// 	var parent *types.Block
-
-// 	cur := b.chain.CurrentBlock()
-
-// 	if cur.Number.Uint64() == 0 {
-// 		parent = b.chain.Genesis()
-// 	} else {
-// 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash)
-// 	}
-
-// 	var err error
-
-// 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.DB, 1, func(i int, gen *core.BlockGen) {
-// 		var addr = make([]byte, common.AddressLength)
-
-// 		_, err = rand.Read(addr)
-// 		if err != nil {
-// 			return
-// 		}
-
-// 		gen.SetCoinbase(common.BytesToAddress(addr))
-// 	})
-
-// 	return blocks[0], err
-// }
-
 const (
 	// testCode is the testing contract binary code which will initialises some
 	// variables in constructor
@@ -715,8 +688,6 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 // nolint : paralleltest
 // TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
 func TestCommitInterruptExperimentBor(t *testing.T) {
-	// TODO - Arpit, Failing
-	t.Skip()
 	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
 	testCommitInterruptExperimentBor(t, 200, 5, 0)
 
