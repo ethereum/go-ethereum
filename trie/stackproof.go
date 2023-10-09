@@ -425,25 +425,41 @@ type GenerativeTrie struct {
 }
 
 func NewGentrie(origin, end common.Hash, writeFn NodeWriteFunc) *GenerativeTrie {
-	// Wrap the write function
-	var originBorder = keybytesToHex(origin[:])
 	var g = &GenerativeTrie{}
-	wrapper := func(path []byte, hash common.Hash, blob []byte) {
-		if bytes.HasPrefix(originBorder, path) {
-			return
+
+	if origin == (common.Hash{}) {
+		// This gentrie has zero-origin: this means no right-side proof is used,
+		// and thus we do not need to wrap the write-function.
+		g.writeFn = func(path []byte, hash common.Hash, blob []byte) {
+			writeFn(path, hash, blob)
 		}
-		if bytes.HasPrefix(g.rightHandBorder, path) {
-			return
+		g.stack = NewStackTrie(g.writeFn)
+	} else {
+		// Wrap the write function
+		var originBorder = keybytesToHex(origin[:])
+		wrapper := func(path []byte, hash common.Hash, blob []byte) {
+			if bytes.HasPrefix(originBorder, path) {
+				//fmt.Printf("1. Skipping path %x\n", path)
+				return
+			}
+			if bytes.HasPrefix(g.rightHandBorder, path) {
+				//fmt.Printf("2. Skipping path %x\n", path)
+				return
+			}
+			writeFn(path, hash, blob)
 		}
-		writeFn(path, hash, blob)
+		g.writeFn = wrapper
 	}
-	return &GenerativeTrie{writeFn: wrapper}
+
+	return g
 }
 
 func (g *GenerativeTrie) AddProof(rootHash common.Hash, origin []byte, proof ethdb.KeyValueReader) {
 	if g.stack == nil {
 		g.proofsSet = true
-		stack, err := newStackTrieFromProof(rootHash, origin[:], proof, g.writeFn)
+		var stack *StackTrie
+		var err error
+		stack, err = newStackTrieFromProof(rootHash, origin[:], proof, g.writeFn)
 		if err != nil {
 			panic(err)
 		}
@@ -459,7 +475,7 @@ func (g *GenerativeTrie) UpdateAll(keys []common.Hash, values [][]byte) error {
 		g.stack.Update(keys[i][:], values[i])
 	}
 	last := keys[len(keys)-1]
-	g.rightHandBorder = last[:]
+	g.rightHandBorder = keybytesToHex(last[:])
 	return nil
 }
 
