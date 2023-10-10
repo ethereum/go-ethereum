@@ -1454,11 +1454,11 @@ func getHash(ctx context.Context, n uint64, base *types.Header, headers []*types
 		} else if tmp.Number.Uint64() > n {
 			// Phantom block.
 			var lastNonPhantomHash common.Hash
-			if hash := hashes[getIndex(h.Number.Uint64()-1)]; hash != (common.Hash{}) {
+			if hash := hashes[getIndex(h.Number.Uint64())]; hash != (common.Hash{}) {
 				lastNonPhantomHash = hash
 			} else {
 				lastNonPhantomHash = h.Hash()
-				hashes[getIndex(h.Number.Uint64()-1)] = lastNonPhantomHash
+				hashes[getIndex(h.Number.Uint64())] = lastNonPhantomHash
 			}
 			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
 			hashData, err := rlp.EncodeToBytes([][]byte{lastNonPhantomHash.Bytes(), big.NewInt(int64(n)).Bytes()})
