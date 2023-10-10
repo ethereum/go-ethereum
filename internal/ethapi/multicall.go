@@ -126,19 +126,15 @@ func (mc *multicall) execute(ctx context.Context, opts multicallOpts) ([]blockRe
 	var (
 		results = make([]blockResult, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
-		globalGasCap = mc.b.RPCGasCap()
-		gp           = new(core.GasPool).AddGas(globalGasCap)
-		header       = base
-		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
-		rules        = mc.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
-		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
-		numHashes    = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64() + 256
+		gp          = new(core.GasPool).AddGas(mc.b.RPCGasCap())
+		precompiles = mc.activePrecompiles(ctx, base)
+		numHashes   = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64() + 256
 	)
 	// Cache for the block hashes.
 	mc.hashes = make([]common.Hash, numHashes)
 	for bi, block := range blocks {
-		header = headers[bi]
-		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
+		header := headers[bi]
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
 		// Respond to BLOCKHASH requests.
 		blockContext.GetHash = func(n uint64) common.Hash {
 			h, err := mc.getBlockHash(ctx, n, base, headers)
@@ -286,6 +282,14 @@ func (mc *multicall) computeBlockHash(ctx context.Context, n uint64, base *types
 		h = tmp
 	}
 	return common.Hash{}, errors.New("requested block is in future")
+}
+
+func (mc *multicall) activePrecompiles(ctx context.Context, base *types.Header) vm.PrecompiledContracts {
+	var (
+		blockContext = core.NewEVMBlockContext(base, NewChainContext(ctx, mc.b), nil)
+		rules        = mc.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
+	)
+	return vm.ActivePrecompiledContracts(rules).Copy()
 }
 
 // repairLogs updates the block hash in the logs present in a multicall
