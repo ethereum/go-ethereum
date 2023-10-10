@@ -421,36 +421,32 @@ type GenerativeTrie struct {
 	writeFn   NodeWriteFunc
 	stack     *StackTrie
 
+	leftHandBorder  []byte
 	rightHandBorder []byte
 }
 
 func NewGentrie(origin, end common.Hash, writeFn NodeWriteFunc) *GenerativeTrie {
 	var g = &GenerativeTrie{}
 
-	if origin == (common.Hash{}) {
-		// This gentrie has zero-origin: this means no right-side proof is used,
-		// and thus we do not need to wrap the write-function.
-		g.writeFn = func(path []byte, hash common.Hash, blob []byte) {
-			writeFn(path, hash, blob)
+	// Wrap the write function
+	wrapper := func(path []byte, hash common.Hash, blob []byte) {
+		if g.leftHandBorder != nil && bytes.HasPrefix(g.leftHandBorder, path) {
+			return
 		}
-		g.stack = NewStackTrie(g.writeFn)
-	} else {
-		// Wrap the write function
-		var originBorder = keybytesToHex(origin[:])
-		wrapper := func(path []byte, hash common.Hash, blob []byte) {
-			if bytes.HasPrefix(originBorder, path) {
-				//fmt.Printf("1. Skipping path %x\n", path)
-				return
-			}
-			if bytes.HasPrefix(g.rightHandBorder, path) {
-				//fmt.Printf("2. Skipping path %x\n", path)
-				return
-			}
-			writeFn(path, hash, blob)
+		if g.rightHandBorder != nil && bytes.HasPrefix(g.rightHandBorder, path) {
+			return
 		}
-		g.writeFn = wrapper
+		writeFn(path, hash, blob)
 	}
-
+	// If origin is non-zero, we can set the left hand border right away.
+	if origin != (common.Hash{}) {
+		g.leftHandBorder = keybytesToHex(origin[:])
+	} else {
+		// If origin is zero. then no proof-init will be needed, and we can
+		// set the internal stacktrie.
+		g.stack = NewStackTrie(writeFn)
+	}
+	g.writeFn = wrapper
 	return g
 }
 
@@ -467,15 +463,24 @@ func (g *GenerativeTrie) AddProof(rootHash common.Hash, origin []byte, proof eth
 	}
 }
 
-func (g *GenerativeTrie) UpdateAll(keys []common.Hash, values [][]byte) error {
+func (g *GenerativeTrie) UpdateAll(keys []common.Hash, values [][]byte, hasMore bool) error {
 	if len(keys) == 0 {
 		return nil
+	}
+	last := keys[len(keys)-1]
+	// If the trie has more elements, then we can (for now) set the right-hand
+	// border: in case Commit or Hash is called, having the border set prevents
+	// nodes on the boundary from being comitted.
+	if hasMore {
+		g.rightHandBorder = keybytesToHex(last[:])
+	} else {
+		// If we know that all elements have been inserted, we must remove
+		// the border, and let the nodes be comitted.
+		g.rightHandBorder = nil
 	}
 	for i := 0; i < len(keys); i++ {
 		g.stack.Update(keys[i][:], values[i])
 	}
-	last := keys[len(keys)-1]
-	g.rightHandBorder = keybytesToHex(last[:])
 	return nil
 }
 

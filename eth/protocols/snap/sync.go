@@ -2096,7 +2096,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// on the fly to not trash the gluing points
 		if i == len(res.hashes)-1 && res.subTask != nil {
 			res.subTask.genTrie.AddProof(res.roots[i], res.origin[:], res.proof)
-			res.subTask.genTrie.UpdateAll(res.hashes[i], res.slots[i])
+			res.subTask.genTrie.UpdateAll(res.hashes[i], res.slots[i], res.cont)
 		}
 		// Persist the received storage segments. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
