@@ -751,7 +751,7 @@ func (s *Syncer) loadSyncStatus() {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
 							},
 						}
-						owner := accountHash
+						owner := accountHash // local assignment for stacktrie writer closure
 						subtask.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
 							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, val, s.scheme)
 						})
@@ -2005,7 +2005,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							s.storageBytes += common.StorageSize(len(key) + len(value))
 						},
 					}
-					owner := account
+					owner := account // local assignment for stacktrie writer closure
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
 						Last:     r.End(),
@@ -2022,7 +2022,6 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
 							},
 						}
-						owner := account
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
 							Last:     r.End(),
@@ -2075,9 +2074,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		slots += len(res.hashes[i])
 
 		if i < len(res.hashes)-1 || res.subTask == nil {
-			owner := account
+			// no need to make local reassignment of account: this closure does not outlive the loop
 			tr := trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-				rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
+				rawdb.WriteTrieNode(batch, account, path, hash, val, s.scheme)
 			})
 			for j := 0; j < len(res.hashes[i]); j++ {
 				tr.Update(res.hashes[i][j][:], res.slots[i][j])
