@@ -144,6 +144,9 @@ var (
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
+		// <specular modification>
+		utils.EnableL2EngineApiFlag,
+		// <specular modification/>
 		configFileFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 

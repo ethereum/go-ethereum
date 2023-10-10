@@ -41,6 +41,10 @@ type BuildPayloadArgs struct {
 	Random       common.Hash       // The provided randomness value
 	Withdrawals  types.Withdrawals // The provided withdrawals
 	BeaconRoot   *common.Hash      // The provided beaconRoot (Cancun)
+	// <specular modification>
+	NoTxPool     bool                 // Specular addition: option to disable tx pool contents from being included
+	Transactions []*types.Transaction // Specular addition: txs forced into the block via engine API
+	// <specular modification/>
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -55,6 +59,16 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	if args.BeaconRoot != nil {
 		hasher.Write(args.BeaconRoot[:])
 	}
+	// <specular modification>
+	if args.NoTxPool || len(args.Transactions) > 0 { // extend if extra payload attributes are used
+		binary.Write(hasher, binary.BigEndian, args.NoTxPool)
+		binary.Write(hasher, binary.BigEndian, uint64(len(args.Transactions)))
+		for _, tx := range args.Transactions {
+			h := tx.Hash()
+			hasher.Write(h[:])
+		}
+	}
+	// <specular modification/>
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out
@@ -188,6 +202,9 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		withdrawals: args.Withdrawals,
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
+		// <specular modification>
+		txs: args.Transactions,
+		// <specular modification/>
 	}
 	empty := w.getSealingBlock(emptyParams)
 	if empty.err != nil {
@@ -196,6 +213,14 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, args.Id())
+	// <specular modification>
+	if args.NoTxPool { // don't start the background payload updating job if there is no tx pool to pull from
+		// make sure to make it appear as full, otherwise it will wait indefinitely for payload building to complete.
+		payload.full = empty.block
+		payload.fullFees = empty.fees
+		return payload, nil
+	}
+	// <specular modification/>
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.

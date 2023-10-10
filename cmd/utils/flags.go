@@ -949,6 +949,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// <specular modification/>
+	EnableL2EngineApiFlag = &cli.BoolFlag{
+		Name:     "enableL2EngineApi",
+		Usage:    "Enable L2 Engine API",
+		Category: flags.EthCategory,
+	}
+	// </specular modification/>
 )
 
 var (
@@ -1574,6 +1582,12 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
 	}
+	// <specular modification>
+	cfg.EnableL2EngineApi = ctx.Bool(EnableL2EngineApiFlag.Name)
+	if cfg.EnableL2EngineApi {
+		log.Info("L2 Engine API enabled")
+	}
+	// <specular modification/>
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {

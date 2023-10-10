@@ -36,11 +36,21 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+	// <specular modification>
+	// Transactions is a field for L2s: the transactions list is forced into the block
+	Transactions [][]byte `json:"transactions,omitempty"  gencodec:"optional"`
+	// NoTxPool is a field for L2s: if true, the no transactions are taken out of the tx-pool,
+	// only transactions from the above Transactions list will be included.
+	NoTxPool bool `json:"noTxPool,omitempty" gencodec:"optional"`
+	// <specular modification//>
 }
 
 // JSON type overrides for PayloadAttributes.
 type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
+	// <specular modification>
+	Transactions []hexutil.Bytes
+	// <specular modification/>
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go

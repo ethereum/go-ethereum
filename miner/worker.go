@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -705,6 +707,18 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
 	state, err := w.chain.StateAt(parent.Root)
+	// <specular modification>
+	if w.config.EnableL2EngineApi { // Allow the miner to reorg its own chain arbitrarily deep
+		if historicalBackend, ok := w.eth.(BackendWithHistoricalState); ok {
+			var release tracers.StateReleaseFunc
+			parentBlock := w.eth.BlockChain().GetBlockByHash(parent.Hash())
+			state, release, err = historicalBackend.StateAtBlock(context.Background(), parentBlock, ^uint64(0), nil, false, false)
+			state = state.Copy()
+			release()
+		}
+	}
+	// <specular modification/>
+
 	if err != nil {
 		return nil, err
 	}
@@ -885,6 +899,9 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block.
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
+	// <specular modification>
+	txs types.Transactions // Transactions to include at the start of the block
+	// <specular modification/>
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -921,9 +938,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Coinbase:   genParams.coinbase,
 	}
 	// Set the extra field.
-	if len(w.extra) != 0 {
+	// <specular modification>
+	if len(w.extra) != 0 && !w.config.EnableL2EngineApi { // L2 chains must not set any extra data.
 		header.Extra = w.extra
 	}
+	// <specular modification/>
+
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
@@ -1008,6 +1028,18 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 		return &newPayloadResult{err: err}
 	}
 	defer work.discard()
+	// <specular modification>
+	for _, tx := range params.txs {
+		from, _ := types.Sender(work.signer, tx)
+		work.state.SetTxContext(tx.Hash(), work.tcount)
+		_, err := w.commitTransaction(work, tx)
+		if err != nil {
+			return &newPayloadResult{err: fmt.Errorf("failed to force-include tx: %s type: %d sender: %s nonce: %d, err: %w", tx.Hash(), tx.Type(), from, tx.Nonce(), err)}
+		}
+		work.tcount++
+	}
+	// forced transactions done, fill rest of block with transactions
+	// <specular modification/>
 
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)

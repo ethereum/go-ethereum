@@ -320,7 +320,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// If the specified head matches with our local head, do nothing and keep
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
-	} else {
+		// <specular modification>
+	} else if !api.eth.Miner().IsL2EngineApiEnabled() { // minor Engine API divergence: allow proposers to reorg their own chain
+		// <specular modification/>
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
 		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
@@ -364,6 +366,17 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// sealed by the beacon client. The payload will be requested later, and we
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
+		// <specular modification>
+		transactions := make(types.Transactions, 0, len(payloadAttributes.Transactions))
+		for i, otx := range payloadAttributes.Transactions {
+			var tx types.Transaction
+			if err := tx.UnmarshalBinary(otx); err != nil {
+				return engine.STATUS_INVALID, fmt.Errorf("transaction %d is not valid: %v", i, err)
+			}
+			transactions = append(transactions, &tx)
+		}
+		// <specular modification/>
+
 		args := &miner.BuildPayloadArgs{
 			Parent:       update.HeadBlockHash,
 			Timestamp:    payloadAttributes.Timestamp,
@@ -371,6 +384,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			Random:       payloadAttributes.Random,
 			Withdrawals:  payloadAttributes.Withdrawals,
 			BeaconRoot:   payloadAttributes.BeaconRoot,
+			// <specular modification>
+			NoTxPool:     payloadAttributes.NoTxPool,
+			Transactions: transactions,
+			// <specular modification/>
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -716,6 +733,12 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.Pa
 //
 // TODO(karalabe): Spin this goroutine down somehow
 func (api *ConsensusAPI) heartbeat() {
+	// <specular modification>
+	if api.eth.Miner().IsL2EngineApiEnabled() { // don't start the api heartbeat, there is no transition
+		return
+	}
+	// <specular modification/>
+
 	// Sleep a bit on startup since there's obviously no beacon client yet
 	// attached, so no need to print scary warnings to the user.
 	time.Sleep(beaconUpdateStartupTimeout)
