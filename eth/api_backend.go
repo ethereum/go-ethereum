@@ -42,7 +42,31 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// EthAPIBackend implements ethapi.Backend and tracers.Backend for full nodes
+// rpcError returns error messages with an error code that can be encoded in the
+// RPC response.
+type rpcError struct {
+	code int
+	msg  string
+}
+
+func (e *rpcError) Error() string {
+	return e.msg
+}
+
+func (e *rpcError) ErrorCode() int {
+	return e.code
+}
+
+func (e *rpcError) With(msg string) *rpcError {
+	e.msg = msg
+	return e
+}
+
+// posTagBeforeMerge is returned if a block is requested using either "safe" or
+// "finalized" before the chain has fully transitioned to PoS.
+var posTagBeforeMerge = &rpcError{code: -39001}
+
+// EthAPIBackend implements ethapi.Backend and tracers.Backend for full nodes.
 type EthAPIBackend struct {
 	extRPCEnabled       bool
 	allowUnprotectedTxs bool
@@ -80,14 +104,14 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.FinalizedBlockNumber {
 		block := b.eth.blockchain.CurrentFinalBlock()
 		if block == nil {
-			return nil, errors.New("finalized block not found")
+			return nil, posTagBeforeMerge.With("finalized block not found")
 		}
 		return block, nil
 	}
 	if number == rpc.SafeBlockNumber {
 		block := b.eth.blockchain.CurrentSafeBlock()
 		if block == nil {
-			return nil, errors.New("safe block not found")
+			return nil, posTagBeforeMerge.With("safe block not found")
 		}
 		return block, nil
 	}
@@ -132,14 +156,14 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if number == rpc.FinalizedBlockNumber {
 		header := b.eth.blockchain.CurrentFinalBlock()
 		if header == nil {
-			return nil, errors.New("finalized block not found")
+			return nil, posTagBeforeMerge.With("finalized block not found")
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
 	if number == rpc.SafeBlockNumber {
 		header := b.eth.blockchain.CurrentSafeBlock()
 		if header == nil {
-			return nil, errors.New("safe block not found")
+			return nil, posTagBeforeMerge.With("safe block not found1")
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
