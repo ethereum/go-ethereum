@@ -237,7 +237,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
 			ReqID, BV uint64
-			Data      trienode.NodeList
+			Data      trienode.ProofList
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)

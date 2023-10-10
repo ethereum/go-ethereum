@@ -445,7 +445,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				break
 			}
 		}
-		return p.replyProofsV2(r.ReqID, nodes.NodeList())
+		return p.replyProofsV2(r.ReqID, nodes.List())
 	}, r.ReqID, uint64(len(r.Reqs)), nil
 }
 
@@ -499,7 +499,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 				break
 			}
 		}
-		return p.replyHelperTrieProofs(r.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
+		return p.replyHelperTrieProofs(r.ReqID, HelperTrieResps{Proofs: nodes.List(), AuxData: auxData})
 	}, r.ReqID, uint64(len(r.Reqs)), nil
 }
 

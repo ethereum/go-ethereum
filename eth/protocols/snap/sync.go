@@ -2394,11 +2394,11 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	for i, key := range hashes {
 		keys[i] = common.CopyBytes(key[:])
 	}
-	nodes := make(trienode.NodeList, len(proof))
+	nodes := make(trienode.ProofList, len(proof))
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	proofdb := nodes.ProofSet()
+	proofdb := nodes.Set()
 
 	var end []byte
 	if len(keys) > 0 {
@@ -2639,7 +2639,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		for j, key := range hashes[i] {
 			keys[j] = common.CopyBytes(key[:])
 		}
-		nodes := make(trienode.NodeList, 0, len(proof))
+		nodes := make(trienode.ProofList, 0, len(proof))
 		if i == len(hashes)-1 {
 			for _, node := range proof {
 				nodes = append(nodes, node)
@@ -2658,7 +2658,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		} else {
 			// A proof was attached, the response is only partial, check that the
 			// returned data is indeed part of the storage trie
-			proofdb := nodes.ProofSet()
+			proofdb := nodes.Set()
 
 			var end []byte
 			if len(keys) > 0 {

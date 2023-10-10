@@ -900,7 +900,7 @@ func (p *clientPeer) replyReceiptsRLP(reqID uint64, receipts []rlp.RawValue) *re
 }
 
 // replyProofsV2 creates a reply with a batch of merkle proofs, corresponding to the ones requested.
-func (p *clientPeer) replyProofsV2(reqID uint64, proofs trienode.NodeList) *reply {
+func (p *clientPeer) replyProofsV2(reqID uint64, proofs trienode.ProofList) *reply {
 	data, _ := rlp.EncodeToBytes(proofs)
 	return &reply{p.rw, ProofsV2Msg, reqID, data}
 }

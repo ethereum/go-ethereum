@@ -282,7 +282,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 			t.logger.Error("Could not prove last item", "error", err)
 		}
 	}
-	for _, blob := range proof.NodeList() {
+	for _, blob := range proof.List() {
 		proofs = append(proofs, blob)
 	}
 	return keys, vals, proofs
@@ -367,7 +367,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.NodeList() {
+			for _, blob := range proof.List() {
 				proofs = append(proofs, blob)
 			}
 			break
@@ -426,7 +426,7 @@ func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, acco
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.NodeList() {
+			for _, blob := range proof.List() {
 				proofs = append(proofs, blob)
 			}
 			break
@@ -614,7 +614,7 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 			keys = append(keys[:1], keys[2:]...)
 			vals = append(vals[:1], vals[2:]...)
 		}
-		for _, blob := range proof.NodeList() {
+		for _, blob := range proof.List() {
 			proofs = append(proofs, blob)
 		}
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {

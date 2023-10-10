@@ -102,12 +102,12 @@ func (db *ProofSet) DataSize() int {
 	return db.dataSize
 }
 
-// NodeList converts the node set to a NodeList
-func (db *ProofSet) NodeList() NodeList {
+// List converts the node set to a ProofList
+func (db *ProofSet) List() ProofList {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var values NodeList
+	var values ProofList
 	for _, key := range db.order {
 		values = append(values, db.nodes[key])
 	}
@@ -124,36 +124,36 @@ func (db *ProofSet) Store(target ethdb.KeyValueWriter) {
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
-type NodeList []rlp.RawValue
+// ProofList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
+type ProofList []rlp.RawValue
 
 // Store writes the contents of the list to the given database
-func (n NodeList) Store(db ethdb.KeyValueWriter) {
+func (n ProofList) Store(db ethdb.KeyValueWriter) {
 	for _, node := range n {
 		db.Put(crypto.Keccak256(node), node)
 	}
 }
 
-// ProofSet converts the node list to a ProofSet
-func (n NodeList) ProofSet() *ProofSet {
+// Set converts the node list to a ProofSet
+func (n ProofList) Set() *ProofSet {
 	db := NewProofSet()
 	n.Store(db)
 	return db
 }
 
 // Put stores a new node at the end of the list
-func (n *NodeList) Put(key []byte, value []byte) error {
+func (n *ProofList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
 }
 
 // Delete panics as there's no reason to remove a node from the list.
-func (n *NodeList) Delete(key []byte) error {
+func (n *ProofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list
-func (n NodeList) DataSize() int {
+func (n ProofList) DataSize() int {
 	var size int
 	for _, node := range n {
 		size += len(node)

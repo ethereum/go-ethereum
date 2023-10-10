@@ -530,11 +530,11 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	for i, key := range hashes {
 		keys[i] = common.CopyBytes(key[:])
 	}
-	nodes := make(trienode.NodeList, len(proof))
+	nodes := make(trienode.ProofList, len(proof))
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	proofdb := nodes.ProofSet()
+	proofdb := nodes.Set()
 
 	var end []byte
 	if len(keys) > 0 {

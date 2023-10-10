@@ -223,9 +223,9 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgProofsV2 {
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.(trienode.NodeList)
+	proofs := msg.Obj.(trienode.ProofList)
 	// Verify the proof and store if checks out
-	nodeSet := proofs.ProofSet()
+	nodeSet := proofs.Set()
 	reads := &readTraceDB{db: nodeSet}
 	if _, err := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
@@ -309,7 +309,7 @@ type HelperTrieReq struct {
 }
 
 type HelperTrieResps struct { // describes all responses, not just a single one
-	Proofs  trienode.NodeList
+	Proofs  trienode.ProofList
 	AuxData [][]byte
 }
 
@@ -357,7 +357,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if len(resp.AuxData) != 1 {
 		return errInvalidEntryCount
 	}
-	nodeSet := resp.Proofs.ProofSet()
+	nodeSet := resp.Proofs.Set()
 	headerEnc := resp.AuxData[0]
 	if len(headerEnc) == 0 {
 		return errHeaderUnavailable
@@ -452,7 +452,7 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	resps := msg.Obj.(HelperTrieResps)
 	proofs := resps.Proofs
-	nodeSet := proofs.ProofSet()
+	nodeSet := proofs.Set()
 	reads := &readTraceDB{db: nodeSet}
 
 	r.BloomBits = make([][]byte, len(r.SectionIndexList))
