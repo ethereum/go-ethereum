@@ -123,6 +123,21 @@ type TransitionConfigurationV1 struct {
 // PayloadID is an identifier of the payload build process
 type PayloadID [8]byte
 
+// Version returns the payload version associated with the identifier.
+func (b PayloadID) Version() PayloadVersion {
+	return PayloadVersion(b[0])
+}
+
+// Is returns whether the identifier matches any of provided payload versions.
+func (b PayloadID) Is(versions ...PayloadVersion) bool {
+	for _, v := range versions {
+		if v == b.Version() {
+			return true
+		}
+	}
+	return false
+}
+
 func (b PayloadID) String() string {
 	return hexutil.Encode(b[:])
 }
