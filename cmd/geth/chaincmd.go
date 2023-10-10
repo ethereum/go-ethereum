@@ -174,7 +174,7 @@ This command dumps out the state for a given block (or latest, if none provided)
 		ArgsUsage: "<dumpfile>",
 		Flags:     flags.Merge([]cli.Flag{utils.TreeRootFlag}, utils.DatabaseFlags),
 		Description: `
-The export-overlay-preimages command exports hash preimages to a flat file, in exactly
+The export-snapshot-preimages command exports hash preimages to a flat file, in exactly
 the expected order for the overlay tree migration.
 `,
 	}
