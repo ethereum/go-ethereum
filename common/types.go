@@ -44,6 +44,12 @@ const (
 var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
+
+	// MaxAddress represents the maximum possible address value.
+	MaxAddress = HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+
+	// MaxHash represents the maximum possible hash value.
+	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
