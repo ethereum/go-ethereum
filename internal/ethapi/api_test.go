@@ -1640,6 +1640,91 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 		},
+		{
+			name: "blockhash-opcode",
+			tag:  latest,
+			blocks: []CallBatch{{
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(12)),
+				},
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: {
+						Code: hex2Bytes("600035804060008103601057600080fd5b5050"),
+					},
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// Phantom block after base.
+					Input: uint256ToBytes(uint256.NewInt(11)),
+				}, {
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// Canonical block.
+					Input: uint256ToBytes(uint256.NewInt(8)),
+				}, {
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// base block.
+					Input: uint256ToBytes(uint256.NewInt(10)),
+				}},
+			}, {
+				BlockOverrides: &BlockOverrides{
+					Number: (*hexutil.Big)(big.NewInt(16)),
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// blocks[0]
+					Input: uint256ToBytes(uint256.NewInt(12)),
+				}, {
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// Phantom after blocks[0]
+					Input: uint256ToBytes(uint256.NewInt(13)),
+				}},
+			}},
+			want: []blockRes{{
+				Number:       "0xc",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xf864",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x52cc",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
+					ReturnValue: "0x",
+					GasUsed:     "0x52cc",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
+
+					ReturnValue: "0x",
+					GasUsed:     "0x52cc",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}, {
+				Number:       "0x10",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0xa598",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x52cc",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
+
+					ReturnValue: "0x",
+					GasUsed:     "0x52cc",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}},
+		},
 	}
 
 	for _, tc := range testSuite {
@@ -1713,6 +1798,12 @@ func newUint64(v uint64) *hexutil.Uint64 {
 func newBytes(b []byte) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(b)
 	return &rpcBytes
+}
+
+func uint256ToBytes(v *uint256.Int) *hexutil.Bytes {
+	b := v.Bytes32()
+	r := hexutil.Bytes(b[:])
+	return &r
 }
 
 func TestRPCMarshalBlock(t *testing.T) {
@@ -1922,10 +2013,6 @@ func TestRPCMarshalBlock(t *testing.T) {
 		}
 		require.JSONEqf(t, tc.want, string(out), "test %d", i)
 	}
-}
-
-func hex2Hash(s string) common.Hash {
-	return common.BytesToHash(common.FromHex(s))
 }
 
 func TestRPCGetBlockOrHeader(t *testing.T) {

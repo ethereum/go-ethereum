@@ -1322,8 +1322,8 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 		blockContext = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
 		rules        = s.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 		precompiles  = vm.ActivePrecompiledContracts(rules).Copy()
-		numHashes    = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64()
-		// Cache for simulated and phantom block hashes.
+		numHashes    = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64() + 256
+		// Cache for the block hashes.
 		hashes = make([]common.Hash, numHashes)
 	)
 	for bi, block := range blocks {
@@ -1426,21 +1426,35 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blo
 // Note getHash assumes `n` is smaller than the last already simulated block
 // and smaller than the last block to be simulated.
 func getHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header, backend Backend, hashes []common.Hash) (common.Hash, []common.Hash, error) {
+	// getIndex returns the index of the hash in the hashes cache.
+	// The cache potentially includes 255 blocks prior to the base.
 	getIndex := func(n uint64) int {
-		return int(n - base.Number.Uint64())
+		first := base.Number.Uint64() - 255
+		return int(n - first)
 	}
 	index := getIndex(n)
 	if h := hashes[index]; h != (common.Hash{}) {
 		return h, hashes, nil
 	}
+	h, err := computeHash(ctx, n, base, headers, backend, hashes)
+	if err != nil {
+		return common.Hash{}, hashes, err
+	}
+	if h != (common.Hash{}) {
+		hashes[index] = h
+	}
+	return h, hashes, nil
+}
+
+func computeHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header, backend Backend, hashes []common.Hash) (common.Hash, error) {
 	if n == base.Number.Uint64() {
-		return base.Hash(), hashes, nil
+		return base.Hash(), nil
 	} else if n < base.Number.Uint64() {
 		h, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(n))
 		if err != nil {
-			return common.Hash{}, hashes, fmt.Errorf("failed to load block hash for number %d. Err: %v\n", n, err)
+			return common.Hash{}, fmt.Errorf("failed to load block hash for number %d. Err: %v\n", n, err)
 		}
-		return h.Hash(), hashes, nil
+		return h.Hash(), nil
 	}
 	h := base
 	for i, _ := range headers {
@@ -1449,29 +1463,23 @@ func getHash(ctx context.Context, n uint64, base *types.Header, headers []*types
 		// so no need to check that condition.
 		if tmp.Number.Uint64() == n {
 			hash := tmp.Hash()
-			hashes[index] = hash
-			return hash, hashes, nil
+			return hash, nil
 		} else if tmp.Number.Uint64() > n {
 			// Phantom block.
-			var lastNonPhantomHash common.Hash
-			if hash := hashes[getIndex(h.Number.Uint64())]; hash != (common.Hash{}) {
-				lastNonPhantomHash = hash
-			} else {
-				lastNonPhantomHash = h.Hash()
-				hashes[getIndex(h.Number.Uint64())] = lastNonPhantomHash
+			lastNonPhantomHash, _, err := getHash(ctx, h.Number.Uint64(), base, headers, backend, hashes)
+			if err != nil {
+				return common.Hash{}, err
 			}
 			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
 			hashData, err := rlp.EncodeToBytes([][]byte{lastNonPhantomHash.Bytes(), big.NewInt(int64(n)).Bytes()})
 			if err != nil {
-				return common.Hash{}, hashes, err
+				return common.Hash{}, err
 			}
-			hash := crypto.Keccak256Hash(hashData)
-			hashes[index] = hash
-			return hash, hashes, nil
+			return crypto.Keccak256Hash(hashData), nil
 		}
 		h = tmp
 	}
-	return common.Hash{}, hashes, errors.New("requested block is in future")
+	return common.Hash{}, errors.New("requested block is in future")
 }
 
 // repairLogs updates the block hash in the logs present in a multicall
