@@ -391,7 +391,7 @@ func (s *Sync) Pending() int {
 	return len(s.nodeReqs) + len(s.codeReqs)
 }
 
-// schedule inserts a new state retrieval request into the fetch queue. If there
+// scheduleNodeRequest inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
@@ -406,7 +406,7 @@ func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
 	s.queue.Push(string(req.path), prio)
 }
 
-// schedule inserts a new state retrieval request into the fetch queue. If there
+// scheduleCodeRequest inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleCodeRequest(req *codeRequest) {
@@ -556,7 +556,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	return requests, nil
 }
 
-// commit finalizes a retrieval request and stores it into the membatch. If any
+// commitNodeRequest finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitNodeRequest(req *nodeRequest) error {
@@ -591,7 +591,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	return nil
 }
 
-// commit finalizes a retrieval request and stores it into the membatch. If any
+// commitCodeRequest finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitCodeRequest(req *codeRequest) error {
