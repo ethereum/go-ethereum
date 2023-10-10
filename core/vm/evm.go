@@ -138,7 +138,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
 	if txCtx.Accesses == nil && chainConfig.IsPrague(blockCtx.BlockNumber, blockCtx.Time) {
-		txCtx.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
+		evm.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
