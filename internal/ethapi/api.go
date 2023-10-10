@@ -1051,6 +1051,11 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	}
 	evm, vmError := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 
+	// Set witness if trie is verkle
+	if state.Database().TrieDB().IsVerkle() {
+		state.SetWitness(state.NewAccessWitness())
+	}
+
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
 	go func() {
