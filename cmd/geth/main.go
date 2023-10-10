@@ -59,6 +59,7 @@ var (
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
+		utils.StaticPeers,
 		utils.MinFreeDiskSpaceFlag,
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,

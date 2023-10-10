@@ -754,6 +754,12 @@ var (
 		Value:    30303,
 		Category: flags.NetworkingCategory,
 	}
+	StaticPeers = &cli.StringFlag{
+		Name: "staticpeers",
+		Usage: "Comma separated enode URLs of static peers",
+		Value: "",
+		Category: flags.NetworkingCategory,
+	}
 	BootnodesFlag = &cli.StringFlag{
 		Name:     "bootnodes",
 		Usage:    "Comma separated enode URLs for P2P discovery bootstrap",
@@ -1093,6 +1099,30 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
+//setStatic Nodes create a list of static nodes from the command line
+// flags, left empty if none have been specified
+func setStaticNodes(ctx *cli.Context, cfg *p2p.Config){
+	var staticNodes [] string
+	switch {
+	case ctx.IsSet(StaticPeers.Name):
+		staticNodes = SplitAndTrim(ctx.String(StaticPeers.Name))
+	case cfg.StaticNodes != nil:
+		return
+	}
+
+	cfg.StaticNodes = make([]*enode.Node, 0, len(staticNodes))
+	for _, url := range staticNodes {
+		if url != ""{
+			node, err := enode.Parse(enode.ValidSchemes, url)
+			if err != nil {
+				log.Error("StaticNode URL invalid", "enode", url, "err", err)
+				continue
+			}
+			cfg.StaticNodes = append(cfg.StaticNodes, node)
+		}
+	}
+}
+
 // setListenAddress creates TCP/UDP listening address strings from set command
 // line flags
 func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
@@ -1345,6 +1375,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setListenAddress(ctx, cfg)
 	setBootstrapNodes(ctx, cfg)
 	setBootstrapNodesV5(ctx, cfg)
+	setStaticNodes(ctx, cfg)
 
 	lightClient := ctx.String(SyncModeFlag.Name) == "light"
 	lightServer := (ctx.Int(LightServeFlag.Name) != 0)
