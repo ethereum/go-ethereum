@@ -83,7 +83,7 @@ var Defaults = Config{
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
-// Config contains configuration options for of the ETH and LES protocols.
+// Config contains configuration options for ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
@@ -177,7 +177,7 @@ func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (conse
 		return beacon.New(clique.New(config.Clique, db)), nil
 	}
 	// If defaulting to proof-of-work, enforce an already merged network since
-	// we cannot run PoW algorithms and more, so we cannot even follow a chain
+	// we cannot run PoW algorithms anymore, so we cannot even follow a chain
 	// not coordinated by a beacon node.
 	if !config.TerminalTotalDifficultyPassed {
 		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
