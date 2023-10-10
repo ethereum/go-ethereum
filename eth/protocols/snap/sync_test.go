@@ -788,6 +788,49 @@ func testSyncWithStorage(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
+// TestSyncWithLargeStorage tests  basic sync using accounts + storage + code, where
+// storage is large enough to trigger chunking.
+func TestSyncWithLargeStorage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("hash", func(t *testing.T) {
+		testSyncWithLargeStorage(t, rawdb.HashScheme)
+	})
+	t.Run("path", func(t *testing.T) {
+		testSyncWithLargeStorage(t, rawdb.PathScheme)
+	})
+	//testSyncWithStorage(t, rawdb.PathScheme)
+}
+
+func testSyncWithLargeStorage(t *testing.T, scheme string) {
+	var (
+		once   sync.Once
+		cancel = make(chan struct{})
+		term   = func() {
+			once.Do(func() {
+				close(cancel)
+			})
+		}
+	)
+	nodeScheme, sourceAccountTrie, elems, storageTries, storageElems := makeAccountTrieWithStorage(scheme, 3, 30000, true, false)
+
+	mkSource := func(name string) *testPeer {
+		source := newTestPeer(name, t, term)
+		source.accountTrie = sourceAccountTrie.Copy()
+		source.accountValues = elems
+		source.setStorageTries(storageTries)
+		source.storageValues = storageElems
+		return source
+	}
+	syncer := setupSyncer(nodeScheme, mkSource("sourceA"))
+	done := checkStall(t, term)
+	if err := syncer.Sync(sourceAccountTrie.Hash(), cancel); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	close(done)
+	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
+}
+
 // TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUseless(t *testing.T) {
 	t.Parallel()

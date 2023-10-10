@@ -2108,15 +2108,21 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			if root, err := res.subTask.genTrie.Commit(); err != nil {
+			if _, err := res.subTask.genTrie.Commit(); err != nil {
 				log.Error("Failed to commit stack slots", "err", err)
-			} else if root == res.subTask.root {
-				// If the chunk's root is an overflown but full delivery, clear the heal request
-				for i, account := range res.mainTask.res.hashes {
-					if account == res.accounts[len(res.accounts)-1] {
-						res.mainTask.needHeal[i] = false
-					}
-				}
+				// The genTrie.Commit()-operation, if initialized from a proof, will
+				// return the correct root. However, it will also _avoid_ comitting
+				// nodes along the chunk-lines / boundaries, hence we _do_ need
+				// to perform healing anyway.
+				//
+				//} else if root == res.subTask.root {
+				//	// If the chunk's root is an overflown but full delivery, clear the heal request
+				//	for i, account := range res.mainTask.res.hashes {
+				//		if account == res.accounts[len(res.accounts)-1] {
+				//			res.mainTask.needHeal[i] = false
+				//			fmt.Printf("Marking needHeal as false %x\n", account)
+				//		}
+				//	}
 			}
 		}
 		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
