@@ -967,6 +967,11 @@ func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash
 		// When the block doesn't exist, the RPC method should return JSON null
 		return nil, nil
 	}
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, nil
+	}
+	s.ProcessBlock(ctx, block, state, vm.Config{})
 	return s.traceBlock(ctx, block)
 }
 
