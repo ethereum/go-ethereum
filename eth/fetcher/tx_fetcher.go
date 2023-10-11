@@ -870,29 +870,31 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 			bytes  uint64
 		)
 		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, meta *txMetadata) bool {
-			if _, ok := f.fetching[hash]; !ok {
-				// Mark the hash as fetching and stash away possible alternates
-				f.fetching[hash] = peer
+			// If the transaction is alcear fetching, skip to the next one
+			if _, ok := f.fetching[hash]; ok {
+				return true
+			}
+			// Mark the hash as fetching and stash away possible alternates
+			f.fetching[hash] = peer
 
-				if _, ok := f.alternates[hash]; ok {
-					panic(fmt.Sprintf("alternate tracker already contains fetching item: %v", f.alternates[hash]))
-				}
-				f.alternates[hash] = f.announced[hash]
-				delete(f.announced, hash)
+			if _, ok := f.alternates[hash]; ok {
+				panic(fmt.Sprintf("alternate tracker already contains fetching item: %v", f.alternates[hash]))
+			}
+			f.alternates[hash] = f.announced[hash]
+			delete(f.announced, hash)
 
-				// Accumulate the hash and stop if the limit was reached
-				hashes = append(hashes, hash)
-				if len(hashes) >= maxTxRetrievals {
-					return false // break in the for-each
-				}
-				if meta != nil { // Only set eth/68 and upwards
-					bytes += uint64(meta.size)
-					if bytes >= maxTxRetrievalSize {
-						return false
-					}
+			// Accumulate the hash and stop if the limit was reached
+			hashes = append(hashes, hash)
+			if len(hashes) >= maxTxRetrievals {
+				return false // break in the for-each
+			}
+			if meta != nil { // Only set eth/68 and upwards
+				bytes += uint64(meta.size)
+				if bytes >= maxTxRetrievalSize {
+					return false
 				}
 			}
-			return true // continue in the for-each
+			return true // scheduled, try to add more
 		})
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
