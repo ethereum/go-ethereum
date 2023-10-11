@@ -1722,7 +1722,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
 	// Parse state scheme, abort the process if it's not compatible.
-	chaindb := tryMakeReadOnlyDatabase(ctx, stack)
+	chaindb := MakeChainDatabase(ctx, stack, false)
 	scheme, err := ParseStateScheme(ctx, chaindb)
 	chaindb.Close()
 	if err != nil {
