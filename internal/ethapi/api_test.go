@@ -621,12 +621,20 @@ func TestEstimateGas(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
 	}))
+
+	blockNumber := api.BlockNumber()
+	nextBlockNumber := (*hexutil.Big)(big.NewInt(int64(blockNumber + 1)))
+	block, _ := api.GetBlockByNumber(context.Background(), rpc.BlockNumber(blockNumber), true)
+	ts := block["timestamp"].(hexutil.Uint64)
+	timestamp := ts + 10
+
 	var testSuite = []struct {
-		blockNumber rpc.BlockNumber
-		call        TransactionArgs
-		overrides   StateOverride
-		expectErr   error
-		want        uint64
+		blockNumber    rpc.BlockNumber
+		call           TransactionArgs
+		overrides      StateOverride
+		blockOverrides BlockOverrides
+		expectErr      error
+		want           uint64
 	}{
 		// simple transfer on latest block
 		{
@@ -678,9 +686,21 @@ func TestEstimateGas(t *testing.T) {
 			},
 			expectErr: core.ErrInsufficientFunds,
 		},
+		// with BlockOverrides
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			blockOverrides: BlockOverrides{Time: &timestamp, Number: nextBlockNumber},
+			expectErr:      nil,
+			want:           21000,
+		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
