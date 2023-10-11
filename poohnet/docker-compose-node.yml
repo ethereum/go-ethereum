@@ -1,6 +1,6 @@
 version: '3.3'
 services:
-    rpc:
+    el1:
         container_name: pow-node
         image: linked0/poohnet-pow:latest
         ports:
@@ -37,7 +37,7 @@ services:
             --ws.api="eth,net,txpool,web3"
             --ws.origins="*"
 
-    el:
+    el2:
         container_name: pow-node
         image: linked0/poohnet-pow:latest
         ports:
