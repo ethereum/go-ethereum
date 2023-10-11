@@ -39,15 +39,21 @@ const (
 	// can announce in a short time.
 	maxTxAnnounces = 4096
 
-	// maxTxRetrievals is the maximum transaction number can be fetched in one
-	// request. The rationale to pick 256 is:
-	//   - In eth protocol, the softResponseLimit is 2MB. Nowadays according to
-	//     Etherscan the average transaction size is around 200B, so in theory
-	//     we can include lots of transaction in a single protocol packet.
-	//   - However the maximum size of a single transaction is raised to 128KB,
-	//     so pick a middle value here to ensure we can maximize the efficiency
-	//     of the retrieval and response size overflow won't happen in most cases.
+	// maxTxRetrievals is the maximum number of transactions that can be fetched
+	// in one request. The rationale for picking 256 is to have a reasonabe lower
+	// bound for the transferred data (don't waste RTTs, transfer more meaningful
+	// batch sizes), but also have an upper bound on the sequentiality to allow
+	// using our entire peerset for deliveries.
+	//
+	// This number also acts as a failsafe against malicious announces which might
+	// cause us to request more data than we'd expect.
 	maxTxRetrievals = 256
+
+	// maxTxRetrievalSize is the max number of bytes that delivered transactions
+	// should weigh according to the announcements. The 128KB was chosen to limit
+	// retrieving a maximum of one blob transaction at a time to minimize hogging
+	// a connection between two peers.
+	maxTxRetrievalSize = 128 * 1024
 
 	// maxTxUnderpricedSetSize is the size of the underpriced transaction set that
 	// is used to track recent transactions that have been dropped so we don't
@@ -859,25 +865,36 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 		if len(f.announces[peer]) == 0 {
 			return // continue in the for-each
 		}
-		hashes := make([]common.Hash, 0, maxTxRetrievals)
-		f.forEachHash(f.announces[peer], func(hash common.Hash) bool {
-			if _, ok := f.fetching[hash]; !ok {
-				// Mark the hash as fetching and stash away possible alternates
-				f.fetching[hash] = peer
+		var (
+			hashes = make([]common.Hash, 0, maxTxRetrievals)
+			bytes  uint64
+		)
+		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, meta *txMetadata) bool {
+			// If the transaction is alcear fetching, skip to the next one
+			if _, ok := f.fetching[hash]; ok {
+				return true
+			}
+			// Mark the hash as fetching and stash away possible alternates
+			f.fetching[hash] = peer
 
-				if _, ok := f.alternates[hash]; ok {
-					panic(fmt.Sprintf("alternate tracker already contains fetching item: %v", f.alternates[hash]))
-				}
-				f.alternates[hash] = f.announced[hash]
-				delete(f.announced, hash)
+			if _, ok := f.alternates[hash]; ok {
+				panic(fmt.Sprintf("alternate tracker already contains fetching item: %v", f.alternates[hash]))
+			}
+			f.alternates[hash] = f.announced[hash]
+			delete(f.announced, hash)
 
-				// Accumulate the hash and stop if the limit was reached
-				hashes = append(hashes, hash)
-				if len(hashes) >= maxTxRetrievals {
-					return false // break in the for-each
+			// Accumulate the hash and stop if the limit was reached
+			hashes = append(hashes, hash)
+			if len(hashes) >= maxTxRetrievals {
+				return false // break in the for-each
+			}
+			if meta != nil { // Only set eth/68 and upwards
+				bytes += uint64(meta.size)
+				if bytes >= maxTxRetrievalSize {
+					return false
 				}
 			}
-			return true // continue in the for-each
+			return true // scheduled, try to add more
 		})
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
@@ -922,27 +939,28 @@ func (f *TxFetcher) forEachPeer(peers map[string]struct{}, do func(peer string))
 	}
 }
 
-// forEachHash does a range loop over a map of hashes in production, but during
-// testing it does a deterministic sorted random to allow reproducing issues.
-func (f *TxFetcher) forEachHash(hashes map[common.Hash]*txMetadata, do func(hash common.Hash) bool) {
+// forEachAnnounce does a range loop over a map of announcements in production,
+// but during testing it does a deterministic sorted random to allow reproducing
+// issues.
+func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadata, do func(hash common.Hash, meta *txMetadata) bool) {
 	// If we're running production, use whatever Go's map gives us
 	if f.rand == nil {
-		for hash := range hashes {
-			if !do(hash) {
+		for hash, meta := range announces {
+			if !do(hash, meta) {
 				return
 			}
 		}
 		return
 	}
 	// We're running the test suite, make iteration deterministic
-	list := make([]common.Hash, 0, len(hashes))
-	for hash := range hashes {
+	list := make([]common.Hash, 0, len(announces))
+	for hash := range announces {
 		list = append(list, hash)
 	}
 	sortHashes(list)
 	rotateHashes(list, f.rand.Intn(len(list)))
 	for _, hash := range list {
-		if !do(hash) {
+		if !do(hash, announces[hash]) {
 			return
 		}
 	}
