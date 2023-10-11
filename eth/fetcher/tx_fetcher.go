@@ -870,7 +870,7 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 			bytes  uint64
 		)
 		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, meta *txMetadata) bool {
-			// If the transaction is alcear fetching, skip to the next one
+			// If the transaction is already fetching, skip to the next one
 			if _, ok := f.fetching[hash]; ok {
 				return true
 			}
