@@ -33,13 +33,12 @@ var (
 
 // NodeWriteFunc is used to provide all information of a dirty node for committing
 // so that callers can flush nodes into database with desired scheme.
-type NodeWriteFunc = func(owner common.Hash, path []byte, hash common.Hash, blob []byte)
+type NodeWriteFunc = func(path []byte, hash common.Hash, blob []byte)
 
 // StackTrie is a trie implementation that expects keys to be inserted
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
 type StackTrie struct {
-	owner   common.Hash   // the owner of the trie
 	writeFn NodeWriteFunc // function for committing nodes, can be nil
 	root    *stNode
 	h       *hasher
@@ -52,14 +51,6 @@ func NewStackTrie(writeFn NodeWriteFunc) *StackTrie {
 		root:    stPool.Get().(*stNode),
 		h:       newHasher(false),
 	}
-}
-
-// NewStackTrieWithOwner allocates and initializes an empty trie, but with
-// the additional owner field.
-func NewStackTrieWithOwner(writeFn NodeWriteFunc, owner common.Hash) *StackTrie {
-	stack := NewStackTrie(writeFn)
-	stack.owner = owner
-	return stack
 }
 
 // Update inserts a (key, value) pair into the stack trie.
@@ -371,7 +362,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// input values
 	st.val = t.h.hashData(encodedNode)
 	if t.writeFn != nil {
-		t.writeFn(t.owner, path, common.BytesToHash(st.val), encodedNode)
+		t.writeFn(path, common.BytesToHash(st.val), encodedNode)
 	}
 }
 
@@ -416,6 +407,6 @@ func (t *StackTrie) Commit() (h common.Hash, err error) {
 	t.h.sha.Write(st.val)
 	t.h.sha.Read(h[:])
 
-	t.writeFn(t.owner, nil, h, st.val)
+	t.writeFn(nil, h, st.val)
 	return h, nil
 }
