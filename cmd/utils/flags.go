@@ -2218,11 +2218,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(provided string, disk ethdb.Database, preimage bool, readOnly bool) *trie.Database {
+func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool) *trie.Database {
 	config := &trie.Config{
 		Preimages: preimage,
 	}
-	scheme, err := rawdb.ParseStateScheme(provided, disk)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), disk)
 	if err != nil {
 		Fatalf("%v", err)
 	}

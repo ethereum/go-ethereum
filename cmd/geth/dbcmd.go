@@ -482,7 +482,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx.String(utils.StateSchemeFlag.Name), db, false, true)
+	triedb := utils.MakeTrieDatabase(ctx, db, false, true)
 	defer triedb.Close()
 
 	var (
