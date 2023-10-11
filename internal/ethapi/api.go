@@ -983,6 +983,104 @@ const (
 	defaultTraceTimeout = 5 * time.Second
 )
 
+// Process processes the state changes according to the Ethereum rules by running
+// the transaction messages using the statedb and applying any rewards to both
+// the processor (coinbase) and any included uncles.
+//
+// Process returns the receipts and logs accumulated during the process and
+// returns the amount of gas that was used in the process. If any of the
+// transactions failed to execute due to insufficient gas it will return an error.
+func (s *BlockChainAPI) ProcessBlock(ctx context.Context, block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	var (
+		receipts    types.Receipts
+		usedGas     = new(uint64)
+		header      = block.Header()
+		blockHash   = block.Hash()
+		blockNumber = block.Number()
+		allLogs     []*types.Log
+		gp          = new(core.GasPool).AddGas(block.GasLimit())
+	)
+	var (
+		context = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, s.b.ChainConfig(), cfg)
+		signer  = types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
+	)
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	// Iterate over and process the individual transactions
+	for i, tx := range block.Transactions() {
+		msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+		statedb.SetTxContext(tx.Hash(), i)
+		receipt, err := applyTransaction(msg, s.b.ChainConfig(), gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+		receipts = append(receipts, receipt)
+		allLogs = append(allLogs, receipt.Logs...)
+	}
+	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
+	withdrawals := block.Withdrawals()
+	if len(withdrawals) > 0 && !s.b.ChainConfig().IsShanghai(block.Number(), block.Time()) {
+		return nil, nil, 0, errors.New("withdrawals before shanghai")
+	}
+
+	return receipts, allLogs, *usedGas, nil
+}
+
+func applyTransaction(msg *core.Message, config *params.ChainConfig, gp *core.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+	// Create a new context to be used in the EVM environment.
+	txContext := core.NewEVMTxContext(msg)
+	evm.Reset(txContext, statedb)
+
+	// Apply the transaction to the current state (included in the env).
+	result, err := core.ApplyMessage(evm, msg, gp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the state with pending changes.
+	var root []byte
+	if config.IsByzantium(blockNumber) {
+		statedb.Finalise(true)
+	} else {
+		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
+	}
+	*usedGas += result.UsedGas
+
+	// Create a new receipt for the transaction, storing the intermediate root and gas used
+	// by the tx.
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	if result.Failed() {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
+	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = result.UsedGas
+
+	if tx.Type() == types.BlobTxType {
+		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
+		receipt.BlobGasPrice = evm.Context.BlobBaseFee
+	}
+
+	// If the transaction created a contract, store the creation address in the receipt.
+	if msg.To == nil {
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+	}
+
+	// Set the receipt logs and create the bloom filter.
+	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
+	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.BlockHash = blockHash
+	receipt.BlockNumber = blockNumber
+	receipt.TransactionIndex = uint(statedb.TxIndex())
+	return receipt, err
+}
+
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
