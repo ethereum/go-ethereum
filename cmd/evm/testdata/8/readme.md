@@ -32,7 +32,7 @@ dir=./testdata/8 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json 
 {"pc":4,"op":84,"gas":"0x48456","gasCost":"0x64","memSize":0,"stack":["0x3"],"depth":1,"refund":0,"opName":"SLOAD"}
 ```
 
-Simlarly, we can provide the input transactions via `stdin` instead of as file: 
+Similarly, we can provide the input transactions via `stdin` instead of as file:
 
 ```
 $ dir=./testdata/8 \
