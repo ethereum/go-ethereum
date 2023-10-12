@@ -136,11 +136,6 @@ var (
 		"golang-go":   "/usr/lib/go",
 	}
 
-	// This is the version of Go that will be downloaded by
-	//
-	//     go run ci.go install -dlgo
-	dlgoVersion = "1.21.3"
-
 	// This is the version of Go that will be used to bootstrap the PPA builder.
 	//
 	// This version is fine to be old and full of security holes, we just use it
@@ -148,10 +143,6 @@ var (
 	// we need to switch over to a recursive builder to jumpt across supported
 	// versions.
 	gobootVersion = "1.19.6"
-
-	// This is the version of execution-spec-tests that we are using.
-	// When updating, you must also update build/checksums.txt.
-	executionSpecTestsVersion = "1.0.2"
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
@@ -215,9 +206,8 @@ func doInstall(cmdline []string) {
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
 	if *dlgo {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
-		tc.Root = build.DownloadGo(csdb, dlgoVersion)
+		tc.Root = build.DownloadGo(csdb)
 	}
-
 	// Disable CLI markdown doc generation in release builds.
 	buildTags := []string{"urfave_cli_no_docs"}
 
@@ -314,7 +304,7 @@ func doTest(cmdline []string) {
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
 	if *dlgo {
-		tc.Root = build.DownloadGo(csdb, dlgoVersion)
+		tc.Root = build.DownloadGo(csdb)
 	}
 	gotest := tc.Go("test")
 
@@ -347,6 +337,10 @@ func doTest(cmdline []string) {
 
 // downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
 func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
+	executionSpecTestsVersion, err := build.Version(csdb, "spec-tests")
+	if err != nil {
+		log.Fatal(err)
+	}
 	ext := ".tar.gz"
 	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
 	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
@@ -379,9 +373,11 @@ func doLint(cmdline []string) {
 
 // downloadLinter downloads and unpacks golangci-lint.
 func downloadLinter(cachedir string) string {
-	const version = "1.51.1"
-
 	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "golangci")
+	if err != nil {
+		log.Fatal(err)
+	}
 	arch := runtime.GOARCH
 	ext := ".tar.gz"
 
@@ -775,6 +771,10 @@ func downloadGoBootstrapSources(cachedir string) string {
 // downloadGoSources downloads the Go source tarball.
 func downloadGoSources(cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
+	dlgoVersion, err := build.Version(csdb, "golang")
+	if err != nil {
+		log.Fatal(err)
+	}
 	file := fmt.Sprintf("go%s.src.tar.gz", dlgoVersion)
 	url := "https://dl.google.com/go/" + file
 	dst := filepath.Join(cachedir, file)
