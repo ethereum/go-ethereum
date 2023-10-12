@@ -1056,34 +1056,8 @@ func applyTransaction(msg *core.Message, config *params.ChainConfig, gp *core.Ga
 	}
 	*usedGas += result.UsedGas
 
-	// Create a new receipt for the transaction, storing the intermediate root and gas used
-	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
-	if result.Failed() {
-		receipt.Status = types.ReceiptStatusFailed
-	} else {
-		receipt.Status = types.ReceiptStatusSuccessful
-	}
-	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = result.UsedGas
-
-	if tx.Type() == types.BlobTxType {
-		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
-		receipt.BlobGasPrice = evm.Context.BlobBaseFee
-	}
-
-	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To == nil {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
-	}
-
-	// Set the receipt logs and create the bloom filter.
-	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	receipt.BlockHash = blockHash
-	receipt.BlockNumber = blockNumber
-	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, err
+	_ = root
+	return nil, err
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and
