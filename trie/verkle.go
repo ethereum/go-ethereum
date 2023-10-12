@@ -286,9 +286,7 @@ func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 	}
 	batch.Write()
 
-	// Serialize root commitment form
-	rootH := root.Hash().BytesLE()
-	return common.BytesToHash(rootH[:]), nil, nil
+	return trie.Hash(), nil, nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
