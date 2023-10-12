@@ -52,7 +52,7 @@ var (
 	TestnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        7,
+			CertThreshold:        7, //based on masternode is 10
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			MinePeriod:           2,
