@@ -54,6 +54,9 @@ type Receipt struct {
 	Type              uint8  `json:"type,omitempty"`
 	PostState         []byte `json:"root"`
 	Status            uint64 `json:"status"`
+	From              common.Address `json:"from"`
+	To                common.Address `json:"to"`
+	RevertReason      string `json:"revertReason"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
 	Logs              []*Log `json:"logs"              gencodec:"required"`

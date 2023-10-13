@@ -19,6 +19,9 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		Type              hexutil.Uint64 `json:"type,omitempty"`
 		PostState         hexutil.Bytes  `json:"root"`
 		Status            hexutil.Uint64 `json:"status"`
+		From              common.Address `json:"from"`
+		To                common.Address `json:"to"`
+		RevertReason      string         `json:"revertReason"`
 		CumulativeGasUsed hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log         `json:"logs"              gencodec:"required"`
@@ -36,6 +39,9 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.Type = hexutil.Uint64(r.Type)
 	enc.PostState = r.PostState
 	enc.Status = hexutil.Uint64(r.Status)
+	enc.From = r.From
+	enc.To = r.To
+	enc.RevertReason = r.RevertReason
 	enc.CumulativeGasUsed = hexutil.Uint64(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
@@ -57,6 +63,9 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		Type              *hexutil.Uint64 `json:"type,omitempty"`
 		PostState         *hexutil.Bytes  `json:"root"`
 		Status            *hexutil.Uint64 `json:"status"`
+		From              *common.Address `json:"from"`
+		To                *common.Address `json:"to"`
+		RevertReason      *string         `json:"revertReason"`
 		CumulativeGasUsed *hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             *Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log          `json:"logs"              gencodec:"required"`
@@ -82,6 +91,15 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Status != nil {
 		r.Status = uint64(*dec.Status)
+	}
+	if dec.From != nil {
+		r.From = *dec.From
+	}
+	if dec.To != nil {
+		r.To = *dec.To
+	}
+	if dec.RevertReason != nil {
+		r.RevertReason = *dec.RevertReason
 	}
 	if dec.CumulativeGasUsed == nil {
 		return errors.New("missing required field 'cumulativeGasUsed' for Receipt")
