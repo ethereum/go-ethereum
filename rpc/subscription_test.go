@@ -17,12 +17,17 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestNewID(t *testing.T) {
@@ -216,5 +221,35 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 		}
 	default:
 		return nil, nil, fmt.Errorf("unrecognized message: %v", msg)
+	}
+}
+
+type mockConn struct{}
+
+// writeJSON writes a message to the connection.
+func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool) error { return nil }
+
+// Closed returns a channel which is closed when the connection is closed.
+func (c *mockConn) closed() <-chan interface{} { return nil }
+
+// RemoteAddr returns the peer address of the connection.
+func (c *mockConn) remoteAddr() string { return "" }
+
+// BenchmarkNotify benchmarks the performance of notifying a subscription.
+func BenchmarkNotify(b *testing.B) {
+	id := ID("test")
+	notifier := &Notifier{
+		h:         &handler{conn: &mockConn{}},
+		sub:       &Subscription{ID: id},
+		activated: true,
+	}
+
+	msg := &types.Header{
+		ParentHash: common.HexToHash("0x01"),
+		Number:     big.NewInt(100),
+	}
+
+	for i := 0; i < b.N; i++ {
+		notifier.Notify(id, msg)
 	}
 }
