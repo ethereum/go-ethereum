@@ -531,3 +531,88 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 	}
 	return keys, vals
 }
+
+func BenchDatabaseSuite2(b *testing.B, New func() ethdb.KeyValueStore) {
+	var (
+		keys, vals   = makeDataset(1000, 32, 32, false)
+		sKeys, sVals = makeDataset(1000, 32, 32, true)
+	)
+	// Run benchmarks sequentially
+	b.Run("Write", func(b *testing.B) {
+		benchWrite := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+			b.ResetTimer()
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+		}
+		b.Run("WriteSorted", func(b *testing.B) {
+			benchWrite(b, sKeys, sVals)
+		})
+		b.Run("WriteRandom", func(b *testing.B) {
+			benchWrite(b, keys, vals)
+		})
+	})
+	b.Run("Read", func(b *testing.B) {
+		benchRead := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+			b.ResetTimer()
+
+			for i := 0; i < len(keys); i++ {
+				db.Get(keys[i])
+			}
+		}
+		b.Run("ReadSorted", func(b *testing.B) {
+			benchRead(b, sKeys, sVals)
+		})
+		b.Run("ReadRandom", func(b *testing.B) {
+			benchRead(b, keys, vals)
+		})
+	})
+	b.Run("Iteration", func(b *testing.B) {
+		benchIteration := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+
+			for i := 0; i < len(keys); i++ {
+				db.Put(keys[i], vals[i])
+			}
+			b.ResetTimer()
+
+			it := db.NewIterator(nil, nil)
+			for it.Next() {
+			}
+			it.Release()
+		}
+		b.Run("IterationSorted", func(b *testing.B) {
+			benchIteration(b, sKeys, sVals)
+		})
+		b.Run("IterationRandom", func(b *testing.B) {
+			benchIteration(b, keys, vals)
+		})
+	})
+	b.Run("BatchWrite", func(b *testing.B) {
+		benchBatchWrite := func(b *testing.B, keys, vals [][]byte) {
+			db := New()
+			defer db.Close()
+			b.ResetTimer()
+			batch := db.NewBatch()
+			for i := 0; i < len(keys); i++ {
+				batch.Put(keys[i], vals[i])
+			}
+			batch.Write()
+		}
+		b.Run("BenchWriteSorted", func(b *testing.B) {
+			benchBatchWrite(b, sKeys, sVals)
+		})
+		b.Run("BenchWriteRandom", func(b *testing.B) {
+			benchBatchWrite(b, keys, vals)
+		})
+	})
+}

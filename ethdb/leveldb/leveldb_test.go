@@ -17,6 +17,7 @@
 package leveldb
 
 import (
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -49,4 +50,29 @@ func BenchmarkLevelDB(b *testing.B) {
 			db: db,
 		}
 	})
+}
+
+func BenchmarkIOLevelDB(b *testing.B) {
+	dir, err := os.MkdirTemp("", "leveldb_*")
+	if err != nil {
+		b.Fatal(err)
+	}
+	var stor storage.Storage
+	stor, err = storage.OpenFile(dir, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+	dbtest.BenchDatabaseSuite2(b, func() ethdb.KeyValueStore {
+		db, err := leveldb.Open(stor, nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		return &Database{
+			db: db,
+		}
+	})
+	err = os.RemoveAll(dir)
+	if err != nil {
+		b.Fatal(err)
+	}
 }

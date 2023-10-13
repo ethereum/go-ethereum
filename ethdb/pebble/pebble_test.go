@@ -19,6 +19,7 @@
 package pebble
 
 import (
+	"os"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -55,4 +56,24 @@ func BenchmarkPebbleDB(b *testing.B) {
 			db: db,
 		}
 	})
+}
+
+func BenchmarkIOPebbleDB(b *testing.B) {
+	dir, err := os.MkdirTemp("", "pebble_*")
+	if err != nil {
+		b.Fatal(err)
+	}
+	dbtest.BenchDatabaseSuite2(b, func() ethdb.KeyValueStore {
+		db, err := pebble.Open(dir, &pebble.Options{})
+		if err != nil {
+			b.Fatal(err)
+		}
+		return &Database{
+			db: db,
+		}
+	})
+	err = os.RemoveAll(dir)
+	if err != nil {
+		b.Fatal(err)
+	}
 }
