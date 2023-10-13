@@ -136,14 +136,6 @@ var (
 		"golang-go":   "/usr/lib/go",
 	}
 
-	// This is the version of Go that will be used to bootstrap the PPA builder.
-	//
-	// This version is fine to be old and full of security holes, we just use it
-	// to build the latest Go. Don't change it. If it ever becomes insufficient,
-	// we need to switch over to a recursive builder to jumpt across supported
-	// versions.
-	gobootVersion = "1.19.6"
-
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
 )
@@ -759,6 +751,10 @@ func doDebianSource(cmdline []string) {
 // to bootstrap the builder Go.
 func downloadGoBootstrapSources(cachedir string) string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
+	gobootVersion, err := build.Version(csdb, "ppa-builder")
+	if err != nil {
+		log.Fatal(err)
+	}
 	file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
 	url := "https://dl.google.com/go/" + file
 	dst := filepath.Join(cachedir, file)
