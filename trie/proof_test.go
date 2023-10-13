@@ -561,7 +561,6 @@ func TestSameSideProofs(t *testing.T) {
 
 	pos := 1000
 	first := common.CopyBytes(entries[0].k)
-	last := decreaseKey(common.CopyBytes(entries[pos].k))
 
 	proof := memorydb.New()
 	if err := trie.Prove(first, proof); err != nil {
@@ -576,7 +575,7 @@ func TestSameSideProofs(t *testing.T) {
 	}
 
 	first = increaseKey(common.CopyBytes(entries[pos].k))
-	last = increaseKey(common.CopyBytes(entries[pos].k))
+	last := increaseKey(common.CopyBytes(entries[pos].k))
 	last = increaseKey(last)
 
 	proof = memorydb.New()
