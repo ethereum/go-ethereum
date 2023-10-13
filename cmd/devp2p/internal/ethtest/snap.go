@@ -536,11 +536,7 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	proofdb := nodes.Set()
 
-	var end []byte
-	if len(keys) > 0 {
-		end = keys[len(keys)-1]
-	}
-	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], end, keys, accounts, proofdb)
+	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], keys, accounts, proofdb)
 	return err
 }
 
