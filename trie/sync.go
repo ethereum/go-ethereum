@@ -51,6 +51,14 @@ var (
 	// lookupGauge is the metric to track how many trie node lookups are
 	// performed to determine if node needs to be deleted.
 	lookupGauge = metrics.NewRegisteredGauge("trie/sync/lookup", nil)
+
+	// nodeSyncedGauge is the metric to track how many trie node are written
+	// during the sync.
+	nodeSyncedGauge = metrics.NewRegisteredGauge("trie/sync/nodes", nil)
+
+	// codeSyncedGauge is the metric to track how many contract codes are
+	// written during the sync.
+	codeSyncedGauge = metrics.NewRegisteredGauge("trie/sync/codes", nil)
 )
 
 // SyncPath is a path tuple identifying a particular trie node either in a single
@@ -366,6 +374,8 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 		owner, inner := ResolvePath([]byte(path))
 		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
+	nodeSyncedGauge.Inc(int64(len(s.membatch.nodes)))
+
 	// Flush the pending node deletes into the database batch.
 	// Please note that each written and deleted node has a
 	// unique path, ensuring no duplication occurs.
@@ -377,6 +387,8 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
 	}
+	codeSyncedGauge.Inc(int64(len(s.membatch.codes)))
+
 	s.membatch = newSyncMemBatch() // reset the batch
 	return nil
 }

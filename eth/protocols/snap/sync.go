@@ -716,6 +716,19 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	}
 }
 
+// cleanPath is used to remove the dangling nodes in the stackTrie.
+func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
+	if owner == (common.Hash{}) && rawdb.ExistsAccountTrieNode(s.db, path) {
+		rawdb.DeleteAccountTrieNode(batch, path)
+		deletionGauge.Inc(1)
+	}
+	if owner != (common.Hash{}) && rawdb.ExistsStorageTrieNode(s.db, owner, path) {
+		rawdb.DeleteStorageTrieNode(batch, owner, path)
+		deletionGauge.Inc(1)
+	}
+	lookupGauge.Inc(1)
+}
+
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
 func (s *Syncer) loadSyncStatus() {
@@ -742,6 +755,14 @@ func (s *Syncer) loadSyncStatus() {
 				options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
 				})
+				if s.scheme == rawdb.PathScheme {
+					options = options.WithCleaner(func(path []byte) {
+						s.cleanPath(task.genBatch, common.Hash{}, path)
+					})
+					options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
+						boundaryNodesGauge.Inc(1)
+					})
+				}
 				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
@@ -758,6 +779,14 @@ func (s *Syncer) loadSyncStatus() {
 						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
 						})
+						if s.scheme == rawdb.PathScheme {
+							options = options.WithCleaner(func(path []byte) {
+								s.cleanPath(subtask.genBatch, owner, path)
+							})
+							options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
+								boundaryNodesGauge.Inc(1)
+							})
+						}
 						subtask.genTrie = trie.NewStackTrie(options)
 					}
 				}
@@ -814,6 +843,14 @@ func (s *Syncer) loadSyncStatus() {
 		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
 		})
+		if s.scheme == rawdb.PathScheme {
+			options = options.WithCleaner(func(path []byte) {
+				s.cleanPath(batch, common.Hash{}, path)
+			})
+			options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
+				boundaryNodesGauge.Inc(1)
+			})
+		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
 			Last:     last,
@@ -2016,6 +2053,14 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 						rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
 					})
+					if s.scheme == rawdb.PathScheme {
+						options = options.WithCleaner(func(path []byte) {
+							s.cleanPath(batch, owner, path)
+						})
+						options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
+							boundaryNodesGauge.Inc(1)
+						})
+					}
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
 						Last:     r.End(),
@@ -2034,6 +2079,14 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 							rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
 						})
+						if s.scheme == rawdb.PathScheme {
+							options = options.WithCleaner(func(path []byte) {
+								s.cleanPath(batch, owner, path)
+							})
+							options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
+								boundaryNodesGauge.Inc(1)
+							})
+						}
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
 							Last:     r.End(),
@@ -2089,6 +2142,11 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 				rawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
 			})
+			if s.scheme == rawdb.PathScheme {
+				options = options.WithCleaner(func(path []byte) {
+					s.cleanPath(batch, account, path)
+				})
+			}
 			tr := trie.NewStackTrie(options)
 			for j := 0; j < len(res.hashes[i]); j++ {
 				tr.Update(res.hashes[i][j][:], res.slots[i][j])
@@ -2111,15 +2169,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			root := res.subTask.genTrie.Commit()
-			if root == res.subTask.root {
-				// If the chunk's root is an overflown but full delivery, clear the heal request
-				for i, account := range res.mainTask.res.hashes {
-					if account == res.accounts[len(res.accounts)-1] {
-						res.mainTask.needHeal[i] = false
-					}
-				}
-			}
+			res.subTask.genTrie.Commit()
 		}
 		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
 			if err := res.subTask.genBatch.Write(); err != nil {

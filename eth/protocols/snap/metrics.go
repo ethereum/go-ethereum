@@ -26,4 +26,15 @@ var (
 
 	IngressRegistrationErrorMeter = metrics.NewRegisteredMeter(ingressRegistrationErrorName, nil)
 	EgressRegistrationErrorMeter  = metrics.NewRegisteredMeter(egressRegistrationErrorName, nil)
+
+	// deletionGauge is the metric to track how many trie node deletions
+	// are performed in total during the sync process.
+	deletionGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/delete", nil)
+
+	// lookupGauge is the metric to track how many trie node lookups are
+	// performed to determine if node needs to be deleted.
+	lookupGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/lookup", nil)
+
+	// boundaryNodesGauge is the metric to track how many boundary trie node are met.
+	boundaryNodesGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary", nil)
 )
