@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build (arm64 || amd64) && !openbsd
-
 // Package pebble implements the key-value database layer based on pebble.
 package pebble
 
@@ -148,8 +146,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
-	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
-	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
+	//
+	// - MaxUint32 on 64-bit platforms;
+	// - MaxInt on 32-bit platforms.
+	//
+	// It is used when slices are limited to Uint32 on 64-bit platforms (the
+	// length limit for slices is naturally MaxInt on 32-bit platforms).
+	//
+	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
+	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
 	// Two memory tables is configured which is identical to leveldb,
 	// including a frozen memory table and another live one.
