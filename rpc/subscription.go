@@ -177,13 +177,17 @@ func (n *Notifier) activate() error {
 }
 
 func (n *Notifier) send(sub *Subscription, data interface{}) error {
-	params, _ := json.Marshal(struct {
+	params := struct {
 		ID     string      `json:"subscription"`
 		Result interface{} `json:"result,omitempty"`
-	}{ID: string(sub.ID), Result: data})
+	}{ID: string(sub.ID), Result: data}
 	ctx := context.Background()
 
-	msg := &jsonrpcMessage{
+	msg := struct {
+		Version string      `json:"jsonrpc,omitempty"`
+		Method  string      `json:"method,omitempty"`
+		Params  interface{} `json:"params,omitempty"`
+	}{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
 		Params:  params,
