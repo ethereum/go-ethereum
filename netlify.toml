@@ -42,7 +42,7 @@
 
 [[redirects]]
   from = "/docs/interface/consensus-clients"
-  to = "/docs/getting-started/consensus-client"
+  to = "/docs/getting-started/consensus-clients"
   force = true
 
 [[redirects]]
