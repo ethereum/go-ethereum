@@ -1867,7 +1867,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// Create a new developer genesis block or reuse existing one
 		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
-			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
+			chaindb := tryMakeReadOnlyChainDB(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
@@ -2072,9 +2072,9 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	return chainDb
 }
 
-// tryMakeReadOnlyDatabase try to open the chain database(without ancient) in read-only mode,
+// tryMakeReadOnlyChainDB try to open the chain database(without ancient) in read-only mode,
 // or fallback to write mode if the database is not initialized.
-func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
+func tryMakeReadOnlyChainDB(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	// If the database doesn't exist we need to open it in write-mode to allow
 	// the engine to create files.
 	readonly := true
