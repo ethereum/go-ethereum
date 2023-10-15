@@ -363,7 +363,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section uint64, root common.Hash) error {
 	indexCh := make(chan uint, types.BloomBitLength)
 	type res struct {
-		nodes *NodeSet
+		nodes *trienode.ProofSet
 		err   error
 	}
 	resCh := make(chan res, types.BloomBitLength)
