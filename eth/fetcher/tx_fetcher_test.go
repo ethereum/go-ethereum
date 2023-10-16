@@ -2008,19 +2008,21 @@ func TestTransactionForgotten(t *testing.T) {
 		func(string, []common.Hash) error { return nil },
 	)
 	go fetcher.loop()
-	tx1 := types.NewTransaction(0, common.Address{}, common.Big0, 0, common.Big0, nil)
+	// Create a TX which is 5 minutes old, and one which is recent
+	tx1 := types.NewTx(&types.LegacyTx{Nonce: 0})
 	tx1.SetTime(time.Now().Add(-maxTxUnderpricedTimeout - 1*time.Second))
-	tx2 := types.NewTransaction(1, common.Address{}, common.Big0, 0, common.Big0, nil)
-	if fetcher.isKnownUnderpriced(tx1.Hash()) {
-		t.Fatal("unknown hash can not be underpriced")
-	}
+	tx2 := types.NewTx(&types.LegacyTx{Nonce: 1})
+
+	// Enqueue both in the fetcher. They will be immediately tagged as underpriced
 	if err := fetcher.Enqueue("asdf", []*types.Transaction{tx1, tx2}, false); err != nil {
 		t.Fatal(err)
 	}
+	// isKnownUnderpriced should trigger removal of the first tx (no longer be known underpriced)
 	if fetcher.isKnownUnderpriced(tx1.Hash()) {
-		t.Fatal("transaction should be evicted by this point")
+		t.Fatal("transaction should be forgotten by now")
 	}
+	// isKnownUnderpriced should not trigger removal of the second
 	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
-		t.Fatal("transaction should not be known underpriced")
+		t.Fatal("transaction should be known underpriced")
 	}
 }
