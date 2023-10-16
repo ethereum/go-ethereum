@@ -65,16 +65,19 @@ func FuzzG2Add(f *testing.F) {
 		fuzz(blsG2Add, data)
 	})
 }
+
 func FuzzG2Mul(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		fuzz(blsG2Mul, data)
 	})
 }
+
 func FuzzG2MultiExp(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		fuzz(blsG2MultiExp, data)
 	})
 }
+
 func FuzzPairing(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		fuzz(blsPairing, data)
