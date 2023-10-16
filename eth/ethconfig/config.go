@@ -19,6 +19,7 @@ package ethconfig
 
 import (
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -172,7 +173,7 @@ type Config struct {
 	RPCTxFeeCap float64
 
 	// OverrideCancun (TODO: remove after the fork)
-	OverrideCancun *uint64 `toml:",omitempty"`
+	OverrideCancun *big.Int `toml:",omitempty"`
 
 	// URL to connect to Heimdall node
 	HeimdallURL string
@@ -202,7 +203,7 @@ type Config struct {
 	DevFakeAuthor bool `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 
 	// OverrideVerkle (TODO: remove after the fork)
-	OverrideVerkle *uint64 `toml:",omitempty"`
+	OverrideVerkle *big.Int `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

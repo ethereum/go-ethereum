@@ -309,10 +309,12 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
 	}
-	if chain.Config().IsShanghai(header.Number, header.Time) {
+
+	if chain.Config().IsShanghai(header.Number) {
 		return errors.New("clique does not support shanghai fork")
 	}
-	if chain.Config().IsCancun(header.Number, header.Time) {
+
+	if chain.Config().IsCancun(header.Number) {
 		return errors.New("clique does not support cancun fork")
 	}
 	// All basic checks passed, verify cascading fields
