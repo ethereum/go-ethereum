@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+func Fuzz(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzz(data)
+	})
+}
+
 func TestF(t *testing.T) {
 	for i, test := range testVectorsF {
 		t.Run(fmt.Sprintf("test vector %v", i), func(t *testing.T) {

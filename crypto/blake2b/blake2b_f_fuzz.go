@@ -1,13 +1,10 @@
-//go:build gofuzz
-// +build gofuzz
-
 package blake2b
 
 import (
 	"encoding/binary"
 )
 
-func Fuzz(data []byte) int {
+func fuzz(data []byte) int {
 	// Make sure the data confirms to the input model
 	if len(data) != 211 {
 		return 0
