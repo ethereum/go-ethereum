@@ -2072,7 +2072,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	return chainDb
 }
 
-// tryMakeReadOnlyDatabase try to open the chain database(without ancient) in read-only mode,
+// tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
 // or fallback to write mode if the database is not initialized.
 func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	// If the database doesn't exist we need to open it in write-mode to allow
@@ -2081,31 +2081,7 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
 		readonly = false
 	}
-
-	var (
-		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
-		err     error
-		chainDb ethdb.Database
-	)
-	if ctx.IsSet(RemoteDBFlag.Name) {
-		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
-		var client *rpc.Client
-		client, err = DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
-		if err == nil {
-			chainDb = remotedb.New(client)
-		}
-	} else {
-		name := "chaindata"
-		if ctx.String(SyncModeFlag.Name) == "light" {
-			name = "lightchaindata"
-		}
-		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
-	}
-	if err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	return chainDb
+	return MakeChainDatabase(ctx, stack, readonly)
 }
 
 func IsNetworkPreset(ctx *cli.Context) bool {
