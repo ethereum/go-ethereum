@@ -63,8 +63,8 @@ func blockTestCmd(ctx *cli.Context) error {
 	}
 	// run them in order
 	var keys []string
-	for k, _ := range tests {
-		keys = append(keys, k)
+	for key := range tests {
+		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, name := range keys {

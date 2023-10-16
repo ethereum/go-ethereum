@@ -334,7 +334,7 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 		log.Fatal(err)
 	}
 	ext := ".tar.gz"
-	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
+	base := "fixtures_develop" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
 	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
