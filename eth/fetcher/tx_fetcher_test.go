@@ -2006,6 +2006,7 @@ func TestTransactionForgotten(t *testing.T) {
 			return errs
 		},
 		func(string, []common.Hash) error { return nil },
+		func(string) {},
 	)
 	fetcher.Start()
 	defer fetcher.Stop()
