@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"time"
 
@@ -156,12 +157,12 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideCancun.Name) {
-		v := ctx.Uint64(utils.OverrideCancun.Name)
-		cfg.Eth.OverrideCancun = &v
+		v := ctx.Int64(utils.OverrideCancun.Name)
+		cfg.Eth.OverrideCancun = new(big.Int).SetInt64(v)
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
-		v := ctx.Uint64(utils.OverrideVerkle.Name)
-		cfg.Eth.OverrideVerkle = &v
+		v := ctx.Int64(utils.OverrideVerkle.Name)
+		cfg.Eth.OverrideVerkle = new(big.Int).SetInt64(v)
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
