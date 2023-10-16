@@ -2007,8 +2007,10 @@ func TestTransactionForgotten(t *testing.T) {
 		},
 		func(string, []common.Hash) error { return nil },
 	)
-	go fetcher.loop()
-	// Create a TX which is 5 minutes old, and one which is recent
+	fetcher.Start()
+	defer fetcher.Stop()
+	// Create a TXuno
+	//which is 5 minutes old, and one which is recent
 	tx1 := types.NewTx(&types.LegacyTx{Nonce: 0})
 	tx1.SetTime(time.Now().Add(-maxTxUnderpricedTimeout - 1*time.Second))
 	tx2 := types.NewTx(&types.LegacyTx{Nonce: 1})
