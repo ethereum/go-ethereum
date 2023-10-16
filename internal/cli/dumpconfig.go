@@ -42,7 +42,7 @@ func (c *DumpconfigCommand) Synopsis() string {
 func (c *DumpconfigCommand) Run(args []string) int {
 	// Initialize an empty command instance to get flags
 	command := server.Command{}
-	flags := command.Flags()
+	flags := command.Flags(nil)
 
 	if err := flags.Parse(args); err != nil {
 		c.UI.Error(err.Error())

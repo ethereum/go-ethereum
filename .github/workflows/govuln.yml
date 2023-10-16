@@ -1,4 +1,4 @@
-name: Security CI
+name: Govuln
 on: [ push, pull_request ]
 
 jobs:
@@ -8,12 +8,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Running govulncheck
-        uses: Templum/govulncheck-action@v0.10.1
+        uses: Templum/govulncheck-action@v1.0.0
         continue-on-error: true
         env:
           DEBUG: "true"
         with:
-          go-version: 1.20.5
+          go-version: 1.21
           package: ./...
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-vuln: true

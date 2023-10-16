@@ -19,6 +19,7 @@ package enode
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math"
 	"net"
 	"reflect"
 	"strconv"
@@ -211,8 +212,11 @@ func (ln *LocalNode) SetFallbackUDP(port int) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpoint4.fallbackUDP = uint16(port)
-	ln.endpoint6.fallbackUDP = uint16(port)
+	if port > 0 && port <= math.MaxUint16 {
+		ln.endpoint4.fallbackUDP = uint16(port)
+		ln.endpoint6.fallbackUDP = uint16(port)
+	}
+
 	ln.updateEndpoints()
 }
 

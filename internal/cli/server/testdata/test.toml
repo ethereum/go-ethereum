@@ -1,25 +1,25 @@
+identity = ""
 datadir = "./data"
-snapshot = false
+verbosity = 3
+"rpc.batchlimit" = 0
+snapshot = true
+"bor.logs" = false
 
 ["eth.requiredblocks"]
 "31000000" = "0x2087b9e2b353209c2c21e370c82daa12278efd0fe5f0febe6c29035352cf050e"
 "32000000" = "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68"
 
-[p2p]
-maxpeers = 30
-
-[txpool]
-locals = []
-lifetime = "1s"
-
 [miner]
-mine = true
-gaslimit = 30000000
-gasprice = "1000000000"
+  gasprice = "30000000000"
+  recommit = "20s"
+
+[jsonrpc]
+  evmtimeout = "5s"
+  txfeecap = 6.0
+  [jsonrpc.http]
+    api = ["eth", "bor"]
+  [jsonrpc.ws]
+    api = [""]
 
 [gpo]
-ignoreprice = "4"
-
-[cache]
-cache = 1024
-rejournal = "1s"
+  maxprice = "5000000000000"

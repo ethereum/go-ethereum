@@ -65,9 +65,12 @@ test-txpool-race:
 
 test-race:
 	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
+	
+gocovmerge-deps:
+	$(GOBUILD) -o $(GOBIN)/gocovmerge github.com/wadey/gocovmerge
 
 test-integration:
-	$(GOTEST) --timeout 60m -tags integration $(TESTE2E)
+	$(GOTEST) --timeout 60m -cover -coverprofile=cover.out -covermode=atomic -tags integration $(TESTE2E)
 
 escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
