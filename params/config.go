@@ -36,8 +36,6 @@ var (
 	KilnGenesisHash       = common.HexToHash("0x51c7fe41be669f69c45c33a56982cbde405313342d9e2b00d7c91a7b284dd4f8")
 )
 
-func newUint64(val uint64) *uint64 { return &val }
-
 var (
 	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
 
@@ -1085,35 +1083,6 @@ func configBlockEqual(x, y *big.Int) bool {
 	return x.Cmp(y) == 0
 }
 
-// isForkTimestampIncompatible returns true if a fork scheduled at timestamp s1
-// cannot be rescheduled to timestamp s2 because head is already past the fork.
-func isForkTimestampIncompatible(s1, s2 *uint64, head uint64) bool {
-	return (isTimestampForked(s1, head) || isTimestampForked(s2, head)) && !configTimestampEqual(s1, s2)
-}
-
-// isTimestampForked returns whether a fork scheduled at timestamp s is active
-// at the given head timestamp. Whilst this method is the same as isBlockForked,
-// they are explicitly separate for clearer reading.
-func isTimestampForked(s *uint64, head uint64) bool {
-	if s == nil {
-		return false
-	}
-
-	return *s <= head
-}
-
-func configTimestampEqual(x, y *uint64) bool {
-	if x == nil {
-		return y == nil
-	}
-
-	if y == nil {
-		return x == nil
-	}
-
-	return *x == *y
-}
-
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a
 // ChainConfig that would alter the past.
 type ConfigCompatError struct {
@@ -1152,32 +1121,6 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 	}
 	if rew != nil && rew.Sign() > 0 {
 		err.RewindToBlock = rew.Uint64() - 1
-	}
-
-	return err
-}
-
-func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
-	var rew *uint64
-
-	switch {
-	case storedtime == nil:
-		rew = newtime
-	case newtime == nil || *storedtime < *newtime:
-		rew = storedtime
-	default:
-		rew = newtime
-	}
-
-	err := &ConfigCompatError{
-		What:         what,
-		StoredTime:   storedtime,
-		NewTime:      newtime,
-		RewindToTime: 0,
-	}
-
-	if rew != nil {
-		err.RewindToTime = *rew - 1
 	}
 
 	return err
