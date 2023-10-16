@@ -58,7 +58,7 @@ var mumbaiTestnet = &Chain{
 				StateReceiverContract: "0x0000000000000000000000000000000000001001",
 				BurntContract: map[string]string{
 					"22640000": "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38",
-					"41824608": "",
+					"41824608": "0x617b94CCCC2511808A3C9478ebb96f455CF167aA",
 				},
 				BlockAlloc: map[string]interface{}{
 					// write as interface since that is how it is decoded in genesis
