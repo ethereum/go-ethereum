@@ -185,11 +185,6 @@ var (
 		utils.GRPCPortFlag,
 	}
 
-	metroFlags = []cli.Flag{
-		utils.MetroGRPCHostFlag,
-		utils.MetroGRPCPortFlag,
-	}
-
 	metricsFlags = []cli.Flag{
 		utils.MetricsEnabledFlag,
 		utils.MetricsEnabledExpensiveFlag,
@@ -253,7 +248,6 @@ func init() {
 	app.Flags = flags.Merge(
 		nodeFlags,
 		rpcFlags,
-		metroFlags,
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,

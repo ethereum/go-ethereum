@@ -811,20 +811,6 @@ var (
 		Category: flags.APICategory,
 	}
 
-	// Metro grpc address and port overrides
-	MetroGRPCHostFlag = &cli.StringFlag{
-		Name:     "metro.addr",
-		Usage:    "Metro gRPC server listening interface",
-		Value:    ethconfig.Defaults.MetroGRPCHost,
-		Category: flags.APICategory,
-	}
-	MetroGRPCPortFlag = &cli.IntFlag{
-		Name:     "metro.port",
-		Usage:    "Metro gRPC server listening port",
-		Value:    ethconfig.Defaults.MetroGRPCPort,
-		Category: flags.APICategory,
-	}
-
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
 		Name:     "maxpeers",
@@ -1903,14 +1889,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
-	}
-
-	// metro
-	if ctx.IsSet(MetroGRPCHostFlag.Name) {
-		cfg.MetroGRPCHost = ctx.String(MetroGRPCHostFlag.Name)
-	}
-	if ctx.IsSet(MetroGRPCPortFlag.Name) {
-		cfg.MetroGRPCPort = ctx.Int(MetroGRPCPortFlag.Name)
 	}
 
 	// Override any default configs for hard coded networks.
