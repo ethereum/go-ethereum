@@ -95,7 +95,7 @@ type receiptRLP struct {
 }
 
 // storedReceiptRLP is the storage encoding of a receipt.
-type storedReceiptRLP struct {
+type StoredReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Logs              []*Log
@@ -282,7 +282,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	var stored storedReceiptRLP
+	var stored StoredReceiptRLP
 	if err := s.Decode(&stored); err != nil {
 		return err
 	}
