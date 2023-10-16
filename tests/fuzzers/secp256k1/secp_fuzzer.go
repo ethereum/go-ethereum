@@ -23,12 +23,12 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	fuzz "github.com/google/gofuzz"
+	gofuzz "github.com/google/gofuzz"
 )
 
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	var (
-		fuzzer = fuzz.NewFromGoFuzz(input)
+		fuzzer = gofuzz.NewFromGoFuzz(input)
 		curveA = secp256k1.S256()
 		curveB = btcec.S256()
 		dataP1 []byte

@@ -1,5 +1,5 @@
-#/bin/bash -eu
-# Copyright 2020 Google Inc.
+#!/bin/bash -eu
+# Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,77 +15,44 @@
 #
 ################################################################################
 
-# This file is for integration with Google OSS-Fuzz.
-# The following ENV variables are available when executing on OSS-fuzz:
-#
-# /out/         $OUT    Directory to store build artifacts (fuzz targets, dictionaries, options files, seed corpus archives).
-# /src/         $SRC    Directory to checkout source files.
-# /work/        $WORK   Directory to store intermediate files.
-#
-# $CC, $CXX, $CCC       The C and C++ compiler binaries.
-# $CFLAGS, $CXXFLAGS    C and C++ compiler flags.
-# $LIB_FUZZING_ENGINE   C++ compiler argument to link fuzz target against the prebuilt engine library (e.g. libFuzzer).
+function build_native_go_fuzzer() {
+	fuzzer=$1
+	function=$2
+	path=$3
+	tags="-tags gofuzz"
 
-# This sets the -coverpgk for the coverage report when the corpus is executed through go test
-coverpkg="github.com/ethereum/go-ethereum/..."
+	if [[ $SANITIZER == *coverage* ]]; then
+		current_dir=$(pwd)
+		mkdir $OUT/rawfuzzers || true
+		cd $abs_file_dir
+		go test $tags -c -run $fuzzer -o $OUT/$fuzzer -cover
+		cp "${fuzzer_filename}" "${OUT}/rawfuzzers/${fuzzer}"
 
-function coverbuild {
-  path=$1
-  function=$2
-  fuzzer=$3
-  tags=""
+		fuzzed_repo=$(go list $tags -f {{.Module}} "$path")
+  		abspath_repo=`go list -m $tags -f {{.Dir}} $fuzzed_repo || go list $tags -f {{.Dir}} $fuzzed_repo`
+  		# give equivalence to absolute paths in another file, as go test -cover uses golangish pkg.Dir
+  		echo "s=$fuzzed_repo"="$abspath_repo"= > $OUT/$fuzzer.gocovpath
 
-  if [[ $#  -eq 4 ]]; then
-    tags="-tags $4"
-  fi
-  cd $path
-  fuzzed_package=`pwd | rev | cut -d'/' -f 1 | rev`
-  cp $GOPATH/ossfuzz_coverage_runner.go ./"${function,,}"_test.go
-  sed -i -e 's/FuzzFunction/'$function'/' ./"${function,,}"_test.go
-  sed -i -e 's/mypackagebeingfuzzed/'$fuzzed_package'/' ./"${function,,}"_test.go
-  sed -i -e 's/TestFuzzCorpus/Test'$function'Corpus/' ./"${function,,}"_test.go
-
-cat << DOG > $OUT/$fuzzer
-#/bin/sh
-
-  cd $OUT/$path
-  go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg
-
-DOG
-
-  chmod +x $OUT/$fuzzer
-  #echo "Built script $OUT/$fuzzer"
-  #cat $OUT/$fuzzer
-  cd -
+		cd $current_dir
+	else
+		go-118-fuzz-build $tags -o $fuzzer.a -func $function $path
+		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
+	fi
 }
 
-function compile_fuzzer {
-  # Inputs:
-  # $1: The package to fuzz, within go-ethereum
-  # $2: The name of the fuzzing function
-  # $3: The name to give to the final fuzzing-binary
-
+function compile_fuzzer() {
   path=$GOPATH/src/github.com/ethereum/go-ethereum/$1
-  func=$2
+  function=$2
   fuzzer=$3
 
   echo "Building $fuzzer"
 
-  # Do a coverage-build or a regular build
-  if [[ $SANITIZER = *coverage* ]]; then
-    coverbuild $path $func $fuzzer $coverpkg
-  else
-    (cd $path && \
-        go-fuzz -func $func -o $WORK/$fuzzer.a . && \
-        $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $WORK/$fuzzer.a -o $OUT/$fuzzer)
-  fi
-
-  ## Check if there exists a seed corpus file
-  corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
-  if [ -f $corpusfile ]
+  # Test if file contains a line with "func $function" and "testing.F".
+  if [ $(grep -r "func $function" $path | grep "testing.F" | wc -l) -eq 1 ]
   then
-    cp $corpusfile $OUT/
-    echo "Found seed corpus: $corpusfile"
+    build_native_go_fuzzer $fuzzer $function $path
+  else
+    echo "Could not find the function: func ${function}(f *testing.F)"
   fi
 }
 
@@ -95,7 +62,7 @@ compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
 compile_fuzzer tests/fuzzers/runtime  Fuzz      fuzzVmRuntime
 compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
-compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
+compile_fuzzer tests/fuzzers/txfetcher  FuzzFetcher fuzzTxfetcher
 compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie

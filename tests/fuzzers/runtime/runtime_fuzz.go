@@ -24,7 +24,7 @@ import (
 //
 // This returns 1 for valid parse:able/runnable code, 0
 // for invalid opcode.
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	_, _, err := runtime.Execute(input, input, &runtime.Config{
 		GasLimit: 12000000,
 	})

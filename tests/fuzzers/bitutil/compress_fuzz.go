@@ -24,7 +24,7 @@ import (
 
 // Fuzz implements a go-fuzz fuzzer method to test various encoding method
 // invocations.
-func Fuzz(data []byte) int {
+func FuzzBitutil(data []byte) int {
 	if len(data) == 0 {
 		return 0
 	}

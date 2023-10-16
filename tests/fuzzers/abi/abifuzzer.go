@@ -153,7 +153,7 @@ func runFuzzer(input []byte) int {
 	return 0
 }
 
-func Fuzz(input []byte) int {
+func FuzzAbi(input []byte) int {
 	return runFuzzer(input)
 }
 

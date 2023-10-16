@@ -41,3 +41,9 @@ func TestGenerateCorpus(t *testing.T) {
 		}
 	*/
 }
+
+func Fuzz(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		FuzzAbi(data)
+	})
+}
