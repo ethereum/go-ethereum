@@ -676,8 +676,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		keyLengths   = make([]int, len(storageKeys))
 		storageProof = make([]StorageResult, len(storageKeys))
 
-		storageTrie state.Trie
-		storageHash = types.EmptyRootHash
+		storageRoot = types.EmptyRootHash
 		codeHash    = types.EmptyCodeHash
 	)
 	// Deserialize all keys. This prevents state access on invalid input.
@@ -692,45 +691,40 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	if state == nil || err != nil {
 		return nil, err
 	}
-	if storageRoot := state.GetStorageRoot(address); storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
+	codeHash = state.GetCodeHash(address)
+	storageRoot = state.GetStorageRoot(address)
+
+	if len(keys) > 0 && storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) { // Create storage proof
 		id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-		tr, err := trie.NewStateTrie(id, state.Database().TrieDB())
+		storageTrie, err := trie.NewStateTrie(id, state.Database().TrieDB())
 		if err != nil {
 			return nil, err
 		}
-		storageTrie = tr
-	}
-	// If we have a storageTrie, the account exists and we must update
-	// the storage root hash and the code hash.
-	if storageTrie != nil {
-		storageHash = storageTrie.Hash()
-		codeHash = state.GetCodeHash(address)
-	}
-	// Create the proofs for the storageKeys.
-	for i, key := range keys {
-		// Output key encoding is a bit special: if the input was a 32-byte hash, it is
-		// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
-		// JSON-RPC spec for getProof. This behavior exists to preserve backwards
-		// compatibility with older client versions.
-		var outputKey string
-		if keyLengths[i] != 32 {
-			outputKey = hexutil.EncodeBig(key.Big())
-		} else {
-			outputKey = hexutil.Encode(key[:])
-		}
+		// Create the proofs for the storageKeys.
+		for i, key := range keys {
+			// Output key encoding is a bit special: if the input was a 32-byte hash, it is
+			// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
+			// JSON-RPC spec for getProof. This behavior exists to preserve backwards
+			// compatibility with older client versions.
+			var outputKey string
+			if keyLengths[i] != 32 {
+				outputKey = hexutil.EncodeBig(key.Big())
+			} else {
+				outputKey = hexutil.Encode(key[:])
+			}
 
-		if storageTrie == nil {
-			storageProof[i] = StorageResult{outputKey, &hexutil.Big{}, []string{}}
-			continue
+			if storageTrie == nil {
+				storageProof[i] = StorageResult{outputKey, &hexutil.Big{}, []string{}}
+				continue
+			}
+			var proof proofList
+			if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
+				return nil, err
+			}
+			value := (*hexutil.Big)(state.GetState(address, key).Big())
+			storageProof[i] = StorageResult{outputKey, value, proof}
 		}
-		var proof proofList
-		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
-			return nil, err
-		}
-		value := (*hexutil.Big)(state.GetState(address, key).Big())
-		storageProof[i] = StorageResult{outputKey, value, proof}
 	}
-
 	// Create the accountProof.
 	tr, err := trie.NewStateTrie(trie.StateTrieID(header.Root), state.Database().TrieDB())
 	if err != nil {
@@ -746,7 +740,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		Balance:      (*hexutil.Big)(state.GetBalance(address)),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
-		StorageHash:  storageHash,
+		StorageHash:  storageRoot,
 		StorageProof: storageProof,
 	}, state.Error()
 }
