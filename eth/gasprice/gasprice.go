@@ -141,7 +141,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	}
 
 	// Check gas price min.
-	minGasPrice := common.MinGasPrice
+	minGasPrice := common.GetMinGasPrice(head.Number)
 	if price.Cmp(minGasPrice) < 0 {
 		price = new(big.Int).Set(minGasPrice)
 	}

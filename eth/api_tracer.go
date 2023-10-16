@@ -706,10 +706,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		}
 
 		if tokenFeeUsed {
-			fee := new(big.Int).SetUint64(gas)
-			if block.Header().Number.Cmp(common.TIPTRC21Fee) > 0 {
-				fee = fee.Mul(fee, common.TRC21GasPrice)
-			}
+			fee := common.GetGasFee(block.Header().Number.Uint64(), gas)
 			feeCapacity[*tx.To()] = new(big.Int).Sub(feeCapacity[*tx.To()], fee)
 			balanceUpdated[*tx.To()] = feeCapacity[*tx.To()]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)

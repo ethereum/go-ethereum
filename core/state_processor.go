@@ -120,10 +120,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		if tokenFeeUsed {
-			fee := new(big.Int).SetUint64(gas)
-			if block.Header().Number.Cmp(common.TIPTRC21Fee) > 0 {
-				fee = fee.Mul(fee, common.TRC21GasPrice)
-			}
+			fee := common.GetGasFee(block.Header().Number.Uint64(), gas)
 			balanceFee[*tx.To()] = new(big.Int).Sub(balanceFee[*tx.To()], fee)
 			balanceUpdated[*tx.To()] = balanceFee[*tx.To()]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
@@ -201,10 +198,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 		receipts[i] = receipt
 		allLogs = append(allLogs, receipt.Logs...)
 		if tokenFeeUsed {
-			fee := new(big.Int).SetUint64(gas)
-			if block.Header().Number.Cmp(common.TIPTRC21Fee) > 0 {
-				fee = fee.Mul(fee, common.TRC21GasPrice)
-			}
+			fee := common.GetGasFee(block.Header().Number.Uint64(), gas)
 			balanceFee[*tx.To()] = new(big.Int).Sub(balanceFee[*tx.To()], fee)
 			balanceUpdated[*tx.To()] = balanceFee[*tx.To()]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)

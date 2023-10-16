@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"math/big"
+	"time"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/contracts/trc21issuer"
 	"github.com/XinFinOrg/XDPoSChain/contracts/trc21issuer/simulation"
 	"github.com/XinFinOrg/XDPoSChain/ethclient"
-	"log"
-	"math/big"
-	"time"
 )
 
 var (
@@ -48,11 +49,10 @@ func airDropTokenToAccountNoXDC() {
 	if err != nil {
 		log.Fatal("can't transaction's receipt ", err, "hash", tx.Hash().Hex())
 	}
-	fee := big.NewInt(0).SetUint64(hexutil.MustDecodeUint64(receipt["gasUsed"].(string)))
-	if hexutil.MustDecodeUint64(receipt["blockNumber"].(string)) > common.TIPTRC21Fee.Uint64() {
-		fee = fee.Mul(fee, common.TRC21GasPrice)
-	}
-	fmt.Println("fee", fee.Uint64(), "number", hexutil.MustDecodeUint64(receipt["blockNumber"].(string)))
+	gasUsed := hexutil.MustDecodeUint64(receipt["gasUsed"].(string))
+	blockNumber := hexutil.MustDecodeUint64(receipt["blockNumber"].(string))
+	fee := common.GetGasFee(blockNumber, gasUsed)
+	fmt.Println("fee", fee.Uint64(), "number", blockNumber)
 	remainFee = big.NewInt(0).Sub(remainFee, fee)
 	//check balance fee
 	balanceIssuerFee, err := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
@@ -111,11 +111,10 @@ func testTransferTRC21TokenWithAccountNoXDC() {
 	if err != nil {
 		log.Fatal("can't transaction's receipt ", err, "hash", tx.Hash().Hex())
 	}
-	fee := big.NewInt(0).SetUint64(hexutil.MustDecodeUint64(receipt["gasUsed"].(string)))
-	if hexutil.MustDecodeUint64(receipt["blockNumber"].(string)) > common.TIPTRC21Fee.Uint64() {
-		fee = fee.Mul(fee, common.TRC21GasPrice)
-	}
-	fmt.Println("fee", fee.Uint64(), "number", hexutil.MustDecodeUint64(receipt["blockNumber"].(string)))
+	gasUsed := hexutil.MustDecodeUint64(receipt["gasUsed"].(string))
+	blockNumber := hexutil.MustDecodeUint64(receipt["blockNumber"].(string))
+	fee := common.GetGasFee(blockNumber, gasUsed)
+	fmt.Println("fee", fee.Uint64(), "number", blockNumber)
 	remainFee = big.NewInt(0).Sub(remainFee, fee)
 	//check balance fee
 	balanceIssuerFee, err := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
@@ -178,11 +177,10 @@ func testTransferTrc21Fail() {
 	if err != nil {
 		log.Fatal("can't transaction's receipt ", err, "hash", tx.Hash().Hex())
 	}
-	fee := big.NewInt(0).SetUint64(hexutil.MustDecodeUint64(receipt["gasUsed"].(string)))
-	if hexutil.MustDecodeUint64(receipt["blockNumber"].(string)) > common.TIPTRC21Fee.Uint64() {
-		fee = fee.Mul(fee, common.TRC21GasPrice)
-	}
-	fmt.Println("fee", fee.Uint64(), "number", hexutil.MustDecodeUint64(receipt["blockNumber"].(string)))
+	gasUsed := hexutil.MustDecodeUint64(receipt["gasUsed"].(string))
+	blockNumber := hexutil.MustDecodeUint64(receipt["blockNumber"].(string))
+	fee := common.GetGasFee(blockNumber, gasUsed)
+	fmt.Println("fee", fee.Uint64(), "number", blockNumber)
 	remainFee = big.NewInt(0).Sub(remainFee, fee)
 	//check balance fee
 	balanceIssuerFee, err = trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
