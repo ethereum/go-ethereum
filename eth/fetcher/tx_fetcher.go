@@ -593,8 +593,9 @@ func (f *TxFetcher) loop() {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
-								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
 								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
 									// wiggle-room where we only warn, but don't drop.
@@ -618,8 +619,9 @@ func (f *TxFetcher) loop() {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
-								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
 								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
 									// wiggle-room where we only warn, but don't drop.
