@@ -964,7 +964,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (boo
 		nodes = trienode.NewNodeSet(addrHash)
 		slots = make(map[common.Hash][]byte)
 	)
-	stack := trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
+	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
 		size += common.StorageSize(len(path))
 	})

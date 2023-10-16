@@ -991,13 +991,14 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number     *hexutil.Big
-	Difficulty *hexutil.Big
-	Time       *hexutil.Uint64
-	GasLimit   *hexutil.Uint64
-	Coinbase   *common.Address
-	Random     *common.Hash
-	BaseFee    *hexutil.Big
+	Number      *hexutil.Big
+	Difficulty  *hexutil.Big
+	Time        *hexutil.Uint64
+	GasLimit    *hexutil.Uint64
+	Coinbase    *common.Address
+	Random      *common.Hash
+	BaseFee     *hexutil.Big
+	BlobBaseFee *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1025,6 +1026,9 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	}
+	if diff.BlobBaseFee != nil {
+		blockCtx.BlobBaseFee = diff.BlobBaseFee.ToInt()
 	}
 }
 
@@ -2191,20 +2195,23 @@ func (api *DebugAPI) PrintBlock(ctx context.Context, number uint64) (string, err
 
 // ChaindbProperty returns leveldb properties of the key-value database.
 func (api *DebugAPI) ChaindbProperty(property string) (string, error) {
-	if property == "" {
-		property = "leveldb.stats"
-	} else if !strings.HasPrefix(property, "leveldb.") {
-		property = "leveldb." + property
-	}
 	return api.b.ChainDb().Stat(property)
 }
 
 // ChaindbCompact flattens the entire key-value database into a single level,
 // removing all unused slots and merging all keys.
 func (api *DebugAPI) ChaindbCompact() error {
-	for b := byte(0); b < 255; b++ {
-		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
+	cstart := time.Now()
+	for b := 0; b <= 255; b++ {
+		var (
+			start = []byte{byte(b)}
+			end   = []byte{byte(b + 1)}
+		)
+		if b == 255 {
+			end = nil
+		}
+		log.Info("Compacting database", "range", fmt.Sprintf("%#X-%#X", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
+		if err := api.b.ChainDb().Compact(start, end); err != nil {
 			log.Error("Database compaction failed", "err", err)
 			return err
 		}

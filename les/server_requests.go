@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // serverBackend defines the backend functions needed for serving LES requests
@@ -378,7 +379,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			err       error
 		)
 		bc := backend.BlockChain()
-		nodes := light.NewNodeSet()
+		nodes := trienode.NewProofSet()
 
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
@@ -444,7 +445,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				break
 			}
 		}
-		return p.replyProofsV2(r.ReqID, nodes.NodeList())
+		return p.replyProofsV2(r.ReqID, nodes.List())
 	}, r.ReqID, uint64(len(r.Reqs)), nil
 }
 
@@ -463,7 +464,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			auxData  [][]byte
 		)
 		bc := backend.BlockChain()
-		nodes := light.NewNodeSet()
+		nodes := trienode.NewProofSet()
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -498,7 +499,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 				break
 			}
 		}
-		return p.replyHelperTrieProofs(r.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
+		return p.replyHelperTrieProofs(r.ReqID, HelperTrieResps{Proofs: nodes.List(), AuxData: auxData})
 	}, r.ReqID, uint64(len(r.Reqs)), nil
 }
 

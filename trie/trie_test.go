@@ -614,7 +614,9 @@ func benchGet(b *testing.B) {
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
+		v := make([]byte, 32)
+		binary.LittleEndian.PutUint64(v, uint64(i))
+		trie.MustUpdate(k, v)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
 
@@ -630,8 +632,10 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	k := make([]byte, 32)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
+		v := make([]byte, 32)
 		e.PutUint64(k, uint64(i))
-		trie.MustUpdate(k, k)
+		e.PutUint64(v, uint64(i))
+		trie.MustUpdate(k, v)
 	}
 	return trie
 }
@@ -908,8 +912,8 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		trie := NewEmpty(db)
 		// Another sponge is used for the stacktrie commits
 		stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
-		stTrie := NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(stackTrieSponge, owner, path, hash, blob, db.Scheme())
+		stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 		})
 		// Fill the trie with elements
 		for i := 0; i < count; i++ {
@@ -967,8 +971,8 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie := NewEmpty(db)
 	// Another sponge is used for the stacktrie commits
 	stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
-	stTrie := NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-		rawdb.WriteTrieNode(stackTrieSponge, owner, path, hash, blob, db.Scheme())
+	stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+		rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 	})
 	// Add a single small-element to the trie(s)
 	key := make([]byte, 5)

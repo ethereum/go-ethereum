@@ -199,7 +199,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 func (c *SimulatedBeacon) loopOnDemand() {
 	var (
 		newTxs = make(chan core.NewTxsEvent)
-		sub    = c.eth.TxPool().SubscribeNewTxsEvent(newTxs)
+		sub    = c.eth.TxPool().SubscribeTransactions(newTxs, true)
 	)
 	defer sub.Unsubscribe()
 

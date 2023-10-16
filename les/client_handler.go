@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server
@@ -236,7 +237,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
 			ReqID, BV uint64
-			Data      light.NodeList
+			Data      trienode.ProofList
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)

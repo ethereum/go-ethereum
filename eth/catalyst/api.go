@@ -513,7 +513,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
 	if err != nil {
 		log.Warn("Invalid NewPayload params", "params", params, "error", err)
-		return engine.PayloadStatusV1{Status: engine.INVALID}, nil
+		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadLock.Lock()
@@ -560,7 +560,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
-	// Another cornercase: if the node is in snap sync mode, but the CL client
+	// Another corner case: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
@@ -694,20 +694,21 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	}
 }
 
-// invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
-// if no latestValid block was provided.
+// invalid returns a response "INVALID" with the latest valid hash supplied by latest.
 func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.PayloadStatusV1 {
-	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
+	var currentHash *common.Hash
 	if latestValid != nil {
-		// Set latest valid hash to 0x0 if parent is PoW block
-		currentHash = common.Hash{}
-		if latestValid.Difficulty.BitLen() == 0 {
+		if latestValid.Difficulty.BitLen() != 0 {
+			// Set latest valid hash to 0x0 if parent is PoW block
+			currentHash = &common.Hash{}
+		} else {
 			// Otherwise set latest valid hash to parent hash
-			currentHash = latestValid.Hash()
+			h := latestValid.Hash()
+			currentHash = &h
 		}
 	}
 	errorMsg := err.Error()
-	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
+	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: currentHash, ValidationError: &errorMsg}
 }
 
 // heartbeat loops indefinitely, and checks if there have been beacon client updates
@@ -776,7 +777,7 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBodyV1 {
-	var bodies = make([]*engine.ExecutionPayloadBodyV1, len(hashes))
+	bodies := make([]*engine.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		bodies[i] = getBody(block)

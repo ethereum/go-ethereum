@@ -286,11 +286,6 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	}
 }
 
-// Synchronising returns whether the downloader is currently retrieving blocks.
-func (d *Downloader) Synchronising() bool {
-	return d.synchronising.Load()
-}
-
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
@@ -307,11 +302,6 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 		return err
 	}
 	return nil
-}
-
-// RegisterLightPeer injects a light client peer, wrapping it so it appears as a regular peer.
-func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) error {
-	return d.RegisterPeer(id, version, &lightPeerWrapper{peer})
 }
 
 // UnregisterPeer remove a peer from the known list, preventing any action from
@@ -403,7 +393,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 		// subsequent state reads, explicitly disable the trie database and state
 		// syncer is responsible to address and correct any state missing.
 		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
-			d.blockchain.TrieDB().Reset(types.EmptyRootHash)
+			if err := d.blockchain.TrieDB().Disable(); err != nil {
+				return err
+			}
 		}
 		// Snap sync uses the snapshot namespace to store potentially flaky data until
 		// sync completely heals and finishes. Pause snapshot maintenance in the mean-

@@ -198,12 +198,11 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 			{"000003", "XXXXXXXXXXXXXXXXXXXXXXXXXXXX", "962c0fffdeef7612a4f7bff1950d67e3e81c878e48b9ae45b3b374253b050bd8"},
 		},
 	}
-	st := NewStackTrie(nil)
 	for i, test := range tests {
 		// The StackTrie does not allow Insert(), Hash(), Insert(), ...
 		// so we will create new trie for every sequence length of inserts.
 		for l := 1; l <= len(test); l++ {
-			st.Reset()
+			st := NewStackTrie(nil)
 			for j := 0; j < l; j++ {
 				kv := &test[j]
 				if err := st.Update(common.FromHex(kv.K), []byte(kv.V)); err != nil {
@@ -375,50 +374,5 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		if !bytes.Equal(have, want) {
 			t.Fatalf("item %d, have %#x want %#x", i, have, want)
 		}
-	}
-}
-
-// TestStacktrieSerialization tests that the stacktrie works well if we
-// serialize/unserialize it a lot
-func TestStacktrieSerialization(t *testing.T) {
-	var (
-		st       = NewStackTrie(nil)
-		nt       = NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
-		keyB     = big.NewInt(1)
-		keyDelta = big.NewInt(1)
-		vals     [][]byte
-		keys     [][]byte
-	)
-	getValue := func(i int) []byte {
-		if i%2 == 0 { // large
-			return crypto.Keccak256(big.NewInt(int64(i)).Bytes())
-		} else { //small
-			return big.NewInt(int64(i)).Bytes()
-		}
-	}
-	for i := 0; i < 10; i++ {
-		vals = append(vals, getValue(i))
-		keys = append(keys, common.BigToHash(keyB).Bytes())
-		keyB = keyB.Add(keyB, keyDelta)
-		keyDelta.Add(keyDelta, common.Big1)
-	}
-	for i, k := range keys {
-		nt.Update(k, common.CopyBytes(vals[i]))
-	}
-
-	for i, k := range keys {
-		blob, err := st.MarshalBinary()
-		if err != nil {
-			t.Fatal(err)
-		}
-		newSt, err := NewFromBinary(blob, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		st = newSt
-		st.Update(k, common.CopyBytes(vals[i]))
-	}
-	if have, want := st.Hash(), nt.Hash(); have != want {
-		t.Fatalf("have %#x want %#x", have, want)
 	}
 }
