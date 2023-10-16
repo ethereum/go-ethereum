@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,28 +25,40 @@ import (
 )
 
 var (
-	ErrCommitDisabled = errors.New("no database for committing")
-	stPool            = sync.Pool{New: func() any { return new(stNode) }}
-	_                 = types.TrieHasher((*StackTrie)(nil))
+	stPool = sync.Pool{New: func() any { return new(stNode) }}
+	_      = types.TrieHasher((*StackTrie)(nil))
 )
 
-// NodeWriteFunc is used to provide all information of a dirty node for committing
-// so that callers can flush nodes into database with desired scheme.
-type NodeWriteFunc = func(path []byte, hash common.Hash, blob []byte)
+// StackTrieOptions contains the configured options for manipulating the stackTrie.
+type StackTrieOptions struct {
+	Writer func(path []byte, hash common.Hash, blob []byte) // The function to commit the dirty nodes
+}
+
+// NewStackTrieOptions initializes an empty options for stackTrie.
+func NewStackTrieOptions() *StackTrieOptions { return &StackTrieOptions{} }
+
+// WithWriter configures trie node writer within the options.
+func (o *StackTrieOptions) WithWriter(writer func(path []byte, hash common.Hash, blob []byte)) *StackTrieOptions {
+	o.Writer = writer
+	return o
+}
 
 // StackTrie is a trie implementation that expects keys to be inserted
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
 type StackTrie struct {
-	writeFn NodeWriteFunc // function for committing nodes, can be nil
+	options *StackTrieOptions
 	root    *stNode
 	h       *hasher
 }
 
 // NewStackTrie allocates and initializes an empty trie.
-func NewStackTrie(writeFn NodeWriteFunc) *StackTrie {
+func NewStackTrie(options *StackTrieOptions) *StackTrie {
+	if options == nil {
+		options = NewStackTrieOptions()
+	}
 	return &StackTrie{
-		writeFn: writeFn,
+		options: options,
 		root:    stPool.Get().(*stNode),
 		h:       newHasher(false),
 	}
@@ -59,7 +70,9 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		panic("deletion not supported")
 	}
-	t.insert(t.root, k[:len(k)-1], value, nil)
+	k = k[:len(k)-1] // chop the termination flag
+
+	t.insert(t.root, k, value, nil)
 	return nil
 }
 
@@ -71,8 +84,9 @@ func (t *StackTrie) MustUpdate(key, value []byte) {
 	}
 }
 
+// Reset resets the stack trie object to empty state.
 func (t *StackTrie) Reset() {
-	t.writeFn = nil
+	t.options = NewStackTrieOptions()
 	t.root = stPool.Get().(*stNode)
 }
 
@@ -291,9 +305,8 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 //   - And the 'st.type' will be 'hashedNode' AGAIN
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
-func (t *StackTrie) hash(st *stNode, path []byte) {
-	// The switch below sets this to the RLP-encoding of this node.
-	var encodedNode []byte
+func (t *StackTrie) hash(st *stNode, prefix []byte) {
+	var blob []byte // RLP-encoded node blob
 
 	switch st.typ {
 	case hashedNode:
@@ -312,7 +325,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 				nodes.Children[i] = nilValueNode
 				continue
 			}
-			t.hash(child, append(path, byte(i)))
+			t.hash(child, append(prefix, byte(i)))
 
 			if len(child.val) < 32 {
 				nodes.Children[i] = rawNode(child.val)
@@ -323,11 +336,13 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 			stPool.Put(child.reset()) // Release child back to pool.
 		}
 		nodes.encode(t.h.encbuf)
-		encodedNode = t.h.encodedBytes()
+		blob = t.h.encodedBytes()
 
 	case extNode:
-		t.hash(st.children[0], append(path, st.key...))
+		// recursively hash and commit child as the first step
+		t.hash(st.children[0], append(prefix, st.key...))
 
+		// encode the extension node
 		n := shortNode{Key: hexToCompactInPlace(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
@@ -335,7 +350,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 			n.Val = hashNode(st.children[0].val)
 		}
 		n.encode(t.h.encbuf)
-		encodedNode = t.h.encodedBytes()
+		blob = t.h.encodedBytes()
 
 		stPool.Put(st.children[0].reset()) // Release child back to pool.
 		st.children[0] = nil
@@ -345,7 +360,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		n := shortNode{Key: hexToCompactInPlace(st.key), Val: valueNode(st.val)}
 
 		n.encode(t.h.encbuf)
-		encodedNode = t.h.encodedBytes()
+		blob = t.h.encodedBytes()
 
 	default:
 		panic("invalid node type")
@@ -353,60 +368,36 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	st.typ = hashedNode
 	st.key = st.key[:0]
-	if len(encodedNode) < 32 {
-		st.val = common.CopyBytes(encodedNode)
+
+	// Skip committing if the non-root node if the size is smaller than 32 bytes.
+	if len(blob) < 32 && len(prefix) > 0 {
+		st.val = common.CopyBytes(blob)
 		return
 	}
-
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
-	// input values
-	st.val = t.h.hashData(encodedNode)
-	if t.writeFn != nil {
-		t.writeFn(path, common.BytesToHash(st.val), encodedNode)
+	// input values.
+	st.val = t.h.hashData(blob)
+
+	// Commit the trie node if the writer is configured.
+	if t.options.Writer != nil {
+		t.options.Writer(prefix, common.BytesToHash(st.val), blob)
 	}
 }
 
-// Hash returns the hash of the current node.
-func (t *StackTrie) Hash() (h common.Hash) {
-	st := t.root
-	t.hash(st, nil)
-	if len(st.val) == 32 {
-		copy(h[:], st.val)
-		return h
-	}
-	// If the node's RLP isn't 32 bytes long, the node will not
-	// be hashed, and instead contain the  rlp-encoding of the
-	// node. For the top level node, we need to force the hashing.
-	t.h.sha.Reset()
-	t.h.sha.Write(st.val)
-	t.h.sha.Read(h[:])
-	return h
+// Hash will firstly hash the entire trie if it's still not hashed
+// and then commit all nodes to the associated database. Actually most
+// of the trie nodes MAY have been committed already. The main purpose
+// here is to commit the root node.
+func (t *StackTrie) Hash() common.Hash {
+	n := t.root
+	t.hash(n, nil)
+	return common.BytesToHash(n.val)
 }
 
 // Commit will firstly hash the entire trie if it's still not hashed
 // and then commit all nodes to the associated database. Actually most
 // of the trie nodes MAY have been committed already. The main purpose
 // here is to commit the root node.
-//
-// The associated database is expected, otherwise the whole commit
-// functionality should be disabled.
-func (t *StackTrie) Commit() (h common.Hash, err error) {
-	if t.writeFn == nil {
-		return common.Hash{}, ErrCommitDisabled
-	}
-	st := t.root
-	t.hash(st, nil)
-	if len(st.val) == 32 {
-		copy(h[:], st.val)
-		return h, nil
-	}
-	// If the node's RLP isn't 32 bytes long, the node will not
-	// be hashed (and committed), and instead contain the rlp-encoding of the
-	// node. For the top level node, we need to force the hashing+commit.
-	t.h.sha.Reset()
-	t.h.sha.Write(st.val)
-	t.h.sha.Read(h[:])
-
-	t.writeFn(nil, h, st.val)
-	return h, nil
+func (t *StackTrie) Commit() common.Hash {
+	return t.Hash()
 }

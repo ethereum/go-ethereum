@@ -912,9 +912,12 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		trie := NewEmpty(db)
 		// Another sponge is used for the stacktrie commits
 		stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
-		stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+
+		options := NewStackTrieOptions()
+		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 		})
+		stTrie := NewStackTrie(options)
 		// Fill the trie with elements
 		for i := 0; i < count; i++ {
 			// For the stack trie, we need to do inserts in proper order
@@ -937,10 +940,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 		db.Commit(root, false)
 		// And flush stacktrie -> disk
-		stRoot, err := stTrie.Commit()
-		if err != nil {
-			t.Fatalf("Failed to commit stack trie %v", err)
-		}
+		stRoot := stTrie.Commit()
 		if stRoot != root {
 			t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 		}
@@ -971,9 +971,12 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie := NewEmpty(db)
 	// Another sponge is used for the stacktrie commits
 	stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
-	stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+
+	options := NewStackTrieOptions()
+	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 		rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 	})
+	stTrie := NewStackTrie(options)
 	// Add a single small-element to the trie(s)
 	key := make([]byte, 5)
 	key[0] = 1
@@ -985,10 +988,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 	db.Commit(root, false)
 	// And flush stacktrie -> disk
-	stRoot, err := stTrie.Commit()
-	if err != nil {
-		t.Fatalf("Failed to commit stack trie %v", err)
-	}
+	stRoot := stTrie.Commit()
 	if stRoot != root {
 		t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 	}
