@@ -462,8 +462,8 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		chainCfg.TerminalTotalDifficulty = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
-		shanghaiTime := uint64(5)
-		chainCfg.ShanghaiTime = &shanghaiTime
+		ShanghaiBlock := big.NewInt(5)
+		chainCfg.ShanghaiBlock = ShanghaiBlock
 	}
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {

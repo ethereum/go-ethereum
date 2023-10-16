@@ -1376,8 +1376,8 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		chainConfigCopy.BerlinBlock = block
 		canon = false
 	}
-	if timestamp := override.VerkleTime; timestamp != nil {
-		chainConfigCopy.VerkleTime = timestamp
+	if timestamp := override.VerkleBlock; timestamp != nil {
+		chainConfigCopy.VerkleBlock = timestamp
 		canon = false
 	}
 
@@ -1401,18 +1401,18 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		canon = false
 	}
 
-	if timestamp := override.ShanghaiTime; timestamp != nil {
-		chainConfigCopy.ShanghaiTime = timestamp
+	if timestamp := override.ShanghaiBlock; timestamp != nil {
+		chainConfigCopy.ShanghaiBlock = timestamp
 		canon = false
 	}
 
-	if timestamp := override.CancunTime; timestamp != nil {
-		chainConfigCopy.CancunTime = timestamp
+	if timestamp := override.CancunBlock; timestamp != nil {
+		chainConfigCopy.CancunBlock = timestamp
 		canon = false
 	}
 
-	if timestamp := override.PragueTime; timestamp != nil {
-		chainConfigCopy.PragueTime = timestamp
+	if timestamp := override.PragueBlock; timestamp != nil {
+		chainConfigCopy.PragueBlock = timestamp
 		canon = false
 	}
 

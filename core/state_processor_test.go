@@ -63,8 +63,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			Ethash:                        new(params.EthashConfig),
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
-			ShanghaiTime:                  new(uint64),
-			CancunTime:                    new(uint64),
+			ShanghaiBlock:                 big.NewInt(0),
+			CancunBlock:                   big.NewInt(0),
 			Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 		}
 		signer  = types.LatestSigner(config)
@@ -378,10 +378,11 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:       parent.Time() + 10,
 		UncleHash:  types.EmptyUncleHash,
 	}
+
 	if config.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
 	}
-	if config.IsShanghai(header.Number, header.Time) {
+	if config.IsShanghai(header.Number) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
 
@@ -406,7 +407,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 
 	header.Root = common.BytesToHash(hasher.Sum(nil))
-	if config.IsCancun(header.Number, header.Time) {
+	if config.IsCancun(header.Number) {
 		var pExcess, pUsed = uint64(0), uint64(0)
 		if parent.ExcessBlobGas() != nil {
 			pExcess = *parent.ExcessBlobGas()
@@ -418,7 +419,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.BlobGasUsed = &used
 	}
 	// Assemble and return the final block for sealing
-	if config.IsShanghai(header.Number, header.Time) {
+	if config.IsShanghai(header.Number) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
 	}
 

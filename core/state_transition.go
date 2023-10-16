@@ -271,7 +271,7 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
-	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
+	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
 			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
 			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
@@ -362,7 +362,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 
-	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
+	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
 		if st.blobGasUsed() > 0 {
 			// Check that the user is paying at least the current blob fee
 			blobFee := eip4844.CalcBlobFee(*st.evm.Context.ExcessBlobGas)
@@ -441,7 +441,6 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	}
 
 	// Check whether the init code size has been exceeded.
-	// TODO marcello double check
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}

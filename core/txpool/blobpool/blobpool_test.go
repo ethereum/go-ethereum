@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -75,8 +74,8 @@ func init() {
 	testChainConfig = new(params.ChainConfig)
 	*testChainConfig = *params.TestChainConfig
 
-	testChainConfig.CancunTime = new(uint64)
-	*testChainConfig.CancunTime = uint64(time.Now().Unix())
+	testChainConfig.CancunBlock = big.NewInt(0)
+	*testChainConfig.CancunBlock = *big.NewInt(0)
 }
 
 // testBlockChain is a mock of the live chain for testing the pool.
@@ -99,8 +98,9 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	// mainnet ether existence, use that as a cap for the tests.
 	var (
 		blockNumber = new(big.Int).Add(bc.config.LondonBlock, big.NewInt(1))
-		blockTime   = *bc.config.CancunTime + 1
-		gasLimit    = uint64(30_000_000)
+		blockTime   = 1
+		// blockTime   = *bc.config.CancunBlock + 1
+		gasLimit = uint64(30_000_000)
 	)
 	lo := new(big.Int)
 	hi := new(big.Int).Mul(big.NewInt(5714), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
@@ -141,7 +141,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 
 	return &types.Header{
 		Number:        blockNumber,
-		Time:          blockTime,
+		Time:          uint64(blockTime),
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
