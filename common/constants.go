@@ -77,6 +77,7 @@ var BaseTopUp = big.NewInt(100)
 var BaseRecall = big.NewInt(100)
 var TIPTRC21Fee = big.NewInt(38383838)
 var TIPTRC21FeeTestnet = big.NewInt(38383838)
+var BlockNumberGas50x = big.NewInt(TIPTRC21Fee.Int64() + 30000000)
 var LimitTimeFinality = uint64(30) // limit in 30 block
 
 var IgnoreSignerCheckBlockArray = map[uint64]bool{
