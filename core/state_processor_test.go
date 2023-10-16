@@ -65,6 +65,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			TerminalTotalDifficultyPassed: true,
 			ShanghaiBlock:                 big.NewInt(0),
 			CancunBlock:                   big.NewInt(0),
+			PragueBlock:                   big.NewInt(0),
+			VerkleBlock:                   big.NewInt(0),
 			Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 		}
 		signer  = types.LatestSigner(config)

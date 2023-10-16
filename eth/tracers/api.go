@@ -1416,5 +1416,10 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		canon = false
 	}
 
+	if timestamp := override.VerkleBlock; timestamp != nil {
+		chainConfigCopy.VerkleBlock = timestamp
+		canon = false
+	}
+
 	return chainConfigCopy, canon
 }
