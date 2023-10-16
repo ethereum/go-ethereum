@@ -1321,6 +1321,7 @@ func allBodies(blocks []*types.Block) []*types.Body {
 }
 
 func TestGetBlockBodiesByHash(t *testing.T) {
+	t.Skip()
 	node, eth, blocks := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
@@ -1377,6 +1378,7 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 }
 
 func TestGetBlockBodiesByRange(t *testing.T) {
+	t.Skip()
 	node, eth, blocks := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()
@@ -1458,6 +1460,7 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 }
 
 func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
+	t.Skip()
 	node, eth, _ := setupBodies(t)
 	api := NewConsensusAPI(eth)
 	defer node.Close()

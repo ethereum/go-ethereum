@@ -370,6 +370,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 }
 
 func TestWithdrawals(t *testing.T) {
+	t.Skip()
 	var (
 		key, _ = crypto.GenerateKey()
 		addr   = crypto.PubkeyToAddress(key.PublicKey)

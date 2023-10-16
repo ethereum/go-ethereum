@@ -336,6 +336,7 @@ var (
 		ShanghaiBlock:                 nil,
 		CancunBlock:                   nil,
 		PragueBlock:                   nil,
+		VerkleBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
@@ -359,6 +360,9 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		ShanghaiBlock:                 big.NewInt(0),
+		CancunBlock:                   big.NewInt(0),
+		PragueBlock:                   big.NewInt(0),
+		VerkleBlock:                   big.NewInt(0),
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 		IsDevMode:                     true,
@@ -388,6 +392,7 @@ var (
 		ShanghaiBlock:                 nil,
 		CancunBlock:                   nil,
 		PragueBlock:                   nil,
+		VerkleBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
@@ -418,6 +423,7 @@ var (
 		ShanghaiBlock:                 nil,
 		CancunBlock:                   nil,
 		PragueBlock:                   nil,
+		VerkleBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -451,6 +457,7 @@ var (
 		ShanghaiBlock:                 nil,
 		CancunBlock:                   nil,
 		PragueBlock:                   nil,
+		VerkleBlock:                   nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -743,7 +750,7 @@ func (c *ChainConfig) Description() string {
 	banner += "\n"
 
 	// Create a list of forks post-merge
-	banner += "Post-Merge hard forks (timestamp based):\n"
+	banner += "Post-Merge hard forks (block based):\n"
 	if c.ShanghaiBlock != nil {
 		banner += fmt.Sprintf(" - Shanghai:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
 	}
@@ -751,7 +758,6 @@ func (c *ChainConfig) Description() string {
 	if c.CancunBlock != nil {
 		banner += fmt.Sprintf(" - Cancun:                      #%-8v\n", c.CancunBlock)
 	}
-
 	if c.PragueBlock != nil {
 		banner += fmt.Sprintf(" - Prague:                      #%-8v\n", c.PragueBlock)
 	}
