@@ -20,13 +20,13 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
-	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"golang.org/x/exp/slices"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {
@@ -302,8 +302,8 @@ func (tn *preminedTestnet) closest(n int) (nodes []*enode.Node) {
 			nodes = append(nodes, tn.node(d, i))
 		}
 	}
-	sort.Slice(nodes, func(i, j int) bool {
-		return enode.DistCmp(tn.target.id(), nodes[i].ID(), nodes[j].ID()) < 0
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return enode.DistCmp(tn.target.id(), a.ID(), b.ID())
 	})
 	return nodes[:n]
 }

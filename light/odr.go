@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -54,35 +55,35 @@ type OdrRequest interface {
 
 // TrieID identifies a state or account storage trie
 type TrieID struct {
-	BlockHash   common.Hash
-	BlockNumber uint64
-	StateRoot   common.Hash
-	Root        common.Hash
-	AccKey      []byte
+	BlockHash      common.Hash
+	BlockNumber    uint64
+	StateRoot      common.Hash
+	Root           common.Hash
+	AccountAddress []byte
 }
 
 // StateTrieID returns a TrieID for a state trie belonging to a certain block
 // header.
 func StateTrieID(header *types.Header) *TrieID {
 	return &TrieID{
-		BlockHash:   header.Hash(),
-		BlockNumber: header.Number.Uint64(),
-		StateRoot:   header.Root,
-		Root:        header.Root,
-		AccKey:      nil,
+		BlockHash:      header.Hash(),
+		BlockNumber:    header.Number.Uint64(),
+		StateRoot:      header.Root,
+		Root:           header.Root,
+		AccountAddress: nil,
 	}
 }
 
 // StorageTrieID returns a TrieID for a contract storage trie at a given account
 // of a given state trie. It also requires the root hash of the trie for
 // checking Merkle proofs.
-func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
+func StorageTrieID(state *TrieID, address common.Address, root common.Hash) *TrieID {
 	return &TrieID{
-		BlockHash:   state.BlockHash,
-		BlockNumber: state.BlockNumber,
-		StateRoot:   state.StateRoot,
-		AccKey:      addrHash[:],
-		Root:        root,
+		BlockHash:      state.BlockHash,
+		BlockNumber:    state.BlockNumber,
+		StateRoot:      state.StateRoot,
+		AccountAddress: address[:],
+		Root:           root,
 	}
 }
 
@@ -90,7 +91,7 @@ func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
 type TrieRequest struct {
 	Id    *TrieID
 	Key   []byte
-	Proof *NodeSet
+	Proof *trienode.ProofSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -143,7 +144,7 @@ type ChtRequest struct {
 	ChtRoot          common.Hash
 	Header           *types.Header
 	Td               *big.Int
-	Proof            *NodeSet
+	Proof            *trienode.ProofSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -163,7 +164,7 @@ type BloomRequest struct {
 	SectionIndexList []uint64
 	BloomTrieRoot    common.Hash
 	BloomBits        [][]byte
-	Proofs           *NodeSet
+	Proofs           *trienode.ProofSet
 }
 
 // StoreResult stores the retrieved data in local database

@@ -22,14 +22,16 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// LookupInstructionSet returns the instructionset for the fork configured by
+// LookupInstructionSet returns the instruction set for the fork configured by
 // the rules.
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
+	case rules.IsVerkle:
+		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
 	case rules.IsPrague:
-		return newShanghaiInstructionSet(), errors.New("prague-fork not defined yet")
+		return newCancunInstructionSet(), errors.New("prague-fork not defined yet")
 	case rules.IsCancun:
-		return newShanghaiInstructionSet(), errors.New("cancun-fork not defined yet")
+		return newCancunInstructionSet(), nil
 	case rules.IsShanghai:
 		return newShanghaiInstructionSet(), nil
 	case rules.IsMerge:
@@ -54,7 +56,7 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	return newFrontierInstructionSet(), nil
 }
 
-// Stack returns the mininum and maximum stack requirements.
+// Stack returns the minimum and maximum stack requirements.
 func (op *operation) Stack() (int, int) {
 	return op.minStack, op.maxStack
 }

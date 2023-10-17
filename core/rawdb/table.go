@@ -97,13 +97,13 @@ func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err e
 
 // TruncateHead is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) TruncateHead(items uint64) error {
+func (t *table) TruncateHead(items uint64) (uint64, error) {
 	return t.db.TruncateHead(items)
 }
 
 // TruncateTail is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) TruncateTail(items uint64) error {
+func (t *table) TruncateTail(items uint64) (uint64, error) {
 	return t.db.TruncateTail(items)
 }
 
@@ -219,7 +219,7 @@ func (b *tableBatch) Put(key, value []byte) error {
 	return b.batch.Put(append([]byte(b.prefix), key...), value)
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }

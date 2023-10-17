@@ -18,10 +18,14 @@ package forkid
 
 import (
 	"bytes"
+	"hash/crc32"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -36,13 +40,13 @@ func TestCreation(t *testing.T) {
 	}
 	tests := []struct {
 		config  *params.ChainConfig
-		genesis common.Hash
+		genesis *types.Block
 		cases   []testcase
 	}{
 		// Mainnet test cases
 		{
 			params.MainnetChainConfig,
-			params.MainnetGenesisHash,
+			core.DefaultGenesisBlock().ToBlock(),
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},                    // Unsynced
 				{1149999, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},              // Last Frontier block
@@ -74,34 +78,10 @@ func TestCreation(t *testing.T) {
 				{30000000, 2000000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}},          // Future Shanghai block
 			},
 		},
-		// Rinkeby test cases
-		{
-			params.RinkebyChainConfig,
-			params.RinkebyGenesisHash,
-			[]testcase{
-				{0, 0, ID{Hash: checksumToBytes(0x3b8e0691), Next: 1}},             // Unsynced, last Frontier block
-				{1, 0, ID{Hash: checksumToBytes(0x60949295), Next: 2}},             // First and last Homestead block
-				{2, 0, ID{Hash: checksumToBytes(0x8bde40dd), Next: 3}},             // First and last Tangerine block
-				{3, 0, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}},       // First Spurious block
-				{1035300, 0, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}}, // Last Spurious block
-				{1035301, 0, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // First Byzantium block
-				{3660662, 0, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // Last Byzantium block
-				{3660663, 0, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // First Constantinople block
-				{4321233, 0, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // Last Constantinople block
-				{4321234, 0, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // First Petersburg block
-				{5435344, 0, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // Last Petersburg block
-				{5435345, 0, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // First Istanbul block
-				{8290927, 0, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // Last Istanbul block
-				{8290928, 0, ID{Hash: checksumToBytes(0x6910c8bd), Next: 8897988}}, // First Berlin block
-				{8897987, 0, ID{Hash: checksumToBytes(0x6910c8bd), Next: 8897988}}, // Last Berlin block
-				{8897988, 0, ID{Hash: checksumToBytes(0x8E29F2F3), Next: 0}},       // First London block
-				{10000000, 0, ID{Hash: checksumToBytes(0x8E29F2F3), Next: 0}},      // Future London block
-			},
-		},
 		// Goerli test cases
 		{
 			params.GoerliChainConfig,
-			params.GoerliGenesisHash,
+			core.DefaultGoerliGenesisBlock().ToBlock(),
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
 				{1561650, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},             // Last Petersburg block
@@ -118,13 +98,23 @@ func TestCreation(t *testing.T) {
 		// Sepolia test cases
 		{
 			params.SepoliaChainConfig,
-			params.SepoliaGenesisHash,
+			core.DefaultSepoliaGenesisBlock().ToBlock(),
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin and first London block
 				{1735370, 0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}},             // Last London block
 				{1735371, 0, ID{Hash: checksumToBytes(0xb96cbd13), Next: 1677557088}},          // First MergeNetsplit block
 				{1735372, 1677557087, ID{Hash: checksumToBytes(0xb96cbd13), Next: 1677557088}}, // Last MergeNetsplit block
 				{1735372, 1677557088, ID{Hash: checksumToBytes(0xf7f9bc08), Next: 0}},          // First Shanghai block
+			},
+		},
+		// Holesky test cases
+		{
+			params.HoleskyChainConfig,
+			core.DefaultHoleskyGenesisBlock().ToBlock(),
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}},   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin, London, Paris block
+				{123, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}}, // First MergeNetsplit block
+				{123, 1696000704, ID{Hash: checksumToBytes(0xfd4f016b), Next: 0}}, // Last MergeNetsplit block
 			},
 		},
 	}
@@ -377,7 +367,7 @@ func TestValidation(t *testing.T) {
 		//{params.MainnetChainConfig, 20999999, 1677999999, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, ErrLocalIncompatibleOrStale},
 	}
 	for i, tt := range tests {
-		filter := newFilter(tt.config, params.MainnetGenesisHash, func() (uint64, uint64) { return tt.head, tt.time })
+		filter := newFilter(tt.config, core.DefaultGenesisBlock().ToBlock(), func() (uint64, uint64) { return tt.head, tt.time })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}
@@ -403,6 +393,58 @@ func TestEncoding(t *testing.T) {
 		}
 		if !bytes.Equal(have, tt.want) {
 			t.Errorf("test %d: RLP mismatch: have %x, want %x", i, have, tt.want)
+		}
+	}
+}
+
+// Tests that time-based forks which are active at genesis are not included in
+// forkid hash.
+func TestTimeBasedForkInGenesis(t *testing.T) {
+	var (
+		time       = uint64(1690475657)
+		genesis    = types.NewBlockWithHeader(&types.Header{Time: time})
+		forkidHash = checksumToBytes(crc32.ChecksumIEEE(genesis.Hash().Bytes()))
+		config     = func(shanghai, cancun uint64) *params.ChainConfig {
+			return &params.ChainConfig{
+				ChainID:                       big.NewInt(1337),
+				HomesteadBlock:                big.NewInt(0),
+				DAOForkBlock:                  nil,
+				DAOForkSupport:                true,
+				EIP150Block:                   big.NewInt(0),
+				EIP155Block:                   big.NewInt(0),
+				EIP158Block:                   big.NewInt(0),
+				ByzantiumBlock:                big.NewInt(0),
+				ConstantinopleBlock:           big.NewInt(0),
+				PetersburgBlock:               big.NewInt(0),
+				IstanbulBlock:                 big.NewInt(0),
+				MuirGlacierBlock:              big.NewInt(0),
+				BerlinBlock:                   big.NewInt(0),
+				LondonBlock:                   big.NewInt(0),
+				TerminalTotalDifficulty:       big.NewInt(0),
+				TerminalTotalDifficultyPassed: true,
+				MergeNetsplitBlock:            big.NewInt(0),
+				ShanghaiTime:                  &shanghai,
+				CancunTime:                    &cancun,
+				Ethash:                        new(params.EthashConfig),
+			}
+		}
+	)
+	tests := []struct {
+		config *params.ChainConfig
+		want   ID
+	}{
+		// Shanghai active before genesis, skip
+		{config(time-1, time+1), ID{Hash: forkidHash, Next: time + 1}},
+
+		// Shanghai active at genesis, skip
+		{config(time, time+1), ID{Hash: forkidHash, Next: time + 1}},
+
+		// Shanghai not active, skip
+		{config(time+1, time+2), ID{Hash: forkidHash, Next: time + 1}},
+	}
+	for _, tt := range tests {
+		if have := NewID(tt.config, genesis, 0, time); have != tt.want {
+			t.Fatalf("incorrect forkid hash: have %x, want %x", have, tt.want)
 		}
 	}
 }

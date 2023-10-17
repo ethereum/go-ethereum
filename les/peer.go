@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -899,7 +900,7 @@ func (p *clientPeer) replyReceiptsRLP(reqID uint64, receipts []rlp.RawValue) *re
 }
 
 // replyProofsV2 creates a reply with a batch of merkle proofs, corresponding to the ones requested.
-func (p *clientPeer) replyProofsV2(reqID uint64, proofs light.NodeList) *reply {
+func (p *clientPeer) replyProofsV2(reqID uint64, proofs trienode.ProofList) *reply {
 	data, _ := rlp.EncodeToBytes(proofs)
 	return &reply{p.rw, ProofsV2Msg, reqID, data}
 }
@@ -998,9 +999,6 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			recentTx -= blockSafetyMargin - txIndexRecentOffset
 		}
 	}
-	if server.config.UltraLightOnlyAnnounce {
-		recentTx = txIndexDisabled
-	}
 	if recentTx != txIndexUnlimited && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
@@ -1009,20 +1007,18 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
-		if !server.config.UltraLightOnlyAnnounce {
-			*lists = (*lists).add("serveHeaders", nil)
-			*lists = (*lists).add("serveChainSince", uint64(0))
-			*lists = (*lists).add("serveStateSince", uint64(0))
+		*lists = (*lists).add("serveHeaders", nil)
+		*lists = (*lists).add("serveChainSince", uint64(0))
+		*lists = (*lists).add("serveStateSince", uint64(0))
 
-			// If local ethereum node is running in archive mode, advertise ourselves we have
-			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
-			if server.archiveMode {
-				stateRecent = 0
-			}
-			*lists = (*lists).add("serveRecentState", stateRecent)
-			*lists = (*lists).add("txRelay", nil)
+		// If local ethereum node is running in archive mode, advertise ourselves we have
+		// all version state data. Otherwise only recent state is available.
+		stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
+		if server.archiveMode {
+			stateRecent = 0
 		}
+		*lists = (*lists).add("serveRecentState", stateRecent)
+		*lists = (*lists).add("txRelay", nil)
 		if p.version >= lpv4 {
 			*lists = (*lists).add("recentTxLookup", recentTx)
 		}

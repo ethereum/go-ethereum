@@ -32,7 +32,8 @@ func TestServerRegisterName(t *testing.T) {
 	server := NewServer()
 	service := new(testService)
 
-	if err := server.RegisterName("test", service); err != nil {
+	svcName := "test"
+	if err := server.RegisterName(svcName, service); err != nil {
 		t.Fatalf("%v", err)
 	}
 
@@ -40,12 +41,12 @@ func TestServerRegisterName(t *testing.T) {
 		t.Fatalf("Expected 2 service entries, got %d", len(server.services.services))
 	}
 
-	svc, ok := server.services.services["test"]
+	svc, ok := server.services.services[svcName]
 	if !ok {
-		t.Fatalf("Expected service calc to be registered")
+		t.Fatalf("Expected service %s to be registered", svcName)
 	}
 
-	wantCallbacks := 13
+	wantCallbacks := 14
 	if len(svc.callbacks) != wantCallbacks {
 		t.Errorf("Expected %d callbacks for service 'service', got %d", wantCallbacks, len(svc.callbacks))
 	}
@@ -70,6 +71,7 @@ func TestServer(t *testing.T) {
 
 func runTestScript(t *testing.T, file string) {
 	server := newTestServer()
+	server.SetBatchLimits(4, 100000)
 	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +151,44 @@ func TestServerShortLivedConn(t *testing.T) {
 		}
 		if !bytes.Equal(buf[:n], []byte(wantResp)) {
 			t.Fatalf("wrong response: %s", buf[:n])
+		}
+	}
+}
+
+func TestServerBatchResponseSizeLimit(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+	server.SetBatchLimits(100, 60)
+	var (
+		batch  []BatchElem
+		client = DialInProc(server)
+	)
+	for i := 0; i < 5; i++ {
+		batch = append(batch, BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal("error sending batch:", err)
+	}
+	for i := range batch {
+		// We expect the first two queries to be ok, but after that the size limit takes effect.
+		if i < 2 {
+			if batch[i].Error != nil {
+				t.Fatalf("batch elem %d has unexpected error: %v", i, batch[i].Error)
+			}
+			continue
+		}
+		// After two, we expect an error.
+		re, ok := batch[i].Error.(Error)
+		if !ok {
+			t.Fatalf("batch elem %d has wrong error: %v", i, batch[i].Error)
+		}
+		wantedCode := errcodeResponseTooLarge
+		if re.ErrorCode() != wantedCode {
+			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), wantedCode)
 		}
 	}
 }

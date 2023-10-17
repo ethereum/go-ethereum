@@ -367,13 +367,31 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		s.filler.resume()
 	}
 	defer func() {
-		if filled := s.filler.suspend(); filled != nil {
-			// If something was filled, try to delete stale sync helpers. If
-			// unsuccessful, warn the user, but not much else we can do (it's
-			// a programming error, just let users report an issue and don't
-			// choke in the meantime).
-			if err := s.cleanStales(filled); err != nil {
-				log.Error("Failed to clean stale beacon headers", "err", err)
+		// The filler needs to be suspended, but since it can block for a while
+		// when there are many blocks queued up for full-sync importing, run it
+		// on a separate goroutine and consume head messages that need instant
+		// replies.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			if filled := s.filler.suspend(); filled != nil {
+				// If something was filled, try to delete stale sync helpers. If
+				// unsuccessful, warn the user, but not much else we can do (it's
+				// a programming error, just let users report an issue and don't
+				// choke in the meantime).
+				if err := s.cleanStales(filled); err != nil {
+					log.Error("Failed to clean stale beacon headers", "err", err)
+				}
+			}
+		}()
+		// Wait for the suspend to finish, consuming head events in the meantime
+		// and dropping them on the floor.
+		for {
+			select {
+			case <-done:
+				return
+			case event := <-s.headEvents:
+				event.errc <- errors.New("beacon syncer reorging")
 			}
 		}
 	}()
@@ -405,7 +423,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
-	// Nofity any tester listening for startup events
+	// Notify any tester listening for startup events
 	if s.syncStarting != nil {
 		s.syncStarting()
 	}
@@ -630,7 +648,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 	}
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		if force {
-			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+			log.Warn("Beacon chain forked", "ancestor", number-1, "hash", parent.Hash(), "want", head.ParentHash)
 		}
 		return true
 	}
@@ -776,7 +794,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
-		headers := *res.Res.(*eth.BlockHeadersPacket)
+		headers := *res.Res.(*eth.BlockHeadersRequest)
 
 		headerReqTimer.Update(time.Since(start))
 		s.peers.rates.Update(peer.id, eth.BlockHeadersMsg, res.Time, len(headers))

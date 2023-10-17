@@ -99,24 +99,24 @@ func (msg Transactions) Code() int     { return 18 }
 func (msg Transactions) ReqID() uint64 { return 18 }
 
 // GetBlockHeaders represents a block header query.
-type GetBlockHeaders eth.GetBlockHeadersPacket66
+type GetBlockHeaders eth.GetBlockHeadersPacket
 
 func (msg GetBlockHeaders) Code() int     { return 19 }
 func (msg GetBlockHeaders) ReqID() uint64 { return msg.RequestId }
 
-type BlockHeaders eth.BlockHeadersPacket66
+type BlockHeaders eth.BlockHeadersPacket
 
 func (msg BlockHeaders) Code() int     { return 20 }
 func (msg BlockHeaders) ReqID() uint64 { return msg.RequestId }
 
 // GetBlockBodies represents a GetBlockBodies request
-type GetBlockBodies eth.GetBlockBodiesPacket66
+type GetBlockBodies eth.GetBlockBodiesPacket
 
 func (msg GetBlockBodies) Code() int     { return 21 }
 func (msg GetBlockBodies) ReqID() uint64 { return msg.RequestId }
 
 // BlockBodies is the network packet for block content distribution.
-type BlockBodies eth.BlockBodiesPacket66
+type BlockBodies eth.BlockBodiesPacket
 
 func (msg BlockBodies) Code() int     { return 22 }
 func (msg BlockBodies) ReqID() uint64 { return msg.RequestId }
@@ -128,7 +128,7 @@ func (msg NewBlock) Code() int     { return 23 }
 func (msg NewBlock) ReqID() uint64 { return 0 }
 
 // NewPooledTransactionHashes66 is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes66 eth.NewPooledTransactionHashesPacket66
+type NewPooledTransactionHashes66 eth.NewPooledTransactionHashesPacket67
 
 func (msg NewPooledTransactionHashes66) Code() int     { return 24 }
 func (msg NewPooledTransactionHashes66) ReqID() uint64 { return 0 }
@@ -139,12 +139,12 @@ type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket68
 func (msg NewPooledTransactionHashes) Code() int     { return 24 }
 func (msg NewPooledTransactionHashes) ReqID() uint64 { return 0 }
 
-type GetPooledTransactions eth.GetPooledTransactionsPacket66
+type GetPooledTransactions eth.GetPooledTransactionsPacket
 
 func (msg GetPooledTransactions) Code() int     { return 25 }
 func (msg GetPooledTransactions) ReqID() uint64 { return msg.RequestId }
 
-type PooledTransactions eth.PooledTransactionsPacket66
+type PooledTransactions eth.PooledTransactionsPacket
 
 func (msg PooledTransactions) Code() int     { return 26 }
 func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
@@ -180,25 +180,25 @@ func (c *Conn) Read() Message {
 	case (Status{}).Code():
 		msg = new(Status)
 	case (GetBlockHeaders{}).Code():
-		ethMsg := new(eth.GetBlockHeadersPacket66)
+		ethMsg := new(eth.GetBlockHeadersPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*GetBlockHeaders)(ethMsg)
 	case (BlockHeaders{}).Code():
-		ethMsg := new(eth.BlockHeadersPacket66)
+		ethMsg := new(eth.BlockHeadersPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*BlockHeaders)(ethMsg)
 	case (GetBlockBodies{}).Code():
-		ethMsg := new(eth.GetBlockBodiesPacket66)
+		ethMsg := new(eth.GetBlockBodiesPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*GetBlockBodies)(ethMsg)
 	case (BlockBodies{}).Code():
-		ethMsg := new(eth.BlockBodiesPacket66)
+		ethMsg := new(eth.BlockBodiesPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
@@ -217,13 +217,13 @@ func (c *Conn) Read() Message {
 		}
 		msg = new(NewPooledTransactionHashes66)
 	case (GetPooledTransactions{}.Code()):
-		ethMsg := new(eth.GetPooledTransactionsPacket66)
+		ethMsg := new(eth.GetPooledTransactionsPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*GetPooledTransactions)(ethMsg)
 	case (PooledTransactions{}.Code()):
-		ethMsg := new(eth.PooledTransactionsPacket66)
+		ethMsg := new(eth.PooledTransactionsPacket)
 		if err := rlp.DecodeBytes(rawData, ethMsg); err != nil {
 			return errorf("could not rlp decode message: %v", err)
 		}
