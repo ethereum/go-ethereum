@@ -154,3 +154,23 @@ func TestResubscribeWithErrorHandler(t *testing.T) {
 		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }
+
+func TestResubscribeWithCompletedSubscription(t *testing.T) {
+	t.Parallel()
+
+	innerSubDone := make(chan struct{}, 1)
+	sub := ResubscribeErr(100*time.Millisecond, func(ctx context.Context, lastErr error) (Subscription, error) {
+		return NewSubscription(func(unsubscribed <-chan struct{}) error {
+			select {
+			case <-time.After(2 * time.Second):
+				innerSubDone <- struct{}{}
+				return nil
+			case <-unsubscribed:
+				return nil
+			}
+		}), nil
+	})
+
+	<-innerSubDone
+	sub.Unsubscribe()
+}

@@ -153,14 +153,21 @@ func (s *resubscribeSub) Err() <-chan error {
 }
 
 func (s *resubscribeSub) loop() {
-	defer close(s.err)
 	var done bool
+	var unsubbed bool
+	defer func() {
+		close(s.err)
+		// Read unsub chan to avoid blocking Unsubscribe
+		if !unsubbed {
+			<-s.unsub
+		}
+	}()
 	for !done {
 		sub := s.subscribe()
 		if sub == nil {
 			break
 		}
-		done = s.waitForError(sub)
+		done, unsubbed = s.waitForError(sub)
 		sub.Unsubscribe()
 	}
 }
@@ -197,14 +204,14 @@ func (s *resubscribeSub) subscribe() Subscription {
 	}
 }
 
-func (s *resubscribeSub) waitForError(sub Subscription) bool {
+func (s *resubscribeSub) waitForError(sub Subscription) (bool, bool) {
 	defer sub.Unsubscribe()
 	select {
 	case err := <-sub.Err():
 		s.lastSubErr = err
-		return err == nil
+		return err == nil, false
 	case <-s.unsub:
-		return true
+		return true, true
 	}
 }
 
