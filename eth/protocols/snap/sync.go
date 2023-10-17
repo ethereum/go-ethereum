@@ -738,9 +738,11 @@ func (s *Syncer) loadSyncStatus() {
 						s.accountBytes += common.StorageSize(len(key) + len(value))
 					},
 				}
-				task.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, val, s.scheme)
+				options := trie.NewStackTrieOptions()
+				options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
 				})
+				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
 						subtask := subtask // closure for subtask.genBatch in the stacktrie writer callback
@@ -752,9 +754,11 @@ func (s *Syncer) loadSyncStatus() {
 							},
 						}
 						owner := accountHash // local assignment for stacktrie writer closure
-						subtask.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, val, s.scheme)
+						options := trie.NewStackTrieOptions()
+						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
 						})
+						subtask.genTrie = trie.NewStackTrie(options)
 					}
 				}
 			}
@@ -806,14 +810,16 @@ func (s *Syncer) loadSyncStatus() {
 				s.accountBytes += common.StorageSize(len(key) + len(value))
 			},
 		}
+		options := trie.NewStackTrieOptions()
+		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
+		})
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
 			Last:     last,
 			SubTasks: make(map[common.Hash][]*storageTask),
 			genBatch: batch,
-			genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-				rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, val, s.scheme)
-			}),
+			genTrie:  trie.NewStackTrie(options),
 		})
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
@@ -2006,14 +2012,16 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						},
 					}
 					owner := account // local assignment for stacktrie writer closure
+					options := trie.NewStackTrieOptions()
+					options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+						rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+					})
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
 						Last:     r.End(),
 						root:     acc.Root,
 						genBatch: batch,
-						genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-							rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
-						}),
+						genTrie:  trie.NewStackTrie(options),
 					})
 					for r.Next() {
 						batch := ethdb.HookedBatch{
@@ -2022,14 +2030,16 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
 							},
 						}
+						options := trie.NewStackTrieOptions()
+						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+							rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+						})
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
 							Last:     r.End(),
 							root:     acc.Root,
 							genBatch: batch,
-							genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-								rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
-							}),
+							genTrie:  trie.NewStackTrie(options),
 						})
 					}
 					for _, task := range tasks {
@@ -2075,9 +2085,11 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 
 		if i < len(res.hashes)-1 || res.subTask == nil {
 			// no need to make local reassignment of account: this closure does not outlive the loop
-			tr := trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-				rawdb.WriteTrieNode(batch, account, path, hash, val, s.scheme)
+			options := trie.NewStackTrieOptions()
+			options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+				rawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
 			})
+			tr := trie.NewStackTrie(options)
 			for j := 0; j < len(res.hashes[i]); j++ {
 				tr.Update(res.hashes[i][j][:], res.slots[i][j])
 			}
@@ -2099,9 +2111,8 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			if root, err := res.subTask.genTrie.Commit(); err != nil {
-				log.Error("Failed to commit stack slots", "err", err)
-			} else if root == res.subTask.root {
+			root := res.subTask.genTrie.Commit()
+			if root == res.subTask.root {
 				// If the chunk's root is an overflown but full delivery, clear the heal request
 				for i, account := range res.mainTask.res.hashes {
 					if account == res.accounts[len(res.accounts)-1] {
@@ -2317,9 +2328,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// flush after finalizing task.done. It's fine even if we crash and lose this
 	// write as it will only cause more data to be downloaded during heal.
 	if task.done {
-		if _, err := task.genTrie.Commit(); err != nil {
-			log.Error("Failed to commit stack account", "err", err)
-		}
+		task.genTrie.Commit()
 	}
 	if task.genBatch.ValueSize() > ethdb.IdealBatchSize || task.done {
 		if err := task.genBatch.Write(); err != nil {
