@@ -185,6 +185,7 @@ require (
 	github.com/bartekn/go-bip39 v0.0.0-20171116152956-a05967ea095d // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b // indirect
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
 	github.com/cbergoon/merkletree v0.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
@@ -243,6 +244,7 @@ require (
 	golang.org/x/oauth2 v0.10.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
+	gotest.tools/v3 v3.5.1 // indirect
 )
 
 require (
@@ -264,13 +266,13 @@ require (
 	google.golang.org/genproto v0.0.0-20230711160842-782d3b101e98 // indirect
 )
 
-replace github.com/cosmos/cosmos-sdk => github.com/maticnetwork/cosmos-sdk v0.37.5-0.20231005133937-b1eb1f90feb7
+replace github.com/cosmos/cosmos-sdk => github.com/maticnetwork/cosmos-sdk v0.38.4
 
-replace github.com/tendermint/tendermint => github.com/maticnetwork/tendermint v0.26.0-dev0.0.20231005133805-2bb6a831bb2e
+replace github.com/tendermint/tendermint => github.com/maticnetwork/tendermint v0.33.0
 
 replace github.com/tendermint/tm-db => github.com/tendermint/tm-db v0.2.0
 
-replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v1.0.4
+replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v1.0.6
 
 replace github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
 
