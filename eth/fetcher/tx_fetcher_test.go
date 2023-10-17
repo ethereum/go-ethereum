@@ -1993,3 +1993,38 @@ func containsHash(slice []common.Hash, hash common.Hash) bool {
 	}
 	return false
 }
+
+// Tests that a transaction is forgotten after the timeout.
+func TestTransactionForgotten(t *testing.T) {
+	fetcher := NewTxFetcher(
+		func(common.Hash) bool { return false },
+		func(txs []*types.Transaction) []error {
+			errs := make([]error, len(txs))
+			for i := 0; i < len(errs); i++ {
+				errs[i] = txpool.ErrUnderpriced
+			}
+			return errs
+		},
+		func(string, []common.Hash) error { return nil },
+		func(string) {},
+	)
+	fetcher.Start()
+	defer fetcher.Stop()
+	// Create one TX which is 5 minutes old, and one which is recent
+	tx1 := types.NewTx(&types.LegacyTx{Nonce: 0})
+	tx1.SetTime(time.Now().Add(-maxTxUnderpricedTimeout - 1*time.Second))
+	tx2 := types.NewTx(&types.LegacyTx{Nonce: 1})
+
+	// Enqueue both in the fetcher. They will be immediately tagged as underpriced
+	if err := fetcher.Enqueue("asdf", []*types.Transaction{tx1, tx2}, false); err != nil {
+		t.Fatal(err)
+	}
+	// isKnownUnderpriced should trigger removal of the first tx (no longer be known underpriced)
+	if fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Fatal("transaction should be forgotten by now")
+	}
+	// isKnownUnderpriced should not trigger removal of the second
+	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Fatal("transaction should be known underpriced")
+	}
+}
