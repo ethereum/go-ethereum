@@ -70,6 +70,10 @@ function compile_fuzzer() {
   echo "Building $fuzzer"
   cd $path
 
+  # Install build dependencies
+  go install github.com/AdamKorcz/go-118-fuzz-build@latest
+  go get github.com/AdamKorcz/go-118-fuzz-build/testing
+
   # Test if file contains a line with "func $function" and "testing.F".
   if [ $(grep -r "func $function" $path | grep "testing.F" | wc -l) -eq 1 ]
   then
