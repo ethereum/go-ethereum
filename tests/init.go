@@ -302,7 +302,7 @@ var Forks = map[string]*params.ChainConfig{
 		ArrowGlacierBlock:       big.NewInt(0),
 		MergeNetsplitBlock:      big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
-		ShanghaiTime:            u64(0),
+		ShanghaiBlock:           big.NewInt(0),
 		Bor:                     params.BorUnittestChainConfig.Bor,
 	},
 	"MergeToShanghaiAtTime15k": {
@@ -321,7 +321,7 @@ var Forks = map[string]*params.ChainConfig{
 		ArrowGlacierBlock:       big.NewInt(0),
 		MergeNetsplitBlock:      big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
-		ShanghaiTime:            u64(15_000),
+		ShanghaiBlock:           big.NewInt(0),
 		Bor:                     params.BorUnittestChainConfig.Bor,
 	},
 }

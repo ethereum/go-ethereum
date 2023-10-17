@@ -94,21 +94,10 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        &ChainConfig{ShanghaiTime: newUint64(10)},
-			new:           &ChainConfig{ShanghaiTime: newUint64(20)},
+			stored:        &ChainConfig{ShanghaiBlock: big.NewInt(30)},
+			new:           &ChainConfig{ShanghaiBlock: big.NewInt(30)},
 			headTimestamp: 9,
 			wantErr:       nil,
-		},
-		{
-			stored:        &ChainConfig{ShanghaiTime: newUint64(10)},
-			new:           &ChainConfig{ShanghaiTime: newUint64(20)},
-			headTimestamp: 25,
-			wantErr: &ConfigCompatError{
-				What:         "Shanghai fork timestamp",
-				StoredTime:   newUint64(10),
-				NewTime:      newUint64(20),
-				RewindToTime: 9,
-			},
 		},
 	}
 
@@ -124,24 +113,24 @@ func TestConfigRules(t *testing.T) {
 	t.Parallel()
 
 	c := &ChainConfig{
-		ShanghaiTime: newUint64(500),
+		ShanghaiBlock: big.NewInt(10),
 	}
 
-	var stamp uint64
+	block := new(big.Int)
 
-	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
-		t.Errorf("expected %v to not be shanghai", stamp)
+	if r := c.Rules(block, true, 0); r.IsShanghai {
+		t.Errorf("expected %v to not be shanghai", 0)
 	}
 
-	stamp = 500
+	block.SetInt64(10)
 
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
-		t.Errorf("expected %v to be shanghai", stamp)
+	if r := c.Rules(block, true, 0); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", 0)
 	}
 
-	stamp = math.MaxInt64
+	block = block.SetInt64(math.MaxInt64)
 
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
-		t.Errorf("expected %v to be shanghai", stamp)
+	if r := c.Rules(block, true, 0); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", 0)
 	}
 }

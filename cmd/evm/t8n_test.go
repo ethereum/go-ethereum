@@ -238,7 +238,6 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp.json",
 		},
-		// TODO marcello double check
 		{ // Test post-merge transition
 			base: "./testdata/24",
 			input: t8nInput{
