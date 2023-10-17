@@ -15,6 +15,39 @@
 #
 ################################################################################
 
+# This sets the -coverpgk for the coverage report when the corpus is executed through go test
+coverpkg="github.com/ethereum/go-ethereum/..."
+
+function coverbuild {
+  path=$1
+  function=$2
+  fuzzer=$3
+  tags=""
+
+  if [[ $#  -eq 4 ]]; then
+    tags="-tags $4"
+  fi
+  cd $path
+  fuzzed_package=`pwd | rev | cut -d'/' -f 1 | rev`
+  cp $GOPATH/ossfuzz_coverage_runner.go ./"${function,,}"_test.go
+  sed -i -e 's/FuzzFunction/'$function'/' ./"${function,,}"_test.go
+  sed -i -e 's/mypackagebeingfuzzed/'$fuzzed_package'/' ./"${function,,}"_test.go
+  sed -i -e 's/TestFuzzCorpus/Test'$function'Corpus/' ./"${function,,}"_test.go
+
+cat << DOG > $OUT/$fuzzer
+#/bin/sh
+
+  cd $OUT/$path
+  go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg
+
+DOG
+
+  chmod +x $OUT/$fuzzer
+  #echo "Built script $OUT/$fuzzer"
+  #cat $OUT/$fuzzer
+  cd -
+}
+
 function build_native_go_fuzzer() {
 	fuzzer=$1
 	function=$2
@@ -22,18 +55,7 @@ function build_native_go_fuzzer() {
 	tags="-tags gofuzz"
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		current_dir=$(pwd)
-		mkdir $OUT/rawfuzzers || true
-		cd $abs_file_dir
-		go test $tags -c -run $fuzzer -o $OUT/$fuzzer -cover
-		cp "${fuzzer_filename}" "${OUT}/rawfuzzers/${fuzzer}"
-
-		fuzzed_repo=$(go list $tags -f {{.Module}} "$path")
-  		abspath_repo=`go list -m $tags -f {{.Dir}} $fuzzed_repo || go list $tags -f {{.Dir}} $fuzzed_repo`
-  		# give equivalence to absolute paths in another file, as go test -cover uses golangish pkg.Dir
-  		echo "s=$fuzzed_repo"="$abspath_repo"= > $OUT/$fuzzer.gocovpath
-
-		cd $current_dir
+		coverbuild $path $func $fuzzer $coverpkg
 	else
 		go-118-fuzz-build $tags -o $fuzzer.a -func $function $path
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
@@ -53,6 +75,14 @@ function compile_fuzzer() {
     build_native_go_fuzzer $fuzzer $function $path
   else
     echo "Could not find the function: func ${function}(f *testing.F)"
+  fi
+
+  ## Check if there exists a seed corpus file
+  corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
+  if [ -f $corpusfile ]
+  then
+    cp $corpusfile $OUT/
+    echo "Found seed corpus: $corpusfile"
   fi
 }
 
