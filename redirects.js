@@ -33,7 +33,7 @@ const redirects = [
   },
   {
     source: '/docs/interface/consensus-clients',
-    destination: '/docs/getting-started/consensus-client',
+    destination: '/docs/getting-started/consensus-clients',
     permanent: true
   },
   {
