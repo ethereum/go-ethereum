@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,22 +93,26 @@ func NewStackTrie(options *StackTrieOptions) *StackTrie {
 
 // Update inserts a (key, value) pair into the stack trie.
 func (t *StackTrie) Update(key, value []byte) error {
-	k := keybytesToHex(key)
 	if len(value) == 0 {
-		panic("deletion not supported")
+		return errors.New("trying to insert empty (deletion)")
 	}
+	k := keybytesToHex(key)
 	k = k[:len(k)-1] // chop the termination flag
-
 	// track the first and last inserted entries.
 	if t.first == nil {
 		t.first = append([]byte{}, k...)
+	}
+	if bytes.Compare(t.last, k) >= 0 {
+		return errors.New("non-ascending key order")
 	}
 	if t.last == nil {
 		t.last = append([]byte{}, k...) // allocate key slice
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	t.insert(t.root, k, value, nil)
+	if err := t.insert(t.root, k, value, nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -189,7 +194,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
+func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
 	switch st.typ {
 	case branchNode: /* Branch */
 		idx := int(key[0])
@@ -208,7 +213,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		if st.children[idx] == nil {
 			st.children[idx] = newLeaf(key[1:], value)
 		} else {
-			t.insert(st.children[idx], key[1:], value, append(path, key[0]))
+			return t.insert(st.children[idx], key[1:], value, append(path, key[0]))
 		}
 
 	case extNode: /* Ext */
@@ -223,8 +228,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
-			return
+			return t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
 		}
 		// Save the original part. Depending if the break is
 		// at the extension's last byte or not, create an
@@ -282,7 +286,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		// keys differ, and 3) one leaf for the differentiated
 		// component of each key.
 		if diffidx >= len(st.key) {
-			panic("Trying to insert into existing key")
+			return errors.New("trying to insert into existing key")
 		}
 
 		// Check if the split occurs at the first nibble of the
@@ -324,11 +328,12 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		st.val = value
 
 	case hashedNode:
-		panic("trying to insert into hash")
+		return errors.New("trying to insert into hash")
 
 	default:
 		panic("invalid type")
 	}
+	return nil
 }
 
 // hash converts st into a 'hashedNode', if possible. Possible outcomes:
