@@ -153,3 +153,33 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestBlockNumberOrHash_WithNumber_StringAndUnmarshal(t *testing.T) {
+	tests := []struct {
+		name  string
+		value BlockNumberOrHash
+	}{
+		{"max", BlockNumberOrHashWithNumber(math.MaxInt64)},
+		{"pending", BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		{"latest", BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		{"earliest", BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		{"0x20", BlockNumberOrHashWithNumber(32)},
+		{"hash", BlockNumberOrHashWithHash(common.Hash{0xaa}, false)},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			bnh := test.value
+			// Wrap the string value in quotes to make it a JSON string.
+			marshalled := []byte("\"" + bnh.String() + "\"")
+			var unmarshalled BlockNumberOrHash
+			err := json.Unmarshal(marshalled, &unmarshalled)
+			if err != nil {
+				t.Fatalf("cannot unmarshal (%v): %v", string(marshalled), err)
+			}
+			if !reflect.DeepEqual(bnh, unmarshalled) {
+				t.Fatalf("wrong result: expected %v, got %v", bnh, unmarshalled)
+			}
+		})
+	}
+}
