@@ -1271,7 +1271,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	if failed {
-		if result != nil && result.Err != vm.ErrOutOfGas {
+		if result != nil && !errors.Is(result.Err, vm.ErrOutOfGas) {
 			if len(result.Revert()) > 0 {
 				return 0, newRevertError(result)
 			}
