@@ -152,7 +152,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
+func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 	switch st.typ {
 	case branchNode: /* Branch */
 		idx := int(key[0])
@@ -161,7 +161,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		for i := idx - 1; i >= 0; i-- {
 			if st.children[i] != nil {
 				if st.children[i].typ != hashedNode {
-					t.hash(st.children[i], append(prefix, byte(i)))
+					t.hash(st.children[i], append(path, byte(i)))
 				}
 				break
 			}
@@ -171,7 +171,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		if st.children[idx] == nil {
 			st.children[idx] = newLeaf(key[1:], value)
 		} else {
-			t.insert(st.children[idx], key[1:], value, append(prefix, key[0]))
+			t.insert(st.children[idx], key[1:], value, append(path, key[0]))
 		}
 
 	case extNode: /* Ext */
@@ -186,7 +186,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			t.insert(st.children[0], key[diffidx:], value, append(prefix, key[:diffidx]...))
+			t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
 			return
 		}
 		// Save the original part. Depending if the break is
@@ -199,14 +199,14 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 			// extension. The path prefix of the newly-inserted
 			// extension should also contain the different byte.
 			n = newExt(st.key[diffidx+1:], st.children[0])
-			t.hash(n, append(prefix, st.key[:diffidx+1]...))
+			t.hash(n, append(path, st.key[:diffidx+1]...))
 		} else {
 			// Break on the last byte, no need to insert
 			// an extension node: reuse the current node.
 			// The path prefix of the original part should
 			// still be same.
 			n = st.children[0]
-			t.hash(n, append(prefix, st.key...))
+			t.hash(n, append(path, st.key...))
 		}
 		var p *stNode
 		if diffidx == 0 {
@@ -271,7 +271,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 		// is hashed directly in order to free up some memory.
 		origIdx := st.key[diffidx]
 		p.children[origIdx] = newLeaf(st.key[diffidx+1:], st.val)
-		t.hash(p.children[origIdx], append(prefix, st.key[:diffidx+1]...))
+		t.hash(p.children[origIdx], append(path, st.key[:diffidx+1]...))
 
 		newIdx := key[diffidx]
 		p.children[newIdx] = newLeaf(key[diffidx+1:], value)
@@ -305,7 +305,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, prefix []byte) {
 //   - And the 'st.type' will be 'hashedNode' AGAIN
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
-func (t *StackTrie) hash(st *stNode, prefix []byte) {
+func (t *StackTrie) hash(st *stNode, path []byte) {
 	var blob []byte // RLP-encoded node blob
 
 	switch st.typ {
@@ -325,7 +325,7 @@ func (t *StackTrie) hash(st *stNode, prefix []byte) {
 				nodes.Children[i] = nilValueNode
 				continue
 			}
-			t.hash(child, append(prefix, byte(i)))
+			t.hash(child, append(path, byte(i)))
 
 			if len(child.val) < 32 {
 				nodes.Children[i] = rawNode(child.val)
@@ -340,7 +340,7 @@ func (t *StackTrie) hash(st *stNode, prefix []byte) {
 
 	case extNode:
 		// recursively hash and commit child as the first step
-		t.hash(st.children[0], append(prefix, st.key...))
+		t.hash(st.children[0], append(path, st.key...))
 
 		// encode the extension node
 		n := shortNode{Key: hexToCompactInPlace(st.key)}
@@ -369,8 +369,8 @@ func (t *StackTrie) hash(st *stNode, prefix []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
-	// Skip committing if the non-root node if the size is smaller than 32 bytes.
-	if len(blob) < 32 && len(prefix) > 0 {
+	// Skip committing the non-root node if the size is smaller than 32 bytes.
+	if len(blob) < 32 && len(path) > 0 {
 		st.val = common.CopyBytes(blob)
 		return
 	}
@@ -380,24 +380,26 @@ func (t *StackTrie) hash(st *stNode, prefix []byte) {
 
 	// Commit the trie node if the writer is configured.
 	if t.options.Writer != nil {
-		t.options.Writer(prefix, common.BytesToHash(st.val), blob)
+		t.options.Writer(path, common.BytesToHash(st.val), blob)
 	}
 }
 
-// Hash will firstly hash the entire trie if it's still not hashed
-// and then commit all nodes to the associated database. Actually most
-// of the trie nodes MAY have been committed already. The main purpose
-// here is to commit the root node.
+// Hash will firstly hash the entire trie if it's still not hashed and then commit
+// all nodes to the associated database. Actually most of the trie nodes have been
+// committed already. The main purpose here is to commit the nodes on right boundary.
+//
+// For stack trie, Hash and Commit are functionally identical.
 func (t *StackTrie) Hash() common.Hash {
 	n := t.root
 	t.hash(n, nil)
 	return common.BytesToHash(n.val)
 }
 
-// Commit will firstly hash the entire trie if it's still not hashed
-// and then commit all nodes to the associated database. Actually most
-// of the trie nodes MAY have been committed already. The main purpose
-// here is to commit the root node.
+// Commit will firstly hash the entire trie if it's still not hashed and then commit
+// all nodes to the associated database. Actually most of the trie nodes have been
+// committed already. The main purpose here is to commit the nodes on right boundary.
+//
+// For stack trie, Hash and Commit are functionally identical.
 func (t *StackTrie) Commit() common.Hash {
 	return t.Hash()
 }
