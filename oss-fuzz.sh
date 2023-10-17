@@ -68,6 +68,7 @@ function compile_fuzzer() {
   fuzzer=$3
 
   echo "Building $fuzzer"
+  cd $path
 
   # Test if file contains a line with "func $function" and "testing.F".
   if [ $(grep -r "func $function" $path | grep "testing.F" | wc -l) -eq 1 ]
@@ -84,6 +85,7 @@ function compile_fuzzer() {
     cp $corpusfile $OUT/
     echo "Found seed corpus: $corpusfile"
   fi
+  cd -
 }
 
 compile_fuzzer tests/fuzzers/bitutil  Fuzz      fuzzBitutilCompress
