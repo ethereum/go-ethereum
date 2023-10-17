@@ -138,11 +138,7 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, 
 			log.Error("Proof for coinbase not available", "coinbase", coinbase, "error", err)
 			// but we still mark the proofs map with nil array
 		}
-		wrappedProof := make([]hexutil.Bytes, len(proof))
-		for i, bt := range proof {
-			wrappedProof[i] = bt
-		}
-		env.Proofs[key] = wrappedProof
+		env.Proofs[key] = types.WrapProof(proof)
 	}
 
 	return env, nil
@@ -347,10 +343,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 			log.Error("Proof not available", "address", addrStr, "error", err)
 			// but we still mark the proofs map with nil array
 		}
-		wrappedProof := make([]hexutil.Bytes, len(proof))
-		for i, bt := range proof {
-			wrappedProof[i] = bt
-		}
+		wrappedProof := types.WrapProof(proof)
 		env.pMu.Lock()
 		env.Proofs[addrStr] = wrappedProof
 		txStorageTrace.Proofs[addrStr] = wrappedProof
@@ -412,10 +405,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 				log.Error("Storage proof not available", "error", err, "address", addrStr, "key", keyStr)
 				// but we still mark the proofs map with nil array
 			}
-			wrappedProof := make([]hexutil.Bytes, len(proof))
-			for i, bt := range proof {
-				wrappedProof[i] = bt
-			}
+			wrappedProof := types.WrapProof(proof)
 			env.sMu.Lock()
 			txm[keyStr] = wrappedProof
 			m[keyStr] = wrappedProof
@@ -468,11 +458,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 			if proof, err := statedb.GetProof(addr); err != nil {
 				log.Error("Proof for intrinstic address not available", "error", err, "address", addr)
 			} else {
-				wrappedProof := make([]hexutil.Bytes, len(proof))
-				for i, bt := range proof {
-					wrappedProof[i] = bt
-				}
-				env.Proofs[addr.String()] = wrappedProof
+				env.Proofs[addr.String()] = types.WrapProof(proof)
 			}
 		}
 
@@ -487,11 +473,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 				} else if proof, _ := statedb.GetSecureTrieProof(trie, slot); err != nil {
 					log.Error("Get storage proof for intrinstic address failed", "error", err, "address", addr, "slot", slot)
 				} else {
-					wrappedProof := make([]hexutil.Bytes, len(proof))
-					for i, bt := range proof {
-						wrappedProof[i] = bt
-					}
-					env.StorageProofs[addr.String()][slot.String()] = wrappedProof
+					env.StorageProofs[addr.String()][slot.String()] = types.WrapProof(proof)
 				}
 			}
 		}
