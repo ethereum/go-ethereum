@@ -55,7 +55,7 @@ function build_native_go_fuzzer() {
 	tags="-tags gofuzz"
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $func $fuzzer $coverpkg
+		coverbuild $path $function $fuzzer $coverpkg
 	else
 		go-118-fuzz-build $tags -o $fuzzer.a -func $function $path
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
