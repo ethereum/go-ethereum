@@ -1,0 +1,3 @@
+INFO [XXXXXXXXXXXXXXXXXX] Output testing started                   big.Int=111,222,333,444,555,678,999 -big.Int=-111,222,333,444,555,678,999 big.Int=11,122,233,344,455,567,899,900 -big.Int=-11,122,233,344,455,567,899,900
+INFO [XXXXXXXXXXXXXXXXXX] Testing uint256                          uint256.Int=111,222,333,444,555,678,999 uint256.Int=11,122,233,344,455,567,899,900
+INFO [XXXXXXXXXXXXXXXXXX] Special chars                            "special \r\n\t chars"="special \r\n\t chars"

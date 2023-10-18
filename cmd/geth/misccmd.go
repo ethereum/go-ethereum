@@ -67,6 +67,14 @@ and displays information about any security vulnerabilities that affect the curr
 		Usage:     "Display license information",
 		ArgsUsage: " ",
 	}
+	logTestCommand = &cli.Command{
+		Action:    logTest,
+		Name:      "logtest",
+		Usage:     "Print some log messages",
+		ArgsUsage: " ",
+		Description: `
+This command is only meant for testing.
+`}
 )
 
 func printVersion(ctx *cli.Context) error {

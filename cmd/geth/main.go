@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"sort"
 	"strconv"
@@ -45,6 +46,7 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -233,6 +235,7 @@ func init() {
 		snapshotCommand,
 		// See verkle.go
 		verkleCommand,
+		logTestCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -469,4 +472,29 @@ func unlockAccounts(ctx *cli.Context, stack *node.Node) {
 	for i, account := range unlocks {
 		unlockAccount(ks, account, i, passwords)
 	}
+}
+
+// logTest is an entry point which spits out some logs. This is used by testing
+// to verify expected outputs
+func logTest(ctx *cli.Context) error {
+	ba, _ := new(big.Int).SetString("111222333444555678999", 10)    // "111,222,333,444,555,678,999"
+	bb, _ := new(big.Int).SetString("-111222333444555678999", 10)   // "-111,222,333,444,555,678,999"
+	bc, _ := new(big.Int).SetString("11122233344455567899900", 10)  // "11,122,233,344,455,567,899,900"
+	bd, _ := new(big.Int).SetString("-11122233344455567899900", 10) // "-11,122,233,344,455,567,899,900"
+
+	ua, _ := uint256.FromDecimal("111222333444555678999")
+	ub, _ := uint256.FromDecimal("11122233344455567899900")
+
+	log.Info("Output testing started",
+		"big.Int", ba,
+		"-big.Int", bb,
+		"big.Int", bc,
+		"-big.Int", bd)
+	log.Info("Testing uint256",
+		"uint256.Int", ua,
+		"uint256.Int", ub)
+	log.Info("Special chars",
+		"special \r\n\t chars", "special \r\n\t chars",
+	)
+	return nil
 }
