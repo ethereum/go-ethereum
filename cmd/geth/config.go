@@ -180,6 +180,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
+	// CHANGE(TAIKO): register Taiko RPC APIs.
+	utils.RegisterTaikoAPIs(stack, &cfg.Eth, eth)
+
 	// Create gauge with geth system and build information
 	if eth != nil { // The 'eth' backend may be nil in light mode
 		var protos []string

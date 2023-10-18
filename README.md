@@ -1,3 +1,13 @@
+# taiko-geth
+
+[![CI](https://github.com/taikoxyz/taiko-geth/actions/workflows/ci.yml/badge.svg)](https://github.com/taikoxyz/taiko-geth/actions/workflows/ci.yml)
+
+The codebase is based on [go-ethereum v1.13.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.13.4).
+
+## Tracing changes
+
+All source code changes by [taiko](https://taiko.xyz) team are commented with `"CHANGE(taiko): ...."`, and the filenames of all additional files have the prefix `"taiko_"` (`taiko_*.go`).
+
 ## Go Ethereum
 
 Official Golang execution layer implementation of the Ethereum protocol.
@@ -83,7 +93,7 @@ This command will:
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
  * Start the built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interacting-with-geth/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md) 
+   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md)
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
    as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/interacting-with-geth/rpc).
    This tool is optional and if you leave it out you can always attach it to an already running
@@ -344,7 +354,7 @@ testing procedures.
 ### Contributing to geth.ethereum.org
 
 For contributions to the [go-ethereum website](https://geth.ethereum.org), please checkout and raise pull requests against the `website` branch.
-For more detailed instructions please see the `website` branch [README](https://github.com/ethereum/go-ethereum/tree/website#readme) or the 
+For more detailed instructions please see the `website` branch [README](https://github.com/ethereum/go-ethereum/tree/website#readme) or the
 [contributing](https://geth.ethereum.org/docs/developers/geth-developer/contributing) page of the website.
 
 ## License

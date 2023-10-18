@@ -18,8 +18,10 @@ package txpool
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -89,6 +91,10 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	// Ensure gasFeeCap is greater than or equal to gasTipCap
 	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
 		return core.ErrTipAboveFeeCap
+	}
+	// CHANGE(taiko): ensure gasFeeCap fee cap is not zero
+	if os.Getenv("TAIKO_TEST") == "" && tx.GasFeeCap().Cmp(common.Big0) == 0 {
+		return errors.New("max fee per gas is zero")
 	}
 	// Make sure the transaction is signed properly
 	if _, err := types.Sender(signer, tx); err != nil {
