@@ -1,3 +1,22 @@
-t=2023-10-18T11:29:46+0200 lvl=info msg="Output testing started" big.Int=111,222,333,444,555,678,999 -big.Int=-111,222,333,444,555,678,999 big.Int=11,122,233,344,455,567,899,900 -big.Int=-11,122,233,344,455,567,899,900
-t=2023-10-18T11:29:46+0200 lvl=info msg="Testing uint256"        uint256.Int=111,222,333,444,555,678,999 uint256.Int=11,122,233,344,455,567,899,900
-t=2023-10-18T11:29:46+0200 lvl=info msg="Special chars"          "special \r\n\t chars"="special \r\n\t chars"
+t=2023-10-18T14:10:59+0200 lvl=info msg=big.Int 111,222,333,444,555,678,999=111,222,333,444,555,678,999
+t=2023-10-18T14:10:59+0200 lvl=info msg=-big.Int -111,222,333,444,555,678,999=-111,222,333,444,555,678,999
+t=2023-10-18T14:10:59+0200 lvl=info msg=big.Int  11,122,233,344,455,567,899,900=11,122,233,344,455,567,899,900
+t=2023-10-18T14:10:59+0200 lvl=info msg=-big.Int -11,122,233,344,455,567,899,900=-11,122,233,344,455,567,899,900
+t=2023-10-18T14:10:59+0200 lvl=info msg=uint256  111,222,333,444,555,678,999=111,222,333,444,555,678,999
+t=2023-10-18T14:10:59+0200 lvl=info msg=uint256  11,122,233,344,455,567,899,900=11,122,233,344,455,567,899,900
+t=2023-10-18T14:10:59+0200 lvl=info msg=int64    1,000,000=1,000,000
+t=2023-10-18T14:10:59+0200 lvl=info msg=int64    -1,000,000=-1,000,000
+t=2023-10-18T14:10:59+0200 lvl=info msg=int64    9,223,372,036,854,775,807=9,223,372,036,854,775,807
+t=2023-10-18T14:10:59+0200 lvl=info msg=int64    -9,223,372,036,854,775,808=-9,223,372,036,854,775,808
+t=2023-10-18T14:10:59+0200 lvl=info msg=uint64   1,000,000=1,000,000
+t=2023-10-18T14:10:59+0200 lvl=info msg=uint64   18,446,744,073,709,551,615=18,446,744,073,709,551,615
+t=2023-10-18T14:10:59+0200 lvl=info msg="Special chars in value" key="special \r\n\t chars"
+t=2023-10-18T14:10:59+0200 lvl=info msg="Special chars in key"   "special \n\t chars"=value
+t=2023-10-18T14:10:59+0200 lvl=info msg=nospace                  nospace=nospace
+t=2023-10-18T14:10:59+0200 lvl=info msg="with space"             "with nospace"="with nospace"
+t=2023-10-18T14:10:59+0200 lvl=info msg="Bash escapes in value"  key="\x1b[1G\x1b[K\x1b[1A"
+t=2023-10-18T14:10:59+0200 lvl=info msg="Bash escapes in key"    "\x1b[1G\x1b[K\x1b[1A"=value
+t=2023-10-18T14:10:59+0200 lvl=info msg="Bash escapes in message  \x1b[1G\x1b[K\x1b[1A end" key=value
+t=2023-10-18T14:10:59+0200 lvl=info msg="\x1b[35mColored\x1b[0m[" "\x1b[35mColored\x1b[0m["="\x1b[35mColored\x1b[0m["
+t=2023-10-18T14:10:59+0200 lvl=info msg="Custom Stringer value"   2562047h47m16.854s=2562047h47m16.854s
+t=2023-10-18T14:10:59+0200 lvl=info msg="Lazy evaluation of value" key="lazy value"
