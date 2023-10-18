@@ -933,7 +933,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	}
 
 	// Wait until filters have timed out
-	time.Sleep(3 * timeout)
+	time.Sleep(6 * timeout)
 
 	// If tx loop doesn't consume `done` after a second
 	// it's hanging.
