@@ -17,6 +17,7 @@
 package bitutil
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
