@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/bitutil"
 )
 
-// Fuzz implements a go-fuzz fuzzer method to test various encoding method
+// FuzzBitutil implements a go-fuzz fuzzer method to test various encoding method
 // invocations.
 func FuzzBitutil(data []byte) int {
 	if len(data) == 0 {

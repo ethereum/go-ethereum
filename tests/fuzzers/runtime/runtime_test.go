@@ -16,10 +16,16 @@
 
 package runtime
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
+)
 
 func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
+	f.Fuzz(func(t *testing.T, code, input []byte) {
+		runtime.Execute(code, input, &runtime.Config{
+			GasLimit: 12000000,
+		})
 	})
 }
