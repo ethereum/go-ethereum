@@ -45,6 +45,8 @@ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bits-and-blooms/bitset v1.9.0 h1:g1YivPG8jOtrN013Fe8OBXubkiTwvm7/vG2vXz03ANU=
 github.com/bits-and-blooms/bitset v1.9.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
+github.com/bits-and-blooms/bitset v1.10.0 h1:ePXTeiPEazB5+opbv5fr8umg2R/1NlzgDsyepwsSr88=
+github.com/bits-and-blooms/bitset v1.10.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0 h1:fzn1qaOt32TuLjFlkzYSsBC35Q3KUjT1SwPxiMSCF5k=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0/go.mod h1:U7MHm051Al6XmscBQ0BoNydpOTsFAn707034b5nY8zU=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=
@@ -86,6 +88,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2 h1:p1EgwI/C7NhT0JmVkwCD2ZBK8j4aeHQX2pMHH
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/crate-crypto/go-ipa v0.0.0-20230914135612-d1b03fcb8e58 h1:PwUlswsGOrLB677lW4XrlWLeszY3BaDGbvZ6dYk28tQ=
 github.com/crate-crypto/go-ipa v0.0.0-20230914135612-d1b03fcb8e58/go.mod h1:J+gsi6D4peY0kyhaklyXFRVHOQWI2I5uU0c2+/90HYc=
+github.com/crate-crypto/go-ipa v0.0.0-20231015184653-ceac2650f699 h1:ng/jln5iPr92iLbq6dHHa5dbObAgUmAoQO7Zjx1vYHM=
+github.com/crate-crypto/go-ipa v0.0.0-20231015184653-ceac2650f699/go.mod h1:J+gsi6D4peY0kyhaklyXFRVHOQWI2I5uU0c2+/90HYc=
 github.com/crate-crypto/go-kzg-4844 v0.3.0 h1:UBlWE0CgyFqqzTI+IFyCzA7A3Zw4iip6uzRv5NIXG0A=
 github.com/crate-crypto/go-kzg-4844 v0.3.0/go.mod h1:SBP7ikXEgDnUPONgm33HtuDZEDtWa3L4QtN1ocJSEQ4=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
@@ -146,6 +150,8 @@ github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff h1:tY80oXqG
 github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff/go.mod h1:x7DCsMOv1taUwEWCzT4cmDeAkigA5/QCwUodaVOe8Ww=
 github.com/gballet/go-verkle v0.1.1-0.20231004173727-0a4e93ed640b h1:LHeiiSTL2FEGCP1ov6FqkikiViqygeVo1ZwJ1x3nYSE=
 github.com/gballet/go-verkle v0.1.1-0.20231004173727-0a4e93ed640b/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
+github.com/gballet/go-verkle v0.1.1-0.20231017182008-0af58979f08c h1:MgjmvQqti384Re4Xg2fqtYYH0k4fWkavDVsVc9op5CE=
+github.com/gballet/go-verkle v0.1.1-0.20231017182008-0af58979f08c/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getsentry/sentry-go v0.12.0/go.mod h1:NSap0JBYWzHND8oMbyi0+XZhUalc1TBdRL1M71JZW2c=

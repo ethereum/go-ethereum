@@ -14,7 +14,7 @@ require (
 	github.com/cloudflare/cloudflare-go v0.14.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/consensys/gnark-crypto v0.12.1
-	github.com/crate-crypto/go-ipa v0.0.0-20230914135612-d1b03fcb8e58
+	github.com/crate-crypto/go-ipa v0.0.0-20231015184653-ceac2650f699
 	github.com/crate-crypto/go-kzg-4844 v0.3.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
@@ -26,7 +26,7 @@ require (
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
-	github.com/gballet/go-verkle v0.1.1-0.20231004173727-0a4e93ed640b
+	github.com/gballet/go-verkle v0.1.1-0.20231017182008-0af58979f08c
 	github.com/go-stack/stack v1.8.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang-jwt/jwt/v4 v4.3.0
@@ -86,7 +86,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.1.1 // indirect
 	github.com/aws/smithy-go v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.9.0 // indirect
+	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
