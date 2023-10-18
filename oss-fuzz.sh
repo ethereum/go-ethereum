@@ -92,7 +92,8 @@ function compile_fuzzer() {
   cd -
 }
 
-compile_fuzzer tests/fuzzers/bitutil  Fuzz      fuzzBitutilCompress
+compile_fuzzer tests/fuzzers/bitutil  FuzzEncoder      fuzzBitutilEncoder
+compile_fuzzer tests/fuzzers/bitutil  FuzzDecoder      fuzzBitutilDecoder
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
