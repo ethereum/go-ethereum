@@ -153,8 +153,8 @@ func (s *resubscribeSub) Err() <-chan error {
 }
 
 func (s *resubscribeSub) loop() {
-	var done bool
 	defer close(s.err)
+	var done bool
 	for !done {
 		sub := s.subscribe()
 		if sub == nil {
