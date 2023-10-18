@@ -73,8 +73,8 @@ type StackTrie struct {
 	root    *stNode
 	h       *hasher
 
-	first []byte // The key of first inserted entry, tracked as left boundary.
-	last  []byte // The key of last inserted entry, tracked as right boundary.
+	first []byte // The (hex-encoded without terminator) key of first inserted entry, tracked as left boundary.
+	last  []byte // The (hex-encoded without terminator) key of last inserted entry, tracked as right boundary.
 }
 
 // NewStackTrie allocates and initializes an empty trie.
