@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,38 +18,37 @@ package bitutil
 
 import (
 	"bytes"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
 )
 
-// Fuzz implements a go-fuzz fuzzer method to test various encoding method
-// invocations.
-func Fuzz(data []byte) int {
-	if len(data) == 0 {
-		return 0
-	}
-	if data[0]%2 == 0 {
-		return fuzzEncode(data[1:])
-	}
-	return fuzzDecode(data[1:])
+func FuzzEncoder(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzEncode(data)
+	})
+}
+func FuzzDecoder(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzDecode(data)
+	})
 }
 
 // fuzzEncode implements a go-fuzz fuzzer method to test the bitset encoding and
 // decoding algorithm.
-func fuzzEncode(data []byte) int {
+func fuzzEncode(data []byte) {
 	proc, _ := bitutil.DecompressBytes(bitutil.CompressBytes(data), len(data))
 	if !bytes.Equal(data, proc) {
 		panic("content mismatch")
 	}
-	return 1
 }
 
 // fuzzDecode implements a go-fuzz fuzzer method to test the bit decoding and
 // reencoding algorithm.
-func fuzzDecode(data []byte) int {
+func fuzzDecode(data []byte) {
 	blob, err := bitutil.DecompressBytes(data, 1024)
 	if err != nil {
-		return 0
+		return
 	}
 	// re-compress it (it's OK if the re-compressed differs from the
 	// original - the first input may not have been compressed at all)
@@ -66,5 +65,4 @@ func fuzzDecode(data []byte) int {
 	if !bytes.Equal(decomp, blob) {
 		panic("content mismatch")
 	}
-	return 1
 }
