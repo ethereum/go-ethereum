@@ -120,7 +120,7 @@ func ResubscribeErr(backoffMax time.Duration, fn ResubscribeErrFunc) Subscriptio
 		backoffMax: backoffMax,
 		fn:         fn,
 		err:        make(chan error),
-		unsub:      make(chan struct{}),
+		unsub:      make(chan struct{}, 1),
 	}
 	go s.loop()
 	return s
@@ -154,20 +154,13 @@ func (s *resubscribeSub) Err() <-chan error {
 
 func (s *resubscribeSub) loop() {
 	var done bool
-	var unsubbed bool
-	defer func() {
-		close(s.err)
-		// Read unsub chan to avoid blocking Unsubscribe
-		if !unsubbed {
-			<-s.unsub
-		}
-	}()
+	defer close(s.err)
 	for !done {
 		sub := s.subscribe()
 		if sub == nil {
 			break
 		}
-		done, unsubbed = s.waitForError(sub)
+		done = s.waitForError(sub)
 		sub.Unsubscribe()
 	}
 }
@@ -204,14 +197,14 @@ func (s *resubscribeSub) subscribe() Subscription {
 	}
 }
 
-func (s *resubscribeSub) waitForError(sub Subscription) (bool, bool) {
+func (s *resubscribeSub) waitForError(sub Subscription) bool {
 	defer sub.Unsubscribe()
 	select {
 	case err := <-sub.Err():
 		s.lastSubErr = err
-		return err == nil, false
+		return err == nil
 	case <-s.unsub:
-		return true, true
+		return true
 	}
 }
 
