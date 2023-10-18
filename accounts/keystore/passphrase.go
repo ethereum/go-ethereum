@@ -240,7 +240,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}, nil
 }
 
-func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
+func DecryptDataV3(cryptoJson CryptoJSON, auth []byte) ([]byte, error) {
 	if cryptoJson.Cipher != "aes-128-ctr" {
 		return nil, fmt.Errorf("cipher not supported: %v", cryptoJson.Cipher)
 	}
@@ -285,7 +285,7 @@ func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byt
 		return nil, nil, err
 	}
 	keyId = keyUUID[:]
-	plainText, err := DecryptDataV3(keyProtected.Crypto, auth)
+	plainText, err := DecryptDataV3(keyProtected.Crypto, []byte(auth))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -313,7 +313,7 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 		return nil, nil, err
 	}
 
-	derivedKey, err := getKDFKey(keyProtected.Crypto, auth)
+	derivedKey, err := getKDFKey(keyProtected.Crypto, []byte(auth))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -330,8 +330,7 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 	return plainText, keyId, err
 }
 
-func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
-	authArray := []byte(auth)
+func getKDFKey(cryptoJSON CryptoJSON, auth []byte) ([]byte, error) {
 	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 	if err != nil {
 		return nil, err
@@ -342,14 +341,14 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 		n := ensureInt(cryptoJSON.KDFParams["n"])
 		r := ensureInt(cryptoJSON.KDFParams["r"])
 		p := ensureInt(cryptoJSON.KDFParams["p"])
-		return scrypt.Key(authArray, salt, n, r, p, dkLen)
+		return scrypt.Key(auth, salt, n, r, p, dkLen)
 	} else if cryptoJSON.KDF == "pbkdf2" {
 		c := ensureInt(cryptoJSON.KDFParams["c"])
 		prf := cryptoJSON.KDFParams["prf"].(string)
 		if prf != "hmac-sha256" {
 			return nil, fmt.Errorf("unsupported PBKDF2 PRF: %s", prf)
 		}
-		key := pbkdf2.Key(authArray, salt, c, dkLen, sha256.New)
+		key := pbkdf2.Key(auth, salt, c, dkLen, sha256.New)
 		return key, nil
 	}
 
