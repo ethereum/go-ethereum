@@ -426,16 +426,9 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			panic("invalid tree type")
 		}
 		if okpre && okpost {
-			// Resolve values from the pre state, the post
-			// state should already have the values in memory.
 			// TODO: see if this can be captured at the witness
 			// level, like it used to.
 			for _, key := range keys {
-				_, err := vtrpre.GetWithHashedKey(key)
-				if err != nil {
-					panic(err)
-				}
-
 				// WORKAROUND: the post trie would normally not
 				// need to be searched for keys, as all of them
 				// were resolved during block execution.
