@@ -941,7 +941,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		select {
 		case <-sub.Err():
 		case <-time.After(1 * time.Second):
-			t.Fatalf("Filter %s should have been uninstalled\n", sub.ID)
+			t.Fatalf("Filter timeout is hanging")
 		}
 	}
 }
