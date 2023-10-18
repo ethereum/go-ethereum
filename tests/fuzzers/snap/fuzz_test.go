@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,25 +14,34 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package snap
 
 import (
-	"fmt"
-	"os"
+	"testing"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/difficulty"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 )
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: debug <file>")
-		os.Exit(1)
-	}
-	crasher := os.Args[1]
-	data, err := os.ReadFile(crasher)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
-		os.Exit(1)
-	}
-	difficulty.Fuzz(data)
+func FuzzARange(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &snap.GetAccountRangePacket{}, snap.GetAccountRangeMsg)
+	})
+}
+
+func FuzzSRange(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &snap.GetStorageRangesPacket{}, snap.GetStorageRangesMsg)
+	})
+}
+
+func FuzzByteCodes(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &snap.GetByteCodesPacket{}, snap.GetByteCodesMsg)
+	})
+}
+
+func FuzzTrieNodes(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &snap.GetTrieNodesPacket{}, snap.GetTrieNodesMsg)
+	})
 }

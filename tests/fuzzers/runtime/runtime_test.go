@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,27 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package runtime
 
 import (
-	"fmt"
-	"os"
+	"testing"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/les"
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
 )
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
-		fmt.Fprintf(os.Stderr, "Example\n")
-		fmt.Fprintf(os.Stderr, "	$ debug ../crashers/4bbef6857c733a87ecf6fd8b9e7238f65eb9862a\n")
-		os.Exit(1)
-	}
-	crasher := os.Args[1]
-	data, err := os.ReadFile(crasher)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
-		os.Exit(1)
-	}
-	les.Fuzz(data)
+func Fuzz(f *testing.F) {
+	f.Fuzz(func(t *testing.T, code, input []byte) {
+		runtime.Execute(code, input, &runtime.Config{
+			GasLimit: 12000000,
+		})
+	})
 }

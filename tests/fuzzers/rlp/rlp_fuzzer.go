@@ -38,7 +38,7 @@ func decodeEncode(input []byte, val interface{}, i int) {
 	}
 }
 
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	if len(input) == 0 {
 		return 0
 	}
