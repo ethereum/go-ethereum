@@ -762,9 +762,7 @@ func (s *Syncer) loadSyncStatus() {
 					options = options.WithCleaner(func(path []byte) {
 						s.cleanPath(task.genBatch, common.Hash{}, path)
 					})
-					options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
-						boundaryNodesGauge.Inc(1)
-					})
+					options = options.SkipBoundary(true, true, boundaryAccountNodesGauge)
 				}
 				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
@@ -789,9 +787,7 @@ func (s *Syncer) loadSyncStatus() {
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(subtask.genBatch, owner, path)
 							})
-							options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
-								boundaryNodesGauge.Inc(1)
-							})
+							options = options.SkipBoundary(true, true, boundaryStorageNodesGauge)
 						}
 						subtask.genTrie = trie.NewStackTrie(options)
 					}
@@ -856,9 +852,7 @@ func (s *Syncer) loadSyncStatus() {
 			options = options.WithCleaner(func(path []byte) {
 				s.cleanPath(batch, common.Hash{}, path)
 			})
-			options = options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
-				boundaryNodesGauge.Inc(1)
-			})
+			options = options.SkipBoundary(true, true, boundaryAccountNodesGauge)
 		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
@@ -2066,9 +2060,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						options = options.WithCleaner(func(path []byte) {
 							s.cleanPath(batch, owner, path)
 						})
-						options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
-							boundaryNodesGauge.Inc(1)
-						})
+						options.SkipBoundary(true, true, boundaryStorageNodesGauge)
 					}
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
@@ -2095,9 +2087,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(batch, owner, path)
 							})
-							options.SkipBoundary(true, true, func(path []byte, hash common.Hash, blob []byte) {
-								boundaryNodesGauge.Inc(1)
-							})
+							options.SkipBoundary(true, true, boundaryStorageNodesGauge)
 						}
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),

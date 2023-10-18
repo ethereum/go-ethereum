@@ -382,9 +382,8 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 
 func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
 	var (
-		options  = NewStackTrieOptions()
-		nodes    = make(map[string]common.Hash)
-		boundary = make(map[string]common.Hash)
+		options = NewStackTrieOptions()
+		nodes   = make(map[string]common.Hash)
 	)
 	var (
 		first int
@@ -409,9 +408,7 @@ func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
 			noRight = true
 		}
 	}
-	options = options.SkipBoundary(noLeft, noRight, func(path []byte, hash common.Hash, blob []byte) {
-		boundary[string(path)] = hash
-	})
+	options = options.SkipBoundary(noLeft, noRight, nil)
 	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 		nodes[string(path)] = hash
 	})
@@ -421,19 +418,6 @@ func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
 		tr.MustUpdate(entries[i].k, entries[i].v)
 	}
 	tr.Commit()
-
-	for path := range boundary {
-		var expect bool
-		if noLeft && bytes.HasPrefix(keybytesToHex(entries[first].k), []byte(path)) {
-			expect = true
-		}
-		if noRight && bytes.HasPrefix(keybytesToHex(entries[last].k), []byte(path)) {
-			expect = true
-		}
-		if !expect {
-			t.Fatalf("Unexpected boundary node, %v", []byte(path))
-		}
-	}
 	return nodes
 }
 

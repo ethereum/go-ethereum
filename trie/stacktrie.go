@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
@@ -35,9 +36,9 @@ type StackTrieOptions struct {
 	Writer  func(path []byte, hash common.Hash, blob []byte) // The function to commit the dirty nodes
 	Cleaner func(path []byte)                                // The function to clean up dangling nodes
 
-	SkipLeftBoundary  bool                                             // Flag whether the nodes on the left boundary are skipped for committing
-	SkipRightBoundary bool                                             // Flag whether the nodes on the right boundary are skipped for committing
-	OnBoundary        func(path []byte, hash common.Hash, blob []byte) // Callback invoked when the node is skipped committing
+	SkipLeftBoundary  bool          // Flag whether the nodes on the left boundary are skipped for committing
+	SkipRightBoundary bool          // Flag whether the nodes on the right boundary are skipped for committing
+	boundaryGauge     metrics.Gauge // Gauge to track how many boundary nodes are met
 }
 
 // NewStackTrieOptions initializes an empty options for stackTrie.
@@ -58,10 +59,10 @@ func (o *StackTrieOptions) WithCleaner(cleaner func(path []byte)) *StackTrieOpti
 // SkipBoundary configures whether the left and right boundary nodes are filtered
 // for committing, along with a onBoundary callback invoked whenever the boundary
 // nodes are met.
-func (o *StackTrieOptions) SkipBoundary(skipLeft, skipRight bool, onBoundary func(path []byte, hash common.Hash, blob []byte)) *StackTrieOptions {
+func (o *StackTrieOptions) SkipBoundary(skipLeft, skipRight bool, gauge metrics.Gauge) *StackTrieOptions {
 	o.SkipLeftBoundary = skipLeft
 	o.SkipRightBoundary = skipRight
-	o.OnBoundary = onBoundary
+	o.boundaryGauge = gauge
 	return o
 }
 
@@ -429,21 +430,19 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	if t.options.Writer == nil {
 		return
 	}
-	hash := common.BytesToHash(st.val)
-
 	// Skip committing if the node is on the left boundary and stackTrie is
 	// configured to filter the boundary.
 	if t.options.SkipLeftBoundary && bytes.HasPrefix(t.first, path) {
-		if t.options.OnBoundary != nil {
-			t.options.OnBoundary(path, hash, blob)
+		if t.options.boundaryGauge != nil {
+			t.options.boundaryGauge.Inc(1)
 		}
 		return
 	}
 	// Skip committing if the node is on the right boundary and stackTrie is
 	// configured to filter the boundary.
 	if t.options.SkipRightBoundary && bytes.HasPrefix(t.last, path) {
-		if t.options.OnBoundary != nil {
-			t.options.OnBoundary(path, hash, blob)
+		if t.options.boundaryGauge != nil {
+			t.options.boundaryGauge.Inc(1)
 		}
 		return
 	}
