@@ -1061,7 +1061,7 @@ func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
 	if encSeed.Version != 1 {
 		log.Warn(fmt.Sprintf("unsupported encryption format of seed: %d, operation will likely fail", encSeed.Version))
 	}
-	seed, err := keystore.DecryptDataV3(encSeed.Params, auth)
+	seed, err := keystore.DecryptDataV3(encSeed.Params, []byte(auth))
 	if err != nil {
 		return nil, err
 	}
