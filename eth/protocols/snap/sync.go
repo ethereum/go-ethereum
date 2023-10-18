@@ -756,6 +756,9 @@ func (s *Syncer) loadSyncStatus() {
 					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
 				})
 				if s.scheme == rawdb.PathScheme {
+					// Configure the dangling node cleaner and also filter out boundary nodes
+					// only in the context of the path scheme. Deletion is forbidden in the
+					// hash scheme, as it can disrupt state completeness.
 					options = options.WithCleaner(func(path []byte) {
 						s.cleanPath(task.genBatch, common.Hash{}, path)
 					})
@@ -780,6 +783,9 @@ func (s *Syncer) loadSyncStatus() {
 							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
 						})
 						if s.scheme == rawdb.PathScheme {
+							// Configure the dangling node cleaner and also filter out boundary nodes
+							// only in the context of the path scheme. Deletion is forbidden in the
+							// hash scheme, as it can disrupt state completeness.
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(subtask.genBatch, owner, path)
 							})
@@ -844,6 +850,9 @@ func (s *Syncer) loadSyncStatus() {
 			rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
 		})
 		if s.scheme == rawdb.PathScheme {
+			// Configure the dangling node cleaner and also filter out boundary nodes
+			// only in the context of the path scheme. Deletion is forbidden in the
+			// hash scheme, as it can disrupt state completeness.
 			options = options.WithCleaner(func(path []byte) {
 				s.cleanPath(batch, common.Hash{}, path)
 			})
@@ -2080,6 +2089,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
 						})
 						if s.scheme == rawdb.PathScheme {
+							// Configure the dangling node cleaner and also filter out boundary nodes
+							// only in the context of the path scheme. Deletion is forbidden in the
+							// hash scheme, as it can disrupt state completeness.
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(batch, owner, path)
 							})
@@ -2143,6 +2155,12 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				rawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
 			})
 			if s.scheme == rawdb.PathScheme {
+				// Configure the dangling node cleaner only in the context of the
+				// path scheme. Deletion is forbidden in the hash scheme, as it can
+				// disrupt state completeness.
+				//
+				// Notably, boundary nodes can be also kept because the whole storage
+				// trie is complete.
 				options = options.WithCleaner(func(path []byte) {
 					s.cleanPath(batch, account, path)
 				})

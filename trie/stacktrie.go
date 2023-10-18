@@ -49,7 +49,7 @@ func (o *StackTrieOptions) WithWriter(writer func(path []byte, hash common.Hash,
 	return o
 }
 
-// WithCleaner configures path cleaner within the options.
+// WithCleaner configures the cleaner in the option for removing dangling nodes.
 func (o *StackTrieOptions) WithCleaner(cleaner func(path []byte)) *StackTrieOptions {
 	o.Cleaner = cleaner
 	return o
@@ -74,7 +74,7 @@ type StackTrie struct {
 	h       *hasher
 
 	first []byte // The key of first inserted entry, tracked as left boundary.
-	last  []byte // The key of last inserted entry, tracked as left boundary.
+	last  []byte // The key of last inserted entry, tracked as right boundary.
 }
 
 // NewStackTrie allocates and initializes an empty trie.
@@ -102,9 +102,9 @@ func (t *StackTrie) Update(key, value []byte) error {
 		t.first = append([]byte{}, k...)
 	}
 	if t.last == nil {
-		t.last = append([]byte{}, k...)
+		t.last = append([]byte{}, k...) // allocate key slice
 	} else {
-		t.last = append(t.last[:0], k...)
+		t.last = append(t.last[:0], k...) // reuse key slice
 	}
 	t.insert(t.root, k, value, nil)
 	return nil
