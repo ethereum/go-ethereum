@@ -605,6 +605,7 @@ func DefaultConfig() *Config {
 		DataDir:                 DefaultDataDir(),
 		Ancient:                 "",
 		DBEngine:                "leveldb",
+		KeyStoreDir:             "",
 		Logging: &LoggingConfig{
 			Vmodule:   "",
 			Json:      false,

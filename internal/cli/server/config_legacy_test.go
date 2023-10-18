@@ -17,6 +17,7 @@ func TestConfigLegacy(t *testing.T) {
 
 		testConfig.Identity = ""
 		testConfig.DataDir = "./data"
+		testConfig.KeyStoreDir = "./keystore"
 		testConfig.Verbosity = 3
 		testConfig.RPCBatchLimit = 0
 		testConfig.Snapshot = true
