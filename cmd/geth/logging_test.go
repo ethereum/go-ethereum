@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -42,7 +43,7 @@ func split(input io.Reader) []string {
 	scanner := bufio.NewScanner(input)
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
-		output = append(output, scanner.Text())
+		output = append(output, strings.TrimSpace(scanner.Text()))
 	}
 	return output
 }
@@ -75,10 +76,17 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 			t.Fatalf("format %v, line %d missing, want:%v", format, i, want)
 		}
 		have := haveLines[i]
+		for strings.Contains(have, "Unknown config environment variable") {
+			// This can happen on CI runs. Drop it.
+			haveLines = append(haveLines[:i], haveLines[i+1:]...)
+			have = haveLines[i]
+		}
+
 		// Black out the timestamp
 		have = censor(have, tStart, tEnd)
 		want = censor(want, tStart, tEnd)
 		if have != want {
+			t.Logf(nicediff([]byte(have), []byte(want)))
 			t.Fatalf("format %v, line %d\nhave %v\nwant %v", format, i, have, want)
 		}
 	}
@@ -106,4 +114,61 @@ func TestVmodule(t *testing.T) {
 	checkOutput(3, "log at level info", "log at level debug")  // info should be present at 3, but debug should be missing
 	checkOutput(2, "log at level warn", "log at level info")   // warn should be present at 2, but info should be missing
 	checkOutput(1, "log at level error", "log at level warn")  // error should be present at 1, but warn should be missing
+}
+
+func nicediff(have, want []byte) string {
+	var i = 0
+	for ; i < len(have) && i < len(want); i++ {
+		if want[i] != have[i] {
+			break
+		}
+	}
+	var end = i + 40
+	var start = i - 50
+	if start < 0 {
+		start = 0
+	}
+	var h, w string
+	if end < len(have) {
+		h = string(have[start:end])
+	} else {
+		h = string(have[start:])
+	}
+	if end < len(want) {
+		w = string(want[start:end])
+	} else {
+		w = string(want[start:])
+	}
+	return fmt.Sprintf("have vs want:\n%q\n%q\n", h, w)
+}
+
+func TestFileOut(t *testing.T) {
+	var (
+		have, want []byte
+		err        error
+		path       = fmt.Sprintf("%s/test_file_out-%d", os.TempDir(), rand.Int63())
+	)
+	t.Cleanup(func() { os.Remove(path) })
+	/*
+		If terminal/logfmt format is used, then this test fails -- apparently the file-, or stream-, or
+		multiplexhandler somehow treats records with duplicate keys differently, adding an extra space
+		on the log output between the two keys.
+		Using the `json` format cheats and gets around this, since json cannot represent duplicate keys.
+
+		    logging_test.go:153: have vs want:
+		        "repeated-key                             foo=once foo=twice\nINFO [10-19|14:42:23.554] log "
+		        "repeated-key                             foo=once  foo=twice\nINFO [10-19|14:42:23.554] log"
+		    logging_test.go:154: file content wrong
+	*/
+	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "--log.format=json", "logtest"); err != nil {
+		t.Fatal(err)
+	}
+	if have, err = os.ReadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(have, want) {
+		// show an intelligent diff
+		t.Logf(nicediff(have, want))
+		t.Errorf("file content wrong")
+	}
 }
