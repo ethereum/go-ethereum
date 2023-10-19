@@ -283,21 +283,21 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
-		CancunTime:                    nil,
-		PragueTime:                    nil,
+		ShanghaiTime:                  &verkleTime,
+		CancunTime:                    &verkleTime,
+		PragueTime:                    &verkleTime,
 		VerkleTime:                    &verkleTime,
-		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        nil,
 		Clique:                        nil,
 	}
 
 	genesis := &Genesis{
-		BaseFee:   big.NewInt(params.InitialBaseFee),
-		Config:    verkleConfig,
-		Timestamp: verkleTime,
-		// difficulty is nil
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Config:     verkleConfig,
+		Timestamp:  verkleTime,
+		Difficulty: big.NewInt(0),
 		Alloc: GenesisAlloc{
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
@@ -307,5 +307,22 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	triedb := trie.NewDatabase(db, &trie.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+	block := genesis.MustCommit(db, triedb)
+	if !bytes.Equal(block.Root().Bytes(), expected) {
+		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	}
+
+	// Test that the trie is verkle
+	if !triedb.IsVerkle() {
+		t.Fatalf("expected trie to be verkle")
+	}
+
+	serialized := rawdb.ReadTrieNode(db, common.Hash{}, []byte{}, common.Hash{}, "path")
+	if len(serialized) == 0 {
+		t.Fatal("could not find node")
 	}
 }
