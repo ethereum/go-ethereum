@@ -336,11 +336,17 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 	// read remaining from ancients
 	max := count * 700
 	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, max)
-	if err == nil && uint64(len(data)) == count {
-		// the data is on the order [h, h+1, .., n] -- reordering needed
-		for i := range data {
-			rlpHeaders = append(rlpHeaders, data[len(data)-1-i])
-		}
+	if err != nil {
+		log.Error("Failed to read headers from freezer", "err", err)
+		return rlpHeaders
+	}
+	if uint64(len(data)) != count {
+		log.Warn("Incomplete read of headers from freezer", "wanted", count, "read", len(data))
+		return rlpHeaders
+	}
+	// The data is on the order [h, h+1, .., n] -- reordering needed
+	for i := range data {
+		rlpHeaders = append(rlpHeaders, data[len(data)-1-i])
 	}
 	return rlpHeaders
 }
