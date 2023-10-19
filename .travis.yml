@@ -29,7 +29,7 @@ jobs:
   - stage: Tests
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: A-B tests
@@ -37,56 +37,56 @@ jobs:
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[a-m].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: C-[a-m] tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[n-o].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: C-[n-o] tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/c[p-z].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: C-[p-z] tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[d-i].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: D-I tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[j-n].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: J-N tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[o-r].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: O-R tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/s.*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: S tests
   - script: travis_retry go run build/ci.go test -coverage $(go list ./... | grep "github.com\/XinFinOrg\/XDPoSChain\/[t-z].*")
     os: linux
     dist: bionic
-    go: 1.14.x
+    go: 1.21.x
     env:
       - GO111MODULE=auto
     name: T-Z tests
