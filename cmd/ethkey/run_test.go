@@ -21,7 +21,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/docker/pkg/reexec"
+	"github.com/ethereum/go-ethereum/common/reexec"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 )
 
