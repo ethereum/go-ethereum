@@ -43,8 +43,8 @@ var (
 	// nodes in storage tries are met.
 	boundaryStorageNodesGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/boundary/storage", nil)
 
-	// smallStorageGauge is the metric to track how many storages are retrieved
-	// in a single request.
+	// smallStorageGauge is the metric to track how many storages are small enough
+	// to retrieved in one or two request.
 	smallStorageGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/small", nil)
 
 	// largeStorageGauge is the metric to track how many storages are large enough
