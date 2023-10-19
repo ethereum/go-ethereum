@@ -762,7 +762,9 @@ func (s *Syncer) loadSyncStatus() {
 					options = options.WithCleaner(func(path []byte) {
 						s.cleanPath(task.genBatch, common.Hash{}, path)
 					})
-					options = options.SkipBoundary(true, true, boundaryAccountNodesGauge)
+					// Skip the left boundary if it's not the first range.
+					// Skip the right boundary if it's not the last range.
+					options = options.SkipBoundary(task.Next != (common.Hash{}), task.Last != common.MaxHash, boundaryAccountNodesGauge)
 				}
 				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
@@ -787,7 +789,9 @@ func (s *Syncer) loadSyncStatus() {
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(subtask.genBatch, owner, path)
 							})
-							options = options.SkipBoundary(true, true, boundaryStorageNodesGauge)
+							// Skip the left boundary if it's not the first range.
+							// Skip the right boundary if it's not the last range.
+							options = options.SkipBoundary(subtask.Next != common.Hash{}, subtask.Last != common.MaxHash, boundaryStorageNodesGauge)
 						}
 						subtask.genTrie = trie.NewStackTrie(options)
 					}
@@ -852,7 +856,9 @@ func (s *Syncer) loadSyncStatus() {
 			options = options.WithCleaner(func(path []byte) {
 				s.cleanPath(batch, common.Hash{}, path)
 			})
-			options = options.SkipBoundary(true, true, boundaryAccountNodesGauge)
+			// Skip the left boundary if it's not the first range.
+			// Skip the right boundary if it's not the last range.
+			options = options.SkipBoundary(next != common.Hash{}, last != common.MaxHash, boundaryAccountNodesGauge)
 		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
@@ -2060,7 +2066,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						options = options.WithCleaner(func(path []byte) {
 							s.cleanPath(batch, owner, path)
 						})
-						options.SkipBoundary(true, true, boundaryStorageNodesGauge)
+						// Keep the left boundary as it's the first range.
+						// Skip the right boundary if it's not the last range.
+						options.SkipBoundary(false, r.End() != common.MaxHash, boundaryStorageNodesGauge)
 					}
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
@@ -2087,7 +2095,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							options = options.WithCleaner(func(path []byte) {
 								s.cleanPath(batch, owner, path)
 							})
-							options.SkipBoundary(true, true, boundaryStorageNodesGauge)
+							// Skip the left boundary as it's not the first range
+							// Skip the right boundary if it's not the last range.
+							options.SkipBoundary(true, r.End() != common.MaxHash, boundaryStorageNodesGauge)
 						}
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
