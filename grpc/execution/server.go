@@ -319,7 +319,7 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 	var header *types.Header
 
 	// Grab the header based on the identifier provided
-	switch id_type := identifier.Identifier.(type) {
+	switch idType := identifier.Identifier.(type) {
 	case *executionv1a2.BlockIdentifier_BlockNumber:
 		header = s.bc.GetHeaderByNumber(uint64(identifier.GetBlockNumber()))
 	case *executionv1a2.BlockIdentifier_BlockHash:
