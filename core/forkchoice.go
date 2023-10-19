@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -114,7 +115,8 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 			currentPreserve, externPreserve = f.preserve(current), f.preserve(extern)
 		}
 
-		reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
+		// Compare hashes of block in case of tie breaker. Lexicographically larger hash wins.
+		reorg = !currentPreserve && (externPreserve || bytes.Compare(current.Hash().Bytes(), extern.Hash().Bytes()) < 0)
 	}
 
 	return reorg, nil
