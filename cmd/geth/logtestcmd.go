@@ -86,10 +86,15 @@ func logTest(ctx *cli.Context) error {
 	{ // Miscellaneous json-quirks
 		// This will check if the json output uses strings or json-booleans to represent bool values
 		log.Info("boolean", "true", true, "false", false)
-		// Handling of duplicate keys ?
-		log.Info("repeated-key", "foo", "once", "foo", "twice")
+		// Handling of duplicate keys.
+		// This is actually ill-handled by the current handler: the format.go
+		// uses a global 'fieldPadding' map and mixes up the two keys. If 'alpha'
+		// is shorter than beta, it sometimes causes erroneous padding -- and what's more
+		// it causes _different_ padding in multi-handler context, e.g. both file-
+		// and console output, making the two mismatch.
+		log.Info("repeated-key", "foo", "alpha", "foo", "beta")
 	}
-	{ //
+	{ // loglevels
 		log.Debug("log at level debug")
 		log.Trace("log at level trace")
 		log.Info("log at level info")

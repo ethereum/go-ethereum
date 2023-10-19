@@ -149,18 +149,7 @@ func TestFileOut(t *testing.T) {
 		path       = fmt.Sprintf("%s/test_file_out-%d", os.TempDir(), rand.Int63())
 	)
 	t.Cleanup(func() { os.Remove(path) })
-	/*
-		If terminal/logfmt format is used, then this test fails -- apparently the file-, or stream-, or
-		multiplexhandler somehow treats records with duplicate keys differently, adding an extra space
-		on the log output between the two keys.
-		Using the `json` format cheats and gets around this, since json cannot represent duplicate keys.
-
-		    logging_test.go:153: have vs want:
-		        "repeated-key                             foo=once foo=twice\nINFO [10-19|14:42:23.554] log "
-		        "repeated-key                             foo=once  foo=twice\nINFO [10-19|14:42:23.554] log"
-		    logging_test.go:154: file content wrong
-	*/
-	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "--log.format=json", "logtest"); err != nil {
+	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "logtest"); err != nil {
 		t.Fatal(err)
 	}
 	if have, err = os.ReadFile(path); err != nil {
