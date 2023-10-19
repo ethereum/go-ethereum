@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -39,6 +38,7 @@ type VerkleTrie struct {
 	db         *Database
 	pointCache *utils.PointCache
 	ended      bool
+	rootHash   common.Hash
 	reader     *trieReader
 }
 
@@ -46,9 +46,7 @@ func (vt *VerkleTrie) ToDot() string {
 	return verkle.ToDot(vt.root)
 }
 
-func NewVerkleTrie(root verkle.VerkleNode, db *Database, pointCache *utils.PointCache, ended bool) (*VerkleTrie, error) {
-	comm := root.Commit().Bytes()
-	rootHash := sha256.Sum256(comm[:])
+func NewVerkleTrie(rootHash common.Hash, root verkle.VerkleNode, db *Database, pointCache *utils.PointCache, ended bool) (*VerkleTrie, error) {
 	reader, err := newTrieReader(rootHash, common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -58,14 +56,12 @@ func NewVerkleTrie(root verkle.VerkleNode, db *Database, pointCache *utils.Point
 		db:         db,
 		pointCache: pointCache,
 		ended:      ended,
+		rootHash:   rootHash,
 		reader:     reader,
 	}, nil
 }
 
 func (trie *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	// NOTE: I use common.Hash{} as the hash, as I expect it to be ignored
-	// since we are using the pathdb. @rjl493456442 please confirm that this
-	// works.
 	return trie.reader.reader.Node(trie.reader.owner, path, common.Hash{})
 }
 
@@ -248,14 +244,13 @@ func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
-		comm := node.Node.Commitment().Bytes()
-		hash := sha256.Sum256(comm[:])
-		nodeset.AddNode(node.Path, trienode.New(common.BytesToHash(hash[:]), node.SerializedBytes))
+		// hash parameter is not used in pathdb
+		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 
 	// Serialize root commitment form
-	rootH := root.Hash().BytesLE()
-	return common.BytesToHash(rootH[:]), nodeset, nil
+	trie.rootHash = trie.Hash()
+	return trie.rootHash, nodeset, nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration

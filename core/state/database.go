@@ -177,15 +177,21 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get node reader in OpenTrie: %w", err)
 		}
-		verklerootbytes, err := reader.Node(common.Hash{}, nil, common.Hash{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get serialized root node in OpenTrie: %w", err)
+
+		var verkleroot verkle.VerkleNode
+		if root != (common.Hash{}) && root != types.EmptyRootHash {
+			verklerootbytes, err := reader.Node(common.Hash{}, nil, common.Hash{})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get serialized root node in OpenTrie: %w", err)
+			}
+			verkleroot, err = verkle.ParseNode(verklerootbytes, 0)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize root node in OpenTrie: %w", err)
+			}
+		} else {
+			verkleroot = verkle.New()
 		}
-		verkleroot, err := verkle.ParseNode(verklerootbytes, 0)
-		if err != nil {
-			return nil, fmt.Errorf("failed to deserialize root node in OpenTrie: %w", err)
-		}
-		return trie.NewVerkleTrie(verkleroot, db.triedb, utils.NewPointCache(), true)
+		return trie.NewVerkleTrie(root, verkleroot, db.triedb, utils.NewPointCache(), true)
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {

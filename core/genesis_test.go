@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -260,4 +261,51 @@ func newDbConfig(scheme string) *trie.Config {
 		return trie.HashDefaults
 	}
 	return &trie.Config{PathDB: pathdb.Defaults}
+}
+
+func TestVerkleGenesisCommit(t *testing.T) {
+	var verkleTime uint64 = 0
+	verkleConfig := &params.ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  nil,
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		VerkleTime:                    &verkleTime,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: true,
+		Ethash:                        nil,
+		Clique:                        nil,
+	}
+
+	genesis := &Genesis{
+		BaseFee:   big.NewInt(params.InitialBaseFee),
+		Config:    verkleConfig,
+		Timestamp: verkleTime,
+		// difficulty is nil
+		Alloc: GenesisAlloc{
+			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+		},
+	}
+
+	expected := common.Hex2Bytes("14398d42be3394ff8d50681816a4b7bf8d8283306f577faba2d5bc57498de23b")
+	got := genesis.ToBlock().Root().Bytes()
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	}
 }
