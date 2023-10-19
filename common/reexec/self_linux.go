@@ -1,3 +1,5 @@
+//go:build linux
+
 package reexec
 
 // Self returns the path to the current process's binary.
