@@ -2014,6 +2014,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
 				res.mainTask.needState[j] = false
 				res.mainTask.pend--
+				smallStorageGauge.Inc(1)
 			}
 			// If the last contract was chunked, mark it as needing healing
 			// to avoid writing it out to disk prematurely.
@@ -2049,7 +2050,11 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						log.Debug("Chunked large contract", "initiators", len(keys), "tail", lastKey, "chunks", chunks)
 					}
 					r := newHashRange(lastKey, chunks)
-
+					if chunks == 1 {
+						smallStorageGauge.Inc(1)
+					} else {
+						largeStorageGauge.Inc(1)
+					}
 					// Our first task is the one that was just filled by this response.
 					batch := ethdb.HookedBatch{
 						Batch: s.db.NewBatch(),
@@ -2187,7 +2192,16 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			res.subTask.genTrie.Commit()
+			root := res.subTask.genTrie.Commit()
+			accountHash := res.accounts[len(res.accounts)-1]
+			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
+				// If the chunk's root is an overflown but full delivery, clear the heal request
+				for i, account := range res.mainTask.res.hashes {
+					if account == accountHash {
+						res.mainTask.needHeal[i] = false
+					}
+				}
+			}
 		}
 		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
 			if err := res.subTask.genBatch.Write(); err != nil {
