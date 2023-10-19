@@ -18,19 +18,19 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
-	"math"
-	"math/big"
-	"time"
 )
 
 // logTest is an entry point which spits out some logs. This is used by testing
 // to verify expected outputs
 func logTest(ctx *cli.Context) error {
-
 	{ // big.Int
 		ba, _ := new(big.Int).SetString("111222333444555678999", 10)    // "111,222,333,444,555,678,999"
 		bb, _ := new(big.Int).SetString("-111222333444555678999", 10)   // "-111,222,333,444,555,678,999"
@@ -82,6 +82,19 @@ func logTest(ctx *cli.Context) error {
 		log.Info("A message with wonky \U0001F4A9 characters")
 		log.Info("A multiline message \nINFO [10-18|14:11:31.106] with wonky characters \U0001F4A9")
 		log.Info("A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above")
+	}
+	{ // Miscellaneous json-quirks
+		// This will check if the json output uses strings or json-booleans to represent bool values
+		log.Info("boolean", "true", true, "false", false)
+		// Handling of duplicate keys ?
+		log.Info("repeated-key", "foo", "once", "foo", "twice")
+	}
+	{ //
+		log.Debug("log at level debug")
+		log.Trace("log at level trace")
+		log.Info("log at level info")
+		log.Warn("log at level warn")
+		log.Error("log at level error")
 	}
 	return nil
 }

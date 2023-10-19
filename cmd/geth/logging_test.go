@@ -86,3 +86,24 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 		t.Errorf("format %v, want %d lines, have %d", format, len(haveLines), len(wantLines))
 	}
 }
+
+func TestVmodule(t *testing.T) {
+	checkOutput := func(level int, want, wantNot string) {
+		t.Helper()
+		output, err := runSelf("--log.format", "terminal", "--verbosity=0", "--log.vmodule", fmt.Sprintf("logtestcmd.go=%d", level), "logtest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(want) > 0 && !strings.Contains(string(output), want) { // trace should be present at 5
+			t.Errorf("failed to find expected string ('%s') in output", want)
+		}
+		if len(wantNot) > 0 && strings.Contains(string(output), wantNot) { // trace should be present at 5
+			t.Errorf("string ('%s') should not be present in output", wantNot)
+		}
+	}
+	checkOutput(5, "log at level trace", "")                   // trace should be present at 5
+	checkOutput(4, "log at level debug", "log at level trace") // debug should be present at 4, but trace should be missing
+	checkOutput(3, "log at level info", "log at level debug")  // info should be present at 3, but debug should be missing
+	checkOutput(2, "log at level warn", "log at level info")   // warn should be present at 2, but info should be missing
+	checkOutput(1, "log at level error", "log at level warn")  // error should be present at 1, but warn should be missing
+}
