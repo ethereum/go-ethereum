@@ -764,7 +764,7 @@ func (s *Syncer) loadSyncStatus() {
 					})
 					// Skip the left boundary if it's not the first range.
 					// Skip the right boundary if it's not the last range.
-					options = options.SkipBoundary(task.Next != (common.Hash{}), task.Last != common.MaxHash, boundaryAccountNodesGauge)
+					options = options.WithSkipBoundary(task.Next != (common.Hash{}), task.Last != common.MaxHash, boundaryAccountNodesGauge)
 				}
 				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
@@ -791,7 +791,7 @@ func (s *Syncer) loadSyncStatus() {
 							})
 							// Skip the left boundary if it's not the first range.
 							// Skip the right boundary if it's not the last range.
-							options = options.SkipBoundary(subtask.Next != common.Hash{}, subtask.Last != common.MaxHash, boundaryStorageNodesGauge)
+							options = options.WithSkipBoundary(subtask.Next != common.Hash{}, subtask.Last != common.MaxHash, boundaryStorageNodesGauge)
 						}
 						subtask.genTrie = trie.NewStackTrie(options)
 					}
@@ -858,7 +858,7 @@ func (s *Syncer) loadSyncStatus() {
 			})
 			// Skip the left boundary if it's not the first range.
 			// Skip the right boundary if it's not the last range.
-			options = options.SkipBoundary(next != common.Hash{}, last != common.MaxHash, boundaryAccountNodesGauge)
+			options = options.WithSkipBoundary(next != common.Hash{}, last != common.MaxHash, boundaryAccountNodesGauge)
 		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
@@ -2073,7 +2073,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						})
 						// Keep the left boundary as it's the first range.
 						// Skip the right boundary if it's not the last range.
-						options.SkipBoundary(false, r.End() != common.MaxHash, boundaryStorageNodesGauge)
+						options = options.WithSkipBoundary(false, r.End() != common.MaxHash, boundaryStorageNodesGauge)
 					}
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
@@ -2102,7 +2102,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 							})
 							// Skip the left boundary as it's not the first range
 							// Skip the right boundary if it's not the last range.
-							options.SkipBoundary(true, r.End() != common.MaxHash, boundaryStorageNodesGauge)
+							options = options.WithSkipBoundary(true, r.End() != common.MaxHash, boundaryStorageNodesGauge)
 						}
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
@@ -2193,17 +2193,24 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	if res.subTask != nil {
 		if res.subTask.done {
 			root := res.subTask.genTrie.Commit()
+			if err := res.subTask.genBatch.Write(); err != nil {
+				log.Error("Failed to persist stack slots", "err", err)
+			}
+			res.subTask.genBatch.Reset()
+
+			// If the chunk's root is an overflown but full delivery,
+			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
 			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
-				// If the chunk's root is an overflown but full delivery, clear the heal request
 				for i, account := range res.mainTask.res.hashes {
 					if account == accountHash {
 						res.mainTask.needHeal[i] = false
+						skipStorageHealingGauge.Inc(1)
 					}
 				}
 			}
 		}
-		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
+		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize {
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}

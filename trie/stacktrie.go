@@ -56,10 +56,10 @@ func (o *StackTrieOptions) WithCleaner(cleaner func(path []byte)) *StackTrieOpti
 	return o
 }
 
-// SkipBoundary configures whether the left and right boundary nodes are filtered
-// for committing, along with a onBoundary callback invoked whenever the boundary
-// nodes are met.
-func (o *StackTrieOptions) SkipBoundary(skipLeft, skipRight bool, gauge metrics.Gauge) *StackTrieOptions {
+// WithSkipBoundary configures whether the left and right boundary nodes are
+// filtered for committing, along with a gauge metrics to track how many
+// boundary nodes are met.
+func (o *StackTrieOptions) WithSkipBoundary(skipLeft, skipRight bool, gauge metrics.Gauge) *StackTrieOptions {
 	o.SkipLeftBoundary = skipLeft
 	o.SkipRightBoundary = skipRight
 	o.boundaryGauge = gauge
