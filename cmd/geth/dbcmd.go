@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/lib/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/olekukonko/tablewriter"

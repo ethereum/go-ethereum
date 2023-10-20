@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/testlog"
+	"github.com/ethereum/go-ethereum/lib/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang-jwt/jwt/v4"

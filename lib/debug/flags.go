@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/lib/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"

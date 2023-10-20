@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ethereum/go-ethereum/lib/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/mattn/go-isatty"
