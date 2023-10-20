@@ -1426,7 +1426,13 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
+	filter, err := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
+	if err != nil {
+		if err == filters.ErrInvalidBlockRange {
+			return nil, nil
+		}
+		return nil, err
+	}
 	return runFilter(ctx, r, filter)
 }
 
