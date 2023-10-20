@@ -529,8 +529,8 @@ func (g *Genesis) ToBlock() *types.Block {
 	var withdrawals []*types.Withdrawal
 
 	if g.Config != nil && g.Config.IsShanghai(new(big.Int).SetUint64(g.Number)) {
-		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
-		withdrawals = make([]*types.Withdrawal, 0)
+		head.WithdrawalsHash = nil
+		withdrawals = nil
 	}
 
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
