@@ -297,7 +297,11 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 			estimate = estimate*(1-intervalAdjustRatio) + intervalAdjustRatio*(min-intervalAdjustBias)
 			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(estimate)*time.Nanosecond
 		case 3:
-			wantMinInterval, wantRecommitInterval = time.Second, time.Second
+			// <specular modification>
+			// lower than upstream test, since enforced min recommit interval is lower
+			wantMinInterval, wantRecommitInterval = 500*time.Millisecond, 500*time.Millisecond
+			// <specular modification/>
+
 		}
 
 		// Check interval
