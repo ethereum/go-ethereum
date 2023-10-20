@@ -111,5 +111,13 @@ func logTest(ctx *cli.Context) error {
 		log.Info("test", "bar", "a long message", "a", 1)
 		log.Info("test", "bar", "short", "a", "aligned right")
 	}
+	{
+		// This sequence of logs should be output with alignment, so each field becoems a column.
+		log.Info("The following logs should align so that the key-fields make 5 columns")
+		log.Info("Inserted known block", "number", 1_012, "hash", common.HexToHash("0x1234"), "txs", 200, "gas", 1_123_123, "other", "first")
+		log.Info("Inserted new block", "number", 1, "hash", common.HexToHash("0x1235"), "txs", 2, "gas", 1_123, "other", "second")
+		log.Info("Inserted known block", "number", 99, "hash", common.HexToHash("0x12322"), "txs", 10, "gas", 1, "other", "third")
+		log.Warn("Inserted known block", "number", 1_012, "hash", common.HexToHash("0x1234"), "txs", 200, "gas", 99, "other", "fourth")
+	}
 	return nil
 }
