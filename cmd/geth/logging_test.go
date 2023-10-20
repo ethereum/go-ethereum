@@ -161,3 +161,23 @@ func TestFileOut(t *testing.T) {
 		t.Errorf("file content wrong")
 	}
 }
+
+func TestRotatingFileOut(t *testing.T) {
+	var (
+		have, want []byte
+		err        error
+		path       = fmt.Sprintf("%s/test_file_out-%d", os.TempDir(), rand.Int63())
+	)
+	t.Cleanup(func() { os.Remove(path) })
+	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "--log.rotate", "logtest"); err != nil {
+		t.Fatal(err)
+	}
+	if have, err = os.ReadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(have, want) {
+		// show an intelligent diff
+		t.Logf(nicediff(have, want))
+		t.Errorf("file content wrong")
+	}
+}

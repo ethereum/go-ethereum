@@ -92,7 +92,8 @@ func logTest(ctx *cli.Context) error {
 		// is shorter than beta, it sometimes causes erroneous padding -- and what's more
 		// it causes _different_ padding in multi-handler context, e.g. both file-
 		// and console output, making the two mismatch.
-		log.Info("repeated-key", "foo", "alpha", "foo", "beta")
+		log.Info("repeated-key 1", "foo", "alpha", "foo", "beta")
+		log.Info("repeated-key 2", "xx", "short", "xx", "longer")
 	}
 	{ // loglevels
 		log.Debug("log at level debug")
