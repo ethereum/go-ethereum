@@ -48,7 +48,7 @@ func memoryMStore(stack *Stack) (uint64, bool) {
 	return calcMemSize64WithUint(stack.Back(0), 32)
 }
 
-func memoryMcopy(stack *Stack) (uint64, bool) {
+func MemoryMcopy(stack *Stack) (uint64, bool) {
 	mStart := stack.Back(0) // stack[0]: dest
 	if stack.Back(1).Gt(mStart) {
 		mStart = stack.Back(1) // stack[1]: source

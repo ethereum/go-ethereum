@@ -35,7 +35,7 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	case rules.IsShanghai:
 		return newShanghaiInstructionSet(), nil
 	case rules.IsMerge:
-		return newMergeInstructionSet(), nil
+		return NewMergeInstructionSet(), nil
 	case rules.IsLondon:
 		return newLondonInstructionSet(), nil
 	case rules.IsBerlin:
@@ -72,5 +72,5 @@ func (op *operation) HasCost() bool {
 	// However, go-lang does now allow that. So we'll just check some other
 	// 'indicators' that this is an invalid op. Alas, STOP is impossible to
 	// filter out
-	return op.dynamicGas != nil || op.constantGas != 0
+	return op.dynamicGas != nil || op.ConstantGas != 0
 }

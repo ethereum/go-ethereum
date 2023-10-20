@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package vm_test
 
 import (
 	"math/bits"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -29,30 +30,30 @@ func TestJumpDestAnalysis(t *testing.T) {
 		exp   byte
 		which int
 	}{
-		{[]byte{byte(PUSH1), 0x01, 0x01, 0x01}, 0b0000_0010, 0},
-		{[]byte{byte(PUSH1), byte(PUSH1), byte(PUSH1), byte(PUSH1)}, 0b0000_1010, 0},
-		{[]byte{0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1)}, 0b0101_0100, 0},
-		{[]byte{byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), 0x01, 0x01, 0x01}, bits.Reverse8(0x7F), 0},
-		{[]byte{byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0001, 1},
-		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), byte(PUSH2), byte(PUSH2), 0x01, 0x01, 0x01}, 0b1100_0000, 0},
-		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0000, 1},
-		{[]byte{byte(PUSH3), 0x01, 0x01, 0x01, byte(PUSH1), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0010_1110, 0},
-		{[]byte{byte(PUSH3), 0x01, 0x01, 0x01, byte(PUSH1), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0000, 1},
-		{[]byte{0x01, byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1100, 0},
-		{[]byte{0x01, byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0011, 1},
-		{[]byte{byte(PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1110, 0},
-		{[]byte{byte(PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1111, 1},
-		{[]byte{byte(PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0001, 2},
-		{[]byte{byte(PUSH8), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, byte(PUSH1), 0x01}, 0b1111_1110, 0},
-		{[]byte{byte(PUSH8), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, byte(PUSH1), 0x01}, 0b0000_0101, 1},
-		{[]byte{byte(PUSH32)}, 0b1111_1110, 0},
-		{[]byte{byte(PUSH32)}, 0b1111_1111, 1},
-		{[]byte{byte(PUSH32)}, 0b1111_1111, 2},
-		{[]byte{byte(PUSH32)}, 0b1111_1111, 3},
-		{[]byte{byte(PUSH32)}, 0b0000_0001, 4},
+		{[]byte{byte(vm.PUSH1), 0x01, 0x01, 0x01}, 0b0000_0010, 0},
+		{[]byte{byte(vm.PUSH1), byte(vm.PUSH1), byte(vm.PUSH1), byte(vm.PUSH1)}, 0b0000_1010, 0},
+		{[]byte{0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1)}, 0b0101_0100, 0},
+		{[]byte{byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), byte(vm.PUSH8), 0x01, 0x01, 0x01}, bits.Reverse8(0x7F), 0},
+		{[]byte{byte(vm.PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0001, 1},
+		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(vm.PUSH2), byte(vm.PUSH2), byte(vm.PUSH2), 0x01, 0x01, 0x01}, 0b1100_0000, 0},
+		{[]byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(vm.PUSH2), 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0000, 1},
+		{[]byte{byte(vm.PUSH3), 0x01, 0x01, 0x01, byte(vm.PUSH1), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0010_1110, 0},
+		{[]byte{byte(vm.PUSH3), 0x01, 0x01, 0x01, byte(vm.PUSH1), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0000, 1},
+		{[]byte{0x01, byte(vm.PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1100, 0},
+		{[]byte{0x01, byte(vm.PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0011, 1},
+		{[]byte{byte(vm.PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1110, 0},
+		{[]byte{byte(vm.PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b1111_1111, 1},
+		{[]byte{byte(vm.PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, 0b0000_0001, 2},
+		{[]byte{byte(vm.PUSH8), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, byte(vm.PUSH1), 0x01}, 0b1111_1110, 0},
+		{[]byte{byte(vm.PUSH8), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, byte(vm.PUSH1), 0x01}, 0b0000_0101, 1},
+		{[]byte{byte(vm.PUSH32)}, 0b1111_1110, 0},
+		{[]byte{byte(vm.PUSH32)}, 0b1111_1111, 1},
+		{[]byte{byte(vm.PUSH32)}, 0b1111_1111, 2},
+		{[]byte{byte(vm.PUSH32)}, 0b1111_1111, 3},
+		{[]byte{byte(vm.PUSH32)}, 0b0000_0001, 4},
 	}
 	for i, test := range tests {
-		ret := codeBitmap(test.code)
+		ret := vm.CodeBitmap(test.code)
 		if ret[test.which] != test.exp {
 			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
@@ -67,7 +68,7 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	bench.SetBytes(analysisCodeSize)
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		codeBitmap(code)
+		vm.CodeBitmap(code)
 	}
 	bench.StopTimer()
 }
@@ -83,27 +84,27 @@ func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 }
 
 func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
-	var op OpCode
+	var op vm.OpCode
 	bencher := func(b *testing.B) {
 		code := make([]byte, analysisCodeSize)
 		b.SetBytes(analysisCodeSize)
 		for i := range code {
 			code[i] = byte(op)
 		}
-		bits := make(bitvec, len(code)/8+1+4)
+		bits := make(vm.Bitvec, len(code)/8+1+4)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for j := range bits {
 				bits[j] = 0
 			}
-			codeBitmapInternal(code, bits)
+			vm.CodeBitmapInternal(code, bits)
 		}
 	}
-	for op = PUSH1; op <= PUSH32; op++ {
+	for op = vm.PUSH1; op <= vm.PUSH32; op++ {
 		bench.Run(op.String(), bencher)
 	}
-	op = JUMPDEST
+	op = vm.JUMPDEST
 	bench.Run(op.String(), bencher)
-	op = STOP
+	op = vm.STOP
 	bench.Run(op.String(), bencher)
 }

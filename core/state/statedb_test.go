@@ -181,16 +181,16 @@ func TestCopy(t *testing.T) {
 	// modify all in memory
 	for i := byte(0); i < 255; i++ {
 		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		copyObj := copy.(*StateDB).GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		ccopyObj := ccopy.(*StateDB).GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 
 		origObj.AddBalance(big.NewInt(2 * int64(i)))
 		copyObj.AddBalance(big.NewInt(3 * int64(i)))
 		ccopyObj.AddBalance(big.NewInt(4 * int64(i)))
 
 		orig.updateStateObject(origObj)
-		copy.updateStateObject(copyObj)
-		ccopy.updateStateObject(copyObj)
+		copy.(*StateDB).updateStateObject(copyObj)
+		ccopy.(*StateDB).updateStateObject(copyObj)
 	}
 
 	// Finalise the changes on all concurrently
@@ -202,15 +202,15 @@ func TestCopy(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go finalise(&wg, orig)
-	go finalise(&wg, copy)
-	go finalise(&wg, ccopy)
+	go finalise(&wg, copy.(*StateDB))
+	go finalise(&wg, ccopy.(*StateDB))
 	wg.Wait()
 
 	// Verify that the three states have been updated independently
 	for i := byte(0); i < 255; i++ {
 		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		copyObj := copy.(*StateDB).GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		ccopyObj := ccopy.(*StateDB).GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 
 		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
@@ -1016,7 +1016,7 @@ func TestStateDBAccessList(t *testing.T) {
 	}
 	// Check the copy
 	// Make a copy
-	state = stateCopy1
+	state = stateCopy1.(*StateDB)
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 	if got, exp := len(state.accessList.addresses), 2; got != exp {

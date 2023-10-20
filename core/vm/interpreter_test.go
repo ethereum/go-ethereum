@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package vm_test
 
 import (
 	"math/big"
@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -38,8 +39,8 @@ var loopInterruptTests = []string{
 
 func TestLoopInterrupt(t *testing.T) {
 	address := common.BytesToAddress([]byte("contract"))
-	vmctx := BlockContext{
-		Transfer: func(StateDB, common.Address, common.Address, *big.Int) {},
+	vmctx := vm.BlockContext{
+		Transfer: func(vm.StateDB, common.Address, common.Address, *big.Int) {},
 	}
 
 	for i, tt := range loopInterruptTests {
@@ -48,13 +49,13 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{})
+		evm := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.AllEthashProtocolChanges, vm.Config{})
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
 
-		go func(evm *EVM) {
-			_, _, err := evm.Call(AccountRef(common.Address{}), address, nil, math.MaxUint64, new(big.Int))
+		go func(evm *vm.EVM) {
+			_, _, err := evm.Call(vm.AccountRef(common.Address{}), address, nil, math.MaxUint64, new(big.Int))
 			errChannel <- err
 		}(evm)
 

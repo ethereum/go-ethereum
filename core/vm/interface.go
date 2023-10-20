@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -88,7 +87,7 @@ type StateDB interface {
 	Finalise(deleteEmptyObjects bool)
 	Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error)
 	SetTxContext(thash common.Hash, ti int)
-	Copy() *state.StateDB
+	Copy() StateDB
 	IntermediateRoot(deleteEmptyObjects bool) common.Hash
 	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
 	TxIndex() int

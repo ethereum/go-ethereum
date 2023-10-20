@@ -212,7 +212,7 @@ type worker struct {
 	snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
-	snapshotState    *state.StateDB
+	snapshotState    vm.StateDB
 
 	// atomic status counters
 	running atomic.Bool  // The indicator whether the consensus engine is running or not.

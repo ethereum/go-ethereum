@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package vm_test
 
 import (
 	"bytes"
@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -45,50 +46,50 @@ type precompiledFailureTest struct {
 
 // allPrecompiles does not map to the actual set of precompiles, as it also contains
 // repriced versions of precompiles at certain slots
-var allPrecompiles = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):    &ecrecover{},
-	common.BytesToAddress([]byte{2}):    &sha256hash{},
-	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):    &dataCopy{},
-	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}):    &blake2F{},
-	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
+var allPrecompiles = map[common.Address]vm.PrecompiledContract{
+	common.BytesToAddress([]byte{1}):    &vm.Ecrecover{},
+	common.BytesToAddress([]byte{2}):    &vm.Sha256hash{},
+	common.BytesToAddress([]byte{3}):    &vm.Ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &vm.DataCopy{},
+	common.BytesToAddress([]byte{5}):    &vm.BigModExp{Eip2565: false},
+	common.BytesToAddress([]byte{0xf5}): &vm.BigModExp{Eip2565: true},
+	common.BytesToAddress([]byte{6}):    &vm.Bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &vm.Bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &vm.Bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &vm.Blake2F{},
+	common.BytesToAddress([]byte{0x0a}): &vm.KzgPointEvaluation{},
 
-	common.BytesToAddress([]byte{0x0f, 0x0a}): &bls12381G1Add{},
-	common.BytesToAddress([]byte{0x0f, 0x0b}): &bls12381G1Mul{},
-	common.BytesToAddress([]byte{0x0f, 0x0c}): &bls12381G1MultiExp{},
-	common.BytesToAddress([]byte{0x0f, 0x0d}): &bls12381G2Add{},
-	common.BytesToAddress([]byte{0x0f, 0x0e}): &bls12381G2Mul{},
-	common.BytesToAddress([]byte{0x0f, 0x0f}): &bls12381G2MultiExp{},
-	common.BytesToAddress([]byte{0x0f, 0x10}): &bls12381Pairing{},
-	common.BytesToAddress([]byte{0x0f, 0x11}): &bls12381MapG1{},
-	common.BytesToAddress([]byte{0x0f, 0x12}): &bls12381MapG2{},
+	common.BytesToAddress([]byte{0x0f, 0x0a}): &vm.Bls12381G1Add{},
+	common.BytesToAddress([]byte{0x0f, 0x0b}): &vm.Bls12381G1Mul{},
+	common.BytesToAddress([]byte{0x0f, 0x0c}): &vm.Bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0f, 0x0d}): &vm.Bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0f, 0x0e}): &vm.Bls12381G2Mul{},
+	common.BytesToAddress([]byte{0x0f, 0x0f}): &vm.Bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f, 0x10}): &vm.Bls12381Pairing{},
+	common.BytesToAddress([]byte{0x0f, 0x11}): &vm.Bls12381MapG1{},
+	common.BytesToAddress([]byte{0x0f, 0x12}): &vm.Bls12381MapG2{},
 }
 
 // EIP-152 test vectors
-var blake2FMalformedInputTests = []precompiledFailureTest{
+var Blake2FMalformedInputTests = []precompiledFailureTest{
 	{
 		Input:         "",
-		ExpectedError: errBlake2FInvalidInputLength.Error(),
+		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
 		Name:          "vector 0: empty input",
 	},
 	{
 		Input:         "00000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
-		ExpectedError: errBlake2FInvalidInputLength.Error(),
+		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
 		Name:          "vector 1: less than 213 bytes input",
 	},
 	{
 		Input:         "000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
-		ExpectedError: errBlake2FInvalidInputLength.Error(),
+		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
 		Name:          "vector 2: more than 213 bytes input",
 	},
 	{
 		Input:         "0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000002",
-		ExpectedError: errBlake2FInvalidFinalFlag.Error(),
+		ExpectedError: vm.ErrBlake2FInvalidFinalFlag.Error(),
 		Name:          "vector 3: malformed final block indicator flag",
 	},
 }
@@ -98,7 +99,7 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, gas), func(t *testing.T) {
-		if res, _, err := RunPrecompiledContract(p, nil, in, gas); err != nil {
+		if res, _, err := vm.RunPrecompiledContract(p, nil, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.Expected {
 			t.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
@@ -120,7 +121,7 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 	gas := p.RequiredGas(in) - 1
 
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.Name, gas), func(t *testing.T) {
-		_, _, err := RunPrecompiledContract(p, nil, in, gas)
+		_, _, err := vm.RunPrecompiledContract(p, nil, in, gas)
 		if err.Error() != "out of gas" {
 			t.Errorf("Expected error [out of gas], got [%v]", err)
 		}
@@ -137,7 +138,7 @@ func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing
 	in := common.Hex2Bytes(test.Input)
 	gas := p.RequiredGas(in)
 	t.Run(test.Name, func(t *testing.T) {
-		_, _, err := RunPrecompiledContract(p, nil, in, gas)
+		_, _, err := vm.RunPrecompiledContract(p, nil, in, gas)
 		if err.Error() != test.ExpectedError {
 			t.Errorf("Expected error [%v], got [%v]", test.ExpectedError, err)
 		}
@@ -169,7 +170,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
 			copy(data, in)
-			res, _, err = RunPrecompiledContract(p, nil, data, reqGas)
+			res, _, err = vm.RunPrecompiledContract(p, nil, data, reqGas)
 		}
 		bench.StopTimer()
 		elapsed := uint64(time.Since(start))
@@ -237,8 +238,8 @@ func BenchmarkPrecompiledIdentity(bench *testing.B) {
 func TestPrecompiledModExp(t *testing.T)      { testJson("modexp", "05", t) }
 func BenchmarkPrecompiledModExp(b *testing.B) { benchJson("modexp", "05", b) }
 
-func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_eip2565", "f5", t) }
-func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_eip2565", "f5", b) }
+func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_Eip2565", "f5", t) }
+func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_Eip2565", "f5", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJson("bn256Add", "06", t) }
@@ -263,11 +264,11 @@ func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJson("bn256ScalarMu
 func TestPrecompiledBn256Pairing(t *testing.T)      { testJson("bn256Pairing", "08", t) }
 func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJson("bn256Pairing", "08", b) }
 
-func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }
-func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJson("blake2F", "09", b) }
+func TestPrecompiledBlake2F(t *testing.T)      { testJson("Blake2F", "09", t) }
+func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJson("Blake2F", "09", b) }
 
 func TestPrecompileBlake2FMalformedInput(t *testing.T) {
-	for _, test := range blake2FMalformedInputTests {
+	for _, test := range Blake2FMalformedInputTests {
 		testPrecompiledFailure("09", test, t)
 	}
 }

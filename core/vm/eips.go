@@ -71,14 +71,14 @@ func ActivateableEips() []string {
 // - Define SELFBALANCE, with cost GasFastStep (5)
 func enable1884(jt *JumpTable) {
 	// Gas cost changes
-	jt[SLOAD].constantGas = params.SloadGasEIP1884
-	jt[BALANCE].constantGas = params.BalanceGasEIP1884
-	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
+	jt[SLOAD].ConstantGas = params.SloadGasEIP1884
+	jt[BALANCE].ConstantGas = params.BalanceGasEIP1884
+	jt[EXTCODEHASH].ConstantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
 	jt[SELFBALANCE] = &operation{
 		execute:     opSelfBalance,
-		constantGas: GasFastStep,
+		ConstantGas: GasFastStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
@@ -96,7 +96,7 @@ func enable1344(jt *JumpTable) {
 	// New opcode
 	jt[CHAINID] = &operation{
 		execute:     opChainID,
-		constantGas: GasQuickStep,
+		ConstantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
@@ -111,7 +111,7 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 
 // enable2200 applies EIP-2200 (Rebalance net-metered SSTORE)
 func enable2200(jt *JumpTable) {
-	jt[SLOAD].constantGas = params.SloadGasEIP2200
+	jt[SLOAD].ConstantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 }
 
@@ -120,36 +120,36 @@ func enable2200(jt *JumpTable) {
 func enable2929(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
 
-	jt[SLOAD].constantGas = 0
+	jt[SLOAD].ConstantGas = 0
 	jt[SLOAD].dynamicGas = gasSLoadEIP2929
 
-	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
+	jt[EXTCODECOPY].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
 
-	jt[EXTCODESIZE].constantGas = params.WarmStorageReadCostEIP2929
+	jt[EXTCODESIZE].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODESIZE].dynamicGas = gasEip2929AccountCheck
 
-	jt[EXTCODEHASH].constantGas = params.WarmStorageReadCostEIP2929
+	jt[EXTCODEHASH].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODEHASH].dynamicGas = gasEip2929AccountCheck
 
-	jt[BALANCE].constantGas = params.WarmStorageReadCostEIP2929
+	jt[BALANCE].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
 
-	jt[CALL].constantGas = params.WarmStorageReadCostEIP2929
+	jt[CALL].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[CALL].dynamicGas = gasCallEIP2929
 
-	jt[CALLCODE].constantGas = params.WarmStorageReadCostEIP2929
+	jt[CALLCODE].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
 
-	jt[STATICCALL].constantGas = params.WarmStorageReadCostEIP2929
+	jt[STATICCALL].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
 
-	jt[DELEGATECALL].constantGas = params.WarmStorageReadCostEIP2929
+	jt[DELEGATECALL].ConstantGas = params.WarmStorageReadCostEIP2929
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
 
-	// This was previously part of the dynamic cost, but we're using it as a constantGas
+	// This was previously part of the dynamic cost, but we're using it as a ConstantGas
 	// factor here
-	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
+	jt[SELFDESTRUCT].ConstantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 
@@ -168,7 +168,7 @@ func enable3198(jt *JumpTable) {
 	// New opcode
 	jt[BASEFEE] = &operation{
 		execute:     opBaseFee,
-		constantGas: GasQuickStep,
+		ConstantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
@@ -179,22 +179,22 @@ func enable3198(jt *JumpTable) {
 // - Adds TSTORE that writes to transient storage
 func enable1153(jt *JumpTable) {
 	jt[TLOAD] = &operation{
-		execute:     opTload,
-		constantGas: params.WarmStorageReadCostEIP2929,
+		execute:     OpTload,
+		ConstantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
 
 	jt[TSTORE] = &operation{
-		execute:     opTstore,
-		constantGas: params.WarmStorageReadCostEIP2929,
+		execute:     OpTstore,
+		ConstantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(2, 0),
 		maxStack:    maxStack(2, 0),
 	}
 }
 
-// opTload implements TLOAD opcode
-func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+// OpTload implements TLOAD opcode
+func OpTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
@@ -202,8 +202,8 @@ func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// opTstore implements TSTORE opcode
-func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+// OpTstore implements TSTORE opcode
+func OpTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
@@ -225,7 +225,7 @@ func enable3855(jt *JumpTable) {
 	// New opcode
 	jt[PUSH0] = &operation{
 		execute:     opPush0,
-		constantGas: GasQuickStep,
+		ConstantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
@@ -248,17 +248,17 @@ func enable3860(jt *JumpTable) {
 // https://eips.ethereum.org/EIPS/eip-5656
 func enable5656(jt *JumpTable) {
 	jt[MCOPY] = &operation{
-		execute:     opMcopy,
-		constantGas: GasFastestStep,
-		dynamicGas:  gasMcopy,
+		execute:     OpMcopy,
+		ConstantGas: GasFastestStep,
+		dynamicGas:  GasMcopy,
 		minStack:    minStack(3, 0),
 		maxStack:    maxStack(3, 0),
-		memorySize:  memoryMcopy,
+		memorySize:  MemoryMcopy,
 	}
 }
 
-// opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
-func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+// OpMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
+func OpMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		dst    = scope.Stack.pop()
 		src    = scope.Stack.pop()
@@ -270,8 +270,8 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// opBlobHash implements the BLOBHASH opcode
-func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+// OpBlobHash implements the BLOBHASH opcode
+func OpBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	index := scope.Stack.peek()
 	if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
 		blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
@@ -292,8 +292,8 @@ func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
 	jt[BLOBHASH] = &operation{
-		execute:     opBlobHash,
-		constantGas: GasFastestStep,
+		execute:     OpBlobHash,
+		ConstantGas: GasFastestStep,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
@@ -303,7 +303,7 @@ func enable4844(jt *JumpTable) {
 func enable7516(jt *JumpTable) {
 	jt[BLOBBASEFEE] = &operation{
 		execute:     opBlobBaseFee,
-		constantGas: GasQuickStep,
+		ConstantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
@@ -314,7 +314,7 @@ func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
 		execute:     opSelfdestruct6780,
 		dynamicGas:  gasSelfdestructEIP3529,
-		constantGas: params.SelfdestructGasEIP150,
+		ConstantGas: params.SelfdestructGasEIP150,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 	}

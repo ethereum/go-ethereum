@@ -1,4 +1,4 @@
-package vm
+package vm_test
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func TestMemoryCopy(t *testing.T) {
@@ -53,7 +54,7 @@ func TestMemoryCopy(t *testing.T) {
 			"11",
 		},
 	} {
-		m := NewMemory()
+		m := vm.NewMemory()
 		// Clean spaces
 		data := common.FromHex(strings.ReplaceAll(tc.pre, " ", ""))
 		// Set pre
@@ -62,7 +63,7 @@ func TestMemoryCopy(t *testing.T) {
 		// Do the copy
 		m.Copy(tc.dst, tc.src, tc.len)
 		want := common.FromHex(strings.ReplaceAll(tc.want, " ", ""))
-		if have := m.store; !bytes.Equal(want, have) {
+		if have := m.GetStore(); !bytes.Equal(want, have) {
 			t.Errorf("case %d: want: %#x\nhave: %#x\n", i, want, have)
 		}
 	}

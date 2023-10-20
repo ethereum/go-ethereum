@@ -84,7 +84,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	var extraEips []int
 	if len(evm.Config.ExtraEips) > 0 {
 		// Deep-copy jumptable to prevent modification of opcodes in other tables
-		table = copyJumpTable(table)
+		table = CopyJumpTable(table)
 	}
 	for _, eip := range evm.Config.ExtraEips {
 		if err := EnableEIP(eip, table); err != nil {
@@ -128,7 +128,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	var (
 		op          OpCode        // current opcode
 		mem         = NewMemory() // bound memory
-		stack       = newstack()  // local stack
+		stack       = Newstack()  // local stack
 		callContext = &ScopeContext{
 			Memory:   mem,
 			Stack:    stack,
@@ -178,7 +178,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := in.table[op]
-		cost = operation.constantGas // For tracing
+		cost = operation.ConstantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
@@ -202,7 +202,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				}
 				// memory is expanded in words of 32 bytes. Gas
 				// is also calculated in words.
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				if memorySize, overflow = math.SafeMul(ToWordSize(memSize), 32); overflow {
 					return nil, ErrGasUintOverflow
 				}
 			}

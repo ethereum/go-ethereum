@@ -114,3 +114,7 @@ func (m *Memory) Copy(dst, src, len uint64) {
 	}
 	copy(m.store[dst:], m.store[src:src+len])
 }
+
+func (m *Memory) GetStore() []byte {
+	return m.store
+}
