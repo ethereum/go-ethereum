@@ -68,10 +68,10 @@ func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
 	}
 
 	sort.Slice(l1, func(i, j int) bool {
-		return l1[i].String() <= l1[j].String()
+		return bytes.Compare(l1[i][:], l1[j][:]) == -1
 	})
 	sort.Slice(l2, func(i, j int) bool {
-		return l2[i].String() <= l2[j].String()
+		return bytes.Compare(l2[i][:], l2[j][:]) == -1
 	})
 	return reflect.DeepEqual(l1, l2)
 }
