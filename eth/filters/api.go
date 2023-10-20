@@ -34,6 +34,8 @@ import (
 )
 
 var (
+	ErrInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
+
 	errInvalidTopic   = errors.New("invalid topic(s)")
 	errFilterNotFound = errors.New("filter not found")
 )
@@ -347,12 +349,16 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 		}
-		// Fast exit if from > to
-		if begin > 0 && end > 0 && begin > end {
-			return nil, nil
-		}
 		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
+		var err error
+		filter, err = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
+		if err != nil {
+			// Compatible with old implement
+			if err == ErrInvalidBlockRange {
+				return nil, nil
+			}
+			return nil, err
+		}
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -403,7 +409,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 			end = f.crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, f.crit.Addresses, f.crit.Topics)
+		filter, _ = api.sys.NewRangeFilter(begin, end, f.crit.Addresses, f.crit.Topics)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
