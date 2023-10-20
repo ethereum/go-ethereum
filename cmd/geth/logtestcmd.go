@@ -101,5 +101,13 @@ func logTest(ctx *cli.Context) error {
 		log.Warn("log at level warn")
 		log.Error("log at level error")
 	}
+	{
+		// The current log formatter has a global map of paddings, storing the
+		// longest seen padding per key in a map. This results in a statefulness
+		// which has some odd side-effects. Demonstrated here:
+		log.Info("test", "bar", "short", "a", "aligned left")
+		log.Info("test", "bar", "a long message", "a", 1)
+		log.Info("test", "bar", "short", "a", "aligned right")
+	}
 	return nil
 }
