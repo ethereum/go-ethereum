@@ -42,8 +42,8 @@ type VerkleTrie struct {
 	reader     *trieReader
 }
 
-func (vt *VerkleTrie) ToDot() string {
-	return verkle.ToDot(vt.root)
+func (t *VerkleTrie) ToDot() string {
+	return verkle.ToDot(t.root)
 }
 
 func NewVerkleTrie(rootHash common.Hash, root verkle.VerkleNode, db *Database, pointCache *utils.PointCache, ended bool) (*VerkleTrie, error) {
@@ -61,31 +61,31 @@ func NewVerkleTrie(rootHash common.Hash, root verkle.VerkleNode, db *Database, p
 	}, nil
 }
 
-func (trie *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	return trie.reader.reader.Node(trie.reader.owner, path, common.Hash{})
+func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return t.reader.reader.Node(t.reader.owner, path, common.Hash{})
 }
 
 var errInvalidRootType = errors.New("invalid node type for root")
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
-func (trie *VerkleTrie) GetKey(key []byte) []byte {
+func (t *VerkleTrie) GetKey(key []byte) []byte {
 	return key
 }
 
-// Get returns the value for key stored in the trie. The value bytes must
-// not be modified by the caller. If a node was not found in the database, a
-// trie.MissingNodeError is returned.
-func (trie *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	pointEval := trie.pointCache.GetTreeKeyHeader(addr[:])
+// GetStorage returns the value for key stored in the trie. The value bytes
+// must not be modified by the caller. If a node was not found in the database,
+// a trie.MissingNodeError is returned.
+func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
+	pointEval := t.pointCache.GetTreeKeyHeader(addr[:])
 	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, key)
-	return trie.root.Get(k, trie.FlatdbNodeResolver)
+	return t.root.Get(k, t.FlatdbNodeResolver)
 }
 
 // GetWithHashedKey returns the value, assuming that the key has already
 // been hashed.
-func (trie *VerkleTrie) GetWithHashedKey(key []byte) ([]byte, error) {
-	return trie.root.Get(key, trie.FlatdbNodeResolver)
+func (t *VerkleTrie) GetWithHashedKey(key []byte) ([]byte, error) {
+	return t.root.Get(key, t.FlatdbNodeResolver)
 }
 
 func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
@@ -161,28 +161,28 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 	return nil
 }
 
-func (trie *VerkleTrie) UpdateStem(key []byte, values [][]byte) error {
-	switch root := trie.root.(type) {
+func (t *VerkleTrie) UpdateStem(key []byte, values [][]byte) error {
+	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		return root.InsertStem(key, values, trie.FlatdbNodeResolver)
+		return root.InsertStem(key, values, t.FlatdbNodeResolver)
 	default:
 		panic("invalid root type")
 	}
 }
 
-// Update associates key with value in the trie. If value has length zero, any
-// existing value is deleted from the trie. The value bytes must not be modified
+// UpdateStorage associates key with value in the trie. If value has length zero,
+// any existing value is deleted from the trie. The value bytes must not be modified
 // by the caller while they are stored in the trie. If a node was not found in the
 // database, a trie.MissingNodeError is returned.
-func (trie *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) error {
-	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(trie.pointCache.GetTreeKeyHeader(address[:]), key)
+func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) error {
+	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(t.pointCache.GetTreeKeyHeader(address[:]), key)
 	var v [32]byte
 	if len(value) >= 32 {
 		copy(v[:], value[:32])
 	} else {
 		copy(v[32-len(value):], value[:])
 	}
-	return trie.root.Insert(k, v[:], trie.FlatdbNodeResolver)
+	return t.root.Insert(k, v[:], t.FlatdbNodeResolver)
 }
 
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
@@ -210,19 +210,19 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 	return nil
 }
 
-// Delete removes any existing value for key from the trie. If a node was not
-// found in the database, a trie.MissingNodeError is returned.
-func (trie *VerkleTrie) DeleteStorage(addr common.Address, key []byte) error {
-	pointEval := trie.pointCache.GetTreeKeyHeader(addr[:])
+// DeleteStorage removes any existing value for key from the trie. If a node was
+// not found in the database, a trie.MissingNodeError is returned.
+func (t *VerkleTrie) DeleteStorage(addr common.Address, key []byte) error {
+	pointEval := t.pointCache.GetTreeKeyHeader(addr[:])
 	k := utils.GetTreeKeyStorageSlotWithEvaluatedAddress(pointEval, key)
 	var zero [32]byte
-	return trie.root.Insert(k, zero[:], trie.FlatdbNodeResolver)
+	return t.root.Insert(k, zero[:], t.FlatdbNodeResolver)
 }
 
 // Hash returns the root hash of the trie. It does not write to the database and
 // can be used even if the trie doesn't have one.
-func (trie *VerkleTrie) Hash() common.Hash {
-	return trie.root.Commit().Bytes()
+func (t *VerkleTrie) Hash() common.Hash {
+	return t.root.Commit().Bytes()
 }
 
 func nodeToDBKey(n verkle.VerkleNode) []byte {
@@ -232,8 +232,8 @@ func nodeToDBKey(n verkle.VerkleNode) []byte {
 
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
-	root, ok := trie.root.(*verkle.InternalNode)
+func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
+	root, ok := t.root.(*verkle.InternalNode)
 	if !ok {
 		return common.Hash{}, nil, errors.New("unexpected root node type")
 	}
@@ -249,14 +249,14 @@ func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 	}
 
 	// Serialize root commitment form
-	trie.rootHash = trie.Hash()
-	return trie.rootHash, nodeset, nil
+	t.rootHash = t.Hash()
+	return t.rootHash, nodeset, nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
 // starts at the key after the given start key.
-func (trie *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
-	return newVerkleNodeIterator(trie, nil)
+func (t *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
+	return newVerkleNodeIterator(t, nil)
 }
 
 // Prove constructs a Merkle proof for key. The result contains all encoded nodes
@@ -266,21 +266,21 @@ func (trie *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root), ending
 // with the node that proves the absence of the key.
-func (trie *VerkleTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+func (t *VerkleTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	panic("not implemented")
 }
 
-func (trie *VerkleTrie) Copy() *VerkleTrie {
+func (t *VerkleTrie) Copy() *VerkleTrie {
 	return &VerkleTrie{
-		root:       trie.root.Copy(),
-		db:         trie.db,
-		pointCache: trie.pointCache,
-		reader:     trie.reader,
+		root:       t.root.Copy(),
+		db:         t.db,
+		pointCache: t.pointCache,
+		reader:     t.reader,
 	}
 }
 
 // IsVerkle indicates if the trie is a Verkle trie.
-func (trie *VerkleTrie) IsVerkle() bool {
+func (t *VerkleTrie) IsVerkle() bool {
 	return true
 }
 

@@ -321,8 +321,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		t.Fatalf("expected trie to be verkle")
 	}
 
-	serialized := rawdb.ReadTrieNode(db, common.Hash{}, []byte{}, common.Hash{}, "path")
-	if len(serialized) == 0 {
+	if !rawdb.ExistsAccountTrieNode(db, nil) {
 		t.Fatal("could not find node")
 	}
 }
