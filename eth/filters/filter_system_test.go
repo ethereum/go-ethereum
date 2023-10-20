@@ -464,8 +464,8 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 		api    = NewFilterAPI(sys, false)
 	)
 
-	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != nil {
-		t.Errorf("Expected Logs for invalid range succeed, but got: %v", err)
+	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
+		t.Errorf("Expected Logs for invalid range return error, but got: %v", err)
 	}
 }
 
