@@ -66,7 +66,7 @@ func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *stat
 type testBlockChain struct {
 	root          common.Hash
 	config        *params.ChainConfig
-	statedb       *state.StateDB
+	statedb       vm.StateDB
 	gasLimit      uint64
 	chainHeadFeed *event.Feed
 }
@@ -86,7 +86,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(common.Hash) (vm.StateDB, error) {
 	return bc.statedb, nil
 }
 

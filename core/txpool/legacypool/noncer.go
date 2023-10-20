@@ -20,20 +20,20 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // noncer is a tiny virtual state database to manage the executable nonces of
 // accounts in the pool, falling back to reading from a real state database if
 // an account is unknown.
 type noncer struct {
-	fallback *state.StateDB
+	fallback vm.StateDB
 	nonces   map[common.Address]uint64
 	lock     sync.Mutex
 }
 
 // newNoncer creates a new virtual state database to track the pool nonces.
-func newNoncer(statedb *state.StateDB) *noncer {
+func newNoncer(statedb vm.StateDB) *noncer {
 	return &noncer{
 		fallback: statedb.Copy(),
 		nonces:   make(map[common.Address]uint64),

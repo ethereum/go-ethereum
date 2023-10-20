@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -84,7 +85,7 @@ type testBlockChain struct {
 	config  *params.ChainConfig
 	basefee *uint256.Int
 	blobfee *uint256.Int
-	statedb *state.StateDB
+	statedb vm.StateDB
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -158,7 +159,7 @@ func (bt *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return nil
 }
 
-func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(common.Hash) (vm.StateDB, error) {
 	return bc.statedb, nil
 }
 

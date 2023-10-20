@@ -83,9 +83,9 @@ var (
 // information of the sealing block generation.
 type environment struct {
 	signer   types.Signer
-	state    *state.StateDB // apply state changes here
-	tcount   int            // tx count in cycle
-	gasPool  *core.GasPool  // available gas used to pack transactions
+	state    vm.StateDB    // apply state changes here
+	tcount   int           // tx count in cycle
+	gasPool  *core.GasPool // available gas used to pack transactions
 	coinbase common.Address
 
 	header   *types.Header
@@ -125,13 +125,13 @@ func (env *environment) discard() {
 	if env.state == nil {
 		return
 	}
-	env.state.StopPrefetcher()
+	env.state.(*state.StateDB).StopPrefetcher()
 }
 
 // task contains all information for consensus engine sealing and result submitting.
 type task struct {
 	receipts  []*types.Receipt
-	state     *state.StateDB
+	state     vm.StateDB
 	block     *types.Block
 	createdAt time.Time
 }
@@ -337,7 +337,7 @@ func (w *worker) setRecommitInterval(interval time.Duration) {
 
 // pending returns the pending state and corresponding block. The returned
 // values can be nil in case the pending block is not initialized.
-func (w *worker) pending() (*types.Block, *state.StateDB) {
+func (w *worker) pending() (*types.Block, vm.StateDB) {
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
 	if w.snapshotState == nil {
@@ -707,16 +707,16 @@ func (w *worker) resultLoop() {
 func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.chain.StateAt(parent.Root)
+	stateDB, err := w.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
+	stateDB.(*state.StateDB).StartPrefetcher("miner")
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
 		signer:   types.MakeSigner(w.chainConfig, header.Number, header.Time),
-		state:    state,
+		state:    stateDB,
 		coinbase: coinbase,
 		header:   header,
 	}
