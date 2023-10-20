@@ -51,7 +51,6 @@ type diskLayer struct {
 func (dl *diskLayer) Release() error {
 	if dl.cache != nil {
 		dl.cache.Reset()
-		dl.cache = nil
 	}
 	return nil
 }
