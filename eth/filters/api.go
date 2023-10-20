@@ -34,10 +34,9 @@ import (
 )
 
 var (
-	ErrInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
-
-	errInvalidTopic   = errors.New("invalid topic(s)")
-	errFilterNotFound = errors.New("filter not found")
+	errInvalidTopic      = errors.New("invalid topic(s)")
+	errFilterNotFound    = errors.New("filter not found")
+	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -353,10 +352,6 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		var err error
 		filter, err = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
 		if err != nil {
-			// Compatible with old implement
-			if err == ErrInvalidBlockRange {
-				return nil, nil
-			}
 			return nil, err
 		}
 	}

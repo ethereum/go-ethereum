@@ -45,7 +45,7 @@ type Filter struct {
 func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) (*Filter, error) {
 	// Fast exit if from > to
 	if begin > 0 && end > 0 && begin > end {
-		return nil, ErrInvalidBlockRange
+		return nil, errInvalidBlockRange
 	}
 
 	// Flatten the address and topic filter clauses into a single bloombits filter
