@@ -51,8 +51,8 @@ func logTest(ctx *cli.Context) error {
 	{ // int64
 		log.Info("int64", "1,000,000", int64(1000000))
 		log.Info("int64", "-1,000,000", int64(-1000000))
-		log.Info("int64", "9,223,372,036,854,775,807", math.MaxInt64)
-		log.Info("int64", "-9,223,372,036,854,775,808", math.MinInt64)
+		log.Info("int64", "9,223,372,036,854,775,807", int64(math.MaxInt64))
+		log.Info("int64", "-9,223,372,036,854,775,808", int64(math.MinInt64))
 	}
 	{ // uint64
 		log.Info("uint64", "1,000,000", uint64(1000000))
