@@ -17,9 +17,11 @@
 package t8ntool
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -29,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"io"
 )
 
 // txWithKey is a helper-struct, to allow us to use the types.Transaction along with
@@ -113,7 +114,6 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 
 func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *params.ChainConfig) (txIterator, error) {
 	var txsWithKeys []*txWithKey
-	var signed types.Transactions
 	if txStr != stdinSelector {
 		data, err := os.ReadFile(txStr)
 		if err != nil {
@@ -124,11 +124,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 			if err := json.Unmarshal(data, &body); err != nil {
 				return nil, err
 			}
-			// Already signed transactions
-			if err := rlp.DecodeBytes(body, &signed); err != nil {
-				return nil, err
-			}
-			return newArrayIterator(signed), err
+			return newRlpTxIterator(body), nil
 		}
 		if err := json.Unmarshal(data, &txsWithKeys); err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
@@ -136,12 +132,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 	} else {
 		if len(inputData.TxRlp) > 0 {
 			// Decode the body of already signed transactions
-			body := common.FromHex(inputData.TxRlp)
-			// Already signed transactions
-			if err := rlp.DecodeBytes(body, &signed); err != nil {
-				return nil, err
-			}
-			return newArrayIterator(signed), nil
+			return newRlpTxIterator(common.FromHex(inputData.TxRlp)), nil
 		}
 		// JSON encoded transactions
 		txsWithKeys = inputData.Txs
@@ -149,7 +140,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 	// We may have to sign the transactions.
 	signer := types.LatestSignerForChainID(chainConfig.ChainID)
 	txs, err := signUnsignedTransactions(txsWithKeys, signer)
-	return newArrayIterator(txs), err
+	return newSliceTxIterator(txs), err
 }
 
 type txIterator interface {
@@ -159,26 +150,45 @@ type txIterator interface {
 	Tx() (*types.Transaction, error)
 }
 
-type arrayIterator struct {
+type sliceTxIterator struct {
 	idx int
-	txs types.Transactions
+	txs []*types.Transaction
 }
 
-func newArrayIterator(transactions types.Transactions) *arrayIterator {
-	return &arrayIterator{0, transactions}
+func newSliceTxIterator(transactions types.Transactions) txIterator {
+	return &sliceTxIterator{0, transactions}
 }
 
-func (ait *arrayIterator) Next() bool {
-	if ait.idx < len(ait.txs) {
-		return true
-	}
-	return false
+func (ait *sliceTxIterator) Next() bool {
+	return ait.idx < len(ait.txs)
 }
 
-func (ait *arrayIterator) Tx() (*types.Transaction, error) {
+func (ait *sliceTxIterator) Tx() (*types.Transaction, error) {
 	if ait.idx < len(ait.txs) {
 		ait.idx++
 		return ait.txs[ait.idx-1], nil
 	}
 	return nil, io.EOF
+}
+
+type rlpTxIterator struct {
+	in *rlp.Stream
+}
+
+func newRlpTxIterator(rlpData []byte) txIterator {
+	in := rlp.NewStream(bytes.NewBuffer(rlpData), 1024*1024)
+	in.List()
+	return &rlpTxIterator{in}
+}
+
+func (it *rlpTxIterator) Next() bool {
+	return it.in.MoreDataInList()
+}
+
+func (it *rlpTxIterator) Tx() (*types.Transaction, error) {
+	var a types.Transaction
+	if err := it.in.Decode(&a); err != nil {
+		return nil, err
+	}
+	return &a, nil
 }
