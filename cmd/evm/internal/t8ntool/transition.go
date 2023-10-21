@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -144,7 +143,7 @@ func Transition(ctx *cli.Context) error {
 	// Check if anything needs to be read from stdin
 	var (
 		prestate Prestate
-		txs      types.Transactions // txs to apply
+		txIt     txIterator // txs to apply
 		allocStr = ctx.String(InputAllocFlag.Name)
 
 		envStr    = ctx.String(InputEnvFlag.Name)
@@ -189,7 +188,7 @@ func Transition(ctx *cli.Context) error {
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
-	if txs, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
+	if txIt, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
 		return err
 	}
 	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
@@ -205,11 +204,10 @@ func Transition(ctx *cli.Context) error {
 		return err
 	}
 	// Run the test and aggregate the result
-	s, result, err := prestate.Apply(vmConfig, chainConfig, txs, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
 		return err
 	}
-	body, _ := rlp.EncodeToBytes(txs)
 	// Dump the excution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)

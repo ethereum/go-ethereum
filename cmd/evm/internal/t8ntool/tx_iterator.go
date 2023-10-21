@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"io"
 )
 
 // txWithKey is a helper-struct, to allow us to use the types.Transaction along with
@@ -110,7 +111,7 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 	return signedTxs, nil
 }
 
-func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *params.ChainConfig) (types.Transactions, error) {
+func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *params.ChainConfig) (txIterator, error) {
 	var txsWithKeys []*txWithKey
 	var signed types.Transactions
 	if txStr != stdinSelector {
@@ -127,7 +128,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 			if err := rlp.DecodeBytes(body, &signed); err != nil {
 				return nil, err
 			}
-			return signed, nil
+			return newArrayIterator(signed), err
 		}
 		if err := json.Unmarshal(data, &txsWithKeys); err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
@@ -140,12 +141,44 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 			if err := rlp.DecodeBytes(body, &signed); err != nil {
 				return nil, err
 			}
-			return signed, nil
+			return newArrayIterator(signed), nil
 		}
 		// JSON encoded transactions
 		txsWithKeys = inputData.Txs
 	}
 	// We may have to sign the transactions.
 	signer := types.LatestSignerForChainID(chainConfig.ChainID)
-	return signUnsignedTransactions(txsWithKeys, signer)
+	txs, err := signUnsignedTransactions(txsWithKeys, signer)
+	return newArrayIterator(txs), err
+}
+
+type txIterator interface {
+	// Next returns true until EOF
+	Next() bool
+	// Tx returns the next transaction, OR an error.
+	Tx() (*types.Transaction, error)
+}
+
+type arrayIterator struct {
+	idx int
+	txs types.Transactions
+}
+
+func newArrayIterator(transactions types.Transactions) *arrayIterator {
+	return &arrayIterator{0, transactions}
+}
+
+func (ait *arrayIterator) Next() bool {
+	if ait.idx < len(ait.txs) {
+		return true
+	}
+	return false
+}
+
+func (ait *arrayIterator) Tx() (*types.Transaction, error) {
+	if ait.idx < len(ait.txs) {
+		ait.idx++
+		return ait.txs[ait.idx-1], nil
+	}
+	return nil, io.EOF
 }
