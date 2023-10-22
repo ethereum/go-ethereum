@@ -76,10 +76,15 @@ type backend interface {
 // reporting to ethstats
 type fullNodeBackend interface {
 	backend
-	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	CurrentBlock() *types.Block
+	CurrentBlock() *types.Header
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+}
+
+// Mining
+type miningNodeBackend interface {
+	fullNodeBackend
+	Miner() *miner.Miner
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -634,7 +639,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
 		if block == nil {
-			block = fullBackend.CurrentBlock()
+			head := fullBackend.CurrentBlock()
+			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
 		}
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
@@ -781,8 +787,11 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
+		miningBackend, miningOk := s.backend.(miningNodeBackend)
+		if miningOk {
+			mining = miningBackend.Miner().Mining()
+			hashrate = int(miningBackend.Miner().Hashrate())
+		}
 
 		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
