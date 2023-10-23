@@ -581,7 +581,16 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 	if err != nil {
 		return 0, err
 	}
-	if ohead <= nhead {
+	otail, err := freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+	// Ensure that the truncation target falls within the specified range.
+	if ohead < nhead || nhead < otail {
+		return 0, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", otail, ohead, nhead)
+	}
+	// Short circuit if nothing to truncate.
+	if ohead == nhead {
 		return 0, nil
 	}
 	// Load the meta objects in range [nhead+1, ohead]
@@ -610,11 +619,20 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 // truncateFromTail removes the extra state histories from the tail with the given
 // parameters. It returns the number of items removed from the tail.
 func truncateFromTail(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, ntail uint64) (int, error) {
+	ohead, err := freezer.Ancients()
+	if err != nil {
+		return 0, err
+	}
 	otail, err := freezer.Tail()
 	if err != nil {
 		return 0, err
 	}
-	if otail >= ntail {
+	// Ensure that the truncation target falls within the specified range.
+	if otail > ntail || ntail > ohead {
+		return 0, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", otail, ohead, ntail)
+	}
+	// Short circuit if nothing to truncate.
+	if otail == ntail {
 		return 0, nil
 	}
 	// Load the meta objects in range [otail+1, ntail]
