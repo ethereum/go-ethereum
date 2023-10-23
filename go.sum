@@ -144,8 +144,8 @@ github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61/go.mod h1:Q0X6pkwTILD
 github.com/gavv/httpexpect v2.0.0+incompatible/go.mod h1:x+9tiU1YnrOvnB725RkpoLv1M62hOWzwo5OXotisrKc=
 github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff h1:tY80oXqGNY4FhTFhk+o9oFHGINQ/+vhlm8HFzi6znCI=
 github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff/go.mod h1:x7DCsMOv1taUwEWCzT4cmDeAkigA5/QCwUodaVOe8Ww=
-github.com/gballet/go-verkle v0.1.1-0.20231018152418-3d7dc630839e h1:3IB7OJpOmge9NpBvHaaiZlZSQQHVRfzKYe7DWWYdHyM=
-github.com/gballet/go-verkle v0.1.1-0.20231018152418-3d7dc630839e/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
+github.com/gballet/go-verkle v0.1.1-0.20231020124853-d124d1998b1a h1:kqhR2nTIep0lw7zJBp2ju+fWbqP3PojUw3L+jv1qBK4=
+github.com/gballet/go-verkle v0.1.1-0.20231020124853-d124d1998b1a/go.mod h1:7JamHhSTnnHDhcI3G8r4sWaD9XlleriqVlC3FeAQJKM=
 github.com/getkin/kin-openapi v0.53.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getkin/kin-openapi v0.61.0/go.mod h1:7Yn5whZr5kJi6t+kShccXS8ae1APpYTW6yheSwk8Yi4=
 github.com/getsentry/sentry-go v0.12.0/go.mod h1:NSap0JBYWzHND8oMbyi0+XZhUalc1TBdRL1M71JZW2c=
