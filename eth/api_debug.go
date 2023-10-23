@@ -443,7 +443,3 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
-
-func (api *DebugAPI) FieldPaddings() (string, error) {
-	return string(log.FieldPaddings()), nil
-}

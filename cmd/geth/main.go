@@ -18,6 +18,8 @@
 package main
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -198,7 +200,13 @@ var (
 
 var app = flags.NewApp("the go-ethereum command line interface")
 
+//go:embed field_padding.json
+var fieldPadding []byte
+
 func init() {
+	var fp map[string]int
+	json.Unmarshal(fieldPadding, fp)
+	log.SetFieldPadding(fp)
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors"
@@ -259,6 +267,7 @@ func init() {
 		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
+
 }
 
 func main() {

@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -55,15 +54,8 @@ var locationLength atomic.Uint32
 // to allow padding log contexts in a bit smarter way.
 var fieldPadding = make(map[string]int)
 
-// fieldPaddingLock is a global mutex protecting the field padding map.
-var fieldPaddingLock sync.RWMutex
-
 type Format interface {
 	Format(r *Record) []byte
-}
-
-func init() {
-	//	json.Unmarshal([]byte("{\n  \"ETH\": 2,\n  \"LES\": 1,\n  \"accounts\": 2,\n  \"age\": 9,\n  \"backend\": 5,\n  \"blocks\": 1,\n  \"cap\": 10,\n  \"clean\": 9,\n  \"dangling\": 1,\n  \"dbversion\": 5,\n  \"dirty\": 9,\n  \"duration\": 10,\n  \"elapsed\": 11,\n  \"err\": 31,\n  \"fees\": 7,\n  \"gas\": 5,\n  \"gcnodes\": 1,\n  \"gcsize\": 5,\n  \"gctime\": 2,\n  \"hash\": 14,\n  \"id\": 18,\n  \"ip\": 9,\n  \"limit\": 9,\n  \"livenodes\": 1,\n  \"livesize\": 5,\n  \"mgas\": 5,\n  \"mgasps\": 6,\n  \"network\": 4,\n  \"nodes\": 2,\n  \"nonce\": 1,\n  \"number\": 2,\n  \"reason\": 8,\n  \"reqid\": 2,\n  \"root\": 14,\n  \"scheme\": 4,\n  \"seq\": 17,\n  \"size\": 7,\n  \"slots\": 1,\n  \"snapdiffs\": 7,\n  \"storage\": 7,\n  \"tcp\": 1,\n  \"td\": 1,\n  \"threshold\": 1,\n  \"time\": 11,\n  \"total\": 2,\n  \"triedirty\": 7,\n  \"txs\": 1,\n  \"udp\": 1,\n  \"url\": 13,\n  \"value\": 3,\n  \"withdrawals\": 1\n}"), fieldPadding)
 }
 
 // FormatFunc returns a new Format object which uses
@@ -76,6 +68,12 @@ type formatFunc func(*Record) []byte
 
 func (f formatFunc) Format(r *Record) []byte {
 	return f(r)
+}
+
+// SetFieldPadding configures the log library to use the given field-paddings.
+// This method should preferrably be invoked during package init.
+func SetFieldPadding(fp map[string]int) {
+	fieldPadding = fp
 }
 
 // TerminalStringer is an analogous interface to the stdlib stringer, allowing
@@ -181,20 +179,6 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 		} else {
 			k = escapeString(k)
 		}
-
-		// XXX: we should probably check that all of your key bytes aren't invalid
-		fieldPaddingLock.RLock()
-		padding := fieldPadding[k]
-		fieldPaddingLock.RUnlock()
-
-		length := utf8.RuneCountInString(v)
-		if padding < length && length <= termCtxMaxPadding {
-			padding = length
-
-			fieldPaddingLock.Lock()
-			fieldPadding[k] = padding
-			fieldPaddingLock.Unlock()
-		}
 		if color > 0 {
 			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, k)
 		} else {
@@ -202,8 +186,10 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 			buf.WriteByte('=')
 		}
 		buf.WriteString(v)
-		if i < len(ctx)-2 && padding > length {
-			buf.Write(bytes.Repeat([]byte{' '}, padding-length))
+		if i < len(ctx)-2 {
+			if length, padding := utf8.RuneCountInString(v), fieldPadding[k]; padding > length {
+				buf.Write(bytes.Repeat([]byte{' '}, padding-length))
+			}
 		}
 	}
 	buf.WriteByte('\n')
@@ -213,13 +199,6 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 // It is the equivalent of JSONFormatEx(false, true).
 func JSONFormat() Format {
 	return JSONFormatEx(false, true)
-}
-
-func FieldPaddings() []byte {
-	fieldPaddingLock.RLock()
-	output, _ := json.MarshalIndent(fieldPadding, "", "  ")
-	fieldPaddingLock.RUnlock()
-	return output
 }
 
 // JSONFormatOrderedEx formats log records as JSON arrays. If pretty is true,
