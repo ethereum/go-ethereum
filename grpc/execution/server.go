@@ -160,20 +160,29 @@ func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServe
 
 // GetBlock will return a block given an identifier.
 func (s *ExecutionServiceServerV1Alpha2) GetBlock(ctx context.Context, req *executionv1a2.GetBlockRequest) (*executionv1a2.Block, error) {
-	log.Info("GetBlock called request", "request", req)
+	log.Info("GetBlock called", "request", req)
 
-	return s.getBlockFromIdentifier(req.GetIdentifier())
+	res, err := s.getBlockFromIdentifier(req.GetIdentifier())
+	if err != nil {
+		log.Error("failed finding block", err)
+		return nil, err
+	}
+
+	log.Info("GetBlock completed", "request", req, "response", res)
+	return res, nil
 }
 
 // BatchGetBlocks will return an array of Blocks given an array of block
 // identifiers.
 func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req *executionv1a2.BatchGetBlocksRequest) (*executionv1a2.BatchGetBlocksResponse, error) {
+	log.Info("BatchGetBlocks called", "request", req)
 	var blocks []*executionv1a2.Block
 
 	ids := req.GetIdentifiers()
 	for _, id := range ids {
 		block, err := s.getBlockFromIdentifier(id)
 		if err != nil {
+			log.Error("failed finding block with id", id, "error", err)
 			return nil, err
 		}
 
@@ -184,13 +193,14 @@ func (s *ExecutionServiceServerV1Alpha2) BatchGetBlocks(ctx context.Context, req
 		Blocks: blocks,
 	}
 
+	log.Info("BatchGetBlocks completed", "request", req, "response", res)
 	return res, nil
 }
 
 // ExecuteBlock drives deterministic derivation of a rollup block from sequencer
 // block data
 func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *executionv1a2.ExecuteBlockRequest) (*executionv1a2.Block, error) {
-	log.Info("ExecuteBlock called request", "request", req)
+	log.Info("ExecuteBlock called", "request", req)
 
 	// Validate block being created has valid previous hash
 	prevHeadHash := common.BytesToHash(req.PrevBlockHash)
@@ -220,18 +230,16 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 	// state
 	block, err := engine.ExecutableDataToBlock(*payload.Resolve().ExecutionPayload)
 	if err != nil {
-		return nil, err
+		log.Error("failed to convert executable data to block", err)
+		return nil, status.Error(codes.Internal, "failed to execute block")
 	}
 	blocks := types.Blocks{
 		block,
 	}
 	n, err := s.bc.InsertChain(blocks)
 	if err != nil {
+		log.Error("failed to insert block to chain", err, "index", n)
 		return nil, status.Error(codes.Internal, "failed to insert block to chain")
-	}
-	if n != 1 {
-		log.Error("block was inserted at height ", n, " instead of head")
-		return nil, status.Error(codes.Internal, "Failed to insert block to chain")
 	}
 
 	// remove txs from original mempool
@@ -246,16 +254,24 @@ func (s *ExecutionServiceServerV1Alpha2) ExecuteBlock(ctx context.Context, req *
 			Seconds: int64(block.Time()),
 		},
 	}
+
+	log.Info("ExecuteBlock completed", "request", req, "response", res)
 	return res, nil
 }
 
 // GetCommitmentState fetches the current CommitmentState of the chain.
 func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context, req *executionv1a2.GetCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
-	softBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
-	firmBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
+	log.Info("GetCommitmentState called", "request", req)
 
+	softBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentSafeBlock())
 	if err != nil {
-		return nil, err
+		log.Error("error finding safe block", err)
+		return nil, status.Error(codes.Internal, "could not locate soft block")
+	}
+	firmBlock, err := ethHeaderToExecutionBlock(s.bc.CurrentFinalBlock())
+	if err != nil {
+		log.Error("error finding final block", err)
+		return nil, status.Error(codes.Internal, "could not locate firm block")
 	}
 
 	res := &executionv1a2.CommitmentState{
@@ -263,12 +279,15 @@ func (s *ExecutionServiceServerV1Alpha2) GetCommitmentState(ctx context.Context,
 		Firm: firmBlock,
 	}
 
+	log.Info("GetCommitmentState completed", "request", req, "response", res)
 	return res, nil
 }
 
 // UpdateCommitmentState replaces the whole CommitmentState with a new
 // CommitmentState.
 func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Context, req *executionv1a2.UpdateCommitmentStateRequest) (*executionv1a2.CommitmentState, error) {
+	log.Info("UpdateCommitmentState called", "request", req)
+	
 	softEthHash := common.BytesToHash(req.CommitmentState.Soft.Hash)
 	firmEthHash := common.BytesToHash(req.CommitmentState.Firm.Hash)
 
@@ -284,22 +303,27 @@ func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Conte
 
 	currentHead := s.bc.CurrentBlock().Hash()
 
-	// Update the head block to soft commitment This must be done before last
-	// validation step, we can only check if a block belongs to the canonical
-	// chain.
+	// Update the canonical chain to soft block. We must do this before last
+	// validation step since there is no way to check if firm block descends from
+	// anything but the canonical chain
 	if currentHead != softEthHash {
 		if _, err := s.bc.SetCanonical(softBlock); err != nil {
+			log.Error("failed updating canonical chain to soft block", err)
 			return nil, status.Error(codes.Internal, "Could not update head to safe hash")
 		}
 	}
 
 	// Once head is updated validate that firm belongs to chain
-	if rawdb.ReadCanonicalHash(s.eth.ChainDb(), firmBlock.NumberU64()) != firmEthHash {
+	if s.bc.GetCanonicalHash(firmBlock.NumberU64()) != firmEthHash {
+		log.Error("firm block not found in canonical chain defined by soft block, rolling back")
+
 		// We don't want partial commitments, rolling back.
 		rollbackBlock := s.bc.GetBlockByHash(currentHead)
-		s.bc.SetCanonical(rollbackBlock)
+		if _, err := s.bc.SetCanonical(rollbackBlock); err != nil {
+			panic("rollback to previous head after failed validation failed")
+		}
 
-		return nil, status.Error(codes.InvalidArgument, "Firm block specified does not exist on canonical chain")
+		return nil, status.Error(codes.InvalidArgument, "soft block in request is not a descendant of the current firmly committed block")
 	}
 
 	// Updating the safe and final after everything validated
@@ -312,6 +336,7 @@ func (s *ExecutionServiceServerV1Alpha2) UpdateCommitmentState(ctx context.Conte
 		s.bc.SetFinalized(firmBlock.Header())
 	}
 
+	log.Info("UpdateCommitmentState completed", "request", req)
 	return req.CommitmentState, nil
 }
 
@@ -325,7 +350,7 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 	case *executionv1a2.BlockIdentifier_BlockHash:
 		header = s.bc.GetHeaderByHash(common.BytesToHash(identifier.GetBlockHash()))
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "identifier has unexpected type %T", id_type)
+		return nil, status.Errorf(codes.InvalidArgument, "identifier has unexpected type %T", idType)
 	}
 
 	if header == nil {
@@ -343,7 +368,7 @@ func (s *ExecutionServiceServerV1Alpha2) getBlockFromIdentifier(identifier *exec
 
 func ethHeaderToExecutionBlock(header *types.Header) (*executionv1a2.Block, error) {
 	if header == nil {
-		return nil, fmt.Errorf("Cannot convert nil header to execution block")
+		return nil, fmt.Errorf("cannot convert nil header to execution block")
 	}
 
 	return &executionv1a2.Block{
