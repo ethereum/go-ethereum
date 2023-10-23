@@ -172,6 +172,12 @@ func encodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig) {
 		}
 	}
 
+	if header.WithdrawalsHash != nil {
+		header.WithdrawalsHash = nil
+
+		log.Warn("Bor does not support withdrawals", "number", header.Number)
+	}
+
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}
@@ -816,14 +822,11 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	headerNumber := header.Number.Uint64()
 
-	if len(withdrawals) > 0 {
-		log.Error("Bor does not support withdrawals", "number", headerNumber)
-		return
-	}
+	if withdrawals != nil || header.WithdrawalsHash != nil {
+		// withdrawals = nil is not required because withdrawals are not used
+		header.WithdrawalsHash = nil
 
-	if header.WithdrawalsHash != nil {
-		log.Error("Bor does not support withdrawalHash", "number", headerNumber)
-		return
+		log.Warn("Bor does not support withdrawals", "number", headerNumber)
 	}
 
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
@@ -898,17 +901,16 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	finalizeCtx, finalizeSpan := tracing.StartSpan(ctx, "bor.FinalizeAndAssemble")
 	defer tracing.EndSpan(finalizeSpan)
 
-	if len(withdrawals) > 0 {
-		return nil, errors.New("Bor does not support withdrawals")
-	}
+	headerNumber := header.Number.Uint64()
 
-	if header.WithdrawalsHash != nil {
-		return nil, errors.New("Bor does not support withdrawalHash")
+	if withdrawals != nil || header.WithdrawalsHash != nil {
+		// withdrawals != nil not required because withdrawals are not used
+		header.WithdrawalsHash = nil
+
+		log.Warn("Bor does not support withdrawals", "number", headerNumber)
 	}
 
 	stateSyncData := []*types.StateSyncData{}
-
-	headerNumber := header.Number.Uint64()
 
 	var err error
 
