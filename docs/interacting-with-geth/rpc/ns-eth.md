@@ -15,7 +15,7 @@ Executes a new message call immediately, without creating a transaction on the b
 
 **Parameters:**
 
-The method takes 3 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; and an optional state override-set to allow executing the call against a modified chain state.
+The method takes 4 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; an optional state override-set to allow executing the call against a modified chain state; and an optional set of overrides for the block context.
 
 1. `Object` - Transaction call object
 
@@ -43,21 +43,37 @@ The method takes 3 parameters: an unsigned transaction object to execute in read
    - It can be used for smart contract analysis by extending the code deployed on chain with custom methods and invoking them. This avoids having to download and reconstruct the entire state in a sandbox to run custom code against.
    - It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
 
-**Example:**
+   **Example:**
 
-```json
-{
-  "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3": {
-    "balance": "0xde0b6b3a7640000"
-  },
-  "0xebe8efa441b9302a0d7eaecc277c09d20d684540": {
-    "code": "0x...",
-    "state": {
-      ""
-    }
-  }
-}
-```
+   ```json
+   {
+     "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3": {
+       "balance": "0xde0b6b3a7640000"
+     },
+     "0xebe8efa441b9302a0d7eaecc277c09d20d684540": {
+       "code": "0x...",
+       "state": {
+         ""
+       }
+     }
+   }
+   ```
+
+4. `Object` - Block override set
+
+   The fields of this optional object customize the block as part of which the call is simulated. The object contains the following fields:
+
+   | Field         | Type     | Bytes | Optional | Description                                              |
+   |---------------|----------|-------|----------|----------------------------------------------------------|
+   | `number`      | Quantity | <32   | Yes      | Fake block number                                        |
+   | `difficulty`  | Quantity | <32   | Yes      | Fake difficulty. Note post-merge difficulty should be 0. |
+   | `time`        | Quantity | <8    | Yes      | Fake block timestamp                                     |
+   | `gasLimit`    | Quantity | <8    | Yes      | Block gas capacity                                       |
+   | `coinbase`    | String   | 20    | Yes      | Block fee recipient                                      |
+   | `random`      | Binary   | 32    | Yes      | Fake PrevRandao value                                    |
+   | `baseFee`     | Quantity | <32   | Yes      | Block base fee (see EIP-1559)                            |
+   | `blobBaseFee` | Quantity | <32   | Yes      | Block blob base fee (see EIP-4844)                       |
+
 
 **Response:**
 
