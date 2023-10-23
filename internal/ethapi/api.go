@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -961,7 +962,7 @@ type RecentBlockHash struct {
 }
 
 // GetRequiredBlockState returns all state required to execute a single historical block.
-func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*txTraceResult, error) {
+func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*trienode.Witness, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if block == nil || err != nil {
 		// When the block doesn't exist, the RPC method should return JSON null
@@ -972,7 +973,8 @@ func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash
 		return nil, nil
 	}
 	s.ProcessBlock(ctx, block, state, vm.Config{})
-	return s.traceBlock(ctx, block)
+	return state.GetWitness(), nil
+	// return s.traceBlock(ctx, block)
 }
 
 // txTraceResult is the result of a single transaction trace.

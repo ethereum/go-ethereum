@@ -75,6 +75,8 @@ type Trie interface {
 	// a trie.MissingNodeError is returned.
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
 
+	GetWitness() *trienode.Witness
+
 	// GetAccount abstracts an account read from the trie. It retrieves the
 	// account blob from the trie with provided account address and decodes it
 	// with associated decoding algorithm. If the specified account is not in

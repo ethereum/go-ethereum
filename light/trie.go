@@ -106,6 +106,10 @@ type odrTrie struct {
 	trie *trie.Trie
 }
 
+func (t *odrTrie) GetWitness() *trienode.Witness {
+	return t.trie.GetWitness()
+}
+
 func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
 	var enc []byte

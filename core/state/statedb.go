@@ -172,6 +172,14 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+
+// StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
+// state trie concurrently while the state is mutated so that when we reach the
+// commit phase, most of the needed data is already hot.
+func (s *StateDB) GetWitness()  *trienode.Witness {
+	return s.trie.GetWitness()
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
