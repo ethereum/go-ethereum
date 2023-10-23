@@ -822,15 +822,11 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil {
+	if withdrawals != nil || header.WithdrawalsHash != nil {
 		// withdrawals = nil is not required because withdrawals are not used
-		log.Warn("Bor does not support withdrawals", "number", headerNumber)
-	}
-
-	if header.WithdrawalsHash != nil {
 		header.WithdrawalsHash = nil
 
-		log.Warn("Bor does not support withdrawalHash", "number", headerNumber)
+		log.Warn("Bor does not support withdrawals", "number", headerNumber)
 	}
 
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
@@ -907,15 +903,11 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil {
+	if withdrawals != nil || header.WithdrawalsHash != nil {
 		// withdrawals != nil not required because withdrawals are not used
-		log.Warn("Bor does not support withdrawals", "number", headerNumber)
-	}
-
-	if header.WithdrawalsHash != nil {
 		header.WithdrawalsHash = nil
 
-		log.Warn("Bor does not support withdrawalHash", "number", headerNumber)
+		log.Warn("Bor does not support withdrawals", "number", headerNumber)
 	}
 
 	stateSyncData := []*types.StateSyncData{}
