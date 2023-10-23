@@ -98,20 +98,20 @@ func (t *StackTrie) Update(key, value []byte) error {
 	}
 	k := keybytesToHex(key)
 	k = k[:len(k)-1] // chop the termination flag
+	if bytes.Compare(t.last, k) >= 0 {
+		return errors.New("non-ascending key order")
+	}
+	if err := t.insert(t.root, k, value, nil); err != nil {
+		return err
+	}
 	// track the first and last inserted entries.
 	if t.first == nil {
 		t.first = append([]byte{}, k...)
-	}
-	if bytes.Compare(t.last, k) >= 0 {
-		return errors.New("non-ascending key order")
 	}
 	if t.last == nil {
 		t.last = append([]byte{}, k...) // allocate key slice
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
-	}
-	if err := t.insert(t.root, k, value, nil); err != nil {
-		return err
 	}
 	return nil
 }
