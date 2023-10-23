@@ -341,7 +341,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			switch {
 			case err == nil: // Noop, but need to handle to not count these
 
-			case errors.Is(err, txpool.ErrAlreadyKnown):
+			case errors.Is(err, txpool.ErrAlreadyKnown) || errors.Is(err, legacypool.ErrAlreadyKnown):
 				duplicate++
 
 			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced):
