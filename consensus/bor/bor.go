@@ -172,12 +172,6 @@ func encodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig) {
 		}
 	}
 
-	if header.WithdrawalsHash != nil {
-		header.WithdrawalsHash = nil
-
-		log.Warn("Bor does not support withdrawals", "number", header.Number)
-	}
-
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}
@@ -387,9 +381,12 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 
 	// Verify that the gas limit is <= 2^63-1
 	gasCap := uint64(0x7fffffffffffffff)
-
 	if header.GasLimit > gasCap {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, gasCap)
+	}
+
+	if header.WithdrawalsHash != nil {
+		return consensus.ErrUnexpectedWithdrawals
 	}
 
 	// All basic checks passed, verify cascading fields
@@ -823,10 +820,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 	headerNumber := header.Number.Uint64()
 
 	if withdrawals != nil || header.WithdrawalsHash != nil {
-		// withdrawals = nil is not required because withdrawals are not used
-		header.WithdrawalsHash = nil
-
-		log.Warn("Bor does not support withdrawals", "number", headerNumber)
+		return
 	}
 
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
@@ -904,10 +898,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	headerNumber := header.Number.Uint64()
 
 	if withdrawals != nil || header.WithdrawalsHash != nil {
-		// withdrawals != nil not required because withdrawals are not used
-		header.WithdrawalsHash = nil
-
-		log.Warn("Bor does not support withdrawals", "number", headerNumber)
+		return nil, consensus.ErrUnexpectedWithdrawals
 	}
 
 	stateSyncData := []*types.StateSyncData{}
