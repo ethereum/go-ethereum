@@ -205,7 +205,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			continue
 		}
 		if tx.Type() == types.BlobTxType {
-			blobGasUsed += uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			txBlobGas := uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			if blobGasUsed+txBlobGas > params.BlobTxBlobGasPerBlob {
+				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", blobGasUsed+txBlobGas, params.MaxBlobGasPerBlock)
+				log.Warn("rejected tx", "index", i, "err", err)
+				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+				continue
+			}
+			blobGasUsed += txBlobGas
 		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
