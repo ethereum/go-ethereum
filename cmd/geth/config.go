@@ -228,14 +228,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			utils.Fatalf("failed to register catalyst service: %v", err)
 		}
 	}
-	//go func() {
-	//	for i := 0; ; i++ {
-	//		path := fmt.Sprintf("%s/fieldPaddings-%d.json", stack.InstanceDir(), i)
-	//		err := os.WriteFile(path, log.FieldPaddings(), 0777)
-	//		log.Info(fmt.Sprintf("Wrote fieldpaddings to %v", path), "err", err)
-	//		time.Sleep(60 * time.Minute)
-	//	}
-	//}()
 	return stack, backend
 }
 
