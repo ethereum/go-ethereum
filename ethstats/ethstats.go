@@ -81,7 +81,8 @@ type fullNodeBackend interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
-// Mining
+// miningNodeBackend encompasses the functionality necessary for a mining node
+// reporting to ethstats
 type miningNodeBackend interface {
 	fullNodeBackend
 	Miner() *miner.Miner
@@ -785,10 +786,8 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		gasprice int
 	)
 	// check if backend is a full node
-	fullBackend, ok := s.backend.(fullNodeBackend)
-	if ok {
-		miningBackend, miningOk := s.backend.(miningNodeBackend)
-		if miningOk {
+	if fullBackend, ok := s.backend.(fullNodeBackend); ok {
+		if miningBackend, ok := s.backend.(miningNodeBackend); ok {
 			mining = miningBackend.Miner().Mining()
 			hashrate = int(miningBackend.Miner().Hashrate())
 		}
