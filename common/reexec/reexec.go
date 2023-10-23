@@ -1,6 +1,6 @@
 // This file originates from Docker/Moby,
 // https://github.com/moby/moby/blob/master/pkg/reexec/reexec.go
-// Licensed under AGPL V2: https://github.com/moby/moby/blob/master/LICENSE
+// Licensed under Apache License 2.0: https://github.com/moby/moby/blob/master/LICENSE
 // Copyright 2013-2018 Docker, Inc.
 //
 // Package reexec facilitates the busybox style reexec of the docker binary that
