@@ -17,11 +17,13 @@
 package trie
 
 import (
+	"bytes"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
@@ -31,7 +33,12 @@ var (
 
 // StackTrieOptions contains the configured options for manipulating the stackTrie.
 type StackTrieOptions struct {
-	Writer func(path []byte, hash common.Hash, blob []byte) // The function to commit the dirty nodes
+	Writer  func(path []byte, hash common.Hash, blob []byte) // The function to commit the dirty nodes
+	Cleaner func(path []byte)                                // The function to clean up dangling nodes
+
+	SkipLeftBoundary  bool          // Flag whether the nodes on the left boundary are skipped for committing
+	SkipRightBoundary bool          // Flag whether the nodes on the right boundary are skipped for committing
+	boundaryGauge     metrics.Gauge // Gauge to track how many boundary nodes are met
 }
 
 // NewStackTrieOptions initializes an empty options for stackTrie.
@@ -43,6 +50,22 @@ func (o *StackTrieOptions) WithWriter(writer func(path []byte, hash common.Hash,
 	return o
 }
 
+// WithCleaner configures the cleaner in the option for removing dangling nodes.
+func (o *StackTrieOptions) WithCleaner(cleaner func(path []byte)) *StackTrieOptions {
+	o.Cleaner = cleaner
+	return o
+}
+
+// WithSkipBoundary configures whether the left and right boundary nodes are
+// filtered for committing, along with a gauge metrics to track how many
+// boundary nodes are met.
+func (o *StackTrieOptions) WithSkipBoundary(skipLeft, skipRight bool, gauge metrics.Gauge) *StackTrieOptions {
+	o.SkipLeftBoundary = skipLeft
+	o.SkipRightBoundary = skipRight
+	o.boundaryGauge = gauge
+	return o
+}
+
 // StackTrie is a trie implementation that expects keys to be inserted
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
@@ -50,6 +73,9 @@ type StackTrie struct {
 	options *StackTrieOptions
 	root    *stNode
 	h       *hasher
+
+	first []byte // The (hex-encoded without terminator) key of first inserted entry, tracked as left boundary.
+	last  []byte // The (hex-encoded without terminator) key of last inserted entry, tracked as right boundary.
 }
 
 // NewStackTrie allocates and initializes an empty trie.
@@ -72,6 +98,15 @@ func (t *StackTrie) Update(key, value []byte) error {
 	}
 	k = k[:len(k)-1] // chop the termination flag
 
+	// track the first and last inserted entries.
+	if t.first == nil {
+		t.first = append([]byte{}, k...)
+	}
+	if t.last == nil {
+		t.last = append([]byte{}, k...) // allocate key slice
+	} else {
+		t.last = append(t.last[:0], k...) // reuse key slice
+	}
 	t.insert(t.root, k, value, nil)
 	return nil
 }
@@ -88,6 +123,8 @@ func (t *StackTrie) MustUpdate(key, value []byte) {
 func (t *StackTrie) Reset() {
 	t.options = NewStackTrieOptions()
 	t.root = stPool.Get().(*stNode)
+	t.first = nil
+	t.last = nil
 }
 
 // stNode represents a node within a StackTrie
@@ -306,8 +343,10 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
 func (t *StackTrie) hash(st *stNode, path []byte) {
-	var blob []byte // RLP-encoded node blob
-
+	var (
+		blob     []byte   // RLP-encoded node blob
+		internal [][]byte // List of node paths covered by the extension node
+	)
 	switch st.typ {
 	case hashedNode:
 		return
@@ -342,6 +381,15 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		// recursively hash and commit child as the first step
 		t.hash(st.children[0], append(path, st.key...))
 
+		// Collect the path of internal nodes between shortNode and its **in disk**
+		// child. This is essential in the case of path mode scheme to avoid leaving
+		// danging nodes within the range of this internal path on disk, which would
+		// break the guarantee for state healing.
+		if len(st.children[0].val) >= 32 && t.options.Cleaner != nil {
+			for i := 1; i < len(st.key); i++ {
+				internal = append(internal, append(path, st.key[:i]...))
+			}
+		}
 		// encode the extension node
 		n := shortNode{Key: hexToCompactInPlace(st.key)}
 		if len(st.children[0].val) < 32 {
@@ -378,10 +426,33 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// input values.
 	st.val = t.h.hashData(blob)
 
-	// Commit the trie node if the writer is configured.
-	if t.options.Writer != nil {
-		t.options.Writer(path, common.BytesToHash(st.val), blob)
+	// Short circuit if the stack trie is not configured for writing.
+	if t.options.Writer == nil {
+		return
 	}
+	// Skip committing if the node is on the left boundary and stackTrie is
+	// configured to filter the boundary.
+	if t.options.SkipLeftBoundary && bytes.HasPrefix(t.first, path) {
+		if t.options.boundaryGauge != nil {
+			t.options.boundaryGauge.Inc(1)
+		}
+		return
+	}
+	// Skip committing if the node is on the right boundary and stackTrie is
+	// configured to filter the boundary.
+	if t.options.SkipRightBoundary && bytes.HasPrefix(t.last, path) {
+		if t.options.boundaryGauge != nil {
+			t.options.boundaryGauge.Inc(1)
+		}
+		return
+	}
+	// Clean up the internal dangling nodes covered by the extension node.
+	// This should be done before writing the node to adhere to the committing
+	// order from bottom to top.
+	for _, path := range internal {
+		t.options.Cleaner(path)
+	}
+	t.options.Writer(path, common.BytesToHash(st.val), blob)
 }
 
 // Hash will firstly hash the entire trie if it's still not hashed and then commit
