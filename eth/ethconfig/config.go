@@ -71,6 +71,7 @@ var Defaults = Config{
 	SnapshotCache:      102,
 	FilterLogCacheSize: 32,
 	Miner:              miner.DefaultConfig,
+	TxPoolDisabled:     false,
 	TxPool:             legacypool.DefaultConfig,
 	BlobPool:           blobpool.DefaultConfig,
 	RPCGasCap:          50000000,
@@ -141,8 +142,9 @@ type Config struct {
 	Miner miner.Config
 
 	// Transaction pool options
-	TxPool   legacypool.Config
-	BlobPool blobpool.Config
+	TxPoolDisabled bool
+	TxPool         legacypool.Config
+	BlobPool       blobpool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config

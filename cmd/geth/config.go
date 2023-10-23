@@ -164,6 +164,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 	applyMetricConfig(ctx, &cfg)
 
+	if cfg.Eth.TxPoolDisabled && cfg.Node.P2P.NetRestrict == nil {
+		utils.Fatalf("Transaction pool can only be disabled when network is restricted")
+	}
+
 	return stack, cfg
 }
 

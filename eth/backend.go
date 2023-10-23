@@ -215,17 +215,21 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 
-	if config.BlobPool.Datadir != "" {
-		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
-	}
-	blobPool := blobpool.New(config.BlobPool, eth.blockchain)
+	var subpools []txpool.SubPool
+	if !config.TxPoolDisabled {
+		if config.BlobPool.Datadir != "" {
+			config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
+		}
+		blobPool := blobpool.New(config.BlobPool, eth.blockchain)
 
-	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
-	}
-	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
+		if config.TxPool.Journal != "" {
+			config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
+		}
+		legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
-	eth.txPool, err = txpool.New(new(big.Int).SetUint64(config.TxPool.PriceLimit), eth.blockchain, []txpool.SubPool{legacyPool, blobPool})
+		subpools = []txpool.SubPool{legacyPool, blobPool}
+	}
+	eth.txPool, err = txpool.New(new(big.Int).SetUint64(config.TxPool.PriceLimit), eth.blockchain, subpools)
 	if err != nil {
 		return nil, err
 	}

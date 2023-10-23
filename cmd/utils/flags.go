@@ -318,6 +318,11 @@ var (
 		Category: flags.LightCategory,
 	}
 	// Transaction pool settings
+	TxPoolDisabledFlag = &cli.BoolFlag{
+		Name:     "txpool.disabled",
+		Usage:    "Run node without a transaction pool",
+		Category: flags.TxPoolCategory,
+	}
 	TxPoolLocalsFlag = &cli.StringFlag{
 		Name:     "txpool.locals",
 		Usage:    "Comma separated accounts to treat as locals (no flush, priority inclusion)",
@@ -1656,10 +1661,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.String(SyncModeFlag.Name) == "light")
-	setTxPool(ctx, &cfg.TxPool)
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
+
+	if ctx.IsSet(TxPoolDisabledFlag.Name) {
+		cfg.TxPoolDisabled = ctx.Bool(TxPoolDisabledFlag.Name)
+	} else {
+		setTxPool(ctx, &cfg.TxPool)
+	}
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
