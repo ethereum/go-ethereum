@@ -54,10 +54,6 @@ const (
 )
 
 var (
-	// ErrAlreadyKnown is returned if the transactions is already contained
-	// within the pool.
-	ErrAlreadyKnown = errors.New("already known")
-
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
 	// another remote transaction.
 	ErrTxPoolOverflow = errors.New("txpool is full")
@@ -660,7 +656,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	if pool.all.Get(hash) != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
-		return false, ErrAlreadyKnown
+		return false, txpool.ErrAlreadyKnown
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
@@ -971,7 +967,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error 
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
-			errs[i] = ErrAlreadyKnown
+			errs[i] = txpool.ErrAlreadyKnown
 			knownTxMeter.Mark(1)
 			continue
 		}

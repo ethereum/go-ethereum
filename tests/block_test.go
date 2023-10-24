@@ -63,10 +63,6 @@ func TestExecutionSpec(t *testing.T) {
 	}
 	bt := new(testMatcher)
 
-	// cancun tests are not complete yet
-	bt.skipLoad(`^cancun/`)
-	bt.skipLoad(`-fork=Cancun`)
-
 	bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
@@ -75,14 +71,18 @@ func TestExecutionSpec(t *testing.T) {
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
 		t.Errorf("test in hash mode without snapshotter failed: %v", err)
+		return
 	}
 	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
 		t.Errorf("test in hash mode with snapshotter failed: %v", err)
+		return
 	}
 	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
 		t.Errorf("test in path mode without snapshotter failed: %v", err)
+		return
 	}
 	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
 		t.Errorf("test in path mode with snapshotter failed: %v", err)
+		return
 	}
 }

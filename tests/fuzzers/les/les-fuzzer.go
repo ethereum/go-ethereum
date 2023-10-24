@@ -70,7 +70,7 @@ func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []co
 			)
 			nonce := uint64(i)
 			if i%4 == 0 {
-				tx, _ = types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 200000, big.NewInt(0), testContractCode), signer, bankKey)
+				tx, _ = types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 200000, big.NewInt(params.GWei), testContractCode), signer, bankKey)
 				addr = crypto.CreateAddress(bankAddr, nonce)
 			} else {
 				addr = common.BigToAddress(big.NewInt(int64(i)))
@@ -279,7 +279,7 @@ func (f *fuzzer) doFuzz(msgCode uint64, packet interface{}) {
 	fn(f, peer, func() bool { return true })
 }
 
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	// We expect some large inputs
 	if len(input) < 100 {
 		return -1

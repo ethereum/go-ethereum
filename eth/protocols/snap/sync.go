@@ -716,6 +716,19 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	}
 }
 
+// cleanPath is used to remove the dangling nodes in the stackTrie.
+func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
+	if owner == (common.Hash{}) && rawdb.ExistsAccountTrieNode(s.db, path) {
+		rawdb.DeleteAccountTrieNode(batch, path)
+		deletionGauge.Inc(1)
+	}
+	if owner != (common.Hash{}) && rawdb.ExistsStorageTrieNode(s.db, owner, path) {
+		rawdb.DeleteStorageTrieNode(batch, owner, path)
+		deletionGauge.Inc(1)
+	}
+	lookupGauge.Inc(1)
+}
+
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
 func (s *Syncer) loadSyncStatus() {
@@ -738,9 +751,22 @@ func (s *Syncer) loadSyncStatus() {
 						s.accountBytes += common.StorageSize(len(key) + len(value))
 					},
 				}
-				task.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, val, s.scheme)
+				options := trie.NewStackTrieOptions()
+				options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+					rawdb.WriteTrieNode(task.genBatch, common.Hash{}, path, hash, blob, s.scheme)
 				})
+				if s.scheme == rawdb.PathScheme {
+					// Configure the dangling node cleaner and also filter out boundary nodes
+					// only in the context of the path scheme. Deletion is forbidden in the
+					// hash scheme, as it can disrupt state completeness.
+					options = options.WithCleaner(func(path []byte) {
+						s.cleanPath(task.genBatch, common.Hash{}, path)
+					})
+					// Skip the left boundary if it's not the first range.
+					// Skip the right boundary if it's not the last range.
+					options = options.WithSkipBoundary(task.Next != (common.Hash{}), task.Last != common.MaxHash, boundaryAccountNodesGauge)
+				}
+				task.genTrie = trie.NewStackTrie(options)
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
 						subtask := subtask // closure for subtask.genBatch in the stacktrie writer callback
@@ -752,9 +778,22 @@ func (s *Syncer) loadSyncStatus() {
 							},
 						}
 						owner := accountHash // local assignment for stacktrie writer closure
-						subtask.genTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, val, s.scheme)
+						options := trie.NewStackTrieOptions()
+						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+							rawdb.WriteTrieNode(subtask.genBatch, owner, path, hash, blob, s.scheme)
 						})
+						if s.scheme == rawdb.PathScheme {
+							// Configure the dangling node cleaner and also filter out boundary nodes
+							// only in the context of the path scheme. Deletion is forbidden in the
+							// hash scheme, as it can disrupt state completeness.
+							options = options.WithCleaner(func(path []byte) {
+								s.cleanPath(subtask.genBatch, owner, path)
+							})
+							// Skip the left boundary if it's not the first range.
+							// Skip the right boundary if it's not the last range.
+							options = options.WithSkipBoundary(subtask.Next != common.Hash{}, subtask.Last != common.MaxHash, boundaryStorageNodesGauge)
+						}
+						subtask.genTrie = trie.NewStackTrie(options)
 					}
 				}
 			}
@@ -806,14 +845,27 @@ func (s *Syncer) loadSyncStatus() {
 				s.accountBytes += common.StorageSize(len(key) + len(value))
 			},
 		}
+		options := trie.NewStackTrieOptions()
+		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, s.scheme)
+		})
+		if s.scheme == rawdb.PathScheme {
+			// Configure the dangling node cleaner and also filter out boundary nodes
+			// only in the context of the path scheme. Deletion is forbidden in the
+			// hash scheme, as it can disrupt state completeness.
+			options = options.WithCleaner(func(path []byte) {
+				s.cleanPath(batch, common.Hash{}, path)
+			})
+			// Skip the left boundary if it's not the first range.
+			// Skip the right boundary if it's not the last range.
+			options = options.WithSkipBoundary(next != common.Hash{}, last != common.MaxHash, boundaryAccountNodesGauge)
+		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:     next,
 			Last:     last,
 			SubTasks: make(map[common.Hash][]*storageTask),
 			genBatch: batch,
-			genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-				rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, val, s.scheme)
-			}),
+			genTrie:  trie.NewStackTrie(options),
 		})
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
@@ -1962,6 +2014,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
 				res.mainTask.needState[j] = false
 				res.mainTask.pend--
+				smallStorageGauge.Inc(1)
 			}
 			// If the last contract was chunked, mark it as needing healing
 			// to avoid writing it out to disk prematurely.
@@ -1997,7 +2050,11 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						log.Debug("Chunked large contract", "initiators", len(keys), "tail", lastKey, "chunks", chunks)
 					}
 					r := newHashRange(lastKey, chunks)
-
+					if chunks == 1 {
+						smallStorageGauge.Inc(1)
+					} else {
+						largeStorageGauge.Inc(1)
+					}
 					// Our first task is the one that was just filled by this response.
 					batch := ethdb.HookedBatch{
 						Batch: s.db.NewBatch(),
@@ -2006,14 +2063,24 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						},
 					}
 					owner := account // local assignment for stacktrie writer closure
+					options := trie.NewStackTrieOptions()
+					options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+						rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+					})
+					if s.scheme == rawdb.PathScheme {
+						options = options.WithCleaner(func(path []byte) {
+							s.cleanPath(batch, owner, path)
+						})
+						// Keep the left boundary as it's the first range.
+						// Skip the right boundary if it's not the last range.
+						options = options.WithSkipBoundary(false, r.End() != common.MaxHash, boundaryStorageNodesGauge)
+					}
 					tasks = append(tasks, &storageTask{
 						Next:     common.Hash{},
 						Last:     r.End(),
 						root:     acc.Root,
 						genBatch: batch,
-						genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-							rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
-						}),
+						genTrie:  trie.NewStackTrie(options),
 					})
 					for r.Next() {
 						batch := ethdb.HookedBatch{
@@ -2022,14 +2089,27 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
 							},
 						}
+						options := trie.NewStackTrieOptions()
+						options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+							rawdb.WriteTrieNode(batch, owner, path, hash, blob, s.scheme)
+						})
+						if s.scheme == rawdb.PathScheme {
+							// Configure the dangling node cleaner and also filter out boundary nodes
+							// only in the context of the path scheme. Deletion is forbidden in the
+							// hash scheme, as it can disrupt state completeness.
+							options = options.WithCleaner(func(path []byte) {
+								s.cleanPath(batch, owner, path)
+							})
+							// Skip the left boundary as it's not the first range
+							// Skip the right boundary if it's not the last range.
+							options = options.WithSkipBoundary(true, r.End() != common.MaxHash, boundaryStorageNodesGauge)
+						}
 						tasks = append(tasks, &storageTask{
 							Next:     r.Start(),
 							Last:     r.End(),
 							root:     acc.Root,
 							genBatch: batch,
-							genTrie: trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-								rawdb.WriteTrieNode(batch, owner, path, hash, val, s.scheme)
-							}),
+							genTrie:  trie.NewStackTrie(options),
 						})
 					}
 					for _, task := range tasks {
@@ -2075,9 +2155,22 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 
 		if i < len(res.hashes)-1 || res.subTask == nil {
 			// no need to make local reassignment of account: this closure does not outlive the loop
-			tr := trie.NewStackTrie(func(path []byte, hash common.Hash, val []byte) {
-				rawdb.WriteTrieNode(batch, account, path, hash, val, s.scheme)
+			options := trie.NewStackTrieOptions()
+			options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+				rawdb.WriteTrieNode(batch, account, path, hash, blob, s.scheme)
 			})
+			if s.scheme == rawdb.PathScheme {
+				// Configure the dangling node cleaner only in the context of the
+				// path scheme. Deletion is forbidden in the hash scheme, as it can
+				// disrupt state completeness.
+				//
+				// Notably, boundary nodes can be also kept because the whole storage
+				// trie is complete.
+				options = options.WithCleaner(func(path []byte) {
+					s.cleanPath(batch, account, path)
+				})
+			}
+			tr := trie.NewStackTrie(options)
 			for j := 0; j < len(res.hashes[i]); j++ {
 				tr.Update(res.hashes[i][j][:], res.slots[i][j])
 			}
@@ -2099,18 +2192,25 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			if root, err := res.subTask.genTrie.Commit(); err != nil {
-				log.Error("Failed to commit stack slots", "err", err)
-			} else if root == res.subTask.root {
-				// If the chunk's root is an overflown but full delivery, clear the heal request
+			root := res.subTask.genTrie.Commit()
+			if err := res.subTask.genBatch.Write(); err != nil {
+				log.Error("Failed to persist stack slots", "err", err)
+			}
+			res.subTask.genBatch.Reset()
+
+			// If the chunk's root is an overflown but full delivery,
+			// clear the heal request.
+			accountHash := res.accounts[len(res.accounts)-1]
+			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
 				for i, account := range res.mainTask.res.hashes {
-					if account == res.accounts[len(res.accounts)-1] {
+					if account == accountHash {
 						res.mainTask.needHeal[i] = false
+						skipStorageHealingGauge.Inc(1)
 					}
 				}
 			}
 		}
-		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
+		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize {
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
@@ -2317,9 +2417,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// flush after finalizing task.done. It's fine even if we crash and lose this
 	// write as it will only cause more data to be downloaded during heal.
 	if task.done {
-		if _, err := task.genTrie.Commit(); err != nil {
-			log.Error("Failed to commit stack account", "err", err)
-		}
+		task.genTrie.Commit()
 	}
 	if task.genBatch.ValueSize() > ethdb.IdealBatchSize || task.done {
 		if err := task.genBatch.Write(); err != nil {

@@ -285,6 +285,7 @@ func doTest(cmdline []string) {
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 		verbose  = flag.Bool("v", false, "Whether to log verbosely")
 		race     = flag.Bool("race", false, "Execute the race detector")
+		short     = flag.Bool("short", false, "Pass the 'short'-flag to go test")
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching downloads")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -318,6 +319,9 @@ func doTest(cmdline []string) {
 	if *race {
 		gotest.Args = append(gotest.Args, "-race")
 	}
+	if *short {
+		gotest.Args = append(gotest.Args, "-short")
+	}
 
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
@@ -334,7 +338,7 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 		log.Fatal(err)
 	}
 	ext := ".tar.gz"
-	base := "fixtures" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
+	base := "fixtures_develop" // TODO(MariusVanDerWijden) rename once the version becomes part of the filename
 	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {

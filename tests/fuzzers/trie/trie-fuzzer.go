@@ -130,7 +130,7 @@ func Generate(input []byte) randTest {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	program := Generate(input)
 	if len(program) == 0 {
 		return 0

@@ -344,7 +344,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		if head.Number.Uint64() == 0 {
 			// The genesis state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the initial state sync is not finished
-			// yet, or the chain head is rewound below the pivot point. In both scenario,
+			// yet, or the chain head is rewound below the pivot point. In both scenarios,
 			// there is no possible recovery approach except for rerunning a snap sync.
 			// Do nothing here until the state syncer picks it up.
 			log.Info("Genesis state is missing, wait state sync")
@@ -666,9 +666,8 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
 				newHeadBlock = bc.genesisBlock
 			} else {
-				// Block exists, keep rewinding until we find one with state,
-				// keeping rewinding until we exceed the optional threshold
-				// root hash
+				// Block exists. Keep rewinding until either we find one with state
+				// or until we exceed the optional threshold root hash
 				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
 
 				for {
@@ -989,6 +988,7 @@ func (bc *BlockChain) Stop() {
 		if snapBase, err = bc.snaps.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
+		bc.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		// Ensure that the in-memory trie nodes are journaled to disk properly.

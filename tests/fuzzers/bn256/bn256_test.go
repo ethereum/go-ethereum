@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package keystore
+package bn256
 
-import (
-	"os"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-)
+func FuzzAdd(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzAdd(data)
+	})
+}
 
-func fuzz(input []byte) int {
-	ks := keystore.NewKeyStore("/tmp/ks", keystore.LightScryptN, keystore.LightScryptP)
+func FuzzMul(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzMul(data)
+	})
+}
 
-	a, err := ks.NewAccount(string(input))
-	if err != nil {
-		panic(err)
-	}
-	if err := ks.Unlock(a, string(input)); err != nil {
-		panic(err)
-	}
-	os.Remove(a.URL.Path)
-	return 1
+func FuzzPair(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzPair(data)
+	})
 }

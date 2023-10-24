@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func TestGenerateWithdrawalChain(t *testing.T) {
+func TestGeneratePOSChain(t *testing.T) {
 	var (
 		keyHex  = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
 		key, _  = crypto.HexToECDSA(keyHex)
@@ -41,9 +41,13 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		bb      = common.Address{0xbb}
 		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
 		config  = *params.AllEthashProtocolChanges
+		asm4788 = common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 		gspec   = &Genesis{
-			Config:     &config,
-			Alloc:      GenesisAlloc{address: {Balance: funds}},
+			Config: &config,
+			Alloc: GenesisAlloc{
+				address:                          {Balance: funds},
+				params.BeaconRootsStorageAddress: {Balance: common.Big0, Code: asm4788},
+			},
 			BaseFee:    big.NewInt(params.InitialBaseFee),
 			Difficulty: common.Big1,
 			GasLimit:   5_000_000,
@@ -56,6 +60,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiTime = u64(0)
+	config.CancunTime = u64(0)
 
 	// init 0xaa with some storage elements
 	storage := make(map[common.Hash]common.Hash)
@@ -78,6 +83,7 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 	genesis := gspec.MustCommit(gendb, trie.NewDatabase(gendb, trie.HashDefaults))
 
 	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
+		gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
 		gen.AddTx(tx)
 		if i == 1 {
@@ -125,6 +131,8 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 		if block == nil {
 			t.Fatalf("block %d not found", i)
 		}
+
+		// Verify withdrawals.
 		if len(block.Withdrawals()) == 0 {
 			continue
 		}
@@ -133,6 +141,18 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 				t.Fatalf("withdrawal index %d does not equal expected index %d", block.Withdrawals()[j].Index, withdrawalIndex)
 			}
 			withdrawalIndex += 1
+		}
+
+		// Verify parent beacon root.
+		want := common.Hash{byte(i)}
+		if got := block.BeaconRoot(); *got != want {
+			t.Fatalf("block %d, wrong parent beacon root: got %s, want %s", i, got, want)
+		}
+		state, _ := blockchain.State()
+		idx := block.Time()%8191 + 8191
+		got := state.GetState(params.BeaconRootsStorageAddress, common.BigToHash(new(big.Int).SetUint64(idx)))
+		if got != want {
+			t.Fatalf("block %d, wrong parent beacon root in state: got %s, want %s", i, got, want)
 		}
 	}
 }

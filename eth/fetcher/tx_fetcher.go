@@ -61,7 +61,7 @@ const (
 	maxTxUnderpricedSetSize = 32768
 
 	// maxTxUnderpricedTimeout is the max time a transaction should be stuck in the underpriced set.
-	maxTxUnderpricedTimeout = int64(5 * time.Minute)
+	maxTxUnderpricedTimeout = 5 * time.Minute
 
 	// txArriveTimeout is the time allowance before an announced transaction is
 	// explicitly requested.
@@ -167,7 +167,7 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	underpriced *lru.Cache[common.Hash, int64] // Transactions discarded as too cheap (don't re-fetch)
+	underpriced *lru.Cache[common.Hash, time.Time] // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
@@ -222,7 +222,7 @@ func NewTxFetcherForTests(
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
 		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: lru.NewCache[common.Hash, int64](maxTxUnderpricedSetSize),
+		underpriced: lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
 		hasTx:       hasTx,
 		addTxs:      addTxs,
 		fetchTxs:    fetchTxs,
@@ -284,7 +284,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 // isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
-	if ok && prevTime+maxTxUnderpricedTimeout < time.Now().Unix() {
+	if ok && prevTime.Before(time.Now().Add(-maxTxUnderpricedTimeout)) {
 		f.underpriced.Remove(hash)
 		return false
 	}
@@ -335,7 +335,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Avoid re-request this transaction when we receive another
 			// announcement.
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
-				f.underpriced.Add(batch[j].Hash(), batch[j].Time().Unix())
+				f.underpriced.Add(batch[j].Hash(), batch[j].Time())
 			}
 			// Track a few interesting failure types
 			switch {
@@ -363,7 +363,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
 		if otherreject > 128/4 {
 			time.Sleep(200 * time.Millisecond)
-			log.Warn("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
+			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
 	}
 	select {
@@ -593,8 +593,9 @@ func (f *TxFetcher) loop() {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
-								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
 								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
 									// wiggle-room where we only warn, but don't drop.
@@ -618,8 +619,9 @@ func (f *TxFetcher) loop() {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
 							} else if delivery.metas[i].size != meta.size {
-								log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
 								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
+									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
+
 									// Normally we should drop a peer considering this is a protocol violation.
 									// However, due to the RLP vs consensus format messyness, allow a few bytes
 									// wiggle-room where we only warn, but don't drop.
