@@ -42,12 +42,7 @@ type Filter struct {
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) (*Filter, error) {
-	// Fast exit if from > to
-	if begin > 0 && end > 0 && begin > end {
-		return nil, errInvalidBlockRange
-	}
-
+func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -75,7 +70,7 @@ func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Add
 	filter.begin = begin
 	filter.end = end
 
-	return filter, nil
+	return filter
 }
 
 // NewBlockFilter creates a new filter which directly inspects the contents of
