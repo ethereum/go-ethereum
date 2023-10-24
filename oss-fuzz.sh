@@ -92,10 +92,16 @@ function compile_fuzzer() {
   cd -
 }
 
+export PROJPATH=$GOPATH/src/github.com/ethereum/go-ethereum
+
 compile_fuzzer accounts/abi        FuzzABI fuzzAbi
 
-compile_fuzzer tests/fuzzers/bitutil  FuzzEncoder      fuzzBitutilEncoder
-compile_fuzzer tests/fuzzers/bitutil  FuzzDecoder      fuzzBitutilDecoder
+# See https://github.com/AdamKorcz/go-118-fuzz-build#using-test-utils-from-other-_testgo-files
+# If we want to use code from '.._test.go'-files, we need to remove the _test suffix.
+mv $PROJPATH/common/bitutil/compress_test.go $PROJPATH/common/bitutil/compress_test_xx.go
+compile_fuzzer common/bitutil  FuzzEncoder      fuzzBitutilEncoder
+compile_fuzzer common/bitutil  FuzzDecoder      fuzzBitutilDecoder
+
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair

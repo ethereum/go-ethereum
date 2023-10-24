@@ -18,6 +18,7 @@ package bitutil
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -48,17 +49,21 @@ func TestEncodingCycle(t *testing.T) {
 		"0xdf7070533534333636313639343638373532313536346c1bc333393438373130707063363430353639343638373532313536346c1bc333393438336336346c65fe",
 	}
 	for i, tt := range tests {
-		data := hexutil.MustDecode(tt)
-
-		proc, err := bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
-		if err != nil {
-			t.Errorf("test %d: failed to decompress compressed data: %v", i, err)
-			continue
-		}
-		if !bytes.Equal(data, proc) {
-			t.Errorf("test %d: compress/decompress mismatch: have %x, want %x", i, proc, data)
+		if err := testEncodingCycle(hexutil.MustDecode(tt)); err != nil {
+			t.Errorf("test %d: %v", i, err)
 		}
 	}
+}
+
+func testEncodingCycle(data []byte) error {
+	proc, err := bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
+	if err != nil {
+		return fmt.Errorf("failed to decompress compressed data: %v", err)
+	}
+	if !bytes.Equal(data, proc) {
+		return fmt.Errorf("compress/decompress mismatch: have %x, want %x", proc, data)
+	}
+	return nil
 }
 
 // Tests that data bitset decoding and rencoding works and is bijective.
