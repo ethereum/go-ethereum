@@ -171,8 +171,8 @@ This command dumps out the state for a given block (or latest, if none provided)
 		Action:    exportSnapshotPreimages,
 		Name:      "export-snapshot-preimages",
 		Usage:     "Export the preimage in snapshot enumeration order",
-		ArgsUsage: "<dumpfile>",
-		Flags:     flags.Merge([]cli.Flag{utils.TreeRootFlag}, utils.DatabaseFlags),
+		ArgsUsage: "<dumpfile> [<root>]",
+		Flags:     utils.DatabaseFlags,
 		Description: `
 The export-snapshot-preimages command exports hash preimages to a flat file, in exactly
 the expected order for the overlay tree migration.
@@ -428,8 +428,8 @@ func exportSnapshotPreimages(ctx *cli.Context) error {
 	chain, _ := utils.MakeChain(ctx, stack, true)
 
 	var root common.Hash
-	if ctx.String(utils.TreeRootFlag.Name) != "" {
-		rootBytes := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
+	if ctx.Args().Len() > 1 {
+		rootBytes := common.FromHex(ctx.Args().Get(1))
 		if len(rootBytes) != common.HashLength {
 			return fmt.Errorf("invalid root hash length")
 		}

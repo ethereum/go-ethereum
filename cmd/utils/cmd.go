@@ -397,45 +397,55 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 		root = chain.CurrentBlock().Root
 	}
 
-	accIt, err := chain.Snapshots().AccountIterator(root, common.Hash{})
-	if err != nil {
-		return err
+	type hashAndPreimageSize struct {
+		Hash common.Hash
+		Size int
 	}
-	defer accIt.Release()
+	var hashCh chan hashAndPreimageSize
 
-	count := 0
-	for accIt.Next() {
-		acc, err := types.FullAccount(accIt.Account())
+	go func() {
+		defer close(hashCh)
+		accIt, err := chain.Snapshots().AccountIterator(root, common.Hash{})
 		if err != nil {
-			return fmt.Errorf("invalid account encountered during traversal: %s", err)
+			log.Error("failed to create account iterator", "error", err)
+			return
 		}
-		addr := rawdb.ReadPreimage(statedb.Database().DiskDB(), accIt.Hash())
-		if len(addr) != 20 {
-			return fmt.Errorf("addr len is zero is not 32: %d", len(addr))
-		}
-		if _, err := writer.Write(addr); err != nil {
-			return fmt.Errorf("failed to write addr preimage: %w", err)
-		}
+		defer accIt.Release()
 
-		if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-			stIt, err := chain.Snapshots().StorageIterator(root, accIt.Hash(), common.Hash{})
+		count := 0
+		for accIt.Next() {
+			acc, err := types.FullAccount(accIt.Account())
 			if err != nil {
-				return fmt.Errorf("failed to create storage iterator: %w", err)
+				log.Error("failed to get full account", "error", err)
+				return
 			}
-			for stIt.Next() {
-				slotnr := rawdb.ReadPreimage(statedb.Database().DiskDB(), stIt.Hash())
-				if len(slotnr) != 32 {
-					return fmt.Errorf("slotnr not 32 len")
+			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: 20}
+
+			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
+				stIt, err := chain.Snapshots().StorageIterator(root, accIt.Hash(), common.Hash{})
+				if err != nil {
+					log.Error("failed to create storage iterator", "error", err)
+					return
 				}
-				if _, err := writer.Write(slotnr); err != nil {
-					return fmt.Errorf("failed to write slotnr preimage: %w", err)
+				for stIt.Next() {
+					hashCh <- hashAndPreimageSize{Hash: stIt.Hash(), Size: 32}
 				}
+				stIt.Release()
 			}
-			stIt.Release()
+			count++
+			if count%100000 == 0 {
+				log.Info("Last exported account", "account", accIt.Hash())
+			}
 		}
-		count++
-		if count%100000 == 0 {
-			log.Info("Last exported account", "account", accIt.Hash())
+	}()
+
+	for item := range hashCh {
+		preimage := rawdb.ReadPreimage(statedb.Database().DiskDB(), item.Hash)
+		if len(preimage) != item.Size {
+			return fmt.Errorf("invalid preimage size")
+		}
+		if _, err := writer.Write(preimage); err != nil {
+			return fmt.Errorf("failed to write preimage: %w", err)
 		}
 	}
 
