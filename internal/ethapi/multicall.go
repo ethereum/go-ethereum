@@ -37,6 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const (
+	// maxMulticallBlocks is the maximum number of blocks that can be simulated
+	// in a single request.
+	maxMulticallBlocks = 256
+)
+
 // CallBatch is a batch of calls to be simulated sequentially.
 type CallBatch struct {
 	BlockOverrides *BlockOverrides

@@ -1229,6 +1229,13 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts multicallOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]blockResult, error) {
+	if len(opts.BlockStateCalls) == 0 {
+		// TODO return error code.
+		return nil, errors.New("invalid params")
+	} else if len(opts.BlockStateCalls) > maxMulticallBlocks {
+		// TODO return error code.
+		return nil, errors.New("invalid params")
+	}
 	if blockNrOrHash == nil {
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
