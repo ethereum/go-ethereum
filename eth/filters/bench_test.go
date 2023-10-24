@@ -137,7 +137,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var addr common.Address
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
-		filter, _ := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
+		filter := sys.NewRangeFilter(0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
 		if _, err := filter.Logs(context.Background()); err != nil {
 			b.Error("filter.Logs error:", err)
 		}
@@ -180,7 +180,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()
-	filter, _ := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
+	filter := sys.NewRangeFilter(0, int64(*headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)
 	b.Log("Finished running filter benchmarks")
