@@ -1426,10 +1426,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter, err := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
-	if err != nil {
-		return nil, err
-	}
+	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
 	return runFilter(ctx, r, filter)
 }
 
