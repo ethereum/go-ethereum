@@ -19,13 +19,13 @@ package bitutil
 import (
 	"bytes"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common/bitutil"
 )
 
 func FuzzEncoder(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzzEncode(data)
+		if err := testEncodingCycle(data); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
 func FuzzDecoder(f *testing.F) {
@@ -34,31 +34,22 @@ func FuzzDecoder(f *testing.F) {
 	})
 }
 
-// fuzzEncode implements a go-fuzz fuzzer method to test the bitset encoding and
-// decoding algorithm.
-func fuzzEncode(data []byte) {
-	proc, _ := bitutil.DecompressBytes(bitutil.CompressBytes(data), len(data))
-	if !bytes.Equal(data, proc) {
-		panic("content mismatch")
-	}
-}
-
 // fuzzDecode implements a go-fuzz fuzzer method to test the bit decoding and
 // reencoding algorithm.
 func fuzzDecode(data []byte) {
-	blob, err := bitutil.DecompressBytes(data, 1024)
+	blob, err := DecompressBytes(data, 1024)
 	if err != nil {
 		return
 	}
 	// re-compress it (it's OK if the re-compressed differs from the
 	// original - the first input may not have been compressed at all)
-	comp := bitutil.CompressBytes(blob)
+	comp := CompressBytes(blob)
 	if len(comp) > len(blob) {
 		// After compression, it must be smaller or equal
 		panic("bad compression")
 	}
 	// But decompressing it once again should work
-	decomp, err := bitutil.DecompressBytes(data, 1024)
+	decomp, err := DecompressBytes(data, 1024)
 	if err != nil {
 		panic(err)
 	}
