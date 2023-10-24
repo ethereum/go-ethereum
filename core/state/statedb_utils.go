@@ -93,16 +93,17 @@ func GetCandidates(statedb *StateDB) []common.Address {
 	slot := slotValidatorMapping["candidates"]
 	slotHash := common.BigToHash(new(big.Int).SetUint64(slot))
 	arrLength := statedb.GetState(common.HexToAddress(common.MasternodeVotingSMC), slotHash)
-	keys := []common.Hash{}
-	for i := uint64(0); i < arrLength.Big().Uint64(); i++ {
+	count := arrLength.Big().Uint64()
+	rets := make([]common.Address, 0, count)
+
+	for i := uint64(0); i < count; i++ {
 		key := GetLocDynamicArrAtElement(slotHash, i, 1)
-		keys = append(keys, key)
-	}
-	rets := []common.Address{}
-	for _, key := range keys {
 		ret := statedb.GetState(common.HexToAddress(common.MasternodeVotingSMC), key)
-		rets = append(rets, common.HexToAddress(ret.Hex()))
+		if !ret.IsZero() {
+			rets = append(rets, common.HexToAddress(ret.Hex()))
+		}
 	}
+
 	return rets
 }
 

@@ -431,7 +431,7 @@ func (pool *LendingPool) validateNewLending(cloneStateDb *state.StateDB, cloneLe
 		return ErrInvalidLendingType
 	}
 	if tx.Side() == lendingstate.Borrowing {
-		if tx.CollateralToken().String() == lendingstate.EmptyAddress || tx.CollateralToken().String() == tx.LendingToken().String() {
+		if tx.CollateralToken().IsZero() || tx.CollateralToken() == tx.LendingToken() {
 			return ErrInvalidLendingCollateral
 		}
 		validCollateral := false
@@ -541,7 +541,7 @@ func (pool *LendingPool) validateBalance(cloneStateDb *state.StateDB, cloneLendi
 	// collateralPrice = BTC/USD (eg: 8000 USD)
 	// lendTokenXDCPrice: price of lendingToken in XDC quote
 	var lendTokenXDCPrice, collateralPrice, collateralTokenDecimal *big.Int
-	if collateralToken.String() != lendingstate.EmptyAddress {
+	if !collateralToken.IsZero() {
 		collateralTokenDecimal, err = XDCXServ.GetTokenDecimal(pool.chain, cloneStateDb, collateralToken)
 		if err != nil {
 			return fmt.Errorf("validateOrder: failed to get collateralTokenDecimal. err: %v", err)

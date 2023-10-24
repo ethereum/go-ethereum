@@ -3,6 +3,8 @@ package XDCxlending
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -10,7 +12,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"math/big"
 )
 
 func (l *Lending) CommitOrder(header *types.Header, coinbase common.Address, chain consensus.ChainContext, statedb *state.StateDB, lendingStateDB *lendingstate.LendingStateDB, tradingStateDb *tradingstate.TradingStateDB, lendingOrderBook common.Hash, order *lendingstate.LendingItem) ([]*lendingstate.LendingTrade, []*lendingstate.LendingItem, error) {
@@ -262,10 +263,9 @@ func (l *Lending) processOrderList(header *types.Header, coinbase common.Address
 			collateralToken = oldestOrder.CollateralToken
 			borrowFee = lendingstate.GetFee(statedb, oldestOrder.Relayer)
 		}
-		if collateralToken.String() == lendingstate.EmptyAddress {
+		if collateralToken.IsZero() {
 			return nil, nil, nil, fmt.Errorf("empty collateral")
 		}
-		collateralPrice := common.BasePrice
 		depositRate, liquidationRate, recallRate := lendingstate.GetCollateralDetail(statedb, collateralToken)
 		if depositRate == nil || depositRate.Sign() <= 0 {
 			return nil, nil, nil, fmt.Errorf("invalid depositRate %v", depositRate)
@@ -953,11 +953,11 @@ func (l *Lending) GetMediumTradePriceBeforeEpoch(chain consensus.ChainContext, s
 	return nil, nil
 }
 
-//LendToken and CollateralToken must meet at least one of following conditions
-//- Have direct pair in XDCX: lendToken/CollateralToken or CollateralToken/LendToken
-//- Have pairs with XDC:
-//-  lendToken/XDC and CollateralToken/XDC
-//-  XDC/lendToken and XDC/CollateralToken
+// LendToken and CollateralToken must meet at least one of following conditions
+// - Have direct pair in XDCX: lendToken/CollateralToken or CollateralToken/LendToken
+// - Have pairs with XDC:
+// -  lendToken/XDC and CollateralToken/XDC
+// -  XDC/lendToken and XDC/CollateralToken
 func (l *Lending) GetCollateralPrices(header *types.Header, chain consensus.ChainContext, statedb *state.StateDB, tradingStateDb *tradingstate.TradingStateDB, collateralToken common.Address, lendingToken common.Address) (*big.Int, *big.Int, error) {
 	// lendTokenXDCPrice: price of ticker lendToken/XDC
 	// collateralXDCPrice: price of ticker collateralToken/XDC

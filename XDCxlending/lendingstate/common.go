@@ -2,16 +2,15 @@ package lendingstate
 
 import (
 	"encoding/json"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"math/big"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
 var (
-	EmptyAddress = "xdc0000000000000000000000000000000000000000"
-	EmptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
 var EmptyHash = common.Hash{}
