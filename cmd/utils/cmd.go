@@ -401,7 +401,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 		Hash common.Hash
 		Size int
 	}
-	var hashCh chan hashAndPreimageSize
+	hashCh := make(chan hashAndPreimageSize)
 
 	go func() {
 		defer close(hashCh)
