@@ -1013,7 +1013,7 @@ func TestMulticallV1(t *testing.T) {
 	}
 	var testSuite = []struct {
 		name             string
-		blocks           []CallBatch
+		blocks           []mcBlock
 		tag              rpc.BlockNumberOrHash
 		includeTransfers *bool
 		validation       *bool
@@ -1026,7 +1026,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "simple",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
 				},
@@ -1068,7 +1068,7 @@ func TestMulticallV1(t *testing.T) {
 			// State build-up over blocks.
 			name: "simple-multi-block",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
 				},
@@ -1137,7 +1137,7 @@ func TestMulticallV1(t *testing.T) {
 			// Block overrides should work, each call is simulated on a different block number
 			name: "block-overrides",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				BlockOverrides: &BlockOverrides{
 					Number:       (*hexutil.Big)(big.NewInt(11)),
 					FeeRecipient: &cac,
@@ -1193,7 +1193,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "block-number-order",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
@@ -1225,7 +1225,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "storage-contract",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
 						Code: hex2Bytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
@@ -1266,7 +1266,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "logs",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
 						// Yul code:
@@ -1307,7 +1307,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "ecrecover-override",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: OverrideAccount{
 						// Yul code that returns ecrecover(0, 0, 0, 0).
@@ -1371,7 +1371,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "precompile-move",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					sha256Address: OverrideAccount{
 						// Yul code that returns the calldata.
@@ -1425,7 +1425,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "transfer-logs",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[0].addr: OverrideAccount{
 						Balance: newRPCBalance(big.NewInt(100)),
@@ -1487,7 +1487,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "selfdestruct",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				Calls: []TransactionArgs{{
 					From: &accounts[0].addr,
 					To:   &cac,
@@ -1550,7 +1550,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "validation-checks",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				Calls: []TransactionArgs{{
 					From:  &accounts[2].addr,
 					To:    &cac,
@@ -1576,7 +1576,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "clear-storage",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: {
 						Code: newBytes(genesis.Alloc[bab].Code),
@@ -1643,7 +1643,7 @@ func TestMulticallV1(t *testing.T) {
 		{
 			name: "blockhash-opcode",
 			tag:  latest,
-			blocks: []CallBatch{{
+			blocks: []mcBlock{{
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
@@ -1729,7 +1729,7 @@ func TestMulticallV1(t *testing.T) {
 
 	for _, tc := range testSuite {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := multicallOpts{BlockStateCalls: tc.blocks}
+			opts := mcOpts{BlockStateCalls: tc.blocks}
 			if tc.includeTransfers != nil && *tc.includeTransfers {
 				opts.TraceTransfers = true
 			}
