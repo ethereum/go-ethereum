@@ -101,9 +101,6 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
-	if err := t.insert(t.root, k, value, nil); err != nil {
-		return err
-	}
 	// track the first and last inserted entries.
 	if t.first == nil {
 		t.first = append([]byte{}, k...)
@@ -112,6 +109,9 @@ func (t *StackTrie) Update(key, value []byte) error {
 		t.last = append([]byte{}, k...) // allocate key slice
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
+	}
+	if err := t.insert(t.root, k, value, nil); err != nil {
+		return err
 	}
 	return nil
 }
