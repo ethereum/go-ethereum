@@ -17,9 +17,15 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -47,7 +53,7 @@ var (
 		Action:    initGenesis,
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
-		ArgsUsage: "<genesisPath>",
+		ArgsUsage: "<genesisPath> [<checksum>]",
 		Flags: flags.Merge([]cli.Flag{
 			utils.CachePreimagesFlag,
 		}, utils.DatabaseFlags),
@@ -56,7 +62,10 @@ The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
 
-It expects the genesis file as argument.`,
+It expects the genesis file or url as argument.
+
+If the argument is a url, you can also provide a sha256 hex string as checksum.
+`,
 	}
 	dumpGenesisCommand = &cli.Command{
 		Action:    dumpGenesis,
@@ -171,15 +180,38 @@ This command dumps out the state for a given block (or latest, if none provided)
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) error {
-	if ctx.Args().Len() != 1 {
-		utils.Fatalf("need genesis.json file as the only argument")
-	}
+func initGenesis(ctx *cli.Context) (err error) {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("invalid path to genesis file")
 	}
-	file, err := os.Open(genesisPath)
+
+	var file io.ReadCloser
+	// if the genesis path is a URL, then fetch it from the http server
+	// if not so, open it from local file system
+	if u, e := url.Parse(genesisPath); e == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		resp, err := http.Get(genesisPath)
+		if err != nil {
+			return err
+		}
+		// sha256 checksum
+		if checksum := ctx.Args().Get(1); checksum != "" {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			hashFn := sha256.New()
+			_, _ = hashFn.Write(body)
+			if gotHash := hex.EncodeToString(hashFn.Sum(nil)); gotHash != checksum {
+				utils.Fatalf("genesis hash does not match, expected: %s but got: %s", checksum, gotHash)
+			}
+			file = io.NopCloser(bytes.NewReader(body))
+		} else {
+			file = resp.Body
+		}
+	} else {
+		file, err = os.Open(genesisPath)
+	}
 	if err != nil {
 		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
