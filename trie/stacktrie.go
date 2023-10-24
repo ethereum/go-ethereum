@@ -110,9 +110,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	if err := t.insert(t.root, k, value, nil); err != nil {
-		return err
-	}
+	t.insert(t.root, k, value, nil)
 	return nil
 }
 
@@ -194,7 +192,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
+func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 	switch st.typ {
 	case branchNode: /* Branch */
 		idx := int(key[0])
@@ -213,7 +211,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
 		if st.children[idx] == nil {
 			st.children[idx] = newLeaf(key[1:], value)
 		} else {
-			return t.insert(st.children[idx], key[1:], value, append(path, key[0]))
+			t.insert(st.children[idx], key[1:], value, append(path, key[0]))
 		}
 
 	case extNode: /* Ext */
@@ -228,7 +226,8 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			return t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
+			t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
+			return
 		}
 		// Save the original part. Depending if the break is
 		// at the extension's last byte or not, create an
@@ -286,7 +285,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
 		// keys differ, and 3) one leaf for the differentiated
 		// component of each key.
 		if diffidx >= len(st.key) {
-			return errors.New("trying to insert into existing key")
+			panic("Trying to insert into existing key")
 		}
 
 		// Check if the split occurs at the first nibble of the
@@ -328,12 +327,11 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) error {
 		st.val = value
 
 	case hashedNode:
-		return errors.New("trying to insert into hash")
+		panic("trying to insert into hash")
 
 	default:
 		panic("invalid type")
 	}
-	return nil
 }
 
 // hash converts st into a 'hashedNode', if possible. Possible outcomes:
