@@ -465,7 +465,7 @@ func TestPartialStackTrie(t *testing.T) {
 	}
 }
 
-func TestStacstaturieErrors(t *testing.T) {
+func TestStackTrieErrors(t *testing.T) {
 	s := NewStackTrie(nil)
 	// Deletion
 	if err := s.Update(nil, nil); err == nil {
