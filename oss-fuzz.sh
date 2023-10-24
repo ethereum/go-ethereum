@@ -105,12 +105,13 @@ compile_fuzzer common/bitutil  FuzzDecoder      fuzzBitutilDecoder
 compile_fuzzer core/vm/runtime  FuzzVmRuntime      fuzzVmRuntime
 compile_fuzzer core/vm  FuzzPrecompiledContracts      fuzzPrecompiledContracts
 
+compile_fuzzer core/types/        FuzzRLP fuzzRlp
+
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
 compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
 compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
-compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
