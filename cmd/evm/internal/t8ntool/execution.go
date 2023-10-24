@@ -204,21 +204,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
 		}
-		if tx.Type() == types.BlobTxType {
-			txBlobGas := uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
-			if blobGasUsed+txBlobGas > params.BlobTxBlobGasPerBlob {
-				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", blobGasUsed+txBlobGas, params.MaxBlobGasPerBlock)
-				log.Warn("rejected tx", "index", i, "err", err)
-				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
-				continue
-			}
-			blobGasUsed += txBlobGas
-		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
+		}
+		if tx.Type() == types.BlobTxType {
+			txBlobGas := uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
+				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
+				log.Warn("rejected tx", "index", i, "err", err)
+				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+				continue
+			}
+			blobGasUsed += txBlobGas
 		}
 		tracer, err := getTracerFn(txIndex, tx.Hash())
 		if err != nil {
