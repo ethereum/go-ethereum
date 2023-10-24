@@ -92,6 +92,8 @@ function compile_fuzzer() {
   cd -
 }
 
+compile_fuzzer accounts/abi        FuzzABI fuzzAbi
+
 compile_fuzzer tests/fuzzers/bitutil  FuzzEncoder      fuzzBitutilEncoder
 compile_fuzzer tests/fuzzers/bitutil  FuzzDecoder      fuzzBitutilDecoder
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
@@ -104,7 +106,6 @@ compile_fuzzer tests/fuzzers/rlp        Fuzz fuzzRlp
 compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
 compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-compile_fuzzer tests/fuzzers/abi        Fuzz fuzzAbi
 compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
 compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
 compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
@@ -129,5 +130,4 @@ compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
 compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
 compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
 
-#TODO: move this to tests/fuzzers, if possible
 compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
