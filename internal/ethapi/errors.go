@@ -68,3 +68,8 @@ func callErrorFromError(err error) *callError {
 		Code:    errCodeInternalError,
 	}
 }
+
+type invalidParamsError struct{ message string }
+
+func (e *invalidParamsError) Error() string  { return e.message }
+func (e *invalidParamsError) ErrorCode() int { return errCodeInvalidParams }
