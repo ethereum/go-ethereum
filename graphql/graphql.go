@@ -40,11 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var (
-	errBlockInvariant    = errors.New("block objects must be instantiated with at least one of num or hash")
-	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
-)
-
 type Long int64
 
 // ImplementsGraphQLType returns true if Long implements the provided GraphQL type.
