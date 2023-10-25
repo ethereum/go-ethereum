@@ -21,7 +21,7 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	ExecutionService_GetBlock_FullMethodName              = "/astria.execution.v1alpha2.ExecutionService/GetBlock"
 	ExecutionService_BatchGetBlocks_FullMethodName        = "/astria.execution.v1alpha2.ExecutionService/BatchGetBlocks"
-	ExecutionService_CreateBlock_FullMethodName           = "/astria.execution.v1alpha2.ExecutionService/CreateBlock"
+	ExecutionService_ExecuteBlock_FullMethodName          = "/astria.execution.v1alpha2.ExecutionService/ExecuteBlock"
 	ExecutionService_GetCommitmentState_FullMethodName    = "/astria.execution.v1alpha2.ExecutionService/GetCommitmentState"
 	ExecutionService_UpdateCommitmentState_FullMethodName = "/astria.execution.v1alpha2.ExecutionService/UpdateCommitmentState"
 )
@@ -32,13 +32,16 @@ const (
 type ExecutionServiceClient interface {
 	// GetBlock will return a block given an identifier.
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*Block, error)
-	// BatchGetBlocks will return an array of Blocks given an array of block identifiers.
+	// BatchGetBlocks will return an array of Blocks given an array of block
+	// identifiers.
 	BatchGetBlocks(ctx context.Context, in *BatchGetBlocksRequest, opts ...grpc.CallOption) (*BatchGetBlocksResponse, error)
-	// CreateBlock is used to drive deterministic creation of an executed block from a sequenced block.
-	CreateBlock(ctx context.Context, in *CreateBlockRequest, opts ...grpc.CallOption) (*Block, error)
+	// ExecuteBlock is called to deterministically derive a rollup block from
+	// filtered sequencer block information.
+	ExecuteBlock(ctx context.Context, in *ExecuteBlockRequest, opts ...grpc.CallOption) (*Block, error)
 	// GetCommitmentState fetches the current CommitmentState of the chain.
 	GetCommitmentState(ctx context.Context, in *GetCommitmentStateRequest, opts ...grpc.CallOption) (*CommitmentState, error)
-	// UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
+	// UpdateCommitmentState replaces the whole CommitmentState with a new
+	// CommitmentState.
 	UpdateCommitmentState(ctx context.Context, in *UpdateCommitmentStateRequest, opts ...grpc.CallOption) (*CommitmentState, error)
 }
 
@@ -68,9 +71,9 @@ func (c *executionServiceClient) BatchGetBlocks(ctx context.Context, in *BatchGe
 	return out, nil
 }
 
-func (c *executionServiceClient) CreateBlock(ctx context.Context, in *CreateBlockRequest, opts ...grpc.CallOption) (*Block, error) {
+func (c *executionServiceClient) ExecuteBlock(ctx context.Context, in *ExecuteBlockRequest, opts ...grpc.CallOption) (*Block, error) {
 	out := new(Block)
-	err := c.cc.Invoke(ctx, ExecutionService_CreateBlock_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, ExecutionService_ExecuteBlock_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,13 +104,16 @@ func (c *executionServiceClient) UpdateCommitmentState(ctx context.Context, in *
 type ExecutionServiceServer interface {
 	// GetBlock will return a block given an identifier.
 	GetBlock(context.Context, *GetBlockRequest) (*Block, error)
-	// BatchGetBlocks will return an array of Blocks given an array of block identifiers.
+	// BatchGetBlocks will return an array of Blocks given an array of block
+	// identifiers.
 	BatchGetBlocks(context.Context, *BatchGetBlocksRequest) (*BatchGetBlocksResponse, error)
-	// CreateBlock is used to drive deterministic creation of an executed block from a sequenced block.
-	CreateBlock(context.Context, *CreateBlockRequest) (*Block, error)
+	// ExecuteBlock is called to deterministically derive a rollup block from
+	// filtered sequencer block information.
+	ExecuteBlock(context.Context, *ExecuteBlockRequest) (*Block, error)
 	// GetCommitmentState fetches the current CommitmentState of the chain.
 	GetCommitmentState(context.Context, *GetCommitmentStateRequest) (*CommitmentState, error)
-	// UpdateCommitmentState replaces the whole CommitmentState with a new CommitmentState.
+	// UpdateCommitmentState replaces the whole CommitmentState with a new
+	// CommitmentState.
 	UpdateCommitmentState(context.Context, *UpdateCommitmentStateRequest) (*CommitmentState, error)
 	mustEmbedUnimplementedExecutionServiceServer()
 }
@@ -122,8 +128,8 @@ func (UnimplementedExecutionServiceServer) GetBlock(context.Context, *GetBlockRe
 func (UnimplementedExecutionServiceServer) BatchGetBlocks(context.Context, *BatchGetBlocksRequest) (*BatchGetBlocksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchGetBlocks not implemented")
 }
-func (UnimplementedExecutionServiceServer) CreateBlock(context.Context, *CreateBlockRequest) (*Block, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateBlock not implemented")
+func (UnimplementedExecutionServiceServer) ExecuteBlock(context.Context, *ExecuteBlockRequest) (*Block, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBlock not implemented")
 }
 func (UnimplementedExecutionServiceServer) GetCommitmentState(context.Context, *GetCommitmentStateRequest) (*CommitmentState, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCommitmentState not implemented")
@@ -180,20 +186,20 @@ func _ExecutionService_BatchGetBlocks_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ExecutionService_CreateBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateBlockRequest)
+func _ExecutionService_ExecuteBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteBlockRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ExecutionServiceServer).CreateBlock(ctx, in)
+		return srv.(ExecutionServiceServer).ExecuteBlock(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ExecutionService_CreateBlock_FullMethodName,
+		FullMethod: ExecutionService_ExecuteBlock_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ExecutionServiceServer).CreateBlock(ctx, req.(*CreateBlockRequest))
+		return srv.(ExecutionServiceServer).ExecuteBlock(ctx, req.(*ExecuteBlockRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -250,8 +256,8 @@ var ExecutionService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExecutionService_BatchGetBlocks_Handler,
 		},
 		{
-			MethodName: "CreateBlock",
-			Handler:    _ExecutionService_CreateBlock_Handler,
+			MethodName: "ExecuteBlock",
+			Handler:    _ExecutionService_ExecuteBlock_Handler,
 		},
 		{
 			MethodName: "GetCommitmentState",

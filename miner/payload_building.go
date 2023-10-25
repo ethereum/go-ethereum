@@ -164,12 +164,13 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 
 	// Get the block to update with the payload
 	block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
-	if err == nil {
-		payload.update(block, fees)
-		log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
-		return payload, nil
-	} else {
+	if err != nil {
 		log.Info("Stopping work on payload", "id", payload.id, "reason", "failed to retrieve payload")
-		return payload, nil
+		return nil, err
 	}
+
+	// Add the updated block to the payload
+	payload.update(block, fees)
+	log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+	return payload, nil
 }
