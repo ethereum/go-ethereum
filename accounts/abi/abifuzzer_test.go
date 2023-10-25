@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 )
 
 // TestReplicate can be used to replicate crashers from the fuzzing tests.
@@ -163,7 +163,7 @@ func upTo(fuzzer *fuzz.Fuzzer, max int) int {
 	if i < 0 {
 		return (-1 - i) % max
 	}
-	return int(i) % max
+	return i % max
 }
 
 func oneOf(fuzzer *fuzz.Fuzzer, options []string) string {
