@@ -49,10 +49,10 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 	return &Genesis{
 		Config:     chainConfig,
 		ExtraData:  []byte{},
-		GasLimit:   uint64(8000000),
+		GasLimit:   uint64(15_000_000),
 		Difficulty: common.Big0,
 		Alloc:      alloc,
 		GasUsed:    0,
-		BaseFee:    new(big.Int).SetUint64(10000000),
+		BaseFee:    new(big.Int).SetUint64(10_000_000),
 	}
 }

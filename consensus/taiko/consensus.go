@@ -29,7 +29,7 @@ var (
 
 	GoldenTouchAccount = common.HexToAddress("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
 	AnchorSelector     = crypto.Keccak256([]byte("anchor(bytes32,bytes32,uint64,uint32)"))[:4]
-	AnchorGasLimit     = uint64(1_000_000)
+	AnchorGasLimit     = uint64(250_000)
 	TaikoL2Address     = common.HexToAddress("0x1000777700000000000000000000000000000001")
 )
 
