@@ -19,7 +19,6 @@ package graphql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -365,7 +364,7 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 
 	tip, err := tx.EffectiveGasTip(header.BaseFee)
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	return (*hexutil.Big)(tip), nil
 }
@@ -545,7 +544,7 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 		logs, err = filter.Logs(ctx)
 	)
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	var ret []*Log
 	// Select tx logs from all block logs
@@ -672,7 +671,7 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 			b.header = b.block.Header()
 		}
 	}
-	return b.block, err
+	return b.block, asGraphQLError(err)
 }
 
 // resolveHeader returns the internal Header object for this block, fetching it
@@ -690,7 +689,7 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	var err error
 	b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	if b.hash == (common.Hash{}) {
 		b.hash = b.header.Hash()
@@ -708,7 +707,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	}
 	receipts, err := b.r.backend.GetReceipts(ctx, b.hash)
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	b.receipts = receipts
 	return receipts, nil
@@ -1191,7 +1190,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 }) (*CallResult, error) {
 	result, err := ethapi.DoCall(ctx, b.r.backend, args.Data, *b.numberOrHash, nil, nil, b.r.backend.RPCEVMTimeout(), b.r.backend.RPCGasCap())
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	status := hexutil.Uint64(1)
 	if result.Failed() {
@@ -1223,7 +1222,7 @@ func (p *Pending) TransactionCount(ctx context.Context) (hexutil.Uint64, error) 
 func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	txs, err := p.r.backend.GetPoolTransactions()
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	ret := make([]*Transaction, 0, len(txs))
 	for i, tx := range txs {
@@ -1254,7 +1253,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 	result, err := ethapi.DoCall(ctx, p.r.backend, args.Data, pendingBlockNr, nil, nil, p.r.backend.RPCEVMTimeout(), p.r.backend.RPCGasCap())
 	if err != nil {
-		return nil, err
+		return nil, asGraphQLError(err)
 	}
 	status := hexutil.Uint64(1)
 	if result.Failed() {
@@ -1286,7 +1285,7 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	Hash   *common.Hash
 }) (*Block, error) {
 	if args.Number != nil && args.Hash != nil {
-		return nil, errors.New("only one of number or hash must be specified")
+		return nil, errOnlyNumberOrHash
 	}
 	var numberOrHash rpc.BlockNumberOrHash
 	if args.Number != nil {
@@ -1353,7 +1352,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 		}
 		ret = append(ret, block)
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, asGraphQLError(err)
 		}
 	}
 	return ret, nil
