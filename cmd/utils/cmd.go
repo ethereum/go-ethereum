@@ -385,8 +385,17 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 	}
 	defer fh.Close()
 
-	writer := bufio.NewWriter(fh)
-	defer writer.Flush()
+	var writer io.Writer = fh
+
+	if strings.HasSuffix(fn, ".gz") {
+		gz := gzip.NewWriter(writer)
+		defer gz.Close()
+		writer = gz
+	}
+
+	buf := bufio.NewWriter(writer)
+	defer buf.Flush()
+	writer = buf
 
 	statedb, err := chain.State()
 	if err != nil {
@@ -441,8 +450,11 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 
 	for item := range hashCh {
 		preimage := rawdb.ReadPreimage(statedb.Database().DiskDB(), item.Hash)
+		if len(preimage) == 0 {
+			return fmt.Errorf("missing preimage for %v", item.Hash)
+		}
 		if len(preimage) != item.Size {
-			return fmt.Errorf("invalid preimage size")
+			return fmt.Errorf("invalid preimage size, have %d", len(preimage))
 		}
 		if _, err := writer.Write(preimage); err != nil {
 			return fmt.Errorf("failed to write preimage: %w", err)

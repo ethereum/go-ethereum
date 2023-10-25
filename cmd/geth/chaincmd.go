@@ -419,7 +419,7 @@ func exportPreimages(ctx *cli.Context) error {
 
 // exportSnapshotPreimages dumps the preimage data to a flat file.
 func exportSnapshotPreimages(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
+	if ctx.NArg() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeConfigNode(ctx)
@@ -428,10 +428,10 @@ func exportSnapshotPreimages(ctx *cli.Context) error {
 	chain, _ := utils.MakeChain(ctx, stack, true)
 
 	var root common.Hash
-	if ctx.Args().Len() > 1 {
+	if ctx.NArg() > 1 {
 		rootBytes := common.FromHex(ctx.Args().Get(1))
 		if len(rootBytes) != common.HashLength {
-			return fmt.Errorf("invalid root hash length")
+			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
 		}
 		root = common.BytesToHash(rootBytes)
 	}
