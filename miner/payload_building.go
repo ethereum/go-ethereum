@@ -244,6 +244,9 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			withdrawals: args.Withdrawals,
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
+			// <specular modification>
+			txs: args.Transactions,
+			// <specular modification/>
 		}
 
 		for {
