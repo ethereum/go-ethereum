@@ -30,11 +30,20 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var singleTestFlag = &cli.StringFlag{
+	Name:  "single-test",
+	Value: "",
+	Usage: "Run a single test from the json file",
+}
+
 var blockTestCommand = &cli.Command{
 	Action:    blockTestCmd,
 	Name:      "blocktest",
 	Usage:     "executes the given blockchain tests",
 	ArgsUsage: "<file>",
+	Flags: []cli.Flag{
+		singleTestFlag,
+	},
 }
 
 func blockTestCmd(ctx *cli.Context) error {
@@ -60,6 +69,17 @@ func blockTestCmd(ctx *cli.Context) error {
 	var tests map[string]tests.BlockTest
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
+	}
+	singleTest := ctx.String(singleTestFlag.Name)
+	if singleTest != "" {
+		if test, ok := tests[singleTest]; ok {
+			if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
+				return fmt.Errorf("test %v: %w", singleTest, err)
+			}
+		} else {
+			return fmt.Errorf("test %v not found", singleTest)
+		}
+		return nil
 	}
 	// run them in order
 	var keys []string
