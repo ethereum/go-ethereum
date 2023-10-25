@@ -336,27 +336,16 @@ func ProveAndSerialize(pretrie, posttrie *VerkleTrie, keys [][]byte, resolver ve
 	return p, kvps, nil
 }
 
-type set = map[string]struct{}
-
-func addKey(s set, key []byte) {
-	s[string(key)] = struct{}{}
-}
-
-func DeserializeAndVerifyVerkleProof(vp *verkle.VerkleProof, root []byte, statediff verkle.StateDiff) error {
-	rootC := new(verkle.Point)
-	rootC.SetBytes(root)
-
-	var others set = set{} // Mark when an "other" stem has been seen
+func DeserializeAndVerifyVerkleProof(vp *verkle.VerkleProof, preStateRoot []byte, postStateRoot []byte, statediff verkle.StateDiff) error {
+	// TODO: check that `OtherStems` have expected length and values.
 
 	proof, err := verkle.DeserializeProof(vp, statediff)
 	if err != nil {
 		return fmt.Errorf("verkle proof deserialization error: %w", err)
 	}
 
-	for _, stem := range proof.PoaStems {
-		addKey(others, stem)
-	}
-
+	rootC := new(verkle.Point)
+	rootC.SetBytes(preStateRoot)
 	pretree, err := verkle.PreStateTreeFromProof(proof, rootC)
 	if err != nil {
 		return fmt.Errorf("error rebuilding the pre-tree from proof: %w", err)
@@ -385,12 +374,20 @@ func DeserializeAndVerifyVerkleProof(vp *verkle.VerkleProof, root []byte, stated
 		}
 	}
 
+	// TODO: this is necessary to verify that the post-values are the correct ones.
+	// But all this can be avoided with a even faster way. The EVM block execution can
+	// keep track of the written keys, and compare that list with this post-values list.
+	// This can avoid regenerating the post-tree which is somewhat expensive.
 	posttree, err := verkle.PostStateTreeFromStateDiff(pretree, statediff)
 	if err != nil {
 		return fmt.Errorf("error rebuilding the post-tree from proof: %w", err)
 	}
+	regeneratedPostTreeRoot := posttree.Commitment().Bytes()
+	if !bytes.Equal(regeneratedPostTreeRoot[:], postStateRoot) {
+		return fmt.Errorf("post tree root mismatch: %x != %x", regeneratedPostTreeRoot, postStateRoot)
+	}
 
-	return verkle.VerifyVerkleProofWithPreAndPostTrie(proof, pretree, posttree)
+	return verkle.VerifyVerkleProofWithPreState(proof, pretree)
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which

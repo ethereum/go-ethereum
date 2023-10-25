@@ -518,7 +518,7 @@ func TestProcessVerkle(t *testing.T) {
 	//f.Write(buf.Bytes())
 	//fmt.Printf("root= %x\n", chain[0].Root())
 	// check the proof for the last block
-	err := trie.DeserializeAndVerifyVerkleProof(proofs[1], chain[0].Root().Bytes(), keyvals[1])
+	err := trie.DeserializeAndVerifyVerkleProof(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), keyvals[1])
 	if err != nil {
 		t.Fatal(err)
 	}
