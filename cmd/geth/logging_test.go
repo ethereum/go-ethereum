@@ -100,7 +100,7 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 func TestVmodule(t *testing.T) {
 	checkOutput := func(level int, want, wantNot string) {
 		t.Helper()
-		output, err := runSelf("--log.format", "terminal", "--verbosity=0", "--log.vmodule", fmt.Sprintf("logtestcmd.go=%d", level), "logtest")
+		output, err := runSelf("--log.format", "terminal", "--verbosity=0", "--log.vmodule", fmt.Sprintf("logtestcmd_active.go=%d", level), "logtest")
 		if err != nil {
 			t.Fatal(err)
 		}
