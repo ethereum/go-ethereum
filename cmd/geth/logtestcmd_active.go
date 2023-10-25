@@ -1,3 +1,5 @@
+//go:build integrationtests
+
 // Copyright 2023 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -27,6 +29,15 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
+
+var logTestCommand = &cli.Command{
+	Action:    logTest,
+	Name:      "logtest",
+	Usage:     "Print some log messages",
+	ArgsUsage: " ",
+	Description: `
+This command is only meant for testing.
+`}
 
 // logTest is an entry point which spits out some logs. This is used by testing
 // to verify expected outputs

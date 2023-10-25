@@ -233,7 +233,9 @@ func init() {
 		snapshotCommand,
 		// See verkle.go
 		verkleCommand,
-		logTestCommand,
+	}
+	if logTestCommand != nil {
+		app.Commands = append(app.Commands, logTestCommand)
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

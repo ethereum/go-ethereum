@@ -1,3 +1,5 @@
+//go:build integrationtests
+
 // Copyright 2023 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
