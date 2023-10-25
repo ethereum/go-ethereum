@@ -18,30 +18,34 @@
 package graphql
 
 import (
-	"errors"
 	"fmt"
 )
 
 var (
-	errBlockInvariant    = errors.New("block objects must be instantiated with at least one of num or hash")
-	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
+	errBlockInvariant    = invalidParamsError("block objects must be instantiated with at least one of num or hash")
+	errInvalidBlockRange = invalidParamsError("invalid from and to block combination: from > to")
+)
+
+const (
+	errcodeDefault       = -32600
+	errcodeInvalidParams = -32602
 )
 
 type graphQLError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    int
+	Message string
 }
 
 // Error implements the github.com/graph-gophers/graphql-go.ResolverError interface.
 func (e *graphQLError) Error() string {
-	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+	return fmt.Sprintf("error [%d]: %s", e.Code, e.Message)
 }
 
 // Extensions implements the github.com/graph-gophers/graphql-go.ResolverError interface.
 func (e *graphQLError) Extensions() map[string]interface{} {
 	return map[string]interface{}{
-		"code":    e.Code,
-		"message": e.Message,
+		"errorCode":    e.Code,
+		"errorMessage": e.Message,
 	}
 }
 
@@ -50,5 +54,9 @@ func asGraphQLError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return &graphQLError{Code: "-32602", Message: err.Error()}
+	return &graphQLError{Code: errcodeDefault, Message: err.Error()}
+}
+
+func invalidParamsError(msg string) error {
+	return &graphQLError{Code: errcodeInvalidParams, Message: msg}
 }
