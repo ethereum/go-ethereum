@@ -55,7 +55,7 @@ func FuzzPrecompiledContracts(f *testing.F) {
 		addrs = append(addrs, k)
 	}
 	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
-		a := addrs[int(int(addr)%len(addrs))]
+		a := addrs[int(addr)%len(addrs)]
 		p := allPrecompiles[a]
 		gas := p.RequiredGas(input)
 		if gas > 10_000_000 {
