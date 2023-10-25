@@ -849,12 +849,11 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 // if statDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
-	Nonce      *hexutil.Uint64              `json:"nonce"`
-	Code       *hexutil.Bytes               `json:"code"`
-	Balance    **hexutil.Big                `json:"balance"`
-	BalanceAdd **hexutil.Big                `json:"balanceAdd"`
-	State      *map[common.Hash]common.Hash `json:"state"`
-	StateDiff  *map[common.Hash]common.Hash `json:"stateDiff"`
+	Nonce     *hexutil.Uint64              `json:"nonce"`
+	Code      *hexutil.Bytes               `json:"code"`
+	Balance   **hexutil.Big                `json:"balance"`
+	State     *map[common.Hash]common.Hash `json:"state"`
+	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -875,15 +874,8 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 			state.SetCode(addr, *account.Code)
 		}
 		// Override account balance.
-		if account.Balance != nil && account.BalanceAdd != nil {
-			return fmt.Errorf("account %s has both 'balance' and 'balanceAdd'", addr.Hex())
-		}
 		if account.Balance != nil {
 			state.SetBalance(addr, (*big.Int)(*account.Balance))
-		}
-		if account.BalanceAdd != nil {
-			balance := big.NewInt(0).Add(state.GetBalance(addr), (*big.Int)(*account.BalanceAdd))
-			state.SetBalance(addr, balance)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
@@ -900,11 +892,6 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 		}
 	}
 	return nil
-}
-
-func newRPCBalance(balance *big.Int) **hexutil.Big {
-	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
 }
 
 func EstimateL1MsgFee(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64, config *params.ChainConfig) (*big.Int, error) {
@@ -992,13 +979,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 
-	signer := types.MakeSigner(b.ChainConfig(), header.Number)
-	l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.ChainConfig().ChainID, signer, state)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := core.ApplyMessage(evm, msg, gp, l1DataFee)
+	result, err := core.ApplyMessage(evm, msg, gp, common.Big0)
 	if err := vmError(); err != nil {
 		return nil, err
 	}
@@ -1050,26 +1031,6 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	// If gasPrice is 0 and no state override is set, make sure
-	// that the account has sufficient balance to cover `l1DataFee`.
-	isGasPriceZero := args.GasPrice == nil || args.GasPrice.ToInt().Cmp(big.NewInt(0)) == 0
-
-	if overrides == nil {
-		overrides = &StateOverride{}
-	}
-	_, isOverrideSet := (*overrides)[args.from()]
-
-	if isGasPriceZero && !isOverrideSet {
-		l1DataFee, err := EstimateL1MsgFee(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap(), s.b.ChainConfig())
-		if err != nil {
-			return nil, err
-		}
-
-		(*overrides)[args.from()] = OverrideAccount{
-			BalanceAdd: newRPCBalance(l1DataFee),
-		}
-	}
-
 	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
