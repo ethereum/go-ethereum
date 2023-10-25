@@ -416,7 +416,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 		defer close(hashCh)
 		accIt, err := chain.Snapshots().AccountIterator(root, common.Hash{})
 		if err != nil {
-			log.Error("failed to create account iterator", "error", err)
+			log.Error("Failed to create account iterator", "error", err)
 			return
 		}
 		defer accIt.Release()
@@ -425,7 +425,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 		for accIt.Next() {
 			acc, err := types.FullAccount(accIt.Account())
 			if err != nil {
-				log.Error("failed to get full account", "error", err)
+				log.Error("Failed to get full account", "error", err)
 				return
 			}
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: 20}
@@ -433,7 +433,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
 				stIt, err := chain.Snapshots().StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
-					log.Error("failed to create storage iterator", "error", err)
+					log.Error("Failed to create storage iterator", "error", err)
 					return
 				}
 				for stIt.Next() {
