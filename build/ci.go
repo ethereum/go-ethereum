@@ -307,6 +307,9 @@ func doTest(cmdline []string) {
 	// Enable CKZG backend in CI.
 	gotest.Args = append(gotest.Args, "-tags=ckzg")
 
+	// Enable integration-tests
+	gotest.Args = append(gotest.Args, "-tags=integrationtests")
+
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest.Args = append(gotest.Args, "-p", "1")
