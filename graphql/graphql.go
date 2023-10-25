@@ -1417,6 +1417,9 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
 	}
+	if begin > 0 && end > 0 && begin > end {
+		return nil, errInvalidBlockRange
+	}
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {
 		addresses = *args.Filter.Addresses
