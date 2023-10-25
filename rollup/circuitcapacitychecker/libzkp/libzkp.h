@@ -8,3 +8,4 @@ char* apply_tx(uint64_t id, char *tx_traces);
 char* apply_block(uint64_t id, char *block_trace);
 char* get_tx_num(uint64_t id);
 char* set_light_mode(uint64_t id, bool light_mode);
+void free_c_chars(char* ptr);

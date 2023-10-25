@@ -259,10 +259,21 @@ pub mod checker {
     }
 }
 
-pub(crate) mod utils {
+pub mod utils {
     use std::ffi::{CStr, CString};
     use std::os::raw::c_char;
     use std::str::Utf8Error;
+
+    /// # Safety
+    #[no_mangle]
+    pub unsafe extern "C" fn free_c_chars(ptr: *mut c_char) {
+        if ptr.is_null() {
+            log::warn!("Try to free an empty pointer!");
+            return;
+        }
+
+        let _ = CString::from_raw(ptr);
+    }
 
     #[allow(dead_code)]
     pub(crate) fn c_char_to_str(c: *const c_char) -> Result<&'static str, Utf8Error> {

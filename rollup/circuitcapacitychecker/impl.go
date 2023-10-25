@@ -79,7 +79,7 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	log.Debug("start to check circuit capacity for tx", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 	rawResult := C.apply_tx(C.uint64_t(ccc.ID), tracesStr)
 	defer func() {
-		C.free(unsafe.Pointer(rawResult))
+		C.free_c_chars(rawResult)
 	}()
 	log.Debug("check circuit capacity for tx done", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 
@@ -125,7 +125,7 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 	log.Debug("start to check circuit capacity for block", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash())
 	rawResult := C.apply_block(C.uint64_t(ccc.ID), tracesStr)
 	defer func() {
-		C.free(unsafe.Pointer(rawResult))
+		C.free_c_chars(rawResult)
 	}()
 	log.Debug("check circuit capacity for block done", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash())
 
@@ -157,7 +157,7 @@ func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error
 	log.Debug("ccc get_tx_num start", "id", ccc.ID)
 	rawResult := C.get_tx_num(C.uint64_t(ccc.ID))
 	defer func() {
-		C.free(unsafe.Pointer(rawResult))
+		C.free_c_chars(rawResult)
 	}()
 	log.Debug("ccc get_tx_num end", "id", ccc.ID)
 
@@ -180,7 +180,7 @@ func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
 	log.Debug("ccc set_light_mode start", "id", ccc.ID)
 	rawResult := C.set_light_mode(C.uint64_t(ccc.ID), C.bool(lightMode))
 	defer func() {
-		C.free(unsafe.Pointer(rawResult))
+		C.free_c_chars(rawResult)
 	}()
 	log.Debug("ccc set_light_mode end", "id", ccc.ID)
 
