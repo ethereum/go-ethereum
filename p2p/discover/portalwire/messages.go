@@ -1,6 +1,8 @@
 package portalwire
 
-import "github.com/ethereum/go-ethereum/common/hexutil"
+import (
+	"github.com/ethereum/go-ethereum/common/hexutil"
+)
 
 // Protocol IDs for the portal protocol.
 const (
@@ -24,6 +26,12 @@ const (
 	CONTENT     byte = 0x05
 	OFFER       byte = 0x06
 	ACCEPT      byte = 0x07
+)
+
+const (
+	ContentConnIdSelector byte = 0x00
+	ContentRawSelector    byte = 0x01
+	ContentEnrsSelector   byte = 0x02
 )
 
 // Request messages for the portal protocol.
