@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,12 +93,14 @@ func NewStackTrie(options *StackTrieOptions) *StackTrie {
 
 // Update inserts a (key, value) pair into the stack trie.
 func (t *StackTrie) Update(key, value []byte) error {
-	k := keybytesToHex(key)
 	if len(value) == 0 {
-		panic("deletion not supported")
+		return errors.New("trying to insert empty (deletion)")
 	}
+	k := keybytesToHex(key)
 	k = k[:len(k)-1] // chop the termination flag
-
+	if bytes.Compare(t.last, k) >= 0 {
+		return errors.New("non-ascending key order")
+	}
 	// track the first and last inserted entries.
 	if t.first == nil {
 		t.first = append([]byte{}, k...)
