@@ -336,12 +336,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
+		applyOverrides(genesis.Config)
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
-		applyOverrides(genesis.Config)
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, hash, err
