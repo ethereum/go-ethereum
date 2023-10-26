@@ -5,11 +5,12 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+    types: [ labeled ]
 
 jobs:
 
   build:
-
+    if: ${{ github.event.label.name == 'CI:Build' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -26,4 +27,4 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
-        tags: vatman/test:latest
+        tags: vatman/client-go:latest
