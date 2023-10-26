@@ -148,6 +148,11 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"data":{"block":{"number":"0xa","call":{"data":"0x","status":"0x1"}}}}`,
 			code: 200,
 		},
+		{
+			body: `{"query": "{blocks {number}}"}`,
+			want: `{"errors":[{"message":"from block number must be specified","path":["blocks"]}],"data":null}`,
+			code: 400,
+		},
 	} {
 		resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", strings.NewReader(tt.body))
 		if err != nil {
