@@ -32,13 +32,20 @@ type Witness struct {
 }
 
 func (u *Witness) MarshalJSON() ([]byte, error) {
-	nodes := make(map[string]string)
+	type Node struct {
+		Key   string
+		Value string
+	}
+	nodes := []Node{}
 	for key, node := range u.Nodes {
-		nodes[key] = hex.EncodeToString(node)
+		nodes = append(nodes, Node{
+			Key:   hex.EncodeToString([]byte(key)),
+			Value: hex.EncodeToString(node),
+		})
 	}
 	return json.Marshal(&struct {
 		Owner common.Hash
-		Nodes map[string]string
+		Nodes []Node
 	}{
 		Owner: u.Owner,
 		Nodes: nodes,

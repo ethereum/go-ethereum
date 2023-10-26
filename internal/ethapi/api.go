@@ -972,6 +972,7 @@ func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash
 	if err != nil {
 		return nil, nil
 	}
+	state.CleanSnaps()
 	s.ProcessBlock(ctx, block, state, vm.Config{})
 	return state.GetWitness(), nil
 	// return s.traceBlock(ctx, block)

@@ -180,6 +180,11 @@ func (s *StateDB) GetWitness()  *trienode.Witness {
 	return s.trie.GetWitness()
 }
 
+func (s *StateDB) CleanSnaps() {
+	s.snaps = nil
+	s.snap = nil
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
