@@ -164,6 +164,13 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 				nonce := state.GetNonce(call.from())
 				call.Nonce = (*hexutil.Uint64)(&nonce)
 			}
+			var gas uint64
+			if call.Gas != nil {
+				gas = uint64(*call.Gas)
+			}
+			if gasUsed+gas > blockContext.GasLimit {
+				return nil, &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
+			}
 			// Let the call run wild unless explicitly specified.
 			if call.Gas == nil {
 				remaining := blockContext.GasLimit - gasUsed
@@ -187,9 +194,8 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			}
 			result, err := applyMessage(ctx, mc.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
 			if err != nil {
-				callErr := callErrorFromError(err)
-				callResults[i] = mcCallResult{Error: callErr, Status: hexutil.Uint64(types.ReceiptStatusFailed)}
-				continue
+				txErr := txValidationError(err)
+				return nil, txErr
 			}
 			// If the result contains a revert reason, try to unpack it.
 			if len(result.Revert()) > 0 {
@@ -200,9 +206,9 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			if result.Failed() {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 				if errors.Is(result.Err, vm.ErrExecutionReverted) {
-					callRes.Error = &callError{Message: result.Err.Error(), Code: -32000}
+					callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeReverted}
 				} else {
-					callRes.Error = &callError{Message: result.Err.Error(), Code: -32015}
+					callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
 				}
 			} else {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
@@ -327,7 +333,7 @@ func makeHeaders(config *params.ChainConfig, blocks []mcBlock, base *types.Heade
 			n := new(big.Int).Add(big.NewInt(int64(prevNumber)), big.NewInt(1))
 			overrides.Number = (*hexutil.Big)(n)
 		} else if overrides.Number.ToInt().Uint64() <= prevNumber {
-			return nil, fmt.Errorf("block numbers must be in order")
+			return nil, &invalidBlockNumberError{fmt.Sprintf("block numbers must be in order: %d <= %d", overrides.Number.ToInt().Uint64(), prevNumber)}
 		}
 		prevNumber = overrides.Number.ToInt().Uint64()
 
@@ -335,7 +341,7 @@ func makeHeaders(config *params.ChainConfig, blocks []mcBlock, base *types.Heade
 			t := prevTimestamp + 1
 			overrides.Time = (*hexutil.Uint64)(&t)
 		} else if time := (*uint64)(overrides.Time); *time <= prevTimestamp {
-			return nil, fmt.Errorf("timestamps must be in order")
+			return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", *time, prevTimestamp)}
 		}
 		prevTimestamp = uint64(*overrides.Time)
 

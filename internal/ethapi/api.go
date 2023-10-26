@@ -1232,7 +1232,7 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts mcOpts, blockNrOrH
 	if len(opts.BlockStateCalls) == 0 {
 		return nil, &invalidParamsError{message: "empty input"}
 	} else if len(opts.BlockStateCalls) > maxMulticallBlocks {
-		return nil, &invalidParamsError{message: "too many blocks"}
+		return nil, &clientLimitExceededError{message: "too many blocks"}
 	}
 	if blockNrOrHash == nil {
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)

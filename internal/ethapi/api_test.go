@@ -1092,10 +1092,6 @@ func TestMulticallV1(t *testing.T) {
 						From:  &randomAccounts[1].addr,
 						To:    &randomAccounts[2].addr,
 						Value: (*hexutil.Big)(big.NewInt(1000)),
-					}, {
-						From:  &randomAccounts[3].addr,
-						To:    &randomAccounts[2].addr,
-						Value: (*hexutil.Big)(big.NewInt(1000)),
 					},
 				},
 			}},
@@ -1125,12 +1121,45 @@ func TestMulticallV1(t *testing.T) {
 					GasUsed:     "0x5208",
 					Logs:        []log{},
 					Status:      "0x1",
-				}, {
+				}},
+			}},
+		}, {
+			// insufficient funds
+			name: "insufficient-funds",
+			tag:  latest,
+			blocks: []mcBlock{{
+				Calls: []TransactionArgs{{
+					From:  &randomAccounts[0].addr,
+					To:    &randomAccounts[1].addr,
+					Value: (*hexutil.Big)(big.NewInt(1000)),
+				}},
+			}},
+			want:      nil,
+			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: errCodeInsufficientFunds},
+		}, {
+			// EVM error
+			name: "evm-error",
+			tag:  latest,
+			blocks: []mcBlock{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: OverrideAccount{Code: hex2Bytes("f3")},
+				},
+				Calls: []TransactionArgs{{
+					From: &randomAccounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}},
+			}},
+			want: []blockRes{{
+				Number:       "0xb",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x47e7c4",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
 					ReturnValue: "0x",
-					GasUsed:     "0x0",
+					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
+					GasUsed:     "0x47e7c4",
 					Logs:        []log{},
 					Status:      "0x0",
-					Error:       callErr{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4691388)", randomAccounts[3].addr.String()), Code: errCodeInsufficientFunds},
 				}},
 			}},
 		}, {
@@ -1219,7 +1248,7 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 			want:      []blockRes{},
-			expectErr: errors.New("block numbers must be in order"),
+			expectErr: &invalidBlockNumberError{message: fmt.Sprintf("block numbers must be in order: 11 <= 12")},
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
 		{
@@ -1558,19 +1587,8 @@ func TestMulticallV1(t *testing.T) {
 				}},
 			}},
 			validation: &validation,
-			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x0",
-				FeeRecipient: coinbase,
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x0",
-					Logs:        []log{},
-					Status:      "0x0",
-					Error:       callErr{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
-				}},
-			}},
+			want:       nil,
+			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
 		},
 		// Clear storage.
 		{

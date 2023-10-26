@@ -27,43 +27,60 @@ type callError struct {
 	Code    int    `json:"code"`
 }
 
+type invalidTxError struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
+}
+
+func (e *invalidTxError) Error() string  { return e.Message }
+func (e *invalidTxError) ErrorCode() int { return e.Code }
+
 const (
-	errCodeNonceTooHigh      = -38011
-	errCodeNonceTooLow       = -38010
-	errCodeInsufficientFunds = -38014
-	errCodeIntrinsicGas      = -38013
-	errCodeInternalError     = -32603
-	errCodeInvalidParams     = -32602
+	errCodeNonceTooHigh            = -38011
+	errCodeNonceTooLow             = -38010
+	errCodeIntrinsicGas            = -38013
+	errCodeInsufficientFunds       = -38014
+	errCodeBlockGasLimitReached    = -38015
+	errCodeBlockNumberInvalid      = -38020
+	errCodeBlockTimestampInvalid   = -38021
+	errCodeSenderIsNotEOA          = -38024
+	errCodeMaxInitCodeSizeExceeded = -38025
+	errCodeClientLimitExceeded     = -38026
+	errCodeInternalError           = -32603
+	errCodeInvalidParams           = -32602
+	errCodeReverted                = -32000
+	errCodeVMError                 = -32015
 )
 
-func callErrorFromError(err error) *callError {
+func txValidationError(err error) *invalidTxError {
 	if err == nil {
 		return nil
 	}
 	switch {
 	case errors.Is(err, core.ErrNonceTooHigh):
-		return &callError{Message: err.Error(), Code: errCodeNonceTooHigh}
+		return &invalidTxError{Message: err.Error(), Code: errCodeNonceTooHigh}
 	case errors.Is(err, core.ErrNonceTooLow):
-		return &callError{Message: err.Error(), Code: errCodeNonceTooLow}
+		return &invalidTxError{Message: err.Error(), Code: errCodeNonceTooLow}
 	case errors.Is(err, core.ErrSenderNoEOA):
-		// TODO
+		return &invalidTxError{Message: err.Error(), Code: errCodeSenderIsNotEOA}
 	case errors.Is(err, core.ErrFeeCapVeryHigh):
-		return &callError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrTipVeryHigh):
-		return &callError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrTipAboveFeeCap):
-		return &callError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrFeeCapTooLow):
-		// TODO
-		return &callError{Message: err.Error(), Code: errCodeInvalidParams}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInvalidParams}
 	case errors.Is(err, core.ErrInsufficientFunds):
-		return &callError{Message: err.Error(), Code: errCodeInsufficientFunds}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
 	case errors.Is(err, core.ErrIntrinsicGas):
-		return &callError{Message: err.Error(), Code: errCodeIntrinsicGas}
+		return &invalidTxError{Message: err.Error(), Code: errCodeIntrinsicGas}
 	case errors.Is(err, core.ErrInsufficientFundsForTransfer):
-		return &callError{Message: err.Error(), Code: errCodeInsufficientFunds}
+		return &invalidTxError{Message: err.Error(), Code: errCodeInsufficientFunds}
+	case errors.Is(err, core.ErrMaxInitCodeSizeExceeded):
+		return &invalidTxError{Message: err.Error(), Code: errCodeMaxInitCodeSizeExceeded}
 	}
-	return &callError{
+	return &invalidTxError{
 		Message: err.Error(),
 		Code:    errCodeInternalError,
 	}
@@ -73,3 +90,23 @@ type invalidParamsError struct{ message string }
 
 func (e *invalidParamsError) Error() string  { return e.message }
 func (e *invalidParamsError) ErrorCode() int { return errCodeInvalidParams }
+
+type clientLimitExceededError struct{ message string }
+
+func (e *clientLimitExceededError) Error() string  { return e.message }
+func (e *clientLimitExceededError) ErrorCode() int { return errCodeClientLimitExceeded }
+
+type invalidBlockNumberError struct{ message string }
+
+func (e *invalidBlockNumberError) Error() string  { return e.message }
+func (e *invalidBlockNumberError) ErrorCode() int { return errCodeBlockNumberInvalid }
+
+type invalidBlockTimestampError struct{ message string }
+
+func (e *invalidBlockTimestampError) Error() string  { return e.message }
+func (e *invalidBlockTimestampError) ErrorCode() int { return errCodeBlockTimestampInvalid }
+
+type blockGasLimitReachedError struct{ message string }
+
+func (e *blockGasLimitReachedError) Error() string  { return e.message }
+func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
