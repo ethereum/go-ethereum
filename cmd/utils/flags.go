@@ -1792,9 +1792,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	// Override any default configs for hard coded networks.
 	switch {
-	// CHANGE(taiko): when --taiko flag is set, use the Taiko genesis.
+	// CHANGE(taiko): when --taiko flag is set, use the Taiko genesis, and set L1
+	// rpc url.
 	case ctx.IsSet(TaikoFlag.Name):
 		cfg.Genesis = core.TaikoGenesisBlock(cfg.NetworkId)
+		if ctx.IsSet(L1RPCUrlFlag.Name) {
+			cfg.L1RPCUrl = ctx.String(L1RPCUrlFlag.Name)
+		}
 	case ctx.Bool(MainnetFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1

@@ -162,6 +162,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
+
 	applyMetricConfig(ctx, &cfg)
 
 	return stack, cfg
@@ -182,6 +183,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	// CHANGE(TAIKO): register Taiko RPC APIs.
 	utils.RegisterTaikoAPIs(stack, &cfg.Eth, eth)
+
+	// CHANGE(TAIKO): register L1 node
+	registerL1Node(ctx, &cfg)
 
 	// Create gauge with geth system and build information
 	if eth != nil { // The 'eth' backend may be nil in light mode
@@ -377,4 +381,12 @@ func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir s
 	}
 
 	return nil
+}
+
+// CHANGE(TAIKO)
+func registerL1Node(ctx *cli.Context, cfg *gethConfig) {
+	if ctx.IsSet(utils.L1RPCUrlFlag.Name) {
+		v := ctx.String(utils.L1RPCUrlFlag.Name)
+		cfg.Eth.L1RPCUrl = v
+	}
 }

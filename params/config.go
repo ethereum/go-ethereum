@@ -341,7 +341,8 @@ type ChainConfig struct {
 	IsDevMode bool          `json:"isDev,omitempty"`
 
 	// CHANGE(taiko): Taiko network flag.
-	Taiko bool `json:"taiko"`
+	Taiko    bool   `json:"taiko"`
+	L1RPCUrl string `json:"l1RpcUrl"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

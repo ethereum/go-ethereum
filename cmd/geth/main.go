@@ -194,6 +194,11 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 	}
+
+	taikoFlags = []cli.Flag{
+		utils.TaikoFlag,
+		utils.L1RPCUrlFlag,
+	}
 )
 
 var app = flags.NewApp("the go-ethereum command line interface")
@@ -244,7 +249,7 @@ func init() {
 		metricsFlags,
 	)
 	// CHANGE(taiko): append Taiko flags into the original GETH flags
-	app.Flags = append(app.Flags, &utils.TaikoFlag)
+	app.Flags = append(app.Flags, taikoFlags...)
 
 	flags.AutoEnvVars(app.Flags, "GETH")
 

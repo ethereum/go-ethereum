@@ -12,9 +12,14 @@ import (
 )
 
 var (
-	TaikoFlag = cli.BoolFlag{
+	TaikoFlag = &cli.BoolFlag{
 		Name:  "taiko",
 		Usage: "Taiko network",
+	}
+	L1RPCUrlFlag = &cli.StringFlag{
+		Name:     "l1RpcUrl",
+		Usage:    "Rpc url of an L1 node (must be archive)",
+		Required: true,
 	}
 )
 

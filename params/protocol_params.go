@@ -140,6 +140,9 @@ const (
 	Ripemd160PerWordGas uint64 = 120  // Per-word price for a RIPEMD160 operation
 	IdentityBaseGas     uint64 = 15   // Base price for a data copy operation
 	IdentityPerWordGas  uint64 = 3    // Per-work price for a data copy operation
+	// CHANGE(taiko): Gas cost for l1call and l1delegatecall
+	L1Call         uint64 = 1000
+	L1DelegateCall uint64 = 1500
 
 	Bn256AddGasByzantium             uint64 = 500    // Byzantium gas needed for an elliptic curve addition
 	Bn256AddGasIstanbul              uint64 = 150    // Gas needed for an elliptic curve addition

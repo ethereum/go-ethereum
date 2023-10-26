@@ -169,6 +169,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	//CHANGE(taiko):
+	L1RPCUrl string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
