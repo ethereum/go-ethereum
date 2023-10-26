@@ -17,34 +17,29 @@
 package algorand
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
-	"github.com/algorand/go-algorand-sdk/client/v2/algod"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // Algorand implements the precompile to access the Algorand blockchain.
 type Algorand struct {
-	algodAddress string
-	algodToken   string
-	algodClient  *algod.Client
+	algodClient Client
 }
 
 // New creates a new Algorand precompiled contract with a client to access Algorand blockchain.
 func New() *Algorand {
 	algodAddress := os.Getenv("ALGOD_ADDRESS")
 	algodToken := os.Getenv("ALGOD_TOKEN")
-	algorand := &Algorand{
-		algodAddress: algodAddress,
-		algodToken:   algodToken,
+	if !strings.HasPrefix(algodAddress, "http://") {
+		algodAddress = "http://" + algodAddress
 	}
-	algodClient, err := algod.MakeClient(algodAddress, algodToken)
-	if err == nil {
-		algorand.algodClient = algodClient
+	algorand := &Algorand{
+		algodClient: NewClient(algodAddress, algodToken),
 	}
 	return algorand
 }
@@ -56,8 +51,9 @@ func (a *Algorand) RequiredGas(input []byte) uint64 {
 
 // Run executes the Algorand precompile with the given input.
 func (a *Algorand) Run(input []byte) ([]byte, error) {
-	if a.algodClient == nil {
-		return nil, fmt.Errorf("cannot connect to Algorand node")
+	err := a.algodClient.CheckStatus()
+	if err != nil {
+		return nil, err
 	}
 
 	params, err := UnpackInput(input)
@@ -67,13 +63,13 @@ func (a *Algorand) Run(input []byte) ([]byte, error) {
 	var info interface{}
 	switch params.GetCmdType() {
 	case AccountCmd:
-		info, err = a.algodClient.AccountInformation(params.(*AccountInput).Address).Do(context.Background())
+		info, err = a.algodClient.GetAccount(params.(*AccountInput).Address)
 		if err != nil {
 			return nil, err
 		}
 	}
 	log.Info("Algorand.Run", "info", info)
-	value := reflect.ValueOf(info).FieldByName(params.GetFieldName())
+	value := reflect.ValueOf(info).Elem().FieldByName(params.GetFieldName())
 	if !value.IsValid() {
 		return nil, fmt.Errorf("field %s does not exist", params.GetFieldName())
 	}

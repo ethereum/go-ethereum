@@ -26,12 +26,23 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// pack encodes the value into bytes.
 func pack(value reflect.Value) ([]byte, error) {
+	// Convert int to int64 or uint to uint64.
+	// This is because the ABI does not support int or uint.
+	// The cast is safe because int/uint is either 32-bit or 64-bit.
+	if value.Kind() == reflect.Int {
+		value = reflect.ValueOf(int64(value.Int()))
+	} else if value.Kind() == reflect.Uint {
+		value = reflect.ValueOf(uint64(value.Uint()))
+	}
+
 	defn := fmt.Sprintf(`[{"type": "constructor", "inputs": [%s]}]`, abiType("", value.Type()))
 	abi, err := abi.JSON(strings.NewReader(defn))
 	if err != nil {
 		return nil, err
 	}
+
 	data, err := abi.Pack("", value.Interface())
 	if err != nil {
 		return nil, err

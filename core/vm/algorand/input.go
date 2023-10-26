@@ -93,6 +93,10 @@ func abiType(name string, typ reflect.Type) string {
 			fields = append(fields, abiType(typ.Field(i).Name, typ.Field(i).Type))
 		}
 		return strings.Join(fields, ", ")
+	} else if typ.Kind() == reflect.Int {
+		return fmt.Sprintf(`{"name": "%s", "type": "int256"}`, name)
+	} else if typ.Kind() == reflect.Uint {
+		return fmt.Sprintf(`{"name": "%s", "type": "uint256"}`, name)
 	} else {
 		return fmt.Sprintf(`{"name": "%s", "type": "%s"}`, name, typ.String())
 	}
