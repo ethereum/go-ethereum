@@ -16,7 +16,12 @@
 
 package trienode
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"encoding/hex"
+	"encoding/json"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // Witness is the set of nodes retrieved from the database for executing a state
 // transition. It can be considered as the previous state for the state transition,
@@ -24,6 +29,20 @@ import "github.com/ethereum/go-ethereum/common"
 type Witness struct {
 	Owner common.Hash
 	Nodes map[string][]byte
+}
+
+func (u *Witness) MarshalJSON() ([]byte, error) {
+	nodes := make(map[string]string)
+	for key, node := range u.Nodes {
+		nodes[key] = hex.EncodeToString(node)
+	}
+	return json.Marshal(&struct {
+		Owner common.Hash
+		Nodes map[string]string
+	}{
+		Owner: u.Owner,
+		Nodes: nodes,
+	})
 }
 
 // NewWitness constructs a witness structure.
