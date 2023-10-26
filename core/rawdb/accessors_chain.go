@@ -763,7 +763,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	}
 	body := ReadBody(db, hash, number)
 	if body == nil {
-		return nil
+		return types.NewBlockWithHeader(header)
 	}
 	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles).WithWithdrawals(body.Withdrawals)
 }
