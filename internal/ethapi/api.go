@@ -19,7 +19,6 @@ package ethapi
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -962,34 +961,28 @@ type RecentBlockHash struct {
 }
 
 // GetRequiredBlockState returns all state required to execute a single historical block.
-func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*trienode.Witness, error) {
+func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Hash]*trienode.Witness, error) {
 	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if block == nil || err != nil {
 		// When the block doesn't exist, the RPC method should return JSON null
 		return nil, nil
 	}
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	parentHash := block.ParentHash()
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHash{BlockHash: &parentHash})
 	if err != nil {
 		return nil, nil
 	}
 	state.CleanSnaps()
-	s.ProcessBlock(ctx, block, state, vm.Config{})
-	return state.GetWitness(), nil
-	// return s.traceBlock(ctx, block)
-}
+	if err := s.ProcessBlock(ctx, block, state, vm.Config{}); err != nil {
+		return nil, err
+	}
+	_, witnesses, err := state.Commit(block.NumberU64(), true)
+	if err != nil {
+		return nil, err
+	}
 
-// txTraceResult is the result of a single transaction trace.
-type txTraceResult struct {
-	TxHash common.Hash `json:"txHash"`           // transaction hash
-	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
-	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+	return witnesses.Witnesses(), nil
 }
-
-const (
-	// defaultTraceTimeout is the amount of time a single transaction can execute
-	// by default before being forcefully aborted.
-	defaultTraceTimeout = 5 * time.Second
-)
 
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
@@ -998,15 +991,11 @@ const (
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (s *BlockChainAPI) ProcessBlock(ctx context.Context, block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (s *BlockChainAPI) ProcessBlock(ctx context.Context, block *types.Block, statedb *state.StateDB, cfg vm.Config) error {
 	var (
-		receipts    types.Receipts
-		usedGas     = new(uint64)
-		header      = block.Header()
-		blockHash   = block.Hash()
-		blockNumber = block.Number()
-		allLogs     []*types.Log
-		gp          = new(core.GasPool).AddGas(block.GasLimit())
+		usedGas = new(uint64)
+		header  = block.Header()
+		gp      = new(core.GasPool).AddGas(block.GasLimit())
 	)
 	var (
 		context = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
@@ -1020,26 +1009,19 @@ func (s *BlockChainAPI) ProcessBlock(ctx context.Context, block *types.Block, st
 	for i, tx := range block.Transactions() {
 		msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, s.b.ChainConfig(), gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		err = applyTransaction(msg, gp, statedb, usedGas, vmenv)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
-		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, receipt.Logs...)
-	}
-	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
-	withdrawals := block.Withdrawals()
-	if len(withdrawals) > 0 && !s.b.ChainConfig().IsShanghai(block.Number(), block.Time()) {
-		return nil, nil, 0, errors.New("withdrawals before shanghai")
 	}
 
-	return receipts, allLogs, *usedGas, nil
+	return nil
 }
 
-func applyTransaction(msg *core.Message, config *params.ChainConfig, gp *core.GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+func applyTransaction(msg *core.Message, gp *core.GasPool, statedb *state.StateDB, usedGas *uint64, evm *vm.EVM) error {
 	// Create a new context to be used in the EVM environment.
 	txContext := core.NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -1047,98 +1029,14 @@ func applyTransaction(msg *core.Message, config *params.ChainConfig, gp *core.Ga
 	// Apply the transaction to the current state (included in the env).
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Update the state with pending changes.
-	var root []byte
-	if config.IsByzantium(blockNumber) {
-		statedb.Finalise(true)
-	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
-	}
+	statedb.Finalise(true)
 	*usedGas += result.UsedGas
 
-	_ = root
-	return nil, err
-}
-
-// traceBlock configures a new tracer according to the provided configuration, and
-// executes all the transactions contained within. The return value will be one item
-// per transaction, dependent on the requested tracer.
-func (s *BlockChainAPI) traceBlock(ctx context.Context, block *types.Block) ([]*txTraceResult, error) {
-	if block.NumberU64() == 0 {
-		return nil, errors.New("genesis is not traceable")
-	}
-	// Prepare base state
-	statedb, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(block.NumberU64()-1))
-	if err != nil {
-		return nil, err
-	}
-
-	// Native tracers have low overhead
-	var (
-		txs      = block.Transactions()
-		is158    = s.b.ChainConfig().IsEIP158(block.Number())
-		blockCtx = core.NewEVMBlockContext(block.Header(), NewChainContext(ctx, s.b), nil)
-		signer   = types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
-		results  = make([]*txTraceResult, len(txs))
-	)
-	for i, tx := range txs {
-		// Generate the next state snapshot fast without tracing
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		res, err := s.traceTx(ctx, msg, blockCtx, statedb)
-		if err != nil {
-			return nil, err
-		}
-		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
-		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(is158)
-	}
-	return results, nil
-}
-
-// Tracer interface extends vm.EVMLogger and additionally
-// allows collecting the tracing result.
-type Tracer interface {
-	vm.EVMLogger
-	GetResult() (json.RawMessage, error)
-	// Stop terminates execution of the tracer at the first opportune moment.
-	Stop(err error)
-}
-
-// traceTx configures a new tracer according to the provided configuration, and
-// executes the given message in the provided environment. The return value will
-// be tracer dependent.
-func (s *BlockChainAPI) traceTx(ctx context.Context, message *core.Message, vmctx vm.BlockContext, statedb *state.StateDB) (interface{}, error) {
-	var (
-		tracer    Tracer
-		err       error
-		timeout   = defaultTraceTimeout
-		txContext = core.NewEVMTxContext(message)
-	)
-	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(&logger.Config{})
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, s.b.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
-
-	// Define a meaningful timeout of a single transaction trace
-	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-	go func() {
-		<-deadlineCtx.Done()
-		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
-			tracer.Stop(errors.New("execution timeout"))
-			// Stop evm execution. Note cancellation is not necessarily immediate.
-			vmenv.Cancel()
-		}
-	}()
-	defer cancel()
-
-	// Call Prepare to clear out the statedb access list
-	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit)); err != nil {
-		return nil, fmt.Errorf("tracing failed: %w", err)
-	}
-	return tracer.GetResult()
+	return err
 }
 
 // OverrideAccount indicates the overriding fields of account during the execution

@@ -172,14 +172,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
-
-// StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
-// state trie concurrently while the state is mutated so that when we reach the
-// commit phase, most of the needed data is already hot.
-func (s *StateDB) GetWitness()  *trienode.Witness {
-	return s.trie.GetWitness()
-}
-
 func (s *StateDB) CleanSnaps() {
 	s.snaps = nil
 	s.snap = nil
@@ -1175,10 +1167,10 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, *trienode.Witnesses, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
-		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
@@ -1196,7 +1188,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	// Handle all state deletions first
 	incomplete, err := s.handleDestruction(nodes)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	// Handle all state updates afterwards
 	for addr := range s.stateObjectsDirty {
@@ -1212,20 +1204,21 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		// Write any storage changes in the state object to its storage trie
 		set, witness, err := obj.commit()
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		// Merge the dirty nodes of storage trie into global set. It is possible
 		// that the account was destructed and then resurrected in the same block.
 		// In this case, the node set is shared by both accounts.
 		if set != nil {
 			if err := nodes.Merge(set); err != nil {
-				return common.Hash{}, err
+				return common.Hash{}, nil, err
 			}
 			updates, deleted := set.Size()
 			storageTrieNodesUpdated += updates
 			storageTrieNodesDeleted += deleted
 		}
 		if witness != nil {
+			fmt.Printf("witness owner: %x, witness len: %d\n", witness.Owner, len(witness.Nodes))
 			witnesses.Merge(witness)
 		}
 	}
@@ -1241,12 +1234,12 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	root, set, witness, err := s.trie.Commit(true)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	// Merge the dirty nodes of account trie into global set
 	if set != nil {
 		if err := nodes.Merge(set); err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 	}
@@ -1299,7 +1292,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		start := time.Now()
 		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
 		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		s.originalRoot = root
 		if metrics.EnabledExpensive {
@@ -1316,7 +1309,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 	s.stateObjectsDirty = make(map[common.Address]struct{})
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
-	return root, nil
+	return root, witnesses, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

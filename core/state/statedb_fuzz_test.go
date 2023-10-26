@@ -223,7 +223,7 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		nroot, err := state.Commit(0, true) // call commit at the block boundary
+		nroot, _, err := state.Commit(0, true) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}

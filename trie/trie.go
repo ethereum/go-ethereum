@@ -688,7 +688,3 @@ func (t *Trie) Reset() {
 	t.witness = trienode.NewWitness(common.Hash{})
 	t.committed = false
 }
-
-func (t *Trie) GetWitness() *trienode.Witness {
-	return t.witness
-}

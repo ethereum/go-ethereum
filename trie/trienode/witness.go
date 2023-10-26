@@ -101,8 +101,13 @@ func NewWitnesses() *Witnesses {
 func (set *Witnesses) Merge(other *Witness) error {
 	_, present := set.witness[other.Owner]
 	if present {
+		return nil
 		//return subset.Merge(other.Owner, other.Nodes)
 	}
 	set.witness[other.Owner] = other
 	return nil
+}
+
+func (set *Witnesses) Witnesses() map[common.Hash]*Witness {
+	return set.witness
 }

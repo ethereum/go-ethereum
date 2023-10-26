@@ -81,10 +81,6 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 	return t.trie.MustGet(t.hashKey(key))
 }
 
-func (t *StateTrie) GetWitness() *trienode.Witness {
-	return t.trie.GetWitness()
-}
-
 // GetStorage attempts to retrieve a storage slot with provided account address
 // and slot key. The value bytes must not be modified by the caller.
 // If the specified storage slot is not in the trie, nil will be returned.
