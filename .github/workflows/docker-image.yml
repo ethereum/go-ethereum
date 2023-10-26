@@ -26,4 +26,4 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
-        tags: test:$(date +%s)
+        tags: test:latest
