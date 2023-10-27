@@ -512,38 +512,28 @@ func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) 
 	return &dec, nil
 }
 
-// writeHistory writes the state history with provided state set. After
-// storing the corresponding state history, it will also prune the stale
-// histories from the disk with the given threshold.
-func writeHistory(db ethdb.KeyValueStore, freezer *rawdb.ResettableFreezer, dl *diffLayer, limit uint64) error {
+// writeHistory persists the state history with the provided state set.
+func writeHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer) error {
 	// Short circuit if state set is not available.
 	if dl.states == nil {
 		return errors.New("state change set is not available")
 	}
 	var (
-		err   error
-		n     int
-		start = time.Now()
-		h     = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states)
+		start   = time.Now()
+		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states)
 	)
-	accountData, storageData, accountIndex, storageIndex := h.encode()
+	accountData, storageData, accountIndex, storageIndex := history.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))
 	indexSize := common.StorageSize(len(accountIndex) + len(storageIndex))
 
 	// Write history data into five freezer table respectively.
-	rawdb.WriteStateHistory(freezer, dl.stateID(), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
+	rawdb.WriteStateHistory(freezer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData)
 
-	// Prune stale state histories based on the config.
-	if limit != 0 && dl.stateID() > limit {
-		n, err = truncateFromTail(db, freezer, dl.stateID()-limit)
-		if err != nil {
-			return err
-		}
-	}
 	historyDataBytesMeter.Mark(int64(dataSize))
 	historyIndexBytesMeter.Mark(int64(indexSize))
 	historyBuildTimeMeter.UpdateSince(start)
-	log.Debug("Stored state history", "id", dl.stateID(), "block", dl.block, "data", dataSize, "index", indexSize, "pruned", n, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Stored state history", "id", dl.stateID(), "block", dl.block, "data", dataSize, "index", indexSize, "elapsed", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }
 
