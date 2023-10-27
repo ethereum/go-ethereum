@@ -158,9 +158,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.evm.Config.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+					in.evm.Config.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 				} else {
-					in.evm.Config.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
+					in.evm.Config.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
 				}
 			}
 		}()
@@ -219,7 +219,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Do tracing before memory expansion
 			if debug {
 				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, GasChangeCallOpCode)
-				in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+				in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 			if memorySize > 0 {
@@ -227,7 +227,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		} else if debug {
 			in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, GasChangeCallOpCode)
-			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 			logged = true
 		}
 

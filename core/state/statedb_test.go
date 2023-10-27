@@ -1148,7 +1148,7 @@ func TestDeleteStorage(t *testing.T) {
 		addr     = common.HexToAddress("0x1")
 	)
 	// Initialize account and populate storage
-	state.SetBalance(addr, big.NewInt(1))
+	state.SetBalance(addr, big.NewInt(1), 0x0)
 	state.CreateAccount(addr)
 	for i := 0; i < 1000; i++ {
 		slot := common.Hash(uint256.NewInt(uint64(i)).Bytes32())
