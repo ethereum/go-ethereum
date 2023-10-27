@@ -62,6 +62,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		OverrideArrowGlacier    *big.Int                       `toml:",omitempty"`
 		MPTWitness              int
 		CheckCircuitCapacity    bool
+		EnableRollupVerify      bool
 		MaxBlockRange           int64
 	}
 	var enc Config
@@ -109,6 +110,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.OverrideArrowGlacier = c.OverrideArrowGlacier
 	enc.MPTWitness = c.MPTWitness
 	enc.CheckCircuitCapacity = c.CheckCircuitCapacity
+	enc.EnableRollupVerify = c.EnableRollupVerify
 	enc.MaxBlockRange = c.MaxBlockRange
 	return &enc, nil
 }
@@ -160,6 +162,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		OverrideArrowGlacier    *big.Int                       `toml:",omitempty"`
 		MPTWitness              *int
 		CheckCircuitCapacity    *bool
+		EnableRollupVerify      *bool
 		MaxBlockRange           *int64
 	}
 	var dec Config
@@ -297,6 +300,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.CheckCircuitCapacity != nil {
 		c.CheckCircuitCapacity = *dec.CheckCircuitCapacity
+	}
+	if dec.EnableRollupVerify != nil {
+		c.EnableRollupVerify = *dec.EnableRollupVerify
 	}
 	if dec.MaxBlockRange != nil {
 		c.MaxBlockRange = *dec.MaxBlockRange

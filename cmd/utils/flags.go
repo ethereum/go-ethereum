@@ -836,6 +836,12 @@ var (
 		Usage: "Enable circuit capacity check during block validation",
 	}
 
+	// Rollup verify service settings
+	RollupVerifyEnabledFlag = cli.BoolFlag{
+		Name:  "rollup.verify",
+		Usage: "Enable verification of batch consistency between L1 and L2 in rollup",
+	}
+
 	// Max block range for `eth_getLogs` method
 	MaxBlockRangeFlag = cli.Int64Flag{
 		Name:  "rpc.getlogs.maxrange",
@@ -1546,6 +1552,12 @@ func setCircuitCapacityCheck(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.GlobalIsSet(RollupVerifyEnabledFlag.Name) {
+		cfg.EnableRollupVerify = ctx.GlobalBool(RollupVerifyEnabledFlag.Name)
+	}
+}
+
 func setMaxBlockRange(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(MaxBlockRangeFlag.Name) {
 		cfg.MaxBlockRange = ctx.GlobalInt64(MaxBlockRangeFlag.Name)
@@ -1620,6 +1632,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
 	setCircuitCapacityCheck(ctx, cfg)
+	setEnableRollupVerify(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
