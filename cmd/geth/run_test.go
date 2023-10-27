@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/reexec"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
+	"github.com/ethereum/go-ethereum/internal/reexec"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
