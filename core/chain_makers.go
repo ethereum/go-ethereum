@@ -186,7 +186,7 @@ func (b *BlockGen) BaseFee() *big.Int {
 
 // Gas returns the amount of gas left in the current block.
 func (b *BlockGen) Gas() uint64 {
-	return b.header.GasLimit - b.header.GasUsed
+	return b.gasPool.Gas()
 }
 
 // Signer returns a valid signer instance for the current block.
