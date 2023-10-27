@@ -2539,10 +2539,6 @@ func (bc *BlockChain) ReorgThroughVerkleTransition() {
 	bc.stateCache.ReorgThroughVerkleTransition()
 }
 
-func (bc *BlockChain) EndVerkleTransition() {
-	bc.stateCache.EndVerkleTransition()
-}
-
 func (bc *BlockChain) AddRootTranslation(originalRoot, translatedRoot common.Hash) {
 	bc.stateCache.AddRootTranslation(originalRoot, translatedRoot)
 }
