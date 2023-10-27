@@ -169,6 +169,9 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
 		}
+		if ctype := resp.Header.Get("Content-Type"); ctype != "application/json" {
+			t.Errorf("testcase %d \nwrong Content-Type, have: %v, want: %v", i, ctype, "application/json")
+		}
 	}
 }
 
