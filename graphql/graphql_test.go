@@ -150,7 +150,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		},
 		{
 			body: `{"query": "{blocks {number}}"}`,
-			want: `{"errors":[{"message":"from block number must be specified","path":["blocks"]}],"data":null}`,
+			want: `{"errors":[{"message":"error [-32602]: from block number must be specified","path":["blocks"],"extensions":{"errorCode":-32602,"errorMessage":"from block number must be specified"}}],"data":null}`,
 			code: 400,
 		},
 		// invalid block range

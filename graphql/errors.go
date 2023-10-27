@@ -25,6 +25,7 @@ var (
 	errOnlyNumberOrHash  = invalidParamsError("only one of number or hash must be specified")
 	errBlockInvariant    = invalidParamsError("block objects must be instantiated with at least one of num or hash")
 	errInvalidBlockRange = invalidParamsError("invalid from and to block combination: from > to")
+	errFromBlockRequired = invalidParamsError("from block number must be specified")
 )
 
 const (
