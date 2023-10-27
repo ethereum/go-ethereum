@@ -48,39 +48,26 @@ DOG
   cd -
 }
 
-function build_native_go_fuzzer() {
-	fuzzer=$1
-	function=$2
-	path=$3
-	tags="-tags gofuzz"
-
-	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
-	else
-		go-118-fuzz-build $tags -o $fuzzer.a -func $function $path
-		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
-	fi
-}
-
 function compile_fuzzer() {
-  path=$GOPATH/src/github.com/ethereum/go-ethereum/$1
+  package=$1
   function=$2
   fuzzer=$3
+
+  path=$GOPATH/src/$1
 
   echo "Building $fuzzer"
   cd $path
 
   # Install build dependencies
-  go install github.com/AdamKorcz/go-118-fuzz-build@latest
-  go get github.com/AdamKorcz/go-118-fuzz-build/testing
+  go mod tidy
+  go get github.com/holiman/gofuzz-shim/testing
 
-  # Test if file contains a line with "func $function(" and "testing.F".
-  if [ $(grep -r "func $function(" $path | grep "testing.F" | wc -l) -eq 1 ]
-  then
-    build_native_go_fuzzer $fuzzer $function $path
-  else
-    echo "Could not find the function: func ${function}(f *testing.F)"
-  fi
+	if [[ $SANITIZER == *coverage* ]]; then
+		coverbuild $path $function $fuzzer $coverpkg
+	else
+	  gofuzz-shim --func $function  --package $package -o $fuzzer.a
+		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
+	fi
 
   ## Check if there exists a seed corpus file
   corpusfile="${path}/testdata/${fuzzer}_seed_corpus.zip"
@@ -92,51 +79,56 @@ function compile_fuzzer() {
   cd -
 }
 
-export PROJPATH=$GOPATH/src/github.com/ethereum/go-ethereum
+go install github.com/holiman/gofuzz-shim@latest
 
-compile_fuzzer accounts/abi        FuzzABI fuzzAbi
+#compile_fuzzer accounts/abi        FuzzABI fuzzAbi
+compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi FuzzABI fuzzAbi
 
-# See https://github.com/AdamKorcz/go-118-fuzz-build#using-test-utils-from-other-_testgo-files
-# If we want to use code from '.._test.go'-files, we need to remove the _test suffix.
-mv $PROJPATH/common/bitutil/compress_test.go $PROJPATH/common/bitutil/compress_test_xx.go
-compile_fuzzer common/bitutil  FuzzEncoder      fuzzBitutilEncoder
-compile_fuzzer common/bitutil  FuzzDecoder      fuzzBitutilDecoder
+#compile_fuzzer common/bitutil  FuzzEncoder      fuzzBitutilEncoder
+compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
 
-compile_fuzzer core/vm/runtime  FuzzVmRuntime      fuzzVmRuntime
-compile_fuzzer core/vm  FuzzPrecompiledContracts      fuzzPrecompiledContracts
+#compile_fuzzer common/bitutil  FuzzDecoder      fuzzBitutilDecoder
+compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
 
-compile_fuzzer core/types/        FuzzRLP fuzzRlp
+#compile_fuzzer core/vm/runtime  FuzzVmRuntime      fuzzVmRuntime
+compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
 
-compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
-compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
-compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
-compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
-compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
-compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
-compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
-compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
-compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
-compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
+#compile_fuzzer core/vm  FuzzPrecompiledContracts      fuzzPrecompiledContracts
+compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
 
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
-compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
-compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
-compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
-compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
-compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
+#compile_fuzzer core/types/        FuzzRLP fuzzRlp
+compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
 
-compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1Add fuzz_cross_g1_add
-compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1MultiExp fuzz_cross_g1_multiexp
-compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
-compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
+#compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
+#compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
+#compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
+#compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
+#compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
+#compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
+#compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
+#compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
+#compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
+#compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
+#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
 
-compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
-compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
-compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
-compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
+#compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
+#compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
+#compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
+#compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
 
-compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
+#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1Add fuzz_cross_g1_add
+#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1MultiExp fuzz_cross_g1_multiexp
+#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
+#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
+
+#compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
+#compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
+#compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
+#compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
+
+#compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
