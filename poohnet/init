@@ -24,12 +24,18 @@ mkdir $HOME/.pooh/el
 mkdir $HOME/.pooh/el/geth
 mkdir $HOME/.pooh/el/keystore
 
+genesis_file="genesis.json"
+
 if [ "$config" = "pow" ]
 then
   config_folder="config"
 elif [ "$config" = "pos" ]
 then
   config_folder="config4pos"
+elif [ "$config" = "local" ]
+then
+  config_folder="config"
+  genesis_file="genesis_local.json"
 else
   echo "Invalid config parameter"
   exit
@@ -45,7 +51,7 @@ docker run -it \
   linked0/poohnet-pow:latest \
   --datadir=/data \
   init \
-  /config/genesis.json
+  /config/$genesis_file
 
 
 if [ $number -ne 0 ]
