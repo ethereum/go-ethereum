@@ -184,3 +184,40 @@ func benchmarkEncoding(b *testing.B, bytes int, fill float64) {
 		bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
 	}
 }
+
+func FuzzEncoder(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if err := testEncodingCycle(data); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+func FuzzDecoder(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzDecode(data)
+	})
+}
+
+// fuzzDecode implements a go-fuzz fuzzer method to test the bit decoding and
+// reencoding algorithm.
+func fuzzDecode(data []byte) {
+	blob, err := DecompressBytes(data, 1024)
+	if err != nil {
+		return
+	}
+	// re-compress it (it's OK if the re-compressed differs from the
+	// original - the first input may not have been compressed at all)
+	comp := CompressBytes(blob)
+	if len(comp) > len(blob) {
+		// After compression, it must be smaller or equal
+		panic("bad compression")
+	}
+	// But decompressing it once again should work
+	decomp, err := DecompressBytes(data, 1024)
+	if err != nil {
+		panic(err)
+	}
+	if !bytes.Equal(decomp, blob) {
+		panic("content mismatch")
+	}
+}
