@@ -42,7 +42,7 @@ type callLog struct {
 	Data    hexutil.Bytes  `json:"data"`
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
-	Position int `json:"position"`
+	Position hexutil.Uint `json:"position"`
 }
 
 type callFrame struct {
@@ -191,9 +191,12 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 			return
 		}
 
-		position := len(t.callstack[len(t.callstack)-1].Calls)
-
-		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data), Position: position}
+		log := callLog{
+			Address:  scope.Contract.Address(),
+			Topics:   topics,
+			Data:     hexutil.Bytes(data),
+			Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
+		}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
 	}
 }
