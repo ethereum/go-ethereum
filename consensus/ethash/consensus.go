@@ -260,7 +260,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return err
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
+	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	if chain.Config().IsShanghai(header.Number, header.Time) {

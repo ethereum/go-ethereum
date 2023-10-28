@@ -194,7 +194,7 @@ func (s cancunSigner) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	// Blob txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
-	V = new(big.Int).Add(V, big.NewInt(27))
+	V = new(big.Int).Add(V, big27)
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
@@ -262,7 +262,7 @@ func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
-	V = new(big.Int).Add(V, big.NewInt(27))
+	V = new(big.Int).Add(V, big27)
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
@@ -335,7 +335,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	case AccessListTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
-		V = new(big.Int).Add(V, big.NewInt(27))
+		V = new(big.Int).Add(V, big27)
 	default:
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -403,7 +403,7 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	}
 	return EIP155Signer{
 		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainIdMul: new(big.Int).Lsh(chainId, 1), // chainId*2
 	}
 }
 
@@ -416,7 +416,11 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 	return ok && eip155.chainId.Cmp(s.chainId) == 0
 }
 
-var big8 = big.NewInt(8)
+var (
+	big8  = big.NewInt(8)
+	big27 = big.NewInt(27)
+	big35 = big.NewInt(35)
+)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != LegacyTxType {
@@ -579,6 +583,6 @@ func deriveChainId(v *big.Int) *big.Int {
 		}
 		return new(big.Int).SetUint64((v - 35) / 2)
 	}
-	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
+	v = new(big.Int).Sub(v, big35)
+	return v.Rsh(v, 1) // v/2
 }

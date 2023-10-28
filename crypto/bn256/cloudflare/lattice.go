@@ -104,12 +104,14 @@ func (l *lattice) Multi(scalar *big.Int) []uint8 {
 	return out
 }
 
+var big1 = big.NewInt(1)
+
 // round sets num to num/denom rounded to the nearest integer.
 func round(num, denom *big.Int) {
 	r := new(big.Int)
 	num.DivMod(num, denom, r)
 
 	if r.Cmp(half) == 1 {
-		num.Add(num, big.NewInt(1))
+		num.Add(num, big1)
 	}
 }
