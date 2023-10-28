@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build js
-// +build js
+//go:build wasip1
+// +build wasip1
 
 package rpc
 
