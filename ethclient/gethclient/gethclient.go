@@ -125,6 +125,15 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 	return &result, err
 }
 
+type RequiredBlockState struct {
+}
+
+// GetRequiredBlockState returns all state required to execute a single historical block.
+func (ec *Client) GetRequiredBlockState(ctx context.Context, blockNumber *big.Int) (*RequiredBlockState, error) {
+	result := RequiredBlockState{}
+	return &result, nil
+}
+
 // CallContract executes a message call transaction, which is directly executed in the VM
 // of the node, but never mined into the blockchain.
 //

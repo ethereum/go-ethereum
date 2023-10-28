@@ -70,7 +70,7 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 	}
 	insertSet := copySet(trie.tracer.inserts) // copy before commit
 	deleteSet := copySet(trie.tracer.deletes) // copy before commit
-	root, nodes, _ := trie.Commit(false)
+	root, nodes, _, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	seen := setKeys(iterNodes(db, root))
@@ -136,7 +136,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
-	root, nodes, _ := trie.Commit(false)
+	root, nodes, _, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
@@ -151,7 +151,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), randBytes(32))
 	}
-	root, nodes, _ = trie.Commit(false)
+	root, nodes, _, _ = trie.Commit(false)
 	db.Update(root, parent, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
@@ -169,7 +169,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 		keys = append(keys, string(key))
 		trie.MustUpdate(key, randBytes(32))
 	}
-	root, nodes, _ = trie.Commit(false)
+	root, nodes, _, _ = trie.Commit(false)
 	db.Update(root, parent, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
@@ -184,7 +184,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	for _, key := range keys {
 		trie.MustUpdate([]byte(key), nil)
 	}
-	root, nodes, _ = trie.Commit(false)
+	root, nodes, _, _ = trie.Commit(false)
 	db.Update(root, parent, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
@@ -199,7 +199,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), nil)
 	}
-	root, nodes, _ = trie.Commit(false)
+	root, nodes, _, _ = trie.Commit(false)
 	db.Update(root, parent, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	trie, _ = New(TrieID(root), db)
@@ -218,7 +218,7 @@ func TestAccessListLeak(t *testing.T) {
 	for _, val := range standard {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
-	root, nodes, _ := trie.Commit(false)
+	root, nodes, _, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	var cases = []struct {
@@ -248,9 +248,9 @@ func TestAccessListLeak(t *testing.T) {
 	}
 	for _, c := range cases {
 		trie, _ = New(TrieID(root), db)
-		n1 := len(trie.tracer.accessList)
+		n1 := trie.witness.Len()
 		c.op(trie)
-		n2 := len(trie.tracer.accessList)
+		n2 := trie.witness.Len()
 
 		if n1 != n2 {
 			t.Fatalf("AccessList is leaked, prev %d after %d", n1, n2)
@@ -268,7 +268,7 @@ func TestTinyTree(t *testing.T) {
 	for _, val := range tiny {
 		trie.MustUpdate([]byte(val.k), randBytes(32))
 	}
-	root, set, _ := trie.Commit(false)
+	root, set, _, _ := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(set), nil)
 
 	parent := root
@@ -277,7 +277,7 @@ func TestTinyTree(t *testing.T) {
 	for _, val := range tiny {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
-	root, set, _ = trie.Commit(false)
+	root, set, _, _ = trie.Commit(false)
 	db.Update(root, parent, 0, trienode.NewWithNodeSet(set), nil)
 
 	trie, _ = New(TrieID(root), db)

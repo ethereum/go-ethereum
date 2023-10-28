@@ -16,10 +16,6 @@
 
 package trie
 
-import (
-	"github.com/ethereum/go-ethereum/common"
-)
-
 // tracer tracks the changes of trie nodes. During the trie operations,
 // some nodes can be deleted from the trie, while these deleted nodes
 // won't be captured by trie.Hasher or trie.Committer. Thus, these deleted
@@ -33,32 +29,19 @@ import (
 // This tool can track all of them no matter the node is embedded in its
 // parent or not, but valueNode is never tracked.
 //
-// Besides, it's also used for recording the original value of the nodes
-// when they are resolved from the disk. The pre-value of the nodes will
-// be used to construct trie history in the future.
-//
 // Note tracer is not thread-safe, callers should be responsible for handling
 // the concurrency issues by themselves.
 type tracer struct {
-	inserts    map[string]struct{}
-	deletes    map[string]struct{}
-	accessList map[string][]byte
+	inserts map[string]struct{}
+	deletes map[string]struct{}
 }
 
 // newTracer initializes the tracer for capturing trie changes.
 func newTracer() *tracer {
 	return &tracer{
-		inserts:    make(map[string]struct{}),
-		deletes:    make(map[string]struct{}),
-		accessList: make(map[string][]byte),
+		inserts: make(map[string]struct{}),
+		deletes: make(map[string]struct{}),
 	}
-}
-
-// onRead tracks the newly loaded trie node and caches the rlp-encoded
-// blob internally. Don't change the value outside of function since
-// it's not deep-copied.
-func (t *tracer) onRead(path []byte, val []byte) {
-	t.accessList[string(path)] = val
 }
 
 // onInsert tracks the newly inserted trie node. If it's already
@@ -83,19 +66,11 @@ func (t *tracer) onDelete(path []byte) {
 	t.deletes[string(path)] = struct{}{}
 }
 
-// reset clears the content tracked by tracer.
-func (t *tracer) reset() {
-	t.inserts = make(map[string]struct{})
-	t.deletes = make(map[string]struct{})
-	t.accessList = make(map[string][]byte)
-}
-
 // copy returns a deep copied tracer instance.
 func (t *tracer) copy() *tracer {
 	var (
-		inserts    = make(map[string]struct{})
-		deletes    = make(map[string]struct{})
-		accessList = make(map[string][]byte)
+		inserts = make(map[string]struct{})
+		deletes = make(map[string]struct{})
 	)
 	for path := range t.inserts {
 		inserts[path] = struct{}{}
@@ -103,27 +78,16 @@ func (t *tracer) copy() *tracer {
 	for path := range t.deletes {
 		deletes[path] = struct{}{}
 	}
-	for path, blob := range t.accessList {
-		accessList[path] = common.CopyBytes(blob)
-	}
 	return &tracer{
-		inserts:    inserts,
-		deletes:    deletes,
-		accessList: accessList,
+		inserts: inserts,
+		deletes: deletes,
 	}
 }
 
-// deletedNodes returns a list of node paths which are deleted from the trie.
-func (t *tracer) deletedNodes() []string {
+// deleteList returns a list of node paths which are marked as deleted.
+func (t *tracer) deleteList() []string {
 	var paths []string
 	for path := range t.deletes {
-		// It's possible a few deleted nodes were embedded
-		// in their parent before, the deletions can be no
-		// effect by deleting nothing, filter them out.
-		_, ok := t.accessList[path]
-		if !ok {
-			continue
-		}
 		paths = append(paths, path)
 	}
 	return paths

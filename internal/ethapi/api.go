@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -925,6 +926,111 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 	}
 
 	return result, nil
+}
+
+type RequiredBlockState struct {
+	CompactEip1186Proofs []CompactEip1186Proof `json:"compact_eip1186_proofs"` // sorted by address
+	Contracts            []Contract            `json:"contracts"`              // sorted by address
+	AccountNodes         []TrieNode            `json:"account_nodes"`          // sorted by address
+	StorageNodes         []TrieNode            `json:"storage_nodes"`          // sorted by address
+	BlockHashes          []RecentBlockHash     `json:"block_hashes"`           // sorted by address
+}
+
+type CompactEip1186Proof struct {
+	Address       common.Address  `json:"address"`
+	Balance       big.Int         `json:"balance"`
+	CodeHash      common.Hash     `json:"code_hash"`
+	Nonce         uint64          `json:"nonce"`
+	StorageHash   common.Hash     `json:"storage_hash"`
+	AccountProof  []string        `json:"account_proof"`  // sorted: node nearest to root first
+	StorageProofs []StorageResult `json:"storage_proofs"` // sorted
+}
+
+type Contract []byte
+type TrieNode []byte
+
+type RecentBlockHash struct {
+	BlockNumber big.Int     `json:"block_number"`
+	BlockHash   common.Hash `json:"block_hash"`
+}
+
+// GetRequiredBlockState returns all state required to execute a single historical block.
+func (s *BlockChainAPI) GetRequiredBlockState(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Hash]*trienode.Witness, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		// When the block doesn't exist, the RPC method should return JSON null
+		return nil, nil
+	}
+	parentHash := block.ParentHash()
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHash{BlockHash: &parentHash})
+	if err != nil {
+		return nil, nil
+	}
+	state.CleanSnaps()
+	if err := s.ProcessBlock(ctx, block, state, vm.Config{}); err != nil {
+		return nil, err
+	}
+	_, witnesses, err := state.Commit(block.NumberU64(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	return witnesses.Witnesses(), nil
+}
+
+// Process processes the state changes according to the Ethereum rules by running
+// the transaction messages using the statedb and applying any rewards to both
+// the processor (coinbase) and any included uncles.
+//
+// Process returns the receipts and logs accumulated during the process and
+// returns the amount of gas that was used in the process. If any of the
+// transactions failed to execute due to insufficient gas it will return an error.
+func (s *BlockChainAPI) ProcessBlock(ctx context.Context, block *types.Block, statedb *state.StateDB, cfg vm.Config) error {
+	var (
+		usedGas = new(uint64)
+		header  = block.Header()
+		gp      = new(core.GasPool).AddGas(block.GasLimit())
+	)
+	var (
+		context = core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, s.b.ChainConfig(), cfg)
+		signer  = types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
+	)
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	// Iterate over and process the individual transactions
+	for i, tx := range block.Transactions() {
+		msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
+		if err != nil {
+			return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+		statedb.SetTxContext(tx.Hash(), i)
+		err = applyTransaction(msg, gp, statedb, usedGas, vmenv)
+		if err != nil {
+			return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+		}
+	}
+
+	return nil
+}
+
+func applyTransaction(msg *core.Message, gp *core.GasPool, statedb *state.StateDB, usedGas *uint64, evm *vm.EVM) error {
+	// Create a new context to be used in the EVM environment.
+	txContext := core.NewEVMTxContext(msg)
+	evm.Reset(txContext, statedb)
+
+	// Apply the transaction to the current state (included in the env).
+	result, err := core.ApplyMessage(evm, msg, gp)
+	if err != nil {
+		return err
+	}
+
+	// Update the state with pending changes.
+	statedb.Finalise(true)
+	*usedGas += result.UsedGas
+
+	return err
 }
 
 // OverrideAccount indicates the overriding fields of account during the execution

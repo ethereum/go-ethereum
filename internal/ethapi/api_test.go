@@ -1619,6 +1619,89 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 	}
 }
 
+func TestRPCGetRequiredBlockState(t *testing.T) {
+	t.Parallel()
+
+	var (
+		genBlocks  = 6
+		backend, _ = setupReceiptBackend(t, genBlocks)
+		api        = NewBlockChainAPI(backend)
+	)
+	blockHashes := make([]common.Hash, genBlocks+1)
+	ctx := context.Background()
+	for i := 0; i <= genBlocks; i++ {
+		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+		if err != nil {
+			t.Errorf("failed to get block: %d err: %v", i, err)
+		}
+		blockHashes[i] = header.Hash()
+	}
+
+	var testSuite = []struct {
+		test rpc.BlockNumberOrHash
+		file string
+	}{
+		// 3. latest tag
+		{
+			test: rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber),
+			file: "tag-latest",
+		},
+		// // 4. block with legacy transfer tx(hash)
+		// {
+		// 	test: rpc.BlockNumberOrHashWithHash(blockHashes[1], false),
+		// 	file: "block-with-legacy-transfer-tx",
+		// },
+		// // 5. block with contract create tx(number)
+		// {
+		// 	test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2)),
+		// 	file: "block-with-contract-create-tx",
+		// },
+		// // 6. block with legacy contract call tx(hash)
+		// {
+		// 	test: rpc.BlockNumberOrHashWithHash(blockHashes[3], false),
+		// 	file: "block-with-legacy-contract-call-tx",
+		// },
+		// // 7. block with dynamic fee tx(number)
+		// {
+		// 	test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(4)),
+		// 	file: "block-with-dynamic-fee-tx",
+		// },
+		// // 8. block is empty
+		// {
+		// 	test: rpc.BlockNumberOrHashWithHash(common.Hash{}, false),
+		// 	file: "hash-empty",
+		// },
+		// // 9. block is not found
+		// {
+		// 	test: rpc.BlockNumberOrHashWithHash(common.HexToHash("deadbeef"), false),
+		// 	file: "hash-notfound",
+		// },
+		// // 10. block is not found
+		// {
+		// 	test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(genBlocks + 1)),
+		// 	file: "block-notfound",
+		// },
+		// // 11. block with blob tx
+		// {
+		// 	test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(6)),
+		// 	file: "block-with-blob-tx",
+		// },
+	}
+
+	for i, tt := range testSuite {
+		var (
+			result interface{}
+			err    error
+		)
+		result, err = api.GetRequiredBlockState(context.Background(), tt.test)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_getRequiredBlockState", tt.file)
+	}
+}
+
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {

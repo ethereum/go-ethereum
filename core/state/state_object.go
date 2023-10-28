@@ -375,11 +375,11 @@ func (s *stateObject) updateRoot() {
 // commit obtains a set of dirty storage trie nodes and updates the account data.
 // The returned set can be nil if nothing to commit. This function assumes all
 // storage mutations have already been flushed into trie by updateRoot.
-func (s *stateObject) commit() (*trienode.NodeSet, error) {
+func (s *stateObject) commit() (*trienode.NodeSet, *trienode.Witness, error) {
 	// Short circuit if trie is not even loaded, don't bother with committing anything
 	if s.trie == nil {
 		s.origin = s.data.Copy()
-		return nil, nil
+		return nil, nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
 	if metrics.EnabledExpensive {
@@ -388,15 +388,15 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
-	root, nodes, err := s.trie.Commit(false)
+	root, nodes, witness, err := s.trie.Commit(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.data.Root = root
 
 	// Update original account data after commit
 	s.origin = s.data.Copy()
-	return nodes, nil
+	return nodes, witness, nil
 }
 
 // AddBalance adds amount to s's balance.
