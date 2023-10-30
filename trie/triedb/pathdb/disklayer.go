@@ -229,7 +229,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Debug("Prune state history", "number", pruned)
+		log.Debug("Pruned state history", "items", pruned, "tailid", oldest)
 	}
 	return ndl, nil
 }
