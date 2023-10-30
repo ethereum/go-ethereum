@@ -58,6 +58,11 @@ func TestSimulatedBackend(t *testing.T) {
 		t.Fatalf("err should be `ethereum.NotFound` but received %v", err)
 	}
 
+	pendingCount, _ := sim.PendingTransactionCount(context.Background())
+	if pendingCount != 0 {
+		t.Errorf("expected pending tx count of 0 got %v", pendingCount)
+	}
+
 	// generate a transaction and confirm you can retrieve it
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
@@ -70,6 +75,11 @@ func TestSimulatedBackend(t *testing.T) {
 	err = sim.SendTransaction(context.Background(), tx)
 	if err != nil {
 		t.Fatal("error sending transaction")
+	}
+
+	pendingCount, _ = sim.PendingTransactionCount(context.Background())
+	if pendingCount != 1 {
+		t.Errorf("expected pending tx count of 1 got %v", pendingCount)
 	}
 
 	txHash = tx.Hash()
@@ -88,6 +98,25 @@ func TestSimulatedBackend(t *testing.T) {
 	}
 	if isPending {
 		t.Fatal("transaction should not have pending status")
+	}
+
+	to := crypto.PubkeyToAddress(testKey.PublicKey)
+	tx = types.NewTransaction(1, to, big.NewInt(1024), params.TxGas, gasPrice, nil)
+	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, key)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+	err = sim.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		t.Errorf("could not add tx to pending block: %v", err)
+	}
+
+	balance, err := sim.PendingBalanceAt(context.Background(), to)
+	if err != nil {
+		t.Errorf("could not get pending balance: %v", err)
+	}
+	if balance.Cmp(big.NewInt(1024)) != 0 {
+		t.Errorf("pendingBalance not match, want: 1024 have: %d", balance.Int64())
 	}
 }
 
