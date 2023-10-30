@@ -45,7 +45,7 @@ var (
 			CertThreshold:        73, // based on masternode is 108
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
-			MinePeriod:           10,
+			MinePeriod:           2,
 		},
 	}
 
@@ -197,7 +197,7 @@ var (
 		ConstantinopleBlock: nil,
 		XDPoS: &XDPoSConfig{
 			Period: 15,
-			Epoch:  30000,
+			Epoch:  900,
 			V2: &V2{
 				SwitchBlock:   big.NewInt(9999999999),
 				CurrentConfig: MainnetV2Configs[0],
@@ -218,8 +218,8 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 900}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 900}, nil}
 
 	// XDPoS config with v2 engine after block 901
 	TestXDPoSMockChainConfig = &ChainConfig{
@@ -337,10 +337,6 @@ func (c *XDPoSConfig) String() string {
 }
 
 func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, extraCheck bool) string {
-	if extraCheck && (len(extraByte) == 0 || extraByte[0] != 2) {
-		return ConsensusEngineVersion1
-	}
-
 	if c.V2 != nil && c.V2.SwitchBlock != nil && num.Cmp(c.V2.SwitchBlock) > 0 {
 		return ConsensusEngineVersion2
 	}
@@ -361,7 +357,7 @@ func (v *V2) UpdateConfig(round uint64) {
 		}
 	}
 	// update to current config
-	log.Info("[updateV2Config] Update config", "index", index, "round", round, "SwitchRound", v.AllConfigs[index].SwitchRound)
+	log.Warn("[updateV2Config] Update config", "index", index, "round", round, "SwitchRound", v.AllConfigs[index].SwitchRound)
 	v.CurrentConfig = v.AllConfigs[index]
 }
 
