@@ -22,12 +22,15 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/holiman/uint256"
 )
 
 // Suite represents a structure used to test a node's conformance
@@ -77,6 +80,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestInvalidTxs", Fn: s.TestInvalidTxs},
 		{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest},
 		{Name: "TestNewPooledTxs", Fn: s.TestNewPooledTxs},
+		{Name: "TestBlobViolations", Fn: s.TestBlobViolations},
 	}
 }
 
@@ -731,5 +735,112 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 		default:
 			t.Fatalf("unexpected %s", pretty.Sdump(msg))
 		}
+	}
+}
+
+func makeSidecar(data ...byte) *types.BlobTxSidecar {
+	var (
+		blobs       = make([]kzg4844.Blob, len(data))
+		commitments []kzg4844.Commitment
+		proofs      []kzg4844.Proof
+	)
+	for i := range blobs {
+		blobs[i][0] = data[i]
+		c, _ := kzg4844.BlobToCommitment(blobs[i])
+		p, _ := kzg4844.ComputeBlobProof(blobs[i], c)
+		commitments = append(commitments, c)
+		proofs = append(proofs, p)
+	}
+	return &types.BlobTxSidecar{
+		Blobs:       blobs,
+		Commitments: commitments,
+		Proofs:      proofs,
+	}
+}
+
+func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Transactions) {
+	from, nonce := s.chain.GetSender(5)
+	for i := 0; i < count; i++ {
+		// Make blob data, max of 2 blobs per tx.
+		blobdata := make([]byte, blobs%2)
+		for i := range blobdata {
+			blobdata[i] = discriminator
+			blobs -= 1
+		}
+		inner := &types.BlobTx{
+			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
+			Nonce:      nonce + uint64(i),
+			GasTipCap:  uint256.NewInt(1),
+			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
+			Gas:        100000,
+			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(*s.chain.Head().ExcessBlobGas())),
+			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
+			Sidecar:    makeSidecar(blobdata...),
+		}
+		tx, err := s.chain.SignTx(from, types.NewTx(inner))
+		if err != nil {
+			panic("blob tx signing failed")
+		}
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+func (s *Suite) TestBlobViolations(t *utesting.T) {
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+	// Create blob txs for each tests with unqiue tx hashes.
+	var (
+		t1 = s.makeBlobTxs(2, 3, 0x1)
+		t2 = s.makeBlobTxs(2, 3, 0x2)
+	)
+	for _, test := range []struct {
+		ann  eth.NewPooledTransactionHashesPacket68
+		resp eth.PooledTransactionsResponse
+	}{
+		// Invalid tx size.
+		{
+			ann: eth.NewPooledTransactionHashesPacket68{
+				Types:  []byte{types.BlobTxType, types.BlobTxType},
+				Sizes:  []uint32{uint32(t1[0].Size()), uint32(t1[1].Size() + 10)},
+				Hashes: []common.Hash{t1[0].Hash(), t1[1].Hash()},
+			},
+			resp: eth.PooledTransactionsResponse(t1),
+		},
+		// Wrong tx type.
+		{
+			ann: eth.NewPooledTransactionHashesPacket68{
+				Types:  []byte{types.DynamicFeeTxType, types.BlobTxType},
+				Sizes:  []uint32{uint32(t2[0].Size()), uint32(t2[1].Size())},
+				Hashes: []common.Hash{t2[0].Hash(), t2[1].Hash()},
+			},
+			resp: eth.PooledTransactionsResponse(t2),
+		},
+	} {
+		conn, err := s.dial()
+		if err != nil {
+			t.Fatalf("dial fail: %v", err)
+		}
+		if err := conn.peer(s.chain, nil); err != nil {
+			t.Fatalf("peering failed: %v", err)
+		}
+		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, test.ann); err != nil {
+			t.Fatalf("sending announcement failed: %v", err)
+		}
+		req := new(eth.GetPooledTransactionsPacket)
+		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+			t.Fatalf("reading pooled tx request failed: %v", err)
+		}
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: test.resp}
+		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+			t.Fatalf("writing pooled tx response failed: %v", err)
+		}
+		if code, _, err := conn.Read(); err != nil {
+			t.Fatalf("expected disconnect on blob violation, got err: %v", err)
+		} else if code != discMsg {
+			t.Fatalf("expected disconnect on blob violation, got msg code: %d", code)
+		}
+		conn.Close()
 	}
 }
