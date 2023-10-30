@@ -369,8 +369,19 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(err)
 		}
-		block, receipt := genblock(i, parent, triedb, statedb)
-		cm.add(block, receipt)
+		block, receipts := genblock(i, parent, triedb, statedb)
+
+		// Post-process the receipts.
+		var blobGasPrice *big.Int
+		if block.ExcessBlobGas() != nil {
+			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+		}
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, block.Transactions()); err != nil {
+			panic(err)
+		}
+
+		// Advance the chain.
+		cm.add(block, receipts)
 		parent = block
 	}
 	return cm.chain, cm.receipts
