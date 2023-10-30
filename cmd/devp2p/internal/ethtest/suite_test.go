@@ -17,32 +17,53 @@
 package ethtest
 
 import (
+	crand "crypto/rand"
+	"fmt"
 	"os"
+	"path"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
-var (
-	genesisFile   = "./testdata/genesis.json"
-	halfchainFile = "./testdata/halfchain.rlp"
-	fullchainFile = "./testdata/chain.rlp"
-)
+func makeJWTSecret() (string, [32]byte, error) {
+	var secret [32]byte
+	if _, err := crand.Read(secret[:]); err != nil {
+		return "", secret, fmt.Errorf("failed to create jwt secret: %v", err)
+	}
+	jwtPath := path.Join(os.TempDir(), "jwt_secret")
+	if err := os.WriteFile(jwtPath, []byte(hexutil.Encode(secret[:])), 0600); err != nil {
+		return "", secret, fmt.Errorf("failed to prepare jwt secret file: %v", err)
+	}
+	return jwtPath, secret, nil
+}
 
 func TestEthSuite(t *testing.T) {
 	t.Parallel()
-	geth, err := runGeth()
+
+	jwtPath, secret, err := makeJWTSecret()
+	if err != nil {
+		t.Fatalf("could not make jwt secret: %v", err)
+	}
+	geth, err := runGeth("./testdata", jwtPath)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
 	defer geth.Close()
 
-	suite, err := NewSuite(geth.Server().Self(), fullchainFile, genesisFile)
+	// TODO: remove this
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
@@ -58,13 +79,21 @@ func TestEthSuite(t *testing.T) {
 
 func TestSnapSuite(t *testing.T) {
 	t.Parallel()
-	geth, err := runGeth()
+
+	jwtPath, secret, err := makeJWTSecret()
+	if err != nil {
+		t.Fatalf("could not make jwt secret: %v", err)
+	}
+	geth, err := runGeth("./testdata/snap", jwtPath)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
 	defer geth.Close()
 
-	suite, err := NewSuite(geth.Server().Self(), fullchainFile, genesisFile)
+	// TODO: remove this
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	suite, err := NewSuite(geth.Server().Self(), "./testdata/snap", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
@@ -79,20 +108,23 @@ func TestSnapSuite(t *testing.T) {
 }
 
 // runGeth creates and starts a geth node
-func runGeth() (*node.Node, error) {
+func runGeth(dir string, jwtPath string) (*node.Node, error) {
 	stack, err := node.New(&node.Config{
+		AuthAddr: "127.0.0.1",
+		AuthPort: 18551,
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:0",
 			NoDiscovery: true,
 			MaxPeers:    10, // in case a test requires multiple connections, can be changed in the future
 			NoDial:      true,
 		},
+		JWTSecret: jwtPath,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	err = setupGeth(stack)
+	err = setupGeth(stack, dir)
 	if err != nil {
 		stack.Close()
 		return nil, err
@@ -104,12 +136,11 @@ func runGeth() (*node.Node, error) {
 	return stack, nil
 }
 
-func setupGeth(stack *node.Node) error {
-	chain, err := loadChain(halfchainFile, genesisFile)
+func setupGeth(stack *node.Node, dir string) error {
+	chain, err := NewChain(dir)
 	if err != nil {
 		return err
 	}
-
 	backend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:        &chain.genesis,
 		NetworkId:      chain.genesis.Config.ChainID.Uint64(), // 19763
@@ -122,8 +153,9 @@ func setupGeth(stack *node.Node) error {
 	if err != nil {
 		return err
 	}
-	backend.SetSynced()
-
+	if err := catalyst.Register(stack, backend); err != nil {
+		return fmt.Errorf("failed to register catalyst service: %v", err)
+	}
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
 	return err
 }

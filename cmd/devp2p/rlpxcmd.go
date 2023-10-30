@@ -106,7 +106,7 @@ func rlpxEthTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
+	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2), ctx.Args().Get(3))
 	if err != nil {
 		exit(err)
 	}
@@ -118,7 +118,7 @@ func rlpxSnapTest(ctx *cli.Context) error {
 	if ctx.NArg() < 3 {
 		exit("missing path to chain.rlp as command-line argument")
 	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
+	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2), ctx.Args().Get(3))
 	if err != nil {
 		exit(err)
 	}

@@ -32,6 +32,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+func (c *Conn) snapRequest(code uint64, msg any) (any, error) {
+	if err := c.Write(snapProto, code, msg); err != nil {
+		return nil, fmt.Errorf("could not write to connection: %v", err)
+	}
+	return c.ReadSnap()
+}
+
 func (s *Suite) TestSnapStatus(t *utesting.T) {
 	conn, err := s.dialSnap()
 	if err != nil {
@@ -479,22 +486,20 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
-	req := &GetAccountRange{
+	req := &snap.GetAccountRangePacket{
 		ID:     uint64(rand.Int63()),
 		Root:   tc.root,
 		Origin: tc.origin,
 		Limit:  tc.limit,
 		Bytes:  tc.nBytes,
 	}
-	resp, err := conn.snapRequest(req, req.ID, s.chain)
+	msg, err := conn.snapRequest(snap.GetAccountRangeMsg, req)
 	if err != nil {
 		return fmt.Errorf("account range request failed: %v", err)
 	}
-	var res *snap.AccountRangePacket
-	if r, ok := resp.(*AccountRange); !ok {
-		return fmt.Errorf("account range response wrong: %T %v", resp, resp)
-	} else {
-		res = (*snap.AccountRangePacket)(r)
+	res, ok := msg.(*snap.AccountRangePacket)
+	if !ok {
+		return fmt.Errorf("account range response wrong: %T %v", msg, msg)
 	}
 	if exp, got := tc.expAccounts, len(res.Accounts); exp != got {
 		return fmt.Errorf("expected %d accounts, got %d", exp, got)
@@ -550,7 +555,7 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
-	req := &GetStorageRanges{
+	req := &snap.GetStorageRangesPacket{
 		ID:       uint64(rand.Int63()),
 		Root:     tc.root,
 		Accounts: tc.accounts,
@@ -558,15 +563,13 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 		Limit:    tc.limit,
 		Bytes:    tc.nBytes,
 	}
-	resp, err := conn.snapRequest(req, req.ID, s.chain)
+	msg, err := conn.snapRequest(snap.GetStorageRangesMsg, req)
 	if err != nil {
 		return fmt.Errorf("account range request failed: %v", err)
 	}
-	var res *snap.StorageRangesPacket
-	if r, ok := resp.(*StorageRanges); !ok {
-		return fmt.Errorf("account range response wrong: %T %v", resp, resp)
-	} else {
-		res = (*snap.StorageRangesPacket)(r)
+	res, ok := msg.(*snap.StorageRangesPacket)
+	if !ok {
+		return fmt.Errorf("account range response wrong: %T %v", msg, msg)
 	}
 	gotSlots := 0
 	// Ensure the ranges are monotonically increasing
@@ -594,24 +597,22 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
-	req := &GetByteCodes{
+	req := &snap.GetByteCodesPacket{
 		ID:     uint64(rand.Int63()),
 		Hashes: tc.hashes,
 		Bytes:  tc.nBytes,
 	}
-	resp, err := conn.snapRequest(req, req.ID, s.chain)
+	msg, err := conn.snapRequest(snap.GetByteCodesMsg, req)
 	if err != nil {
 		return fmt.Errorf("getBytecodes request failed: %v", err)
 	}
-	var res *snap.ByteCodesPacket
-	if r, ok := resp.(*ByteCodes); !ok {
-		return fmt.Errorf("bytecodes response wrong: %T %v", resp, resp)
-	} else {
-		res = (*snap.ByteCodesPacket)(r)
+	res, ok := msg.(*snap.ByteCodesPacket)
+	if !ok {
+		return fmt.Errorf("bytecodes response wrong: %T %v", msg, msg)
 	}
 	if exp, got := tc.expHashes, len(res.Codes); exp != got {
 		for i, c := range res.Codes {
-			fmt.Printf("%d. %#x\n", i, c)
+			t.Logf("%d. %#x\n", i, c)
 		}
 		return fmt.Errorf("expected %d bytecodes, got %d", exp, got)
 	}
@@ -655,24 +656,22 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
-	req := &GetTrieNodes{
+	req := &snap.GetTrieNodesPacket{
 		ID:    uint64(rand.Int63()),
 		Root:  tc.root,
 		Paths: tc.paths,
 		Bytes: tc.nBytes,
 	}
-	resp, err := conn.snapRequest(req, req.ID, s.chain)
+	msg, err := conn.snapRequest(snap.GetTrieNodesMsg, req)
 	if err != nil {
 		if tc.expReject {
 			return nil
 		}
 		return fmt.Errorf("trienodes  request failed: %v", err)
 	}
-	var res *snap.TrieNodesPacket
-	if r, ok := resp.(*TrieNodes); !ok {
-		return fmt.Errorf("trienodes response wrong: %T %v", resp, resp)
-	} else {
-		res = (*snap.TrieNodesPacket)(r)
+	res, ok := msg.(*snap.TrieNodesPacket)
+	if !ok {
+		return fmt.Errorf("trienodes response wrong: %T %v", msg, msg)
 	}
 
 	// Check the correctness
@@ -690,7 +689,7 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 		hasher.Write(trienode)
 		hasher.Read(hash)
 		if got, want := hash, tc.expHashes[i]; !bytes.Equal(got, want[:]) {
-			fmt.Printf("hash %d wrong, got %#x, want %#x\n", i, got, want)
+			t.Logf("hash %d wrong, got %#x, want %#x\n", i, got, want)
 			err = fmt.Errorf("hash %d wrong, got %#x, want %#x", i, got, want)
 		}
 	}
