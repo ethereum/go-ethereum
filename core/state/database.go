@@ -58,7 +58,7 @@ type Database interface {
 	// DiskDB returns the underlying key-value disk database.
 	DiskDB() ethdb.KeyValueStore
 
-	// TrieDB returns the underlying trie database for managing trie nodes.
+	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
 }
 
@@ -147,7 +147,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		triedb:        trie.NewDatabase(db, config),
+		triedb:        trie.NewDatabaseWithConfig(db, config),
 	}
 }
 

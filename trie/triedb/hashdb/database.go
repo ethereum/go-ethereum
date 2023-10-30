@@ -65,20 +65,6 @@ type ChildResolver interface {
 	ForEach(node []byte, onChild func(common.Hash))
 }
 
-// Config contains the settings for database.
-type Config struct {
-	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
-}
-
-// Defaults is the default setting for database if it's not specified.
-// Notably, clean cache is disabled explicitly,
-var Defaults = &Config{
-	// Explicitly set clean cache size to 0 to avoid creating fastcache,
-	// otherwise database must be closed when it's no longer needed to
-	// prevent memory leak.
-	CleanCacheSize: 0,
-}
-
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
@@ -136,13 +122,12 @@ func (n *cachedNode) forChildren(resolver ChildResolver, onChild func(hash commo
 }
 
 // New initializes the hash-based node database.
-func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Database {
-	if config == nil {
-		config = Defaults
-	}
+func New(diskdb ethdb.Database, size int, resolver ChildResolver) *Database {
+	// Initialize the clean cache if the specified cache allowance
+	// is non-zero. Note, the size is in bytes.
 	var cleans *fastcache.Cache
-	if config.CleanCacheSize > 0 {
-		cleans = fastcache.New(config.CleanCacheSize)
+	if size > 0 {
+		cleans = fastcache.New(size)
 	}
 	return &Database{
 		diskdb:   diskdb,
@@ -624,10 +609,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
-//
-// The first return will always be 0, representing the memory stored in unbounded
-// diff layers above the dirty cache. This is only available in pathdb.
-func (db *Database) Size() (common.StorageSize, common.StorageSize) {
+func (db *Database) Size() common.StorageSize {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -635,17 +617,11 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
 	var metadataSize = common.StorageSize(len(db.dirties) * cachedNodeSize)
-	return 0, db.dirtiesSize + db.childrenSize + metadataSize
+	return db.dirtiesSize + db.childrenSize + metadataSize
 }
 
 // Close closes the trie database and releases all held resources.
-func (db *Database) Close() error {
-	if db.cleans != nil {
-		db.cleans.Reset()
-		db.cleans = nil
-	}
-	return nil
-}
+func (db *Database) Close() error { return nil }
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {

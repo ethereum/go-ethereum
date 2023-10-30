@@ -80,7 +80,7 @@ func (h *testHasher) Delete(key []byte) error {
 
 // Commit computes the new hash of the states and returns the set with all
 // state changes.
-func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	var (
 		nodes = make(map[common.Hash][]byte)
 		set   = trienode.NewNodeSet(h.owner)
@@ -108,7 +108,7 @@ func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, e
 	if root == types.EmptyRootHash && h.root != types.EmptyRootHash {
 		set.AddNode(nil, trienode.NewDeleted())
 	}
-	return root, set, nil
+	return root, set
 }
 
 // hash performs the hash computation upon the provided states.

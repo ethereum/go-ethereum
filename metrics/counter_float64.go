@@ -5,16 +5,13 @@ import (
 	"sync/atomic"
 )
 
-type CounterFloat64Snapshot interface {
-	Count() float64
-}
-
 // CounterFloat64 holds a float64 value that can be incremented and decremented.
 type CounterFloat64 interface {
 	Clear()
+	Count() float64
 	Dec(float64)
 	Inc(float64)
-	Snapshot() CounterFloat64Snapshot
+	Snapshot() CounterFloat64
 }
 
 // GetOrRegisterCounterFloat64 returns an existing CounterFloat64 or constructs and registers
@@ -74,19 +71,47 @@ func NewRegisteredCounterFloat64Forced(name string, r Registry) CounterFloat64 {
 	return c
 }
 
-// counterFloat64Snapshot is a read-only copy of another CounterFloat64.
-type counterFloat64Snapshot float64
+// CounterFloat64Snapshot is a read-only copy of another CounterFloat64.
+type CounterFloat64Snapshot float64
+
+// Clear panics.
+func (CounterFloat64Snapshot) Clear() {
+	panic("Clear called on a CounterFloat64Snapshot")
+}
 
 // Count returns the value at the time the snapshot was taken.
-func (c counterFloat64Snapshot) Count() float64 { return float64(c) }
+func (c CounterFloat64Snapshot) Count() float64 { return float64(c) }
 
+// Dec panics.
+func (CounterFloat64Snapshot) Dec(float64) {
+	panic("Dec called on a CounterFloat64Snapshot")
+}
+
+// Inc panics.
+func (CounterFloat64Snapshot) Inc(float64) {
+	panic("Inc called on a CounterFloat64Snapshot")
+}
+
+// Snapshot returns the snapshot.
+func (c CounterFloat64Snapshot) Snapshot() CounterFloat64 { return c }
+
+// NilCounterFloat64 is a no-op CounterFloat64.
 type NilCounterFloat64 struct{}
 
-func (NilCounterFloat64) Clear()                           {}
-func (NilCounterFloat64) Count() float64                   { return 0.0 }
-func (NilCounterFloat64) Dec(i float64)                    {}
-func (NilCounterFloat64) Inc(i float64)                    {}
-func (NilCounterFloat64) Snapshot() CounterFloat64Snapshot { return NilCounterFloat64{} }
+// Clear is a no-op.
+func (NilCounterFloat64) Clear() {}
+
+// Count is a no-op.
+func (NilCounterFloat64) Count() float64 { return 0.0 }
+
+// Dec is a no-op.
+func (NilCounterFloat64) Dec(i float64) {}
+
+// Inc is a no-op.
+func (NilCounterFloat64) Inc(i float64) {}
+
+// Snapshot is a no-op.
+func (NilCounterFloat64) Snapshot() CounterFloat64 { return NilCounterFloat64{} }
 
 // StandardCounterFloat64 is the standard implementation of a CounterFloat64 and uses the
 // atomic to manage a single float64 value.
@@ -97,6 +122,11 @@ type StandardCounterFloat64 struct {
 // Clear sets the counter to zero.
 func (c *StandardCounterFloat64) Clear() {
 	c.floatBits.Store(0)
+}
+
+// Count returns the current value.
+func (c *StandardCounterFloat64) Count() float64 {
+	return math.Float64frombits(c.floatBits.Load())
 }
 
 // Dec decrements the counter by the given amount.
@@ -110,9 +140,8 @@ func (c *StandardCounterFloat64) Inc(v float64) {
 }
 
 // Snapshot returns a read-only copy of the counter.
-func (c *StandardCounterFloat64) Snapshot() CounterFloat64Snapshot {
-	v := math.Float64frombits(c.floatBits.Load())
-	return counterFloat64Snapshot(v)
+func (c *StandardCounterFloat64) Snapshot() CounterFloat64 {
+	return CounterFloat64Snapshot(c.Count())
 }
 
 func atomicAddFloat(fbits *atomic.Uint64, v float64) {

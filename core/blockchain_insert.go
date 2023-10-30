@@ -39,7 +39,7 @@ const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
-func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, snapBufItems, trieDiffNodes, triebufNodes common.StorageSize, setHead bool) {
+func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize, setHead bool) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -63,16 +63,7 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
-		if snapDiffItems != 0 || snapBufItems != 0 { // snapshots enabled
-			context = append(context, []interface{}{"snapdiffs", snapDiffItems}...)
-			if snapBufItems != 0 { // future snapshot refactor
-				context = append(context, []interface{}{"snapdirty", snapBufItems}...)
-			}
-		}
-		if trieDiffNodes != 0 { // pathdb
-			context = append(context, []interface{}{"triediffs", trieDiffNodes}...)
-		}
-		context = append(context, []interface{}{"triedirty", triebufNodes}...)
+		context = append(context, []interface{}{"dirty", dirty}...)
 
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)

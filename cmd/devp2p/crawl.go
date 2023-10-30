@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,14 +51,7 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newCrawler(input nodeSet, bootnodes []*enode.Node, disc resolver, iters ...enode.Iterator) (*crawler, error) {
-	if len(input) == 0 {
-		input.add(bootnodes...)
-	}
-	if len(input) == 0 {
-		return nil, errors.New("no input nodes to start crawling")
-	}
-
+func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler {
 	c := &crawler{
 		input:     input,
 		output:    make(nodeSet, len(input)),
@@ -75,7 +67,7 @@ func newCrawler(input nodeSet, bootnodes []*enode.Node, disc resolver, iters ...
 	for id, n := range input {
 		c.output[id] = n
 	}
-	return c, nil
+	return c
 }
 
 func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {

@@ -64,7 +64,7 @@ func (r *v2Reporter) run() {
 	for {
 		select {
 		case <-intervalTicker.C:
-			r.send(0)
+			r.send()
 		case <-pingTicker.C:
 			_, err := r.client.Health(context.Background())
 			if err != nil {
@@ -74,16 +74,9 @@ func (r *v2Reporter) run() {
 	}
 }
 
-// send sends the measurements. If provided tstamp is >0, it is used. Otherwise,
-// a 'fresh' timestamp is used.
-func (r *v2Reporter) send(tstamp int64) {
+func (r *v2Reporter) send() {
 	r.reg.Each(func(name string, i interface{}) {
-		var now time.Time
-		if tstamp <= 0 {
-			now = time.Now()
-		} else {
-			now = time.Unix(tstamp, 0)
-		}
+		now := time.Now()
 		measurement, fields := readMeter(r.namespace, name, i)
 		if fields == nil {
 			return

@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -91,7 +90,7 @@ func StorageTrieID(state *TrieID, address common.Address, root common.Hash) *Tri
 type TrieRequest struct {
 	Id    *TrieID
 	Key   []byte
-	Proof *trienode.ProofSet
+	Proof *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -144,7 +143,7 @@ type ChtRequest struct {
 	ChtRoot          common.Hash
 	Header           *types.Header
 	Td               *big.Int
-	Proof            *trienode.ProofSet
+	Proof            *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -164,7 +163,7 @@ type BloomRequest struct {
 	SectionIndexList []uint64
 	BloomTrieRoot    common.Hash
 	BloomBits        [][]byte
-	Proofs           *trienode.ProofSet
+	Proofs           *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database

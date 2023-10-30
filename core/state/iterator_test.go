@@ -26,14 +26,9 @@ import (
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
-	testNodeIteratorCoverage(t, rawdb.HashScheme)
-	testNodeIteratorCoverage(t, rawdb.PathScheme)
-}
-
-func testNodeIteratorCoverage(t *testing.T, scheme string) {
 	// Create some arbitrary test state to iterate
-	db, sdb, ndb, root, _ := makeTestState(scheme)
-	ndb.Commit(root, false)
+	db, sdb, root, _ := makeTestState()
+	sdb.TrieDB().Commit(root, false)
 
 	state, err := New(root, sdb, nil)
 	if err != nil {
@@ -53,7 +48,7 @@ func testNodeIteratorCoverage(t *testing.T, scheme string) {
 	)
 	it := db.NewIterator(nil, nil)
 	for it.Next() {
-		ok, hash := isTrieNode(scheme, it.Key(), it.Value())
+		ok, hash := isTrieNode(sdb.TrieDB().Scheme(), it.Key(), it.Value())
 		if !ok {
 			continue
 		}
@@ -95,11 +90,11 @@ func isTrieNode(scheme string, key, val []byte) (bool, common.Hash) {
 			return true, common.BytesToHash(key)
 		}
 	} else {
-		ok := rawdb.IsAccountTrieNode(key)
+		ok, _ := rawdb.IsAccountTrieNode(key)
 		if ok {
 			return true, crypto.Keccak256Hash(val)
 		}
-		ok = rawdb.IsStorageTrieNode(key)
+		ok, _, _ = rawdb.IsStorageTrieNode(key)
 		if ok {
 			return true, crypto.Keccak256Hash(val)
 		}

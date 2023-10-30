@@ -3,7 +3,6 @@ package metrics
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
 )
@@ -48,37 +47,15 @@ type Registry interface {
 	Unregister(string)
 }
 
-type orderedRegistry struct {
-	StandardRegistry
-}
-
-// Call the given function for each registered metric.
-func (r *orderedRegistry) Each(f func(string, interface{})) {
-	var names []string
-	reg := r.registered()
-	for name := range reg {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		f(name, reg[name])
-	}
-}
-
-// NewRegistry creates a new registry.
-func NewRegistry() Registry {
-	return new(StandardRegistry)
-}
-
-// NewOrderedRegistry creates a new ordered registry (for testing).
-func NewOrderedRegistry() Registry {
-	return new(orderedRegistry)
-}
-
 // The standard implementation of a Registry uses sync.map
 // of names to metrics.
 type StandardRegistry struct {
 	metrics sync.Map
+}
+
+// Create a new registry.
+func NewRegistry() Registry {
+	return &StandardRegistry{}
 }
 
 // Call the given function for each registered metric.
@@ -150,13 +127,13 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 		values := make(map[string]interface{})
 		switch metric := i.(type) {
 		case Counter:
-			values["count"] = metric.Snapshot().Count()
+			values["count"] = metric.Count()
 		case CounterFloat64:
-			values["count"] = metric.Snapshot().Count()
+			values["count"] = metric.Count()
 		case Gauge:
-			values["value"] = metric.Snapshot().Value()
+			values["value"] = metric.Value()
 		case GaugeFloat64:
-			values["value"] = metric.Snapshot().Value()
+			values["value"] = metric.Value()
 		case Healthcheck:
 			values["error"] = nil
 			metric.Check()
@@ -214,7 +191,7 @@ func (r *StandardRegistry) Unregister(name string) {
 
 func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, bool) {
 	switch i.(type) {
-	case Counter, CounterFloat64, Gauge, GaugeFloat64, GaugeInfo, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
+	case Counter, CounterFloat64, Gauge, GaugeFloat64, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
 	default:
 		return nil, false, false
 	}

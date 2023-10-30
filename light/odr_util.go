@@ -17,6 +17,7 @@
 package light
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -125,7 +126,7 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 		return nil, err
 	}
 	body := new(types.Body)
-	if err := rlp.DecodeBytes(data, body); err != nil {
+	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
 		return nil, err
 	}
 	return body, nil

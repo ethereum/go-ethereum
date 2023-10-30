@@ -120,8 +120,8 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// hash computes the state root according to the genesis specification.
-func (ga *GenesisAlloc) hash() (common.Hash, error) {
+// deriveHash computes the state root according to the genesis specification.
+func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
@@ -130,9 +130,7 @@ func (ga *GenesisAlloc) hash() (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	for addr, account := range *ga {
-		if account.Balance != nil {
-			statedb.AddBalance(addr, account.Balance)
-		}
+		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -142,18 +140,16 @@ func (ga *GenesisAlloc) hash() (common.Hash, error) {
 	return statedb.Commit(0, false)
 }
 
-// flush is very similar with hash, but the main difference is all the generated
-// states will be persisted into the given database. Also, the genesis state
-// specification will be flushed as well.
+// flush is very similar with deriveHash, but the main difference is
+// all the generated states will be persisted into the given database.
+// Also, the genesis state specification will be flushed as well.
 func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		return err
 	}
 	for addr, account := range *ga {
-		if account.Balance != nil {
-			statedb.AddBalance(addr, account.Balance)
-		}
+		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -177,6 +173,39 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	}
 	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
 	return nil
+}
+
+// CommitGenesisState loads the stored genesis state with the given block
+// hash and commits it into the provided trie database.
+func CommitGenesisState(db ethdb.Database, triedb *trie.Database, blockhash common.Hash) error {
+	var alloc GenesisAlloc
+	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
+	if len(blob) != 0 {
+		if err := alloc.UnmarshalJSON(blob); err != nil {
+			return err
+		}
+	} else {
+		// Genesis allocation is missing and there are several possibilities:
+		// the node is legacy which doesn't persist the genesis allocation or
+		// the persisted allocation is just lost.
+		// - supported networks(mainnet, testnets), recover with defined allocations
+		// - private network, can't recover
+		var genesis *Genesis
+		switch blockhash {
+		case params.MainnetGenesisHash:
+			genesis = DefaultGenesisBlock()
+		case params.GoerliGenesisHash:
+			genesis = DefaultGoerliGenesisBlock()
+		case params.SepoliaGenesisHash:
+			genesis = DefaultSepoliaGenesisBlock()
+		}
+		if genesis != nil {
+			alloc = genesis.Alloc
+		} else {
+			return errors.New("not found")
+		}
+	}
+	return alloc.flush(db, triedb, blockhash)
 }
 
 // GenesisAccount is an account in the state of the genesis block.
@@ -287,23 +316,20 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		applyOverrides(genesis.Config)
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		applyOverrides(genesis.Config)
 		return genesis.Config, block.Hash(), nil
 	}
-	// The genesis block is present(perhaps in ancient database) while the
-	// state database is not initialized yet. It can happen that the node
-	// is initialized with an external ancient store. Commit genesis state
-	// in this case.
+	// We have the genesis block in database(perhaps in ancient database)
+	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
+	if header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
-		applyOverrides(genesis.Config)
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
@@ -313,18 +339,25 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		if err != nil {
 			return genesis.Config, hash, err
 		}
+		applyOverrides(genesis.Config)
 		return genesis.Config, block.Hash(), nil
 	}
+	// Assume mainnet chainId first
+	chainId := params.MainnetChainConfig.ChainID.Uint64()
+	// Note: The `genesis` argument will be one of:
+	// - nil: if running without the `init` command and without providing a network flag (--pulsechain, --ropsten, etc..)
+	// - defaulted: when a network flag is provided (--pulsechain, --ropsten, etc..), genesis will hold the defaults
+	// - custom: if running with the `init` command supplying a custom genesis.json file, genesis will hold the file contents
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		applyOverrides(genesis.Config)
+		chainId = genesis.Config.ChainID.Uint64()
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
 	}
 	// Get the existing chain configuration.
-	newcfg := genesis.configOrDefault(stored)
+	newcfg := genesis.configOrDefault(stored, chainId)
 	applyOverrides(newcfg)
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
@@ -341,7 +374,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// chain config as that would be AllProtocolChanges (applying any new fork
 	// on top of an existing private network genesis block). In that case, only
 	// apply the overrides.
-	if genesis == nil && stored != params.MainnetGenesisHash {
+	// Added: support custom config for PrimordialPulse fork with mainnet genesis
+	// and non-standard chain id.
+	if genesis == nil && (storedcfg.PrimordialPulseBlock != nil ||
+		stored != params.MainnetGenesisHash) {
 		newcfg = storedcfg
 		applyOverrides(newcfg)
 	}
@@ -395,12 +431,23 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, 
 	return params.MainnetChainConfig, nil
 }
 
-func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
+func (g *Genesis) configOrDefault(ghash common.Hash, chainId uint64) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
-		return params.MainnetChainConfig
+		switch chainId {
+		case params.PulseChainConfig.ChainID.Uint64():
+			return params.PulseChainConfig
+		case params.WhaleChainConfig.ChainID.Uint64():
+			return params.WhaleChainConfig
+		case params.PulseChainTestnetV4Config.ChainID.Uint64():
+			return params.PulseChainTestnetV4Config
+		case params.WhaleChainTestnetV4Config.ChainID.Uint64():
+			return params.WhaleChainTestnetV4Config
+		default:
+			return params.MainnetChainConfig
+		}
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
 	case ghash == params.GoerliGenesisHash:
@@ -412,7 +459,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := g.Alloc.hash()
+	root, err := g.Alloc.deriveHash()
 	if err != nil {
 		panic(err)
 	}
@@ -451,11 +498,6 @@ func (g *Genesis) ToBlock() *types.Block {
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
 		if conf.IsCancun(num, g.Timestamp) {
-			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
-			// the zero hash. This is because the genesis block does not have a parent
-			// by definition.
-			head.ParentBeaconRoot = new(common.Hash)
-			// EIP-4844 fields
 			head.ExcessBlobGas = g.ExcessBlobGas
 			head.BlobGasUsed = g.BlobGasUsed
 			if head.ExcessBlobGas == nil {
@@ -505,8 +547,10 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, triedb *trie.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+// Note the state changes will be committed in hash-based scheme, use Commit
+// if path-scheme is preferred.
+func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
+	block, err := g.Commit(db, trie.NewDatabase(db))
 	if err != nil {
 		panic(err)
 	}
@@ -517,6 +561,30 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *trie.Database) *types.Bl
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// DefaultPulseChainGenesisBlock returns the PulseChain mainnet genesis block.
+func DefaultPulseChainGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.PulseChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// DefaultWhaleChainGenesisBlock returns the WhaleChain mainnet genesis block.
+func DefaultWhaleChainGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.WhaleChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
@@ -550,15 +618,27 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultHoleskyGenesisBlock returns the Holesky network genesis block.
-func DefaultHoleskyGenesisBlock() *Genesis {
+// DefaultPulseChainTestnetV4GenesisBlock returns the PulseChain Testnet V4 genesis block.
+func DefaultPulseChainTestnetV4GenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.HoleskyChainConfig,
-		Nonce:      0x1234,
-		GasLimit:   0x17d7840,
-		Difficulty: big.NewInt(0x01),
-		Timestamp:  1695902100,
-		Alloc:      decodePrealloc(holeskyAllocData),
+		Config:     params.PulseChainTestnetV4Config,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// DefaultWhaleChainTestnetV4GenesisBlock returns the WhaleChain Testnet V4 genesis block.
+func DefaultWhaleChainTestnetV4GenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.WhaleChainTestnetV4Config,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
 
@@ -589,34 +669,13 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address) *Genesis {
 }
 
 func decodePrealloc(data string) GenesisAlloc {
-	var p []struct {
-		Addr    *big.Int
-		Balance *big.Int
-		Misc    *struct {
-			Nonce uint64
-			Code  []byte
-			Slots []struct {
-				Key common.Hash
-				Val common.Hash
-			}
-		} `rlp:"optional"`
-	}
+	var p []struct{ Addr, Balance *big.Int }
 	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
 		panic(err)
 	}
 	ga := make(GenesisAlloc, len(p))
 	for _, account := range p {
-		acc := GenesisAccount{Balance: account.Balance}
-		if account.Misc != nil {
-			acc.Nonce = account.Misc.Nonce
-			acc.Code = account.Misc.Code
-
-			acc.Storage = make(map[common.Hash]common.Hash)
-			for _, slot := range account.Misc.Slots {
-				acc.Storage[slot.Key] = slot.Val
-			}
-		}
-		ga[common.BigToAddress(account.Addr)] = acc
+		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
 }

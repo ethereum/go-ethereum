@@ -14,7 +14,7 @@ func TestGetOrRegisterHistogram(t *testing.T) {
 	r := NewRegistry()
 	s := NewUniformSample(100)
 	NewRegisteredHistogram("foo", r, s).Update(47)
-	if h := GetOrRegisterHistogram("foo", r, s).Snapshot(); h.Count() != 1 {
+	if h := GetOrRegisterHistogram("foo", r, s); h.Count() != 1 {
 		t.Fatal(h)
 	}
 }
@@ -24,11 +24,11 @@ func TestHistogram10000(t *testing.T) {
 	for i := 1; i <= 10000; i++ {
 		h.Update(int64(i))
 	}
-	testHistogram10000(t, h.Snapshot())
+	testHistogram10000(t, h)
 }
 
 func TestHistogramEmpty(t *testing.T) {
-	h := NewHistogram(NewUniformSample(100)).Snapshot()
+	h := NewHistogram(NewUniformSample(100))
 	if count := h.Count(); count != 0 {
 		t.Errorf("h.Count(): 0 != %v\n", count)
 	}
@@ -66,7 +66,7 @@ func TestHistogramSnapshot(t *testing.T) {
 	testHistogram10000(t, snapshot)
 }
 
-func testHistogram10000(t *testing.T, h HistogramSnapshot) {
+func testHistogram10000(t *testing.T, h Histogram) {
 	if count := h.Count(); count != 10000 {
 		t.Errorf("h.Count(): 10000 != %v\n", count)
 	}

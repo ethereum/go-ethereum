@@ -67,14 +67,14 @@ type BlockContext struct {
 	GetHash GetHashFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        uint64         // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE
-	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE
-	Random      *common.Hash   // Provides information for PREVRANDAO
+	Coinbase      common.Address // Provides information for COINBASE
+	GasLimit      uint64         // Provides information for GASLIMIT
+	BlockNumber   *big.Int       // Provides information for NUMBER
+	Time          uint64         // Provides information for TIME
+	Difficulty    *big.Int       // Provides information for DIFFICULTY
+	BaseFee       *big.Int       // Provides information for BASEFEE
+	Random        *common.Hash   // Provides information for PREVRANDAO
+	ExcessBlobGas *uint64        // ExcessBlobGas field in the header, needed to compute the data
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -125,13 +125,23 @@ type EVM struct {
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+	flexChainConfig := chainConfig
+	if chainConfig.PrimordialPulseAhead(blockCtx.BlockNumber) {
+		// Create a shallow of chainConfig struct and set to ethereum mainnet
+		chainCfgCpy := *chainConfig
+		chainCfgCpy.ChainID = big.NewInt(1)
+
+		// Use the new chainCfgCpy
+		flexChainConfig = &chainCfgCpy
+	}
+
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
 		StateDB:     statedb,
 		Config:      config,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
+		chainConfig: flexChainConfig,
+		chainRules:  flexChainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm

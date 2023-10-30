@@ -21,11 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -41,7 +40,10 @@ func blockTestCmd(ctx *cli.Context) error {
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("path-to-test argument required")
 	}
-
+	// Configure the go-ethereum logger
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
+	log.Root().SetHandler(glogger)
 	var tracer vm.EVMLogger
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {
@@ -61,16 +63,9 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
-	// run them in order
-	var keys []string
-	for key := range tests {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, name := range keys {
-		test := tests[name]
-		if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
-			return fmt.Errorf("test %v: %w", name, err)
+	for i, test := range tests {
+		if err := test.Run(false, tracer); err != nil {
+			return fmt.Errorf("test %v: %w", i, err)
 		}
 	}
 	return nil

@@ -65,8 +65,10 @@ var (
 		"vendor/", "tests/testdata/", "build/",
 
 		// don't relicense vendored sources
+		"cmd/internal/browser",
 		"common/bitutil/bitutil",
 		"common/prque/",
+		"consensus/ethash/xor.go",
 		"crypto/blake2b/",
 		"crypto/bn256/",
 		"crypto/bls12381/",
@@ -76,7 +78,6 @@ var (
 		"log/",
 		"metrics/",
 		"signer/rules/deps",
-		"internal/reexec",
 
 		// skip special licenses
 		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/ethereum/go-ethereum/pull/17225

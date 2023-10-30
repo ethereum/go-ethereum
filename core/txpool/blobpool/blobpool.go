@@ -19,7 +19,6 @@ package blobpool
 
 import (
 	"container/heap"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -36,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -53,7 +53,7 @@ const (
 	// maxBlobsPerTransaction is the maximum number of blobs a single transaction
 	// is allowed to contain. Whilst the spec states it's unlimited, the block
 	// data slots are protocol bound, which implicitly also limit this.
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+	maxBlobsPerTransaction = params.BlobTxMaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
@@ -83,6 +83,16 @@ const (
 	limboedTransactionStore = "limbo"
 )
 
+// blobTx is a wrapper around types.BlobTx which also contains the literal blob
+// data along with all the transaction metadata.
+type blobTx struct {
+	Tx *types.Transaction
+
+	Blobs   []kzg4844.Blob
+	Commits []kzg4844.Commitment
+	Proofs  []kzg4844.Proof
+}
+
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
 // schedule the blob transactions into the following blocks. Only ever add the
 // bare minimum needed fields to keep the size down (and thus number of entries
@@ -97,8 +107,6 @@ type blobTxMeta struct {
 	execTipCap *uint256.Int // Needed to prioritize inclusion order across accounts and validate replacement price bump
 	execFeeCap *uint256.Int // Needed to validate replacement price bump
 	blobFeeCap *uint256.Int // Needed to validate replacement price bump
-	execGas    uint64       // Needed to check inclusion validity before reading the blob
-	blobGas    uint64       // Needed to check inclusion validity before reading the blob
 
 	basefeeJumps float64 // Absolute number of 1559 fee adjustments needed to reach the tx's fee cap
 	blobfeeJumps float64 // Absolute number of 4844 fee adjustments needed to reach the tx's blob fee cap
@@ -120,8 +128,6 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
 		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
 		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:    tx.Gas(),
-		blobGas:    tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -311,8 +317,8 @@ type BlobPool struct {
 	spent  map[common.Address]*uint256.Int  // Expenditure tracking for individual accounts
 	evict  *evictHeap                       // Heap of cheapest accounts for eviction when full
 
-	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
-	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
+	eventFeed  event.Feed              // Event feed to send out new tx events on pool inclusion
+	eventScope event.SubscriptionScope // Event scope to track and mass unsubscribe on termination
 
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
@@ -359,13 +365,7 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 			return err
 		}
 	}
-	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
-	// fully synced).
 	state, err := p.chain.StateAt(head.Root)
-	if err != nil {
-		state, err = p.chain.StateAt(types.EmptyRootHash)
-	}
 	if err != nil {
 		return err
 	}
@@ -440,6 +440,8 @@ func (p *BlobPool) Close() error {
 	if err := p.store.Close(); err != nil {
 		errs = append(errs, err)
 	}
+	p.eventScope.Close()
+
 	switch {
 	case errs == nil:
 		return nil
@@ -453,27 +455,22 @@ func (p *BlobPool) Close() error {
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
 func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
-	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(blob, tx); err != nil {
+	item := new(blobTx)
+	if err := rlp.DecodeBytes(blob, item); err != nil {
 		// This path is impossible unless the disk data representation changes
 		// across restarts. For that ever unprobable case, recover gracefully
 		// by ignoring this data entry.
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
 	}
-	if tx.BlobTxSidecar() == nil {
-		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
-		return errors.New("missing blob sidecar")
-	}
+	meta := newBlobTxMeta(id, size, item.Tx)
 
-	meta := newBlobTxMeta(id, size, tx)
-
-	sender, err := p.signer.Sender(tx)
+	sender, err := p.signer.Sender(item.Tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
 		// restarts. For that ever unprobable case, recover gracefully by ignoring
 		// this data entry.
-		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
+		log.Error("Failed to recover blob tx sender", "id", id, "hash", item.Tx.Hash(), "err", err)
 		return err
 	}
 	if _, ok := p.index[sender]; !ok {
@@ -721,17 +718,17 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, &tx); err != nil {
+	item := new(blobTx)
+	if err = rlp.DecodeBytes(data, item); err != nil {
 		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
 		return
 	}
-	block, ok := inclusions[tx.Hash()]
+	block, ok := inclusions[item.Tx.Hash()]
 	if !ok {
 		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
 		return
 	}
-	if err := p.limbo.push(&tx, block); err != nil {
+	if err := p.limbo.push(item.Tx.Hash(), block, item.Blobs, item.Commits, item.Proofs); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -760,20 +757,14 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
-		var adds []*types.Transaction
 		for addr, txs := range reinject {
 			// Blindly push all the lost transactions back into the pool
 			for _, tx := range txs {
-				if err := p.reinject(addr, tx.Hash()); err == nil {
-					adds = append(adds, tx.WithoutBlobTxSidecar())
-				}
+				p.reinject(addr, tx)
 			}
 			// Recheck the account's pooled transactions to drop included and
 			// invalidated one
 			p.recheck(addr, inclusions)
-		}
-		if len(adds) > 0 {
-			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
@@ -929,35 +920,32 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 // Note, the method will not initialize the eviction cache values as those will
 // be done once for all transactions belonging to an account after all individual
 // transactions are injected back into the pool.
-func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
+func (p *BlobPool) reinject(addr common.Address, tx *types.Transaction) {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
-	tx, err := p.limbo.pull(txhash)
+	blobs, commits, proofs, err := p.limbo.pull(tx.Hash())
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
-		return err
+		return
 	}
-	// TODO: seems like an easy optimization here would be getting the serialized tx
-	// from limbo instead of re-serializing it here.
-
-	// Serialize the transaction back into the primary datastore.
-	blob, err := rlp.EncodeToBytes(tx)
+	// Serialize the transaction back into the primary datastore
+	blob, err := rlp.EncodeToBytes(&blobTx{Tx: tx, Blobs: blobs, Commits: commits, Proofs: proofs})
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-		return err
+		return
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
 		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
-		return err
+		return
 	}
-
 	// Update the indixes and metrics
 	meta := newBlobTxMeta(id, p.store.Size(id), tx)
+
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserve(addr, true); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
-			return err
+			return
 		}
 		p.index[addr] = []*blobTxMeta{meta}
 		p.spent[addr] = meta.costCap
@@ -968,7 +956,6 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	}
 	p.lookup[meta.hash] = meta.id
 	p.stored += uint64(meta.size)
-	return nil
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
@@ -1036,7 +1023,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (p *BlobPool) validateTx(tx *types.Transaction) error {
+func (p *BlobPool) validateTx(tx *types.Transaction, blobs []kzg4844.Blob, commits []kzg4844.Commitment, proofs []kzg4844.Proof) error {
 	// Ensure the transaction adheres to basic pool filters (type, size, tip) and
 	// consensus rules
 	baseOpts := &txpool.ValidationOptions{
@@ -1045,7 +1032,7 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 		MaxSize: txMaxSize,
 		MinTip:  p.gasTip.ToBig(),
 	}
-	if err := txpool.ValidateTransaction(tx, p.head, p.signer, baseOpts); err != nil {
+	if err := txpool.ValidateTransaction(tx, blobs, commits, proofs, p.head, p.signer, baseOpts); err != nil {
 		return err
 	}
 	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)
@@ -1130,7 +1117,7 @@ func (p *BlobPool) Has(hash common.Hash) bool {
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
-func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
+func (p *BlobPool) Get(hash common.Hash) *txpool.Transaction {
 	// Track the amount of time waiting to retrieve a fully resolved blob tx from
 	// the pool and the amount of time actually spent on pulling the data from disk.
 	getStart := time.Now()
@@ -1152,37 +1139,32 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 		log.Error("Tracked blob transaction missing from store", "hash", hash, "id", id, "err", err)
 		return nil
 	}
-	item := new(types.Transaction)
+	item := new(blobTx)
 	if err = rlp.DecodeBytes(data, item); err != nil {
 		log.Error("Blobs corrupted for traced transaction", "hash", hash, "id", id, "err", err)
 		return nil
 	}
-	return item
+	return &txpool.Transaction{
+		Tx:            item.Tx,
+		BlobTxBlobs:   item.Blobs,
+		BlobTxCommits: item.Commits,
+		BlobTxProofs:  item.Proofs,
+	}
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restictions).
-func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
-	var (
-		adds = make([]*types.Transaction, 0, len(txs))
-		errs = make([]error, len(txs))
-	)
+func (p *BlobPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
+	errs := make([]error, len(txs))
 	for i, tx := range txs {
-		errs[i] = p.add(tx)
-		if errs[i] == nil {
-			adds = append(adds, tx.WithoutBlobTxSidecar())
-		}
-	}
-	if len(adds) > 0 {
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: adds})
-		p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
+		errs[i] = p.add(tx.Tx, tx.BlobTxBlobs, tx.BlobTxCommits, tx.BlobTxProofs)
 	}
 	return errs
 }
 
 // Add inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restictions).
-func (p *BlobPool) add(tx *types.Transaction) (err error) {
+func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kzg4844.Commitment, proofs []kzg4844.Proof) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled form the network, so this method will act as the overload
 	// protection for fetches.
@@ -1196,7 +1178,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}(time.Now())
 
 	// Ensure the transaction is valid from all perspectives
-	if err := p.validateTx(tx); err != nil {
+	if err := p.validateTx(tx, blobs, commits, proofs); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
 		return err
 	}
@@ -1221,7 +1203,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}
 	// Transaction permitted into the pool from a nonce and cost perspective,
 	// insert it into the database and update the indices
-	blob, err := rlp.EncodeToBytes(tx)
+	blob, err := rlp.EncodeToBytes(&blobTx{Tx: tx, Blobs: blobs, Commits: commits, Proofs: proofs})
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
@@ -1403,8 +1385,6 @@ func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTr
 				Time:      time.Now(), // TODO(karalabe): Maybe save these and use that?
 				GasFeeCap: tx.execFeeCap.ToBig(),
 				GasTipCap: tx.execTipCap.ToBig(),
-				Gas:       tx.execGas,
-				BlobGas:   tx.blobGas,
 			})
 		}
 		if len(lazies) > 0 {
@@ -1489,14 +1469,10 @@ func (p *BlobPool) updateLimboMetrics() {
 	limboSlotusedGauge.Update(int64(slotused))
 }
 
-// SubscribeTransactions registers a subscription for new transaction events,
-// supporting feeding only newly seen or also resurrected transactions.
-func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
-	if reorgs {
-		return p.insertFeed.Subscribe(ch)
-	} else {
-		return p.discoverFeed.Subscribe(ch)
-	}
+// SubscribeTransactions registers a subscription of NewTxsEvent and
+// starts sending event to the given channel.
+func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
+	return p.eventScope.Track(p.eventFeed.Subscribe(ch))
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable

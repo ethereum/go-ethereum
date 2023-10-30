@@ -32,51 +32,24 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/exp/slices"
 )
 
-type allocItem struct {
-	Addr    *big.Int
-	Balance *big.Int
-	Misc    *allocItemMisc `rlp:"optional"`
-}
-
-type allocItemMisc struct {
-	Nonce uint64
-	Code  []byte
-	Slots []allocItemStorageItem
-}
-
-type allocItemStorageItem struct {
-	Key common.Hash
-	Val common.Hash
-}
+type allocItem struct{ Addr, Balance *big.Int }
 
 func makelist(g *core.Genesis) []allocItem {
 	items := make([]allocItem, 0, len(g.Alloc))
 	for addr, account := range g.Alloc {
-		var misc *allocItemMisc
 		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
-			misc = &allocItemMisc{
-				Nonce: account.Nonce,
-				Code:  account.Code,
-				Slots: make([]allocItemStorageItem, 0, len(account.Storage)),
-			}
-			for key, val := range account.Storage {
-				misc.Slots = append(misc.Slots, allocItemStorageItem{key, val})
-			}
-			slices.SortFunc(misc.Slots, func(a, b allocItemStorageItem) int {
-				return a.Key.Cmp(b.Key)
-			})
+			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
-		items = append(items, allocItem{bigAddr, account.Balance, misc})
+		items = append(items, allocItem{bigAddr, account.Balance})
 	}
-	slices.SortFunc(items, func(a, b allocItem) int {
-		return a.Addr.Cmp(b.Addr)
+	slices.SortFunc(items, func(a, b allocItem) bool {
+		return a.Addr.Cmp(b.Addr) < 0
 	})
 	return items
 }

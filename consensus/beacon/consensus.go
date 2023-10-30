@@ -79,18 +79,20 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
-func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
+func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header) error {
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
 		return err
 	}
 	if !reached {
-		return beacon.ethone.VerifyHeader(chain, header)
+		return beacon.ethone.VerifyHeader(chain, header, parent)
 	}
 	// Short circuit if the parent is not known
-	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
-		return consensus.ErrUnknownAncestor
+		parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+		if parent == nil {
+			return consensus.ErrUnknownAncestor
+		}
 	}
 	// Sanity checks passed, do a proper verification
 	return beacon.verifyHeader(chain, header, parent)
@@ -127,20 +129,15 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 	var (
 		preHeaders  = headers
 		postHeaders []*types.Header
-		td          = new(big.Int).Set(ptd)
-		tdPassed    bool
 	)
 	for i, header := range headers {
-		if tdPassed {
+		// PulseChain Special Case:
+		// Partition based on header difficulty (IsPoSHeader) instead of TTD being reached
+		// so we can properly handle ETH Beacon blocks below the increased PulseChain TTD.
+		if beacon.IsPoSHeader(header) {
 			preHeaders = headers[:i]
 			postHeaders = headers[i:]
 			break
-		}
-		td = td.Add(td, header.Difficulty)
-		if td.Cmp(ttd) >= 0 {
-			// This is the last PoW header, it still belongs to
-			// the preHeaders, so we cannot split+break yet.
-			tdPassed = true
 		}
 	}
 	return preHeaders, postHeaders, nil
@@ -150,31 +147,77 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
+//
+// Normal Cases:
+//  1. x * POW blocks
+//  2. x * POS blocks
+//  3. x * POW blocks => y * POS blocks
+//
+// Special Cases for PulseChain:
+//  4. x * POS blocks[eth] => POW fork block[pls]
+//  5. x * POS blocks[eth] => POW fork block[pls] => y * POS blocks[pls]
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	preHeaders, postHeaders, err := beacon.splitHeaders(chain, headers)
 	if err != nil {
 		return make(chan struct{}), errOut(len(headers), err)
 	}
+	// Case 1
 	if len(postHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers)
 	}
-	if len(preHeaders) == 0 {
+	chainCfg := chain.Config()
+	primordialPulseIndex := 0
+	if chainCfg.PrimordialPulseAhead(postHeaders[0].Number) && !chainCfg.PrimordialPulseAhead(postHeaders[len(postHeaders)-1].Number) {
+		primordialPulseIndex = int(new(big.Int).Sub(chainCfg.PrimordialPulseBlock, postHeaders[0].Number).Uint64())
+	}
+	primordialWhaleIndex := 0
+	if chainCfg.PrimordialWhaleAhead(postHeaders[0].Number) && !chainCfg.PrimordialWhaleAhead(postHeaders[len(postHeaders)-1].Number) {
+		primordialWhaleIndex = int(new(big.Int).Sub(chainCfg.PrimordialWhaleBlock, postHeaders[0].Number).Uint64())
+	}
+	// Case 2
+	if len(preHeaders) == 0 && primordialPulseIndex == 0 && primordialWhaleIndex == 0 {
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
 	// The transition point exists in the middle, separate the headers
-	// into two batches and apply different verification rules for them.
+	// into batches and apply different verification rules for them.
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
 	go func() {
 		var (
-			old, new, out      = 0, len(preHeaders), 0
-			errors             = make([]error, len(headers))
-			done               = make([]bool, len(headers))
-			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders)
-			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
+			oldIdx, out          = 0, 0
+			errors               = make([]error, len(headers))
+			done                 = make([]bool, len(headers))
+			oldDone, oldResult   = beacon.ethone.VerifyHeaders(chain, preHeaders)
+			lastPowHeader        *types.Header
+			whaleChainForkHeader *types.Header
+			preforkPosIdx        = len(preHeaders)
+			preforkPosHeaders    = postHeaders
+			postforkPosIdx       = len(headers)
+			postforkPosHeaders   = []*types.Header{}
 		)
+		// Case 3
+		if len(preHeaders) > 0 {
+			lastPowHeader = preHeaders[len(preHeaders)-1]
+		}
+		// Handle fork partitioning and verification for cases 4 and 5
+		if primordialWhaleIndex > 0 {
+			preforkPosHeaders = postHeaders[:primordialWhaleIndex]
+			whaleChainForkHeader = postHeaders[primordialWhaleIndex]
+
+			// Verify the fork block
+			forkBlockResult := beacon.ethone.VerifyHeader(chain, whaleChainForkHeader, postHeaders[primordialWhaleIndex-1])
+			forkBlockIdx := preforkPosIdx + len(preforkPosHeaders)
+			errors[forkBlockIdx], done[forkBlockIdx] = forkBlockResult, true
+
+			// Can be empty in case 4
+			postforkPosHeaders = postHeaders[primordialWhaleIndex+1:]
+			postforkPosIdx = forkBlockIdx + 1
+		}
+		preforkPosDone, preforkPosResult := beacon.verifyHeaders(chain, preforkPosHeaders, lastPowHeader)
+		postforkPosDone, postforkPosResult := beacon.verifyHeaders(chain, postforkPosHeaders, whaleChainForkHeader)
+
 		// Collect the results
 		for {
 			for ; done[out]; out++ {
@@ -185,16 +228,20 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			}
 			select {
 			case err := <-oldResult:
-				if !done[old] { // skip TTD-verified failures
-					errors[old], done[old] = err, true
+				if !done[oldIdx] { // skip TTD-verified failures
+					errors[oldIdx], done[oldIdx] = err, true
 				}
-				old++
-			case err := <-newResult:
-				errors[new], done[new] = err, true
-				new++
+				oldIdx++
+			case err := <-preforkPosResult:
+				errors[preforkPosIdx], done[preforkPosIdx] = err, true
+				preforkPosIdx++
+			case err := <-postforkPosResult:
+				errors[postforkPosIdx], done[postforkPosIdx] = err, true
+				postforkPosIdx++
 			case <-abort:
 				close(oldDone)
-				close(newDone)
+				close(preforkPosDone)
+				close(postforkPosDone)
 				return
 			}
 		}
@@ -263,27 +310,24 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify existence / non-existence of withdrawalsHash.
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
+	if chain.Config().PrimordialPulseAhead(header.Number) {
+		shanghai = params.MainnetChainConfig.IsShanghai(header.Number, header.Time)
+	}
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	// Verify the existence / non-existence of cancun-specific header fields
+	// Verify the existence / non-existence of excessBlobGas
 	cancun := chain.Config().IsCancun(header.Number, header.Time)
-	if !cancun {
-		switch {
-		case header.ExcessBlobGas != nil:
-			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
-		case header.BlobGasUsed != nil:
-			return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
-		case header.ParentBeaconRoot != nil:
-			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
-		}
-	} else {
-		if header.ParentBeaconRoot == nil {
-			return errors.New("header is missing beaconRoot")
-		}
+	if !cancun && header.ExcessBlobGas != nil {
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
+	}
+	if !cancun && header.BlobGasUsed != nil {
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+	}
+	if cancun {
 		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
 			return err
 		}

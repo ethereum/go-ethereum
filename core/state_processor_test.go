@@ -132,7 +132,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		)
 
 		defer blockchain.Stop()
-		bigNumber := new(big.Int).SetBytes(common.MaxHash.Bytes())
+		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
 		for i, tt := range []struct {
@@ -410,9 +410,6 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
-
-		beaconRoot := common.HexToHash("0xbeac00")
-		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number, header.Time) {

@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -223,9 +222,9 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgProofsV2 {
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.(trienode.ProofList)
+	proofs := msg.Obj.(light.NodeList)
 	// Verify the proof and store if checks out
-	nodeSet := proofs.Set()
+	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
 	if _, err := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
@@ -309,7 +308,7 @@ type HelperTrieReq struct {
 }
 
 type HelperTrieResps struct { // describes all responses, not just a single one
-	Proofs  trienode.ProofList
+	Proofs  light.NodeList
 	AuxData [][]byte
 }
 
@@ -357,7 +356,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if len(resp.AuxData) != 1 {
 		return errInvalidEntryCount
 	}
-	nodeSet := resp.Proofs.Set()
+	nodeSet := resp.Proofs.NodeSet()
 	headerEnc := resp.AuxData[0]
 	if len(headerEnc) == 0 {
 		return errHeaderUnavailable
@@ -452,7 +451,7 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	resps := msg.Obj.(HelperTrieResps)
 	proofs := resps.Proofs
-	nodeSet := proofs.Set()
+	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
 
 	r.BloomBits = make([][]byte, len(r.SectionIndexList))

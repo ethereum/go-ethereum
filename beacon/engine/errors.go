@@ -80,7 +80,6 @@ var (
 	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
 	TooLargeRequest          = &EngineAPIError{code: -38004, msg: "Too large request"}
 	InvalidParams            = &EngineAPIError{code: -32602, msg: "Invalid parameters"}
-	UnsupportedFork          = &EngineAPIError{code: -38005, msg: "Unsupported fork"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}

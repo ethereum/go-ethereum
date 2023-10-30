@@ -22,7 +22,6 @@ package core
 import (
 	"fmt"
 	"math/big"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -30,13 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 // rewindTest is a test case for chain rollback upon user request.
@@ -1954,24 +1949,16 @@ func testLongReorgedSnapSyncingDeepSetHead(t *testing.T, snapshots bool) {
 }
 
 func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-		testSetHeadWithScheme(t, tt, snapshots, scheme)
-	}
-}
-
-func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
 	// It's hard to follow the test case, visualize the input
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(false))
 
 	// Create a temporary persistent database
 	datadir := t.TempDir()
-	ancient := path.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
-		AncientsDirectory: ancient,
-		Ephemeral:         true,
+		AncientsDirectory: datadir,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
@@ -1990,7 +1977,6 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
 			SnapshotLimit:  0, // Disable snapshot
-			StateScheme:    scheme,
 		}
 	)
 	if snapshots {
@@ -2021,7 +2007,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false)
+		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), false)
 		if snapshots {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
@@ -2031,17 +2017,13 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
-	// Reopen the trie database without persisting in-memory dirty nodes.
-	chain.triedb.Close()
-	dbconfig := &trie.Config{}
-	if scheme == rawdb.PathScheme {
-		dbconfig.PathDB = pathdb.Defaults
-	} else {
-		dbconfig.HashDB = hashdb.Defaults
+	// Manually dereference anything not committed to not have to work with 128+ tries
+	for _, block := range sideblocks {
+		chain.stateCache.TrieDB().Dereference(block.Root())
 	}
-	chain.triedb = trie.NewDatabase(chain.db, dbconfig)
-	chain.stateCache = state.NewDatabaseWithNodeDB(chain.db, chain.triedb)
-
+	for _, block := range canonblocks {
+		chain.stateCache.TrieDB().Dereference(block.Root())
+	}
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64) error

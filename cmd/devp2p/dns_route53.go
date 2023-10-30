@@ -411,6 +411,10 @@ func newTXTChange(action, name string, ttl int64, values ...string) types.Change
 
 // isSubdomain returns true if name is a subdomain of domain.
 func isSubdomain(name, domain string) bool {
+	// Normalize strings for comparison
+	name = strings.ToLower(name)
+	domain = strings.ToLower(domain)
+
 	domain = strings.TrimSuffix(domain, ".")
 	name = strings.TrimSuffix(name, ".")
 	return strings.HasSuffix("."+name, "."+domain)

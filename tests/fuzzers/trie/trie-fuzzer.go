@@ -130,7 +130,7 @@ func Generate(input []byte) randTest {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func fuzz(input []byte) int {
+func Fuzz(input []byte) int {
 	program := Generate(input)
 	if len(program) == 0 {
 		return 0
@@ -143,7 +143,7 @@ func fuzz(input []byte) int {
 
 func runRandTest(rt randTest) error {
 	var (
-		triedb = trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+		triedb = trie.NewDatabase(rawdb.NewMemoryDatabase())
 		tr     = trie.NewEmpty(triedb)
 		origin = types.EmptyRootHash
 		values = make(map[string]string) // tracks content of the trie

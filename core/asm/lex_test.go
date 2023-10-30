@@ -72,16 +72,6 @@ func TestLexer(t *testing.T) {
 			input:  "@label123",
 			tokens: []token{{typ: lineStart}, {typ: label, text: "label123"}, {typ: eof}},
 		},
-		// Comment after label
-		{
-			input:  "@label123 ;; comment",
-			tokens: []token{{typ: lineStart}, {typ: label, text: "label123"}, {typ: eof}},
-		},
-		// Comment after instruction
-		{
-			input:  "push 3 ;; comment\nadd",
-			tokens: []token{{typ: lineStart}, {typ: element, text: "push"}, {typ: number, text: "3"}, {typ: lineEnd, text: "\n"}, {typ: lineStart, lineno: 1}, {typ: element, lineno: 1, text: "add"}, {typ: eof, lineno: 1}},
-		},
 	}
 
 	for _, test := range tests {

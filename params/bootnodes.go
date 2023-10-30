@@ -28,12 +28,36 @@ var MainnetBootnodes = []string{
 	"enode://4aeb4ab6c14b23e2c4cfdce879c04b0748a20d8e9b59e25ded2a08143e265c6c25936e74cbc8e641e3312ca288673d91f2f93f8e277de3cfa444ecdaaf982052@157.90.35.166:30303", // bootnode-hetzner-fsn
 }
 
-// HoleskyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Holesky test network.
-var HoleskyBootnodes = []string{
-	// EF DevOps
-	"enode://ac906289e4b7f12df423d654c5a962b6ebe5b3a74cc9e06292a85221f9a64a6f1cfdd6b714ed6dacef51578f92b34c60ee91e9ede9c7f8fadc4d347326d95e2b@146.190.13.128:30303",
-	"enode://a3435a0155a3e837c02f5e7f5662a2f1fbc25b48e4dc232016e1c51b544cb5b4510ef633ea3278c0e970fa8ad8141e2d4d0f9f95456c537ff05fdf9b31c15072@178.128.136.233:30303",
+// PulseChainBootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the main PulseChain network.
+var PulseChainBootnodes = []string{
+	"enode://ba55e4342cdf8b4d45a0da26ed0575f96c8422400930bfde0ec7b241dd60d55651eb6a7010c2275ea63475dd77dbf431ae24b7b0f12453bc5120007e815b85f1@18.216.186.49:30303",  // bootnode-aws-us-east-2-001
+	"enode://c4c8889c0d4bdc2cff9502e8dba81ab855772767ef023088dfd6d393328c1b3931304672d5fc722cd11b6141ecf0868f86d823748edd1bebd129b4c541509a27@18.188.89.119:30303",  // bootnode-aws-us-east-2-002
+	"enode://345b8ef4dad4013b994ff664ec3a6b3f0438221794c4946b756bcae7fd0a1eb373a15035d3f032c039b5e3a69884b01774a3ca19c91081058cd05fcd02f93450@18.216.221.152:30303", // bootnode-aws-us-east-2-003
+}
+
+// WhaleChainBootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the main WhaleChain network.
+var WhaleChainBootnodes = []string{
+	"enode://ba55e4342cdf8b4d45a0da26ed0575f96c8422400930bfde0ec7b241dd60d55651eb6a7010c2275ea63475dd77dbf431ae24b7b0f12453bc5120007e815b85f1@18.216.186.49:30303",  // bootnode-aws-us-east-2-001
+	"enode://c4c8889c0d4bdc2cff9502e8dba81ab855772767ef023088dfd6d393328c1b3931304672d5fc722cd11b6141ecf0868f86d823748edd1bebd129b4c541509a27@18.188.89.119:30303",  // bootnode-aws-us-east-2-002
+	"enode://345b8ef4dad4013b994ff664ec3a6b3f0438221794c4946b756bcae7fd0a1eb373a15035d3f032c039b5e3a69884b01774a3ca19c91081058cd05fcd02f93450@18.216.221.152:30303", // bootnode-aws-us-east-2-003
+}
+
+// PulseChainTestnetV4Bootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the PulseChain Testnet V4 network.
+var PulseChainTestnetV4Bootnodes = []string{
+	"enode://499f821836b8fec272c0664e79b95e8ec50b4320d201e02ac83c5bf63bcff33869c411e8290b1774d74ed01b7a53e838e3689cfe46992243094886a0980a9c60@3.142.166.203:30303",  // bootnode-aws-us-east-2-001
+	"enode://133f45485d3b5221d10e5ed288bf1da827d5adbe454a9a9ae3cd4ae15d14b65d0b6d937b0a1a0ba3b9b2ebbf50c40e379573293f1ff51b553e997d843faa2c4b@18.118.188.165:30303", // bootnode-aws-us-east-2-002
+	"enode://ef4bf6197515e2aa3290f5bf5e43e2b99022254fcbd540507d325d2de40e9c6fd87581d88e9affe97bc7c099946a84ca66de0c7752a1ab616c7b51ef1f10b2fb@3.138.107.144:30303",  // bootnode-aws-us-east-2-003
+}
+
+// WhaleChainTestnetV4Bootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the WhaleChain Testnet V4 network.
+var WhaleChainTestnetV4Bootnodes = []string{
+	"enode://499f821836b8fec272c0664e79b95e8ec50b4320d201e02ac83c5bf63bcff33869c411e8290b1774d74ed01b7a53e838e3689cfe46992243094886a0980a9c60@3.142.166.203:30303",  // bootnode-aws-us-east-2-001
+	"enode://133f45485d3b5221d10e5ed288bf1da827d5adbe454a9a9ae3cd4ae15d14b65d0b6d937b0a1a0ba3b9b2ebbf50c40e379573293f1ff51b553e997d843faa2c4b@18.118.188.165:30303", // bootnode-aws-us-east-2-002
+	"enode://ef4bf6197515e2aa3290f5bf5e43e2b99022254fcbd540507d325d2de40e9c6fd87581d88e9affe97bc7c099946a84ca66de0c7752a1ab616c7b51ef1f10b2fb@3.138.107.144:30303",  // bootnode-aws-us-east-2-003
 }
 
 // SepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
@@ -82,24 +106,40 @@ var V5Bootnodes = []string{
 	"enr:-Ku4QEWzdnVtXc2Q0ZVigfCGggOVB2Vc1ZCPEc6j21NIFLODSJbvNaef1g4PxhPwl_3kax86YPheFUSLXPRs98vvYsoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhDZBrP2Jc2VjcDI1NmsxoQM6jr8Rb1ktLEsVcKAPa08wCsKUmvoQ8khiOl_SLozf9IN1ZHCCIyg",
 }
 
-const dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"
-
 // KnownDNSNetwork returns the address of a public DNS-based node list for the given
 // genesis hash and protocol. See https://github.com/ethereum/discv4-dns-lists for more
 // information.
-func KnownDNSNetwork(genesis common.Hash, protocol string) string {
+func KnownDNSNetwork(genesis common.Hash, networkId uint64, protocol string) string {
 	var net string
+	var dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"
+	var tld = ".ethdisco.net"
+
+	if networkId == PulseChainConfig.ChainID.Uint64() || networkId == PulseChainTestnetV4Config.ChainID.Uint64() {
+		tld = ".pulsedisco.net"
+		dnsPrefix = "enrtree://APFXO36RU3TWV7XFGWI2TYF5IDA3WM2GPTRL3TCZINWHZX4R6TAOK@"
+	}
+
+	if networkId == WhaleChainConfig.ChainID.Uint64() || networkId == WhaleChainTestnetV4Config.ChainID.Uint64() {
+		tld = ".whaledisco.net"
+		dnsPrefix = "enrtree://APFXO36RU3TWV7XFGWI2TYF5IDA3WM2GPTRL3TCZINWHZX4R6TAOK@"
+	}
+
 	switch genesis {
 	case MainnetGenesisHash:
-		net = "mainnet"
+		switch networkId {
+		case PulseChainTestnetV4Config.ChainID.Uint64():
+			net = "testnet-v4"
+		case WhaleChainTestnetV4Config.ChainID.Uint64():
+			net = "testnet-v4"
+		default:
+			net = "mainnet"
+		}
 	case GoerliGenesisHash:
 		net = "goerli"
 	case SepoliaGenesisHash:
 		net = "sepolia"
-	case HoleskyGenesisHash:
-		net = "holesky"
 	default:
 		return ""
 	}
-	return dnsPrefix + protocol + "." + net + ".ethdisco.net"
+	return dnsPrefix + protocol + "." + net + tld
 }

@@ -11,13 +11,13 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 	case metrics.Counter:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
-			"value": metric.Snapshot().Count(),
+			"value": metric.Count(),
 		}
 		return measurement, fields
 	case metrics.CounterFloat64:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
-			"value": metric.Snapshot().Count(),
+			"value": metric.Count(),
 		}
 		return measurement, fields
 	case metrics.Gauge:
@@ -30,13 +30,6 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
-		}
-		return measurement, fields
-	case metrics.GaugeInfo:
-		ms := metric.Snapshot()
-		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
-		fields := map[string]interface{}{
-			"value": ms.Value().String(),
 		}
 		return measurement, fields
 	case metrics.Histogram:
@@ -99,19 +92,20 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		return measurement, fields
 	case metrics.ResettingTimer:
 		t := metric.Snapshot()
-		if t.Count() == 0 {
+		if len(t.Values()) == 0 {
 			break
 		}
-		ps := t.Percentiles([]float64{0.50, 0.95, 0.99})
+		ps := t.Percentiles([]float64{50, 95, 99})
+		val := t.Values()
 		measurement := fmt.Sprintf("%s%s.span", namespace, name)
 		fields := map[string]interface{}{
-			"count": t.Count(),
-			"max":   t.Max(),
+			"count": len(val),
+			"max":   val[len(val)-1],
 			"mean":  t.Mean(),
-			"min":   t.Min(),
-			"p50":   int(ps[0]),
-			"p95":   int(ps[1]),
-			"p99":   int(ps[2]),
+			"min":   val[0],
+			"p50":   ps[0],
+			"p95":   ps[1],
+			"p99":   ps[2],
 		}
 		return measurement, fields
 	}

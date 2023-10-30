@@ -39,15 +39,22 @@ type sigCache struct {
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
 	var signer Signer
+
+	chainID := config.ChainID
+	if config.PrimordialPulseAhead(blockNumber) {
+		// Use ethereum mainnet chainid for pre-fork transactions
+		chainID = big.NewInt(1)
+	}
+
 	switch {
 	case config.IsCancun(blockNumber, blockTime):
 		signer = NewCancunSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
+		signer = NewLondonSigner(chainID)
 	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
+		signer = NewEIP2930Signer(chainID)
 	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
+		signer = NewEIP155Signer(chainID)
 	case config.IsHomestead(blockNumber):
 		signer = HomesteadSigner{}
 	default:
@@ -57,7 +64,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
-// configuration. Specifically, this enables support of all types of transactions
+// configuration. Specifically, this enables support of all types of transacrions
 // when their respective forks are scheduled to occur at any block number (or time)
 // in the chain config.
 //
@@ -331,7 +338,11 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
 	case LegacyTxType:
-		return s.EIP155Signer.Sender(tx)
+		if !tx.Protected() {
+			return HomesteadSigner{}.Sender(tx)
+		}
+		V = new(big.Int).Sub(V, s.chainIdMul)
+		V.Sub(V, big8)
 	case AccessListTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
@@ -368,7 +379,15 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.Type() {
 	case LegacyTxType:
-		return s.EIP155Signer.Hash(tx)
+		return rlpHash([]interface{}{
+			tx.Nonce(),
+			tx.GasPrice(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			s.chainId, uint(0), uint(0),
+		})
 	case AccessListTxType:
 		return prefixedRlpHash(
 			tx.Type(),

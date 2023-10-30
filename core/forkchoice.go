@@ -108,6 +108,10 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, extern *types.Header) (b
 			currentPreserve, externPreserve = f.preserve(current), f.preserve(extern)
 		}
 		reorg = !currentPreserve && (externPreserve || f.rand.Float64() < 0.5)
+	} else if f.chain.Config().PrimordialPulseAhead(extern.Number) {
+		// Pre-fork ethereum mainnet pos blocks have a difficulty of 0.
+		// These blocks should be accepted onto the chain head.
+		reorg = true
 	}
 	return reorg, nil
 }

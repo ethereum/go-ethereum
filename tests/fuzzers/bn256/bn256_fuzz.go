@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build gofuzz
+// +build gofuzz
+
 package bn256
 
 import (
@@ -61,8 +64,8 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *bn254.G2Affine) 
 	return xc, xg, xs
 }
 
-// fuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
-func fuzzAdd(data []byte) int {
+// FuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
+func FuzzAdd(data []byte) int {
 	input := bytes.NewReader(data)
 	xc, xg, xs := getG1Points(input)
 	if xc == nil {
@@ -94,9 +97,9 @@ func fuzzAdd(data []byte) int {
 	return 1
 }
 
-// fuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
+// FuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
 // libraries.
-func fuzzMul(data []byte) int {
+func FuzzMul(data []byte) int {
 	input := bytes.NewReader(data)
 	pc, pg, ps := getG1Points(input)
 	if pc == nil {
@@ -136,7 +139,7 @@ func fuzzMul(data []byte) int {
 	return 1
 }
 
-func fuzzPair(data []byte) int {
+func FuzzPair(data []byte) int {
 	input := bytes.NewReader(data)
 	pc, pg, ps := getG1Points(input)
 	if pc == nil {

@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // So we can deterministically seed different blockchains
@@ -56,7 +55,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	db := rawdb.NewMemoryDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db)
 	blockchain, _ := NewLightChain(&dummyOdr{db: db, indexerConfig: TestClientIndexerConfig}, gspec.Config, ethash.NewFaker())
 
 	// Create and inject the requested chain
@@ -76,7 +75,7 @@ func newTestLightChain() *LightChain {
 		Difficulty: big.NewInt(1),
 		Config:     params.TestChainConfig,
 	}
-	gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	gspec.MustCommit(db)
 	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker())
 	if err != nil {
 		panic(err)
@@ -121,7 +120,7 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := lightchain.engine.VerifyHeader(lightchain.hc, header); err != nil {
+		if err := lightchain.engine.VerifyHeader(lightchain.hc, header, nil); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)

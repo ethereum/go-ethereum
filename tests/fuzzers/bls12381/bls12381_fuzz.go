@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build gofuzz
+// +build gofuzz
+
 package bls
 
 import (
@@ -32,7 +35,7 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
-func fuzzCrossPairing(data []byte) int {
+func FuzzCrossPairing(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G1 points
@@ -98,7 +101,7 @@ func massageBLST(in []byte) []byte {
 	return out
 }
 
-func fuzzCrossG1Add(data []byte) int {
+func FuzzCrossG1Add(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G1 points
@@ -136,7 +139,7 @@ func fuzzCrossG1Add(data []byte) int {
 	return 1
 }
 
-func fuzzCrossG2Add(data []byte) int {
+func FuzzCrossG2Add(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G2 points
@@ -174,7 +177,7 @@ func fuzzCrossG2Add(data []byte) int {
 	return 1
 }
 
-func fuzzCrossG1MultiExp(data []byte) int {
+func FuzzCrossG1MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
 		gethScalars  []*big.Int

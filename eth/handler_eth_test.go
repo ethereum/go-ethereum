@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -58,7 +59,7 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		h.blockBroadcasts.Send(packet.Block)
 		return nil
 
-	case *eth.NewPooledTransactionHashesPacket67:
+	case *eth.NewPooledTransactionHashesPacket66:
 		h.txAnnounces.Send(([]common.Hash)(*packet))
 		return nil
 
@@ -70,7 +71,7 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
 		return nil
 
-	case *eth.PooledTransactionsResponse:
+	case *eth.PooledTransactionsPacket:
 		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
 		return nil
 
@@ -81,6 +82,7 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 // Tests that peers are correctly accepted (or rejected) based on the advertised
 // fork IDs in the protocol handshake.
+func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, eth.ETH66) }
 func TestForkIDSplit67(t *testing.T) { testForkIDSplit(t, eth.ETH67) }
 func TestForkIDSplit68(t *testing.T) { testForkIDSplit(t, eth.ETH68) }
 
@@ -236,6 +238,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 }
 
 // Tests that received transactions are added to the local pool.
+func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, eth.ETH66) }
 func TestRecvTransactions67(t *testing.T) { testRecvTransactions(t, eth.ETH67) }
 func TestRecvTransactions68(t *testing.T) { testRecvTransactions(t, eth.ETH68) }
 
@@ -246,10 +249,10 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	handler.handler.synced.Store(true) // mark synced to accept transactions
+	handler.handler.acceptTxs.Store(true) // mark synced to accept transactions
 
 	txs := make(chan core.NewTxsEvent)
-	sub := handler.txpool.SubscribeTransactions(txs, false)
+	sub := handler.txpool.SubscribeNewTxsEvent(txs)
 	defer sub.Unsubscribe()
 
 	// Create a source peer to send messages through and a sink handler to receive them
@@ -294,6 +297,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 }
 
 // This test checks that pending transactions are sent.
+func TestSendTransactions66(t *testing.T) { testSendTransactions(t, eth.ETH66) }
 func TestSendTransactions67(t *testing.T) { testSendTransactions(t, eth.ETH67) }
 func TestSendTransactions68(t *testing.T) { testSendTransactions(t, eth.ETH68) }
 
@@ -304,11 +308,12 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	insert := make([]*types.Transaction, 100)
+	insert := make([]*txpool.Transaction, 100)
 	for nonce := range insert {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-		insert[nonce] = tx
+
+		insert[nonce] = &txpool.Transaction{Tx: tx}
 	}
 	go handler.txpool.Add(insert, false, false) // Need goroutine to not block on feed
 	time.Sleep(250 * time.Millisecond)          // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
@@ -353,7 +358,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	seen := make(map[common.Hash]struct{})
 	for len(seen) < len(insert) {
 		switch protocol {
-		case 67, 68:
+		case 66, 67, 68:
 			select {
 			case hashes := <-anns:
 				for _, hash := range hashes {
@@ -371,14 +376,15 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		}
 	}
 	for _, tx := range insert {
-		if _, ok := seen[tx.Hash()]; !ok {
-			t.Errorf("missing transaction: %x", tx.Hash())
+		if _, ok := seen[tx.Tx.Hash()]; !ok {
+			t.Errorf("missing transaction: %x", tx.Tx.Hash())
 		}
 	}
 }
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
+func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, eth.ETH66) }
 func TestTransactionPropagation67(t *testing.T) { testTransactionPropagation(t, eth.ETH67) }
 func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
 
@@ -397,7 +403,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		sinks[i] = newTestHandler()
 		defer sinks[i].close()
 
-		sinks[i].handler.synced.Store(true) // mark synced to accept transactions
+		sinks[i].handler.acceptTxs.Store(true) // mark synced to accept transactions
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
@@ -424,15 +430,16 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	for i := 0; i < len(sinks); i++ {
 		txChs[i] = make(chan core.NewTxsEvent, 1024)
 
-		sub := sinks[i].txpool.SubscribeTransactions(txChs[i], false)
+		sub := sinks[i].txpool.SubscribeNewTxsEvent(txChs[i])
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
-	txs := make([]*types.Transaction, 1024)
+	txs := make([]*txpool.Transaction, 1024)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
-		txs[nonce] = tx
+
+		txs[nonce] = &txpool.Transaction{Tx: tx}
 	}
 	source.txpool.Add(txs, false, false)
 
@@ -486,8 +493,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := eth.NewPeer(eth.ETH67, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, nil)
-		sinkPeer := eth.NewPeer(eth.ETH67, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, nil)
+		sourcePeer := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, nil)
+		sinkPeer := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, nil)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
 
@@ -539,6 +546,7 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 
 // Tests that a propagated malformed block (uncles or transactions don't match
 // with the hashes in the header) gets discarded and not broadcast forward.
+func TestBroadcastMalformedBlock66(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH66) }
 func TestBroadcastMalformedBlock67(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH67) }
 func TestBroadcastMalformedBlock68(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH68) }
 
