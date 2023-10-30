@@ -97,7 +97,7 @@ func (b *BlockGen) Difficulty() *big.Int {
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	var (
-		blockContext = NewEVMBlockContext(b.header, nil, &b.header.Coinbase)
+		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
 	)
 	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
@@ -309,7 +309,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	if engine == nil {
 		panic("nil consensus engine")
 	}
-	cm := newChainMaker(parent, config)
+	cm := newChainMaker(parent, config, engine)
 
 	genblock := func(i int, parent *types.Block, triedb *trie.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
@@ -472,16 +472,18 @@ func makeBlockChainWithGenesis(genesis *Genesis, n int, engine consensus.Engine,
 // chainMaker contains the state of chain generation.
 type chainMaker struct {
 	bottom      *types.Block
+	engine      consensus.Engine
 	config      *params.ChainConfig
 	chain       []*types.Block
 	chainByHash map[common.Hash]*types.Block
 	receipts    []types.Receipts
 }
 
-func newChainMaker(bottom *types.Block, config *params.ChainConfig) *chainMaker {
+func newChainMaker(bottom *types.Block, config *params.ChainConfig, engine consensus.Engine) *chainMaker {
 	return &chainMaker{
 		bottom:      bottom,
 		config:      config,
+		engine:      engine,
 		chainByHash: make(map[common.Hash]*types.Block),
 	}
 }
@@ -504,11 +506,16 @@ func (cm *chainMaker) blockByNumber(number uint64) *types.Block {
 	return cm.chain[number-lowest]
 }
 
-// ChainReader implementation
+// ChainReader/ChainContext implementation
 
-// Config returns the chain configuration.
+// Config returns the chain configuration (for consensus.ChainReader).
 func (cm *chainMaker) Config() *params.ChainConfig {
 	return cm.config
+}
+
+// Engine returns the consensus engine (for ChainContext).
+func (cm *chainMaker) Engine() consensus.Engine {
+	return cm.engine
 }
 
 func (cm *chainMaker) CurrentHeader() *types.Header {
