@@ -345,8 +345,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// Assume mainnet chainId first
 	chainId := params.MainnetChainConfig.ChainID.Uint64()
 	// Note: The `genesis` argument will be one of:
-	// - nil: if running without the `init` command and without providing a network flag (--pulsechain, --ropsten, etc..)
-	// - defaulted: when a network flag is provided (--pulsechain, --ropsten, etc..), genesis will hold the defaults
+	// - nil: if running without the `init` command and without providing a network flag (--whalechain, --ropsten, etc..)
+	// - defaulted: when a network flag is provided (--whalechain, --ropsten, etc..), genesis will hold the defaults
 	// - custom: if running with the `init` command supplying a custom genesis.json file, genesis will hold the file contents
 	// Check whether the genesis block is already written.
 	if genesis != nil {
@@ -374,9 +374,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// chain config as that would be AllProtocolChanges (applying any new fork
 	// on top of an existing private network genesis block). In that case, only
 	// apply the overrides.
-	// Added: support custom config for PrimordialPulse fork with mainnet genesis
+	// Added: support custom config for PrimordialWhale fork with mainnet genesis
 	// and non-standard chain id.
-	if genesis == nil && (storedcfg.PrimordialPulseBlock != nil ||
+	if genesis == nil && (storedcfg.PrimordialWhaleBlock != nil ||
 		stored != params.MainnetGenesisHash) {
 		newcfg = storedcfg
 		applyOverrides(newcfg)
@@ -437,12 +437,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash, chainId uint64) *params.Cha
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		switch chainId {
-		case params.PulseChainConfig.ChainID.Uint64():
-			return params.PulseChainConfig
 		case params.WhaleChainConfig.ChainID.Uint64():
 			return params.WhaleChainConfig
-		case params.PulseChainTestnetV4Config.ChainID.Uint64():
-			return params.PulseChainTestnetV4Config
 		case params.WhaleChainTestnetV4Config.ChainID.Uint64():
 			return params.WhaleChainTestnetV4Config
 		default:
@@ -569,18 +565,6 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultPulseChainGenesisBlock returns the PulseChain mainnet genesis block.
-func DefaultPulseChainGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.PulseChainConfig,
-		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
-		Alloc:      decodePrealloc(mainnetAllocData),
-	}
-}
-
 // DefaultWhaleChainGenesisBlock returns the WhaleChain mainnet genesis block.
 func DefaultWhaleChainGenesisBlock() *Genesis {
 	return &Genesis{
@@ -615,18 +599,6 @@ func DefaultSepoliaGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x20000),
 		Timestamp:  1633267481,
 		Alloc:      decodePrealloc(sepoliaAllocData),
-	}
-}
-
-// DefaultPulseChainTestnetV4GenesisBlock returns the PulseChain Testnet V4 genesis block.
-func DefaultPulseChainTestnetV4GenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.PulseChainTestnetV4Config,
-		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
-		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
 

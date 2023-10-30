@@ -93,7 +93,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
 	shanghai := p.config.IsShanghai(blockNumber, block.Time())
-	if p.config.PrimordialPulseAhead(blockNumber) {
+	if p.config.PrimordialWhaleAhead(blockNumber) {
 		shanghai = params.MainnetChainConfig.IsShanghai(blockNumber, block.Time())
 	}
 	if len(withdrawals) > 0 && !shanghai {

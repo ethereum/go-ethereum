@@ -126,7 +126,7 @@ type EVM struct {
 // only ever be used *once*.
 func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	flexChainConfig := chainConfig
-	if chainConfig.PrimordialPulseAhead(blockCtx.BlockNumber) {
+	if chainConfig.PrimordialWhaleAhead(blockCtx.BlockNumber) {
 		// Create a shallow of chainConfig struct and set to ethereum mainnet
 		chainCfgCpy := *chainConfig
 		chainCfgCpy.ChainID = big.NewInt(1)

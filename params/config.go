@@ -305,9 +305,9 @@ type ChainConfig struct {
 	Clique    *CliqueConfig `json:"clique,omitempty"`
 	IsDevMode bool          `json:"isDev,omitempty"`
 
-	// PulseChain modifications
-	PrimordialPulseBlock *big.Int  `json:"primordialPulseBlock,omitempty"` // PrimordialPulseBlock switch block (nil = no fork, 0 = already activated)
-	Treasury             *Treasury `json:"treasury,omitempty"`             // An optional treasury which will receive allocations during the PrimordialPulseBlock
+	// WhaleChain modifications
+	PrimordialWhaleBlock *big.Int  `json:"primordialWhaleBlock,omitempty"` // PrimordialWhaleBlock switch block (nil = no fork, 0 = already activated)
+	Treasury             *Treasury `json:"treasury,omitempty"`             // An optional treasury which will receive allocations during the PrimordialWhaleBlock
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -387,8 +387,8 @@ func (c *ChainConfig) Description() string {
 	if c.GrayGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
-	if c.PrimordialPulseBlock != nil {
-		banner += fmt.Sprintf(" - Primordial Pulse:            #%-8v (https://gitlab.com/pulsechaincom/go-pulse)\n", c.PrimordialPulseBlock)
+	if c.PrimordialWhaleBlock != nil {
+		banner += fmt.Sprintf(" - Primordial Whale:            #%-8v (https://github.com/WhaleChain/go-ethereum)\n", c.PrimordialWhaleBlock)
 	}
 	banner += "\n"
 
@@ -524,15 +524,15 @@ func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
 }
 
-// IsPrimordialPulseBlock returns whether or not the given block is the primordial pulse block.
-func (c *ChainConfig) IsPrimordialPulseBlock(num *big.Int) bool {
-	// Returns whether or not the given block is the PrimordialPulseBlock.
-	return c.PrimordialPulseBlock != nil && c.PrimordialPulseBlock.Cmp(num) == 0
+// IsPrimordialWhaleBlock returns whether or not the given block is the primordial whale block.
+func (c *ChainConfig) IsPrimordialWhaleBlock(num *big.Int) bool {
+	// Returns whether or not the given block is the PrimordialWhaleBlock.
+	return c.PrimordialWhaleBlock != nil && c.PrimordialWhaleBlock.Cmp(num) == 0
 }
 
-// Returns true if there is a PrimordialPulse block in the future.
-func (c *ChainConfig) PrimordialPulseAhead(num *big.Int) bool {
-	return c.PrimordialPulseBlock != nil && c.PrimordialPulseBlock.Cmp(num) > 0
+// Returns true if there is a PrimordialWhale block in the future.
+func (c *ChainConfig) PrimordialWhaleAhead(num *big.Int) bool {
+	return c.PrimordialWhaleBlock != nil && c.PrimordialWhaleBlock.Cmp(num) > 0
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -647,8 +647,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.EIP158Block, newcfg.EIP158Block, headNumber) {
 		return newBlockCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
 	}
-	// allow mismatching ChainID if there is a PrimordialPulse block ahead
-	if c.IsEIP158(headNumber) && !configBlockEqual(c.ChainID, newcfg.ChainID) && !newcfg.PrimordialPulseAhead(headNumber) {
+	// allow mismatching ChainID if there is a PrimordialWhale block ahead
+	if c.IsEIP158(headNumber) && !configBlockEqual(c.ChainID, newcfg.ChainID) && !newcfg.PrimordialWhaleAhead(headNumber) {
 		return newBlockCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
 	if isForkBlockIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, headNumber) {
@@ -685,8 +685,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, headNumber) {
 		return newBlockCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
 	}
-	// allow mismatching Shanghai time if we're on the PrimordialPulse block or if there is a PrimordialPulse block ahead
-	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) && !newcfg.IsPrimordialPulseBlock(headNumber) && !newcfg.PrimordialPulseAhead(headNumber) {
+	// allow mismatching Shanghai time if we're on the PrimordialWhale block or if there is a PrimordialWhale block ahead
+	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) && !newcfg.IsPrimordialWhaleBlock(headNumber) && !newcfg.PrimordialWhaleAhead(headNumber) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
 	}
 	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
@@ -698,8 +698,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.VerkleTime, newcfg.VerkleTime, headTimestamp) {
 		return newTimestampCompatError("Verkle fork timestamp", c.VerkleTime, newcfg.VerkleTime)
 	}
-	if isForkBlockIncompatible(c.PrimordialPulseBlock, newcfg.PrimordialPulseBlock, headNumber) {
-		return newBlockCompatError("PrimordialPulse fork block", c.PrimordialPulseBlock, newcfg.PrimordialPulseBlock)
+	if isForkBlockIncompatible(c.PrimordialWhaleBlock, newcfg.PrimordialWhaleBlock, headNumber) {
+		return newBlockCompatError("PrimordialWhale fork block", c.PrimordialWhaleBlock, newcfg.PrimordialWhaleBlock)
 	}
 	return nil
 }
@@ -856,7 +856,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		chainID = new(big.Int)
 	}
 	isShanghai := c.IsShanghai(num, timestamp)
-	if c.PrimordialPulseAhead(num) {
+	if c.PrimordialWhaleAhead(num) {
 		isShanghai = MainnetChainConfig.IsShanghai(num, timestamp)
 	}
 	return Rules{

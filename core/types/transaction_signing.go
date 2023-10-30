@@ -41,7 +41,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 	var signer Signer
 
 	chainID := config.ChainID
-	if config.PrimordialPulseAhead(blockNumber) {
+	if config.PrimordialWhaleAhead(blockNumber) {
 		// Use ethereum mainnet chainid for pre-fork transactions
 		chainID = big.NewInt(1)
 	}

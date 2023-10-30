@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/WhaleChain/go-ethereum-whale
 
 go 1.19
 

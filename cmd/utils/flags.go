@@ -945,13 +945,11 @@ var (
 	TestnetFlags = []cli.Flag{
 		GoerliFlag,
 		SepoliaFlag,
-		PulseChainTestnetV4Flag,
 		WhaleChainTestnetV4Flag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{
 		MainnetFlag,
-		PulseChainFlag,
 		WhaleChainFlag,
 	}, TestnetFlags...)
 
@@ -1033,16 +1031,12 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.IsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
-	case ctx.Bool(PulseChainFlag.Name):
-		urls = params.PulseChainBootnodes
 	case ctx.Bool(WhaleChainFlag.Name):
 		urls = params.WhaleChainBootnodes
 	case ctx.Bool(SepoliaFlag.Name):
 		urls = params.SepoliaBootnodes
 	case ctx.Bool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.Bool(PulseChainTestnetV4Flag.Name):
-		urls = params.PulseChainTestnetV4Bootnodes
 	case ctx.Bool(WhaleChainTestnetV4Flag.Name):
 		urls = params.WhaleChainTestnetV4Bootnodes
 	}
@@ -1653,7 +1647,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, PulseChainFlag, WhaleChainFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, PulseChainTestnetV4Flag, WhaleChainTestnetV4Flag)
+	CheckExclusive(ctx, MainnetFlag, WhaleChainFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, WhaleChainTestnetV4Flag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
@@ -1783,12 +1777,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
-	case ctx.Bool(PulseChainFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 369
-		}
-		cfg.Genesis = core.DefaultPulseChainGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.Bool(WhaleChainFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 370
@@ -1807,12 +1795,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.Bool(PulseChainTestnetV4Flag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 943
-		}
-		cfg.Genesis = core.DefaultPulseChainTestnetV4GenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.Bool(WhaleChainTestnetV4Flag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 944
@@ -2135,16 +2117,12 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		genesis = core.DefaultGenesisBlock()
-	case ctx.Bool(PulseChainFlag.Name):
-		genesis = core.DefaultPulseChainGenesisBlock()
 	case ctx.Bool(WhaleChainFlag.Name):
 		genesis = core.DefaultWhaleChainGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
 	case ctx.Bool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.Bool(PulseChainTestnetV4Flag.Name):
-		genesis = core.DefaultPulseChainTestnetV4GenesisBlock()
 	case ctx.Bool(WhaleChainTestnetV4Flag.Name):
 		genesis = core.DefaultWhaleChainTestnetV4GenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):

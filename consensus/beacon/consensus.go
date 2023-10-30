@@ -131,9 +131,9 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 		postHeaders []*types.Header
 	)
 	for i, header := range headers {
-		// PulseChain Special Case:
+		// WhaleChain Special Case:
 		// Partition based on header difficulty (IsPoSHeader) instead of TTD being reached
-		// so we can properly handle ETH Beacon blocks below the increased PulseChain TTD.
+		// so we can properly handle ETH Beacon blocks below the increased WhaleChain TTD.
 		if beacon.IsPoSHeader(header) {
 			preHeaders = headers[:i]
 			postHeaders = headers[i:]
@@ -153,7 +153,7 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 //  2. x * POS blocks
 //  3. x * POW blocks => y * POS blocks
 //
-// Special Cases for PulseChain:
+// Special Cases for WhaleChain:
 //  4. x * POS blocks[eth] => POW fork block[pls]
 //  5. x * POS blocks[eth] => POW fork block[pls] => y * POS blocks[pls]
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
@@ -166,16 +166,12 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		return beacon.ethone.VerifyHeaders(chain, headers)
 	}
 	chainCfg := chain.Config()
-	primordialPulseIndex := 0
-	if chainCfg.PrimordialPulseAhead(postHeaders[0].Number) && !chainCfg.PrimordialPulseAhead(postHeaders[len(postHeaders)-1].Number) {
-		primordialPulseIndex = int(new(big.Int).Sub(chainCfg.PrimordialPulseBlock, postHeaders[0].Number).Uint64())
-	}
 	primordialWhaleIndex := 0
 	if chainCfg.PrimordialWhaleAhead(postHeaders[0].Number) && !chainCfg.PrimordialWhaleAhead(postHeaders[len(postHeaders)-1].Number) {
 		primordialWhaleIndex = int(new(big.Int).Sub(chainCfg.PrimordialWhaleBlock, postHeaders[0].Number).Uint64())
 	}
 	// Case 2
-	if len(preHeaders) == 0 && primordialPulseIndex == 0 && primordialWhaleIndex == 0 {
+	if len(preHeaders) == 0 && primordialWhaleIndex == 0 {
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
 	// The transition point exists in the middle, separate the headers
@@ -310,7 +306,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify existence / non-existence of withdrawalsHash.
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
-	if chain.Config().PrimordialPulseAhead(header.Number) {
+	if chain.Config().PrimordialWhaleAhead(header.Number) {
 		shanghai = params.MainnetChainConfig.IsShanghai(header.Number, header.Time)
 	}
 	if shanghai && header.WithdrawalsHash == nil {

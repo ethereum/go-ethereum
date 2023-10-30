@@ -6,17 +6,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-// Optional treasury for launching PulseChain testnets
+// Optional treasury for launching WhaleChain testnets
 type Treasury struct {
 	Addr    string                `json:"addr"`
 	Balance *math.HexOrDecimal256 `json:"balance"`
 }
 
 // A trivially small amount of work to add to the Ethereum Mainnet TTD
-// to allow for un-merging and merging with the PulseChain beacon chain
+// to allow for un-merging and merging with the WhaleChain beacon chain
 var WhaleChainTTDOffset = big.NewInt(131_072)
 
-// This value is defined as LAST_ACTUAL_MAINNET_TTD + PulseChainTTDOffset
+// This value is defined as LAST_ACTUAL_MAINNET_TTD + WhaleChainTTDOffset
 // where LAST_ACTUAL_MAINNET_TTD = 58_750_003_716_598_352_816_469
 var WhaleChainTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_003_716_598_352_947_541", 0)
 
@@ -38,10 +38,10 @@ var (
 		LondonBlock:                   big.NewInt(12_965_000),
 		ArrowGlacierBlock:             big.NewInt(13_773_000),
 		GrayGlacierBlock:              big.NewInt(15_050_000),
-		TerminalTotalDifficulty:       PulseChainTerminalTotalDifficulty,
+		TerminalTotalDifficulty:       WhaleChainTerminalTotalDifficulty,
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
-		PrimordialPulseBlock:          big.NewInt(17_233_000),
+		PrimordialWhaleBlock:          big.NewInt(17_233_000),
 		ShanghaiTime:                  newUint64(1683786515),
 	}
 
@@ -62,10 +62,10 @@ var (
 		LondonBlock:                   big.NewInt(12_965_000),
 		ArrowGlacierBlock:             big.NewInt(13_773_000),
 		GrayGlacierBlock:              big.NewInt(15_050_000),
-		TerminalTotalDifficulty:       PulseChainTerminalTotalDifficulty,
+		TerminalTotalDifficulty:       WhaleChainTerminalTotalDifficulty,
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
-		PrimordialPulseBlock:          big.NewInt(16_492_700),
+		PrimordialWhaleBlock:          big.NewInt(16_492_700),
 		Treasury:                      testnetTreasury(),
 		ShanghaiTime:                  newUint64(1682700369),
 	}
