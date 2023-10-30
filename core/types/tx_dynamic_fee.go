@@ -134,7 +134,7 @@ func (tx *DynamicFeeTx) gasTipCapU256() *uint256.Int {
 func (tx *DynamicFeeTx) gasPrice() *big.Int { return tx.GasFeeCap }
 func (tx *DynamicFeeTx) gasPriceU256() *uint256.Int {
 	if tx.gasFeeCapUint256 != nil {
-		return tx.gasTipCapUint256
+		return tx.gasFeeCapUint256
 	}
 
 	tx.gasFeeCapUint256, _ = uint256.FromBig(tx.GasFeeCap)
