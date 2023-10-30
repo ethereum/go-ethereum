@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 )
@@ -60,9 +59,6 @@ func TestEthSuite(t *testing.T) {
 	}
 	defer geth.Close()
 
-	// TODO: remove this
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
 	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
@@ -89,9 +85,6 @@ func TestSnapSuite(t *testing.T) {
 		t.Fatalf("could not run geth: %v", err)
 	}
 	defer geth.Close()
-
-	// TODO: remove this
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	suite, err := NewSuite(geth.Server().Self(), "./testdata/snap", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
