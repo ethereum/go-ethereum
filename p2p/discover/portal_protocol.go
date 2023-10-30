@@ -78,6 +78,7 @@ type PortalProtocol struct {
 	nodeRadius     *uint256.Int
 	DiscV5         *UDPv5
 	utp            *utp.Listener
+	utpPackets     chan *utp.UdpMessage
 	ListenAddr     string
 	localNode      *enode.LocalNode
 	log            log.Logger
@@ -128,6 +129,7 @@ func (p *PortalProtocol) Start() error {
 	}
 
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
+	p.DiscV5.RegisterTalkHandler(portalwire.UTPNetwork, p.handleUtpTalkRequest)
 
 	go p.table.loop()
 	return nil
@@ -156,7 +158,26 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	//	}
 	//}
 
-	p.utp, err = utp.ListenUTP("udp", (*utp.Addr)(laddr))
+	p.utpPackets = make(chan *utp.UdpMessage, 10)
+	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithCustomHandler(
+		func(buf []byte, addr *net.UDPAddr) (int, error) {
+			var a [32]byte
+			// todo need to find enode.ID by addr
+			_, err := p.DiscV5.TalkRequestToID(a, addr, portalwire.UTPNetwork, buf)
+			return 0, err
+		},
+		func() ([]byte, *net.UDPAddr, error) {
+			select {
+			case msg := <-p.utpPackets:
+				if msg != nil {
+					return msg.Buf, msg.Addr, nil
+				} else {
+					return nil, nil, errClosed
+				}
+			}
+		},
+	))
+
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +306,14 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (uint64, e
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	p.table.addVerifiedNode(wrapNode(target))
 	return pong.EnrSeq, nil
+}
+
+func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
+	if node := p.DiscV5.getNode(id); node != nil {
+		p.table.addSeenNode(wrapNode(node))
+	}
+	p.utpPackets <- &utp.UdpMessage{Buf: msg, Addr: addr}
+	return []byte("")
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
