@@ -413,14 +413,6 @@ func (b *SimulatedBackend) TransactionInBlock(ctx context.Context, blockHash com
 	return transactions[index], nil
 }
 
-// PendingCodeAt returns the code associated with an account in the pending state.
-func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.pendingState.GetCode(contract), nil
-}
-
 func newRevertError(result *core.ExecutionResult) *revertError {
 	reason, errUnpack := abi.UnpackRevert(result.Revert())
 	err := errors.New("execution reverted")
@@ -507,13 +499,50 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	return res.Return(), res.Err
 }
 
+// PendingBalanceAt implements PendingStateReader.PendingBalanceAt, retrieving
+// the balance of the account in the pending state.
+func (b *SimulatedBackend) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.pendingState.GetOrNewStateObject(account).Balance(), nil
+}
+
+// PendingStorageAt implements PendingStateReader.PendingStorageAt, retrieving
+// the account's storage value of key in the pending state.
+func (b *SimulatedBackend) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.pendingState.GetOrNewStateObject(account).Code(), nil
+}
+
+// PendingCodeAt implements PendingStateReader.PendingCodeAt, retrieving
+// the code associated with an account in the pending state.
+func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.pendingState.GetCode(contract), nil
+}
+
 // PendingNonceAt implements PendingStateReader.PendingNonceAt, retrieving
-// the nonce currently pending for the account.
+// the account's nonce in the pending state.
 func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
+}
+
+// PendingBalanceAt implements PendingStateReader.PendingTransactionCount, retrieving
+// the currently pending transaction count
+func (b *SimulatedBackend) PendingTransactionCount(ctx context.Context) (uint, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	txs := b.pendingBlock.Transactions().Len()
+	return uint(txs), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
