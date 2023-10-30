@@ -514,7 +514,7 @@ func (b *SimulatedBackend) PendingStorageAt(ctx context.Context, account common.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.pendingState.GetOrNewStateObject(account).Code(), nil
+	return b.pendingState.GetState(account, key).Bytes(), nil
 }
 
 // PendingCodeAt implements PendingStateReader.PendingCodeAt, retrieving
