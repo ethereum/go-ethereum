@@ -6,4 +6,4 @@ hivechain generate \
   --length 500 \
   --outdir testdata \
   --lastfork cancun \
-  --outputs accounts,genesis,chain,headstate,txinfo,headblock,headfcu,newpayload
+  --outputs accounts,genesis,chain,headstate,txinfo,headblock,headfcu,newpayload,forkenv
