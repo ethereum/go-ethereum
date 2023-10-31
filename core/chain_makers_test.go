@@ -149,7 +149,7 @@ func TestGeneratePOSChain(t *testing.T) {
 				t.Errorf("receipt has wrong block number %d, want %d", r.BlockNumber, block.Number())
 			}
 			if r.BlockHash != block.Hash() {
-				t.Errorf("receipt has wrong block hash %v, want %v", r.BlockNumber, block.Hash())
+				t.Errorf("receipt has wrong block hash %v, want %v", r.BlockHash, block.Hash())
 			}
 
 			// patch up empty logs list to make DeepEqual below work
