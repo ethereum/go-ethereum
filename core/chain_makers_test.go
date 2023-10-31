@@ -145,8 +145,16 @@ func TestGeneratePOSChain(t *testing.T) {
 		// Verify receipts.
 		genBlockReceipts := genreceipts[i]
 		for _, r := range genBlockReceipts {
+			if r.BlockNumber.Cmp(block.Number()) != 0 {
+				t.Errorf("receipt has wrong block number %d, want %d", r.BlockNumber, block.Number())
+			}
+			if r.BlockHash != block.Hash() {
+				t.Errorf("receipt has wrong block hash %v, want %v", r.BlockNumber, block.Hash())
+			}
+
+			// patch up empty logs list to make DeepEqual below work
 			if r.Logs == nil {
-				r.Logs = []*types.Log{} // patch up empty logs to match decoded from db
+				r.Logs = []*types.Log{}
 			}
 		}
 		blockchainReceipts := blockchain.GetReceiptsByHash(block.Hash())
