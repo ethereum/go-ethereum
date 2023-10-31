@@ -291,7 +291,7 @@ func (s *engineApiUpdater) Process(env *request.Environment) {
 	} else {
 		s.updating = true
 		go func() {
-			if status, err := callNewPayloadV1(s.client, execBlock); err == nil {
+			if status, err := callNewPayloadV2(s.client, execBlock); err == nil {
 				log.Info("Successful NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "status", status)
 			} else {
 				log.Error("Failed NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "error", err)

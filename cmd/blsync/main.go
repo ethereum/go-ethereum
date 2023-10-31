@@ -149,10 +149,10 @@ func blsync(ctx *cli.Context) error {
 	return nil
 }
 
-func callNewPayloadV1(client *rpc.Client, block *ctypes.Block) (string, error) {
+func callNewPayloadV2(client *rpc.Client, block *ctypes.Block) (string, error) {
 	var resp engine.PayloadStatusV1
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	err := client.CallContext(ctx, &resp, "engine_newPayloadV1", *engine.BlockToExecutableData(block, nil).ExecutionPayload)
+	err := client.CallContext(ctx, &resp, "engine_newPayloadV2", *engine.BlockToExecutableData(block, nil).ExecutionPayload)
 	cancel()
 	return resp.Status, err
 }
