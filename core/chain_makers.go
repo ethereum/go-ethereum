@@ -38,8 +38,8 @@ import (
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
 	i       int
+	cm      *chainMaker
 	parent  *types.Block
-	chain   []*types.Block
 	header  *types.Header
 	statedb *state.StateDB
 
@@ -49,7 +49,6 @@ type BlockGen struct {
 	uncles      []*types.Header
 	withdrawals []*types.Withdrawal
 
-	config *params.ChainConfig
 	engine consensus.Engine
 }
 
@@ -88,13 +87,18 @@ func (b *BlockGen) SetPoS() {
 	b.header.Difficulty = new(big.Int)
 }
 
+// Difficulty returns the currently calculated difficulty of the block.
+func (b *BlockGen) Difficulty() *big.Int {
+	return new(big.Int).Set(b.header.Difficulty)
+}
+
 // SetParentBeaconRoot sets the parent beacon root field of the generated
 // block.
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	var (
-		blockContext = NewEVMBlockContext(b.header, nil, &b.header.Coinbase)
-		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.config, vm.Config{})
+		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
 	)
 	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
 }
@@ -111,7 +115,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	receipt, err := ApplyTransaction(b.cm.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -125,11 +129,11 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 // AddTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
-// AddTx panics if the transaction cannot be executed. In addition to
-// the protocol-imposed limitations (gas limit, etc.), there are some
-// further limitations on the content of transactions that can be
-// added. Notably, contract code relying on the BLOCKHASH instruction
-// will panic during execution.
+// AddTx panics if the transaction cannot be executed. In addition to the protocol-imposed
+// limitations (gas limit, etc.), there are some further limitations on the content of
+// transactions that can be added. Notably, contract code relying on the BLOCKHASH
+// instruction will panic during execution if it attempts to access a block number outside
+// of the range created by GenerateChain.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.addTx(nil, vm.Config{}, tx)
 }
@@ -137,11 +141,10 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
-// AddTxWithChain panics if the transaction cannot be executed. In addition to
-// the protocol-imposed limitations (gas limit, etc.), there are some
-// further limitations on the content of transactions that can be
-// added. If contract code relies on the BLOCKHASH instruction,
-// the block in chain will be returned.
+// AddTxWithChain panics if the transaction cannot be executed. In addition to the
+// protocol-imposed limitations (gas limit, etc.), there are some further limitations on
+// the content of transactions that can be added. If contract code relies on the BLOCKHASH
+// instruction, the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	b.addTx(bc, vm.Config{}, tx)
 }
@@ -158,8 +161,7 @@ func (b *BlockGen) GetBalance(addr common.Address) *big.Int {
 	return b.statedb.GetBalance(addr)
 }
 
-// AddUncheckedTx forcefully adds a transaction to the block without any
-// validation.
+// AddUncheckedTx forcefully adds a transaction to the block without any validation.
 //
 // AddUncheckedTx will cause consensus failures when used during real
 // chain processing. This is best used in conjunction with raw block insertion.
@@ -180,6 +182,16 @@ func (b *BlockGen) Timestamp() uint64 {
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
+}
+
+// Gas returns the amount of gas left in the current block.
+func (b *BlockGen) Gas() uint64 {
+	return b.header.GasLimit - b.header.GasUsed
+}
+
+// Signer returns a valid signer instance for the current block.
+func (b *BlockGen) Signer() types.Signer {
+	return types.MakeSigner(b.cm.config, b.header.Number, b.header.Time)
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -207,20 +219,19 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 
 	var parent *types.Header
 	for i := b.i - 1; i >= 0; i-- {
-		if b.chain[i].Hash() == h.ParentHash {
-			parent = b.chain[i].Header()
+		if b.cm.chain[i].Hash() == h.ParentHash {
+			parent = b.cm.chain[i].Header()
 			break
 		}
 	}
-	chainreader := &fakeChainReader{config: b.config}
-	h.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, parent)
+	h.Difficulty = b.engine.CalcDifficulty(b.cm, b.header.Time, parent)
 
 	// The gas limit and price should be derived from the parent
 	h.GasLimit = parent.GasLimit
-	if b.config.IsLondon(h.Number) {
-		h.BaseFee = eip1559.CalcBaseFee(b.config, parent)
-		if !b.config.IsLondon(parent.Number) {
-			parentGasLimit := parent.GasLimit * b.config.ElasticityMultiplier()
+	if b.cm.config.IsLondon(h.Number) {
+		h.BaseFee = eip1559.CalcBaseFee(b.cm.config, parent)
+		if !b.cm.config.IsLondon(parent.Number) {
+			parentGasLimit := parent.GasLimit * b.cm.config.ElasticityMultiplier()
 			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
@@ -242,12 +253,12 @@ func (b *BlockGen) nextWithdrawalIndex() uint64 {
 		return b.withdrawals[len(b.withdrawals)-1].Index + 1
 	}
 	for i := b.i - 1; i >= 0; i-- {
-		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
+		if wd := b.cm.chain[i].Withdrawals(); len(wd) != 0 {
 			return wd[len(wd)-1].Index + 1
 		}
 		if i == 0 {
 			// Correctly set the index if no parent had withdrawals.
-			if wd := b.parent.Withdrawals(); len(wd) != 0 {
+			if wd := b.cm.bottom.Withdrawals(); len(wd) != 0 {
 				return wd[len(wd)-1].Index + 1
 			}
 		}
@@ -263,9 +274,9 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 		panic(fmt.Errorf("block index %d out of range (%d,%d)", index, -1, b.i))
 	}
 	if index == -1 {
-		return b.parent
+		return b.cm.bottom
 	}
-	return b.chain[index]
+	return b.cm.chain[index]
 }
 
 // OffsetTime modifies the time instance of a block, implicitly changing its
@@ -273,11 +284,10 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Time += uint64(seconds)
-	if b.header.Time <= b.parent.Header().Time {
+	if b.header.Time <= b.cm.bottom.Header().Time {
 		panic("block time out of range")
 	}
-	chainreader := &fakeChainReader{config: b.config}
-	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time, b.parent.Header())
+	b.header.Difficulty = b.engine.CalcDifficulty(b.cm, b.header.Time, b.parent.Header())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -296,11 +306,14 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	if config == nil {
 		config = params.TestChainConfig
 	}
-	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
+	if engine == nil {
+		panic("nil consensus engine")
+	}
+	cm := newChainMaker(parent, config, engine)
+
 	genblock := func(i int, parent *types.Block, triedb *trie.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
+		b.header = cm.makeHeader(parent, statedb, b.engine)
 
 		// Set the difficulty for clique block. The chain maker doesn't have access
 		// to a chain, so the difficulty will be left unset (nil). Set it here to the
@@ -330,24 +343,23 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if gen != nil {
 			gen(i, b)
 		}
-		if b.engine != nil {
-			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
-			if err != nil {
-				panic(err)
-			}
 
-			// Write state changes to db
-			root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
-			if err != nil {
-				panic(fmt.Sprintf("state write error: %v", err))
-			}
-			if err = triedb.Commit(root, false); err != nil {
-				panic(fmt.Sprintf("trie write error: %v", err))
-			}
-			return block, b.receipts
+		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+		if err != nil {
+			panic(err)
 		}
-		return nil, nil
+
+		// Write state changes to db
+		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
+		if err != nil {
+			panic(fmt.Sprintf("state write error: %v", err))
+		}
+		if err = triedb.Commit(root, false); err != nil {
+			panic(fmt.Sprintf("trie write error: %v", err))
+		}
+		return block, b.receipts
 	}
+
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	triedb := trie.NewDatabase(db, trie.HashDefaults)
 	defer triedb.Close()
@@ -357,12 +369,36 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(err)
 		}
-		block, receipt := genblock(i, parent, triedb, statedb)
-		blocks[i] = block
-		receipts[i] = receipt
+		block, receipts := genblock(i, parent, triedb, statedb)
+
+		// Post-process the receipts.
+		// Here we assign the final block hash and other info into the receipt.
+		// In order for DeriveFields to work, the transaction and receipt lists need to be
+		// of equal length. If AddUncheckedTx or AddUncheckedReceipt are used, there will be
+		// extra ones, so we just trim the lists here.
+		receiptsCount := len(receipts)
+		txs := block.Transactions()
+		if len(receipts) > len(txs) {
+			receipts = receipts[:len(txs)]
+		} else if len(receipts) < len(txs) {
+			txs = txs[:len(receipts)]
+		}
+		var blobGasPrice *big.Int
+		if block.ExcessBlobGas() != nil {
+			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+		}
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
+			panic(err)
+		}
+
+		// Re-expand to ensure all receipts are returned.
+		receipts = receipts[:receiptsCount]
+
+		// Advance the chain.
+		cm.add(block, receipts)
 		parent = block
 	}
-	return blocks, receipts
+	return cm.chain, cm.receipts
 }
 
 // GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
@@ -380,35 +416,26 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	return db, blocks, receipts
 }
 
-func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
-	var time uint64
-	if parent.Time() == 0 {
-		time = 10
-	} else {
-		time = parent.Time() + 10 // block time is fixed at 10 seconds
-	}
+func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+	time := parent.Time() + 10 // block time is fixed at 10 seconds
 	header := &types.Header{
-		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
+		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(chain, time, &types.Header{
-			Number:     parent.Number(),
-			Time:       time - 10,
-			Difficulty: parent.Difficulty(),
-			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit: parent.GasLimit(),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		Difficulty: engine.CalcDifficulty(cm, time, parent.Header()),
+		GasLimit:   parent.GasLimit(),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		Time:       time,
 	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(chain.Config(), parent.Header())
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * chain.Config().ElasticityMultiplier()
+
+	if cm.config.IsLondon(header.Number) {
+		header.BaseFee = eip1559.CalcBaseFee(cm.config, parent.Header())
+		if !cm.config.IsLondon(parent.Number()) {
+			parentGasLimit := parent.GasLimit() * cm.config.ElasticityMultiplier()
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
-	if chain.Config().IsCancun(header.Number, header.Time) {
+	if cm.config.IsCancun(header.Number, header.Time) {
 		var (
 			parentExcessBlobGas uint64
 			parentBlobGasUsed   uint64
@@ -461,18 +488,86 @@ func makeBlockChainWithGenesis(genesis *Genesis, n int, engine consensus.Engine,
 	return db, blocks
 }
 
-type fakeChainReader struct {
-	config *params.ChainConfig
+// chainMaker contains the state of chain generation.
+type chainMaker struct {
+	bottom      *types.Block
+	engine      consensus.Engine
+	config      *params.ChainConfig
+	chain       []*types.Block
+	chainByHash map[common.Hash]*types.Block
+	receipts    []types.Receipts
 }
 
-// Config returns the chain configuration.
-func (cr *fakeChainReader) Config() *params.ChainConfig {
-	return cr.config
+func newChainMaker(bottom *types.Block, config *params.ChainConfig, engine consensus.Engine) *chainMaker {
+	return &chainMaker{
+		bottom:      bottom,
+		config:      config,
+		engine:      engine,
+		chainByHash: make(map[common.Hash]*types.Block),
+	}
 }
 
-func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
-func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
-func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
-func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
-func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
-func (cr *fakeChainReader) GetTd(hash common.Hash, number uint64) *big.Int          { return nil }
+func (cm *chainMaker) add(b *types.Block, r []*types.Receipt) {
+	cm.chain = append(cm.chain, b)
+	cm.chainByHash[b.Hash()] = b
+	cm.receipts = append(cm.receipts, r)
+}
+
+func (cm *chainMaker) blockByNumber(number uint64) *types.Block {
+	if number == cm.bottom.NumberU64() {
+		return cm.bottom
+	}
+	cur := cm.CurrentHeader().Number.Uint64()
+	lowest := cm.bottom.NumberU64() + 1
+	if number < lowest || number > cur {
+		return nil
+	}
+	return cm.chain[number-lowest]
+}
+
+// ChainReader/ChainContext implementation
+
+// Config returns the chain configuration (for consensus.ChainReader).
+func (cm *chainMaker) Config() *params.ChainConfig {
+	return cm.config
+}
+
+// Engine returns the consensus engine (for ChainContext).
+func (cm *chainMaker) Engine() consensus.Engine {
+	return cm.engine
+}
+
+func (cm *chainMaker) CurrentHeader() *types.Header {
+	if len(cm.chain) == 0 {
+		return cm.bottom.Header()
+	}
+	return cm.chain[len(cm.chain)-1].Header()
+}
+
+func (cm *chainMaker) GetHeaderByNumber(number uint64) *types.Header {
+	b := cm.blockByNumber(number)
+	if b == nil {
+		return nil
+	}
+	return b.Header()
+}
+
+func (cm *chainMaker) GetHeaderByHash(hash common.Hash) *types.Header {
+	b := cm.chainByHash[hash]
+	if b == nil {
+		return nil
+	}
+	return b.Header()
+}
+
+func (cm *chainMaker) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return cm.GetHeaderByNumber(number)
+}
+
+func (cm *chainMaker) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return cm.blockByNumber(number)
+}
+
+func (cm *chainMaker) GetTd(hash common.Hash, number uint64) *big.Int {
+	return nil // not supported
+}
