@@ -111,6 +111,9 @@ func TestGethClient(t *testing.T) {
 			"TestGetProof2",
 			func(t *testing.T) { testGetProof(t, client, testContract) },
 		}, {
+			"TestGetProofNonExistent",
+			func(t *testing.T) { testGetProof(t, client, common.HexToAddress("0x0001")) },
+		}, {
 			"TestGetProofCanonicalizeKeys",
 			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
 		}, {
