@@ -367,6 +367,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		// <specular modification>
+		if api.eth.BlockChain().Config().EnableL2GasLimitApi && payloadAttributes.GasLimit == nil {
+			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("gasLimit parameter is required"))
+		}
 		transactions := make(types.Transactions, 0, len(payloadAttributes.Transactions))
 		for i, otx := range payloadAttributes.Transactions {
 			var tx types.Transaction
@@ -387,6 +390,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			// <specular modification>
 			NoTxPool:     payloadAttributes.NoTxPool,
 			Transactions: transactions,
+			GasLimit:     payloadAttributes.GasLimit,
 			// <specular modification/>
 		}
 		id := args.Id()

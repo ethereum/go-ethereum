@@ -42,6 +42,8 @@ type PayloadAttributes struct {
 	// NoTxPool is a field for L2s: if true, the no transactions are taken out of the tx-pool,
 	// only transactions from the above Transactions list will be included.
 	NoTxPool bool `json:"noTxPool,omitempty" gencodec:"optional"`
+	// GasLimit is a field for L2s: if set, this sets the exact gas limit the block produced with.
+	GasLimit *uint64 `json:"gasLimit,omitempty" gencodec:"optional"`
 	// <specular modification//>
 }
 
@@ -50,6 +52,7 @@ type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
 	// <specular modification>
 	Transactions []hexutil.Bytes
+	GasLimit     *hexutil.Uint64
 	// <specular modification/>
 }
 

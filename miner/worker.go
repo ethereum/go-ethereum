@@ -902,7 +902,8 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 	// <specular modification>
-	txs types.Transactions // Transactions to include at the start of the block
+	txs      types.Transactions // Transactions to include at the start of the block
+	gasLimit *uint64            // Optional gas limit override
 	// <specular modification/>
 }
 
@@ -958,6 +959,15 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
 	}
+	// <specular modification>
+	if genParams.gasLimit != nil { // override gas limit if specified
+		header.GasLimit = *genParams.gasLimit
+	} else if w.chain.Config().EnableL2GasLimitApi && w.config.GasCeil != 0 {
+		// configure the gas limit of pending blocks with the miner gas limit config when L2 gas limit config is enabled
+		header.GasLimit = w.config.GasCeil
+	}
+	// <specular modification/>
+
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
@@ -1031,6 +1041,9 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	}
 	defer work.discard()
 	// <specular modification>
+	if work.gasPool == nil {
+		work.gasPool = new(core.GasPool).AddGas(work.header.GasLimit)
+	}
 	for _, tx := range params.txs {
 		from, _ := types.Sender(work.signer, tx)
 		work.state.SetTxContext(tx.Hash(), work.tcount)

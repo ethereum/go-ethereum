@@ -24,6 +24,7 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 		// <specular modification>
 		Transactions          []hexutil.Bytes     `json:"transactions,omitempty"  gencodec:"optional"`
 		NoTxPool              bool                `json:"noTxPool,omitempty" gencodec:"optional"`
+		GasLimit              *hexutil.Uint64     `json:"gasLimit,omitempty" gencodec:"optional"`
 		// <specular modification/>
 	}
 	var enc PayloadAttributes
@@ -40,6 +41,7 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 		}
 	}
 	enc.NoTxPool = p.NoTxPool
+	enc.GasLimit = (*hexutil.Uint64)(p.GasLimit)
 	// <specular modification/>
 	return json.Marshal(&enc)
 }
@@ -55,6 +57,7 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 		// <specular modification>
 		Transactions          []hexutil.Bytes     `json:"transactions,omitempty"  gencodec:"optional"`
 		NoTxPool              *bool               `json:"noTxPool,omitempty" gencodec:"optional"`
+		GasLimit              *hexutil.Uint64     `json:"gasLimit,omitempty" gencodec:"optional"`
 		// <specular modification/>
 	}
 	var dec PayloadAttributes
@@ -88,6 +91,9 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 	}
 	if dec.NoTxPool != nil {
 		p.NoTxPool = *dec.NoTxPool
+	}
+	if dec.GasLimit != nil {
+		p.GasLimit = (*uint64)(dec.GasLimit)
 	}
 	// <specular modification/>
 	return nil

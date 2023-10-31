@@ -333,6 +333,10 @@ type ChainConfig struct {
 	Ethash    *EthashConfig `json:"ethash,omitempty"`
 	Clique    *CliqueConfig `json:"clique,omitempty"`
 	IsDevMode bool          `json:"isDev,omitempty"`
+
+	// <specular modification>
+	EnableL2GasLimitApi bool `json:"enableL2GasLimitApi,omitempty"`
+	// <specular modification/>
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -365,6 +369,10 @@ func (c *ChainConfig) Description() string {
 	}
 	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
 	switch {
+	// <specular modification>
+	case c.EnableL2GasLimitApi:
+		banner += "Consensus: L2 gas limit API enabled\n"
+	// <specular modification/>
 	case c.Ethash != nil:
 		if c.TerminalTotalDifficulty == nil {
 			banner += "Consensus: Ethash (proof-of-work)\n"

@@ -42,8 +42,9 @@ type BuildPayloadArgs struct {
 	Withdrawals  types.Withdrawals // The provided withdrawals
 	BeaconRoot   *common.Hash      // The provided beaconRoot (Cancun)
 	// <specular modification>
-	NoTxPool     bool                 // Specular addition: option to disable tx pool contents from being included
-	Transactions []*types.Transaction // Specular addition: txs forced into the block via engine API
+	NoTxPool     bool                 // L2 engine api addition: option to disable tx pool contents from being included
+	Transactions []*types.Transaction // L2 engine api addition: txs forced into the block via engine API
+	GasLimit     *uint64              // L2 engine api addition: override gas limit of the block to build
 	// <specular modification/>
 }
 
@@ -67,6 +68,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 			h := tx.Hash()
 			hasher.Write(h[:])
 		}
+	}
+	if args.GasLimit != nil {
+		binary.Write(hasher, binary.BigEndian, *args.GasLimit)
 	}
 	// <specular modification/>
 	var out engine.PayloadID
@@ -193,6 +197,10 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
+
+	// <specular modification>
+	// With L2s, the "empty" block is constructed from provided txs only, i.e. no tx-pool usage.
+	// <specular modification/>
 	emptyParams := &generateParams{
 		timestamp:   args.Timestamp,
 		forceTime:   true,
@@ -203,7 +211,8 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
 		// <specular modification>
-		txs: args.Transactions,
+		txs:      args.Transactions,
+		gasLimit: args.GasLimit,
 		// <specular modification/>
 	}
 	empty := w.getSealingBlock(emptyParams)
@@ -245,7 +254,8 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 			// <specular modification>
-			txs: args.Transactions,
+			txs:      args.Transactions,
+			gasLimit: args.GasLimit,
 			// <specular modification/>
 		}
 
