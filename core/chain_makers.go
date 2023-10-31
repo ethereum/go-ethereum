@@ -372,13 +372,27 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		block, receipts := genblock(i, parent, triedb, statedb)
 
 		// Post-process the receipts.
+		// Here we assign the final block hash and other info into the receipt.
+		// In order for DeriveFields to work, the transaction and receipt lists need to be
+		// of equal length. If AddUncheckedTx or AddUncheckedReceipt are used, there will be
+		// extra ones, so we just trim the lists here.
+		receiptsCount := len(receipts)
+		txs := block.Transactions()
+		if len(receipts) > len(txs) {
+			receipts = receipts[:len(txs)]
+		} else if len(receipts) < len(txs) {
+			txs = txs[:len(receipts)]
+		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
 			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
 		}
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, block.Transactions()); err != nil {
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
 		}
+
+		// Re-expand to ensure all receipts are returned.
+		receipts = receipts[:receiptsCount]
 
 		// Advance the chain.
 		cm.add(block, receipts)
