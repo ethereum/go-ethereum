@@ -176,23 +176,16 @@ func (n *Notifier) activate() error {
 	return nil
 }
 
-func (n *Notifier) send(sub *Subscription, data interface{}) error {
-	params := struct {
-		ID     string      `json:"subscription"`
-		Result interface{} `json:"result,omitempty"`
-	}{ID: string(sub.ID), Result: data}
-	ctx := context.Background()
-
-	msg := struct {
-		Version string      `json:"jsonrpc,omitempty"`
-		Method  string      `json:"method,omitempty"`
-		Params  interface{} `json:"params,omitempty"`
-	}{
+func (n *Notifier) send(sub *Subscription, data any) error {
+	msg := jsonrpcSubscriptionNotification{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
-		Params:  params,
+		Params: subscriptionResultEnc{
+			ID:     string(sub.ID),
+			Result: data,
+		},
 	}
-	return n.h.conn.writeJSON(ctx, msg, false)
+	return n.h.conn.writeJSON(context.Background(), &msg, false)
 }
 
 // A Subscription is created by a notifier and tied to that notifier. The client can use
