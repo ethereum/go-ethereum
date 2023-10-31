@@ -330,6 +330,12 @@ func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
 		if nonce2 != acct.Nonce {
 			return fmt.Errorf("account nonce mismatch for addr: %s want: %d have: %d", addr, acct.Nonce, nonce2)
 		}
+		for k, v := range acct.Storage {
+			v2 := statedb.GetState(addr, k)
+			if v2 != v {
+				return fmt.Errorf("account storage mismatch for addr: %s, slot: %x, want: %x, have: %x", addr, k, v, v2)
+			}
+		}
 	}
 	return nil
 }
