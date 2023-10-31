@@ -1481,3 +1481,119 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 		t.Errorf("failed to build block on fork")
 	}
 }
+
+// TestStorageAt tests StorageAt and PendingStorageAt for a contract storage slot.
+// 1. Deploy a contract.
+// 2. Send a transaction to set a value in a storage slot.
+// 3. Check that StorageAt returns the unmodified value.
+// 4. Check that PendingStorageAt returns the modified value.
+// 5. Commit the transaction.
+// 6. Check that StorageAt returns the modified value.
+// 7. Check that view function returns the modified value.
+func TestStorageAt(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	bgCtx := context.Background()
+
+	// pragma solidity ^0.4.26;
+	// contract T {
+	//     uint256 key;
+	//
+	//     function setKey(uint256 _key) public {
+	//         key = _key;
+	//     }
+	//
+	//     function getKey() public view returns (uint256) {
+	//         return key;
+	//     }
+	// }
+	const (
+		contractABI = `[{"constant":true,"inputs":[],"name":"getKey","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"_key","type":"uint256"}],"name":"setKey","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+		contractBIN = `0x608060405234801561001057600080fd5b5060df8061001f6000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806382678dd614604e578063d6528776146076575b600080fd5b348015605957600080fd5b50606060a0565b6040518082815260200191505060405180910390f35b348015608157600080fd5b50609e6004803603810190808035906020019092919050505060a9565b005b60008054905090565b80600081905550505600a165627a7a7230582089d995439a82d0c7f16a31174e7017acd915e0ab5d78870cbc62947dbaf891570029`
+	)
+
+	parsed, err := abi.JSON(strings.NewReader(contractABI))
+	if err != nil {
+		t.Errorf("could not get code at test addr: %v", err)
+	}
+	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
+	contractAddr, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(contractBIN), sim)
+	if err != nil {
+		t.Fatalf("could not deploy contract: %v tx: %v contract: %v", err, tx, contract)
+	}
+
+	sim.Commit()
+
+	// check StorageAt return should return 0x0
+	key, err := sim.StorageAt(bgCtx, contractAddr, common.HexToHash("0x0"), nil)
+	if err != nil {
+		t.Errorf("could not get StorageAt contract: %v", err)
+	}
+	if common.BytesToHash(key) != common.HexToHash("0x0") {
+		t.Errorf("get storage of slot: 0x0 should be 0x0, got %v", common.BytesToHash(key))
+	}
+
+	// check PendingStorageAt should return 0x0
+	key, err = sim.PendingStorageAt(bgCtx, contractAddr, common.HexToHash("0x0"))
+	if err != nil {
+		t.Errorf("could not get PendingStorageAt contract: %v", err)
+	}
+	if common.BytesToHash(key) != common.HexToHash("0x0") {
+		t.Errorf("get pendingStorage of slot: 0x0 should be 0x0, got %v", common.BytesToHash(key))
+	}
+
+	// set key to 1024
+	auth.Nonce = big.NewInt(1)
+	tx, err = contract.Transact(auth, "setKey", big.NewInt(1024))
+	if err != nil {
+		t.Errorf("transacting setKey function on contract failed: %v", err)
+	}
+
+	// check PendingStorageAt should changed
+	key, err = sim.PendingStorageAt(bgCtx, contractAddr, common.HexToHash("0x0"))
+	if err != nil {
+		t.Errorf("could not get PendingStorageAt contract: %v", err)
+	}
+	if common.BytesToHash(key) != common.HexToHash("0x400") {
+		t.Errorf("get pendingStorage of slot: 0x0 should be 0x400, got %v", common.BytesToHash(key))
+	}
+
+	// check StorageAt should keep the same
+	key, err = sim.StorageAt(bgCtx, contractAddr, common.HexToHash("0x0"), nil)
+	if err != nil {
+		t.Errorf("could not get StorageAt contract: %v", err)
+	}
+	if common.BytesToHash(key) != common.HexToHash("0x0") {
+		t.Errorf("get storage of slot: 0x0 should be 0x0, got %v", common.BytesToHash(key))
+	}
+
+	// apply the transaction
+	sim.Commit()
+
+	// check StorageAt should changed
+	key, err = sim.StorageAt(bgCtx, contractAddr, common.HexToHash("0x0"), nil)
+	if err != nil {
+		t.Errorf("could not get StorageAt contract: %v", err)
+	}
+	if common.BytesToHash(key) != common.HexToHash("0x400") {
+		t.Errorf("get storage of key: 0x0 should be 0x0, got %v", common.BytesToHash(key))
+	}
+
+	input, err := parsed.Pack("getKey")
+	if err != nil {
+		t.Errorf("could not pack getKey function on contract: %v", err)
+	}
+	res, err := sim.CallContract(bgCtx, ethereum.CallMsg{
+		From: testAddr,
+		To:   &contractAddr,
+		Data: input,
+	}, nil)
+	if err != nil {
+		t.Errorf("could not call getKey method on contract: %v", err)
+	}
+
+	if common.BytesToHash(res) != common.HexToHash("0x400") {
+		t.Errorf("get res from getKey function should be 0x400, got %v", common.BytesToHash(key))
+	}
+}
