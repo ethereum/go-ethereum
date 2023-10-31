@@ -112,7 +112,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testGetProof(t, client, testContract) },
 		}, {
 			"TestGetProofNonExistent",
-			func(t *testing.T) { testGetProof(t, client, common.HexToAddress("0x0001")) },
+			func(t *testing.T) { testGetProofNonExistent(t, client) },
 		}, {
 			"TestGetProofCanonicalizeKeys",
 			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
@@ -274,6 +274,38 @@ func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
 	}
 	if result.StorageProof[0].Key != hashSizedKey {
 		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+}
+
+func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
+	addr := common.HexToAddress("0x0001")
+	ec := New(client)
+	result, err := ec.GetProof(context.Background(), addr, []string{testSlot.String()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
+	}
+	// test nonce
+	if result.Nonce != 0 {
+		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
+	}
+	// test balance
+	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
+	}
+	// test storage
+	if len(result.StorageProof) != 1 {
+		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
+	}
+	// test codeHash
+	if result.CodeHash != types.EmptyCodeHash {
+		t.Fatalf("codehash wrong, have %v want %v ", result.CodeHash, types.EmptyCodeHash)
+	}
+	// test codeHash
+	if result.StorageHash != types.EmptyRootHash {
+		t.Fatalf("storagehash wrong, have %v want %v ", result.StorageHash, types.EmptyRootHash)
 	}
 }
 
