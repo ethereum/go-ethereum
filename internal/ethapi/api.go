@@ -689,7 +689,13 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		return nil, err
 	}
 	codeHash := statedb.GetCodeHash(address)
+	if codeHash == (common.Hash{}) {
+		codeHash = types.EmptyCodeHash
+	}
 	storageRoot := statedb.GetStorageRoot(address)
+	if storageRoot == (common.Hash{}) {
+		storageRoot = types.EmptyRootHash
+	}
 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
