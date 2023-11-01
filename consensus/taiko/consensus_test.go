@@ -3,6 +3,7 @@ package taiko_test
 import (
 	"bytes"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,15 @@ func init() {
 	config.Taiko = true
 	testEngine = taiko.New(config)
 
+	taikoL2AddressPrefix := strings.TrimPrefix(config.ChainID.String(), "0")
+
+	taikoL2Address := common.HexToAddress(
+		"0x" +
+			taikoL2AddressPrefix +
+			strings.Repeat("0", common.AddressLength*2-len(taikoL2AddressPrefix)-len(taiko.TaikoL2AddressSuffix)) +
+			taiko.TaikoL2AddressSuffix,
+	)
+
 	genesis = &core.Genesis{
 		Config:     config,
 		Alloc:      core.GenesisAlloc{testAddr: {Balance: big.NewInt(2e15)}},
@@ -56,7 +66,7 @@ func init() {
 			GasFeeCap: new(big.Int).SetUint64(875_000_000),
 			Data:      taiko.AnchorSelector,
 			Gas:       taiko.AnchorGasLimit,
-			To:        &taiko.TaikoL2Address,
+			To:        &taikoL2Address,
 		}),
 		types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &types.LegacyTx{
 			Nonce:    0,

@@ -27,22 +27,32 @@ var (
 	ErrEmptyWithdrawalsHash = errors.New("withdrawals hash missing")
 	ErrAnchorTxNotFound     = errors.New("anchor transaction not found")
 
-	GoldenTouchAccount = common.HexToAddress("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
-	AnchorSelector     = crypto.Keccak256([]byte("anchor(bytes32,bytes32,uint64,uint32)"))[:4]
-	AnchorGasLimit     = uint64(250_000)
-	TaikoL2Address     = common.HexToAddress("0x1000777700000000000000000000000000000001")
+	GoldenTouchAccount   = common.HexToAddress("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
+	TaikoL2AddressSuffix = "10001"
+	AnchorSelector       = crypto.Keccak256([]byte("anchor(bytes32,bytes32,uint64,uint32)"))[:4]
+	AnchorGasLimit       = uint64(250_000)
 )
 
 // Taiko is a consensus engine used by L2 rollup.
 type Taiko struct {
-	chainConfig *params.ChainConfig
+	chainConfig    *params.ChainConfig
+	taikoL2Address common.Address
 }
 
 var _ = new(Taiko)
 
 func New(chainConfig *params.ChainConfig) *Taiko {
-	crypto.Keccak256()
-	return &Taiko{chainConfig}
+	taikoL2AddressPrefix := strings.TrimPrefix(chainConfig.ChainID.String(), "0")
+
+	return &Taiko{
+		chainConfig: chainConfig,
+		taikoL2Address: common.HexToAddress(
+			"0x" +
+				taikoL2AddressPrefix +
+				strings.Repeat("0", common.AddressLength*2-len(taikoL2AddressPrefix)-len(TaikoL2AddressSuffix)) +
+				TaikoL2AddressSuffix,
+		),
+	}
 }
 
 // check all method stubs for interface `Engine` without affect performance.
@@ -306,7 +316,7 @@ func (t *Taiko) ValidateAnchorTx(tx *types.Transaction, header *types.Header) (b
 		return false, nil
 	}
 
-	if tx.To() == nil || *tx.To() != TaikoL2Address {
+	if tx.To() == nil || *tx.To() != t.taikoL2Address {
 		return false, nil
 	}
 
