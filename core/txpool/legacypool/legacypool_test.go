@@ -1515,18 +1515,10 @@ func TestMinGasPriceEnforced(t *testing.T) {
 		t.Fatalf("Min tip not enforced")
 	}
 
-	if err := pool.Add([]*txpool.Transaction{{Tx: tx}}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
-		t.Fatalf("Min tip not enforced")
-	}
-
 	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), key)
 	pool.SetGasTip(big.NewInt(tx.GasTipCap().Int64() + 1))
 
 	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
-		t.Fatalf("Min tip not enforced")
-	}
-
-	if err := pool.Add([]*txpool.Transaction{{Tx: tx}}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("Min tip not enforced")
 	}
 }

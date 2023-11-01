@@ -152,6 +152,10 @@ var DefaultConfig = Config{
 	Lifetime: 3 * time.Hour,
 }
 
+func (config *Config) PrioritizeLocals() bool {
+	return !config.NoLocals
+}
+
 // sanitize checks the provided user configurations and changes anything that's
 // unreasonable or unworkable.
 func (config *Config) sanitize() Config {
@@ -596,8 +600,8 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load(),
 	}
-	if local && pool.config.NoLocals {
-		local = false
+	if local && pool.config.PrioritizeLocals() {
+		opts.MinTip = new(big.Int)
 	}
 	if err := txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
 		return err
