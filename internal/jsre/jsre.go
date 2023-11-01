@@ -103,8 +103,8 @@ func randomSource() *rand.Rand {
 // call the functions of the goja vm directly to circumvent the queue. These
 // functions should be used if and only if running a routine that was already
 // called from JS through an RPC call.
-func (self *JSRE) runEventLoop() {
-	defer close(self.closed)
+func (re *JSRE) runEventLoop() {
+	defer close(re.closed)
 
 	r := randomSource()
 	re.vm.SetRandSource(r.Float64)
@@ -199,14 +199,14 @@ loop:
 					break loop
 				}
 			}
-		case req := <-self.evalQueue:
+		case req := <-re.evalQueue:
 			// run the code, send the result back
 			req.fn(re.vm)
 			close(req.done)
 			if waitForCallbacks && (len(registry) == 0) {
 				break loop
 			}
-		case waitForCallbacks = <-self.stopEventLoop:
+		case waitForCallbacks = <-re.stopEventLoop:
 			if !waitForCallbacks || (len(registry) == 0) {
 				break loop
 			}
@@ -223,23 +223,23 @@ loop:
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
-	self.evalQueue <- req
+	re.evalQueue <- req
 	<-done
 }
 
 // stops the event loop before exit, optionally waits for all timers to expire
-func (self *JSRE) Stop(waitForCallbacks bool) {
+func (re *JSRE) Stop(waitForCallbacks bool) {
 	select {
-	case <-self.closed:
-	case self.stopEventLoop <- waitForCallbacks:
-		<-self.closed
+	case <-re.closed:
+	case re.stopEventLoop <- waitForCallbacks:
+		<-re.closed
 	}
 }
 
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
-func (self *JSRE) Exec(file string) error {
-	code, err := ioutil.ReadFile(common.AbsolutePath(self.assetPath, file))
+func (re *JSRE) Exec(file string) error {
+	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {
 		return err
 	}
