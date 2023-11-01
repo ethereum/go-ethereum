@@ -255,7 +255,7 @@ Path of the secret key file: node1/keystore/UTC--2022-05-13T14-25-49.229126160Z-
 
 The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in each node's data directory.
 
-In each data directory save a copy of the following `genesis.json` to the top level project directory. The account addresses in the `alloc` field should be replaced with those created for each node in the previous step (without the leading `0x`).
+In each data directory save a copy of the following `genesis.json` to the top level project directory. The account addresses in the `alloc` field should be replaced with those created for each node in the previous step (without the leading `0x`). Additionally, replace the initial signer address in extradata with the account address of Node 1.
 
 ```json
 {
@@ -281,7 +281,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
   },
   "difficulty": "1",
   "gasLimit": "800000000",
-  "extradata": "0x00000000000000000000000000000000000000000000000000000000000000007df9a875a174b3bc565e6424a0050ebc1b2d1d820000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "extradata": "0x0000000000000000000000000000000000000000000000000000000000000000C1B2c0dFD381e6aC08f34816172d6343Decbb12b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "alloc": {
     "C1B2c0dFD381e6aC08f34816172d6343Decbb12b": { "balance": "500000" },
     "c94d95a5106270775351eecfe43f97e8e75e59e8": { "balance": "500000" }
@@ -332,13 +332,19 @@ We recommend using a regular node as bootstrap node for production deployments.
 INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
 ```
 
-The two nodes can now be started. Open separate terminals for each node, leaving the bootnode running in the original terminal. In each terminal, run the following command (replacing `node1` with `node2` where appropriate, and giving each node different `--port` and `authrpc.port` IDs. The account address and password file for node 1 must also be provided:
+The two nodes can now be started. Open separate terminals for each node, leaving the bootnode running in the original terminal. In the terminal for Node 1, run the following command (replacing bootnodes, account address and etherbase for Node 1. The password file for Node 1 must also be provided): 
 
 ```sh
-./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt --authrpc.port 8551
+./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt --authrpc.port 8551 --mine --miner.etherbase 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b
 ```
 
-This will start the node using the bootnode as an entry point. Repeat the same command with the information appropriate to node 2. In each terminal, the following logs indicate success:
+In the terminal for Node 2, run the following command (replacing bootnodes and account address for Node 2. The password file for Node 2 must also be provided): 
+
+```sh
+./geth --datadir node2 --port 30307 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xc94d95a5106270775351eecfe43f97e8e75e59e8 --password node2/password.txt --authrpc.port 8552
+```
+
+These will start the nodes using the bootnode as an entry point and run Node 1 as a signer. In each terminal, the following logs indicate success:
 
 ```terminal
 INFO [05-13|16:17:40.061] Maximum peer count                       ETH=50 LES=0 total=50
@@ -371,24 +377,11 @@ INFO [05-13|16:18:00.164] Looking for peers                        peercount=0 t
 In the first terminal that is currently running the logs resembling the following will be displayed, showing the discovery process in action:
 
 ```terminal
-INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
-TRACE[05-13|16:15:49.228]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.229]  PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.229]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.230]  PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.730]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.731]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.231]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.231]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.561]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.561]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.731]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.731]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:51.231]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:51.232]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:52.591]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:52.591]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:57.767]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+INFO [11-01|13:57:46.616] New local node record                    seq=1,698,846,143,652 id=a4db82e7e2c14799 ip=10.12.178.86 udp=30306 tcp=30306
+INFO [11-01|13:57:55.627] Looking for peers                        peercount=0 tried=0 static=0
+INFO [11-01|13:58:05.648] Looking for peers                        peercount=0 tried=0 static=0
+INFO [11-01|13:58:15.668] Looking for peers                        peercount=1 tried=1 static=0
+INFO [11-01|13:58:25.688] Looking for peers                        peercount=1 tried=0 static=0
 ```
 
 It is now possible to attach a Javascript console to either node to query the network properties:
@@ -397,7 +390,7 @@ It is now possible to attach a Javascript console to either node to query the ne
 geth attach node1/geth.ipc
 ```
 
-Once the Javascript console is running, check that the node is connected to one other peer (node 2):
+Once the Javascript console is running, check that the node is connected to one other peer (Node 2):
 
 ```sh
 net.peerCount
