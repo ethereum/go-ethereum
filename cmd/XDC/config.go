@@ -185,6 +185,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}
+	common.MinGasPrice50x = common.MinGasPrice50x.Mul(common.MinGasPrice, big.NewInt(50))
 
 	// read passwords from environment
 	passwords := []string{}

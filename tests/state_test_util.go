@@ -131,7 +131,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	statedb := MakePreState(db, t.json.Pre)
 
 	post := t.json.Post[subtest.Fork][subtest.Index]
-	msg, err := t.json.Tx.toMessage(post)
+	msg, err := t.json.Tx.toMessage(post, block.Number())
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	}
 }
 
-func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
+func (tx *stTransaction) toMessage(ps stPostState, number *big.Int) (core.Message, error) {
 	// Derive sender from private key if present.
 	var from common.Address
 	if len(tx.PrivateKey) > 0 {
@@ -235,7 +235,7 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tx data %q", dataHex)
 	}
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, true, nil)
+	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, data, true, nil, number)
 	return msg, nil
 }
 

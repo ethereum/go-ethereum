@@ -1,6 +1,7 @@
 package engine_v2_tests
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -123,4 +124,22 @@ func TestSnapshotShouldAlreadyCreatedByUpdateM1(t *testing.T) {
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, currentBlock.Header())
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(1350), snap.Number)
+}
+
+func TestInitialWithWrongSwitchNumber(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 800, &config, nil)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	header := currentBlock.Header()
+	config.XDPoS.V2.SwitchBlock = big.NewInt(800) // not epoch number
+
+	err = adaptor.EngineV2.Initial(blockchain, header)
+	assert.NotNil(t, err)
 }

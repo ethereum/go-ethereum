@@ -262,7 +262,9 @@ func (tx *Transaction) AsMessage(s Signer, balanceFee *big.Int, number *big.Int)
 	var err error
 	msg.from, err = Sender(s, tx)
 	if balanceFee != nil {
-		if number.Cmp(common.TIPTRC21Fee) > 0 {
+		if number.Cmp(common.BlockNumberGas50x) >= 0 {
+			msg.gasPrice = common.GasPrice50x
+		} else if number.Cmp(common.TIPTRC21Fee) > 0 {
 			msg.gasPrice = common.TRC21GasPrice
 		} else {
 			msg.gasPrice = common.TRC21GasPriceBefore
@@ -291,8 +293,8 @@ func (tx *Transaction) Cost() *big.Int {
 }
 
 // Cost returns amount + gasprice * gaslimit.
-func (tx *Transaction) TRC21Cost() *big.Int {
-	total := new(big.Int).Mul(common.TRC21GasPrice, new(big.Int).SetUint64(tx.data.GasLimit))
+func (tx *Transaction) TxCost(number *big.Int) *big.Int {
+	total := new(big.Int).Mul(common.GetGasPrice(number), new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
 }
@@ -700,9 +702,9 @@ type Message struct {
 	balanceTokenFee *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool, balanceTokenFee *big.Int) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool, balanceTokenFee *big.Int, number *big.Int) Message {
 	if balanceTokenFee != nil {
-		gasPrice = common.TRC21GasPrice
+		gasPrice = common.GetGasPrice(number)
 	}
 	return Message{
 		from:            from,

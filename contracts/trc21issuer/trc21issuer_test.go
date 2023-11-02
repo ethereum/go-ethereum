@@ -1,13 +1,14 @@
 package trc21issuer
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"math/big"
-	"testing"
 )
 
 var (
@@ -81,10 +82,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't transaction's receipt ", err, "hash", tx.Hash())
 	}
-	fee := big.NewInt(0).SetUint64(receipt.GasUsed)
-	if receipt.Logs[0].BlockNumber > common.TIPTRC21Fee.Uint64() {
-		fee = fee.Mul(fee, common.TRC21GasPrice)
-	}
+	fee := common.GetGasFee(receipt.Logs[0].BlockNumber, receipt.GasUsed)
 	remainFee := big.NewInt(0).Sub(minApply, fee)
 
 	// check balance trc21 again
@@ -133,10 +131,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't transaction's receipt ", err, "hash", tx.Hash())
 	}
-	fee = big.NewInt(0).SetUint64(receipt.GasUsed)
-	if receipt.Logs[0].BlockNumber > common.TIPTRC21Fee.Uint64() {
-		fee = fee.Mul(fee, common.TRC21GasPrice)
-	}
+	fee = common.GetGasFee(receipt.Logs[0].BlockNumber, receipt.GasUsed)
 	remainFee = big.NewInt(0).Sub(remainFee, fee)
 	//check balance fee
 	balanceIssuerFee, err = trc21Issuer.GetTokenCapacity(trc21TokenAddr)

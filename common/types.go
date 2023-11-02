@@ -73,6 +73,9 @@ func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
 func Uint64ToHash(b uint64) Hash { return BytesToHash(new(big.Int).SetUint64(b).Bytes()) }
 func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
+// IsZero returns if a Hash is empty
+func (h Hash) IsZero() bool { return h == Hash{} }
+
 // Get the string representation of the underlying hash
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
@@ -189,6 +192,9 @@ func IsHexAddress(s string) bool {
 	}
 	return len(s) == 2*AddressLength && isHex(s)
 }
+
+// IsZero returns if a address is empty
+func (a Address) IsZero() bool { return a == Address{} }
 
 // Get the string representation of the underlying address
 func (a Address) Str() string   { return string(a[:]) }
