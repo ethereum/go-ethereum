@@ -763,6 +763,7 @@ func borKeyValueConfigHelper[T uint64 | string](field map[string]T, number uint6
 		if err != nil {
 			panic(err)
 		}
+
 		keys = append(keys, keyUint)
 
 		fieldUint[keyUint] = v
