@@ -220,7 +220,11 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	ctx := context.Background()
 
 	// Finalize and seal the block
-	block, _ := _bor.FinalizeAndAssemble(ctx, chain, b.header, state, b.txs, nil, b.receipts, []*types.Withdrawal{})
+	block, err := _bor.FinalizeAndAssemble(ctx, chain, b.header, state, b.txs, nil, b.receipts, nil)
+
+	if err != nil {
+		panic(fmt.Sprintf("error finalizing block: %v", err))
+	}
 
 	// Write state changes to db
 	root, err := state.Commit(chain.Config().IsEIP158(b.header.Number))

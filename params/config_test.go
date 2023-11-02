@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"gotest.tools/assert"
+
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -133,4 +135,46 @@ func TestConfigRules(t *testing.T) {
 	if r := c.Rules(block, true, 0); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", 0)
 	}
+}
+
+func TestBorKeyValueConfigHelper(t *testing.T) {
+	t.Parallel()
+
+	backupMultiplier := map[string]uint64{
+		"0":        2,
+		"25275000": 5,
+		"29638656": 2,
+	}
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 0), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 1), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 25275000-1), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 25275000), uint64(5))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 25275000+1), uint64(5))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 29638656-1), uint64(5))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 29638656), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(backupMultiplier, 29638656+1), uint64(2))
+
+	config := map[string]uint64{
+		"0":         1,
+		"90000000":  2,
+		"100000000": 3,
+	}
+	assert.Equal(t, borKeyValueConfigHelper(config, 0), uint64(1))
+	assert.Equal(t, borKeyValueConfigHelper(config, 1), uint64(1))
+	assert.Equal(t, borKeyValueConfigHelper(config, 90000000-1), uint64(1))
+	assert.Equal(t, borKeyValueConfigHelper(config, 90000000), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(config, 90000000+1), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(config, 100000000-1), uint64(2))
+	assert.Equal(t, borKeyValueConfigHelper(config, 100000000), uint64(3))
+	assert.Equal(t, borKeyValueConfigHelper(config, 100000000+1), uint64(3))
+
+	burntContract := map[string]string{
+		"22640000": "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38",
+		"41824608": "0x617b94CCCC2511808A3C9478ebb96f455CF167aA",
+	}
+	assert.Equal(t, borKeyValueConfigHelper(burntContract, 22640000), "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38")
+	assert.Equal(t, borKeyValueConfigHelper(burntContract, 22640000+1), "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38")
+	assert.Equal(t, borKeyValueConfigHelper(burntContract, 41824608-1), "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38")
+	assert.Equal(t, borKeyValueConfigHelper(burntContract, 41824608), "0x617b94CCCC2511808A3C9478ebb96f455CF167aA")
+	assert.Equal(t, borKeyValueConfigHelper(burntContract, 41824608+1), "0x617b94CCCC2511808A3C9478ebb96f455CF167aA")
 }
