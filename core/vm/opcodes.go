@@ -219,8 +219,7 @@ const (
 	SELFDESTRUCT OpCode = 0xff
 )
 
-// Since the opcodes aren't all in order we can't use a regular slice.
-var opCodeToString = map[OpCode]string{
+var opCodeToString = [256]string{
 	// 0x0 range - arithmetic ops.
 	STOP:       "STOP",
 	ADD:        "ADD",
@@ -385,12 +384,11 @@ var opCodeToString = map[OpCode]string{
 }
 
 func (op OpCode) String() string {
-	str := opCodeToString[op]
-	if len(str) == 0 {
-		return fmt.Sprintf("opcode 0x%x not defined", int(op))
+	if s := opCodeToString[op]; s != "" {
+		return s
 	}
 
-	return str
+	return fmt.Sprintf("opcode %#x not defined", int(op))
 }
 
 var stringToOp = map[string]OpCode{
