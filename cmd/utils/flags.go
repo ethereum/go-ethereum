@@ -176,7 +176,7 @@ var (
 	}
 	DeveloperAllocFlag = &cli.PathFlag{
 		Name:      "dev.alloc",
-		Usage:     "Genesis account allocation file to use in developer mode",
+		Usage:     "Genesis account allocation file to use in developer mode (available only if datadir is not enabled)",
 		TakesFile: true,
 		Category:  flags.DevCategory,
 	}
@@ -1884,10 +1884,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		var alloc core.GenesisAlloc
+		if ctx.IsSet(DeveloperAllocFlag.Name) && ctx.IsSet(DataDirFlag.Name) {
+			Fatalf("The %s flag is conflicted with %s flag, this flag can only be used with an ephemeral data directory", DeveloperAllocFlag.Name, DataDirFlag.Name)
+		}
 		if allocPath := ctx.Path(DeveloperAllocFlag.Name); allocPath != "" {
-			if ctx.IsSet(DataDirFlag.Name) {
-				allocPath = stack.ResolvePath(allocPath)
-			}
 			data, err := os.ReadFile(allocPath)
 			if err != nil {
 				Fatalf("Failed to read developer genesis alloc file: %v", err)
