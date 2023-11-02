@@ -624,7 +624,11 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true)
+	defer triedb.Close()
 
 	var root common.Hash
 	if ctx.NArg() > 1 {
@@ -633,10 +637,28 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
 		}
 		root = common.BytesToHash(rootBytes)
+	} else {
+		headBlock := rawdb.ReadHeadBlock(chaindb)
+		if headBlock == nil {
+			log.Error("Failed to load head block")
+			return errors.New("no head block")
+		}
+		root = headBlock.Root()
+	}
+
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapConfig, chaindb, triedb, root)
+	if err != nil {
+		return err
 	}
 
 	start := time.Now()
-	if err := utils.ExportSnapshotPreimages(chain, ctx.Args().First(), root); err != nil {
+	if err := utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	log.Info("Export done", "duration", time.Since(start))

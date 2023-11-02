@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -376,7 +377,7 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
-func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash) error {
+func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -397,15 +398,6 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 	defer buf.Flush()
 	writer = buf
 
-	statedb, err := chain.State()
-	if err != nil {
-		return fmt.Errorf("failed to open statedb: %w", err)
-	}
-
-	if root == (common.Hash{}) {
-		root = chain.CurrentBlock().Root
-	}
-
 	type hashAndPreimageSize struct {
 		Hash common.Hash
 		Size int
@@ -414,7 +406,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 
 	go func() {
 		defer close(hashCh)
-		accIt, err := chain.Snapshots().AccountIterator(root, common.Hash{})
+		accIt, err := snaptree.AccountIterator(root, common.Hash{})
 		if err != nil {
 			log.Error("Failed to create account iterator", "error", err)
 			return
@@ -431,7 +423,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: 20}
 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-				stIt, err := chain.Snapshots().StorageIterator(root, accIt.Hash(), common.Hash{})
+				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)
 					return
@@ -449,7 +441,7 @@ func ExportSnapshotPreimages(chain *core.BlockChain, fn string, root common.Hash
 	}()
 
 	for item := range hashCh {
-		preimage := rawdb.ReadPreimage(statedb.Database().DiskDB(), item.Hash)
+		preimage := rawdb.ReadPreimage(chaindb, item.Hash)
 		if len(preimage) == 0 {
 			return fmt.Errorf("missing preimage for %v", item.Hash)
 		}
