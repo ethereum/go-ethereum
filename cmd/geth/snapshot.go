@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -147,6 +148,17 @@ as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
+`,
+			},
+			{
+				Action:    snapshotExportPreimages,
+				Name:      "export-preimages",
+				Usage:     "Export the preimage in snapshot enumeration order",
+				ArgsUsage: "<dumpfile> [<root>]",
+				Flags:     utils.DatabaseFlags,
+				Description: `
+The export-preimages command exports hash preimages to a flat file, in exactly
+the expected order for the overlay tree migration.
 `,
 			},
 		},
@@ -601,6 +613,33 @@ func dumpState(ctx *cli.Context) error {
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// snapshotExportPreimages dumps the preimage data to a flat file.
+func snapshotExportPreimages(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, _ := utils.MakeChain(ctx, stack, true)
+
+	var root common.Hash
+	if ctx.NArg() > 1 {
+		rootBytes := common.FromHex(ctx.Args().Get(1))
+		if len(rootBytes) != common.HashLength {
+			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
+		}
+		root = common.BytesToHash(rootBytes)
+	}
+
+	start := time.Now()
+	if err := utils.ExportSnapshotPreimages(chain, ctx.Args().First(), root); err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	log.Info("Export done", "duration", time.Since(start))
 	return nil
 }
 
