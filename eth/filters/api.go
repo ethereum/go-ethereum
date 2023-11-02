@@ -36,7 +36,7 @@ import (
 var (
 	errInvalidTopic      = errors.New("invalid topic(s)")
 	errFilterNotFound    = errors.New("filter not found")
-	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
+	errInvalidBlockRange = errors.New("invalid block range params")
 )
 
 // filter is a helper struct that holds meta information over the filter type
