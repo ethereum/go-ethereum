@@ -214,7 +214,7 @@ func (f *fuzzer) atomicBalanceOp(balance vfs.AtomicBalanceOperator, id enode.ID)
 	}
 }
 
-func FuzzClientPool(input []byte) int {
+func fuzzClientPool(input []byte) int {
 	if len(input) > 10000 {
 		return -1
 	}

@@ -33,7 +33,7 @@ import (
 
 // BuildPayloadArgs contains the provided parameters for building payload.
 // Check engine-api specification for more details.
-// https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#payloadattributesv1
+// https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
 	Parent       common.Hash       // The parent block to build payload on top
 	Timestamp    uint64            // The provided timestamp of generated payload

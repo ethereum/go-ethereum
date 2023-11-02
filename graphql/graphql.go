@@ -41,7 +41,8 @@ import (
 )
 
 var (
-	errBlockInvariant = errors.New("block objects must be instantiated with at least one of num or hash")
+	errBlockInvariant    = errors.New("block objects must be instantiated with at least one of num or hash")
+	errInvalidBlockRange = errors.New("invalid from and to block combination: from > to")
 )
 
 type Long int64
@@ -272,8 +273,6 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 		return hexutil.Big{}
 	}
 	switch tx.Type() {
-	case types.AccessListTxType:
-		return hexutil.Big(*tx.GasPrice())
 	case types.DynamicFeeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
@@ -312,9 +311,7 @@ func (t *Transaction) MaxFeePerGas(ctx context.Context) *hexutil.Big {
 		return nil
 	}
 	switch tx.Type() {
-	case types.AccessListTxType:
-		return nil
-	case types.DynamicFeeTxType:
+	case types.DynamicFeeTxType, types.BlobTxType:
 		return (*hexutil.Big)(tx.GasFeeCap())
 	default:
 		return nil
@@ -327,13 +324,31 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) *hexutil.Big {
 		return nil
 	}
 	switch tx.Type() {
-	case types.AccessListTxType:
-		return nil
-	case types.DynamicFeeTxType:
+	case types.DynamicFeeTxType, types.BlobTxType:
 		return (*hexutil.Big)(tx.GasTipCap())
 	default:
 		return nil
 	}
+}
+
+func (t *Transaction) MaxFeePerBlobGas(ctx context.Context) *hexutil.Big {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
+	return (*hexutil.Big)(tx.BlobGasFeeCap())
+}
+
+func (t *Transaction) BlobVersionedHashes(ctx context.Context) *[]common.Hash {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil
+	}
+	blobHashes := tx.BlobHashes()
+	return &blobHashes
 }
 
 func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
@@ -466,6 +481,40 @@ func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*hexutil.Uint64, e
 	}
 	ret := hexutil.Uint64(receipt.CumulativeGasUsed)
 	return &ret, nil
+}
+
+func (t *Transaction) BlobGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil, nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil, nil
+	}
+
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+	ret := hexutil.Uint64(receipt.BlobGasUsed)
+	return &ret, nil
+}
+
+func (t *Transaction) BlobGasPrice(ctx context.Context) (*hexutil.Big, error) {
+	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil, nil
+	}
+	if tx.Type() != types.BlobTxType {
+		return nil, nil
+	}
+
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+	ret := (*hexutil.Big)(receipt.BlobGasPrice)
+	return ret, nil
 }
 
 func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs) (*Account, error) {
@@ -1019,6 +1068,30 @@ func (b *Block) Withdrawals(ctx context.Context) (*[]*Withdrawal, error) {
 	return &ret, nil
 }
 
+func (b *Block) BlobGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.BlobGasUsed == nil {
+		return nil, nil
+	}
+	ret := hexutil.Uint64(*header.BlobGasUsed)
+	return &ret, nil
+}
+
+func (b *Block) ExcessBlobGas(ctx context.Context) (*hexutil.Uint64, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if header.ExcessBlobGas == nil {
+		return nil, nil
+	}
+	ret := hexutil.Uint64(*header.ExcessBlobGas)
+	return &ret, nil
+}
+
 // BlockFilterCriteria encapsulates criteria passed to a `logs` accessor inside
 // a block.
 type BlockFilterCriteria struct {
@@ -1252,6 +1325,9 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	From *Long
 	To   *Long
 }) ([]*Block, error) {
+	if args.From == nil {
+		return nil, errors.New("from block number must be specified")
+	}
 	from := rpc.BlockNumber(*args.From)
 
 	var to rpc.BlockNumber
@@ -1261,7 +1337,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 		to = rpc.BlockNumber(r.backend.CurrentBlock().Number.Int64())
 	}
 	if to < from {
-		return []*Block{}, nil
+		return nil, errInvalidBlockRange
 	}
 	var ret []*Block
 	for i := from; i <= to; i++ {
@@ -1343,6 +1419,9 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	end := rpc.LatestBlockNumber.Int64()
 	if args.Filter.ToBlock != nil {
 		end = int64(*args.Filter.ToBlock)
+	}
+	if begin > 0 && end > 0 && begin > end {
+		return nil, errInvalidBlockRange
 	}
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {

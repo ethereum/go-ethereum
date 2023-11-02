@@ -133,8 +133,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	scheme, err := rawdb.ParseStateScheme(config.StateScheme, chainDb)
+	if err != nil {
+		return nil, err
+	}
 	// Try to recover offline state pruning only in hash-based.
-	if config.StateScheme == rawdb.HashScheme {
+	if scheme == rawdb.HashScheme {
 		if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb); err != nil {
 			log.Error("Failed to recover state", "error", err)
 		}
@@ -195,7 +199,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
 			StateHistory:        config.StateHistory,
-			StateScheme:         config.StateScheme,
+			StateScheme:         scheme,
 		}
 	)
 	// Override the chain config with provided settings.
@@ -388,7 +392,7 @@ func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	// r5   A      [X] F G
 	// r6    [X]
 	//
-	// In the round5, the inturn signer E is offline, so the worst case
+	// In the round5, the in-turn signer E is offline, so the worst case
 	// is A, F and G sign the block of round5 and reject the block of opponents
 	// and in the round6, the last available signer B is offline, the whole
 	// network is stuck.
@@ -475,7 +479,7 @@ func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Ethereum) Synced() bool                       { return s.handler.acceptTxs.Load() }
+func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }

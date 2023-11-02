@@ -212,6 +212,9 @@ func (t *freezerTable) repair() error {
 	}
 	// Ensure the index is a multiple of indexEntrySize bytes
 	if overflow := stat.Size() % indexEntrySize; overflow != 0 {
+		if t.readonly {
+			return fmt.Errorf("index file(path: %s, name: %s) size is not a multiple of %d", t.path, t.name, indexEntrySize)
+		}
 		truncateFreezerFile(t.index, stat.Size()-overflow) // New file can't trigger this path
 	}
 	// Retrieve the file sizes and prepare for truncation
@@ -254,6 +257,12 @@ func (t *freezerTable) repair() error {
 		t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 		lastIndex.unmarshalBinary(buffer)
 	}
+	// Print an error log if the index is corrupted due to an incorrect
+	// last index item. While it is theoretically possible to have a zero offset
+	// by storing all zero-size items, it is highly unlikely to occur in practice.
+	if lastIndex.offset == 0 && offsetsSize%indexEntrySize > 1 {
+		log.Error("Corrupted index file detected", "lastOffset", lastIndex.offset, "items", offsetsSize%indexEntrySize-1)
+	}
 	if t.readonly {
 		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForReadOnly)
 	} else {
@@ -270,6 +279,9 @@ func (t *freezerTable) repair() error {
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
 	for contentExp != contentSize {
+		if t.readonly {
+			return fmt.Errorf("freezer table(path: %s, name: %s, num: %d) is corrupted", t.path, t.name, lastIndex.filenum)
+		}
 		verbose = true
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
@@ -343,7 +355,7 @@ func (t *freezerTable) repair() error {
 		return err
 	}
 	if verbose {
-		t.logger.Info("Chain freezer table opened", "items", t.items.Load(), "size", t.headBytes)
+		t.logger.Info("Chain freezer table opened", "items", t.items.Load(), "deleted", t.itemOffset.Load(), "hidden", t.itemHidden.Load(), "tailId", t.tailId, "headId", t.headId, "size", t.headBytes)
 	} else {
 		t.logger.Debug("Chain freezer table opened", "items", t.items.Load(), "size", common.StorageSize(t.headBytes))
 	}
@@ -516,6 +528,10 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if err := t.meta.Sync(); err != nil {
 		return err
 	}
+	// Close the index file before shorten it.
+	if err := t.index.Close(); err != nil {
+		return err
+	}
 	// Truncate the deleted index entries from the index file.
 	err = copyFrom(t.index.Name(), t.index.Name(), indexEntrySize*(newDeleted-deleted+1), func(f *os.File) error {
 		tailIndex := indexEntry{
@@ -529,11 +545,12 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		return err
 	}
 	// Reopen the modified index file to load the changes
-	if err := t.index.Close(); err != nil {
-		return err
-	}
 	t.index, err = openFreezerFileForAppend(t.index.Name())
 	if err != nil {
+		return err
+	}
+	// Sync the file to ensure changes are flushed to disk
+	if err := t.index.Sync(); err != nil {
 		return err
 	}
 	// Release any files before the current tail
@@ -768,7 +785,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 			return fmt.Errorf("missing data file %d", fileId)
 		}
 		if _, err := dataFile.ReadAt(output[len(output)-length:], int64(start)); err != nil {
-			return err
+			return fmt.Errorf("%w, fileid: %d, start: %d, length: %d", err, fileId, start, length)
 		}
 		return nil
 	}

@@ -200,6 +200,9 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 		if triedb != nil {
 			triedb.Close()
 		}
+		if snaps != nil {
+			snaps.Release()
+		}
 	}()
 	checkedErr := t.checkError(subtest, err)
 	if checkedErr != nil {

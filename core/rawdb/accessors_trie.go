@@ -89,6 +89,16 @@ func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) 
 	return h.hash(data) == hash
 }
 
+// ExistsAccountTrieNode checks the presence of the account trie node with the
+// specified node path, regardless of the node hash.
+func ExistsAccountTrieNode(db ethdb.KeyValueReader, path []byte) bool {
+	has, err := db.Has(accountTrieNodeKey(path))
+	if err != nil {
+		return false
+	}
+	return has
+}
+
 // WriteAccountTrieNode writes the provided account trie node into database.
 func WriteAccountTrieNode(db ethdb.KeyValueWriter, path []byte, node []byte) {
 	if err := db.Put(accountTrieNodeKey(path), node); err != nil {
@@ -125,6 +135,16 @@ func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path [
 	h := newHasher()
 	defer h.release()
 	return h.hash(data) == hash
+}
+
+// ExistsStorageTrieNode checks the presence of the storage trie node with the
+// specified account hash and node path, regardless of the node hash.
+func ExistsStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) bool {
+	has, err := db.Has(storageTrieNodeKey(accountHash, path))
+	if err != nil {
+		return false
+	}
+	return has
 }
 
 // WriteStorageTrieNode writes the provided storage trie node into database.
@@ -284,4 +304,39 @@ func ReadStateScheme(db ethdb.Reader) string {
 		return "" // no state in disk
 	}
 	return HashScheme
+}
+
+// ParseStateScheme checks if the specified state scheme is compatible with
+// the stored state.
+//
+//   - If the provided scheme is none, use the scheme consistent with persistent
+//     state, or fallback to hash-based scheme if state is empty.
+//
+//   - If the provided scheme is hash, use hash-based scheme or error out if not
+//     compatible with persistent state scheme.
+//
+//   - If the provided scheme is path: use path-based scheme or error out if not
+//     compatible with persistent state scheme.
+func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
+	// If state scheme is not specified, use the scheme consistent
+	// with persistent state, or fallback to hash mode if database
+	// is empty.
+	stored := ReadStateScheme(disk)
+	if provided == "" {
+		if stored == "" {
+			// use default scheme for empty database, flip it when
+			// path mode is chosen as default
+			log.Info("State schema set to default", "scheme", "hash")
+			return HashScheme, nil
+		}
+		log.Info("State scheme set to already existing", "scheme", stored)
+		return stored, nil // reuse scheme of persistent scheme
+	}
+	// If state scheme is specified, ensure it's compatible with
+	// persistent state.
+	if stored == "" || provided == stored {
+		log.Info("State scheme set by user", "scheme", provided)
+		return provided, nil
+	}
+	return "", fmt.Errorf("incompatible state scheme, stored: %s, provided: %s", stored, provided)
 }

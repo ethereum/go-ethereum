@@ -18,7 +18,6 @@
 package utils
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -39,11 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -73,7 +70,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -273,7 +269,6 @@ var (
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
-		Value:    rawdb.HashScheme,
 		Category: flags.StateCategory,
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
@@ -601,9 +596,9 @@ var (
 	}
 
 	// MISC settings
-	SyncTargetFlag = &cli.PathFlag{
+	SyncTargetFlag = &cli.StringFlag{
 		Name:      "synctarget",
-		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
+		Usage:     `Hash of the block to full sync to (dev testing feature)`,
 		TakesFile: true,
 		Category:  flags.MiscCategory,
 	}
@@ -967,20 +962,16 @@ var (
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
 
-	// DatabasePathFlags is the flag group of all database path flags.
-	DatabasePathFlags = []cli.Flag{
+	// DatabaseFlags is the flag group of all database flags.
+	DatabaseFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
 		RemoteDBFlag,
+		DBEngineFlag,
+		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
 )
-
-func init() {
-	if rawdb.PebbleEnabled {
-		DatabasePathFlags = append(DatabasePathFlags, DBEngineFlag)
-	}
-}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
@@ -1004,7 +995,7 @@ func MakeDataDir(ctx *cli.Context) string {
 
 // setNodeKey creates a node key from set command line flags, either loading it
 // from a file or as a specified hex value. If neither flags were provided, this
-// method returns nil and an emphemeral key is to be generated.
+// method returns nil and an ephemeral key is to be generated.
 func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 	var (
 		hex  = ctx.String(NodeKeyHexFlag.Name)
@@ -1037,35 +1028,45 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
+// Priority order for bootnodes configuration:
+//
+// 1. --bootnodes flag
+// 2. Config file
+// 3. Network preset flags (e.g. --goerli)
+// 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
-	switch {
-	case ctx.IsSet(BootnodesFlag.Name):
+	if ctx.IsSet(BootnodesFlag.Name) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
-	case ctx.Bool(HoleskyFlag.Name):
-		urls = params.HoleskyBootnodes
-	case ctx.Bool(SepoliaFlag.Name):
-		urls = params.SepoliaBootnodes
-	case ctx.Bool(GoerliFlag.Name):
-		urls = params.GoerliBootnodes
+	} else {
+		if cfg.BootstrapNodes != nil {
+			return // Already set by config file, don't apply defaults.
+		}
+		switch {
+		case ctx.Bool(HoleskyFlag.Name):
+			urls = params.HoleskyBootnodes
+		case ctx.Bool(SepoliaFlag.Name):
+			urls = params.SepoliaBootnodes
+		case ctx.Bool(GoerliFlag.Name):
+			urls = params.GoerliBootnodes
+		}
 	}
+	cfg.BootstrapNodes = mustParseBootnodes(urls)
+}
 
-	// don't apply defaults if BootstrapNodes is already set
-	if cfg.BootstrapNodes != nil {
-		return
-	}
-
-	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
+func mustParseBootnodes(urls []string) []*enode.Node {
+	nodes := make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
-				continue
+				return nil
 			}
-			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
+			nodes = append(nodes, node)
 		}
 	}
+	return nodes
 }
 
 // setBootstrapNodesV5 creates a list of bootstrap nodes from the command line
@@ -1686,7 +1687,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
-	if ctx.IsSet(SyncModeFlag.Name) {
+	if ctx.IsSet(SyncTargetFlag.Name) {
+		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+	} else if ctx.IsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
@@ -1718,15 +1721,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
-	// Parse state scheme, abort the process if it's not compatible.
-	chaindb := tryMakeReadOnlyDatabase(ctx, stack)
-	scheme, err := ParseStateScheme(ctx, chaindb)
-	chaindb.Close()
-	if err != nil {
-		Fatalf("%v", err)
+	if ctx.IsSet(StateSchemeFlag.Name) {
+		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
-	cfg.StateScheme = scheme
-
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -1971,21 +1968,9 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
-	blob, err := os.ReadFile(path)
-	if err != nil {
-		Fatalf("Failed to read block file: %v", err)
-	}
-	rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
-	if err != nil {
-		Fatalf("Failed to decode block blob: %v", err)
-	}
-	var block types.Block
-	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
-		Fatalf("Failed to decode block: %v", err)
-	}
-	catalyst.RegisterFullSyncTester(stack, eth, &block)
-	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
+	catalyst.RegisterFullSyncTester(stack, eth, target)
+	log.Info("Registered full-sync tester", "hash", target)
 }
 
 func SetupMetrics(ctx *cli.Context) {
@@ -2127,7 +2112,7 @@ func DialRPCWithHeaders(endpoint string, headers []string) (*rpc.Client, error) 
 	}
 	var opts []rpc.ClientOption
 	if len(headers) > 0 {
-		var customHeaders = make(http.Header)
+		customHeaders := make(http.Header)
 		for _, h := range headers {
 			kv := strings.Split(h, ":")
 			if len(kv) != 2 {
@@ -2174,7 +2159,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
-	scheme, err := ParseStateScheme(ctx, chainDb)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), chainDb)
 	if err != nil {
 		Fatalf("%v", err)
 	}
@@ -2242,47 +2227,12 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	return preloads
 }
 
-// ParseStateScheme resolves scheme identifier from CLI flag. If the provided
-// state scheme is not compatible with the one of persistent scheme, an error
-// will be returned.
-//
-//   - none: use the scheme consistent with persistent state, or fallback
-//     to hash-based scheme if state is empty.
-//   - hash: use hash-based scheme or error out if not compatible with
-//     persistent state scheme.
-//   - path: use path-based scheme or error out if not compatible with
-//     persistent state scheme.
-func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
-	// If state scheme is not specified, use the scheme consistent
-	// with persistent state, or fallback to hash mode if database
-	// is empty.
-	stored := rawdb.ReadStateScheme(disk)
-	if !ctx.IsSet(StateSchemeFlag.Name) {
-		if stored == "" {
-			// use default scheme for empty database, flip it when
-			// path mode is chosen as default
-			log.Info("State schema set to default", "scheme", "hash")
-			return rawdb.HashScheme, nil
-		}
-		log.Info("State scheme set to already existing", "scheme", stored)
-		return stored, nil // reuse scheme of persistent scheme
-	}
-	// If state scheme is specified, ensure it's compatible with
-	// persistent state.
-	scheme := ctx.String(StateSchemeFlag.Name)
-	if stored == "" || scheme == stored {
-		log.Info("State scheme set by user", "scheme", scheme)
-		return scheme, nil
-	}
-	return "", fmt.Errorf("incompatible state scheme, stored: %s, provided: %s", stored, scheme)
-}
-
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
 func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool) *trie.Database {
 	config := &trie.Config{
 		Preimages: preimage,
 	}
-	scheme, err := ParseStateScheme(ctx, disk)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), disk)
 	if err != nil {
 		Fatalf("%v", err)
 	}

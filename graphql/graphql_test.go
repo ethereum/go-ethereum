@@ -148,6 +148,11 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"data":{"block":{"number":"0xa","call":{"data":"0x","status":"0x1"}}}}`,
 			code: 200,
 		},
+		{
+			body: `{"query": "{blocks {number}}"}`,
+			want: `{"errors":[{"message":"from block number must be specified","path":["blocks"]}],"data":null}`,
+			code: 400,
+		},
 	} {
 		resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", strings.NewReader(tt.body))
 		if err != nil {
@@ -163,6 +168,9 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		}
 		if tt.code != resp.StatusCode {
 			t.Errorf("testcase %d %s,\nwrong statuscode, have: %v, want: %v", i, tt.body, resp.StatusCode, tt.code)
+		}
+		if ctype := resp.Header.Get("Content-Type"); ctype != "application/json" {
+			t.Errorf("testcase %d \nwrong Content-Type, have: %v, want: %v", i, ctype, "application/json")
 		}
 	}
 }

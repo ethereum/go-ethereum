@@ -393,6 +393,7 @@ func testTransactionInBlockInterrupted(t *testing.T, client *rpc.Client) {
 	// Test tx in block interrupted.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	<-ctx.Done() // Ensure the close of the Done channel
 	tx, err := ec.TransactionInBlock(ctx, block.Hash(), 0)
 	if tx != nil {
 		t.Fatal("transaction should be nil")
@@ -583,6 +584,11 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func testAtFunctions(t *testing.T, client *rpc.Client) {
 	ec := NewClient(client)
 
+	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
+	if err != nil {
+		t.Fatalf("BlockByNumber error: %v", err)
+	}
+
 	// send a transaction for some interesting pending status
 	sendTransaction(ec)
 	time.Sleep(100 * time.Millisecond)
@@ -600,6 +606,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	hashBalance, err := ec.BalanceAtHash(context.Background(), testAddr, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if balance.Cmp(hashBalance) == 0 {
+		t.Fatalf("unexpected balance at hash: %v %v", balance, hashBalance)
+	}
 	penBalance, err := ec.PendingBalanceAt(context.Background(), testAddr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -611,6 +624,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	nonce, err := ec.NonceAt(context.Background(), testAddr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	hashNonce, err := ec.NonceAtHash(context.Background(), testAddr, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hashNonce == nonce {
+		t.Fatalf("unexpected nonce at hash: %v %v", nonce, hashNonce)
 	}
 	penNonce, err := ec.PendingNonceAt(context.Background(), testAddr)
 	if err != nil {
@@ -624,6 +644,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	hashStorage, err := ec.StorageAtHash(context.Background(), testAddr, common.Hash{}, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(storage, hashStorage) {
+		t.Fatalf("unexpected storage at hash: %v %v", storage, hashStorage)
+	}
 	penStorage, err := ec.PendingStorageAt(context.Background(), testAddr, common.Hash{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -635,6 +662,13 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	code, err := ec.CodeAt(context.Background(), testAddr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	hashCode, err := ec.CodeAtHash(context.Background(), common.Address{}, block.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(code, hashCode) {
+		t.Fatalf("unexpected code at hash: %v %v", code, hashCode)
 	}
 	penCode, err := ec.PendingCodeAt(context.Background(), testAddr)
 	if err != nil {
@@ -666,6 +700,7 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	// TransactionSender. Ensure the server is not asked by canceling the context here.
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
+	<-canceledCtx.Done() // Ensure the close of the Done channel
 	sender1, err := ec.TransactionSender(canceledCtx, tx1, block2.Hash(), 0)
 	if err != nil {
 		t.Fatal(err)

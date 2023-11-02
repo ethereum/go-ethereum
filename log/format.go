@@ -24,6 +24,14 @@ const (
 	termCtxMaxPadding = 40
 )
 
+// ResetGlobalState resets the fieldPadding, which is useful for producing
+// predictable output.
+func ResetGlobalState() {
+	fieldPaddingLock.Lock()
+	fieldPadding = make(map[string]int)
+	fieldPaddingLock.Unlock()
+}
+
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
 	"github.com/ethereum/go-ethereum/",

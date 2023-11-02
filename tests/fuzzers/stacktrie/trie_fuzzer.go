@@ -115,7 +115,7 @@ type kv struct {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func Fuzz(data []byte) int {
+func fuzz(data []byte) int {
 	f := fuzzer{
 		input:     bytes.NewReader(data),
 		exhausted: false,
@@ -140,9 +140,11 @@ func (f *fuzzer) fuzz() int {
 		trieA   = trie.NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB), nil)
-		trieB   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(spongeB, owner, path, hash, blob, dbB.Scheme())
+
+		options = trie.NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
 		})
+		trieB       = trie.NewStackTrie(options)
 		vals        []kv
 		useful      bool
 		maxElements = 10000
@@ -204,22 +206,20 @@ func (f *fuzzer) fuzz() int {
 
 	// Ensure all the nodes are persisted correctly
 	var (
-		nodeset = make(map[string][]byte) // path -> blob
-		trieC   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
+		nodeset  = make(map[string][]byte) // path -> blob
+		optionsC = trie.NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 			if crypto.Keccak256Hash(blob) != hash {
 				panic("invalid node blob")
 			}
-			if owner != (common.Hash{}) {
-				panic("invalid node owner")
-			}
 			nodeset[string(path)] = common.CopyBytes(blob)
 		})
+		trieC   = trie.NewStackTrie(optionsC)
 		checked int
 	)
 	for _, kv := range vals {
 		trieC.MustUpdate(kv.k, kv.v)
 	}
-	rootC, _ := trieC.Commit()
+	rootC := trieC.Commit()
 	if rootA != rootC {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootC))
 	}

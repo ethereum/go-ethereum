@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -58,7 +58,7 @@ type accRangeTest struct {
 func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 	var (
 		root           = s.chain.RootAt(999)
-		ffHash         = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		ffHash         = common.MaxHash
 		zero           = common.Hash{}
 		firstKeyMinus1 = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf29")
 		firstKey       = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
@@ -125,7 +125,7 @@ type stRangesTest struct {
 // TestSnapGetStorageRanges various forms of GetStorageRanges requests.
 func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 	var (
-		ffHash    = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+		ffHash    = common.MaxHash
 		zero      = common.Hash{}
 		firstKey  = common.HexToHash("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 		secondKey = common.HexToHash("0x09e47cd5056a689e708f22fe1f932709a320518e444f5f7d8d46a3da523d6606")
@@ -530,17 +530,13 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	for i, key := range hashes {
 		keys[i] = common.CopyBytes(key[:])
 	}
-	nodes := make(light.NodeList, len(proof))
+	nodes := make(trienode.ProofList, len(proof))
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	proofdb := nodes.NodeSet()
+	proofdb := nodes.Set()
 
-	var end []byte
-	if len(keys) > 0 {
-		end = keys[len(keys)-1]
-	}
-	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], end, keys, accounts, proofdb)
+	_, err = trie.VerifyRangeProof(tc.root, tc.origin[:], keys, accounts, proofdb)
 	return err
 }
 
