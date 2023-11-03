@@ -284,8 +284,6 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
 						break
 					}
-					// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-					task.statedb.Finalise(api.backend.ChainConfig().IsEIP158(task.block.Number()))
 					task.results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
 				}
 				// Tracing state is used up, queue it for de-referencing. Note the
@@ -599,7 +597,6 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	var (
 		txs       = block.Transactions()
 		blockHash = block.Hash()
-		is158     = api.backend.ChainConfig().IsEIP158(block.Number())
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
@@ -618,9 +615,6 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			return nil, err
 		}
 		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
-		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(is158)
 	}
 	return results, nil
 }
@@ -935,10 +929,10 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
-		tracer    directory.Tracer
-		err       error
-		timeout   = defaultTraceTimeout
-		txContext = core.NewEVMTxContext(message)
+		tracer  directory.Tracer
+		err     error
+		timeout = defaultTraceTimeout
+		usedGas uint64
 	)
 	if config == nil {
 		config = &TraceConfig{}
@@ -951,7 +945,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
 	statedb.SetLogger(tracer)
 
 	// Define a meaningful timeout of a single transaction trace
@@ -973,14 +967,10 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	tracer.CaptureTxStart(vmenv, tx)
-	res, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit))
+	_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv)
 	if err != nil {
-		tracer.CaptureTxEnd(nil, err)
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-	r := &types.Receipt{GasUsed: res.UsedGas}
-	tracer.CaptureTxEnd(r, nil)
 	return tracer.GetResult()
 }
 
