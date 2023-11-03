@@ -1,10 +1,12 @@
 package discover
 
 import (
+	"crypto/rand"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
@@ -12,6 +14,26 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 )
+
+type MockStorage struct {
+	db map[string][]byte
+}
+
+func (m *MockStorage) ContentId(contentKey []byte) []byte {
+	return crypto.Keccak256(contentKey)
+}
+
+func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+	if content, ok := m.db[string(contentId)]; ok {
+		return content, nil
+	}
+	return nil, ContentNotFound
+}
+
+func (m *MockStorage) Put(contentKey []byte, content []byte) error {
+	m.db[string(m.ContentId(contentKey))] = content
+	return nil
+}
 
 func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol, error) {
 	conf := DefaultPortalProtocolConfig()
@@ -21,7 +43,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	if bootNodes != nil {
 		conf.BootstrapNodes = bootNodes
 	}
-	portalProtocol, err := NewPortalProtocol(conf, portalwire.HistoryNetwork, newkey())
+	portalProtocol, err := NewPortalProtocol(conf, portalwire.HistoryNetwork, newkey(), &MockStorage{db: make(map[string][]byte)})
 	if err != nil {
 		return nil, err
 	}
@@ -76,4 +98,32 @@ func TestPortalWireProtocol(t *testing.T) {
 	slices.ContainsFunc(node3.table.Nodes(), func(n *enode.Node) bool {
 		return n.ID() == node2.localNode.Node().ID()
 	})
+
+	err = node1.storage.Put([]byte("test_key"), []byte("test_value"))
+	assert.NoError(t, err)
+
+	flag, content, err := node2.findContent(node1.localNode.Node(), []byte("test_key"))
+	assert.NoError(t, err)
+	assert.Equal(t, portalwire.ContentRawSelector, flag)
+	assert.Equal(t, []byte("test_value"), content)
+
+	flag, content, err = node2.findContent(node3.localNode.Node(), []byte("test_key"))
+	assert.NoError(t, err)
+	assert.Equal(t, portalwire.ContentEnrsSelector, flag)
+	assert.Equal(t, 1, len(content.([]*enode.Node)))
+	assert.Equal(t, node1.localNode.Node().ID(), content.([]*enode.Node)[0].ID())
+
+	// create a byte slice of length 1199 and fill it with random data
+	// this will be used as a test content
+	largeTestContent := make([]byte, 1199)
+	_, err = rand.Read(largeTestContent)
+	assert.NoError(t, err)
+
+	err = node1.storage.Put([]byte("large_test_key"), largeTestContent)
+	assert.NoError(t, err)
+
+	//flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
+	//assert.NoError(t, err)
+	//assert.Equal(t, portalwire.ContentConnIdSelector, flag)
+	//assert.Equal(t, largeTestContent, content)
 }
