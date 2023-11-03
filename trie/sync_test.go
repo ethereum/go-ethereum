@@ -73,7 +73,7 @@ func makeTestTrie(scheme string) (ethdb.Database, *Database, *StateTrie, map[str
 func checkTrieContents(t *testing.T, db ethdb.Database, scheme string, root []byte, content map[string][]byte, rawTrie bool) {
 	// Check root availability and trie contents
 	ndb := newTestDatabase(db, scheme)
-	if err := checkTrieConsistency(db, scheme, common.BytesToHash(root), rawTrie); err != nil {
+	if err := checkTrieConsistency(db, scheme, common.BytesToHash(root), rawTrie, nil); err != nil {
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	type reader interface {
@@ -101,7 +101,7 @@ func checkTrieContents(t *testing.T, db ethdb.Database, scheme string, root []by
 }
 
 // checkTrieConsistency checks that all nodes in a trie are indeed present.
-func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash, rawTrie bool) error {
+func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash, rawTrie bool, resolver NodeResolver) error {
 	ndb := newTestDatabase(db, scheme)
 	var it NodeIterator
 	if rawTrie {
@@ -116,6 +116,9 @@ func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash, ra
 			return nil // Consider a non existent state consistent
 		}
 		it = trie.MustNodeIterator(nil)
+	}
+	if resolver != nil {
+		it.AddResolver(resolver)
 	}
 	for it.Next(true) {
 	}
@@ -512,8 +515,8 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 // Tests that at any point in time during a sync, only complete sub-tries are in
 // the database.
 func TestIncompleteSyncHash(t *testing.T) {
-	testIncompleteSync(t, rawdb.HashScheme)
-	testIncompleteSync(t, rawdb.PathScheme)
+	testIncompleteSync(t, rawdb.HashScheme) // 9.585s
+	testIncompleteSync(t, rawdb.PathScheme) // 19.522
 }
 
 func testIncompleteSync(t *testing.T, scheme string) {
@@ -585,16 +588,32 @@ func testIncompleteSync(t *testing.T, scheme string) {
 			})
 		}
 	}
+
+	// Cache trie nodes for faster verification
+	nodesCache := make(map[string][]byte)
+	resolver := func(owner common.Hash, path []byte, hash common.Hash) []byte {
+		if scheme == rawdb.HashScheme {
+			return nodesCache[string(hash[:])]
+		}
+		return nodesCache[string(path)]
+	}
+
 	// Sanity check that removing any node from the database is detected
 	for i, path := range addedKeys {
 		owner, inner := ResolvePath([]byte(path))
 		nodeHash := addedHashes[i]
 		value := rawdb.ReadTrieNode(diskdb, owner, inner, nodeHash, scheme)
 		rawdb.DeleteTrieNode(diskdb, owner, inner, nodeHash, scheme)
-		if err := checkTrieConsistency(diskdb, srcDb.Scheme(), root, false); err == nil {
+		if err := checkTrieConsistency(diskdb, srcDb.Scheme(), root, false, resolver); err == nil {
 			t.Fatalf("trie inconsistency not caught, missing: %x", path)
 		}
 		rawdb.WriteTrieNode(diskdb, owner, inner, nodeHash, value, scheme)
+		// We only add nodes to the cache that we already visited
+		if scheme == rawdb.HashScheme {
+			nodesCache[string(nodeHash[:])] = value
+		} else {
+			nodesCache[string(inner[:])] = value
+		}
 	}
 }
 
