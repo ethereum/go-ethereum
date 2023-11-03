@@ -206,7 +206,20 @@ func TestTraceCall(t *testing.T) {
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
+
+		if i == genBlocks-1 {
+			tx, _ := types.SignTx(types.NewTransaction(uint64(i)+1, accounts[2].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+			b.AddTx(tx)
+		}
 	})
+
+	// for i := 0; i <= genBlocks; i++ {
+	// 	block := backend.chain.GetBlockByNumber(uint64(i))
+	// 	fmt.Printf(".......block(%s) %d -> %d \n", block.Hash().String(), i, block.Transactions().Len())
+	// }
+
+	uintPtr := func(i int) *hexutil.Uint { x := hexutil.Uint(i); return &x }
+
 	defer backend.teardown()
 	api := NewAPI(backend)
 	var testSuite = []struct {
@@ -237,6 +250,29 @@ func TestTraceCall(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
+			expectErr: nil,
+			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
+		},
+		// Standard JSON trace upon the head, plain transfer.
+		{
+			blockNumber: rpc.BlockNumber(genBlocks),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config:    &TraceCallConfig{TxIndex: uintPtr(0)},
+			expectErr: fmt.Errorf("insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
+		},
+		// Standard JSON trace upon the head + txindex, plain transfer.
+		{
+			blockNumber: rpc.BlockNumber(genBlocks),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
 			expectErr: nil,
 			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
@@ -298,7 +334,7 @@ func TestTraceCall(t *testing.T) {
 				continue
 			}
 			if !reflect.DeepEqual(err, testspec.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, testspec.expectErr, err)
 			}
 		} else {
 			if err != nil {
