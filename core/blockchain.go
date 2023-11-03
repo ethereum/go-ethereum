@@ -1802,6 +1802,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				return it.index, err
 			}
 			stats.processed++
+			if bc.logger != nil {
+				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
+				bc.logger.OnBlockEnd(nil)
+			}
 
 			// We can assume that logs are empty here, since the only way for consecutive
 			// Clique blocks to have the same state is if there are no transactions.
