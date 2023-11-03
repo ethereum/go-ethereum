@@ -59,6 +59,8 @@ type StateLogger interface {
 	OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
 	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
 	OnLog(log *types.Log)
+	// OnNewAccount is called when a new account is created.
+	// Note: it will be even invoked when precompiled contracts are populated.
 	OnNewAccount(addr common.Address)
 }
 
