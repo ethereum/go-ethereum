@@ -7,11 +7,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -43,9 +45,11 @@ const (
 
 	portalFindnodesResultLimit = 32
 
-	defaultUTPAcceptTimeout = 15 * time.Second
+	defaultUTPConnectTimeout = 15 * time.Second
 
 	defaultUTPWriteTimeout = 60 * time.Second
+
+	defaultUTPReadTimeout = 60 * time.Second
 )
 
 type PortalProtocolConfig struct {
@@ -94,7 +98,7 @@ type PortalProtocol struct {
 	storage        Storage
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage) (*PortalProtocol, error) {
 	nodeDB, err := enode.OpenDB(config.NodeDBPath)
 	if err != nil {
 		return nil, err
@@ -117,6 +121,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		cancelCloseCtx: cancelCloseCtx,
 		localNode:      localNode,
 		validSchemes:   enode.ValidSchemes,
+		storage:        storage,
 	}
 
 	return protocol, nil
@@ -161,9 +166,8 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	p.utpPackets = make(chan *utp.UdpMessage, 10)
 	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithCustomHandler(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
-			var a [32]byte
-			// todo need to find enode.ID by addr
-			_, err := p.DiscV5.TalkRequestToID(a, addr, portalwire.UTPNetwork, buf)
+			id := crypto.Keccak256([]byte(addr.String()))
+			_, err := p.DiscV5.TalkRequestToID(enode.ID(id), addr, portalwire.UTPNetwork, buf)
 			return 0, err
 		},
 		func() ([]byte, *net.UDPAddr, error) {
@@ -211,6 +215,44 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 	return nil
 }
 
+func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
+	enrSeq := p.DiscV5.LocalNode().Seq()
+	radiusBytes, err := p.nodeRadius.MarshalSSZ()
+	if err != nil {
+		return 0, err
+	}
+	customPayload := &portalwire.PingPongCustomData{
+		Radius: radiusBytes,
+	}
+
+	customPayloadBytes, err := customPayload.MarshalSSZ()
+	if err != nil {
+		return 0, err
+	}
+
+	pingRequest := &portalwire.Ping{
+		EnrSeq:        enrSeq,
+		CustomPayload: customPayloadBytes,
+	}
+
+	p.log.Trace("Sending ping request", "protocol", p.protocolId, "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
+	pingRequestBytes, err := pingRequest.MarshalSSZ()
+	if err != nil {
+		return 0, err
+	}
+
+	talkRequestBytes := make([]byte, 0, len(pingRequestBytes)+1)
+	talkRequestBytes = append(talkRequestBytes, portalwire.PING)
+	talkRequestBytes = append(talkRequestBytes, pingRequestBytes...)
+
+	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
+
+	if err != nil {
+		p.replaceNode(node)
+	}
+	return p.processPong(node, talkResp)
+}
+
 func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode.Node, error) {
 	distancesBytes := make([][2]byte, len(distances))
 	for i, distance := range distances {
@@ -241,44 +283,148 @@ func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode
 	return p.processNodes(node, talkResp, distances)
 }
 
-func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances []uint) ([]*enode.Node, error) {
-	var (
-		nodes    []*enode.Node
-		seen     = make(map[enode.ID]struct{})
-		err      error
-		verified = 0
-	)
+func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte, interface{}, error) {
+	findContent := &portalwire.FindContent{
+		ContentKey: contentKey,
+	}
 
+	p.log.Trace("Sending find content request", "id", node.ID(), "findContent", findContent)
+	findContentBytes, err := findContent.MarshalSSZ()
+	if err != nil {
+		p.log.Error("failed to marshal find content request", "err", err)
+		return 0xff, nil, err
+	}
+
+	talkRequestBytes := make([]byte, 0, len(findContentBytes)+1)
+	talkRequestBytes = append(talkRequestBytes, portalwire.FINDCONTENT)
+	talkRequestBytes = append(talkRequestBytes, findContentBytes...)
+
+	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
+	if err != nil {
+		p.log.Error("failed to send find content request", "err", err)
+		return 0xff, nil, err
+	}
+
+	return p.processContent(node, talkResp)
+}
+
+func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, interface{}, error) {
+	if resp[0] != portalwire.CONTENT {
+		return 0xff, nil, fmt.Errorf("invalid content response")
+	}
+
+	switch resp[1] {
+	case portalwire.ContentRawSelector:
+		content := &portalwire.Content{}
+		err := content.UnmarshalSSZ(resp[2:])
+		if err != nil {
+			return 0xff, nil, err
+		}
+
+		p.log.Trace("Received content response", "id", target.ID(), "content", content)
+		return resp[1], content.Content, nil
+	case portalwire.ContentConnIdSelector:
+		connIdMsg := &portalwire.ConnectionId{}
+		err := connIdMsg.UnmarshalSSZ(resp[2:])
+		if err != nil {
+			return 0xff, nil, err
+		}
+
+		p.log.Trace("Received content response", "id", target.ID(), "connIdMsg", connIdMsg)
+		rctx, rcancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
+		laddr := p.utp.Addr().(*utp.Addr)
+		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
+		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
+		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(rctx), utp.WithConnId(uint32(connId)))
+		if err != nil {
+			rcancel()
+			return 0xff, nil, err
+		}
+
+		err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
+		if err != nil {
+			rcancel()
+			return 0xff, nil, err
+		}
+		// Read ALL the data from the connection until EOF and return it
+		data := make([]byte, 0)
+		for {
+			buf := make([]byte, 1024)
+			var n int
+			n, err = conn.Read(buf)
+			if err != nil {
+				rcancel()
+				if errors.Is(err, io.EOF) {
+					p.log.Trace("Received content response", "id", target.ID(), "data", data, "size", n)
+					return resp[1], data, nil
+				}
+
+				p.log.Error("failed to read from utp connection", "err", err)
+				return 0xff, nil, err
+			}
+			data = append(data, buf[:n]...)
+		}
+	case portalwire.ContentEnrsSelector:
+		enrs := &portalwire.Enrs{}
+		err := enrs.UnmarshalSSZ(resp[2:])
+
+		if err != nil {
+			return 0xff, nil, err
+		}
+
+		p.log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
+
+		nodes := p.filterNodes(target, enrs.Enrs, nil)
+		return resp[1], nodes, nil
+	default:
+		return 0xff, nil, fmt.Errorf("invalid content response")
+	}
+}
+
+func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances []uint) ([]*enode.Node, error) {
 	if resp[0] != portalwire.NODES {
 		return nil, fmt.Errorf("invalid nodes response")
 	}
 
 	nodesResp := &portalwire.Nodes{}
-	err = nodesResp.UnmarshalSSZ(resp[1:])
+	err := nodesResp.UnmarshalSSZ(resp[1:])
 	if err != nil {
 		return nil, err
 	}
 
 	p.table.addVerifiedNode(wrapNode(target))
-	var n *enode.Node
-	for _, b := range nodesResp.Enrs {
+	nodes := p.filterNodes(target, nodesResp.Enrs, distances)
+
+	return nodes, nil
+}
+
+func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distances []uint) []*enode.Node {
+	var (
+		nodes    []*enode.Node
+		seen     = make(map[enode.ID]struct{})
+		err      error
+		verified = 0
+		n        *enode.Node
+	)
+
+	for _, b := range enrs {
 		record := &enr.Record{}
 		err = rlp.DecodeBytes(b, record)
 		if err != nil {
-			p.log.Debug("Invalid record in nodes response", "id", target.ID(), "err", err)
+			p.log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
 			continue
 		}
 		n, err = p.verifyResponseNode(target, record, distances, seen)
 		if err != nil {
-			p.log.Debug("Invalid record in nodes response", "id", target.ID(), "err", err)
+			p.log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
 			continue
 		}
 		verified++
 		nodes = append(nodes, n)
 	}
 
-	p.log.Trace("Received nodes response", "id", target.ID(), "total", nodesResp.Total, "verified", verified, "nodes", nodes)
-	return nodes, nil
+	p.log.Trace("Received nodes response", "id", target.ID(), "total", len(enrs), "verified", verified, "nodes", nodes)
+	return nodes
 }
 
 func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (uint64, error) {
@@ -309,16 +455,16 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (uint64, e
 }
 
 func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	if node := p.DiscV5.getNode(id); node != nil {
-		p.table.addSeenNode(wrapNode(node))
+	if n := p.DiscV5.getNode(id); n != nil {
+		p.table.addSeenNode(wrapNode(n))
 	}
 	p.utpPackets <- &utp.UdpMessage{Buf: msg, Addr: addr}
 	return []byte("")
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	if node := p.DiscV5.getNode(id); node != nil {
-		p.table.addSeenNode(wrapNode(node))
+	if n := p.DiscV5.getNode(id); n != nil {
+		p.table.addSeenNode(wrapNode(n))
 	}
 
 	msgCode := msg[0]
@@ -459,16 +605,16 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 	contentId := p.storage.ContentId(request.ContentKey)
 	if contentId == nil {
-		return nil, fmt.Errorf("content not found")
+		return nil, ContentNotFound
 	}
 
 	var content []byte
 	content, err = p.storage.Get(request.ContentKey, contentId)
-	if err != nil {
+	if err != nil && !errors.Is(err, ContentNotFound) {
 		return nil, err
 	}
 
-	if content == nil {
+	if errors.Is(err, ContentNotFound) {
 		closestNodes := p.findNodesCloseToContent(contentId)
 		for i, n := range closestNodes {
 			if n.ID() == id {
@@ -500,9 +646,21 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 		return talkRespBytes, nil
 	} else if len(content) <= maxPayloadSize {
-		contentMsgBytes := make([]byte, 0, len(content)+1)
+		rawContentMsg := &portalwire.Content{
+			Content: content,
+		}
+
+		p.log.Trace("Sending raw content response", "protocol", p.protocolId, "source", addr, "content", rawContentMsg)
+
+		var rawContentMsgBytes []byte
+		rawContentMsgBytes, err = rawContentMsg.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+
+		contentMsgBytes := make([]byte, 0, len(rawContentMsgBytes)+1)
 		contentMsgBytes = append(contentMsgBytes, portalwire.ContentRawSelector)
-		contentMsgBytes = append(contentMsgBytes, content...)
+		contentMsgBytes = append(contentMsgBytes, rawContentMsgBytes...)
 
 		talkRespBytes := make([]byte, 0, len(contentMsgBytes)+1)
 		talkRespBytes = append(talkRespBytes, portalwire.CONTENT)
@@ -515,7 +673,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		connIdSend := connId.SendId()
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultUTPAcceptTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
 			var conn *utp.Conn
 			conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
 			if err != nil {
@@ -602,44 +760,6 @@ func (p *PortalProtocol) verifyResponseNode(sender *enode.Node, r *enr.Record, d
 	}
 	seen[n.ID()] = struct{}{}
 	return n, nil
-}
-
-func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
-	enrSeq := p.DiscV5.LocalNode().Seq()
-	radiusBytes, err := p.nodeRadius.MarshalSSZ()
-	if err != nil {
-		return 0, err
-	}
-	customPayload := &portalwire.PingPongCustomData{
-		Radius: radiusBytes,
-	}
-
-	customPayloadBytes, err := customPayload.MarshalSSZ()
-	if err != nil {
-		return 0, err
-	}
-
-	pingRequest := &portalwire.Ping{
-		EnrSeq:        enrSeq,
-		CustomPayload: customPayloadBytes,
-	}
-
-	p.log.Trace("Sending ping request", "protocol", p.protocolId, "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
-	pingRequestBytes, err := pingRequest.MarshalSSZ()
-	if err != nil {
-		return 0, err
-	}
-
-	talkRequestBytes := make([]byte, 0, len(pingRequestBytes)+1)
-	talkRequestBytes = append(talkRequestBytes, portalwire.PING)
-	talkRequestBytes = append(talkRequestBytes, pingRequestBytes...)
-
-	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
-
-	if err != nil {
-		p.replaceNode(node)
-	}
-	return p.processPong(node, talkResp)
 }
 
 func (p *PortalProtocol) replaceNode(node *enode.Node) {
