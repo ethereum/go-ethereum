@@ -368,11 +368,7 @@ func TestGetBlockBodies68(t *testing.T) {
 func testGetBlockBodies(t *testing.T, protocol uint) {
 	gen := func(n int, g *core.BlockGen) {
 		if n%2 == 0 {
-			w := &types.Withdrawal{
-				Address: common.Address{0xaa},
-				Amount:  42,
-			}
-			g.AddWithdrawal(w)
+			g.AddWithdrawal(&types.Withdrawal{})
 		}
 	}
 

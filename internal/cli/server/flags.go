@@ -64,9 +64,10 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.DBEngine,
 	})
 	f.StringFlag(&flagset.StringFlag{
-		Name:  "keystore",
-		Usage: "Path of the directory where keystores are located",
-		Value: &c.cliConfig.KeyStoreDir,
+		Name:    "keystore",
+		Usage:   "Path of the directory where keystores are located",
+		Value:   &c.cliConfig.KeyStoreDir,
+		Default: c.cliConfig.KeyStoreDir,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "rpc.batchlimit",

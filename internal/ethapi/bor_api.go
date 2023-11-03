@@ -74,7 +74,11 @@ func (api *BorAPI) SendRawTransactionConditional(ctx context.Context, input hexu
 	}
 
 	currentHeader := api.b.CurrentHeader()
-	currentState, _, _ := api.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(currentHeader.Number.Int64()))
+	currentState, _, err := api.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(currentHeader.Number.Int64()))
+
+	if currentState == nil || err != nil {
+		return common.Hash{}, err
+	}
 
 	// check block number range
 	if err := currentHeader.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
