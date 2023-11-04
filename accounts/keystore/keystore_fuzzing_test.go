@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,21 +17,18 @@
 package keystore
 
 import (
-	"os"
-
-	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"testing"
 )
 
-func fuzz(input []byte) int {
-	ks := keystore.NewKeyStore("/tmp/ks", keystore.LightScryptN, keystore.LightScryptP)
-
-	a, err := ks.NewAccount(string(input))
-	if err != nil {
-		panic(err)
-	}
-	if err := ks.Unlock(a, string(input)); err != nil {
-		panic(err)
-	}
-	os.Remove(a.URL.Path)
-	return 1
+func FuzzPassword(f *testing.F) {
+	f.Fuzz(func(t *testing.T, password string) {
+		ks := NewKeyStore(t.TempDir(), LightScryptN, LightScryptP)
+		a, err := ks.NewAccount(password)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ks.Unlock(a, password); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

@@ -81,31 +81,31 @@ function compile_fuzzer() {
 
 go install github.com/holiman/gofuzz-shim@latest
 
-#compile_fuzzer accounts/abi        FuzzABI fuzzAbi
-compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi FuzzABI fuzzAbi
+# compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi FuzzABI fuzzAbi
+# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
+# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
+# compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
+# compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
+# compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
 
-#compile_fuzzer common/bitutil  FuzzEncoder      fuzzBitutilEncoder
-compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
+compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
 
-#compile_fuzzer common/bitutil  FuzzDecoder      fuzzBitutilDecoder
-compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
+compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
 
-#compile_fuzzer core/vm/runtime  FuzzVmRuntime      fuzzVmRuntime
-compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
+#compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
+#compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 
-#compile_fuzzer core/vm  FuzzPrecompiledContracts      fuzzPrecompiledContracts
-compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
+#compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
+#compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
+#compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
+#compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
 
-#compile_fuzzer core/types/        FuzzRLP fuzzRlp
-compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
+
 
 #compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 #compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 #compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
-#compile_fuzzer tests/fuzzers/keystore   Fuzz fuzzKeystore
 #compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
-#compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
-#compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 #compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
 #compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
 #compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
@@ -126,9 +126,3 @@ compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
 #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
 #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
 
-#compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
-#compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
-#compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
-#compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
-
-#compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
