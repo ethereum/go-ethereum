@@ -232,6 +232,16 @@ func dumpGenesis(ctx *cli.Context) error {
 		}
 		return nil
 	}
+
+	// if a datadir isn't specified, dump a generic dev-mode compatible genesis configuration
+	if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
+		genesis := core.DeveloperGenesisBlock(10_000_000, common.Address{})
+		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
+			utils.Fatalf("could not encode genesis: %s", err)
+		}
+		return nil
+	}
+
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
