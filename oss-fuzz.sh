@@ -51,9 +51,10 @@ DOG
 function compile_fuzzer() {
   package=$1
   function=$2
-  fuzzer=$3
+  file=$3
+  fuzzer=$4
 
-  path=$GOPATH/src/$1
+  path=$GOPATH/src/$package
 
   echo "Building $fuzzer"
   cd $path
@@ -65,7 +66,7 @@ function compile_fuzzer() {
 	if [[ $SANITIZER == *coverage* ]]; then
 		coverbuild $path $function $fuzzer $coverpkg
 	else
-	  gofuzz-shim --func $function  --package $package -o $fuzzer.a
+	  gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
 	fi
 
@@ -81,25 +82,69 @@ function compile_fuzzer() {
 
 go install github.com/holiman/gofuzz-shim@latest
 
-# compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi FuzzABI fuzzAbi
-# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
-# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
-# compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
-# compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
-# compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
+# compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi \
+#   FuzzABI \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/accounts/abi/abifuzzer_test.go \
+#   fuzzAbi
+#
+# # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
+# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil \
+#   FuzzEncoder \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/common/bitutil/compress_test.go \
+#   fuzzBitutilEncoder
+#
+# # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
+# compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil \
+#   FuzzDecoder \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/common/bitutil/compress_test.go \
+#   fuzzBitutilDecoder
+#
+# # compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
+# compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime \
+#   FuzzVmRuntime \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/core/vm/runtime/runtime_fuzz_test.go \
+#   fuzzVmRuntime
+#
+# # compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
+# compile_fuzzer github.com/ethereum/go-ethereum/core/vm \
+#   FuzzPrecompiledContracts \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/core/vm/contracts_fuzz_test.go \
+#   fuzzPrecompiledContracts
+# 
+# # compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
+# compile_fuzzer github.com/ethereum/go-ethereum/core/types \
+#   FuzzRLP \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/core/types/rlp_fuzzer_test.go \
+#   fuzzRlp
+# 
+# #compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
+# compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b \
+#   Fuzz \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/crypto/blake2b/blake2b_f_fuzz_test.go \
+#   fuzzBlake2b
+# 
+# #compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
+# compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore \
+#   FuzzPassword \
+#   $GOPATH/src/github.com/ethereum/go-ethereum/accounts/keystore/keystore_fuzzing_test.go \
+#   fuzzKeystore
+# 
+#compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzTrie fuzzTrie
+compile_fuzzer github.com/ethereum/go-ethereum/trie \
+  FuzzTrie \
+  $GOPATH/src/github.com/ethereum/go-ethereum/trie/trie_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/database_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/tracer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/proof_test.go \
+  fuzzTrie
 
-#compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
-
-#compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
-
-compile_fuzzer github.com/ethereum/go-ethereum/fuzzers/trie       FuzzTrie fuzzTrie
-#compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
+#compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzStackTrie fuzzStackTrie
+compile_fuzzer github.com/ethereum/go-ethereum/trie \
+  FuzzStackTrie \
+  $GOPATH/src/github.com/ethereum/go-ethereum/trie/stacktrie_fuzzer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/iterator_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/trie_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/database_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/tracer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/proof_test.go \
+  fuzzStackTrie
 
 #compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
 #compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
 #compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
 #compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
-
 
 
 #compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add

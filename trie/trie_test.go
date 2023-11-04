@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
-	"io"
 )
 
 func init() {
