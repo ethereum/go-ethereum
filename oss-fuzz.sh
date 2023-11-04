@@ -88,11 +88,11 @@ go install github.com/holiman/gofuzz-shim@latest
 # compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
 # compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
 
-compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
+#compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
 
-compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
+#compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
 
-#compile_fuzzer tests/fuzzers/trie       Fuzz fuzzTrie
+compile_fuzzer github.com/ethereum/go-ethereum/fuzzers/trie       FuzzTrie fuzzTrie
 #compile_fuzzer tests/fuzzers/stacktrie  Fuzz fuzzStackTrie
 
 #compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
