@@ -235,7 +235,7 @@ func dumpGenesis(ctx *cli.Context) error {
 
 	// if a datadir isn't specified, dump a generic dev-mode compatible genesis configuration
 	if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
-		genesis := core.DeveloperGenesisBlock(10_000_000, common.Address{})
+		genesis := core.DeveloperGenesisBlock(10_000_000, nil)
 		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
 			utils.Fatalf("could not encode genesis: %s", err)
 		}
