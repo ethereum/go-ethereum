@@ -500,6 +500,7 @@ func (c *Clique) verifySeal(snap *Snapshot, header *types.Header, parents []*typ
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	log.Trace("start of prepare")
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
 	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
@@ -602,6 +603,7 @@ func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	log.Trace("start of seal")
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -650,6 +652,14 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		return err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
+
+	// Don't let delay be longer than target block period
+	if delay.Milliseconds() > int64(c.config.PeriodMs) {
+		log.Trace("old delay", "delay", common.PrettyDuration(delay))
+		delay = time.Millisecond*time.Duration(c.config.PeriodMs) - 20*time.Millisecond
+		log.Trace("new delay", "delay", common.PrettyDuration(delay))
+	}
+
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
