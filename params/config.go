@@ -133,8 +133,8 @@ var (
 		ShanghaiTime:                  newUint64(1678832736),
 		CancunTime:                    newUint64(1705473120),
 		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
+			PeriodMs: 15000,
+			Epoch:    30000,
 		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -214,7 +214,7 @@ var (
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
-		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
+		Clique:                        &CliqueConfig{PeriodMs: 0, Epoch: 30000},
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -377,8 +377,8 @@ func (c *EthashConfig) String() string {
 
 // CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
 type CliqueConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+	PeriodMs uint64 `json:"period"` // Number of ms between blocks to enforce
+	Epoch    uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 }
 
 // String implements the stringer interface, returning the consensus engine details.
