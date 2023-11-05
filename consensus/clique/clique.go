@@ -654,11 +654,13 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 
 	// Don't let delay be longer than target block period
-	if delay.Milliseconds() > int64(c.config.PeriodMs) {
-		log.Trace("old delay", "delay", common.PrettyDuration(delay))
-		delay = time.Millisecond*time.Duration(c.config.PeriodMs) - 20*time.Millisecond
-		log.Trace("new delay", "delay", common.PrettyDuration(delay))
-	}
+	// if delay.Milliseconds() > int64(c.config.PeriodMs) {
+	// 	log.Trace("old delay", "delay", common.PrettyDuration(delay))
+	// 	delay = time.Millisecond*time.Duration(c.config.PeriodMs) - 20*time.Millisecond
+	// 	log.Trace("new delay", "delay", common.PrettyDuration(delay))
+	// }
+
+	delay = time.Millisecond * (time.Duration(c.config.PeriodMs - 20))
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
