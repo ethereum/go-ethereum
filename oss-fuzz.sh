@@ -81,112 +81,189 @@ function compile_fuzzer() {
 }
 
 go install github.com/holiman/gofuzz-shim@latest
-
+repo=$GOPATH/src/github.com/ethereum/go-ethereum
 # compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi \
 #   FuzzABI \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/accounts/abi/abifuzzer_test.go \
+#   $repo/accounts/abi/abifuzzer_test.go \
 #   fuzzAbi
 #
 # # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzEncoder fuzzBitutilEncoder
 # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil \
 #   FuzzEncoder \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/common/bitutil/compress_test.go \
+#   $repo/common/bitutil/compress_test.go \
 #   fuzzBitutilEncoder
 #
 # # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil FuzzDecoder fuzzBitutilDecoder
 # compile_fuzzer github.com/ethereum/go-ethereum/common/bitutil \
 #   FuzzDecoder \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/common/bitutil/compress_test.go \
+#   $repo/common/bitutil/compress_test.go \
 #   fuzzBitutilDecoder
 #
 # # compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime FuzzVmRuntime fuzzVmRuntime
 # compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime \
 #   FuzzVmRuntime \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/core/vm/runtime/runtime_fuzz_test.go \
+#   $repo/core/vm/runtime/runtime_fuzz_test.go \
 #   fuzzVmRuntime
 #
 # # compile_fuzzer github.com/ethereum/go-ethereum/core/vm FuzzPrecompiledContracts fuzzPrecompiledContracts
 # compile_fuzzer github.com/ethereum/go-ethereum/core/vm \
 #   FuzzPrecompiledContracts \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/core/vm/contracts_fuzz_test.go \
+#   $repo/core/vm/contracts_fuzz_test.go \
 #   fuzzPrecompiledContracts
 # 
 # # compile_fuzzer github.com/ethereum/go-ethereum/core/types FuzzRLP fuzzRlp
 # compile_fuzzer github.com/ethereum/go-ethereum/core/types \
 #   FuzzRLP \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/core/types/rlp_fuzzer_test.go \
+#   $repo/core/types/rlp_fuzzer_test.go \
 #   fuzzRlp
 # 
 # #compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b  Fuzz      fuzzBlake2b
 # compile_fuzzer github.com/ethereum/go-ethereum/crypto/blake2b \
 #   Fuzz \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/crypto/blake2b/blake2b_f_fuzz_test.go \
+#   $repo/crypto/blake2b/blake2b_f_fuzz_test.go \
 #   fuzzBlake2b
 # 
 # #compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore FuzzPassword fuzzKeystore
 # compile_fuzzer github.com/ethereum/go-ethereum/accounts/keystore \
 #   FuzzPassword \
-#   $GOPATH/src/github.com/ethereum/go-ethereum/accounts/keystore/keystore_fuzzing_test.go \
+#   $repo/accounts/keystore/keystore_fuzzing_test.go \
 #   fuzzKeystore
-# 
-#compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzTrie fuzzTrie
-pkg=$GOPATH/src/github.com/ethereum/go-ethereum/trie/
-compile_fuzzer github.com/ethereum/go-ethereum/trie \
-  FuzzTrie \
-  $pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/iterator_test.go,$pkg/sync_test.go \
-  fuzzTrie
+# #
+# #compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzTrie fuzzTrie
+# pkg=$repo/trie/
+# compile_fuzzer github.com/ethereum/go-ethereum/trie \
+#   FuzzTrie \
+#   $pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/iterator_test.go,$pkg/sync_test.go \
+#   fuzzTrie
+#
+# #compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzStackTrie fuzzStackTrie
+# compile_fuzzer github.com/ethereum/go-ethereum/trie \
+#   FuzzStackTrie \
+#   $pkg/stacktrie_fuzzer_test.go,$pkg/iterator_test.go,$pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/sync_test.go \
+#   fuzzStackTrie
+#
+# #compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
+# compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+#   FuzzARange \
+#   $repo/eth/protocols/snap/handler_fuzzing_test.go \
+#   fuzz_account_range
+#
+# #compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
+# compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+#   FuzzSRange \
+#   $repo/eth/protocols/snap/handler_fuzzing_test.go \
+#   fuzz_storage_range
+#
+# #compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
+# compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+#   FuzzByteCodes \
+#   $repo/eth/protocols/snap/handler_fuzzing_test.go \
+#   fuzz_byte_codes
+# #compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
+# compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+#   FuzzTrieNodes \
+#   $repo/eth/protocols/snap/handler_fuzzing_test.go \
+#   fuzz_trie_nodes
+#
+#
+# #compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+#   FuzzAdd \
+#   $repo/tests/fuzzers/bn256/bn256_test.go  \
+#   fuzzBn256Add
+#
+# #compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+#   FuzzMul \
+#   $repo/tests/fuzzers/bn256/bn256_test.go  \
+#   fuzzBn256Mul
+# #compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+#   FuzzPair \
+#   $repo/tests/fuzzers/bn256/bn256_test.go  \
+#   fuzzBn256Pair
+#
+# #compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/txfetcher \
+#   Fuzz \
+#   $repo/tests/fuzzers/txfetcher/txfetcher_test.go  \
+#   fuzzTxfetcher
+#
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG1Add \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g1_add
+#
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG1Mul \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g1_mul
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG1MultiExp \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g1_multiexp
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG2Add \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g2_add
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG2Mul \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g2_mul
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzG2MultiExp \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_g2_multiexp
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzPairing \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_pairing
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzMapG1 \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_map_g1
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzMapG2 \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_map_g2
+#
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1Add fuzz_cross_g1_add
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzCrossG1Add \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_cross_g1_add
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1MultiExp fuzz_cross_g1_multiexp
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzCrossG1MultiExp \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_cross_g1_multiexp
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzCrossG2Add \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_cross_g2_add
+# #compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
+# compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+#   FuzzCrossPairing \
+#   $repo/tests/fuzzers/bls12381/bls12381_test.go  \
+#   fuzz_cross_pairing
+#
+#compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
+  Fuzz \
+  $repo/tests/fuzzers/secp256k1/secp_test.go  \
+  fuzzSecp256k1
 
-#compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzStackTrie fuzzStackTrie
-compile_fuzzer github.com/ethereum/go-ethereum/trie \
-  FuzzStackTrie \
-  $pkg/stacktrie_fuzzer_test.go,$pkg/iterator_test.go,$pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/sync_test.go \
-  fuzzStackTrie
-
-#compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
-compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
-  FuzzARange \
-  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
-  fuzz_account_range
-
-#compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
-compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
-  FuzzSRange \
-  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
-  fuzz_storage_range
-
-#compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
-compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
-  FuzzByteCodes \
-  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
-  fuzz_byte_codes
-#compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
-compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
-  FuzzTrieNodes \
-  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
-  fuzz_trie_nodes
-
-
-#compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
-#compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
-#compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
-#compile_fuzzer tests/fuzzers/txfetcher  Fuzz fuzzTxfetcher
+#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
 #compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
 #compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
-#compile_fuzzer tests/fuzzers/secp256k1  Fuzz fuzzSecp256k1
-#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
-
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG1Add fuzz_g1_add
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG1Mul fuzz_g1_mul
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG1MultiExp fuzz_g1_multiexp
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG2Add fuzz_g2_add
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG2Mul fuzz_g2_mul
-#compile_fuzzer tests/fuzzers/bls12381  FuzzG2MultiExp fuzz_g2_multiexp
-#compile_fuzzer tests/fuzzers/bls12381  FuzzPairing fuzz_pairing
-#compile_fuzzer tests/fuzzers/bls12381  FuzzMapG1 fuzz_map_g1
-#compile_fuzzer tests/fuzzers/bls12381  FuzzMapG2 fuzz_map_g2
-
-#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1Add fuzz_cross_g1_add
-#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG1MultiExp fuzz_cross_g1_multiexp
-#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossG2Add fuzz_cross_g2_add
-#compile_fuzzer tests/fuzzers/bls12381  FuzzCrossPairing fuzz_cross_pairing
 
