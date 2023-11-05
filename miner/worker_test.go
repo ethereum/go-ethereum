@@ -80,8 +80,8 @@ func init() {
 	cliqueChainConfig = new(params.ChainConfig)
 	*cliqueChainConfig = *params.TestChainConfig
 	cliqueChainConfig.Clique = &params.CliqueConfig{
-		Period: 10,
-		Epoch:  30000,
+		PeriodMs: 10000,
+		Epoch:    30000,
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
@@ -171,7 +171,7 @@ func TestGenerateAndImportBlock(t *testing.T) {
 		db     = rawdb.NewMemoryDatabase()
 		config = *params.AllCliqueProtocolChanges
 	)
-	config.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	config.Clique = &params.CliqueConfig{PeriodMs: 1000, Epoch: 30000}
 	engine := clique.New(config.Clique, db)
 
 	w, b := newTestWorker(t, &config, engine, db, 0)

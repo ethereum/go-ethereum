@@ -261,8 +261,8 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address) *core.Genesis {
 	config := *params.AllCliqueProtocolChanges
 	config.Clique = &params.CliqueConfig{
-		Period: period,
-		Epoch:  config.Clique.Epoch,
+		PeriodMs: period,
+		Epoch:    config.Clique.Epoch,
 	}
 
 	// Assemble and return the genesis with the precompiles and faucet pre-funded
@@ -294,7 +294,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	// Create chainConfig
 	chainDB := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(chainDB, nil)
-	genesis := minerTestGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
+	genesis := minerTestGenesisBlock(15000, 11_500_000, common.HexToAddress("12345"))
 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, triedb, genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
