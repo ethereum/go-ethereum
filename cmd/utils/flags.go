@@ -1646,6 +1646,43 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
+func validateDeveloperGenesis(genesis *core.Genesis) error {
+	checkHFIsZero := func(forkName string, hfBlockNumber *big.Int) error {
+		if hfBlockNumber == nil {
+			return errors.New(fmt.Sprintf("%s: hard-fork not enabled", forkName))
+		} else if hfBlockNumber.Cmp(big.NewInt(0)) != 0 {
+			return errors.New(fmt.Sprintf("%s: hard-fork not activated in block 0", forkName))
+		}
+		return nil
+	}
+
+	config := genesis.Config
+	if err := checkHFIsZero("Homestead", config.HomesteadBlock); err != nil {
+		return err
+	} else if config.DAOForkBlock != nil {
+		return errors.New("DAO hardfork cannot be enabled")
+	} else if err := checkHFIsZero("EIP150", config.EIP150Block); err != nil {
+		return err
+	} else if err := checkHFIsZero("EIP155", config.EIP155Block); err != nil {
+		return err
+	} else if err := checkHFIsZero("EIP158", config.EIP158Block); err != nil {
+		return err
+	} else if err := checkHFIsZero("Byzantium", config.ByzantiumBlock); err != nil {
+		return err
+	} else if err := checkHFIsZero("Constantinople", config.ConstantinopleBlock); err != nil {
+		return err
+	} else if err := checkHFIsZero("Istanbul", config.IstanbulBlock); err != nil {
+		return err
+	} else if err := checkHFIsZero("Berlin", config.BerlinBlock); err != nil {
+		return err
+	} else if err := checkHFIsZero("London", config.LondonBlock); err != nil {
+		return err
+	} else if config.TerminalTotalDifficultyPassed != true {
+		return errors.New("terminal total difficulty must be passed")
+	}
+	return nil
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
@@ -1870,6 +1907,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
+
+				var genesis *core.Genesis
+				var err error
+				if genesis, err = core.ReadGenesis(chaindb); err != nil {
+					Fatalf("could not read genesis from database: %v", err)
+				}
+				if err = validateDeveloperGenesis(genesis); err != nil {
+					Fatalf("genesis configuration incompatible with development mode: %v", err)
+				}
 			}
 			chaindb.Close()
 		}
