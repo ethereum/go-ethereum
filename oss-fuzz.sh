@@ -130,21 +130,40 @@ go install github.com/holiman/gofuzz-shim@latest
 #   fuzzKeystore
 # 
 #compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzTrie fuzzTrie
+pkg=$GOPATH/src/github.com/ethereum/go-ethereum/trie/
 compile_fuzzer github.com/ethereum/go-ethereum/trie \
   FuzzTrie \
-  $GOPATH/src/github.com/ethereum/go-ethereum/trie/trie_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/database_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/tracer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/proof_test.go \
+  $pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/iterator_test.go,$pkg/sync_test.go \
   fuzzTrie
 
 #compile_fuzzer github.com/ethereum/go-ethereum/trie       FuzzStackTrie fuzzStackTrie
 compile_fuzzer github.com/ethereum/go-ethereum/trie \
   FuzzStackTrie \
-  $GOPATH/src/github.com/ethereum/go-ethereum/trie/stacktrie_fuzzer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/iterator_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/trie_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/database_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/tracer_test.go,$GOPATH/src/github.com/ethereum/go-ethereum/trie/proof_test.go \
+  $pkg/stacktrie_fuzzer_test.go,$pkg/iterator_test.go,$pkg/trie_test.go,$pkg/database_test.go,$pkg/tracer_test.go,$pkg/proof_test.go,$pkg/sync_test.go \
   fuzzStackTrie
 
 #compile_fuzzer tests/fuzzers/snap  FuzzARange fuzz_account_range
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+  FuzzARange \
+  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
+  fuzz_account_range
+
 #compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+  FuzzSRange \
+  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
+  fuzz_storage_range
+
 #compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+  FuzzByteCodes \
+  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
+  fuzz_byte_codes
 #compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/snap \
+  FuzzTrieNodes \
+  $GOPATH/src/github.com/ethereum/go-ethereum/eth/protocols/snap/handler_fuzzing_test.go \
+  fuzz_trie_nodes
 
 
 #compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
