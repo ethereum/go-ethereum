@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,17 +17,23 @@
 package rpc
 
 import (
-	"context"
-	"net"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// DialInProc attaches an in-process connection to the given RPC server.
-func DialInProc(handler *Server) *Client {
-	initctx := context.Background()
-	c, _ := newClient(initctx, func(context.Context) (ServerCodec, error) {
-		p1, p2 := net.Pipe()
-		go handler.ServeCodec(NewCodec(p1), 0)
-		return NewCodec(p2), nil
-	})
-	return c
+var (
+	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", nil)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", nil)
+	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/failure", nil)
+	rpcServingTimer        = metrics.NewRegisteredTimer("rpc/duration/all", nil)
+)
+
+func newRPCServingTimer(method string, valid bool) metrics.Timer {
+	flag := "success"
+	if !valid {
+		flag = "failure"
+	}
+	m := fmt.Sprintf("rpc/duration/%s/%s", method, flag)
+	return metrics.GetOrRegisterTimer(m, nil)
 }

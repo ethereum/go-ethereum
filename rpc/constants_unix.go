@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,37 +19,17 @@
 
 package rpc
 
-import (
-	"context"
-	"fmt"
-	"net"
-	"os"
-	"path/filepath"
+/*
+#include <sys/un.h>
 
-	"github.com/XinFinOrg/XDPoSChain/log"
+__attribute__((weak))
+int max_socket_path_size() {
+struct sockaddr_un s;
+return sizeof(s.sun_path);
+}
+*/
+import "C"
+
+var (
+	max_path_size = C.max_socket_path_size()
 )
-
-// ipcListen will create a Unix socket on the given endpoint.
-func ipcListen(endpoint string) (net.Listener, error) {
-	if len(endpoint) > int(max_path_size) {
-		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", max_path_size),
-			"endpoint", endpoint)
-	}
-
-	// Ensure the IPC path exists and remove any previous leftover
-	if err := os.MkdirAll(filepath.Dir(endpoint), 0751); err != nil {
-		return nil, err
-	}
-	os.Remove(endpoint)
-	l, err := net.Listen("unix", endpoint)
-	if err != nil {
-		return nil, err
-	}
-	os.Chmod(endpoint, 0600)
-	return l, nil
-}
-
-// newIPCConnection will connect to a Unix socket on the given endpoint.
-func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
-	return new(net.Dialer).DialContext(ctx, "unix", endpoint)
-}

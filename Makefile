@@ -4,7 +4,7 @@
 
 GOBIN = $(shell pwd)/build/bin
 GOFMT = gofmt
-GO ?= 1.13.1
+GO ?= 1.14
 GO_PACKAGES = .
 GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
 
