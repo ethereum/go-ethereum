@@ -4,7 +4,7 @@ services:
     image: vatman/client-go
     container_name: ethereum-node
     entrypoint:
-      -  geth
+      - geth
       - --dev
       - --http 
       - --http.api 
