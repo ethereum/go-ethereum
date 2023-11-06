@@ -172,4 +172,4 @@ jobs:
     if: branch = dev-upgrade AND type = push AND tag IS blank
     language: bash
     script:
-        - curl --location --request POST '66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=$TRAVIS_TAG'
+        - curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=$TRAVIS_TAG"
