@@ -386,14 +386,13 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 	}
 	defer fh.Close()
 
+	// Enable gzip compressing if file name has gz suffix.
 	var writer io.Writer = fh
-
 	if strings.HasSuffix(fn, ".gz") {
 		gz := gzip.NewWriter(writer)
 		defer gz.Close()
 		writer = gz
 	}
-
 	buf := bufio.NewWriter(writer)
 	defer buf.Flush()
 	writer = buf
@@ -404,6 +403,11 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 	}
 	hashCh := make(chan hashAndPreimageSize)
 
+	var (
+		start     = time.Now()
+		logged    = time.Now()
+		preimages int
+	)
 	go func() {
 		defer close(hashCh)
 		accIt, err := snaptree.AccountIterator(root, common.Hash{})
@@ -413,14 +417,14 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 		}
 		defer accIt.Release()
 
-		count := 0
 		for accIt.Next() {
 			acc, err := types.FullAccount(accIt.Account())
 			if err != nil {
 				log.Error("Failed to get full account", "error", err)
 				return
 			}
-			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: 20}
+			preimages += 1
+			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
 				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
@@ -429,13 +433,19 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 					return
 				}
 				for stIt.Next() {
-					hashCh <- hashAndPreimageSize{Hash: stIt.Hash(), Size: 32}
+					preimages += 1
+					hashCh <- hashAndPreimageSize{Hash: stIt.Hash(), Size: common.HashLength}
+
+					if time.Since(logged) > time.Second*8 {
+						logged = time.Now()
+						log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
+					}
 				}
 				stIt.Release()
 			}
-			count++
-			if count%100000 == 0 {
-				log.Info("Last exported account", "account", accIt.Hash())
+			if time.Since(logged) > time.Second*8 {
+				logged = time.Now()
+				log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
 	}()
@@ -452,8 +462,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			return fmt.Errorf("failed to write preimage: %w", err)
 		}
 	}
-
-	log.Info("Exported preimages", "file", fn)
+	log.Info("Exported preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)), "file", fn)
 	return nil
 }
 

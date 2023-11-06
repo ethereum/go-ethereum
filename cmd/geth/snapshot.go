@@ -645,7 +645,6 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 		}
 		root = headBlock.Root()
 	}
-
 	snapConfig := snapshot.Config{
 		CacheSize:  256,
 		Recovery:   false,
@@ -656,13 +655,7 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	start := time.Now()
-	if err := utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root); err != nil {
-		utils.Fatalf("Export error: %v\n", err)
-	}
-	log.Info("Export done", "duration", time.Since(start))
-	return nil
+	return utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root)
 }
 
 // checkAccount iterates the snap data layers, and looks up the given account
