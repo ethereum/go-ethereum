@@ -100,7 +100,7 @@ compile_fuzzer github.com/ethereum/go-ethereum/core/vm/runtime \
 
 compile_fuzzer github.com/ethereum/go-ethereum/core/vm \
   FuzzPrecompiledContracts fuzzPrecompiledContracts\
-  $repo/core/vm/contracts_fuzz_test.go
+  $repo/core/vm/contracts_fuzz_test.go,$repo/core/vm/contracts_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/core/types \
   FuzzRLP fuzzRlp \
