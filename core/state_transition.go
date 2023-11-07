@@ -327,7 +327,7 @@ func (st *StateTransition) preCheck() error {
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if st.blobGasUsed() > 0 {
 			// Skip the checks if gas fields are zero and blobBaseFee was explicitly disabled (eth_call)
-			if !st.evm.Config.NoBaseFee && msg.BlobGasFeeCap.BitLen() > 0 {
+			if !st.evm.Config.NoBaseFee || msg.BlobGasFeeCap.BitLen() > 0 {
 				if l := msg.BlobGasFeeCap.BitLen(); l > 256 {
 					return fmt.Errorf("%w: address %v, blobGasFeeCap bit length: %d", ErrFeeCapVeryHigh,
 						msg.From.Hex(), l)
