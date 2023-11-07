@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -60,9 +61,16 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
-	for i, test := range tests {
+	// run them in order
+	var keys []string
+	for key := range tests {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		test := tests[name]
 		if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
-			return fmt.Errorf("test %v: %w", i, err)
+			return fmt.Errorf("test %v: %w", name, err)
 		}
 	}
 	return nil

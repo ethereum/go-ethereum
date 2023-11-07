@@ -97,6 +97,8 @@ type blobTxMeta struct {
 	execTipCap *uint256.Int // Needed to prioritize inclusion order across accounts and validate replacement price bump
 	execFeeCap *uint256.Int // Needed to validate replacement price bump
 	blobFeeCap *uint256.Int // Needed to validate replacement price bump
+	execGas    uint64       // Needed to check inclusion validity before reading the blob
+	blobGas    uint64       // Needed to check inclusion validity before reading the blob
 
 	basefeeJumps float64 // Absolute number of 1559 fee adjustments needed to reach the tx's fee cap
 	blobfeeJumps float64 // Absolute number of 4844 fee adjustments needed to reach the tx's blob fee cap
@@ -118,6 +120,8 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
 		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
 		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
+		execGas:    tx.Gas(),
+		blobGas:    tx.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -307,8 +311,8 @@ type BlobPool struct {
 	spent  map[common.Address]*uint256.Int  // Expenditure tracking for individual accounts
 	evict  *evictHeap                       // Heap of cheapest accounts for eviction when full
 
-	eventFeed  event.Feed              // Event feed to send out new tx events on pool inclusion
-	eventScope event.SubscriptionScope // Event scope to track and mass unsubscribe on termination
+	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
+	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
@@ -436,8 +440,6 @@ func (p *BlobPool) Close() error {
 	if err := p.store.Close(); err != nil {
 		errs = append(errs, err)
 	}
-	p.eventScope.Close()
-
 	switch {
 	case errs == nil:
 		return nil
@@ -758,14 +760,20 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
+		var adds []*types.Transaction
 		for addr, txs := range reinject {
 			// Blindly push all the lost transactions back into the pool
 			for _, tx := range txs {
-				p.reinject(addr, tx.Hash())
+				if err := p.reinject(addr, tx.Hash()); err == nil {
+					adds = append(adds, tx.WithoutBlobTxSidecar())
+				}
 			}
 			// Recheck the account's pooled transactions to drop included and
 			// invalidated one
 			p.recheck(addr, inclusions)
+		}
+		if len(adds) > 0 {
+			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
@@ -921,13 +929,13 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 // Note, the method will not initialize the eviction cache values as those will
 // be done once for all transactions belonging to an account after all individual
 // transactions are injected back into the pool.
-func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) {
+func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
 	tx, err := p.limbo.pull(txhash)
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
-		return
+		return err
 	}
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
@@ -936,12 +944,12 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) {
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-		return
+		return err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
 		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
-		return
+		return err
 	}
 
 	// Update the indixes and metrics
@@ -949,7 +957,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) {
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserve(addr, true); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
-			return
+			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
 		p.spent[addr] = meta.costCap
@@ -960,6 +968,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) {
 	}
 	p.lookup[meta.hash] = meta.id
 	p.stored += uint64(meta.size)
+	return nil
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
@@ -1154,9 +1163,19 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restictions).
 func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
-	errs := make([]error, len(txs))
+	var (
+		adds = make([]*types.Transaction, 0, len(txs))
+		errs = make([]error, len(txs))
+	)
 	for i, tx := range txs {
 		errs[i] = p.add(tx)
+		if errs[i] == nil {
+			adds = append(adds, tx.WithoutBlobTxSidecar())
+		}
+	}
+	if len(adds) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: adds})
+		p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 	}
 	return errs
 }
@@ -1384,6 +1403,8 @@ func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTr
 				Time:      time.Now(), // TODO(karalabe): Maybe save these and use that?
 				GasFeeCap: tx.execFeeCap.ToBig(),
 				GasTipCap: tx.execTipCap.ToBig(),
+				Gas:       tx.execGas,
+				BlobGas:   tx.blobGas,
 			})
 		}
 		if len(lazies) > 0 {
@@ -1468,10 +1489,14 @@ func (p *BlobPool) updateLimboMetrics() {
 	limboSlotusedGauge.Update(int64(slotused))
 }
 
-// SubscribeTransactions registers a subscription of NewTxsEvent and
-// starts sending event to the given channel.
-func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription {
-	return p.eventScope.Track(p.eventFeed.Subscribe(ch))
+// SubscribeTransactions registers a subscription for new transaction events,
+// supporting feeding only newly seen or also resurrected transactions.
+func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
+	if reorgs {
+		return p.insertFeed.Subscribe(ch)
+	} else {
+		return p.discoverFeed.Subscribe(ch)
+	}
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable

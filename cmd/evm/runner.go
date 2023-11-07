@@ -123,7 +123,8 @@ func runCmd(ctx *cli.Context) error {
 		sender      = common.BytesToAddress([]byte("sender"))
 		receiver    = common.BytesToAddress([]byte("receiver"))
 		preimages   = ctx.Bool(DumpFlag.Name)
-		blobHashes  []common.Hash // TODO (MariusVanDerWijden) implement blob hashes in state tests
+		blobHashes  []common.Hash  // TODO (MariusVanDerWijden) implement blob hashes in state tests
+		blobBaseFee = new(big.Int) // TODO (MariusVanDerWijden) implement blob fee in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
@@ -221,6 +222,7 @@ func runCmd(ctx *cli.Context) error {
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		BlobHashes:  blobHashes,
+		BlobBaseFee: blobBaseFee,
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		},
