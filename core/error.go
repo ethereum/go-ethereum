@@ -86,11 +86,11 @@ var (
 	// transaction with a tip higher than the total fee cap.
 	ErrTipAboveFeeCap = errors.New("max priority fee per gas higher than max fee per gas")
 
-	// ErrTipVeryHigh is a sanity error to avoid extremely big numbers specified
+	// ErrTipVeryHigh is a sanity error to avoid extremly big numbers specified
 	// in the tip field.
 	ErrTipVeryHigh = errors.New("max priority fee per gas higher than 2^256-1")
 
-	// ErrFeeCapVeryHigh is a sanity error to avoid extremely big numbers specified
+	// ErrFeeCapVeryHigh is a sanity error to avoid extremly big numbers specified
 	// in the fee cap field.
 	ErrFeeCapVeryHigh = errors.New("max fee per gas higher than 2^256-1")
 

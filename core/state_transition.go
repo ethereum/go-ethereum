@@ -330,10 +330,6 @@ func (st *StateTransition) preCheck() error {
 			// Skip the checks if gas fields are zero and blobBaseFee was explicitly disabled (eth_call)
 			skipCheck := st.evm.Config.NoBaseFee && msg.BlobGasFeeCap.BitLen() == 0
 			if !skipCheck {
-				if l := msg.BlobGasFeeCap.BitLen(); l > 256 {
-					return fmt.Errorf("%w: address %v, blobGasFeeCap bit length: %d", ErrFeeCapVeryHigh,
-						msg.From.Hex(), l)
-				}
 				// This will panic if blobBaseFee is nil, but blobBaseFee presence
 				// is verified as part of header validation.
 				if msg.BlobGasFeeCap.Cmp(st.evm.Context.BlobBaseFee) < 0 {
