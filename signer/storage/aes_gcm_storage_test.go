@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"golang.org/x/exp/slog"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-colorable"
@@ -89,7 +91,7 @@ func TestFileStorage(t *testing.T) {
 	}
 }
 func TestEnd2End(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
 
 	d := t.TempDir()
 
@@ -111,7 +113,7 @@ func TestEnd2End(t *testing.T) {
 func TestSwappedKeys(t *testing.T) {
 	// It should not be possible to swap the keys/values, so that
 	// K1:V1, K2:V2 can be swapped into K1:V2, K2:V1
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
 
 	d := t.TempDir()
 

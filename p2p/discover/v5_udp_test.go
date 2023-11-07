@@ -18,6 +18,7 @@ package discover
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
@@ -26,6 +27,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
@@ -79,10 +82,11 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 
 	// Prefix logs with node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
-	lfmt := log.TerminalFormat(false)
-	cfg.Log = testlog.Logger(t, log.LvlTrace)
-	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
-		t.Logf("%s %s", lprefix, lfmt.Format(r))
+	cfg.Log = testlog.LoggerWithHandler(t, log.FuncHandler(func(_ context.Context, r slog.Record) error {
+		if r.Level <= log.LevelTrace {
+			return nil
+		}
+		t.Logf("%s %s", lprefix, log.TerminalFormat(r, false))
 		return nil
 	}))
 
@@ -765,7 +769,7 @@ func newUDPV5Test(t *testing.T) *udpV5Test {
 	ln.Set(enr.UDP(30303))
 	test.udp, _ = ListenV5(test.pipe, ln, Config{
 		PrivateKey:   test.localkey,
-		Log:          testlog.Logger(t, log.LvlTrace),
+		Log:          testlog.Logger(t, log.LevelTrace),
 		ValidSchemes: enode.ValidSchemesForTesting,
 	})
 	test.udp.codec = &testCodec{test: test, id: ln.ID()}

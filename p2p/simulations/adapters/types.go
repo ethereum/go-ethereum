@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 
+	"golang.org/x/exp/slog"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/reexec"
 	"github.com/ethereum/go-ethereum/log"
@@ -129,7 +130,7 @@ type NodeConfig struct {
 	// LogVerbosity is the log verbosity of the p2p node at runtime.
 	//
 	// The default verbosity is INFO.
-	LogVerbosity log.Lvl
+	LogVerbosity slog.Level
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -197,7 +198,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
 	n.LogFile = confJSON.LogFile
-	n.LogVerbosity = log.Lvl(confJSON.LogVerbosity)
+	n.LogVerbosity = slog.Level(confJSON.LogVerbosity)
 
 	return nil
 }
@@ -227,7 +228,7 @@ func RandomNodeConfig() *NodeConfig {
 		Name:            fmt.Sprintf("node_%s", enodId.String()),
 		Port:            port,
 		EnableMsgEvents: true,
-		LogVerbosity:    log.LvlInfo,
+		LogVerbosity:    log.LevelInfo,
 	}
 }
 

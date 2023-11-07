@@ -2,27 +2,32 @@ package log
 
 import (
 	"os"
+	"sync/atomic"
+
+	"golang.org/x/exp/slog"
 )
 
 var (
-	root          = &logger{[]interface{}{}, new(swapHandler)}
-	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
-	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
+	root = new(atomic.Value)
 )
 
 func init() {
-	root.SetHandler(DiscardHandler())
+	defaultLogger := &logger{slog.New(DiscardHandler())}
+	root.Store(defaultLogger)
 }
 
-// New returns a new logger with the given context.
-// New is a convenient alias for Root().New
-func New(ctx ...interface{}) Logger {
-	return root.New(ctx...)
+func SetDefault(l Logger) {
+	root.Store(l)
 }
 
 // Root returns the root logger
 func Root() Logger {
-	return root
+	return rootLogger()
+}
+
+func rootLogger() *logger {
+	res, _ := root.Load().(*logger)
+	return res
 }
 
 // The following functions bypass the exported logger methods (logger.Debug,
@@ -39,7 +44,7 @@ func Root() Logger {
 //	log.Trace("msg", "key1", val1)
 //	log.Trace("msg", "key1", val1, "key2", val2)
 func Trace(msg string, ctx ...interface{}) {
-	root.write(msg, LvlTrace, ctx, skipLevel)
+	rootLogger().write(LevelTrace, msg, ctx...)
 }
 
 // Debug is a convenient alias for Root().Debug
@@ -52,7 +57,7 @@ func Trace(msg string, ctx ...interface{}) {
 //	log.Debug("msg", "key1", val1)
 //	log.Debug("msg", "key1", val1, "key2", val2)
 func Debug(msg string, ctx ...interface{}) {
-	root.write(msg, LvlDebug, ctx, skipLevel)
+	rootLogger().write(slog.LevelDebug, msg, ctx...)
 }
 
 // Info is a convenient alias for Root().Info
@@ -65,7 +70,7 @@ func Debug(msg string, ctx ...interface{}) {
 //	log.Info("msg", "key1", val1)
 //	log.Info("msg", "key1", val1, "key2", val2)
 func Info(msg string, ctx ...interface{}) {
-	root.write(msg, LvlInfo, ctx, skipLevel)
+	rootLogger().write(slog.LevelInfo, msg, ctx...)
 }
 
 // Warn is a convenient alias for Root().Warn
@@ -78,7 +83,7 @@ func Info(msg string, ctx ...interface{}) {
 //	log.Warn("msg", "key1", val1)
 //	log.Warn("msg", "key1", val1, "key2", val2)
 func Warn(msg string, ctx ...interface{}) {
-	root.write(msg, LvlWarn, ctx, skipLevel)
+	rootLogger().write(slog.LevelWarn, msg, ctx...)
 }
 
 // Error is a convenient alias for Root().Error
@@ -91,7 +96,7 @@ func Warn(msg string, ctx ...interface{}) {
 //	log.Error("msg", "key1", val1)
 //	log.Error("msg", "key1", val1, "key2", val2)
 func Error(msg string, ctx ...interface{}) {
-	root.write(msg, LvlError, ctx, skipLevel)
+	rootLogger().write(slog.LevelError, msg, ctx...)
 }
 
 // Crit is a convenient alias for Root().Crit
@@ -104,15 +109,12 @@ func Error(msg string, ctx ...interface{}) {
 //	log.Crit("msg", "key1", val1)
 //	log.Crit("msg", "key1", val1, "key2", val2)
 func Crit(msg string, ctx ...interface{}) {
-	root.write(msg, LvlCrit, ctx, skipLevel)
+	rootLogger().write(LevelCrit, msg, ctx...)
 	os.Exit(1)
 }
 
-// Output is a convenient alias for write, allowing for the modification of
-// the calldepth (number of stack frames to skip).
-// calldepth influences the reported line number of the log message.
-// A calldepth of zero reports the immediate caller of Output.
-// Non-zero calldepth skips as many stack frames.
-func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
-	root.write(msg, lvl, ctx, calldepth+skipLevel)
+// New returns a new logger with the given context.
+// New is a convenient alias for Root().New
+func New(ctx ...interface{}) Logger {
+	return rootLogger().With(ctx...)
 }

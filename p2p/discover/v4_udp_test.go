@@ -18,6 +18,7 @@ package discover
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
@@ -30,6 +31,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
@@ -71,7 +74,7 @@ func newUDPTest(t *testing.T) *udpTest {
 	ln := enode.NewLocalNode(test.db, test.localkey)
 	test.udp, _ = ListenV4(test.pipe, ln, Config{
 		PrivateKey: test.localkey,
-		Log:        testlog.Logger(t, log.LvlTrace),
+		Log:        testlog.Logger(t, log.LevelTrace),
 	})
 	test.table = test.udp.tab
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
@@ -557,10 +560,12 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 
 	// Prefix logs with node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
-	lfmt := log.TerminalFormat(false)
-	cfg.Log = testlog.Logger(t, log.LvlTrace)
-	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
-		t.Logf("%s %s", lprefix, lfmt.Format(r))
+	cfg.Log = testlog.LoggerWithHandler(t, log.FuncHandler(func(_ context.Context, r slog.Record) error {
+		if r.Level <= log.LevelTrace {
+			return nil
+		}
+
+		t.Logf("%s %s", lprefix, log.TerminalFormat(r, false))
 		return nil
 	}))
 

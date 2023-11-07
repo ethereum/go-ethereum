@@ -2,19 +2,21 @@ package log
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/slog"
 )
+
+const timeKey = "t"
+const lvlKey = "lvl"
+const msgKey = "msg"
 
 const (
 	timeFormat        = "2006-01-02T15:04:05-0700"
@@ -24,41 +26,6 @@ const (
 	termCtxMaxPadding = 40
 )
 
-// ResetGlobalState resets the fieldPadding, which is useful for producing
-// predictable output.
-func ResetGlobalState() {
-	fieldPaddingLock.Lock()
-	fieldPadding = make(map[string]int)
-	fieldPaddingLock.Unlock()
-}
-
-// locationTrims are trimmed for display to avoid unwieldy log lines.
-var locationTrims = []string{
-	"github.com/ethereum/go-ethereum/",
-}
-
-// PrintOrigins sets or unsets log location (file:line) printing for terminal
-// format output.
-func PrintOrigins(print bool) {
-	locationEnabled.Store(print)
-	if print {
-		stackEnabled.Store(true)
-	}
-}
-
-// stackEnabled is an atomic flag controlling whether the log handler needs
-// to store the callsite stack. This is needed in case any handler wants to
-// print locations (locationEnabled), use vmodule, or print full stacks (BacktraceAt).
-var stackEnabled atomic.Bool
-
-// locationEnabled is an atomic flag controlling whether the terminal formatter
-// should append the log locations too when printing entries.
-var locationEnabled atomic.Bool
-
-// locationLength is the maxmimum path length encountered, which all logs are
-// padded to to aid in alignment.
-var locationLength atomic.Uint32
-
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
 var fieldPadding = make(map[string]int)
@@ -67,18 +34,18 @@ var fieldPadding = make(map[string]int)
 var fieldPaddingLock sync.RWMutex
 
 type Format interface {
-	Format(r *Record) []byte
+	Format(r slog.Record) []byte
 }
 
 // FormatFunc returns a new Format object which uses
 // the given function to perform record formatting.
-func FormatFunc(f func(*Record) []byte) Format {
+func FormatFunc(f func(slog.Record) []byte) Format {
 	return formatFunc(f)
 }
 
-type formatFunc func(*Record) []byte
+type formatFunc func(slog.Record) []byte
 
-func (f formatFunc) Format(r *Record) []byte {
+func (f formatFunc) Format(r slog.Record) []byte {
 	return f(r)
 }
 
@@ -98,65 +65,41 @@ type TerminalStringer interface {
 // Example:
 //
 //	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-func TerminalFormat(usecolor bool) Format {
-	return FormatFunc(func(r *Record) []byte {
-		msg := escapeMessage(r.Msg)
-		var color = 0
-		if usecolor {
-			switch r.Lvl {
-			case LvlCrit:
-				color = 35
-			case LvlError:
-				color = 31
-			case LvlWarn:
-				color = 33
-			case LvlInfo:
-				color = 32
-			case LvlDebug:
-				color = 36
-			case LvlTrace:
-				color = 34
-			}
+func TerminalFormat(r slog.Record, usecolor bool) []byte {
+	msg := escapeMessage(r.Message)
+	var color = 0
+	if usecolor {
+		switch r.Level {
+		case LevelCrit:
+			color = 35
+		case slog.LevelError:
+			color = 31
+		case slog.LevelWarn:
+			color = 33
+		case slog.LevelInfo:
+			color = 32
+		case slog.LevelDebug:
+			color = 36
+		case LevelTrace:
+			color = 34
 		}
+	}
 
-		b := &bytes.Buffer{}
-		lvl := r.Lvl.AlignedString()
-		if locationEnabled.Load() {
-			// Log origin printing was requested, format the location path and line number
-			location := fmt.Sprintf("%+v", r.Call)
-			for _, prefix := range locationTrims {
-				location = strings.TrimPrefix(location, prefix)
-			}
-			// Maintain the maximum location length for fancyer alignment
-			align := int(locationLength.Load())
-			if align < len(location) {
-				align = len(location)
-				locationLength.Store(uint32(align))
-			}
-			padding := strings.Repeat(" ", align-len(location))
-
-			// Assemble and print the log heading
-			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, msg)
-			} else {
-				fmt.Fprintf(b, "%s[%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, msg)
-			}
-		} else {
-			if color > 0 {
-				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), msg)
-			} else {
-				fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), msg)
-			}
-		}
-		// try to justify the log output for short messages
-		length := utf8.RuneCountInString(msg)
-		if len(r.Ctx) > 0 && length < termMsgJust {
-			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
-		}
-		// print the keys logfmt style
-		logfmt(b, r.Ctx, color, true)
-		return b.Bytes()
-	})
+	b := &bytes.Buffer{}
+	lvl := LevelAlignedString(r.Level)
+	if color > 0 {
+		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), msg)
+	} else {
+		fmt.Fprintf(b, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), msg)
+	}
+	// try to justify the log output for short messages
+	length := utf8.RuneCountInString(msg)
+	if r.NumAttrs() > 0 && length < termMsgJust {
+		b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
+	}
+	// print the keys logfmt style
+	logfmt(b, []slog.Attr{}, r, color, true)
+	return b.Bytes()
 }
 
 // LogfmtFormat prints records in logfmt format, an easy machine-parseable but human-readable
@@ -164,144 +107,58 @@ func TerminalFormat(usecolor bool) Format {
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtFormat() Format {
-	return FormatFunc(func(r *Record) []byte {
-		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
+	return FormatFunc(func(r slog.Record) []byte {
+		common := []slog.Attr{slog.Time(timeKey, r.Time), slog.Int(lvlKey, int(r.Level)), slog.String(msgKey, r.Message)}
 		buf := &bytes.Buffer{}
-		logfmt(buf, append(common, r.Ctx...), 0, false)
+		logfmt(buf, common, r, 0, false)
 		return buf.Bytes()
 	})
 }
 
-func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
-	for i := 0; i < len(ctx); i += 2 {
+func logfmt(buf *bytes.Buffer, commonAttrs []slog.Attr, r slog.Record, color int, term bool) {
+	attrs := []slog.Attr{}
+	r.Attrs(func(attr slog.Attr) bool {
+		attrs = append(attrs, attr)
+		return true
+	})
+
+	attrs = append(commonAttrs, attrs...)
+
+	for i, attr := range attrs {
 		if i != 0 {
 			buf.WriteByte(' ')
 		}
 
-		k, ok := ctx[i].(string)
-		v := formatLogfmtValue(ctx[i+1], term)
-		if !ok {
-			k, v = errorKey, fmt.Sprintf("%+T is not a string key", ctx[i])
-		} else {
-			k = escapeString(k)
-		}
+		key := escapeString(attr.Key)
+		rawVal := attr.Value.Any()
+		val := formatLogfmtValue(rawVal, true)
 
 		// XXX: we should probably check that all of your key bytes aren't invalid
+		// TODO (jwasinger) above comment was from log15 code.  what does it mean?  check that key bytes are ascii characters?
 		fieldPaddingLock.RLock()
-		padding := fieldPadding[k]
+		padding := fieldPadding[key]
 		fieldPaddingLock.RUnlock()
 
-		length := utf8.RuneCountInString(v)
+		length := utf8.RuneCountInString(val)
 		if padding < length && length <= termCtxMaxPadding {
 			padding = length
 
 			fieldPaddingLock.Lock()
-			fieldPadding[k] = padding
+			fieldPadding[key] = padding
 			fieldPaddingLock.Unlock()
 		}
 		if color > 0 {
-			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, k)
+			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, key)
 		} else {
-			buf.WriteString(k)
+			buf.WriteString(key)
 			buf.WriteByte('=')
 		}
-		buf.WriteString(v)
-		if i < len(ctx)-2 && padding > length {
+		buf.WriteString(val)
+		if i < r.NumAttrs()-1 && padding > length {
 			buf.Write(bytes.Repeat([]byte{' '}, padding-length))
 		}
 	}
 	buf.WriteByte('\n')
-}
-
-// JSONFormat formats log records as JSON objects separated by newlines.
-// It is the equivalent of JSONFormatEx(false, true).
-func JSONFormat() Format {
-	return JSONFormatEx(false, true)
-}
-
-// JSONFormatOrderedEx formats log records as JSON arrays. If pretty is true,
-// records will be pretty-printed. If lineSeparated is true, records
-// will be logged with a new line between each record.
-func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
-	jsonMarshal := json.Marshal
-	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
-			return json.MarshalIndent(v, "", "    ")
-		}
-	}
-	return FormatFunc(func(r *Record) []byte {
-		props := map[string]interface{}{
-			r.KeyNames.Time: r.Time,
-			r.KeyNames.Lvl:  r.Lvl.String(),
-			r.KeyNames.Msg:  r.Msg,
-		}
-
-		ctx := make([]string, len(r.Ctx))
-		for i := 0; i < len(r.Ctx); i += 2 {
-			if k, ok := r.Ctx[i].(string); ok {
-				ctx[i] = k
-				ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
-			} else {
-				props[errorKey] = fmt.Sprintf("%+T is not a string key,", r.Ctx[i])
-			}
-		}
-		props[r.KeyNames.Ctx] = ctx
-
-		b, err := jsonMarshal(props)
-		if err != nil {
-			b, _ = jsonMarshal(map[string]string{
-				errorKey: err.Error(),
-			})
-			return b
-		}
-		if lineSeparated {
-			b = append(b, '\n')
-		}
-		return b
-	})
-}
-
-// JSONFormatEx formats log records as JSON objects. If pretty is true,
-// records will be pretty-printed. If lineSeparated is true, records
-// will be logged with a new line between each record.
-func JSONFormatEx(pretty, lineSeparated bool) Format {
-	jsonMarshal := json.Marshal
-	if pretty {
-		jsonMarshal = func(v interface{}) ([]byte, error) {
-			return json.MarshalIndent(v, "", "    ")
-		}
-	}
-
-	return FormatFunc(func(r *Record) []byte {
-		props := map[string]interface{}{
-			r.KeyNames.Time: r.Time,
-			r.KeyNames.Lvl:  r.Lvl.String(),
-			r.KeyNames.Msg:  r.Msg,
-		}
-
-		for i := 0; i < len(r.Ctx); i += 2 {
-			k, ok := r.Ctx[i].(string)
-			if !ok {
-				props[errorKey] = fmt.Sprintf("%+T is not a string key", r.Ctx[i])
-			} else {
-				props[k] = formatJSONValue(r.Ctx[i+1])
-			}
-		}
-
-		b, err := jsonMarshal(props)
-		if err != nil {
-			b, _ = jsonMarshal(map[string]string{
-				errorKey: err.Error(),
-			})
-			return b
-		}
-
-		if lineSeparated {
-			b = append(b, '\n')
-		}
-
-		return b
-	})
 }
 
 func formatShared(value interface{}) (result interface{}) {
@@ -327,16 +184,6 @@ func formatShared(value interface{}) (result interface{}) {
 
 	default:
 		return v
-	}
-}
-
-func formatJSONValue(value interface{}) interface{} {
-	value = formatShared(value)
-	switch value.(type) {
-	case int, int8, int16, int32, int64, float32, float64, uint, uint8, uint16, uint32, uint64, string:
-		return value
-	default:
-		return fmt.Sprintf("%+v", value)
 	}
 }
 

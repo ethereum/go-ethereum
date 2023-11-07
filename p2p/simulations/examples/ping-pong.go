@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	// set the log level to Trace
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(os.Stderr, log.LevelTrace, false)))
 
 	// register a single ping-pong service
 	services := map[string]adapters.LifecycleConstructor{
@@ -137,7 +137,7 @@ const (
 // Run implements the ping-pong protocol which sends ping messages to the peer
 // at 10s intervals, and responds to pings with pong messages.
 func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	log := p.log.New("peer.id", peer.ID())
+	log := p.log.With("peer.id", peer.ID())
 
 	errC := make(chan error, 1)
 	go func() {

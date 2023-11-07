@@ -24,6 +24,8 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/exp/slog"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -66,9 +68,9 @@ func (r *result) MarshalJSON() ([]byte, error) {
 
 func Transaction(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
+	glogger := log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
+	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
+	log.SetDefault(log.NewLogger(glogger))
 
 	var (
 		err error

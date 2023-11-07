@@ -49,7 +49,6 @@ func blockTestCmd(ctx *cli.Context) error {
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("path-to-test argument required")
 	}
-
 	var tracer vm.EVMLogger
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {

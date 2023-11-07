@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/exp/slog"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth"
@@ -51,8 +53,7 @@ var (
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.Level(*loglevel), true)))
 	// register the Delivery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterLifecycles(services)

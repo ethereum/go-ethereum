@@ -1,301 +1,25 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"net"
-	"os"
+	"math/big"
 	"reflect"
 	"sync"
-	"sync/atomic"
+	"time"
 
-	"github.com/go-stack/stack"
+	"github.com/holiman/uint256"
+	"golang.org/x/exp/slog"
 )
 
-// Handler defines where and how log records are written.
-// A Logger prints its log records by writing to a Handler.
-// Handlers are composable, providing you great flexibility in combining
-// them to achieve the logging structure that suits your applications.
-type Handler interface {
-	Log(r *Record) error
-}
-
-// FuncHandler returns a Handler that logs records with the given
-// function.
-func FuncHandler(fn func(r *Record) error) Handler {
-	return funcHandler(fn)
-}
-
-type funcHandler func(r *Record) error
-
-func (h funcHandler) Log(r *Record) error {
-	return h(r)
-}
-
-// StreamHandler writes log records to an io.Writer
-// with the given format. StreamHandler can be used
-// to easily begin writing log records to other
-// outputs.
+// Lazy allows you to defer calculation of a logged value that is expensive
+// to compute until it is certain that it must be evaluated with the given filters.
 //
-// StreamHandler wraps itself with LazyHandler and SyncHandler
-// to evaluate Lazy objects and perform safe concurrent writes.
-func StreamHandler(wr io.Writer, fmtr Format) Handler {
-	h := FuncHandler(func(r *Record) error {
-		_, err := wr.Write(fmtr.Format(r))
-		return err
-	})
-	return LazyHandler(SyncHandler(h))
-}
-
-// SyncHandler can be wrapped around a handler to guarantee that
-// only a single Log operation can proceed at a time. It's necessary
-// for thread-safe concurrent writes.
-func SyncHandler(h Handler) Handler {
-	var mu sync.Mutex
-	return FuncHandler(func(r *Record) error {
-		mu.Lock()
-		defer mu.Unlock()
-
-		return h.Log(r)
-	})
-}
-
-// FileHandler returns a handler which writes log records to the give file
-// using the given format. If the path
-// already exists, FileHandler will append to the given file. If it does not,
-// FileHandler will create the file with mode 0644.
-func FileHandler(path string, fmtr Format) (Handler, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
-	}
-	return closingHandler{f, StreamHandler(f, fmtr)}, nil
-}
-
-// NetHandler opens a socket to the given address and writes records
-// over the connection.
-func NetHandler(network, addr string, fmtr Format) (Handler, error) {
-	conn, err := net.Dial(network, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return closingHandler{conn, StreamHandler(conn, fmtr)}, nil
-}
-
-// XXX: closingHandler is essentially unused at the moment
-// it's meant for a future time when the Handler interface supports
-// a possible Close() operation
-type closingHandler struct {
-	io.WriteCloser
-	Handler
-}
-
-func (h *closingHandler) Close() error {
-	return h.WriteCloser.Close()
-}
-
-// CallerFileHandler returns a Handler that adds the line number and file of
-// the calling function to the context with key "caller".
-func CallerFileHandler(h Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		r.Ctx = append(r.Ctx, "caller", fmt.Sprint(r.Call))
-		return h.Log(r)
-	})
-}
-
-// CallerFuncHandler returns a Handler that adds the calling function name to
-// the context with key "fn".
-func CallerFuncHandler(h Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		r.Ctx = append(r.Ctx, "fn", formatCall("%+n", r.Call))
-		return h.Log(r)
-	})
-}
-
-// This function is here to please go vet on Go < 1.8.
-func formatCall(format string, c stack.Call) string {
-	return fmt.Sprintf(format, c)
-}
-
-// CallerStackHandler returns a Handler that adds a stack trace to the context
-// with key "stack". The stack trace is formatted as a space separated list of
-// call sites inside matching []'s. The most recent call site is listed first.
-// Each call site is formatted according to format. See the documentation of
-// package github.com/go-stack/stack for the list of supported formats.
-func CallerStackHandler(format string, h Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		s := stack.Trace().TrimBelow(r.Call).TrimRuntime()
-		if len(s) > 0 {
-			r.Ctx = append(r.Ctx, "stack", fmt.Sprintf(format, s))
-		}
-		return h.Log(r)
-	})
-}
-
-// FilterHandler returns a Handler that only writes records to the
-// wrapped Handler if the given function evaluates true. For example,
-// to only log records where the 'err' key is not nil:
-//
-//	logger.SetHandler(FilterHandler(func(r *Record) bool {
-//	    for i := 0; i < len(r.Ctx); i += 2 {
-//	        if r.Ctx[i] == "err" {
-//	            return r.Ctx[i+1] != nil
-//	        }
-//	    }
-//	    return false
-//	}, h))
-func FilterHandler(fn func(r *Record) bool, h Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		if fn(r) {
-			return h.Log(r)
-		}
-		return nil
-	})
-}
-
-// MatchFilterHandler returns a Handler that only writes records
-// to the wrapped Handler if the given key in the logged
-// context matches the value. For example, to only log records
-// from your ui package:
-//
-//	log.MatchFilterHandler("pkg", "app/ui", log.StdoutHandler)
-func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
-	return FilterHandler(func(r *Record) (pass bool) {
-		switch key {
-		case r.KeyNames.Lvl:
-			return r.Lvl == value
-		case r.KeyNames.Time:
-			return r.Time == value
-		case r.KeyNames.Msg:
-			return r.Msg == value
-		}
-
-		for i := 0; i < len(r.Ctx); i += 2 {
-			if r.Ctx[i] == key {
-				return r.Ctx[i+1] == value
-			}
-		}
-		return false
-	}, h)
-}
-
-// LvlFilterHandler returns a Handler that only writes
-// records which are less than the given verbosity
-// level to the wrapped Handler. For example, to only
-// log Error/Crit records:
-//
-//	log.LvlFilterHandler(log.LvlError, log.StdoutHandler)
-func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
-	return FilterHandler(func(r *Record) (pass bool) {
-		return r.Lvl <= maxLvl
-	}, h)
-}
-
-// MultiHandler dispatches any write to each of its handlers.
-// This is useful for writing different types of log information
-// to different locations. For example, to log to a file and
-// standard error:
-//
-//	log.MultiHandler(
-//	    log.Must.FileHandler("/var/log/app.log", log.LogfmtFormat()),
-//	    log.StderrHandler)
-func MultiHandler(hs ...Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		for _, h := range hs {
-			// what to do about failures?
-			h.Log(r)
-		}
-		return nil
-	})
-}
-
-// FailoverHandler writes all log records to the first handler
-// specified, but will failover and write to the second handler if
-// the first handler has failed, and so on for all handlers specified.
-// For example you might want to log to a network socket, but failover
-// to writing to a file if the network fails, and then to
-// standard out if the file write fails:
-//
-//	log.FailoverHandler(
-//	    log.Must.NetHandler("tcp", ":9090", log.JSONFormat()),
-//	    log.Must.FileHandler("/var/log/app.log", log.LogfmtFormat()),
-//	    log.StdoutHandler)
-//
-// All writes that do not go to the first handler will add context with keys of
-// the form "failover_err_{idx}" which explain the error encountered while
-// trying to write to the handlers before them in the list.
-func FailoverHandler(hs ...Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		var err error
-		for i, h := range hs {
-			err = h.Log(r)
-			if err == nil {
-				return nil
-			}
-			r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
-		}
-
-		return err
-	})
-}
-
-// ChannelHandler writes all records to the given channel.
-// It blocks if the channel is full. Useful for async processing
-// of log messages, it's used by BufferedHandler.
-func ChannelHandler(recs chan<- *Record) Handler {
-	return FuncHandler(func(r *Record) error {
-		recs <- r
-		return nil
-	})
-}
-
-// BufferedHandler writes all records to a buffered
-// channel of the given size which flushes into the wrapped
-// handler whenever it is available for writing. Since these
-// writes happen asynchronously, all writes to a BufferedHandler
-// never return an error and any errors from the wrapped handler are ignored.
-func BufferedHandler(bufSize int, h Handler) Handler {
-	recs := make(chan *Record, bufSize)
-	go func() {
-		for m := range recs {
-			_ = h.Log(m)
-		}
-	}()
-	return ChannelHandler(recs)
-}
-
-// LazyHandler writes all values to the wrapped handler after evaluating
-// any lazy functions in the record's context. It is already wrapped
-// around StreamHandler and SyslogHandler in this library, you'll only need
-// it if you write your own Handler.
-func LazyHandler(h Handler) Handler {
-	return FuncHandler(func(r *Record) error {
-		// go through the values (odd indices) and reassign
-		// the values of any lazy fn to the result of its execution
-		hadErr := false
-		for i := 1; i < len(r.Ctx); i += 2 {
-			lz, ok := r.Ctx[i].(Lazy)
-			if ok {
-				v, err := evaluateLazy(lz)
-				if err != nil {
-					hadErr = true
-					r.Ctx[i] = err
-				} else {
-					if cs, ok := v.(stack.CallStack); ok {
-						v = cs.TrimBelow(r.Call).TrimRuntime()
-					}
-					r.Ctx[i] = v
-				}
-			}
-		}
-
-		if hadErr {
-			r.Ctx = append(r.Ctx, errorKey, "bad lazy")
-		}
-
-		return h.Log(r)
-	})
+// You may wrap any function which takes no arguments to Lazy. It may return any
+// number of values of any type.
+type Lazy struct {
+	Fn interface{}
 }
 
 func evaluateLazy(lz Lazy) (interface{}, error) {
@@ -325,51 +49,242 @@ func evaluateLazy(lz Lazy) (interface{}, error) {
 	return values, nil
 }
 
-// DiscardHandler reports success for all writes but does nothing.
-// It is useful for dynamically disabling logging at runtime via
-// a Logger's SetHandler method.
-func DiscardHandler() Handler {
-	return FuncHandler(func(r *Record) error {
-		return nil
-	})
+type discardHandler struct{}
+
+// DiscardHandler returns a no-op handler
+func DiscardHandler() slog.Handler {
+	return &discardHandler{}
 }
 
-// Must provides the following Handler creation functions
-// which instead of returning an error parameter only return a Handler
-// and panic on failure: FileHandler, NetHandler, SyslogHandler, SyslogNetHandler
-var Must muster
+func (h *discardHandler) Handle(_ context.Context, r slog.Record) error {
+	return nil
+}
 
-func must(h Handler, err error) Handler {
-	if err != nil {
-		panic(err)
+func (h *discardHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return false
+}
+
+func (h *discardHandler) WithGroup(name string) slog.Handler {
+	panic("not implemented")
+}
+
+func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &discardHandler{}
+}
+
+type funcHandler struct {
+	handler handlerFunc
+	attrs   []slog.Attr
+}
+
+type handlerFunc func(_ context.Context, r slog.Record) error
+
+// FuncHandler returns a handler which forwards all records to the provided handler function
+func FuncHandler(fn handlerFunc) slog.Handler {
+	return &funcHandler{fn, []slog.Attr{}}
+}
+
+func (h funcHandler) Handle(_ context.Context, r slog.Record) error {
+	r.AddAttrs(h.attrs...)
+	return h.handler(context.Background(), r)
+}
+
+func (h *funcHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return true
+}
+
+func (h *funcHandler) WithGroup(name string) slog.Handler {
+	panic("not implemented")
+}
+
+func (h *funcHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &funcHandler{
+		h.handler,
+		append(h.attrs, attrs...),
 	}
-	return h
 }
 
-type muster struct{}
-
-func (m muster) FileHandler(path string, fmtr Format) Handler {
-	return must(FileHandler(path, fmtr))
+type terminalHandler struct {
+	mu       sync.Mutex
+	wr       io.Writer
+	lvl      slog.Level
+	useColor bool
+	attrs    []slog.Attr
 }
 
-func (m muster) NetHandler(network, addr string, fmtr Format) Handler {
-	return must(NetHandler(network, addr, fmtr))
+// TerminalHandler returns a handler which formats log records at all levels optimized for human readability on
+// a terminal with color-coded level output and terser human friendly timestamp.
+// This format should only be used for interactive programs or while developing.
+//
+//	[LEVEL] [TIME] MESSAGE key=value key=value ...
+//
+// Example:
+//
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
+func TerminalHandler(wr io.Writer, useColor bool) slog.Handler {
+	return TerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
 }
 
-// swapHandler wraps another handler that may be swapped out
-// dynamically at runtime in a thread-safe fashion.
-type swapHandler struct {
-	handler atomic.Value
+// TerminalHandlerWithLevel returns the same handler as TerminalHandler but only outputs
+// records which are less than or equal to the specified verbosity level.
+func TerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) slog.Handler {
+	return &terminalHandler{
+		sync.Mutex{},
+		wr,
+		lvl,
+		useColor,
+		[]slog.Attr{},
+	}
 }
 
-func (h *swapHandler) Log(r *Record) error {
-	return (*h.handler.Load().(*Handler)).Log(r)
+func (h *terminalHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r.AddAttrs(h.attrs...)
+	h.wr.Write(TerminalFormat(r, h.useColor))
+	return nil
 }
 
-func (h *swapHandler) Swap(newHandler Handler) {
-	h.handler.Store(&newHandler)
+func (h *terminalHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.lvl
 }
 
-func (h *swapHandler) Get() Handler {
-	return *h.handler.Load().(*Handler)
+func (h *terminalHandler) WithGroup(name string) slog.Handler {
+	panic("not implemented")
+}
+
+func (h *terminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &terminalHandler{
+		sync.Mutex{},
+		h.wr,
+		h.lvl,
+		h.useColor,
+		append(h.attrs, attrs...),
+	}
+}
+
+type leveler struct{ minLevel slog.Level }
+
+func (l *leveler) Level() slog.Level {
+	return l.minLevel
+}
+
+func JsonHandler(wr io.Writer) slog.Handler {
+	return &builtinHandler{slog.NewJSONHandler(wr, &slog.HandlerOptions{
+		ReplaceAttr: builtinReplace,
+	})}
+}
+
+// LogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
+// format for key/value pairs.
+//
+// For more details see: http://godoc.org/github.com/kr/logfmt
+func LogfmtHandler(wr io.Writer) slog.Handler {
+	return &builtinHandler{slog.NewTextHandler(wr, &slog.HandlerOptions{
+		ReplaceAttr: builtinReplace,
+	})}
+}
+
+// LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs
+// records which are less than or equal to the specified verbosity level.
+func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
+	return &builtinHandler{slog.NewTextHandler(wr, &slog.HandlerOptions{
+		ReplaceAttr: builtinReplace,
+		Level:       &leveler{level},
+	})}
+}
+
+// builtinHandler wraps an instance of the built-in slog json/text handlers
+// a wrapper is needed because with slog.HandlerOptions.ReplaceAttr, there is
+// no way to differentiate between an attribute that is a property of the Record
+// and a user-provided attribute (e.g. providing an attribute who's key is "time"
+// conflicts with the Record.Time property).
+type builtinHandler struct {
+	inner slog.Handler
+}
+
+func (h *builtinHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &builtinHandler{
+		h.inner.WithAttrs(attrs),
+	}
+}
+
+const diffMarker = "xxxxxx"
+
+func (h *builtinHandler) WithGroup(name string) slog.Handler {
+	return &builtinHandler{
+		h.inner.WithGroup(name),
+	}
+}
+
+func (h *builtinHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return h.inner.Enabled(context.Background(), level)
+}
+
+func (h *builtinHandler) Handle(_ context.Context, r slog.Record) error {
+	var sanitizedAttrs []slog.Attr
+	sanitizedRecord := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
+
+	// iterate user-provided attrs. prepend key with marker for
+	// any that would conflict with keys for Record obj properties.
+	r.Attrs(func(attr slog.Attr) bool {
+		switch attr.Key {
+		case slog.TimeKey:
+			attr.Key = diffMarker + slog.TimeKey
+		case slog.LevelKey:
+			attr.Key = diffMarker + slog.LevelKey
+		case slog.MessageKey:
+			attr.Key = diffMarker + slog.MessageKey
+		case slog.SourceKey:
+			attr.Key = diffMarker + slog.SourceKey
+		}
+		sanitizedAttrs = append(sanitizedAttrs, attr)
+		return true
+	})
+
+	sanitizedRecord.AddAttrs(sanitizedAttrs...)
+	return h.inner.Handle(context.Background(), sanitizedRecord)
+}
+
+func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
+	switch attr.Key {
+	case slog.TimeKey:
+		attr = slog.Any("t", attr.Value.Time().Format(timeFormat))
+		return attr
+	case slog.LevelKey:
+		attr = slog.Any("lvl", LevelString(attr.Value.Any().(slog.Level)))
+		return attr
+	case slog.MessageKey:
+		return attr
+	case slog.SourceKey:
+		return attr
+
+	// strip the marker from attr keys that conflict with Record obj property keys
+	case diffMarker + slog.TimeKey:
+		attr.Key = slog.TimeKey
+	case diffMarker + slog.LevelKey:
+		attr.Key = slog.LevelKey
+	case diffMarker + slog.MessageKey:
+		attr.Key = slog.MessageKey
+	case diffMarker + slog.SourceKey:
+		attr.Key = slog.SourceKey
+	}
+
+	switch v := attr.Value.Any().(type) {
+	case time.Time:
+		attr = slog.Any(attr.Key, v.Format(timeFormat))
+	case *big.Int:
+		if v == nil {
+			attr.Value = slog.AnyValue("<nil>")
+		} else {
+			attr.Value = slog.AnyValue(formatLogfmtBigInt(v))
+		}
+	case *uint256.Int:
+		if v == nil {
+			attr.Value = slog.AnyValue("<nil>")
+		} else {
+			attr.Value = slog.AnyValue(formatLogfmtUint256(v))
+		}
+	}
+	return attr
 }
