@@ -231,7 +231,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
 	storageRoot := statedb.GetStorageRoot(address)
-	if storageRoot == types.EmptyRootHash {
+	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}
 	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
