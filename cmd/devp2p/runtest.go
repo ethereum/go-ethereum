@@ -50,9 +50,10 @@ var (
 		Category: flags.TestingCategory,
 	}
 	testNodeJWTFlag = &cli.StringFlag{
-		Name:     "jwt",
-		Usage:    "JWT for talking to the engine API of the test node (required)",
+		Name:     "jwtsecret",
+		Usage:    "JWT secret for the engine API of the test node (required)",
 		Category: flags.TestingCategory,
+		Value:    "0x7365637265747365637265747365637265747365637265747365637265747365",
 	}
 	testNodeEngineFlag = &cli.StringFlag{
 		Name:     "engineapi",
