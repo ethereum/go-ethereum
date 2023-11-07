@@ -28,7 +28,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.IntFlag(&flagset.IntFlag{
 		Name:    "verbosity",
-		Usage:   "Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit), default = 3",
+		Usage:   "Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit)",
 		Value:   &c.cliConfig.Verbosity,
 		Default: c.cliConfig.Verbosity,
 	})
@@ -71,13 +71,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "rpc.batchlimit",
-		Usage:   "Maximum number of messages in a batch (default=100, use 0 for no limits)",
+		Usage:   "Maximum number of messages in a batch (use 0 for no limits)",
 		Value:   &c.cliConfig.RPCBatchLimit,
 		Default: c.cliConfig.RPCBatchLimit,
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "rpc.returndatalimit",
-		Usage:   "Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)",
+		Usage:   "Maximum size (in bytes) a result of an rpc request could have (use 0 for no limits)",
 		Value:   &c.cliConfig.RPCReturnDataLimit,
 		Default: c.cliConfig.RPCReturnDataLimit,
 	})
@@ -433,7 +433,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.triesinmemory",
-		Usage:   "Number of block states (tries) to keep in memory (default = 128)",
+		Usage:   "Number of block states (tries) to keep in memory",
 		Value:   &c.cliConfig.Cache.TriesInMemory,
 		Default: c.cliConfig.Cache.TriesInMemory,
 		Group:   "Cache",
@@ -788,7 +788,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.DurationFlag(&flagset.DurationFlag{
 		Name:    "txarrivalwait",
-		Usage:   "Maximum duration to wait for a transaction before explicitly requesting it (defaults to 500ms)",
+		Usage:   "Maximum duration to wait for a transaction before explicitly requesting it",
 		Value:   &c.cliConfig.P2P.TxArrivalWait,
 		Default: c.cliConfig.P2P.TxArrivalWait,
 		Group:   "P2P",

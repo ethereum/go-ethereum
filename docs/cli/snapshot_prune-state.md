@@ -4,13 +4,13 @@ The ```bor snapshot prune-state``` command will prune historical state data with
 
 ## Options
 
-- ```datadir```: Path of the data directory to store information
+- ```bloomfilter.size```: Size of the bloom filter (default: 2048)
 
-- ```keystore```: Path of the data directory to store keys
+- ```datadir```: Path of the data directory to store information
 
 - ```datadir.ancient```: Path of the ancient data directory to store information
 
-- ```bloomfilter.size```: Size of the bloom filter (default: 2048)
+- ```keystore```: Path of the data directory to store keys
 
 ### Cache Options
 
