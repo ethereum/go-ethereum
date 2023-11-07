@@ -17,19 +17,19 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
-	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"io"
 )
 
 func TestNewID(t *testing.T) {
