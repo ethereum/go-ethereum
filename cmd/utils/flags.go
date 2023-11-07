@@ -1646,45 +1646,6 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
-// validateDeveloperGenesis asserts that a provided genesis can be used with dev mode:
-// it requires pre-merge hard-forks and proof-of-stake to be activated at block 0
-func validateDeveloperGenesis(genesis *core.Genesis) error {
-	checkForkIsBlock0 := func(forkName string, hfBlockNumber *big.Int) error {
-		if hfBlockNumber == nil {
-			return fmt.Errorf("%s: hard-fork not enabled", forkName)
-		} else if hfBlockNumber.Cmp(big.NewInt(0)) != 0 {
-			return fmt.Errorf("%s: hard-fork not activated in block 0", forkName)
-		}
-		return nil
-	}
-
-	config := genesis.Config
-	if err := checkForkIsBlock0("Homestead", config.HomesteadBlock); err != nil {
-		return err
-	} else if config.DAOForkBlock != nil {
-		return errors.New("DAO hardfork cannot be enabled")
-	} else if err := checkForkIsBlock0("EIP150", config.EIP150Block); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("EIP155", config.EIP155Block); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("EIP158", config.EIP158Block); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("Byzantium", config.ByzantiumBlock); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("Constantinople", config.ConstantinopleBlock); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("Istanbul", config.IstanbulBlock); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("Berlin", config.BerlinBlock); err != nil {
-		return err
-	} else if err := checkForkIsBlock0("London", config.LondonBlock); err != nil {
-		return err
-	} else if !config.TerminalTotalDifficultyPassed {
-		return errors.New("terminal total difficulty must be passed")
-	}
-	return nil
-}
-
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
@@ -1913,10 +1874,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				var genesis *core.Genesis
 				var err error
 				if genesis, err = core.ReadGenesis(chaindb); err != nil {
-					Fatalf("could not read genesis from database: %v", err)
+					Fatalf("Could not read genesis from database: %v", err)
 				}
-				if err = validateDeveloperGenesis(genesis); err != nil {
-					Fatalf("genesis configuration incompatible with development mode: %v", err)
+				if !genesis.Config.TerminalTotalDifficultyPassed {
+					Fatalf("Bad genesis configuration: ttd must be passed in block 0 in developer mode")
 				}
 			}
 			chaindb.Close()
