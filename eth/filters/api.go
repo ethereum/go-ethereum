@@ -34,8 +34,9 @@ import (
 )
 
 var (
-	errInvalidTopic   = errors.New("invalid topic(s)")
-	errFilterNotFound = errors.New("filter not found")
+	errInvalidTopic      = errors.New("invalid topic(s)")
+	errFilterNotFound    = errors.New("filter not found")
+	errInvalidBlockRange = errors.New("invalid block range params")
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -346,6 +347,9 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
+		}
+		if begin > 0 && end > 0 && begin > end {
+			return nil, errInvalidBlockRange
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
