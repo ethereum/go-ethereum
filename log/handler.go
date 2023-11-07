@@ -81,6 +81,8 @@ type TerminalHandler struct {
 	// fieldPadding is a map with maximum field value lengths seen until now
 	// to allow padding log contexts in a bit smarter way.
 	fieldPadding map[string]int
+
+	buf []byte
 }
 
 // NewTerminalHandler returns a handler which formats log records at all levels optimized for human readability on
@@ -110,7 +112,9 @@ func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *T
 func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.wr.Write(h.TerminalFormat(r, h.useColor))
+	buf := h.TerminalFormat(h.buf, r, h.useColor)
+	h.wr.Write(buf)
+	h.buf = buf[:0]
 	return nil
 }
 
