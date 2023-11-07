@@ -104,6 +104,8 @@ jobs:
       script:
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        - go run build/ci.go install -dlgo -arch arm64
+        - go run build/ci.go archive -arch arm64 -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
     # These builders run the tests
     - stage: build
