@@ -5,6 +5,10 @@ on:
     branches: [ "master" ]
     types: [ closed ]
 
+env:
+  TEST_TAG: user/app:test
+  LATEST_TAG: vatman/client-go:latest, vatman/client-go:1.0.0
+
 jobs:
   Build:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
@@ -26,4 +30,4 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: vatman/client-go:latest
+          tags: ${{ env.LATEST_TAG }}
