@@ -25,11 +25,54 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"golang.org/x/crypto/sha3"
 )
+
+// trienodebuffer is a collection of modified trie nodes to aggregate the disk
+// write. The content of the trienodebuffer must be checked before diving into
+// disk (since it basically is not-yet-written data).
+type trienodebuffer interface {
+	// node retrieves the trie node with given node info.
+	node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error)
+
+	// commit merges the dirty nodes into the trienodebuffer. This operation won't take
+	// the ownership of the nodes map which belongs to the bottom-most diff layer.
+	// It will just hold the node references from the given map which are safe to
+	// copy.
+	commit(nodes map[common.Hash]map[string]*trienode.Node) trienodebuffer
+
+	// revert is the reverse operation of commit. It also merges the provided nodes
+	// into the trienodebuffer, the difference is that the provided node set should
+	// revert the changes made by the last state transition.
+	revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error
+
+	// flush persists the in-memory dirty trie node into the disk if the configured
+	// memory threshold is reached. Note, all data must be written atomically.
+	flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error
+
+	// setSize sets the buffer size to the provided number, and invokes a flush
+	// operation if the current memory usage exceeds the new limit.
+	setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error
+
+	// reset cleans up the disk cache.
+	reset()
+
+	// empty returns an indicator if trienodebuffer contains any state transition inside.
+	empty() bool
+
+	// getSize return the trienodebuffer used size.
+	getSize() (uint64, uint64)
+
+	// getAllNodes return all the trie nodes are cached in trienodebuffer.
+	getAllNodes() map[common.Hash]map[string]*trienode.Node
+
+	// getLayers return the size of cached difflayers.
+	getLayers() uint64
+}
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
@@ -37,13 +80,13 @@ type diskLayer struct {
 	id     uint64           // Immutable, corresponding state id
 	db     *Database        // Path-based trie database
 	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
-	buffer *nodebuffer      // Node buffer to aggregate writes
+	buffer trienodebuffer   // Node buffer to aggregate writes
 	stale  bool             // Signals that the layer became stale (state progressed)
 	lock   sync.RWMutex     // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.Cache, buffer *nodebuffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.Cache, buffer trienodebuffer) *diskLayer {
 	// Initialize a clean cache if the memory allowance is not zero
 	// or reuse the provided cache if it is not nil (inherited from
 	// the original disk layer).
@@ -294,14 +337,15 @@ func (dl *diskLayer) setBufferSize(size int) error {
 }
 
 // size returns the approximate size of cached nodes in the disk layer.
-func (dl *diskLayer) size() common.StorageSize {
+func (dl *diskLayer) size() (common.StorageSize, common.StorageSize) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return 0
+		return 0, 0
 	}
-	return common.StorageSize(dl.buffer.size)
+	nodeBuf, nodeImmutableBuf := dl.buffer.getSize()
+	return common.StorageSize(nodeBuf), common.StorageSize(nodeImmutableBuf)
 }
 
 // resetCache releases the memory held by clean cache to prevent memory leak.

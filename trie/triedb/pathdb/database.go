@@ -52,6 +52,10 @@ const (
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
 	DefaultBufferSize = 64 * 1024 * 1024
+
+	// DefaultBackgroundFlushInterval defines the default the wait interval
+	// that background node cache flush disk.
+	DefaultBackgroundFlushInterval = 3
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -303,7 +307,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0)))
+	db.tree.reset(newDiskLayer(root, 0, db, nil, newAsyncNodeBuffer(db.bufferSize, nil, 0)))
 
 	// Re-enable the database as the final step.
 	db.waitSync = false
@@ -410,16 +414,16 @@ func (db *Database) Close() error {
 
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
-func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) {
+func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize, nodesImmutable common.StorageSize) {
 	db.tree.forEach(func(layer layer) {
 		if diff, ok := layer.(*diffLayer); ok {
 			diffs += common.StorageSize(diff.memory)
 		}
 		if disk, ok := layer.(*diskLayer); ok {
-			nodes += disk.size()
+			nodes, nodesImmutable = disk.size()
 		}
 	})
-	return diffs, nodes
+	return diffs, nodes, nodesImmutable
 }
 
 // Initialized returns an indicator if the state data is already

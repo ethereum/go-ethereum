@@ -49,6 +49,20 @@ var (
 	// errUnexpectedNode is returned if the requested node with specified path is
 	// not hash matched with expectation.
 	errUnexpectedNode = errors.New("unexpected node")
+
+	// errWriteImmutable is returned if write to background immutable nodebuffer
+	// under asyncnodebuffer
+	errWriteImmutable = errors.New("write immutable node buffer")
+
+	// errFlushMutable is returned if flush the background mutable nodebuffer
+	// to disk, under asyncnodebuffer
+	errFlushMutable = errors.New("flush mutable node buffer")
+
+	// errRevertImmutable is returned if revert the background immutable nodebuffer
+	errRevertImmutable = errors.New("revert immutable node buffer")
+
+	// errIncompatibleMerge is returned when merge node cache occurs error.
+	errIncompatibleMerge = errors.New("incompatible node buffer merge")
 )
 
 func newUnexpectedNodeError(loc string, expHash common.Hash, gotHash common.Hash, owner common.Hash, path []byte, blob []byte) error {

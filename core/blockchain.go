@@ -1023,7 +1023,7 @@ func (bc *BlockChain) Stop() {
 			for !bc.triegc.Empty() {
 				triedb.Dereference(bc.triegc.PopItem())
 			}
-			if _, nodes, _ := triedb.Size(); nodes != 0 { // all memory is contained within the nodes return for hashdb
+			if _, nodes, _, _ := triedb.Size(); nodes != 0 { // all memory is contained within the nodes return for hashdb
 				log.Error("Dangling trie nodes after full cleanup")
 			}
 		}
@@ -1431,8 +1431,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (
-		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
-		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+		_, nodesMutable, nodesImmutable, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
+		limit                                 = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+		nodes                                 = nodesMutable + nodesImmutable
 	)
 	if nodes > limit || imgs > 4*1024*1024 {
 		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
@@ -1872,8 +1873,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if bc.snaps != nil {
 			snapDiffItems, snapBufItems = bc.snaps.Size()
 		}
-		trieDiffNodes, trieBufNodes, _ := bc.triedb.Size()
-		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, setHead)
+		trieDiffNodes, trieBufNodes, trieBufNodesImmutable, _ := bc.triedb.Size()
+		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, trieBufNodesImmutable, setHead)
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
