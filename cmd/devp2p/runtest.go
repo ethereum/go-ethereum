@@ -34,6 +34,21 @@ var (
 		Name:  "tap",
 		Usage: "Output TAP",
 	}
+
+	// for eth/snap tests
+	testChainDirFlag = &cli.StringFlag{
+		Name:  "chain",
+		Usage: "Test chain directory",
+	}
+	testNodeJWTFlag = &cli.StringFlag{
+		Name:  "jwt",
+		Usage: "JWT for talking to the engine API of the test node",
+	}
+	testNodeEngineFlag = &cli.StringFlag{
+		Name:  "engineapi",
+		Usage: "Engine API endpoint of the test node",
+	}
+
 	// These two are specific to the discovery tests.
 	testListen1Flag = &cli.StringFlag{
 		Name:  "listen1",
