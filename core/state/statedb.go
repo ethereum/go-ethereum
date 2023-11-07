@@ -305,7 +305,7 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	if stateObject != nil {
 		return stateObject.Root()
 	}
-	return types.EmptyRootHash
+	return common.Hash{}
 }
 
 // TxIndex returns the current transaction index set by Prepare.
@@ -331,10 +331,10 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return common.BytesToHash(stateObject.CodeHash())
+	if stateObject == nil {
+		return common.Hash{}
 	}
-	return types.EmptyCodeHash
+	return common.BytesToHash(stateObject.CodeHash())
 }
 
 // GetState retrieves a value from the given account's storage trie.
