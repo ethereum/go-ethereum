@@ -17,9 +17,9 @@
 package memorydb
 
 import (
+	"encoding/binary"
 	"testing"
 
-	"encoding/binary"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/dbtest"
 )
