@@ -54,6 +54,7 @@ var (
 			testPatternFlag,
 			testTAPFlag,
 			testChainDirFlag,
+			testNodeFlag,
 			testNodeJWTFlag,
 			testNodeEngineFlag,
 		},
@@ -61,12 +62,13 @@ var (
 	rlpxSnapTestCommand = &cli.Command{
 		Name:      "snap-test",
 		Usage:     "Runs snap protocol tests against a node",
-		ArgsUsage: "<node>",
+		ArgsUsage: "",
 		Action:    rlpxSnapTest,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
 			testChainDirFlag,
+			testNodeFlag,
 			testNodeJWTFlag,
 			testNodeEngineFlag,
 		},
@@ -136,8 +138,16 @@ type testParams struct {
 }
 
 func cliTestParams(ctx *cli.Context) *testParams {
+	nodeStr := ctx.String(testNodeFlag.Name)
+	if nodeStr == "" {
+		exit(fmt.Errorf("missing -%s", testNodeFlag.Name))
+	}
+	node, err := parseNode(nodeStr)
+	if err != nil {
+		exit(err)
+	}
 	p := testParams{
-		node:      getNodeArg(ctx),
+		node:      node,
 		engineAPI: ctx.String(testNodeEngineFlag.Name),
 		jwt:       ctx.String(testNodeJWTFlag.Name),
 		chainDir:  ctx.String(testChainDirFlag.Name),
