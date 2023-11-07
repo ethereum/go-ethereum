@@ -57,7 +57,7 @@ func TestClientSyncTree(t *testing.T) {
 		wantSeq   = uint(1)
 	)
 
-	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LevelTrace)})
+	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	stree, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	if err != nil {
 		t.Fatal("sync error:", err)
@@ -91,7 +91,7 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
 		"INDMVBZEEQ4ESVYAKGIYU74EAA.n": "enr:-----",
 	}
-	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LevelTrace)})
+	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	_, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	wantErr := nameError{name: "INDMVBZEEQ4ESVYAKGIYU74EAA.n", err: entryError{typ: "enr", err: errInvalidENR}}
 	if err != wantErr {
@@ -110,7 +110,7 @@ func TestIterator(t *testing.T) {
 
 	c := NewClient(Config{
 		Resolver:  r,
-		Logger:    testlog.Logger(t, log.LevelTrace),
+		Logger:    testlog.Logger(t, log.LvlTrace),
 		RateLimit: 500,
 	})
 	it, err := c.NewIterator(url)
@@ -174,7 +174,7 @@ func TestIteratorLinks(t *testing.T) {
 
 	c := NewClient(Config{
 		Resolver:  newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
-		Logger:    testlog.Logger(t, log.LevelTrace),
+		Logger:    testlog.Logger(t, log.LvlTrace),
 		RateLimit: 500,
 	})
 	it, err := c.NewIterator(url2)
@@ -195,7 +195,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
-			Logger:          testlog.Logger(t, log.LevelTrace),
+			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
 			RateLimit:       500,
 		})
@@ -233,7 +233,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
-			Logger:          testlog.Logger(t, log.LevelTrace),
+			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
 			RateLimit:       500,
 			// Disabling the cache is required for this test because the client doesn't
@@ -271,7 +271,7 @@ func TestIteratorEmptyTree(t *testing.T) {
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
-			Logger:          testlog.Logger(t, log.LevelTrace),
+			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
 			RateLimit:       500,
 		})
@@ -332,7 +332,7 @@ func TestIteratorLinkUpdates(t *testing.T) {
 		resolver = newMapResolver()
 		c        = NewClient(Config{
 			Resolver:        resolver,
-			Logger:          testlog.Logger(t, log.LevelTrace),
+			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
 			RateLimit:       500,
 		})

@@ -157,6 +157,10 @@ func (l *logger) With(ctx ...interface{}) log.Logger {
 	return &logger{l.t, l.l.With(ctx...), l.mu, l.h}
 }
 
+func (l *logger) New(ctx ...interface{}) log.Logger {
+	return l.With(ctx...)
+}
+
 // flush writes all buffered messages and clears the buffer.
 func (l *logger) flush() {
 	l.t.Helper()

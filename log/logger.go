@@ -29,6 +29,11 @@ const (
 	LevelWarn                    = slog.LevelWarn
 	LevelError                   = slog.LevelError
 	LevelCrit         slog.Level = 12
+
+	// for backward-compatibility
+	LvlTrace = LevelTrace
+	LvlInfo = LevelInfo
+	LvlDebug = LevelDebug
 )
 
 // convert from old Geth verbosity level constants
@@ -107,6 +112,9 @@ type Logger interface {
 
 	// With returns a new Logger that has this logger's attributes plus the given attributes
 	With(ctx ...interface{}) Logger
+
+	// With returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
+	New(ctx ...interface{}) Logger
 
 	// Log logs a message at the specified level with context key/value pairs
 	Log(level slog.Level, msg string, ctx ...interface{})
@@ -194,6 +202,10 @@ func (l *logger) Log(level slog.Level, msg string, attrs ...any) {
 
 func (l *logger) With(ctx ...interface{}) Logger {
 	return &logger{l.inner.With(ctx...)}
+}
+
+func (l *logger) New(ctx ...interface{}) Logger {
+	return l.With(ctx...)
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {

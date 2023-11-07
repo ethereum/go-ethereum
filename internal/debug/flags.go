@@ -175,7 +175,7 @@ var (
 
 func init() {
 	glogger = log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
-	glogger.Verbosity(log.LevelInfo)
+	glogger.Verbosity(log.LvlInfo)
 	log.SetDefault(log.NewLogger(glogger))
 }
 
@@ -204,7 +204,6 @@ func Setup(ctx *cli.Context) error {
 	} else {
 		context = append(context, "format", "terminal")
 	}
-
 	if rotation {
 		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
 		// so typically /tmp/geth-lumberjack.log on linux

@@ -228,7 +228,7 @@ func RandomNodeConfig() *NodeConfig {
 		Name:            fmt.Sprintf("node_%s", enodId.String()),
 		Port:            port,
 		EnableMsgEvents: true,
-		LogVerbosity:    log.LevelInfo,
+		LogVerbosity:    log.LvlInfo,
 	}
 }
 

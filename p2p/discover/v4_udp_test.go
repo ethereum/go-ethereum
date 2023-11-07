@@ -74,7 +74,7 @@ func newUDPTest(t *testing.T) *udpTest {
 	ln := enode.NewLocalNode(test.db, test.localkey)
 	test.udp, _ = ListenV4(test.pipe, ln, Config{
 		PrivateKey: test.localkey,
-		Log:        testlog.Logger(t, log.LevelTrace),
+		Log:        testlog.Logger(t, log.LvlTrace),
 	})
 	test.table = test.udp.tab
 	// Wait for initial refresh so the table doesn't send unexpected findnode.

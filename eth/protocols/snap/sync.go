@@ -2438,7 +2438,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().With("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering range of accounts", "hashes", len(hashes), "accounts", len(accounts), "proofs", len(proof), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -2548,7 +2548,7 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
 	}
-	logger := peer.Log().With("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of bytecodes", "bytecodes", len(bytecodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -2661,7 +2661,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 	for _, node := range proof {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().With("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering ranges of storage slots", "accounts", len(hashes), "hashes", hashCount, "slots", slotCount, "proofs", len(proof), "size", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -2795,7 +2795,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	for _, node := range trienodes {
 		size += common.StorageSize(len(node))
 	}
-	logger := peer.Log().With("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of healing trienodes", "trienodes", len(trienodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and
@@ -2902,7 +2902,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 	for _, code := range bytecodes {
 		size += common.StorageSize(len(code))
 	}
-	logger := peer.Log().With("reqid", id)
+	logger := peer.Log().New("reqid", id)
 	logger.Trace("Delivering set of healing bytecodes", "bytecodes", len(bytecodes), "bytes", size)
 
 	// Whether or not the response is valid, we can mark the peer as idle and

@@ -769,7 +769,7 @@ func newUDPV5Test(t *testing.T) *udpV5Test {
 	ln.Set(enr.UDP(30303))
 	test.udp, _ = ListenV5(test.pipe, ln, Config{
 		PrivateKey:   test.localkey,
-		Log:          testlog.Logger(t, log.LevelTrace),
+		Log:          testlog.Logger(t, log.LvlTrace),
 		ValidSchemes: enode.ValidSchemesForTesting,
 	})
 	test.udp.codec = &testCodec{test: test, id: ln.ID()}

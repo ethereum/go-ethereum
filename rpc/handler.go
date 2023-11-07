@@ -89,7 +89,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		batchResponseMaxSize: batchResponseMaxSize,
 	}
 	if conn.remoteAddr() != "" {
-		h.log = h.log.With("conn", conn.remoteAddr())
+		h.log = h.log.New("conn", conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
