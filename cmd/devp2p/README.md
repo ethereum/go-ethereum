@@ -115,17 +115,22 @@ with our test chain. The chain files are located in `./cmd/devp2p/internal/ethte
 2. import blocks from `chain.rlp`
 3. run the client using the resulting database. For geth, use a command like the one below:
 
-    geth --datadir <datadir> --nodiscover --nat=none --networkid 3503995874084926 --verbosity 5
+    geth \
+        --datadir <datadir>            \
+        --nodiscover                   \
+        --nat=none                     \
+        --networkid 3503995874084926   \
+        --verbosity 5                  \
+        --authrpc.jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
 
-Tests also require access to the engine API.
-
+Note that the tests also require access to the engine API.
 The test suite can now be executed using the devp2p tool.
 
     devp2p rlpx eth-test \
-        -chain internal/ethtest/testdata   \
-        -node enode://....                 \
-        -engineapi http://127.0.0.1:8546   \
-        -jwt 0x424242424242424242424242...
+        --chain internal/ethtest/testdata   \
+        --node enode://....                 \
+        --engineapi http://127.0.0.1:8551   \
+        --jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
 
 Repeat the above process (re-initialising the node) in order to run the Eth Protocol test suite again.
 
