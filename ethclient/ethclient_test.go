@@ -481,7 +481,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if networkID.Cmp(big.NewInt(0)) != 0 {
+	if networkID.Cmp(big.NewInt(1337)) != 0 {
 		t.Fatalf("unexpected networkID: %v", networkID)
 	}
 
