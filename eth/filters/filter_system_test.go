@@ -429,7 +429,10 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	}
 }
 
+// TestLogFilterUninstall tests invalid getLogs requests
 func TestInvalidGetLogsRequest(t *testing.T) {
+	t.Parallel()
+
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		_, sys    = newTestFilterSystem(t, db, Config{})
@@ -448,6 +451,21 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		if _, err := api.GetLogs(context.Background(), test); err == nil {
 			t.Errorf("Expected Logs for case #%d to fail", i)
 		}
+	}
+}
+
+// TestInvalidGetRangeLogsRequest tests getLogs with invalid block range
+func TestInvalidGetRangeLogsRequest(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(t, db, Config{})
+		api    = NewFilterAPI(sys, false)
+	)
+
+	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
+		t.Errorf("Expected Logs for invalid range return error, but got: %v", err)
 	}
 }
 
