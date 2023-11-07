@@ -169,7 +169,6 @@ func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
 	} else {
 		t.to = *tx.To()
-		t.create = false
 	}
 
 	t.lookupAccount(from)
