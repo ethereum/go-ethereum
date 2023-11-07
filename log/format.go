@@ -26,6 +26,14 @@ const (
 	termCtxMaxPadding = 40
 )
 
+// ResetGlobalState resets the fieldPadding, which is useful for producing
+// predictable output.
+func ResetGlobalState() {
+	fieldPaddingLock.Lock()
+	fieldPadding = make(map[string]int)
+	fieldPaddingLock.Unlock()
+}
+
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
 var fieldPadding = make(map[string]int)
