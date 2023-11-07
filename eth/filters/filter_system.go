@@ -40,6 +40,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	errInvalidFromTo = errors.New("invalid from and to block combination: from > to")
+)
+
 // Config represents the configuration of the filter system.
 type Config struct {
 	LogCacheSize int           // maximum number of cached blocks (default: 32)
@@ -325,14 +329,14 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		return es.subscribeLogs(crit, logs), nil
 	}
 	// interested in mined logs from a specific block number, new logs and pending logs
-	if from >= rpc.LatestBlockNumber && to == rpc.PendingBlockNumber {
+	if (from == rpc.LatestBlockNumber || from >= 0) && to == rpc.PendingBlockNumber {
 		return es.subscribeMinedPendingLogs(crit, logs), nil
 	}
 	// interested in logs from a specific block number to new mined blocks
 	if from >= 0 && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil
 	}
-	return nil, errors.New("invalid from and to block combination: from > to")
+	return nil, errInvalidFromTo
 }
 
 // subscribeMinedPendingLogs creates a subscription that returned mined and

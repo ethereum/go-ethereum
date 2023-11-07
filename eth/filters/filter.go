@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Filter can be used to retrieve and filter logs.
+// Filter can be used to retrieve and filter historical logs.
 type Filter struct {
 	sys *FilterSystem
 
@@ -161,8 +161,8 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	var logs []*types.Log
 	for {
 		select {
-		case log := <-logChan:
-			logs = append(logs, log)
+		case matches := <-logChan:
+			logs = append(logs, matches...)
 		case err := <-errChan:
 			if err != nil {
 				// if an error occurs during extraction, we do return the extracted data
@@ -180,9 +180,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 
 // rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error) {
+func (f *Filter) rangeLogsAsync(ctx context.Context) (chan []*types.Log, chan error) {
 	var (
-		logChan = make(chan *types.Log)
+		logChan = make(chan []*types.Log)
 		errChan = make(chan error)
 	)
 
@@ -221,7 +221,7 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
+func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan []*types.Log) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
@@ -255,8 +255,10 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *type
 			if err != nil {
 				return err
 			}
-			for _, log := range found {
-				logChan <- log
+			select {
+			case logChan <- found:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 
 		case <-ctx.Done():
@@ -267,7 +269,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *type
 
 // unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
+func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan []*types.Log) error {
 	for ; f.begin <= int64(end); f.begin++ {
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
@@ -277,12 +279,10 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *ty
 		if err != nil {
 			return err
 		}
-		for _, log := range found {
-			select {
-			case logChan <- log:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		select {
+		case logChan <- found:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	return nil
