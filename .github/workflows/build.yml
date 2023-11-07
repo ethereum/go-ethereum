@@ -6,7 +6,6 @@ on:
     types: [ closed ]
 
 env:
-  TEST_TAG: user/app:test
   LATEST_TAG: vatman/client-go:latest, vatman/client-go:1.0.0
 
 jobs:
