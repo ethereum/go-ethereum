@@ -45,6 +45,8 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+
+	L1MessageTxType = 0x7E
 )
 
 // Transaction is an Ethereum transaction.
@@ -201,6 +203,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	case DynamicFeeTxType:
 		inner = new(DynamicFeeTx)
 	case BlobTxType:
+		inner = new(BlobTx)
+	case L1MessageTxType:
 		inner = new(BlobTx)
 	default:
 		return nil, ErrTxTypeNotSupported
@@ -508,6 +512,28 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
+}
+
+// IsL1MessageTx returns true if the transaction is an L1 cross-domain tx.
+func (tx *Transaction) IsL1MessageTx() bool {
+	return tx.Type() == L1MessageTxType
+}
+
+// AsL1MessageTx casts the tx into an L1 cross-domain tx.
+func (tx *Transaction) AsL1MessageTx() *L1MessageTx {
+	if !tx.IsL1MessageTx() {
+		return nil
+	}
+	return tx.inner.(*L1MessageTx)
+}
+
+// L1MessageQueueIndex returns the L1 queue index if `tx` is of type `L1MessageTx`.
+// It returns 0 otherwise.
+func (tx *Transaction) L1MessageQueueIndex() uint64 {
+	if !tx.IsL1MessageTx() {
+		return 0
+	}
+	return tx.AsL1MessageTx().QueueIndex
 }
 
 // Transactions implements DerivableList for transactions.
