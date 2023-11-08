@@ -155,8 +155,6 @@ devfakeauthor = false           # Run miner without validator set authorization 
   snapshot = 10            # Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)
   database = 50            # Percentage of cache memory allowance to use for database io
   trie = 15                # Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)
-  journal = "triecache"    # Disk journal directory for trie cache to survive node restarts
-  rejournal = "1h0m0s"     # Time interval to regenerate the trie cache journal
   noprefetch = false       # Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
   preimages = false        # Enable recording the SHA3/keccak preimages of trie keys
   txlookuplimit = 2350000  # Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)

@@ -389,20 +389,6 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.Cache.PercTrie,
 		Group:   "Cache",
 	})
-	f.StringFlag(&flagset.StringFlag{
-		Name:    "cache.trie.journal",
-		Usage:   "Disk journal directory for trie cache to survive node restarts",
-		Value:   &c.cliConfig.Cache.Journal,
-		Default: c.cliConfig.Cache.Journal,
-		Group:   "Cache",
-	})
-	f.DurationFlag(&flagset.DurationFlag{
-		Name:    "cache.trie.rejournal",
-		Usage:   "Time interval to regenerate the trie cache journal",
-		Value:   &c.cliConfig.Cache.Rejournal,
-		Default: c.cliConfig.Cache.Rejournal,
-		Group:   "Cache",
-	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.gc",
 		Usage:   "Percentage of cache memory allowance to use for trie pruning",

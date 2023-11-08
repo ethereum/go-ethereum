@@ -526,13 +526,6 @@ type CacheConfig struct {
 	// PercTrie is percentage of cache used for the trie
 	PercTrie uint64 `hcl:"trie,optional" toml:"trie,optional"`
 
-	// Journal is the disk journal directory for trie cache to survive node restarts
-	Journal string `hcl:"journal,optional" toml:"journal,optional"`
-
-	// Rejournal is the time interval to regenerate the journal for clean cache
-	Rejournal    time.Duration `hcl:"-,optional" toml:"-"`
-	RejournalRaw string        `hcl:"rejournal,optional" toml:"rejournal,optional"`
-
 	// NoPrefetch is used to disable prefetch of tries
 	NoPrefetch bool `hcl:"noprefetch,optional" toml:"noprefetch,optional"`
 
@@ -742,8 +735,6 @@ func DefaultConfig() *Config {
 			PercTrie:      15,
 			PercGc:        25,
 			PercSnapshot:  10,
-			Journal:       "triecache",
-			Rejournal:     60 * time.Minute,
 			NoPrefetch:    false,
 			Preimages:     false,
 			TxLookupLimit: 2350000,
@@ -840,7 +831,6 @@ func (c *Config) fillTimeDurations() error {
 		{"jsonrpc.http.ep-requesttimeout", &c.JsonRPC.Http.ExecutionPoolRequestTimeout, &c.JsonRPC.Http.ExecutionPoolRequestTimeoutRaw},
 		{"txpool.lifetime", &c.TxPool.LifeTime, &c.TxPool.LifeTimeRaw},
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
-		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
 		{"cache.timeout", &c.Cache.TrieTimeout, &c.Cache.TrieTimeoutRaw},
 		{"p2p.txarrivalwait", &c.P2P.TxArrivalWait, &c.P2P.TxArrivalWaitRaw},
 	}
