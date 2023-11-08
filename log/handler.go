@@ -277,13 +277,13 @@ func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 		if v == nil {
 			attr.Value = slog.AnyValue("<nil>")
 		} else {
-			attr.Value = slog.AnyValue(formatLogfmtBigInt(v))
+			attr.Value = slog.AnyValue(v.String())
 		}
 	case *uint256.Int:
 		if v == nil {
 			attr.Value = slog.AnyValue("<nil>")
 		} else {
-			attr.Value = slog.AnyValue(formatLogfmtUint256(v))
+			attr.Value = slog.AnyValue(v.ToBig().String())
 		}
 	}
 	return attr
