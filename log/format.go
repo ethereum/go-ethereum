@@ -110,19 +110,6 @@ func TerminalFormat(r slog.Record, usecolor bool) []byte {
 	return b.Bytes()
 }
 
-// LogfmtFormat prints records in logfmt format, an easy machine-parseable but human-readable
-// format for key/value pairs.
-//
-// For more details see: http://godoc.org/github.com/kr/logfmt
-func LogfmtFormat() Format {
-	return FormatFunc(func(r slog.Record) []byte {
-		common := []slog.Attr{slog.Time(timeKey, r.Time), slog.Int(lvlKey, int(r.Level)), slog.String(msgKey, r.Message)}
-		buf := &bytes.Buffer{}
-		logfmt(buf, common, r, 0, false)
-		return buf.Bytes()
-	})
-}
-
 func logfmt(buf *bytes.Buffer, commonAttrs []slog.Attr, r slog.Record, color int, term bool) {
 	attrs := []slog.Attr{}
 	r.Attrs(func(attr slog.Attr) bool {
