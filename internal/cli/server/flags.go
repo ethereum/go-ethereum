@@ -766,6 +766,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Group:   "P2P",
 	})
 	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "v4disc",
+		Usage:   "Enables the V4 discovery mechanism",
+		Value:   &c.cliConfig.P2P.Discovery.DiscoveryV4,
+		Default: c.cliConfig.P2P.Discovery.DiscoveryV4,
+		Group:   "P2P",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "v5disc",
 		Usage:   "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
 		Value:   &c.cliConfig.P2P.Discovery.V5Enabled,

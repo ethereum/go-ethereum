@@ -41,6 +41,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   nodekeyhex = ""         # P2P node key as hex
   txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
+    v4disc = true       # Enables the V4 discovery mechanism
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
     bootnodesv4 = []    # List of initial v4 bootnodes
