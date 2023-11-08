@@ -39,6 +39,8 @@ var DeprecatedFlags = []cli.Flag{
 	CacheTrieRejournalFlag,
 	LegacyDiscoveryV5Flag,
 	TxLookupLimitFlag,
+	LogBacktraceAtFlag,
+	LogDebugFlag,
 }
 
 var (
@@ -78,16 +80,16 @@ var (
 		Category: flags.DeprecatedCategory,
 	}
 	// Deprecated November 2023
-	BacktraceAtFlag = &cli.StringFlag{
+	LogBacktraceAtFlag = &cli.StringFlag{
 		Name:     "log.backtrace",
-		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Usage:    "Request a stack trace at a specific logging statement (deprecated)",
 		Value:    "",
-		Category: flags.LoggingCategory,
+		Category: flags.DeprecatedCategory,
 	}
-	DebugFlag = &cli.BoolFlag{
+	LogDebugFlag = &cli.BoolFlag{
 		Name:     "log.debug",
-		Usage:    "Prepends log messages with call-site location (file and line number)",
-		Category: flags.LoggingCategory,
+		Usage:    "Prepends log messages with call-site location (deprecated)",
+		Category: flags.DeprecatedCategory,
 	}
 )
 

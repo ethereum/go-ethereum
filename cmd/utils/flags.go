@@ -1460,10 +1460,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DBEngine = dbEngine
 	}
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
-	if ctx.IsSet(BacktraceAtFlag.Name) {
+	if ctx.IsSet(LogBacktraceAtFlag.Name) {
 		log.Warn("log.backtrace flag is deprecated")
 	}
-	if ctx.IsSet(DebugFlag.Name) {
+	if ctx.IsSet(LogDebugFlag.Name) {
 		log.Warn("log.debug flag is deprecated")
 	}
 }
