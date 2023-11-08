@@ -77,6 +77,18 @@ var (
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.DeprecatedCategory,
 	}
+	// Deprecated November 2023
+	BacktraceAtFlag = &cli.StringFlag{
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
+	DebugFlag = &cli.BoolFlag{
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (file and line number)",
+		Category: flags.LoggingCategory,
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
