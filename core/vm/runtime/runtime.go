@@ -122,7 +122,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil {
-		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}))
+		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
@@ -158,7 +158,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		rules  = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil {
-		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{Data: input, Value: cfg.Value, Gas: cfg.GasLimit}))
+		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
@@ -189,7 +189,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)
 	if cfg.EVMConfig.Tracer != nil {
-		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}))
+		cfg.EVMConfig.Tracer.CaptureTxStart(vmenv, types.NewTx(&types.LegacyTx{To: &address, Data: input, Value: cfg.Value, Gas: cfg.GasLimit}), cfg.Origin)
 	}
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)

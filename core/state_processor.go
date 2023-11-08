@@ -113,7 +113,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
 	if evm.Config.Tracer != nil {
-		evm.Config.Tracer.CaptureTxStart(evm, tx)
+		evm.Config.Tracer.CaptureTxStart(evm, tx, msg.From)
 		defer func() {
 			evm.Config.Tracer.CaptureTxEnd(receipt, err)
 		}()

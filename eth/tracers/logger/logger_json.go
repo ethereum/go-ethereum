@@ -90,6 +90,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (l *JSONLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	l.env = env
 }

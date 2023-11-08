@@ -196,7 +196,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *callTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
 }
 

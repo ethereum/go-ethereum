@@ -74,7 +74,7 @@ func runTrace(tracer directory.Tracer, vmctx *vmContext, chaincfg *params.ChainC
 		contract.Code = contractCode
 	}
 
-	tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{Gas: gasLimit}))
+	tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{Gas: gasLimit}), contract.Caller())
 	tracer.CaptureStart(contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
@@ -185,7 +185,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
 	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
-	tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}))
+	tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}), common.Address{})
 	tracer.CaptureStart(common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
 	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
@@ -207,7 +207,7 @@ func TestNoStepExec(t *testing.T) {
 			t.Fatal(err)
 		}
 		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
-		tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}))
+		tracer.CaptureTxStart(env, types.NewTx(&types.LegacyTx{}), common.Address{})
 		tracer.CaptureStart(common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
 		tracer.CaptureEnd(nil, 0, nil)
 		ret, err := tracer.GetResult()

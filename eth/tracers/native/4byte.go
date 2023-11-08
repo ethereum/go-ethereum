@@ -80,7 +80,7 @@ func (t *fourByteTracer) store(id []byte, size int) {
 	t.ids[key] += 1
 }
 
-func (t *fourByteTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *fourByteTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	t.env = env
 	// Update list of precompiles based on current block
 	rules := t.env.ChainConfig().Rules(t.env.Context.BlockNumber, t.env.Context.Random != nil, t.env.Context.Time)

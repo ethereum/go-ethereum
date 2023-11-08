@@ -19,7 +19,6 @@ package native
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -156,14 +155,8 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	t.env = env
-	signer := types.MakeSigner(env.ChainConfig(), env.Context.BlockNumber, env.Context.Time)
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		t.Stop(fmt.Errorf("could not recover sender address: %v", err))
-		return
-	}
 	if tx.To() == nil {
 		t.create = true
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
