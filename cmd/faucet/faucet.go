@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"golang.org/x/exp/slog"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"

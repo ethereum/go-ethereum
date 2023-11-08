@@ -35,7 +35,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/natefinch/lumberjack.v2"
-
 	"golang.org/x/exp/slog"
 )
 
@@ -75,6 +74,17 @@ var (
 	logFileFlag = &cli.StringFlag{
 		Name:     "log.file",
 		Usage:    "Write logs to a file",
+		Category: flags.LoggingCategory,
+	}
+	backtraceAtFlag = &cli.StringFlag{
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
+	debugFlag = &cli.BoolFlag{
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (file and line number)",
 		Category: flags.LoggingCategory,
 	}
 	logRotateFlag = &cli.BoolFlag{
@@ -150,6 +160,8 @@ var (
 var Flags = []cli.Flag{
 	verbosityFlag,
 	logVmoduleFlag,
+	backtraceAtFlag,
+	debugFlag,
 	vmoduleFlag,
 	logjsonFlag,
 	logFormatFlag,
@@ -270,6 +282,13 @@ func Setup(ctx *cli.Context) error {
 		}
 	}
 	glogger.Vmodule(vmodule)
+
+	if ctx.IsSet(backtraceAtFlag.Name) {
+		defer log.Warn("The flag '--log.backtraceat' is depcrecated and should no longer be used.")
+	}
+	if ctx.IsSet(debugFlag.Name) {
+		defer log.Warn("The flag '--log.debug' is depcrecated and should no longer be used.")
+	}
 
 	log.SetDefault(log.NewLogger(glogger))
 
