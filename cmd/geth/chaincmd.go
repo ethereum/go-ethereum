@@ -121,6 +121,21 @@ last block to write. In this mode, the file will be appended
 if already existing. If the file ends with .gz, the output will
 be gzipped.`,
 	}
+	importPreimagesCommand = &cli.Command{
+		Action:    importPreimages,
+		Name:      "import-preimages",
+		Usage:     "Import the preimage database from an RLP stream",
+		ArgsUsage: "<datafile>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+		}, utils.DatabaseFlags),
+		Description: `
+The import-preimages command imports hash preimages from an RLP encoded stream.
+It's deprecated, please use "geth db import" instead.
+`,
+	}
+
 	dumpCommand = &cli.Command{
 		Action:    dump,
 		Name:      "dump",
@@ -336,6 +351,29 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
+	return nil
+}
+
+// importPreimages imports preimage data from the specified file.
+// it is deprecated, and the export function has been removed, but
+// the import function is kept around for the time being so that
+// older file formats can still be imported.
+func importPreimages(ctx *cli.Context) error {
+	if ctx.Args().Len() < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+	start := time.Now()
+
+	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
+		utils.Fatalf("Import error: %v\n", err)
+	}
+	fmt.Printf("Import done in %v\n", time.Since(start))
 	return nil
 }
 

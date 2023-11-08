@@ -458,7 +458,11 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 		if len(preimage) != item.Size {
 			return fmt.Errorf("invalid preimage size, have %d", len(preimage))
 		}
-		if _, err := writer.Write(preimage); err != nil {
+		rlpenc, err := rlp.EncodeToBytes(preimage)
+		if err != nil {
+			return fmt.Errorf("error encoding preimage: %w", err)
+		}
+		if _, err := writer.Write(rlpenc); err != nil {
 			return fmt.Errorf("failed to write preimage: %w", err)
 		}
 	}
