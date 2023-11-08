@@ -207,6 +207,7 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
+		importPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
