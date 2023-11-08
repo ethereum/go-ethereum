@@ -5,6 +5,11 @@ on:
     branches: [ "master" ]
     types: [ closed ]
 
+env:
+  TEST_TAG: 1.0.0
+  LATEST_TAG: 2.0.0
+  IMAGE_NAME: vatman/client-go-hardhat
+
 jobs:
   Deploy:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
@@ -21,7 +26,7 @@ jobs:
 
       - name: Start Local Devnet
         run: |
-          docker run -d --name ethereum-node         -p 8545:8545 -p 30303:30303     vatman/client-go --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
+          docker run -d --name ethereum-node -p 8545:8545 -p 30303:30303 vatman/client-go:latest --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
 
       - name: Deploy Hardhat Project
         working-directory: ./hardhat
@@ -29,18 +34,34 @@ jobs:
           npm install --save-dev hardhat
           npx hardhat run scripts/deploy.js --network localhost
 
-      - name: Hardhat test
-        working-directory: ./hardhat
-        run: npx hardhat test
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-    
-      - name: Export the Docker image
-        run: docker commit ethereum-node vatman/client-go-hardhat:latest
 
-      - name: Export and push
-        run: docker push vatman/client-go-hardhat:latest
+      - name: Export the Docker test image
+        run: docker commit ethereum-node ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+
+      - name: Export and push Docker test image
+        run: docker push ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }}
+
+      - name: Stop Local Devnet
+        run: |
+          docker container stop ethereum-node
+
+      - name: Hardhat test
+        working-directory: ./hardhat
+        run: |
+          docker run -d --name test-ethereum-node -p 8545:8545 -p 30303:30303 ${{ env.IMAGE_NAME }}:${{ env.TEST_TAG }} --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
+          npx hardhat test
+
+      - name: Export the Docker image
+        run: docker commit ethereum-node ${{ env.IMAGE_NAME }}:${{ env.LATEST_TAG }}
+
+      - name: Tag image also as latest
+        run: docker tag ${{ env.IMAGE_NAME }}:${{ env.LATEST_TAG }} ${{ env.IMAGE_NAME }}:latest
+
+      - name: Push image to DockerHub
+        run: docker push --all-tags ${{ env.IMAGE_NAME }}
+      
