@@ -813,14 +813,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	env.tcount = 0
 	env.blockSize = 0
 	env.l1TxCount = 0
-
-	// find next L1 message queue index
-	nextQueueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), parent.Hash())
-	if nextQueueIndex == nil {
-		// the parent must have been processed before we start a new mining job.
-		log.Crit("Failed to read last L1 message in L2 block", "parent.Hash()", parent.Hash().String())
-	}
-	env.nextL1MsgIndex = *nextQueueIndex
+	env.nextL1MsgIndex = traceEnv.StartL1QueueIndex
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
