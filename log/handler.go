@@ -169,7 +169,7 @@ func (l *leveler) Level() slog.Level {
 	return l.minLevel
 }
 
-func JsonHandler(wr io.Writer) slog.Handler {
+func JSONHandler(wr io.Writer) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplace,
 	})
