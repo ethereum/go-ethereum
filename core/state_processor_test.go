@@ -383,7 +383,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
 	}
 	if config.IsShanghai(header.Number) {
-		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
+		header.WithdrawalsHash = nil
 	}
 
 	var receipts []*types.Receipt

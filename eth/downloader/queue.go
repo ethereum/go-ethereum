@@ -78,7 +78,7 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	if !header.EmptyBody() {
 		item.pending.Store(item.pending.Load() | (1 << bodyType))
 	} else if header.WithdrawalsHash != nil {
-		item.Withdrawals = make(types.Withdrawals, 0)
+		item.Withdrawals = nil
 	}
 
 	if fastSync && !header.EmptyReceipts() {

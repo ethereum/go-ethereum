@@ -176,7 +176,7 @@ func (h *Header) SanityCheck() error {
 // that is: no transactions, no uncles and no withdrawals.
 func (h *Header) EmptyBody() bool {
 	if h.WithdrawalsHash != nil {
-		return h.TxHash == EmptyTxsHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
+		return h.TxHash == EmptyTxsHash && h.WithdrawalsHash == nil
 	}
 	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
 }
@@ -323,7 +323,7 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	if withdrawals == nil {
 		b.header.WithdrawalsHash = nil
 	} else if len(withdrawals) == 0 {
-		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
+		b.header.WithdrawalsHash = nil
 	} else {
 		h := DeriveSha(Withdrawals(withdrawals), hasher)
 		b.header.WithdrawalsHash = &h
@@ -353,8 +353,7 @@ func CopyHeader(h *Header) *Header {
 	}
 
 	if h.WithdrawalsHash != nil {
-		cpy.WithdrawalsHash = new(common.Hash)
-		*cpy.WithdrawalsHash = *h.WithdrawalsHash
+		cpy.WithdrawalsHash = nil
 	}
 	if h.ExcessBlobGas != nil {
 		cpy.ExcessBlobGas = new(uint64)
