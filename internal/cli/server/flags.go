@@ -367,6 +367,29 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.Gpo.IgnorePrice,
 	})
 
+	// Blob transaction pool settings
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "blobpool.datadir",
+		Usage:   "Data directory to store blob transactions in",
+		Value:   &c.cliConfig.BlobPool.DataDir,
+		Default: c.cliConfig.BlobPool.DataDir,
+		Group:   "BlobPool",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "blobpool.datacap",
+		Usage:   "Disk space to allocate for pending blob transactions (soft limit)",
+		Value:   &c.cliConfig.BlobPool.DataCap,
+		Default: c.cliConfig.BlobPool.DataCap,
+		Group:   "BlobPool",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "blobpool.pricebump",
+		Usage:   "Price bump percentage to replace an already existing blob transaction",
+		Value:   &c.cliConfig.BlobPool.PriceBump,
+		Default: c.cliConfig.BlobPool.PriceBump,
+		Group:   "BlobPool",
+	})
+
 	// cache options
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache",

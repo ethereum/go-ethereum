@@ -145,6 +145,11 @@ syncmode = "full"
     # organization = ""
   # [telemetry.influx.tags]
 
+# [blobpool]
+  # datadir = "blobpool"
+  # datacap = 10737418240
+  # pricebump = 100
+
 # [cache]
   # cache = 1024
   # gc = 25
