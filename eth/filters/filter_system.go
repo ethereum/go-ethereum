@@ -300,7 +300,7 @@ func (es *EventSystem) subscribe(sub *subscription) *Subscription {
 // block is "latest". If the fromBlock > toBlock an error is returned.
 func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*types.Log) (*Subscription, error) {
 	if len(crit.Topics) > maxTopics {
-		return nil, errInvalidTopic
+		return nil, errExceedMaxTopics
 	}
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
