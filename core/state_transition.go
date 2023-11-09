@@ -403,7 +403,6 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	}
 
 	// Check whether the init code size has been exceeded.
-	// TODO marcello double check
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}

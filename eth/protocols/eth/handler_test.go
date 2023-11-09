@@ -74,7 +74,6 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 		engine consensus.Engine = ethash.NewFaker()
 	)
 
-	// TODO marcello double check
 	if shanghai {
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(1),
@@ -94,7 +93,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 			ArrowGlacierBlock:             big.NewInt(0),
 			GrayGlacierBlock:              big.NewInt(0),
 			MergeNetsplitBlock:            big.NewInt(0),
-			ShanghaiTime:                  u64(0),
+			ShanghaiBlock:                 big.NewInt(0),
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
 			Ethash:                        new(params.EthashConfig),
@@ -368,11 +367,7 @@ func TestGetBlockBodies68(t *testing.T) {
 func testGetBlockBodies(t *testing.T, protocol uint) {
 	gen := func(n int, g *core.BlockGen) {
 		if n%2 == 0 {
-			w := &types.Withdrawal{
-				Address: common.Address{0xaa},
-				Amount:  42,
-			}
-			g.AddWithdrawal(w)
+			g.AddWithdrawal(&types.Withdrawal{})
 		}
 	}
 

@@ -381,9 +381,12 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 
 	// Verify that the gas limit is <= 2^63-1
 	gasCap := uint64(0x7fffffffffffffff)
-
 	if header.GasLimit > gasCap {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, gasCap)
+	}
+
+	if header.WithdrawalsHash != nil {
+		return consensus.ErrUnexpectedWithdrawals
 	}
 
 	// All basic checks passed, verify cascading fields
@@ -816,6 +819,10 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	headerNumber := header.Number.Uint64()
 
+	if withdrawals != nil || header.WithdrawalsHash != nil {
+		return
+	}
+
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
 		ctx := context.Background()
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
@@ -888,9 +895,13 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	finalizeCtx, finalizeSpan := tracing.StartSpan(ctx, "bor.FinalizeAndAssemble")
 	defer tracing.EndSpan(finalizeSpan)
 
-	stateSyncData := []*types.StateSyncData{}
-
 	headerNumber := header.Number.Uint64()
+
+	if withdrawals != nil || header.WithdrawalsHash != nil {
+		return nil, consensus.ErrUnexpectedWithdrawals
+	}
+
+	stateSyncData := []*types.StateSyncData{}
 
 	var err error
 

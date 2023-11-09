@@ -101,9 +101,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
-	// TODO marcello double check
-	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time()) {
+	if !p.config.IsShanghai(block.Number()) && withdrawals != nil {
 		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
+	}
+	// Bor does not support withdrawals
+	if withdrawals != nil {
+		withdrawals = nil
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)

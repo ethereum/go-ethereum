@@ -165,46 +165,46 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 //
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if payloadAttributes != nil {
-		if payloadAttributes.Withdrawals != nil {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
-		}
+// func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+// 	if payloadAttributes != nil {
+// 		if payloadAttributes.Withdrawals != nil {
+// 			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("withdrawals not supported in V1"))
+// 		}
 
-		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
-		}
-	}
+// 		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+// 			return engine.STATUS_INVALID, engine.InvalidParams.With(fmt.Errorf("forkChoiceUpdateV1 called post-shanghai"))
+// 		}
+// 	}
 
-	return api.forkchoiceUpdated(update, payloadAttributes)
-}
+// 	return api.forkchoiceUpdated(update, payloadAttributes)
+// }
 
 // ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload attributes.
-func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if payloadAttributes != nil {
-		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
-			return engine.STATUS_INVALID, engine.InvalidParams.With(err)
-		}
-	}
+// func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+// 	if payloadAttributes != nil {
+// 		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
+// 			return engine.STATUS_INVALID, engine.InvalidParams.With(err)
+// 		}
+// 	}
 
-	return api.forkchoiceUpdated(update, payloadAttributes)
-}
+// 	return api.forkchoiceUpdated(update, payloadAttributes)
+// }
 
-func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
-	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
-		// Reject payload attributes with withdrawals before shanghai
-		if attr.Withdrawals != nil {
-			return errors.New("withdrawals before shanghai")
-		}
-	} else {
-		// Reject payload attributes with nil withdrawals after shanghai
-		if attr.Withdrawals == nil {
-			return errors.New("missing withdrawals list")
-		}
-	}
+// func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes) error {
+// 	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
+// 		// Reject payload attributes with withdrawals before shanghai
+// 		if attr.Withdrawals != nil {
+// 			return errors.New("withdrawals before shanghai")
+// 		}
+// 	} else {
+// 		// Reject payload attributes with nil withdrawals after shanghai
+// 		if attr.Withdrawals == nil {
+// 			return errors.New("missing withdrawals list")
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // nolint:gocognit
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
@@ -454,18 +454,18 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 	return api.newPayload(params)
 }
 
-// NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
-		if params.Withdrawals == nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
-		}
-	} else if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
-	}
+// // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+// func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+// 	if api.eth.BlockChain().Config().IsShanghai(params.Timestamp) {
+// 		if params.Withdrawals == nil {
+// 			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil withdrawals post-shanghai"))
+// 		}
+// 	} else if params.Withdrawals != nil {
+// 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("non-nil withdrawals pre-shanghai"))
+// 	}
 
-	return api.newPayload(params)
-}
+// 	return api.newPayload(params)
+// }
 
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:

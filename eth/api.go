@@ -277,6 +277,9 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
 		_, stateDb := api.eth.miner.Pending()
+		if stateDb == nil {
+			return state.Dump{}, errors.New("pending state is not available")
+		}
 		return stateDb.RawDump(opts), nil
 	}
 
@@ -385,6 +388,9 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			// both the pending block as well as the pending state from
 			// the miner and operate on those
 			_, stateDb = api.eth.miner.Pending()
+			if stateDb == nil {
+				return state.IteratorDump{}, errors.New("pending state is not available")
+			}
 		} else {
 			var header *types.Header
 			if number == rpc.LatestBlockNumber {

@@ -41,6 +41,7 @@ func TestFlagsWithoutConfig(t *testing.T) {
 
 	require.Equal(t, c.config.Identity, "")
 	require.Equal(t, c.config.DataDir, "./data")
+	require.Equal(t, c.config.KeyStoreDir, "")
 	require.Equal(t, c.config.Verbosity, 3)
 	require.Equal(t, c.config.RPCBatchLimit, uint64(0))
 	require.Equal(t, c.config.Snapshot, true)
@@ -74,6 +75,7 @@ func TestFlagsWithConfig(t *testing.T) {
 
 	require.Equal(t, c.config.Identity, "")
 	require.Equal(t, c.config.DataDir, "./data")
+	require.Equal(t, c.config.KeyStoreDir, "./keystore")
 	require.Equal(t, c.config.Verbosity, 3)
 	require.Equal(t, c.config.RPCBatchLimit, uint64(0))
 	require.Equal(t, c.config.Snapshot, true)
@@ -105,6 +107,7 @@ func TestFlagsWithConfigAndFlags(t *testing.T) {
 		"--config", "./testdata/test.toml",
 		"--identity", "Anon",
 		"--datadir", "",
+		"--keystore", "",
 		"--verbosity", "0",
 		"--rpc.batchlimit", "5",
 		"--snapshot=false",
@@ -128,6 +131,7 @@ func TestFlagsWithConfigAndFlags(t *testing.T) {
 
 	require.Equal(t, c.config.Identity, "Anon")
 	require.Equal(t, c.config.DataDir, "")
+	require.Equal(t, c.config.KeyStoreDir, "")
 	require.Equal(t, c.config.Verbosity, 0)
 	require.Equal(t, c.config.RPCBatchLimit, uint64(5))
 	require.Equal(t, c.config.Snapshot, false)

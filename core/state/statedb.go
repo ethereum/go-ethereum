@@ -1595,7 +1595,6 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 				al.AddSlot(el.Address, key)
 			}
 		}
-		// TODO marcello double check
 		if rules.IsShanghai { // EIP-3651: warm coinbase
 			al.AddAddress(coinbase)
 		}
