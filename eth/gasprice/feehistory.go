@@ -170,6 +170,13 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, lastBlock rpc.Block
 	} else if pendingBlock == nil && lastBlock > headBlock {
 		return nil, nil, 0, 0, fmt.Errorf("%w: requested %d, head %d", errRequestBeyondHead, lastBlock, headBlock)
 	}
+	if lastBlock == rpc.FinalizedBlockNumber {
+		if latestFinalizedHeader, err := oracle.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber); err == nil {
+			lastBlock = rpc.BlockNumber(latestFinalizedHeader.Number.Uint64())
+		} else {
+			return nil, nil, 0, 0, err
+		}
+	}
 	// ensure not trying to retrieve before genesis
 	if rpc.BlockNumber(blocks) > lastBlock+1 {
 		blocks = int(lastBlock + 1)

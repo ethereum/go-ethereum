@@ -715,6 +715,60 @@ func (api *ScrollAPI) GetNumSkippedTransactions(ctx context.Context) (uint64, er
 	return rawdb.ReadNumSkippedTransactions(api.eth.ChainDb()), nil
 }
 
+// SyncStatus includes L2 block sync height, L1 rollup sync height,
+// L1 message sync height, and L2 finalized block height.
+type SyncStatus struct {
+	L2BlockSyncHeight      uint64 `json:"l2BlockSyncHeight,omitempty"`
+	L1RollupSyncHeight     uint64 `json:"l1RollupSyncHeight,omitempty"`
+	L1MessageSyncHeight    uint64 `json:"l1MessageSyncHeight,omitempty"`
+	L2FinalizedBlockHeight uint64 `json:"l2FinalizedBlockHeight,omitempty"`
+}
+
+// SyncStatus returns the overall rollup status including L2 block sync height, L1 rollup sync height,
+// L1 message sync height, and L2 finalized block height.
+func (api *ScrollAPI) SyncStatus(_ context.Context) *SyncStatus {
+	status := &SyncStatus{}
+
+	l2BlockHeader := api.eth.blockchain.CurrentHeader()
+	if l2BlockHeader != nil {
+		status.L2BlockSyncHeight = l2BlockHeader.Number.Uint64()
+	}
+
+	l1RollupSyncHeightPtr := rawdb.ReadRollupEventSyncedL1BlockNumber(api.eth.ChainDb())
+	if l1RollupSyncHeightPtr != nil {
+		status.L1RollupSyncHeight = *l1RollupSyncHeightPtr
+	}
+
+	l1MessageSyncHeightPtr := rawdb.ReadSyncedL1BlockNumber(api.eth.ChainDb())
+	if l1MessageSyncHeightPtr != nil {
+		status.L1MessageSyncHeight = *l1MessageSyncHeightPtr
+	}
+
+	l2FinalizedBlockHeightPtr := rawdb.ReadFinalizedL2BlockNumber(api.eth.ChainDb())
+	if l2FinalizedBlockHeightPtr != nil {
+		status.L2FinalizedBlockHeight = *l2FinalizedBlockHeightPtr
+	}
+
+	return status
+}
+
+// EstimateL1DataFee returns an estimate of the L1 data fee required to
+// process the given transaction against the current pending block.
+func (api *ScrollAPI) EstimateL1DataFee(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+
+	l1DataFee, err := ethapi.EstimateL1MsgFee(ctx, api.eth.APIBackend, args, bNrOrHash, nil, 0, api.eth.APIBackend.RPCGasCap(), api.eth.APIBackend.ChainConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate L1 data fee: %w", err)
+	}
+
+	result := hexutil.Uint64(l1DataFee.Uint64())
+	return &result, nil
+}
+
 // RPCTransaction is the standard RPC transaction return type with some additional skip-related fields.
 type RPCTransaction struct {
 	ethapi.RPCTransaction
