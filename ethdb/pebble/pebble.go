@@ -127,6 +127,9 @@ type panicLogger struct{}
 func (l panicLogger) Infof(format string, args ...interface{}) {
 }
 
+func (l panicLogger) Errorf(format string, args ...interface{}) {
+}
+
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
 	panic(errors.Errorf("fatal: "+format, args...))
 }
