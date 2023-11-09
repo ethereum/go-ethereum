@@ -182,10 +182,13 @@ func (batch *freezerTableBatch) maybeCommit() error {
 
 // commit writes the batched items to the backing freezerTable.
 func (batch *freezerTableBatch) commit() error {
-	// Write data. The head file is not fsync'd after write to avoid
-	// expensive overhead.
+	// Write data. The head file is fsync'd after write to ensure the
+	// data is truly transferred to disk.
 	_, err := batch.t.head.Write(batch.dataBuffer)
 	if err != nil {
+		return err
+	}
+	if err := batch.t.head.Sync(); err != nil {
 		return err
 	}
 	dataSize := int64(len(batch.dataBuffer))
