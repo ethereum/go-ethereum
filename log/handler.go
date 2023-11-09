@@ -170,9 +170,9 @@ func (l *leveler) Level() slog.Level {
 }
 
 func JsonHandler(wr io.Writer) slog.Handler {
-	return &builtinHandler{slog.NewJSONHandler(wr, &slog.HandlerOptions{
+	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplace,
-	})}
+	})
 }
 
 // LogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
@@ -180,94 +180,32 @@ func JsonHandler(wr io.Writer) slog.Handler {
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtHandler(wr io.Writer) slog.Handler {
-	return &builtinHandler{slog.NewTextHandler(wr, &slog.HandlerOptions{
+	return slog.NewTextHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplace,
-	})}
+	})
 }
 
 // LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs
 // records which are less than or equal to the specified verbosity level.
 func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
-	return &builtinHandler{slog.NewTextHandler(wr, &slog.HandlerOptions{
+	return slog.NewTextHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplace,
 		Level:       &leveler{level},
-	})}
-}
-
-// builtinHandler wraps an instance of the built-in slog json/text handlers
-// a wrapper is needed because with slog.HandlerOptions.ReplaceAttr, there is
-// no way to differentiate between an attribute that is a property of the Record
-// and a user-provided attribute (e.g. providing an attribute who's key is "time"
-// conflicts with the Record.Time property).
-type builtinHandler struct {
-	inner slog.Handler
-}
-
-func (h *builtinHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &builtinHandler{
-		h.inner.WithAttrs(attrs),
-	}
-}
-
-const diffMarker = "xxxxxx"
-
-func (h *builtinHandler) WithGroup(name string) slog.Handler {
-	return &builtinHandler{
-		h.inner.WithGroup(name),
-	}
-}
-
-func (h *builtinHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return h.inner.Enabled(context.Background(), level)
-}
-
-func (h *builtinHandler) Handle(_ context.Context, r slog.Record) error {
-	var sanitizedAttrs []slog.Attr
-	sanitizedRecord := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
-
-	// iterate user-provided attrs. prepend key with marker for
-	// any that would conflict with keys for Record obj properties.
-	r.Attrs(func(attr slog.Attr) bool {
-		switch attr.Key {
-		case slog.TimeKey:
-			attr.Key = diffMarker + slog.TimeKey
-		case slog.LevelKey:
-			attr.Key = diffMarker + slog.LevelKey
-		case slog.MessageKey:
-			attr.Key = diffMarker + slog.MessageKey
-		case slog.SourceKey:
-			attr.Key = diffMarker + slog.SourceKey
-		}
-		sanitizedAttrs = append(sanitizedAttrs, attr)
-		return true
 	})
-
-	sanitizedRecord.AddAttrs(sanitizedAttrs...)
-	return h.inner.Handle(context.Background(), sanitizedRecord)
 }
 
 func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 	switch attr.Key {
 	case slog.TimeKey:
-		attr = slog.Any("t", attr.Value.Time().Format(timeFormat))
-		return attr
+		if t, ok := attr.Value.Any().(time.Time); ok {
+			attr = slog.Any("t", t.Format(timeFormat))
+			return attr
+		}
 	case slog.LevelKey:
-		attr = slog.Any("lvl", LevelString(attr.Value.Any().(slog.Level)))
-		return attr
-	case slog.MessageKey:
-		return attr
-	case slog.SourceKey:
-		return attr
-
-	// strip the marker from attr keys that conflict with Record obj property keys
-	case diffMarker + slog.TimeKey:
-		attr.Key = slog.TimeKey
-	case diffMarker + slog.LevelKey:
-		attr.Key = slog.LevelKey
-	case diffMarker + slog.MessageKey:
-		attr.Key = slog.MessageKey
-	case diffMarker + slog.SourceKey:
-		attr.Key = slog.SourceKey
+		if l, ok := attr.Value.Any().(slog.Level); ok {
+			attr = slog.Any("lvl", LevelString(l))
+			return attr
+		}
 	}
 
 	switch v := attr.Value.Any().(type) {
