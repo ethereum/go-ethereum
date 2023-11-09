@@ -37,3 +37,13 @@ t=2023-10-20T12:56:08+0200 lvl=info msg="Inserted known block"              numb
 t=2023-10-20T12:56:08+0200 lvl=info msg="Inserted new block"                number=1    hash=0x0000000000000000000000000000000000000000000000000000000000001235 txs=2   gas=1123      other=second
 t=2023-10-20T12:56:08+0200 lvl=info msg="Inserted known block"              number=99   hash=0x0000000000000000000000000000000000000000000000000000000000012322 txs=10  gas=1         other=third
 t=2023-10-20T12:56:08+0200 lvl=warn msg="Inserted known block"              number=1012 hash=0x0000000000000000000000000000000000000000000000000000000000001234 txs=200 gas=99        other=fourth
+t=2023-11-09T08:26:52+0100 lvl=info msg=(*big.Int)(nil)                     <nil>=<nil>
+t=2023-11-09T08:26:52+0100 lvl=info msg=(*uint256.Int)(nil)                 <nil>=<nil>
+t=2023-11-09T08:26:52+0100 lvl=info msg=(fmt.Stringer)(nil)                 res=nil
+t=2023-11-09T08:26:52+0100 lvl=info msg=nil-concrete-stringer               res=nil
+t=2023-11-09T08:26:52+0100 lvl=info msg="error(nil) "                       res=nil
+t=2023-11-09T08:26:52+0100 lvl=info msg=nil-concrete-error                  res=
+t=2023-11-09T08:26:52+0100 lvl=info msg=nil-custom-struct                   res=<nil>
+t=2023-11-09T08:26:52+0100 lvl=info msg="raw nil"                           res=nil
+t=2023-11-09T08:26:52+0100 lvl=info msg=(*uint64)(nil)                      res=<nil>
+t=2023-11-09T08:30:19+0100 lvl=info msg="Using keys 't', 'lvl', 'time', 'level' and 'msg'" t=t                        time=time lvl=lvl  level=level msg=msg
