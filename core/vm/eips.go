@@ -294,16 +294,16 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-// enable4844 applies EIP-4844 (DATAHASH opcode)
-func enable4844(jt *JumpTable) {
-	// New opcode
-	jt[BLOBHASH] = &operation{
-		execute:     opBlobHash,
-		constantGas: GasFastestStep,
-		minStack:    minStack(1, 1),
-		maxStack:    maxStack(1, 1),
-	}
-}
+// // enable4844 applies EIP-4844 (DATAHASH opcode)
+// func enable4844(jt *JumpTable) {
+// 	// New opcode
+// 	jt[BLOBHASH] = &operation{
+// 		execute:     opBlobHash,
+// 		constantGas: GasFastestStep,
+// 		minStack:    minStack(1, 1),
+// 		maxStack:    maxStack(1, 1),
+// 	}
+// }
 
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
