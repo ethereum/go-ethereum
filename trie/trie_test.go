@@ -477,10 +477,7 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 
 // runRandTestBool coerces error to boolean, for use in quick.Check
 func runRandTestBool(rt randTest) bool {
-	if runRandTest(rt) != nil {
-		return false
-	}
-	return true
+	return runRandTest(rt) == nil
 }
 
 func runRandTest(rt randTest) error {

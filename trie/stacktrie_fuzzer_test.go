@@ -152,5 +152,4 @@ func fuzz(data []byte, debugging bool) {
 	if checked != len(nodeset) {
 		panic("node number is not matched")
 	}
-	return
 }
