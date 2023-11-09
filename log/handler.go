@@ -140,8 +140,7 @@ func TerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) slog.
 func (h *terminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	r.AddAttrs(h.attrs...)
-	h.wr.Write(TerminalFormat(r, h.useColor))
+	h.wr.Write(TerminalFormat(r, h.attrs, h.useColor))
 	return nil
 }
 

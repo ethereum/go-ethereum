@@ -73,7 +73,7 @@ type TerminalStringer interface {
 // Example:
 //
 //	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-func TerminalFormat(r slog.Record, usecolor bool) []byte {
+func TerminalFormat(r slog.Record, commonAttrs []slog.Attr, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
 	var color = 0
 	if usecolor {
@@ -106,7 +106,7 @@ func TerminalFormat(r slog.Record, usecolor bool) []byte {
 		b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
 	}
 	// print the keys logfmt style
-	logfmt(b, []slog.Attr{}, r, color, true)
+	logfmt(b, commonAttrs, r, color, true)
 	return b.Bytes()
 }
 
