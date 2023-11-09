@@ -219,6 +219,9 @@ type P2PConfig struct {
 }
 
 type P2PDiscovery struct {
+	// DiscoveryV4 specifies whether V4 discovery should be started.
+	DiscoveryV4 bool `hcl:"v4disc,optional" toml:"v4disc,optional"`
+
 	// V5Enabled is used to enable disc v5 discovery mode
 	V5Enabled bool `hcl:"v5disc,optional" toml:"v5disc,optional"`
 
@@ -526,13 +529,6 @@ type CacheConfig struct {
 	// PercTrie is percentage of cache used for the trie
 	PercTrie uint64 `hcl:"trie,optional" toml:"trie,optional"`
 
-	// Journal is the disk journal directory for trie cache to survive node restarts
-	Journal string `hcl:"journal,optional" toml:"journal,optional"`
-
-	// Rejournal is the time interval to regenerate the journal for clean cache
-	Rejournal    time.Duration `hcl:"-,optional" toml:"-"`
-	RejournalRaw string        `hcl:"rejournal,optional" toml:"rejournal,optional"`
-
 	// NoPrefetch is used to disable prefetch of tries
 	NoPrefetch bool `hcl:"noprefetch,optional" toml:"noprefetch,optional"`
 
@@ -623,6 +619,7 @@ func DefaultConfig() *Config {
 			NetRestrict:   "",
 			TxArrivalWait: 500 * time.Millisecond,
 			Discovery: &P2PDiscovery{
+				DiscoveryV4:  true,
 				V5Enabled:    false,
 				Bootnodes:    []string{},
 				BootnodesV4:  []string{},
@@ -742,8 +739,6 @@ func DefaultConfig() *Config {
 			PercTrie:      15,
 			PercGc:        25,
 			PercSnapshot:  10,
-			Journal:       "triecache",
-			Rejournal:     60 * time.Minute,
 			NoPrefetch:    false,
 			Preimages:     false,
 			TxLookupLimit: 2350000,
@@ -840,7 +835,6 @@ func (c *Config) fillTimeDurations() error {
 		{"jsonrpc.http.ep-requesttimeout", &c.JsonRPC.Http.ExecutionPoolRequestTimeout, &c.JsonRPC.Http.ExecutionPoolRequestTimeoutRaw},
 		{"txpool.lifetime", &c.TxPool.LifeTime, &c.TxPool.LifeTimeRaw},
 		{"txpool.rejournal", &c.TxPool.Rejournal, &c.TxPool.RejournalRaw},
-		{"cache.rejournal", &c.Cache.Rejournal, &c.Cache.RejournalRaw},
 		{"cache.timeout", &c.Cache.TrieTimeout, &c.Cache.TrieTimeoutRaw},
 		{"p2p.txarrivalwait", &c.P2P.TxArrivalWait, &c.P2P.TxArrivalWaitRaw},
 	}
@@ -1317,6 +1311,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPeers:        int(c.P2P.MaxPeers),
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
+			DiscoveryV4:     c.P2P.Discovery.DiscoveryV4,
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
 			TxArrivalWait:   c.P2P.TxArrivalWait,
 		},
