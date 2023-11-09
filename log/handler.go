@@ -197,9 +197,8 @@ func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
 func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 	switch attr.Key {
 	case slog.TimeKey:
-		if t, ok := attr.Value.Any().(time.Time); ok {
-			attr = slog.Any("t", t.Format(timeFormat))
-			return attr
+		if attr.Value.Kind() == slog.KindTime {
+			return slog.Time("t", attr.Value.Time())
 		}
 	case slog.LevelKey:
 		if l, ok := attr.Value.Any().(slog.Level); ok {
