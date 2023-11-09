@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -38,6 +39,9 @@ var (
 	errFilterNotFound    = errors.New("filter not found")
 	errInvalidBlockRange = errors.New("invalid block range params")
 )
+
+// The maximum number of topic criteria allowed
+const maxTopics = int(vm.LOG4 - vm.LOG0)
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
@@ -334,6 +338,9 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 
 // GetLogs returns logs matching the given argument that are stored within the state.
 func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
+	if len(crit.Topics) > maxTopics {
+		return nil, errInvalidTopic
+	}
 	var filter *Filter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
