@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"hash"
 	"math/big"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -46,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
@@ -648,13 +649,19 @@ type Account struct {
 	addr common.Address
 }
 
-func newAccounts(n int) (accounts []Account) {
+type Accounts []Account
+
+func (a Accounts) Len() int           { return len(a) }
+func (a Accounts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a Accounts) Less(i, j int) bool { return bytes.Compare(a[i].addr.Bytes(), a[j].addr.Bytes()) < 0 }
+
+func newAccounts(n int) (accounts Accounts) {
 	for i := 0; i < n; i++ {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		accounts = append(accounts, Account{key: key, addr: addr})
 	}
-	slices.SortFunc(accounts, func(a, b Account) bool { return a.addr.Less(b.addr) })
+	sort.Sort(accounts)
 	return accounts
 }
 
