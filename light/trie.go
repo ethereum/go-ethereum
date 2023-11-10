@@ -108,16 +108,12 @@ type odrTrie struct {
 
 func (t *odrTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
-	var enc []byte
+	var res []byte
 	err := t.do(key, func() (err error) {
-		enc, err = t.trie.Get(key)
+		res, err = t.trie.Get(key)
 		return err
 	})
-	if err != nil || len(enc) == 0 {
-		return nil, err
-	}
-	_, content, _, err := rlp.Split(enc)
-	return content, err
+	return res, err
 }
 
 func (t *odrTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
@@ -149,9 +145,8 @@ func (t *odrTrie) UpdateAccount(address common.Address, acc *types.StateAccount)
 
 func (t *odrTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	key = crypto.Keccak256(key)
-	v, _ := rlp.EncodeToBytes(value)
 	return t.do(key, func() error {
-		return t.trie.Update(key, v)
+		return t.trie.Update(key, value)
 	})
 }
 

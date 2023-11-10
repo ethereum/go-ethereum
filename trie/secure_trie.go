@@ -86,12 +86,7 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 // If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
-	enc, err := t.trie.Get(t.hashKey(key))
-	if err != nil || len(enc) == 0 {
-		return nil, err
-	}
-	_, content, _, err := rlp.Split(enc)
-	return content, err
+	return t.trie.Get(t.hashKey(key))
 }
 
 // GetAccount attempts to retrieve an account with provided account address.
@@ -153,8 +148,7 @@ func (t *StateTrie) MustUpdate(key, value []byte) {
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	hk := t.hashKey(key)
-	v, _ := rlp.EncodeToBytes(value)
-	err := t.trie.Update(hk, v)
+	err := t.trie.Update(hk, value)
 	if err != nil {
 		return err
 	}
