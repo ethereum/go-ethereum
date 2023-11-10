@@ -35,7 +35,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -62,7 +62,7 @@ func TestKDF(t *testing.T) {
 	}
 }
 
-var ErrBadSharedKeys = errors.New("ecies: shared keys don't match")
+var ErrBadSharedKeys = fmt.Errorf("ecies: shared keys don't match")
 
 // cmpParams compares a set of ECIES parameters. We assume, as per the
 // docs, that AES is the only supported symmetric encryption algorithm.

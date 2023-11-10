@@ -141,11 +141,11 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 
 	// The priv.D must < N
 	if priv.D.Cmp(secp256k1N) >= 0 {
-		return nil, errors.New("invalid private key, >=N")
+		return nil, fmt.Errorf("invalid private key, >=N")
 	}
 	// The priv.D must not be zero or negative.
 	if priv.D.Sign() <= 0 {
-		return nil, errors.New("invalid private key, zero or negative")
+		return nil, fmt.Errorf("invalid private key, zero or negative")
 	}
 
 	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(d)
@@ -204,7 +204,7 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	} else if n != len(buf) {
-		return nil, errors.New("key file too short, want 64 hex characters")
+		return nil, fmt.Errorf("key file too short, want 64 hex characters")
 	}
 	if err := checkKeyFileEnd(r); err != nil {
 		return nil, err
