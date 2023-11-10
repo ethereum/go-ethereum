@@ -197,11 +197,11 @@ type Transaction struct {
 
 // resolve returns the internal transaction object, fetching it if needed.
 // It also returns the block the tx belongs to, unless it is a pending tx.
-func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) {
+func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.tx != nil {
-		return t.tx, t.block
+		return t.tx, t.block, nil
 	}
 	// Try to return an already finalized transaction
 	tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
@@ -214,58 +214,58 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 			hash:         blockHash,
 		}
 		t.index = index
-		return t.tx, t.block
+		return t.tx, t.block, nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	t.tx = t.r.backend.GetPoolTransaction(t.hash)
-	return t.tx, nil
+	return t.tx, nil, nil
 }
 
 func (t *Transaction) Hash(ctx context.Context) common.Hash {
 	return t.hash
 }
 
-func (t *Transaction) InputData(ctx context.Context) hexutil.Bytes {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Bytes{}
+func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Bytes{}, err
 	}
-	return tx.Data()
+	return tx.Data(), nil
 }
 
-func (t *Transaction) Gas(ctx context.Context) hexutil.Uint64 {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return 0
+func (t *Transaction) Gas(ctx context.Context) (hexutil.Uint64, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return 0, err
 	}
-	return hexutil.Uint64(tx.Gas())
+	return hexutil.Uint64(tx.Gas()), nil
 }
 
-func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
-	tx, block := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Big{}
+func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
+	tx, block, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Big{}, err
 	}
 	switch tx.Type() {
 	case types.AccessListTxType:
-		return hexutil.Big(*tx.GasPrice())
+		return hexutil.Big(*tx.GasPrice()), nil
 	case types.DynamicFeeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
 				// price = min(tip, gasFeeCap - baseFee) + baseFee
-				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap()))
+				return (hexutil.Big)(*math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee.ToInt()), tx.GasFeeCap())), nil
 			}
 		}
-		return hexutil.Big(*tx.GasPrice())
+		return hexutil.Big(*tx.GasPrice()), nil
 	default:
-		return hexutil.Big(*tx.GasPrice())
+		return hexutil.Big(*tx.GasPrice()), nil
 	}
 }
 
 func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, error) {
-	tx, block := t.resolve(ctx)
-	if tx == nil {
-		return nil, nil
+	tx, block, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	// Pending tx
 	if block == nil {
@@ -281,40 +281,40 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	return (*hexutil.Big)(math.BigMin(new(big.Int).Add(tx.GasTipCap(), header.BaseFee), tx.GasFeeCap())), nil
 }
 
-func (t *Transaction) MaxFeePerGas(ctx context.Context) *hexutil.Big {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return nil
+func (t *Transaction) MaxFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	switch tx.Type() {
 	case types.AccessListTxType:
-		return nil
+		return nil, nil
 	case types.DynamicFeeTxType:
-		return (*hexutil.Big)(tx.GasFeeCap())
+		return (*hexutil.Big)(tx.GasFeeCap()), nil
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
-func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) *hexutil.Big {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return nil
+func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	switch tx.Type() {
 	case types.AccessListTxType:
-		return nil
+		return nil, nil
 	case types.DynamicFeeTxType:
-		return (*hexutil.Big)(tx.GasTipCap())
+		return (*hexutil.Big)(tx.GasTipCap()), nil
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
 func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
-	tx, block := t.resolve(ctx)
-	if tx == nil {
-		return nil, nil
+	tx, block, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	// Pending tx
 	if block == nil {
@@ -336,9 +336,9 @@ func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
 }
 
 func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Big{}, nil
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Big{}, err
 	}
 	if tx.Value() == nil {
 		return hexutil.Big{}, fmt.Errorf("invalid transaction value %x", t.hash)
@@ -346,34 +346,34 @@ func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*tx.Value()), nil
 }
 
-func (t *Transaction) Nonce(ctx context.Context) hexutil.Uint64 {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return 0
+func (t *Transaction) Nonce(ctx context.Context) (hexutil.Uint64, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return 0, err
 	}
-	return hexutil.Uint64(tx.Nonce())
+	return hexutil.Uint64(tx.Nonce()), nil
 }
 
-func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) *Account {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return nil
+func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	to := tx.To()
 	if to == nil {
-		return nil
+		return nil, nil
 	}
 	return &Account{
 		r:             t.r,
 		address:       *to,
 		blockNrOrHash: args.NumberOrLatest(),
-	}
+	}, nil
 }
 
-func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) *Account {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return nil
+func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	signer := types.LatestSigner(t.r.backend.ChainConfig())
 	from, _ := types.Sender(signer, tx)
@@ -381,27 +381,36 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) *Account {
 		r:             t.r,
 		address:       from,
 		blockNrOrHash: args.NumberOrLatest(),
+	}, nil
+}
+
+func (t *Transaction) Block(ctx context.Context) (*Block, error) {
+	_, block, err := t.resolve(ctx)
+	if err != nil {
+		return nil, err
 	}
+	return block, nil
 }
 
-func (t *Transaction) Block(ctx context.Context) *Block {
-	_, block := t.resolve(ctx)
-	return block
-}
-
-func (t *Transaction) Index(ctx context.Context) *hexutil.Uint64 {
-	_, block := t.resolve(ctx)
+func (t *Transaction) Index(ctx context.Context) (*hexutil.Uint64, error) {
+	_, block, err := t.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if block == nil {
-		return nil
+		return nil, nil
 	}
 	index := hexutil.Uint64(t.index)
-	return &index
+	return &index, nil
 }
 
 // getReceipt returns the receipt associated with this transaction, if any.
 func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
-	_, block := t.resolve(ctx)
+	_, block, err := t.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if block == nil {
 		return nil, nil
@@ -456,7 +465,10 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 }
 
 func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
-	_, block := t.resolve(ctx)
+	_, block, err := t.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Pending tx
 	if block == nil {
 		return nil, nil
@@ -492,16 +504,19 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 	return &ret, nil
 }
 
-func (t *Transaction) Type(ctx context.Context) *hexutil.Uint64 {
-	tx, _ := t.resolve(ctx)
+func (t *Transaction) Type(ctx context.Context) (*hexutil.Uint64, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
 	txType := hexutil.Uint64(tx.Type())
-	return &txType
+	return &txType, nil
 }
 
-func (t *Transaction) AccessList(ctx context.Context) *[]*AccessTuple {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return nil
+func (t *Transaction) AccessList(ctx context.Context) (*[]*AccessTuple, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
 	}
 	accessList := tx.AccessList()
 	ret := make([]*AccessTuple, 0, len(accessList))
@@ -511,40 +526,40 @@ func (t *Transaction) AccessList(ctx context.Context) *[]*AccessTuple {
 			storageKeys: al.StorageKeys,
 		})
 	}
-	return &ret
+	return &ret, nil
 }
 
-func (t *Transaction) R(ctx context.Context) hexutil.Big {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Big{}
+func (t *Transaction) R(ctx context.Context) (hexutil.Big, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Big{}, err
 	}
 	_, r, _ := tx.RawSignatureValues()
-	return hexutil.Big(*r)
+	return hexutil.Big(*r), nil
 }
 
-func (t *Transaction) S(ctx context.Context) hexutil.Big {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Big{}
+func (t *Transaction) S(ctx context.Context) (hexutil.Big, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Big{}, err
 	}
 	_, _, s := tx.RawSignatureValues()
-	return hexutil.Big(*s)
+	return hexutil.Big(*s), nil
 }
 
-func (t *Transaction) V(ctx context.Context) hexutil.Big {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Big{}
+func (t *Transaction) V(ctx context.Context) (hexutil.Big, error) {
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Big{}, err
 	}
 	v, _, _ := tx.RawSignatureValues()
-	return hexutil.Big(*v)
+	return hexutil.Big(*v), nil
 }
 
 func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
-	tx, _ := t.resolve(ctx)
-	if tx == nil {
-		return hexutil.Bytes{}, nil
+	tx, _, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Bytes{}, err
 	}
 	return tx.MarshalBinary()
 }
@@ -1218,17 +1233,19 @@ func (r *Resolver) Pending(ctx context.Context) *Pending {
 	return &Pending{r}
 }
 
-func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Hash }) *Transaction {
+func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Hash }) (*Transaction, error) {
 	tx := &Transaction{
 		r:    r,
 		hash: args.Hash,
 	}
 	// Resolve the transaction; if it doesn't exist, return nil.
-	t, _ := tx.resolve(ctx)
-	if t == nil {
-		return nil
+	t, _, err := tx.resolve(ctx)
+	if err != nil {
+		return nil, err
+	} else if t == nil {
+		return nil, nil
 	}
-	return tx
+	return tx, nil
 }
 
 func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hexutil.Bytes }) (common.Hash, error) {
