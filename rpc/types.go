@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -220,7 +221,7 @@ func (bnh *BlockNumberOrHash) Number() (BlockNumber, bool) {
 
 func (bnh *BlockNumberOrHash) String() string {
 	if bnh.BlockNumber != nil {
-		return bnh.BlockNumber.String()
+		return strconv.Itoa(int(*bnh.BlockNumber))
 	}
 	if bnh.BlockHash != nil {
 		return bnh.BlockHash.String()
