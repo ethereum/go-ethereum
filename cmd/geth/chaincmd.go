@@ -50,8 +50,6 @@ var (
 		ArgsUsage: "<genesisPath>",
 		Flags: flags.Merge([]cli.Flag{
 			utils.CachePreimagesFlag,
-			utils.OverrideCancun,
-			utils.OverrideVerkle,
 		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -195,15 +193,6 @@ func initGenesis(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	var overrides core.ChainOverrides
-	if ctx.IsSet(utils.OverrideCancun.Name) {
-		v := ctx.Uint64(utils.OverrideCancun.Name)
-		overrides.OverrideCancun = &v
-	}
-	if ctx.IsSet(utils.OverrideVerkle.Name) {
-		v := ctx.Uint64(utils.OverrideVerkle.Name)
-		overrides.OverrideVerkle = &v
-	}
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
 		if err != nil {
@@ -214,7 +203,7 @@ func initGenesis(ctx *cli.Context) error {
 		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false)
 		defer triedb.Close()
 
-		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
