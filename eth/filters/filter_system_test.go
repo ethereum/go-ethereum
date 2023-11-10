@@ -50,8 +50,6 @@ type testBackend struct {
 	rmLogsFeed      event.Feed
 	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
-	pendingBlock    *types.Block
-	pendingReceipts types.Receipts
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -126,7 +124,7 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint
 }
 
 func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return b.pendingBlock, b.pendingReceipts
+	return nil, nil
 }
 
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
