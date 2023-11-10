@@ -202,8 +202,8 @@ const (
 	hashedNode
 )
 
-// Update inserts a (key, value) pair into the stack trie.
-func (st *StackTrie) Update(key, value []byte) error {
+// TryUpdate inserts a (key, value) pair into the stack trie
+func (st *StackTrie) TryUpdate(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {
 		panic("deletion not supported")
@@ -212,10 +212,8 @@ func (st *StackTrie) Update(key, value []byte) error {
 	return nil
 }
 
-// MustUpdate is a wrapper of Update and will omit any encountered error but
-// just print out an error message.
-func (st *StackTrie) MustUpdate(key, value []byte) {
-	if err := st.Update(key, value); err != nil {
+func (st *StackTrie) Update(key, value []byte) {
+	if err := st.TryUpdate(key, value); err != nil {
 		log.Error("Unhandled trie error in StackTrie.Update", "err", err)
 	}
 }

@@ -219,10 +219,9 @@ func (d *hashToHumanReadable) Reset() {
 	d.data = make([]byte, 0)
 }
 
-func (d *hashToHumanReadable) Update(i []byte, i2 []byte) error {
+func (d *hashToHumanReadable) Update(i []byte, i2 []byte) {
 	l := fmt.Sprintf("%x %x\n", i, i2)
 	d.data = append(d.data, []byte(l)...)
-	return nil
 }
 
 func (d *hashToHumanReadable) Hash() common.Hash {
