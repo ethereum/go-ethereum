@@ -518,7 +518,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeAddress is a prototype that represents address type
+ * SolidityTypeAddress is a prootype that represents address type
  * It matches:
  * address
  * address[]
@@ -546,7 +546,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeBool is a prototype that represents bool type
+ * SolidityTypeBool is a prootype that represents bool type
  * It matches:
  * bool
  * bool[]
@@ -1146,7 +1146,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeInt is a prototype that represents int type
+ * SolidityTypeInt is a prootype that represents int type
  * It matches:
  * int
  * int[]
@@ -1334,7 +1334,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeReal is a prototype that represents real type
+ * SolidityTypeReal is a prootype that represents real type
  * It matches:
  * real
  * real[]
@@ -1647,7 +1647,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeUInt is a prototype that represents uint type
+ * SolidityTypeUInt is a prootype that represents uint type
  * It matches:
  * uint
  * uint[]
@@ -1681,7 +1681,7 @@ var f = require('./formatters');
 var SolidityType = require('./type');
 
 /**
- * SolidityTypeUReal is a prototype that represents ureal type
+ * SolidityTypeUReal is a prootype that represents ureal type
  * It matches:
  * ureal
  * ureal[]
@@ -2307,7 +2307,7 @@ var toChecksumAddress = function (address) {
 };
 
 /**
- * Transforms given string to valid 20 bytes-length address with 0x prefix
+ * Transforms given string to valid 20 bytes-length addres with 0x prefix
  *
  * @method toAddress
  * @param {String} address
