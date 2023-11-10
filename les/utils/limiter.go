@@ -369,14 +369,8 @@ func (l *Limiter) dropRequests() {
 			priority: w / float64(nq.sumCost),
 		})
 	}
-	slices.SortFunc(list, func(a, b dropListItem) int {
-		if a.priority < b.priority {
-			return -1
-		}
-		if a.priority < b.priority {
-			return 1
-		}
-		return 0
+	slices.SortFunc(list, func(a, b dropListItem) bool {
+		return a.priority < b.priority
 	})
 	for _, item := range list {
 		for _, request := range item.nq.queue {

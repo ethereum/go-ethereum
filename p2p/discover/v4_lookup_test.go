@@ -302,8 +302,8 @@ func (tn *preminedTestnet) closest(n int) (nodes []*enode.Node) {
 			nodes = append(nodes, tn.node(d, i))
 		}
 	}
-	slices.SortFunc(nodes, func(a, b *enode.Node) int {
-		return enode.DistCmp(tn.target.id(), a.ID(), b.ID())
+	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
+		return enode.DistCmp(tn.target.id(), a.ID(), b.ID()) < 0
 	})
 	return nodes[:n]
 }

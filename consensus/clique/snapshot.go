@@ -308,7 +308,7 @@ func (s *Snapshot) signers() []common.Address {
 	for sig := range s.Signers {
 		sigs = append(sigs, sig)
 	}
-	slices.SortFunc(sigs, common.Address.Cmp)
+	slices.SortFunc(sigs, common.Address.Less)
 	return sigs
 }
 
