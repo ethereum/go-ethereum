@@ -994,52 +994,6 @@ func TestSequentialReadByteLimit(t *testing.T) {
 	}
 }
 
-// TestSequentialReadNoByteLimit tests the batch-read if maxBytes is not specified.
-// Freezer should return the requested items regardless the size limitation.
-func TestSequentialReadNoByteLimit(t *testing.T) {
-	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
-	fname := fmt.Sprintf("batchread-3-%d", rand.Uint64())
-	{ // Fill table
-		f, err := newTable(os.TempDir(), fname, rm, wm, sg, 100, true, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Write 10 bytes 30 times,
-		// Splitting it at every 100 bytes (10 items)
-		writeChunks(t, f, 30, 10)
-		f.Close()
-	}
-	for i, tc := range []struct {
-		items uint64
-		want  int
-	}{
-		{1, 1},
-		{30, 30},
-		{31, 30},
-	} {
-		{
-			f, err := newTable(os.TempDir(), fname, rm, wm, sg, 100, true, false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			items, err := f.RetrieveItems(0, tc.items, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if have, want := len(items), tc.want; have != want {
-				t.Fatalf("test %d: want %d items, have %d ", i, want, have)
-			}
-			for ii, have := range items {
-				want := getChunk(10, ii)
-				if !bytes.Equal(want, have) {
-					t.Fatalf("test %d: data corruption item %d: have\n%x\n, want \n%x\n", i, ii, have, want)
-				}
-			}
-			f.Close()
-		}
-	}
-}
-
 func TestFreezerReadonly(t *testing.T) {
 	tmpdir := os.TempDir()
 	// Case 1: Check it fails on non-existent file.

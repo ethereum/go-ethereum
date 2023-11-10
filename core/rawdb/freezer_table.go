@@ -712,7 +712,7 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 		if !t.noCompression {
 			decompressedSize, _ = snappy.DecodedLen(item)
 		}
-		if i > 0 && maxBytes != 0 && uint64(outputSize+decompressedSize) > maxBytes {
+		if i > 0 && uint64(outputSize+decompressedSize) > maxBytes {
 			break
 		}
 		if !t.noCompression {
@@ -730,10 +730,8 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 }
 
 // retrieveItems reads up to 'count' items from the table. It reads at least
-// one item, but otherwise avoids reading more than maxBytes bytes. Freezer
-// will ignore the size limitation and continuously allocate memory to store
-// data if maxBytes is 0. It returns the (potentially compressed) data, and
-// the sizes.
+// one item, but otherwise avoids reading more than maxBytes bytes.
+// It returns the (potentially compressed) data, and the sizes.
 func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []int, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -754,22 +752,25 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	if start+count > items {
 		count = items - start
 	}
-	var output []byte // Buffer to read data into
-	if maxBytes != 0 {
-		output = make([]byte, 0, maxBytes)
-	} else {
-		output = make([]byte, 0, 1024) // initial buffer cap
-	}
+	var (
+		output     = make([]byte, maxBytes) // Buffer to read data into
+		outputSize int                      // Used size of that buffer
+	)
 	// readData is a helper method to read a single data item from disk.
 	readData := func(fileId, start uint32, length int) error {
-		output = grow(output, length)
+		// In case a small limit is used, and the elements are large, may need to
+		// realloc the read-buffer when reading the first (and only) item.
+		if len(output) < length {
+			output = make([]byte, length)
+		}
 		dataFile, exist := t.files[fileId]
 		if !exist {
 			return fmt.Errorf("missing data file %d", fileId)
 		}
-		if _, err := dataFile.ReadAt(output[len(output)-length:], int64(start)); err != nil {
+		if _, err := dataFile.ReadAt(output[outputSize:outputSize+length], int64(start)); err != nil {
 			return err
 		}
+		outputSize += length
 		return nil
 	}
 	// Read all the indexes in one go
@@ -800,7 +801,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 			}
 			readStart = 0
 		}
-		if i > 0 && uint64(totalSize+size) > maxBytes && maxBytes != 0 {
+		if i > 0 && uint64(totalSize+size) > maxBytes {
 			// About to break out due to byte limit being exceeded. We don't
 			// read this last item, but we need to do the deferred reads now.
 			if unreadSize > 0 {
@@ -814,7 +815,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 		unreadSize += size
 		totalSize += size
 		sizes = append(sizes, size)
-		if i == len(indices)-2 || (uint64(totalSize) > maxBytes && maxBytes != 0) {
+		if i == len(indices)-2 || uint64(totalSize) > maxBytes {
 			// Last item, need to do the read now
 			if err := readData(secondIndex.filenum, readStart, unreadSize); err != nil {
 				return nil, nil, err
@@ -825,7 +826,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 
 	// Update metrics.
 	t.readMeter.Mark(int64(totalSize))
-	return output, sizes, nil
+	return output[:outputSize], sizes, nil
 }
 
 // has returns an indicator whether the specified number data is still accessible
