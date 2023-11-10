@@ -71,8 +71,6 @@ type Database struct {
 	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
-
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 	closed   bool            // keep track of whether we're Closed
@@ -232,7 +230,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	db.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return
-	go db.meter(metricsGatheringInterval, namespace)
+	go db.meter(metricsGatheringInterval)
 	return db, nil
 }
 
@@ -429,7 +427,7 @@ func (d *Database) Path() string {
 
 // meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
-func (d *Database) meter(refresh time.Duration, namespace string) {
+func (d *Database) meter(refresh time.Duration) {
 	var errc chan error
 	timer := time.NewTimer(refresh)
 	defer timer.Stop()
@@ -452,7 +450,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			compRead  int64
 			nWrite    int64
 
-			stats              = d.db.Metrics()
+			metrics            = d.db.Metrics()
 			compTime           = d.compTime.Load()
 			writeDelayCount    = d.writeDelayCount.Load()
 			writeDelayTime     = d.writeDelayTime.Load()
@@ -463,14 +461,14 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
 
-		for _, levelMetrics := range stats.Levels {
+		for _, levelMetrics := range metrics.Levels {
 			nWrite += int64(levelMetrics.BytesCompacted)
 			nWrite += int64(levelMetrics.BytesFlushed)
 			compWrite += int64(levelMetrics.BytesCompacted)
 			compRead += int64(levelMetrics.BytesRead)
 		}
 
-		nWrite += int64(stats.WAL.BytesWritten)
+		nWrite += int64(metrics.WAL.BytesWritten)
 
 		compWrites[i%2] = compWrite
 		compReads[i%2] = compRead
@@ -492,7 +490,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
 		}
 		if d.diskSizeGauge != nil {
-			d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
+			d.diskSizeGauge.Update(int64(metrics.DiskSpaceUsage()))
 		}
 		if d.diskReadMeter != nil {
 			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
@@ -501,20 +499,12 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
 		}
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
-		manuallyAllocated := stats.BlockCache.Size + int64(stats.MemTable.Size) + int64(stats.MemTable.ZombieSize)
+		manuallyAllocated := metrics.BlockCache.Size + int64(metrics.MemTable.Size) + int64(metrics.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)
-		d.memCompGauge.Update(stats.Flush.Count)
+		d.memCompGauge.Update(metrics.Flush.Count)
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
-		d.seekCompGauge.Update(stats.Compact.ReadCount)
-
-		for i, level := range stats.Levels {
-			// Append metrics for additional layers
-			if i >= len(d.levelsGauge) {
-				d.levelsGauge = append(d.levelsGauge, metrics.NewRegisteredGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
-			}
-			d.levelsGauge[i].Update(level.NumFiles)
-		}
+		d.seekCompGauge.Update(metrics.Compact.ReadCount)
 
 		// Sleep a bit, then repeat the stats collection
 		select {
