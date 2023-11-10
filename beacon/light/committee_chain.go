@@ -63,14 +63,14 @@ var (
 // signed beacon headers.
 type CommitteeChain struct {
 	// chainmu guards against concurrent access to the canonicalStore structures
-	// (updates, committees, fixedRoots) and ensures that they stay consistent
+	// (updates, committees, fixedCommitteeRoots) and ensures that they stay consistent
 	// with each other and with committeeCache.
-	chainmu        sync.RWMutex
-	db             ethdb.KeyValueStore
-	updates        *canonicalStore[*types.LightClientUpdate]
-	committees     *canonicalStore[*types.SerializedSyncCommittee]
-	fixedRoots     *canonicalStore[common.Hash]
-	committeeCache *lru.Cache[uint64, syncCommittee] // cache deserialized committees
+	chainmu             sync.RWMutex
+	db                  ethdb.KeyValueStore
+	updates             *canonicalStore[*types.LightClientUpdate]
+	committees          *canonicalStore[*types.SerializedSyncCommittee]
+	fixedCommitteeRoots *canonicalStore[common.Hash]
+	committeeCache      *lru.Cache[uint64, syncCommittee] // cache deserialized committees
 
 	clock       mclock.Clock         // monotonic clock (simulated clock in tests)
 	unixNano    func() int64         // system clock (simulated clock in tests)
@@ -91,10 +91,10 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 // clock source and signature verification for testing purposes.
 func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	var (
-		fixedRootEncoder = func(root common.Hash) ([]byte, error) {
+		fixedCommitteeRootEncoder = func(root common.Hash) ([]byte, error) {
 			return root[:], nil
 		}
-		fixedRootDecoder = func(enc []byte) (root common.Hash, err error) {
+		fixedCommitteeRootDecoder = func(enc []byte) (root common.Hash, err error) {
 			if len(enc) != common.HashLength {
 				return common.Hash{}, errors.New("incorrect length for committee root entry in the database")
 			}
@@ -123,17 +123,17 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 		}
 	)
 	s := &CommitteeChain{
-		fixedRoots:      newCanonicalStore[common.Hash](db, rawdb.FixedRootKey, fixedRootEncoder, fixedRootDecoder),
-		committees:      newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, committeeEncoder, committeeDecoder),
-		updates:         newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, updateEncoder, updateDecoder),
-		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
-		db:              db,
-		sigVerifier:     sigVerifier,
-		clock:           clock,
-		unixNano:        unixNano,
-		config:          config,
-		signerThreshold: signerThreshold,
-		enforceTime:     enforceTime,
+		fixedCommitteeRoots: newCanonicalStore[common.Hash](db, rawdb.FixedCommitteeRootKey, fixedCommitteeRootEncoder, fixedCommitteeRootDecoder),
+		committees:          newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, committeeEncoder, committeeDecoder),
+		updates:             newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, updateEncoder, updateDecoder),
+		committeeCache:      lru.NewCache[uint64, syncCommittee](10),
+		db:                  db,
+		sigVerifier:         sigVerifier,
+		clock:               clock,
+		unixNano:            unixNano,
+		config:              config,
+		signerThreshold:     signerThreshold,
+		enforceTime:         enforceTime,
 		minimumUpdateScore: types.UpdateScore{
 			SignerCount:    uint32(signerThreshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
@@ -169,15 +169,15 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 
 // checkConstraints checks committee chain validity constraints
 func (s *CommitteeChain) checkConstraints() bool {
-	isNotInFixedRootRange := func(r Range) bool {
-		return s.fixedRoots.periods.IsEmpty() ||
-			r.Start < s.fixedRoots.periods.Start ||
-			r.Start >= s.fixedRoots.periods.End
+	isNotInFixedCommitteeRootRange := func(r Range) bool {
+		return s.fixedCommitteeRoots.periods.IsEmpty() ||
+			r.Start < s.fixedCommitteeRoots.periods.Start ||
+			r.Start >= s.fixedCommitteeRoots.periods.End
 	}
 
 	valid := true
 	if !s.updates.periods.IsEmpty() {
-		if isNotInFixedRootRange(s.updates.periods) {
+		if isNotInFixedCommitteeRootRange(s.updates.periods) {
 			log.Error("Start update is not in the fixed roots range")
 			valid = false
 		}
@@ -187,11 +187,11 @@ func (s *CommitteeChain) checkConstraints() bool {
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
-		if isNotInFixedRootRange(s.committees.periods) {
+		if isNotInFixedCommitteeRootRange(s.committees.periods) {
 			log.Error("Start committee is not in the fixed roots range")
 			valid = false
 		}
-		if s.committees.periods.End > s.fixedRoots.periods.End && s.committees.periods.End > s.updates.periods.End+1 {
+		if s.committees.periods.End > s.fixedCommitteeRoots.periods.End && s.committees.periods.End > s.updates.periods.End+1 {
 			log.Error("Last committee is neither in the fixed roots range nor proven by updates")
 			valid = false
 		}
@@ -209,10 +209,10 @@ func (s *CommitteeChain) Reset() {
 	}
 }
 
-// AddFixedRoot sets a fixed committee root at the given period.
+// AddFixedCommitteeRoot sets a fixed committee root at the given period.
 // Note that the period where the first committee is added has to have a fixed
 // root which can either come from a CheckpointData or a trusted source.
-func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
+func (s *CommitteeChain) AddFixedCommitteeRoot(period uint64, root common.Hash) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
@@ -222,7 +222,7 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)
-	if !s.fixedRoots.periods.CanExpand(period) {
+	if !s.fixedCommitteeRoots.periods.CanExpand(period) {
 		// Note: the fixed committee root range should always be continuous and
 		// therefore the expected syncing method is to forward sync and optionally
 		// backward sync periods one by one, starting from a checkpoint. The only
@@ -238,8 +238,8 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 		// if the old root exists and matches the new one then it is guaranteed
 		// that the given period is after the existing fixed range and the roots
 		// in between can also be fixed.
-		for p := s.fixedRoots.periods.End; p < period; p++ {
-			if err := s.fixedRoots.add(batch, p, s.getCommitteeRoot(p)); err != nil {
+		for p := s.fixedCommitteeRoots.periods.End; p < period; p++ {
+			if err := s.fixedCommitteeRoots.add(batch, p, s.getCommitteeRoot(p)); err != nil {
 				return err
 			}
 		}
@@ -250,7 +250,7 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 			return err
 		}
 	}
-	if err := s.fixedRoots.add(batch, period, root); err != nil {
+	if err := s.fixedCommitteeRoots.add(batch, period, root); err != nil {
 		return err
 	}
 	if err := batch.Write(); err != nil {
@@ -260,18 +260,18 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 	return nil
 }
 
-// DeleteFixedRootsFrom deletes fixed roots starting from the given period.
+// DeleteFixedCommitteeRootsFrom deletes fixed roots starting from the given period.
 // It also maintains chain consistency, meaning that it also deletes updates and
 // committees if they are no longer supported by a valid update chain.
-func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
+func (s *CommitteeChain) DeleteFixedCommitteeRootsFrom(period uint64) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	if period >= s.fixedRoots.periods.End {
+	if period >= s.fixedCommitteeRoots.periods.End {
 		return nil
 	}
 	batch := s.db.NewBatch()
-	s.fixedRoots.deleteFrom(batch, period)
+	s.fixedCommitteeRoots.deleteFrom(batch, period)
 	if s.updates.periods.IsEmpty() || period <= s.updates.periods.Start {
 		// Note: the first period of the update chain should always be fixed so if
 		// the fixed root at the first update is removed then the entire update chain
@@ -327,7 +327,7 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 	if root != committee.Root() {
 		return ErrWrongCommitteeRoot
 	}
-	if !s.committees.periods.Includes(period) {
+	if !s.committees.periods.Contains(period) {
 		if err := s.committees.add(s.db, period, committee); err != nil {
 			return err
 		}
@@ -349,7 +349,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	defer s.chainmu.Unlock()
 
 	period := update.AttestedHeader.Header.SyncPeriod()
-	if !s.updates.periods.CanExpand(period) || !s.committees.periods.Includes(period) {
+	if !s.updates.periods.CanExpand(period) || !s.committees.periods.Contains(period) {
 		return ErrInvalidPeriod
 	}
 	if s.minimumUpdateScore.BetterThan(update.Score()) {
@@ -364,7 +364,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		}
 		return nil
 	}
-	if s.fixedRoots.periods.Includes(period+1) && reorg {
+	if s.fixedCommitteeRoots.periods.Contains(period+1) && reorg {
 		return ErrCannotReorg
 	}
 	if ok, err := s.verifyUpdate(update); err != nil {
@@ -372,7 +372,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	} else if !ok {
 		return ErrInvalidUpdate
 	}
-	addCommittee := !s.committees.periods.Includes(period+1) || reorg
+	addCommittee := !s.committees.periods.Contains(period+1) || reorg
 	if addCommittee {
 		if nextCommittee == nil {
 			return ErrNeedCommittee
@@ -426,14 +426,14 @@ func (s *CommitteeChain) rollback(period uint64) error {
 	if s.committees.periods.End > max {
 		max = s.committees.periods.End
 	}
-	if s.fixedRoots.periods.End > max {
-		max = s.fixedRoots.periods.End
+	if s.fixedCommitteeRoots.periods.End > max {
+		max = s.fixedCommitteeRoots.periods.End
 	}
 	for max > period {
 		max--
 		batch := s.db.NewBatch()
 		s.deleteCommitteesFrom(batch, max)
-		s.fixedRoots.deleteFrom(batch, max)
+		s.fixedCommitteeRoots.deleteFrom(batch, max)
 		if max > 0 {
 			s.updates.deleteFrom(batch, max-1)
 		}
@@ -449,7 +449,7 @@ func (s *CommitteeChain) rollback(period uint64) error {
 // proven by a previous update or both. It returns an empty hash if the committee
 // root is unknown.
 func (s *CommitteeChain) getCommitteeRoot(period uint64) common.Hash {
-	if root, ok := s.fixedRoots.get(period); ok || period == 0 {
+	if root, ok := s.fixedCommitteeRoots.get(period); ok || period == 0 {
 		return root
 	}
 	if update, ok := s.updates.get(period - 1); ok {

@@ -53,16 +53,16 @@ var (
 	tcAnotherGenesis            = newTestCommitteeChain(nil, tfAnotherGenesis, true, 0, 10, 400, false)
 )
 
-func TestCommitteeChainFixedRoots(t *testing.T) {
+func TestCommitteeChainFixedCommitteeRoots(t *testing.T) {
 	for _, reload := range []bool{false, true} {
 		c := newCommitteeChainTest(t, tfBase, 300, true)
 		c.setClockPeriod(7)
-		c.addFixedRoot(tcBase, 4, nil)
-		c.addFixedRoot(tcBase, 5, nil)
-		c.addFixedRoot(tcBase, 6, nil)
-		c.addFixedRoot(tcBase, 8, ErrInvalidPeriod) // range has to be continuous
-		c.addFixedRoot(tcBase, 3, nil)
-		c.addFixedRoot(tcBase, 2, nil)
+		c.addFixedCommitteeRoot(tcBase, 4, nil)
+		c.addFixedCommitteeRoot(tcBase, 5, nil)
+		c.addFixedCommitteeRoot(tcBase, 6, nil)
+		c.addFixedCommitteeRoot(tcBase, 8, ErrInvalidPeriod) // range has to be continuous
+		c.addFixedCommitteeRoot(tcBase, 3, nil)
+		c.addFixedCommitteeRoot(tcBase, 2, nil)
 		if reload {
 			c.reloadChain()
 		}
@@ -87,8 +87,8 @@ func TestCommitteeChainCheckpointSync(t *testing.T) {
 				c.setClockPeriod(6)
 			}
 			c.insertUpdate(tcBase, 3, true, ErrInvalidPeriod)
-			c.addFixedRoot(tcBase, 3, nil)
-			c.addFixedRoot(tcBase, 4, nil)
+			c.addFixedCommitteeRoot(tcBase, 3, nil)
+			c.addFixedCommitteeRoot(tcBase, 4, nil)
 			c.insertUpdate(tcBase, 4, true, ErrInvalidPeriod) // still no committee
 			c.addCommittee(tcBase, 3, nil)
 			c.addCommittee(tcBase, 4, nil)
@@ -120,7 +120,7 @@ func TestCommitteeChainCheckpointSync(t *testing.T) {
 			c.verifyRange(tcBase, 3, 7) // now period 7 can also be verified
 			// try reverse syncing an update
 			c.insertUpdate(tcBase, 2, false, ErrInvalidPeriod) // fixed committee is needed first
-			c.addFixedRoot(tcBase, 2, nil)
+			c.addFixedCommitteeRoot(tcBase, 2, nil)
 			c.addCommittee(tcBase, 2, nil)
 			c.insertUpdate(tcBase, 2, false, nil)
 			c.verifyRange(tcBase, 2, 7)
@@ -133,8 +133,8 @@ func TestCommitteeChainReorg(t *testing.T) {
 		for _, addBetterUpdates := range []bool{false, true} {
 			c := newCommitteeChainTest(t, tfBase, 300, true)
 			c.setClockPeriod(11)
-			c.addFixedRoot(tcBase, 3, nil)
-			c.addFixedRoot(tcBase, 4, nil)
+			c.addFixedCommitteeRoot(tcBase, 3, nil)
+			c.addFixedCommitteeRoot(tcBase, 4, nil)
 			c.addCommittee(tcBase, 3, nil)
 			for period := uint64(3); period < 10; period++ {
 				c.insertUpdate(tcBase, period, true, nil)
@@ -193,8 +193,8 @@ func TestCommitteeChainFork(t *testing.T) {
 	c := newCommitteeChainTest(t, tfAlternative, 300, true)
 	c.setClockPeriod(11)
 	// trying to sync a chain on an alternative fork with the base chain data
-	c.addFixedRoot(tcBase, 0, nil)
-	c.addFixedRoot(tcBase, 1, nil)
+	c.addFixedCommitteeRoot(tcBase, 0, nil)
+	c.addFixedCommitteeRoot(tcBase, 1, nil)
 	c.addCommittee(tcBase, 0, nil)
 	// shared section should sync without errors
 	for period := uint64(0); period < 7; period++ {
@@ -258,9 +258,9 @@ func (c *committeeChainTest) setClockPeriod(period float64) {
 	c.clock.Run(wait)
 }
 
-func (c *committeeChainTest) addFixedRoot(tc *testCommitteeChain, period uint64, expErr error) {
-	if err := c.chain.AddFixedRoot(period, tc.periods[period].committee.Root()); err != expErr {
-		c.t.Errorf("Incorrect error output from AddFixedRoot at period %d (expected %v, got %v)", period, expErr, err)
+func (c *committeeChainTest) addFixedCommitteeRoot(tc *testCommitteeChain, period uint64, expErr error) {
+	if err := c.chain.AddFixedCommitteeRoot(period, tc.periods[period].committee.Root()); err != expErr {
+		c.t.Errorf("Incorrect error output from AddFixedCommitteeRoot at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
 

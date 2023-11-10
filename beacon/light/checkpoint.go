@@ -53,11 +53,11 @@ func (c *CheckpointData) InitChain(chain *CommitteeChain) {
 		}
 	}
 	period := c.Header.SyncPeriod()
-	must(chain.DeleteFixedRootsFrom(period + 2))
-	if chain.AddFixedRoot(period, c.CommitteeRoot) != nil {
+	must(chain.DeleteFixedCommitteeRootsFrom(period + 2))
+	if chain.AddFixedCommitteeRoot(period, c.CommitteeRoot) != nil {
 		chain.Reset()
-		must(chain.AddFixedRoot(period, c.CommitteeRoot))
+		must(chain.AddFixedCommitteeRoot(period, c.CommitteeRoot))
 	}
-	must(chain.AddFixedRoot(period+1, common.Hash(c.CommitteeBranch[0])))
+	must(chain.AddFixedCommitteeRoot(period+1, common.Hash(c.CommitteeBranch[0])))
 	must(chain.AddCommittee(period, c.Committee))
 }

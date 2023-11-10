@@ -26,8 +26,8 @@ func (a Range) IsEmpty() bool {
 	return a.End == a.Start
 }
 
-// Includes returns true if the range includes the given period.
-func (a Range) Includes(period uint64) bool {
+// Contains returns true if the range includes the given period.
+func (a Range) Contains(period uint64) bool {
 	return period >= a.Start && period < a.End
 }
 
@@ -38,21 +38,17 @@ func (a Range) CanExpand(period uint64) bool {
 	return a.IsEmpty() || (period+1 >= a.Start && period <= a.End)
 }
 
-// Expand expands the range with the given period (assumes that CanExpand returned true).
+// Expand expands the range with the given period.
+// This method assumes that CanExpand returned true: otherwise this is a no-op.
 func (a *Range) Expand(period uint64) {
 	if a.IsEmpty() {
 		a.Start, a.End = period, period+1
 		return
 	}
-	if a.Includes(period) {
-		return
-	}
 	if a.Start == period+1 {
 		a.Start--
-		return
 	}
 	if a.End == period {
 		a.End++
-		return
 	}
 }
