@@ -41,7 +41,6 @@ var (
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
 	difficultyTestDir  = filepath.Join(baseDir, "BasicTests")
-	executionSpecDir   = filepath.Join(".", "spec-tests", "fixtures")
 	benchmarksDir      = filepath.Join(".", "evm-benchmarks", "benchmarks")
 )
 
