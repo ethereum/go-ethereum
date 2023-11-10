@@ -305,7 +305,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	}
 	if baseRoot := rawdb.ReadSnapshotRoot(db); baseRoot != parent {
 		log.Warn("Loaded snapshot journal", "diskroot", baseRoot, "diffs", "unmatched")
-		return errors.New("mismatched disk and diff layers")
+		return fmt.Errorf("mismatched disk and diff layers")
 	}
 	for {
 		var (

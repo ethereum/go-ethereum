@@ -87,8 +87,6 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
-	errInvalidOldChain      = errors.New("invalid old chain")
-	errInvalidNewChain      = errors.New("invalid new chain")
 )
 
 const (
@@ -867,7 +865,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 			return fmt.Errorf("export failed on #%d: not found", nr)
 		}
 		if nr > first && block.ParentHash() != parentHash {
-			return errors.New("export failed: chain reorg during export")
+			return fmt.Errorf("export failed: chain reorg during export")
 		}
 		parentHash = block.Hash()
 		if err := block.EncodeRLP(w); err != nil {
@@ -2099,10 +2097,10 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		}
 	}
 	if oldBlock == nil {
-		return errInvalidOldChain
+		return errors.New("invalid old chain")
 	}
 	if newBlock == nil {
-		return errInvalidNewChain
+		return errors.New("invalid new chain")
 	}
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
@@ -2122,11 +2120,11 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		// Step back with both chains
 		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return errInvalidOldChain
+			return fmt.Errorf("invalid old chain")
 		}
 		newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if newBlock == nil {
-			return errInvalidNewChain
+			return fmt.Errorf("invalid new chain")
 		}
 	}
 
