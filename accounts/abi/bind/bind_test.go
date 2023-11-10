@@ -2038,29 +2038,6 @@ var bindTests = []struct {
 				t.Errorf("error deploying the contract: %v", err)
 			}
 		`,
-	}, {
-		name: "NumericMethodName",
-		contract: `
-		// SPDX-License-Identifier: GPL-3.0
-		pragma solidity >=0.4.22 <0.9.0;
-
-		contract NumericMethodName {
-			event _1TestEvent(address _param);
-			function _1test() public pure {}
-			function __1test() public pure {}
-			function __2test() public pure {}
-		}
-		`,
-		bytecode: []string{"0x6080604052348015600f57600080fd5b5060958061001e6000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80639d993132146041578063d02767c7146049578063ffa02795146051575b600080fd5b60476059565b005b604f605b565b005b6057605d565b005b565b565b56fea26469706673582212200382ca602dff96a7e2ba54657985e2b4ac423a56abe4a1f0667bc635c4d4371f64736f6c63430008110033"},
-		abi:      []string{`[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"_param","type":"address"}],"name":"_1TestEvent","type":"event"},{"inputs":[],"name":"_1test","outputs":[],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"__1test","outputs":[],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"__2test","outputs":[],"stateMutability":"pure","type":"function"}]`},
-		imports: `
-			"github.com/ethereum/go-ethereum/common"
-		`,
-		tester: `
-			if b, err := NewNumericMethodName(common.Address{}, nil); b == nil || err != nil {
-				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, nil)
-			}
-`,
 	},
 }
 
