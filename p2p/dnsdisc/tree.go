@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 // Tree is a merkle tree of node records.
@@ -214,8 +214,8 @@ func (t *Tree) build(entries []entry) entry {
 }
 
 func sortByID(nodes []*enode.Node) []*enode.Node {
-	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
-		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
+	sort.Slice(nodes, func(i, j int) bool {
+		return bytes.Compare(nodes[i].ID().Bytes(), nodes[j].ID().Bytes()) < 0
 	})
 	return nodes
 }
