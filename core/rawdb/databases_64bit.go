@@ -12,47 +12,26 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
 
 //go:build (arm64 || amd64) && !openbsd
 
-package pebble
+package rawdb
 
 import (
-	"testing"
-
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/vfs"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/dbtest"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 )
 
-func TestPebbleDB(t *testing.T) {
-	t.Run("DatabaseSuite", func(t *testing.T) {
-		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
-			db, err := pebble.Open("", &pebble.Options{
-				FS: vfs.NewMem(),
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			return &Database{
-				db: db,
-			}
-		})
-	})
-}
+// Pebble is unsupported on 32bit architecture
+const PebbleEnabled = true
 
-func BenchmarkPebbleDB(b *testing.B) {
-	dbtest.BenchDatabaseSuite(b, func() ethdb.KeyValueStore {
-		db, err := pebble.Open("", &pebble.Options{
-			FS: vfs.NewMem(),
-		})
-		if err != nil {
-			b.Fatal(err)
-		}
-		return &Database{
-			db: db,
-		}
-	})
+// NewPebbleDBDatabase creates a persistent key-value database without a freezer
+// moving immutable chain segments into cold storage.
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly, ephemeral bool) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
+	if err != nil {
+		return nil, err
+	}
+	return NewDatabase(db), nil
 }
