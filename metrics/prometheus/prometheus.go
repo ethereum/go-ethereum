@@ -41,7 +41,25 @@ func Handler(reg metrics.Registry) http.Handler {
 
 		for _, name := range names {
 			i := reg.Get(name)
-			if err := c.Add(name, i); err != nil {
+
+			switch m := i.(type) {
+			case metrics.Counter:
+				c.addCounter(name, m.Snapshot())
+			case metrics.CounterFloat64:
+				c.addCounterFloat64(name, m.Snapshot())
+			case metrics.Gauge:
+				c.addGauge(name, m.Snapshot())
+			case metrics.GaugeFloat64:
+				c.addGaugeFloat64(name, m.Snapshot())
+			case metrics.Histogram:
+				c.addHistogram(name, m.Snapshot())
+			case metrics.Meter:
+				c.addMeter(name, m.Snapshot())
+			case metrics.Timer:
+				c.addTimer(name, m.Snapshot())
+			case metrics.ResettingTimer:
+				c.addResettingTimer(name, m.Snapshot())
+			default:
 				log.Warn("Unknown Prometheus metric type", "type", fmt.Sprintf("%T", i))
 			}
 		}
