@@ -45,7 +45,7 @@ var (
 				Usage:     "verify the conversion of a MPT into a verkle tree",
 				ArgsUsage: "<root>",
 				Action:    verifyVerkle,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth verkle verify <state-root>
 This command takes a root commitment and attempts to rebuild the tree.
@@ -56,7 +56,7 @@ This command takes a root commitment and attempts to rebuild the tree.
 				Usage:     "Dump a verkle tree to a DOT file",
 				ArgsUsage: "<root> <key1> [<key 2> ...]",
 				Action:    expandVerkle,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth verkle dump <state-root> <key 1> [<key 2> ...]
 This command will produce a dot file representing the tree, rooted at <root>.

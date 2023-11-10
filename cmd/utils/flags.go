@@ -961,19 +961,18 @@ var (
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
 
-	// DatabaseFlags is the flag group of all database flags.
-	DatabaseFlags = []cli.Flag{
+	// DatabasePathFlags is the flag group of all database path flags.
+	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
 		RemoteDBFlag,
-		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
 )
 
 func init() {
 	if rawdb.PebbleEnabled {
-		DatabaseFlags = append(DatabaseFlags, DBEngineFlag)
+		DatabasePathFlags = append(DatabasePathFlags, DBEngineFlag)
 	}
 }
 
