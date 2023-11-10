@@ -140,11 +140,9 @@ func (f *fuzzer) fuzz() int {
 		trieA   = trie.NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB), nil)
-
-		options = trie.NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+		trieB   = trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
 		})
-		trieB       = trie.NewStackTrie(options)
 		vals        []kv
 		useful      bool
 		maxElements = 10000
@@ -206,20 +204,19 @@ func (f *fuzzer) fuzz() int {
 
 	// Ensure all the nodes are persisted correctly
 	var (
-		nodeset  = make(map[string][]byte) // path -> blob
-		optionsC = trie.NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+		nodeset = make(map[string][]byte) // path -> blob
+		trieC   = trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			if crypto.Keccak256Hash(blob) != hash {
 				panic("invalid node blob")
 			}
 			nodeset[string(path)] = common.CopyBytes(blob)
 		})
-		trieC   = trie.NewStackTrie(optionsC)
 		checked int
 	)
 	for _, kv := range vals {
 		trieC.MustUpdate(kv.k, kv.v)
 	}
-	rootC := trieC.Commit()
+	rootC, _ := trieC.Commit()
 	if rootA != rootC {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootC))
 	}
