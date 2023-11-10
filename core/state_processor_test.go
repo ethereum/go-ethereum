@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -406,7 +405,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 			pExcess = *parent.ExcessDataGas()
 			pUsed = *parent.DataGasUsed()
 		}
-		excess := eip4844.CalcExcessDataGas(pExcess, pUsed)
+		excess := misc.CalcExcessDataGas(pExcess, pUsed)
 		used := uint64(nBlobs * params.BlobTxDataGasPerBlob)
 		header.ExcessDataGas = &excess
 		header.DataGasUsed = &used
