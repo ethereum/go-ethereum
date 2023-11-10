@@ -62,8 +62,8 @@ type DumpAccount struct {
 
 // Dump represents the full dump in a collected format, as one large map.
 type Dump struct {
-	Root     string                         `json:"root"`
-	Accounts map[common.Address]DumpAccount `json:"accounts"`
+	Root     string                 `json:"root"`
+	Accounts map[string]DumpAccount `json:"accounts"`
 }
 
 // OnRoot implements DumpCollector interface
@@ -73,8 +73,11 @@ func (d *Dump) OnRoot(root common.Hash) {
 
 // OnAccount implements DumpCollector interface
 func (d *Dump) OnAccount(addr *common.Address, account DumpAccount) {
+	if addr == nil {
+		d.Accounts[fmt.Sprintf("pre(%s)", account.SecureKey)] = account
+	}
 	if addr != nil {
-		d.Accounts[*addr] = account
+		d.Accounts[(*addr).String()] = account
 	}
 }
 
@@ -223,7 +226,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 // RawDump returns the entire state an a single large object
 func (s *StateDB) RawDump(opts *DumpConfig) Dump {
 	dump := &Dump{
-		Accounts: make(map[common.Address]DumpAccount),
+		Accounts: make(map[string]DumpAccount),
 	}
 	s.DumpToCollector(dump, opts)
 	return *dump

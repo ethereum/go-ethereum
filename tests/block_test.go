@@ -74,19 +74,19 @@ func TestExecutionSpec(t *testing.T) {
 }
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
-	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode without snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode with snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode without snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode with snapshotter failed: %v", err)
 		return
 	}

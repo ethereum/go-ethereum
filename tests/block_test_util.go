@@ -108,7 +108,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -158,6 +158,11 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) er
 	if err != nil {
 		return err
 	}
+	// Import succeeded: regardless of whether the _test_ succeeds or not, schedule
+	// the post-check to run
+	defer func() {
+		postCheck(result, chain)
+	}()
 	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
 		return fmt.Errorf("last block hash validation mismatch: want: %x, have: %x", t.json.BestBlock, cmlast)
