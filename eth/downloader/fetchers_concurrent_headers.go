@@ -81,7 +81,7 @@ func (q *headerQueue) request(peer *peerConnection, req *fetchRequest, resCh cha
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the header data and delivering it to the downloader's queue.
 func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	headers := *packet.Res.(*eth.BlockHeadersRequest)
+	headers := *packet.Res.(*eth.BlockHeadersPacket)
 	hashes := packet.Meta.([]common.Hash)
 
 	accepted, err := q.queue.DeliverHeaders(peer.id, headers, hashes, q.headerProcCh)
