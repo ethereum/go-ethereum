@@ -204,12 +204,6 @@ const (
 	LOG4
 )
 
-// 0xb0 range.
-const (
-	TLOAD  OpCode = 0xb3
-	TSTORE OpCode = 0xb4
-)
-
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0
@@ -223,6 +217,12 @@ const (
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
 	SELFDESTRUCT OpCode = 0xff
+)
+
+// 0xb0 range.
+const (
+	TLOAD  OpCode = 0xb3
+	TSTORE OpCode = 0xb4
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice.
@@ -290,7 +290,9 @@ var opCodeToString = map[OpCode]string{
 	BASEFEE:     "BASEFEE",
 
 	// 0x50 range - 'storage' and execution.
-	POP:      "POP",
+	POP: "POP",
+	//DUP:     "DUP",
+	//SWAP:    "SWAP",
 	MLOAD:    "MLOAD",
 	MSTORE:   "MSTORE",
 	MSTORE8:  "MSTORE8",
@@ -304,7 +306,7 @@ var opCodeToString = map[OpCode]string{
 	JUMPDEST: "JUMPDEST",
 	PUSH0:    "PUSH0",
 
-	// 0x60 range - pushes.
+	// 0x60 range - push.
 	PUSH1:  "PUSH1",
 	PUSH2:  "PUSH2",
 	PUSH3:  "PUSH3",
@@ -338,7 +340,6 @@ var opCodeToString = map[OpCode]string{
 	PUSH31: "PUSH31",
 	PUSH32: "PUSH32",
 
-	// 0x80 - dups.
 	DUP1:  "DUP1",
 	DUP2:  "DUP2",
 	DUP3:  "DUP3",
@@ -356,7 +357,6 @@ var opCodeToString = map[OpCode]string{
 	DUP15: "DUP15",
 	DUP16: "DUP16",
 
-	// 0x90 - swaps.
 	SWAP1:  "SWAP1",
 	SWAP2:  "SWAP2",
 	SWAP3:  "SWAP3",
@@ -373,19 +373,17 @@ var opCodeToString = map[OpCode]string{
 	SWAP14: "SWAP14",
 	SWAP15: "SWAP15",
 	SWAP16: "SWAP16",
-
-	// 0xa0 range - logging ops.
-	LOG0: "LOG0",
-	LOG1: "LOG1",
-	LOG2: "LOG2",
-	LOG3: "LOG3",
-	LOG4: "LOG4",
+	LOG0:   "LOG0",
+	LOG1:   "LOG1",
+	LOG2:   "LOG2",
+	LOG3:   "LOG3",
+	LOG4:   "LOG4",
 
 	// 0xb0 range.
 	TLOAD:  "TLOAD",
 	TSTORE: "TSTORE",
 
-	// 0xf0 range - closures.
+	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
 	RETURN:       "RETURN",
@@ -475,6 +473,8 @@ var stringToOp = map[string]OpCode{
 	"GAS":            GAS,
 	"JUMPDEST":       JUMPDEST,
 	"PUSH0":          PUSH0,
+	"TLOAD":          TLOAD,
+	"TSTORE":         TSTORE,
 	"PUSH1":          PUSH1,
 	"PUSH2":          PUSH2,
 	"PUSH3":          PUSH3,
@@ -544,8 +544,6 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
-	"TLOAD":          TLOAD,
-	"TSTORE":         TSTORE,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
