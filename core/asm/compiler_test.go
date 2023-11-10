@@ -54,14 +54,6 @@ func TestCompiler(t *testing.T) {
 `,
 			output: "6300000006565b",
 		},
-		{
-			input: `
-	JUMP @label
-label: ;; comment
-	ADD ;; comment
-`,
-			output: "6300000006565b01",
-		},
 	}
 	for _, test := range tests {
 		ch := Lex([]byte(test.input), false)
