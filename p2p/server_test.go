@@ -370,6 +370,8 @@ func TestServerSetupConn(t *testing.T) {
 		clientkey, srvkey = newkey(), newkey()
 		clientpub         = &clientkey.PublicKey
 		srvpub            = &srvkey.PublicKey
+		fooErr            = errors.New("foo")
+		readErr           = errors.New("read error")
 	)
 	tests := []struct {
 		dontstart bool
@@ -387,10 +389,10 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: errServerStopped,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: errEncHandshakeError},
+			tt:           &setupTransport{pubkey: clientpub, encHandshakeErr: readErr},
 			flags:        inboundConn,
 			wantCalls:    "doEncHandshake,close,",
-			wantCloseErr: errEncHandshakeError,
+			wantCloseErr: readErr,
 		},
 		{
 			tt:           &setupTransport{pubkey: clientpub, phs: protoHandshake{ID: randomID().Bytes()}},
@@ -400,11 +402,11 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: DiscUnexpectedIdentity,
 		},
 		{
-			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: errProtoHandshakeError},
+			tt:           &setupTransport{pubkey: clientpub, protoHandshakeErr: fooErr},
 			dialDest:     enode.NewV4(clientpub, nil, 0, 0),
 			flags:        dynDialedConn,
 			wantCalls:    "doEncHandshake,doProtoHandshake,close,",
-			wantCloseErr: errProtoHandshakeError,
+			wantCloseErr: fooErr,
 		},
 		{
 			tt:           &setupTransport{pubkey: srvpub, phs: protoHandshake{ID: crypto.FromECDSAPub(srvpub)[1:]}},

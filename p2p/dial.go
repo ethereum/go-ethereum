@@ -521,14 +521,13 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
-	dialMeter.Mark(1)
 	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
 		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
-		dialConnectionError.Mark(1)
 		return &dialError{err}
 	}
-	return d.setupFunc(newMeteredConn(fd), t.flags, dest)
+	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
+	return d.setupFunc(mfd, t.flags, dest)
 }
 
 func (t *dialTask) String() string {
