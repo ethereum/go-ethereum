@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -96,15 +95,11 @@ type TxPool interface {
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
 func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2p.Protocol {
-	protocols := make([]p2p.Protocol, 0, len(ProtocolVersions))
-	for _, version := range ProtocolVersions {
+	protocols := make([]p2p.Protocol, len(ProtocolVersions))
+	for i, version := range ProtocolVersions {
 		version := version // Closure
 
-		// Path scheme does not support GetNodeData, don't advertise eth66 on it
-		if version <= ETH66 && backend.Chain().TrieDB().Scheme() == rawdb.PathScheme {
-			continue
-		}
-		protocols = append(protocols, p2p.Protocol{
+		protocols[i] = p2p.Protocol{
 			Name:    ProtocolName,
 			Version: version,
 			Length:  protocolLengths[version],
@@ -124,7 +119,7 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 			},
 			Attributes:     []enr.Entry{currentENREntry(backend.Chain())},
 			DialCandidates: dnsdisc,
-		})
+		}
 	}
 	return protocols
 }
