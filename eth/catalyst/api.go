@@ -513,7 +513,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
 	if err != nil {
 		log.Warn("Invalid NewPayload params", "params", params, "error", err)
-		return api.invalid(err, nil), nil
+		return engine.PayloadStatusV1{Status: engine.INVALID}, nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadLock.Lock()
@@ -694,21 +694,20 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	}
 }
 
-// invalid returns a response "INVALID" with the latest valid hash supplied by latest.
+// invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
+// if no latestValid block was provided.
 func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.PayloadStatusV1 {
-	var currentHash *common.Hash
+	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
 	if latestValid != nil {
-		if latestValid.Difficulty.BitLen() != 0 {
-			// Set latest valid hash to 0x0 if parent is PoW block
-			currentHash = &common.Hash{}
-		} else {
+		// Set latest valid hash to 0x0 if parent is PoW block
+		currentHash = common.Hash{}
+		if latestValid.Difficulty.BitLen() == 0 {
 			// Otherwise set latest valid hash to parent hash
-			h := latestValid.Hash()
-			currentHash = &h
+			currentHash = latestValid.Hash()
 		}
 	}
 	errorMsg := err.Error()
-	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: currentHash, ValidationError: &errorMsg}
+	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
 }
 
 // heartbeat loops indefinitely, and checks if there have been beacon client updates
