@@ -57,8 +57,7 @@ func (e feedTypeError) Error() string {
 	return "event: wrong type in " + e.op + " got " + e.got.String() + ", want " + e.want.String()
 }
 
-func (f *Feed) init(etype reflect.Type) {
-	f.etype = etype
+func (f *Feed) init() {
 	f.removeSub = make(chan interface{})
 	f.sendLock = make(chan struct{}, 1)
 	f.sendLock <- struct{}{}
@@ -71,6 +70,8 @@ func (f *Feed) init(etype reflect.Type) {
 // The channel should have ample buffer space to avoid blocking other subscribers.
 // Slow subscribers are not dropped.
 func (f *Feed) Subscribe(channel interface{}) Subscription {
+	f.once.Do(f.init)
+
 	chanval := reflect.ValueOf(channel)
 	chantyp := chanval.Type()
 	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.SendDir == 0 {
@@ -78,18 +79,25 @@ func (f *Feed) Subscribe(channel interface{}) Subscription {
 	}
 	sub := &feedSub{feed: f, channel: chanval, err: make(chan error, 1)}
 
-	f.once.Do(func() { f.init(chantyp.Elem()) })
-	if f.etype != chantyp.Elem() {
-		panic(feedTypeError{op: "Subscribe", got: chantyp, want: reflect.ChanOf(reflect.SendDir, f.etype)})
-	}
-
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if !f.typecheck(chantyp.Elem()) {
+		panic(feedTypeError{op: "Subscribe", got: chantyp, want: reflect.ChanOf(reflect.SendDir, f.etype)})
+	}
 	// Add the select case to the inbox.
 	// The next Send will add it to f.sendCases.
 	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
 	f.inbox = append(f.inbox, cas)
 	return sub
+}
+
+// note: callers must hold f.mu
+func (f *Feed) typecheck(typ reflect.Type) bool {
+	if f.etype == nil {
+		f.etype = typ
+		return true
+	}
+	return f.etype == typ
 }
 
 func (f *Feed) remove(sub *feedSub) {
@@ -120,17 +128,19 @@ func (f *Feed) remove(sub *feedSub) {
 func (f *Feed) Send(value interface{}) (nsent int) {
 	rvalue := reflect.ValueOf(value)
 
-	f.once.Do(func() { f.init(rvalue.Type()) })
-	if f.etype != rvalue.Type() {
-		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
-	}
-
+	f.once.Do(f.init)
 	<-f.sendLock
 
 	// Add new cases from the inbox after taking the send lock.
 	f.mu.Lock()
 	f.sendCases = append(f.sendCases, f.inbox...)
 	f.inbox = nil
+
+	if !f.typecheck(rvalue.Type()) {
+		f.sendLock <- struct{}{}
+		f.mu.Unlock()
+		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
+	}
 	f.mu.Unlock()
 
 	// Set the sent value on all channels.
