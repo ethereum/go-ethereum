@@ -70,7 +70,7 @@ var (
 func NewType(t string, internalType string, components []ArgumentMarshaling) (typ Type, err error) {
 	// check that array brackets are equal if they exist
 	if strings.Count(t, "[") != strings.Count(t, "]") {
-		return Type{}, errors.New("invalid arg type in abi")
+		return Type{}, fmt.Errorf("invalid arg type in abi")
 	}
 	typ.stringKind = t
 
@@ -109,7 +109,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			}
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
-			return Type{}, errors.New("invalid formatting of array type")
+			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
 		return typ, err
 	}

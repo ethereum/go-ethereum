@@ -228,7 +228,7 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 		structFieldName := ToCamelCase(argName)
 
 		if structFieldName == "" {
-			return nil, errors.New("abi: purely underscored output cannot unpack to struct")
+			return nil, fmt.Errorf("abi: purely underscored output cannot unpack to struct")
 		}
 
 		// this abi has already been paired, skip it... unless there exists another, yet unassigned
