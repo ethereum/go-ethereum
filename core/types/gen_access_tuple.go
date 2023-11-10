@@ -12,8 +12,8 @@ import (
 // MarshalJSON marshals as JSON.
 func (a AccessTuple) MarshalJSON() ([]byte, error) {
 	type AccessTuple struct {
-		Address     common.Address `json:"address"     gencodec:"required"`
-		StorageKeys []common.Hash  `json:"storageKeys" gencodec:"required"`
+		Address     common.Address `json:"address"        gencodec:"required"`
+		StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
 	}
 	var enc AccessTuple
 	enc.Address = a.Address
@@ -24,8 +24,8 @@ func (a AccessTuple) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (a *AccessTuple) UnmarshalJSON(input []byte) error {
 	type AccessTuple struct {
-		Address     *common.Address `json:"address"     gencodec:"required"`
-		StorageKeys []common.Hash   `json:"storageKeys" gencodec:"required"`
+		Address     *common.Address `json:"address"        gencodec:"required"`
+		StorageKeys []common.Hash   `json:"storageKeys"    gencodec:"required"`
 	}
 	var dec AccessTuple
 	if err := json.Unmarshal(input, &dec); err != nil {
