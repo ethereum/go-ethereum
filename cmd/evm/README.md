@@ -342,7 +342,7 @@ To make `t8n` apply these, the following inputs are required:
   - For ethash, it is `5000000000000000000` `wei`,
   - If this is not defined, mining rewards are not applied,
   - A value of `0` is valid, and causes accounts to be 'touched'.
-- For each ommer, the tool needs to be given an `address\` and a `delta`. This
+- For each ommer, the tool needs to be given an `addres\` and a `delta`. This
   is done via the `ommers` field in `env`.
 
 Note: the tool does not verify that e.g. the normal uncle rules apply,
