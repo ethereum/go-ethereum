@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -157,7 +156,7 @@ func (t *odrTrie) DeleteStorage(_ common.Address, key []byte) error {
 	})
 }
 
-// DeleteAccount abstracts an account deletion from the trie.
+// TryDeleteAccount abstracts an account deletion from the trie.
 func (t *odrTrie) DeleteAccount(address common.Address) error {
 	key := crypto.Keccak256(address.Bytes())
 	return t.do(key, func() error {
@@ -165,7 +164,7 @@ func (t *odrTrie) DeleteAccount(address common.Address) error {
 	})
 }
 
-func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
+func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet) {
 	if t.trie == nil {
 		return t.id.Root, nil
 	}

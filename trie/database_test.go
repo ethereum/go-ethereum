@@ -17,19 +17,17 @@
 package trie
 
 import (
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 )
 
-// newTestDatabase initializes the trie database with specified scheme.
-func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
-	db := prepare(diskdb, nil)
-	if scheme == rawdb.HashScheme {
-		db.backend = hashdb.New(diskdb, db.cleans, mptResolver{})
+// Tests that the trie database returns a missing trie node error if attempting
+// to retrieve the meta root.
+func TestDatabaseMetarootFetch(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	if _, err := db.Node(common.Hash{}); err == nil {
+		t.Fatalf("metaroot retrieval succeeded")
 	}
-	//} else {
-	//	db.backend = snap.New(diskdb, db.cleans, nil)
-	//}
-	return db
 }

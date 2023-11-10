@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -74,23 +73,18 @@ func TestMissingRoot(t *testing.T) {
 	}
 }
 
-func TestMissingNode(t *testing.T) {
-	testMissingNode(t, false, rawdb.HashScheme)
-	//testMissingNode(t, false, rawdb.PathScheme)
-	testMissingNode(t, true, rawdb.HashScheme)
-	//testMissingNode(t, true, rawdb.PathScheme)
-}
+func TestMissingNodeDisk(t *testing.T)    { testMissingNode(t, false) }
+func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
-func testMissingNode(t *testing.T, memonly bool, scheme string) {
+func testMissingNode(t *testing.T, memonly bool) {
 	diskdb := rawdb.NewMemoryDatabase()
-	triedb := newTestDatabase(diskdb, scheme)
+	triedb := NewDatabase(diskdb)
 
 	trie := NewEmpty(triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, nodes := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
-
+	triedb.Update(NewWithNodeSet(nodes))
 	if !memonly {
 		triedb.Commit(root, false)
 	}
@@ -121,39 +115,34 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	var (
-		path []byte
-		hash = common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
-	)
-	for p, n := range nodes.Nodes {
-		if n.Hash == hash {
-			path = common.CopyBytes([]byte(p))
-			break
-		}
-	}
-	trie, _ = New(TrieID(root), triedb)
+	hash := common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
 	if memonly {
-		trie.reader.banned = map[string]struct{}{string(path): {}}
+		delete(triedb.dirties, hash)
 	} else {
-		rawdb.DeleteTrieNode(diskdb, common.Hash{}, path, hash, scheme)
+		diskdb.Delete(hash[:])
 	}
 
+	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("120000"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+	trie, _ = New(TrieID(root), triedb)
 	_, err = trie.Get([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
+	trie, _ = New(TrieID(root), triedb)
 	err = trie.Update([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
+	trie, _ = New(TrieID(root), triedb)
 	err = trie.Delete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
@@ -203,7 +192,7 @@ func TestGet(t *testing.T) {
 			return
 		}
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(NewWithNodeSet(nodes))
 		trie, _ = New(TrieID(root), db)
 	}
 }
@@ -260,8 +249,8 @@ func TestEmptyValues(t *testing.T) {
 }
 
 func TestReplication(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
-	trie := NewEmpty(db)
+	triedb := NewDatabase(rawdb.NewMemoryDatabase())
+	trie := NewEmpty(triedb)
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -274,13 +263,13 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	root, nodes := trie.Commit(false)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	exp, nodes := trie.Commit(false)
+	triedb.Update(NewWithNodeSet(nodes))
 
 	// create a new trie on top of the database and check that lookups work.
-	trie2, err := New(TrieID(root), db)
+	trie2, err := New(TrieID(exp), triedb)
 	if err != nil {
-		t.Fatalf("can't recreate trie at %x: %v", root, err)
+		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
 	for _, kv := range vals {
 		if string(getString(trie2, kv.k)) != kv.v {
@@ -288,17 +277,17 @@ func TestReplication(t *testing.T) {
 		}
 	}
 	hash, nodes := trie2.Commit(false)
-	if hash != root {
-		t.Errorf("root failure. expected %x got %x", root, hash)
+	if hash != exp {
+		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
 
 	// recreate the trie after commit
 	if nodes != nil {
-		db.Update(hash, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		triedb.Update(NewWithNodeSet(nodes))
 	}
-	trie2, err = New(TrieID(hash), db)
+	trie2, err = New(TrieID(hash), triedb)
 	if err != nil {
-		t.Fatalf("can't recreate trie at %x: %v", hash, err)
+		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
 	// perform some insertions on the new trie.
 	vals2 := []struct{ k, v string }{
@@ -315,8 +304,8 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals2 {
 		updateString(trie2, val.k, val.v)
 	}
-	if trie2.Hash() != hash {
-		t.Errorf("root failure. expected %x got %x", hash, hash)
+	if hash := trie2.Hash(); hash != exp {
+		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
 }
 
@@ -413,12 +402,12 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(steps)
 }
 
-func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
+func verifyAccessList(old *Trie, new *Trie, set *NodeSet) error {
 	deletes, inserts, updates := diffTries(old, new)
 
 	// Check insertion set
 	for path := range inserts {
-		n, ok := set.Nodes[path]
+		n, ok := set.nodes[path]
 		if !ok || n.IsDeleted() {
 			return errors.New("expect new node")
 		}
@@ -428,7 +417,7 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 	}
 	// Check deletion set
 	for path, blob := range deletes {
-		n, ok := set.Nodes[path]
+		n, ok := set.nodes[path]
 		if !ok || !n.IsDeleted() {
 			return errors.New("expect deleted node")
 		}
@@ -441,7 +430,7 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 	}
 	// Check update set
 	for path, blob := range updates {
-		n, ok := set.Nodes[path]
+		n, ok := set.nodes[path]
 		if !ok || n.IsDeleted() {
 			return errors.New("expect updated node")
 		}
@@ -456,13 +445,8 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 }
 
 func runRandTest(rt randTest) bool {
-	var scheme = rawdb.HashScheme
-	//if rand.Intn(2) == 0 {
-	//	scheme = rawdb.PathScheme
-	//}
 	var (
-		origin   = types.EmptyRootHash
-		triedb   = newTestDatabase(rawdb.NewMemoryDatabase(), scheme)
+		triedb   = NewDatabase(rawdb.NewMemoryDatabase())
 		tr       = NewEmpty(triedb)
 		values   = make(map[string]string) // tracks content of the trie
 		origTrie = NewEmpty(triedb)
@@ -503,7 +487,7 @@ func runRandTest(rt randTest) bool {
 		case opCommit:
 			root, nodes := tr.Commit(true)
 			if nodes != nil {
-				triedb.Update(root, origin, trienode.NewWithNodeSet(nodes))
+				triedb.Update(NewWithNodeSet(nodes))
 			}
 			newtr, err := New(TrieID(root), triedb)
 			if err != nil {
@@ -518,7 +502,6 @@ func runRandTest(rt randTest) bool {
 			}
 			tr = newtr
 			origTrie = tr.Copy()
-			origin = root
 		case opItercheckhash:
 			checktr := NewEmpty(triedb)
 			it := NewIterator(tr.NodeIterator(nil))
@@ -838,7 +821,7 @@ func TestCommitSequence(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -879,7 +862,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -919,7 +902,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
 		// Flush memdb -> disk (sponge)
-		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+		db.Update(NewWithNodeSet(nodes))
 		db.Commit(root, false)
 		// And flush stacktrie -> disk
 		stRoot, err := stTrie.Commit()
@@ -967,7 +950,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	// Flush trie -> database
 	root, nodes := trie.Commit(false)
 	// Flush memdb -> disk (sponge)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	db.Update(NewWithNodeSet(nodes))
 	db.Commit(root, false)
 	// And flush stacktrie -> disk
 	stRoot, err := stTrie.Commit()
@@ -1138,8 +1121,8 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
 	h := trie.Hash()
-	root, nodes := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	_, nodes := trie.Commit(false)
+	triedb.Update(NewWithNodeSet(nodes))
 	b.StartTimer()
 	triedb.Dereference(h)
 	b.StopTimer()

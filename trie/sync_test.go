@@ -25,16 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
-func makeTestTrie(scheme string) (ethdb.Database, *Database, *StateTrie, map[string][]byte) {
+func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
-	db := rawdb.NewMemoryDatabase()
-	triedb := newTestDatabase(db, scheme)
+	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie, _ := NewStateTrie(TrieID(common.Hash{}), triedb)
 
 	// Fill it with some arbitrary data
@@ -57,27 +54,23 @@ func makeTestTrie(scheme string) (ethdb.Database, *Database, *StateTrie, map[str
 		}
 	}
 	root, nodes := trie.Commit(false)
-	if err := triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
+	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
-	}
-	if err := triedb.Commit(root, false); err != nil {
-		panic(err)
 	}
 	// Re-create the trie based on the new state
 	trie, _ = NewStateTrie(TrieID(root), triedb)
-	return db, triedb, trie, content
+	return triedb, trie, content
 }
 
 // checkTrieContents cross references a reconstructed trie with an expected data
 // content map.
-func checkTrieContents(t *testing.T, db ethdb.Database, scheme string, root []byte, content map[string][]byte) {
+func checkTrieContents(t *testing.T, db *Database, root []byte, content map[string][]byte) {
 	// Check root availability and trie contents
-	ndb := newTestDatabase(db, scheme)
-	trie, err := NewStateTrie(TrieID(common.BytesToHash(root)), ndb)
+	trie, err := NewStateTrie(TrieID(common.BytesToHash(root)), db)
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
-	if err := checkTrieConsistency(db, scheme, common.BytesToHash(root)); err != nil {
+	if err := checkTrieConsistency(db, common.BytesToHash(root)); err != nil {
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	for key, val := range content {
@@ -88,9 +81,9 @@ func checkTrieContents(t *testing.T, db ethdb.Database, scheme string, root []by
 }
 
 // checkTrieConsistency checks that all nodes in a trie are indeed present.
-func checkTrieConsistency(db ethdb.Database, scheme string, root common.Hash) error {
-	ndb := newTestDatabase(db, scheme)
-	trie, err := NewStateTrie(TrieID(root), ndb)
+func checkTrieConsistency(db *Database, root common.Hash) error {
+	// Create and iterate a trie rooted in a subnode
+	trie, err := NewStateTrie(TrieID(root), db)
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
@@ -111,16 +104,11 @@ type trieElement struct {
 func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(rawdb.NewMemoryDatabase())
 	dbB := NewDatabase(rawdb.NewMemoryDatabase())
-	//dbC := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
-	//dbD := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
-
-	emptyA := NewEmpty(dbA)
+	emptyA, _ := New(TrieID(common.Hash{}), dbA)
 	emptyB, _ := New(TrieID(types.EmptyRootHash), dbB)
-	//emptyC := NewEmpty(dbC)
-	//emptyD, _ := New(TrieID(types.EmptyRootHash), dbD)
 
-	for i, trie := range []*Trie{emptyA, emptyB /*emptyC, emptyD*/} {
-		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB /*dbC, dbD*/}[i].Scheme())
+	for i, trie := range []*Trie{emptyA, emptyB} {
+		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB}[i].Scheme())
 		if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v, %v, %v", i, paths, nodes, codes)
 		}
@@ -129,23 +117,18 @@ func TestEmptySync(t *testing.T) {
 
 // Tests that given a root hash, a trie can sync iteratively on a single thread,
 // requesting retrieval tasks and returning all of them in one go.
-func TestIterativeSync(t *testing.T) {
-	testIterativeSync(t, 1, false, rawdb.HashScheme)
-	testIterativeSync(t, 100, false, rawdb.HashScheme)
-	testIterativeSync(t, 1, true, rawdb.HashScheme)
-	testIterativeSync(t, 100, true, rawdb.HashScheme)
-	// testIterativeSync(t, 1, false, rawdb.PathScheme)
-	// testIterativeSync(t, 100, false, rawdb.PathScheme)
-	// testIterativeSync(t, 1, true, rawdb.PathScheme)
-	// testIterativeSync(t, 100, true, rawdb.PathScheme)
-}
+func TestIterativeSyncIndividual(t *testing.T)       { testIterativeSync(t, 1, false) }
+func TestIterativeSyncBatched(t *testing.T)          { testIterativeSync(t, 100, false) }
+func TestIterativeSyncIndividualByPath(t *testing.T) { testIterativeSync(t, 1, true) }
+func TestIterativeSyncBatchedByPath(t *testing.T)    { testIterativeSync(t, 100, true) }
 
-func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
+func testIterativeSync(t *testing.T, count int, bypath bool) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -163,8 +146,7 @@ func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
 		results := make([]NodeSyncResult, len(elements))
 		if !bypath {
 			for i, element := range elements {
-				owner, inner := ResolvePath([]byte(element.path))
-				data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+				data, err := srcDb.Node(element.hash)
 				if err != nil {
 					t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
 				}
@@ -201,22 +183,18 @@ func testIterativeSync(t *testing.T, count int, bypath bool, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
 // Tests that the trie scheduler can correctly reconstruct the state even if only
 // partial results are returned, and the others sent only later.
 func TestIterativeDelayedSync(t *testing.T) {
-	testIterativeDelayedSync(t, rawdb.HashScheme)
-	//testIterativeDelayedSync(t, rawdb.PathScheme)
-}
-
-func testIterativeDelayedSync(t *testing.T, scheme string) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -234,8 +212,7 @@ func testIterativeDelayedSync(t *testing.T, scheme string) {
 		// Sync only half of the scheduled nodes
 		results := make([]NodeSyncResult, len(elements)/2+1)
 		for i, element := range elements[:len(results)] {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -263,25 +240,22 @@ func testIterativeDelayedSync(t *testing.T, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
 // Tests that given a root hash, a trie can sync iteratively on a single thread,
 // requesting retrieval tasks and returning all of them in one go, however in a
 // random order.
-func TestIterativeRandomSyncIndividual(t *testing.T) {
-	testIterativeRandomSync(t, 1, rawdb.HashScheme)
-	testIterativeRandomSync(t, 100, rawdb.HashScheme)
-	// testIterativeRandomSync(t, 1, rawdb.PathScheme)
-	// testIterativeRandomSync(t, 100, rawdb.PathScheme)
-}
+func TestIterativeRandomSyncIndividual(t *testing.T) { testIterativeRandomSync(t, 1) }
+func TestIterativeRandomSyncBatched(t *testing.T)    { testIterativeRandomSync(t, 100) }
 
-func testIterativeRandomSync(t *testing.T, count int, scheme string) {
+func testIterativeRandomSync(t *testing.T, count int) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -299,8 +273,7 @@ func testIterativeRandomSync(t *testing.T, count int, scheme string) {
 		// Fetch all the queued nodes in a random order
 		results := make([]NodeSyncResult, 0, len(queue))
 		for path, element := range queue {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -329,22 +302,18 @@ func testIterativeRandomSync(t *testing.T, count int, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
 // Tests that the trie scheduler can correctly reconstruct the state even if only
 // partial results are returned (Even those randomly), others sent only later.
 func TestIterativeRandomDelayedSync(t *testing.T) {
-	testIterativeRandomDelayedSync(t, rawdb.HashScheme)
-	// testIterativeRandomDelayedSync(t, rawdb.PathScheme)
-}
-
-func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -362,8 +331,7 @@ func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]NodeSyncResult, 0, len(queue)/2+1)
 		for path, element := range queue {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -397,22 +365,18 @@ func testIterativeRandomDelayedSync(t *testing.T, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
 // Tests that a trie sync will not request nodes multiple times, even if they
 // have such references.
 func TestDuplicateAvoidanceSync(t *testing.T) {
-	testDuplicateAvoidanceSync(t, rawdb.HashScheme)
-	// testDuplicateAvoidanceSync(t, rawdb.PathScheme)
-}
-
-func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -431,8 +395,7 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -465,33 +428,27 @@ func testDuplicateAvoidanceSync(t *testing.T, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 }
 
 // Tests that at any point in time during a sync, only complete sub-tries are in
 // the database.
-func TestIncompleteSyncHash(t *testing.T) {
-	testIncompleteSync(t, rawdb.HashScheme)
-	// testIncompleteSync(t, rawdb.PathScheme)
-}
-
-func testIncompleteSync(t *testing.T, scheme string) {
+func TestIncompleteSync(t *testing.T) {
 	t.Parallel()
-
 	// Create a random trie to copy
-	_, srcDb, srcTrie, _ := makeTestTrie(scheme)
+	srcDb, srcTrie, _ := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
 	// at the testing trie.
 	var (
-		addedKeys   []string
-		addedHashes []common.Hash
-		elements    []trieElement
-		root        = srcTrie.Hash()
+		added    []common.Hash
+		elements []trieElement
+		root     = srcTrie.Hash()
 	)
 	paths, nodes, _ := sched.Missing(1)
 	for i := 0; i < len(paths); i++ {
@@ -505,8 +462,7 @@ func testIncompleteSync(t *testing.T, scheme string) {
 		// Fetch a batch of trie nodes
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -527,8 +483,11 @@ func testIncompleteSync(t *testing.T, scheme string) {
 		for _, result := range results {
 			hash := crypto.Keccak256Hash(result.Data)
 			if hash != root {
-				addedKeys = append(addedKeys, result.Path)
-				addedHashes = append(addedHashes, crypto.Keccak256Hash(result.Data))
+				added = append(added, hash)
+			}
+			// Check that all known sub-tries in the synced trie are complete
+			if err := checkTrieConsistency(triedb, hash); err != nil {
+				t.Fatalf("trie inconsistent: %v", err)
 			}
 		}
 		// Fetch the next batch to retrieve
@@ -543,31 +502,25 @@ func testIncompleteSync(t *testing.T, scheme string) {
 		}
 	}
 	// Sanity check that removing any node from the database is detected
-	for i, path := range addedKeys {
-		owner, inner := ResolvePath([]byte(path))
-		nodeHash := addedHashes[i]
-		value := rawdb.ReadTrieNode(diskdb, owner, inner, nodeHash, scheme)
-		rawdb.DeleteTrieNode(diskdb, owner, inner, nodeHash, scheme)
-		if err := checkTrieConsistency(diskdb, srcDb.Scheme(), root); err == nil {
-			t.Fatalf("trie inconsistency not caught, missing: %x", path)
+	for _, hash := range added {
+		value, _ := diskdb.Get(hash.Bytes())
+		diskdb.Delete(hash.Bytes())
+		if err := checkTrieConsistency(triedb, root); err == nil {
+			t.Fatalf("trie inconsistency not caught, missing: %x", hash)
 		}
-		rawdb.WriteTrieNode(diskdb, owner, inner, nodeHash, value, scheme)
+		diskdb.Put(hash.Bytes(), value)
 	}
 }
 
 // Tests that trie nodes get scheduled lexicographically when having the same
 // depth.
 func TestSyncOrdering(t *testing.T) {
-	testSyncOrdering(t, rawdb.HashScheme)
-	// testSyncOrdering(t, rawdb.PathScheme)
-}
-
-func testSyncOrdering(t *testing.T, scheme string) {
 	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
+	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler, tracking the requests
 	diskdb := rawdb.NewMemoryDatabase()
+	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil, srcDb.Scheme())
 
 	// The code requests are ignored here since there is no code
@@ -589,8 +542,7 @@ func testSyncOrdering(t *testing.T, scheme string) {
 	for len(elements) > 0 {
 		results := make([]NodeSyncResult, len(elements))
 		for i, element := range elements {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(srcTrie.Hash()).Node(owner, inner, element.hash)
+			data, err := srcDb.Node(element.hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", element.hash, err)
 			}
@@ -619,7 +571,7 @@ func testSyncOrdering(t *testing.T, scheme string) {
 		}
 	}
 	// Cross check that the two tries are in sync
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
+	checkTrieContents(t, triedb, srcTrie.Hash().Bytes(), srcData)
 
 	// Check that the trie nodes have been requested path-ordered
 	for i := 0; i < len(reqs)-1; i++ {
@@ -632,117 +584,4 @@ func testSyncOrdering(t *testing.T, scheme string) {
 			t.Errorf("Invalid request order: %v before %v", compactToHex(reqs[i][0]), compactToHex(reqs[i+1][0]))
 		}
 	}
-}
-
-func syncWith(t *testing.T, root common.Hash, db ethdb.Database, srcDb *Database) {
-	// Create a destination trie and sync with the scheduler
-	sched := NewSync(root, db, nil, srcDb.Scheme())
-
-	// The code requests are ignored here since there is no code
-	// at the testing trie.
-	paths, nodes, _ := sched.Missing(1)
-	var elements []trieElement
-	for i := 0; i < len(paths); i++ {
-		elements = append(elements, trieElement{
-			path:     paths[i],
-			hash:     nodes[i],
-			syncPath: NewSyncPath([]byte(paths[i])),
-		})
-	}
-	for len(elements) > 0 {
-		results := make([]NodeSyncResult, len(elements))
-		for i, element := range elements {
-			owner, inner := ResolvePath([]byte(element.path))
-			data, err := srcDb.Reader(root).Node(owner, inner, element.hash)
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for hash %x: %v", element.hash, err)
-			}
-			results[i] = NodeSyncResult{element.path, data}
-		}
-		for index, result := range results {
-			if err := sched.ProcessNode(result); err != nil {
-				t.Fatalf("failed to process result[%d][%v] data %v %v", index, []byte(result.Path), result.Data, err)
-			}
-		}
-		batch := db.NewBatch()
-		if err := sched.Commit(batch); err != nil {
-			t.Fatalf("failed to commit data: %v", err)
-		}
-		batch.Write()
-
-		paths, nodes, _ = sched.Missing(1)
-		elements = elements[:0]
-		for i := 0; i < len(paths); i++ {
-			elements = append(elements, trieElement{
-				path:     paths[i],
-				hash:     nodes[i],
-				syncPath: NewSyncPath([]byte(paths[i])),
-			})
-		}
-	}
-}
-
-// Tests that the syncing target is keeping moving which may overwrite the stale
-// states synced in the last cycle.
-func TestSyncMovingTarget(t *testing.T) {
-	testSyncMovingTarget(t, rawdb.HashScheme)
-	// testSyncMovingTarget(t, rawdb.PathScheme)
-}
-
-func testSyncMovingTarget(t *testing.T, scheme string) {
-	// Create a random trie to copy
-	_, srcDb, srcTrie, srcData := makeTestTrie(scheme)
-
-	// Create a destination trie and sync with the scheduler
-	diskdb := rawdb.NewMemoryDatabase()
-	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), srcData)
-
-	// Push more modifications into the src trie, to see if dest trie can still
-	// sync with it(overwrite stale states)
-	var (
-		preRoot = srcTrie.Hash()
-		diff    = make(map[string][]byte)
-	)
-	for i := byte(0); i < 10; i++ {
-		key, val := randBytes(32), randBytes(32)
-		srcTrie.MustUpdate(key, val)
-		diff[string(key)] = val
-	}
-	root, nodes := srcTrie.Commit(false)
-	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
-		panic(err)
-	}
-	if err := srcDb.Commit(root, false); err != nil {
-		panic(err)
-	}
-	preRoot = root
-	srcTrie, _ = NewStateTrie(TrieID(root), srcDb)
-
-	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), diff)
-
-	// Revert added modifications from the src trie, to see if dest trie can still
-	// sync with it(overwrite reverted states)
-	var reverted = make(map[string][]byte)
-	for k := range diff {
-		srcTrie.MustDelete([]byte(k))
-		reverted[k] = nil
-	}
-	for k := range srcData {
-		val := randBytes(32)
-		srcTrie.MustUpdate([]byte(k), val)
-		reverted[k] = val
-	}
-	root, nodes = srcTrie.Commit(false)
-	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
-		panic(err)
-	}
-	if err := srcDb.Commit(root, false); err != nil {
-		panic(err)
-	}
-	srcTrie, _ = NewStateTrie(TrieID(root), srcDb)
-
-	syncWith(t, srcTrie.Hash(), diskdb, srcDb)
-	checkTrieContents(t, diskdb, srcDb.Scheme(), srcTrie.Hash().Bytes(), reverted)
 }

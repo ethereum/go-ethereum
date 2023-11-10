@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
@@ -96,7 +95,7 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
-	tr, _ := New(TrieID(types.EmptyRootHash), db)
+	tr, _ := New(TrieID(common.Hash{}), db)
 	return tr
 }
 
@@ -572,10 +571,10 @@ func (t *Trie) Hash() common.Hash {
 // The returned nodeset can be nil if the trie is clean (nothing to commit).
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
+func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
 	defer t.tracer.reset()
 
-	nodes := trienode.NewNodeSet(t.owner)
+	nodes := NewNodeSet(t.owner)
 	t.tracer.markDeletions(nodes)
 
 	// Trie is empty and can be classified into two types of situations:
