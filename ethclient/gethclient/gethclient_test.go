@@ -94,7 +94,10 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 
 func TestGethClient(t *testing.T) {
 	backend, _ := newTestBackend(t)
-	client := backend.Attach()
+	client, err := backend.Attach()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer backend.Close()
 	defer client.Close()
 

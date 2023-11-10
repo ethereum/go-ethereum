@@ -616,8 +616,8 @@ func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
-func (n *Node) Attach() *rpc.Client {
-	return rpc.DialInProc(n.inprocHandler)
+func (n *Node) Attach() (*rpc.Client, error) {
+	return rpc.DialInProc(n.inprocHandler), nil
 }
 
 // RPCHandler returns the in-process RPC request handler.

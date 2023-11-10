@@ -75,7 +75,10 @@ func localConsole(ctx *cli.Context) error {
 	defer stack.Close()
 
 	// Attach to the newly started node and create the JavaScript console.
-	client := stack.Attach()
+	client, err := stack.Attach()
+	if err != nil {
+		return fmt.Errorf("failed to attach to the inproc geth: %v", err)
+	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
 		DocRoot: ctx.String(utils.JSpathFlag.Name),

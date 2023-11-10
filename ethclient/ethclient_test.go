@@ -250,7 +250,7 @@ func generateTestChain() []*types.Block {
 
 func TestEthClient(t *testing.T) {
 	backend, chain := newTestBackend(t)
-	client := backend.Attach()
+	client, _ := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
