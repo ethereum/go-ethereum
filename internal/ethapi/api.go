@@ -354,20 +354,19 @@ func (s *PersonalAccountAPI) DeriveAccount(url string, path string, pin *bool) (
 }
 
 // NewAccount will create a new account and returns the address for the new account.
-func (s *PersonalAccountAPI) NewAccount(password string) (common.AddressEIP55, error) {
+func (s *PersonalAccountAPI) NewAccount(password string) (common.Address, error) {
 	ks, err := fetchKeystore(s.am)
 	if err != nil {
-		return common.AddressEIP55{}, err
+		return common.Address{}, err
 	}
 	acc, err := ks.NewAccount(password)
 	if err == nil {
-		addrEIP55 := common.AddressEIP55(acc.Address)
-		log.Info("Your new key was generated", "address", addrEIP55.String())
+		log.Info("Your new key was generated", "address", acc.Address)
 		log.Warn("Please backup your key file!", "path", acc.URL.Path)
 		log.Warn("Please remember your password!")
-		return addrEIP55, nil
+		return acc.Address, nil
 	}
-	return common.AddressEIP55{}, err
+	return common.Address{}, err
 }
 
 // fetchKeystore retrieves the encrypted keystore from the account manager.

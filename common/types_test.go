@@ -559,27 +559,3 @@ func TestHash_Format(t *testing.T) {
 		})
 	}
 }
-
-func TestAddressEIP55(t *testing.T) {
-	addr := HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
-	addrEIP55 := AddressEIP55(addr)
-
-	if addr.Hex() != addrEIP55.String() {
-		t.Fatal("AddressEIP55 should match original address hex")
-	}
-
-	blob, err := addrEIP55.MarshalJSON()
-	if err != nil {
-		t.Fatal("Failed to marshal AddressEIP55", err)
-	}
-	if strings.Trim(string(blob), "\"") != addr.Hex() {
-		t.Fatal("Address with checksum is expected")
-	}
-	var dec Address
-	if err := json.Unmarshal(blob, &dec); err != nil {
-		t.Fatal("Failed to unmarshal AddressEIP55", err)
-	}
-	if addr != dec {
-		t.Fatal("Unexpected address after unmarshal")
-	}
-}
