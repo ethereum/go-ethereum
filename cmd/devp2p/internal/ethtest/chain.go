@@ -19,7 +19,6 @@ package ethtest
 import (
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -99,7 +98,7 @@ func (c *Chain) Head() *types.Block {
 
 func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
-		return nil, errors.New("no block headers requested")
+		return nil, fmt.Errorf("no block headers requested")
 	}
 
 	headers := make([]*types.Header, req.Amount)

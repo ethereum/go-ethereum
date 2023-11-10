@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
@@ -92,7 +91,7 @@ func rlpxPing(ctx *cli.Context) error {
 	case 1:
 		var msg []p2p.DiscReason
 		if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
-			return errors.New("invalid disconnect message")
+			return fmt.Errorf("invalid disconnect message")
 		}
 		return fmt.Errorf("received disconnect message: %v", msg[0])
 	default:

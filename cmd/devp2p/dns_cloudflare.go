@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -49,7 +48,7 @@ type cloudflareClient struct {
 func newCloudflareClient(ctx *cli.Context) *cloudflareClient {
 	token := ctx.String(cloudflareTokenFlag.Name)
 	if token == "" {
-		exit(errors.New("need cloudflare API token to proceed"))
+		exit(fmt.Errorf("need cloudflare API token to proceed"))
 	}
 	api, err := cloudflare.NewWithAPIToken(token)
 	if err != nil {

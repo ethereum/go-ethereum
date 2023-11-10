@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
@@ -87,7 +86,7 @@ var (
 
 func genkey(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
-		return errors.New("need key file as argument")
+		return fmt.Errorf("need key file as argument")
 	}
 	file := ctx.Args().Get(0)
 
@@ -127,7 +126,7 @@ func keyToRecord(ctx *cli.Context) error {
 
 func makeRecord(ctx *cli.Context) (*enode.Node, error) {
 	if ctx.NArg() != 1 {
-		return nil, errors.New("need key file as argument")
+		return nil, fmt.Errorf("need key file as argument")
 	}
 
 	var (

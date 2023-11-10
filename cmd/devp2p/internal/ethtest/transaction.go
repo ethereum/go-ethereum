@@ -17,7 +17,6 @@
 package ethtest
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -40,7 +39,7 @@ func (s *Suite) sendSuccessfulTxs(t *utesting.T) error {
 	}
 	for i, tx := range tests {
 		if tx == nil {
-			return errors.New("could not find tx to send")
+			return fmt.Errorf("could not find tx to send")
 		}
 		t.Logf("Testing tx propagation %d: sending tx %v %v %v\n", i, tx.Hash().String(), tx.GasPrice(), tx.Gas())
 		// get previous tx if exists for reference in case of old tx propagation
@@ -349,7 +348,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 
 	nextTx := getNextTxFromChain(s)
 	if nextTx == nil {
-		return nil, nil, errors.New("failed to get the next transaction")
+		return nil, nil, fmt.Errorf("failed to get the next transaction")
 	}
 	gas := nextTx.Gas()
 
@@ -358,7 +357,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 	for i := 0; i < numTxs; i++ {
 		tx := generateTx(s.chain.chainConfig, nonce, gas)
 		if tx == nil {
-			return nil, nil, errors.New("failed to get the next transaction")
+			return nil, nil, fmt.Errorf("failed to get the next transaction")
 		}
 		txHashMap[tx.Hash()] = tx.Hash()
 		txs[i] = tx

@@ -17,7 +17,6 @@
 package ethtest
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -186,7 +185,7 @@ loop:
 	}
 	// make sure eth protocol version is set for negotiation
 	if c.negotiatedProtoVersion == 0 {
-		return nil, errors.New("eth protocol version must be set in Conn")
+		return nil, fmt.Errorf("eth protocol version must be set in Conn")
 	}
 	if status == nil {
 		// default status message
