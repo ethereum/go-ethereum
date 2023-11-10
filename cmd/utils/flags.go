@@ -101,8 +101,8 @@ var (
 	}
 	DBEngineFlag = &cli.StringFlag{
 		Name:     "db.engine",
-		Usage:    "Backing database implementation to use ('pebble' or 'leveldb')",
-		Value:    node.DefaultConfig.DBEngine,
+		Usage:    "Backing database implementation to use ('leveldb' or 'pebble')",
+		Value:    "leveldb",
 		Category: flags.EthCategory,
 	}
 	AncientFlag = &flags.DirectoryFlag{

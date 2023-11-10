@@ -222,17 +222,14 @@ func (d *Database) Close() error {
 	d.quitLock.Lock()
 	defer d.quitLock.Unlock()
 
-	// Allow double closing, simplifies things
-	if d.quitChan == nil {
-		return nil
+	if d.quitChan != nil {
+		errc := make(chan error)
+		d.quitChan <- errc
+		if err := <-errc; err != nil {
+			d.log.Error("Metrics collection failed", "err", err)
+		}
+		d.quitChan = nil
 	}
-	errc := make(chan error)
-	d.quitChan <- errc
-	if err := <-errc; err != nil {
-		d.log.Error("Metrics collection failed", "err", err)
-	}
-	d.quitChan = nil
-
 	return d.db.Close()
 }
 
