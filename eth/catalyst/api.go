@@ -450,7 +450,7 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("newPayloadV3 called pre-cancun"))
 	}
 
-	if params.ExcessBlobGas == nil {
+	if params.ExcessDataGas == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(fmt.Errorf("nil excessDataGas post-cancun"))
 	}
 	var hashes []common.Hash

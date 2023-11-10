@@ -137,14 +137,14 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			lo = mid
 		}
 	}
-	excessBlobGas := lo.Uint64()
+	excessDataGas := lo.Uint64()
 
 	return &types.Header{
 		Number:        blockNumber,
 		Time:          blockTime,
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
-		ExcessBlobGas: &excessBlobGas,
+		ExcessDataGas: &excessDataGas,
 	}
 }
 
@@ -523,7 +523,7 @@ func TestOpenDrops(t *testing.T) {
 	chain := &testBlockChain{
 		config:  testChainConfig,
 		basefee: uint256.NewInt(params.InitialBaseFee),
-		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		blobfee: uint256.NewInt(params.BlobTxMinDataGasprice),
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
@@ -638,7 +638,7 @@ func TestOpenIndex(t *testing.T) {
 	chain := &testBlockChain{
 		config:  testChainConfig,
 		basefee: uint256.NewInt(params.InitialBaseFee),
-		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		blobfee: uint256.NewInt(params.BlobTxMinDataGasprice),
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
