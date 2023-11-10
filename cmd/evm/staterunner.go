@@ -116,7 +116,6 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 				if err != nil {
 					// Test failed, mark as so
 					result.Pass, result.Error = false, err.Error()
-
 				}
 			})
 			results = append(results, *result)
