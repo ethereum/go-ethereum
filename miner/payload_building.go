@@ -40,7 +40,6 @@ type BuildPayloadArgs struct {
 	FeeRecipient common.Address    // The provided recipient address for collecting transaction fee
 	Random       common.Hash       // The provided randomness value
 	Withdrawals  types.Withdrawals // The provided withdrawals
-	BeaconRoot   *common.Hash      // The provided beaconRoot (Cancun)
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -52,9 +51,6 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	hasher.Write(args.Random[:])
 	hasher.Write(args.FeeRecipient[:])
 	rlp.Encode(hasher, args.Withdrawals)
-	if args.BeaconRoot != nil {
-		hasher.Write(args.BeaconRoot[:])
-	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out
@@ -186,7 +182,6 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		coinbase:    args.FeeRecipient,
 		random:      args.Random,
 		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
 	}
 	empty := w.getSealingBlock(emptyParams)
@@ -217,7 +212,6 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			coinbase:    args.FeeRecipient,
 			random:      args.Random,
 			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
 

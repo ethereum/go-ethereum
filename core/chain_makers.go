@@ -411,7 +411,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
-		header.ParentBeaconRoot = new(common.Hash)
+		header.BeaconRoot = new(common.Hash)
 	}
 	return header
 }
