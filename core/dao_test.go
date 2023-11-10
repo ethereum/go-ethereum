@@ -83,7 +83,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 		}
-		if err := bc.triedb.Commit(bc.CurrentHeader().Root, false); err != nil {
+		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, false); err != nil {
 			t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 		}
 		bc.Stop()
@@ -106,7 +106,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if _, err := bc.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 		}
-		if err := bc.triedb.Commit(bc.CurrentHeader().Root, false); err != nil {
+		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, false); err != nil {
 			t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 		}
 		bc.Stop()
@@ -131,7 +131,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import contra-fork chain for expansion: %v", err)
 	}
-	if err := bc.triedb.Commit(bc.CurrentHeader().Root, false); err != nil {
+	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, false); err != nil {
 		t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 	}
 	blocks, _ = GenerateChain(&proConf, conBc.GetBlockByHash(conBc.CurrentBlock().Hash()), ethash.NewFaker(), genDb, 1, func(i int, gen *BlockGen) {})
@@ -149,7 +149,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	if _, err := bc.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to import pro-fork chain for expansion: %v", err)
 	}
-	if err := bc.triedb.Commit(bc.CurrentHeader().Root, false); err != nil {
+	if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, false); err != nil {
 		t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 	}
 	blocks, _ = GenerateChain(&conConf, proBc.GetBlockByHash(proBc.CurrentBlock().Hash()), ethash.NewFaker(), genDb, 1, func(i int, gen *BlockGen) {})

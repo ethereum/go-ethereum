@@ -27,7 +27,7 @@ import (
 func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
 	db := prepare(diskdb, nil)
 	if scheme == rawdb.HashScheme {
-		db.backend = hashdb.New(diskdb, &hashdb.Config{}, mptResolver{})
+		db.backend = hashdb.New(diskdb, 0, mptResolver{})
 	} else {
 		db.backend = pathdb.New(diskdb, &pathdb.Config{}) // disable clean/dirty cache
 	}

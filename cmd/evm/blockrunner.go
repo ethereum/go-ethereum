@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
@@ -65,7 +64,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return err
 	}
 	for i, test := range tests {
-		if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
+		if err := test.Run(false, tracer); err != nil {
 			return fmt.Errorf("test %v: %w", i, err)
 		}
 	}

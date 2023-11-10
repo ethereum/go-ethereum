@@ -136,10 +136,10 @@ func (f *fuzzer) fuzz() int {
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
 		spongeA = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbA     = trie.NewDatabase(rawdb.NewDatabase(spongeA), nil)
+		dbA     = trie.NewDatabase(rawdb.NewDatabase(spongeA))
 		trieA   = trie.NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB), nil)
+		dbB     = trie.NewDatabase(rawdb.NewDatabase(spongeB))
 		trieB   = trie.NewStackTrie(func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(spongeB, owner, path, hash, blob, dbB.Scheme())
 		})

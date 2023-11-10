@@ -109,8 +109,8 @@ type trieElement struct {
 
 // Tests that an empty trie is not scheduled for syncing.
 func TestEmptySync(t *testing.T) {
-	dbA := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
-	dbB := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+	dbA := NewDatabase(rawdb.NewMemoryDatabase())
+	dbB := NewDatabase(rawdb.NewMemoryDatabase())
 	dbC := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
 	dbD := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
 

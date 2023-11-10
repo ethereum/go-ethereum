@@ -38,9 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -103,30 +100,16 @@ type btHeaderMarshaling struct {
 	BaseFeePerGas *math.HexOrDecimal256
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+func (t *BlockTest) Run(snapshotter bool, tracer vm.EVMLogger) error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
-	// import pre accounts & construct test genesis block & state root
-	var (
-		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{}
-	)
-	if scheme == rawdb.PathScheme {
-		tconf.PathDB = pathdb.Defaults
-	} else {
-		tconf.HashDB = hashdb.Defaults
-	}
-	// Commit genesis state
-	gspec := t.genesis(config)
-	triedb := trie.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb)
-	if err != nil {
-		return err
-	}
-	triedb.Close() // close the db to prevent memory leak
 
+	// import pre accounts & construct test genesis block & state root
+	db := rawdb.NewMemoryDatabase()
+	gspec := t.genesis(config)
+	gblock := gspec.MustCommit(db)
 	if gblock.Hash() != t.json.Genesis.Hash {
 		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
 	}
@@ -136,7 +119,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) er
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme}
+	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true

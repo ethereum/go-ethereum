@@ -108,10 +108,8 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     test.Genesis.BaseFee,
 				}
-				triedb, _, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			defer triedb.Close()
-
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
