@@ -224,7 +224,6 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 			ReadBufferSize:  wsReadBuffer,
 			WriteBufferSize: wsWriteBuffer,
 			WriteBufferPool: wsBufferPool,
-			Proxy:           http.ProxyFromEnvironment,
 		}
 	}
 
