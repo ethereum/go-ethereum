@@ -403,9 +403,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 		// subsequent state reads, explicitly disable the trie database and state
 		// syncer is responsible to address and correct any state missing.
 		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
-			if err := d.blockchain.TrieDB().Disable(); err != nil {
-				return err
-			}
+			d.blockchain.TrieDB().Reset(types.EmptyRootHash)
 		}
 		// Snap sync uses the snapshot namespace to store potentially flaky data until
 		// sync completely heals and finishes. Pause snapshot maintenance in the mean-

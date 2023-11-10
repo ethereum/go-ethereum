@@ -199,6 +199,7 @@ func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, 
 	if err != nil {
 		return nil, err
 	}
+
 	return stateDB.GetCode(contract), nil
 }
 
@@ -211,6 +212,7 @@ func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Addres
 	if err != nil {
 		return nil, err
 	}
+
 	return stateDB.GetBalance(contract), nil
 }
 
@@ -223,6 +225,7 @@ func (b *SimulatedBackend) NonceAt(ctx context.Context, contract common.Address,
 	if err != nil {
 		return 0, err
 	}
+
 	return stateDB.GetNonce(contract), nil
 }
 
@@ -235,6 +238,7 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 	if err != nil {
 		return nil, err
 	}
+
 	val := stateDB.GetState(contract, key)
 	return val[:], nil
 }
@@ -696,10 +700,8 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		}
 		block.AddTxWithChain(b.blockchain, tx)
 	})
-	stateDB, err := b.blockchain.State()
-	if err != nil {
-		return err
-	}
+	stateDB, _ := b.blockchain.State()
+
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
 	b.pendingReceipts = receipts[0]
@@ -819,12 +821,11 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
-	stateDB, err := b.blockchain.State()
-	if err != nil {
-		return err
-	}
+	stateDB, _ := b.blockchain.State()
+
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+
 	return nil
 }
 

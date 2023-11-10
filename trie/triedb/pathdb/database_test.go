@@ -439,39 +439,38 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}
 }
 
-func TestDisable(t *testing.T) {
-	tester := newTester(t)
+func TestReset(t *testing.T) {
+	var (
+		tester = newTester(t)
+		index  = tester.bottomIndex()
+	)
 	defer tester.release()
 
-	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
-	if err := tester.db.Disable(); err != nil {
-		t.Fatal("Failed to deactivate database")
+	// Reset database to unknown target, should reject it
+	if err := tester.db.Reset(testutil.RandomHash()); err == nil {
+		t.Fatal("Failed to reject invalid reset")
 	}
-	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
-		t.Fatalf("Invalid activation should be rejected")
+	// Reset database to state persisted in the disk
+	if err := tester.db.Reset(types.EmptyRootHash); err != nil {
+		t.Fatalf("Failed to reset database %v", err)
 	}
-	if err := tester.db.Enable(stored); err != nil {
-		t.Fatal("Failed to activate database")
-	}
-
 	// Ensure journal is deleted from disk
 	if blob := rawdb.ReadTrieJournal(tester.db.diskdb); len(blob) != 0 {
 		t.Fatal("Failed to clean journal")
 	}
 	// Ensure all trie histories are removed
-	n, err := tester.db.freezer.Ancients()
-	if err != nil {
-		t.Fatal("Failed to clean state history")
-	}
-	if n != 0 {
-		t.Fatal("Failed to clean state history")
+	for i := 0; i <= index; i++ {
+		_, err := readHistory(tester.db.freezer, uint64(i+1))
+		if err == nil {
+			t.Fatalf("Failed to clean state history, index %d", i+1)
+		}
 	}
 	// Verify layer tree structure, single disk layer is expected
 	if tester.db.tree.len() != 1 {
 		t.Fatalf("Extra layer kept %d", tester.db.tree.len())
 	}
-	if tester.db.tree.bottom().rootHash() != stored {
-		t.Fatalf("Root hash is not matched exp %x got %x", stored, tester.db.tree.bottom().rootHash())
+	if tester.db.tree.bottom().rootHash() != types.EmptyRootHash {
+		t.Fatalf("Root hash is not matched exp %x got %x", types.EmptyRootHash, tester.db.tree.bottom().rootHash())
 	}
 }
 
