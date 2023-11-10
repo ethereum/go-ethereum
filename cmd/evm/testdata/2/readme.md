@@ -1,1 +1,1 @@
-These files exemplify a selfdestruct to the `0`-address. 
+These files examplify a selfdestruct to the `0`-address. 
