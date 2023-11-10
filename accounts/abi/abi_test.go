@@ -1057,34 +1057,6 @@ func TestABI_EventById(t *testing.T) {
 	}
 }
 
-func TestABI_ErrorByID(t *testing.T) {
-	abi, err := JSON(strings.NewReader(`[
-		{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"MyError1","type":"error"},
-		{"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"x","type":"tuple"},{"internalType":"address","name":"y","type":"address"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"z","type":"tuple"}],"name":"MyError2","type":"error"},
-		{"inputs":[{"internalType":"uint256[]","name":"x","type":"uint256[]"}],"name":"MyError3","type":"error"}
-	]`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for name, m := range abi.Errors {
-		a := fmt.Sprintf("%v", &m)
-		var id [4]byte
-		copy(id[:], m.ID[:4])
-		m2, err := abi.ErrorByID(id)
-		if err != nil {
-			t.Fatalf("Failed to look up ABI error: %v", err)
-		}
-		b := fmt.Sprintf("%v", m2)
-		if a != b {
-			t.Errorf("Error %v (id %x) not 'findable' by id in ABI", name, id)
-		}
-	}
-	// test unsuccessful lookups
-	if _, err = abi.ErrorByID([4]byte{}); err == nil {
-		t.Error("Expected error: no error with this id")
-	}
-}
-
 // TestDoubleDuplicateMethodNames checks that if transfer0 already exists, there won't be a name
 // conflict and that the second transfer method will be renamed transfer1.
 func TestDoubleDuplicateMethodNames(t *testing.T) {

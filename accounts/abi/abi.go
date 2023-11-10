@@ -222,17 +222,6 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 	return nil, fmt.Errorf("no event with id: %#x", topic.Hex())
 }
 
-// ErrorByID looks up an error by the 4-byte id,
-// returns nil if none found.
-func (abi *ABI) ErrorByID(sigdata [4]byte) (*Error, error) {
-	for _, errABI := range abi.Errors {
-		if bytes.Equal(errABI.ID[:4], sigdata[:]) {
-			return &errABI, nil
-		}
-	}
-	return nil, fmt.Errorf("no error with id: %#x", sigdata[:])
-}
-
 // HasFallback returns an indicator whether a fallback function is included.
 func (abi *ABI) HasFallback() bool {
 	return abi.Fallback.Type == Fallback

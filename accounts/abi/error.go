@@ -78,7 +78,7 @@ func NewError(name string, inputs Arguments) Error {
 	}
 }
 
-func (e Error) String() string {
+func (e *Error) String() string {
 	return e.str
 }
 
