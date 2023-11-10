@@ -82,7 +82,7 @@ func (i *HexOrDecimal256) MarshalText() ([]byte, error) {
 // it however accepts either "0x"-prefixed (hex encoded) or non-prefixed (decimal)
 type Decimal256 big.Int
 
-// NewDecimal256 creates a new Decimal256
+// NewHexOrDecimal256 creates a new Decimal256
 func NewDecimal256(x int64) *Decimal256 {
 	b := big.NewInt(x)
 	d := Decimal256(*b)
