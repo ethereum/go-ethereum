@@ -247,6 +247,41 @@ func TestTable_findnodeByID(t *testing.T) {
 	}
 }
 
+func TestTable_ReadRandomNodesGetAll(t *testing.T) {
+	cfg := &quick.Config{
+		MaxCount: 200,
+		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
+		Values: func(args []reflect.Value, rand *rand.Rand) {
+			args[0] = reflect.ValueOf(make([]*enode.Node, rand.Intn(1000)))
+		},
+	}
+	test := func(buf []*enode.Node) bool {
+		transport := newPingRecorder()
+		tab, db := newTestTable(transport)
+		defer db.Close()
+		defer tab.close()
+		<-tab.initDone
+
+		for i := 0; i < len(buf); i++ {
+			ld := cfg.Rand.Intn(len(tab.buckets))
+			fillTable(tab, []*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
+		}
+		gotN := tab.ReadRandomNodes(buf)
+		if gotN != tab.len() {
+			t.Errorf("wrong number of nodes, got %d, want %d", gotN, tab.len())
+			return false
+		}
+		if hasDuplicates(wrapNodes(buf[:gotN])) {
+			t.Errorf("result contains duplicates")
+			return false
+		}
+		return true
+	}
+	if err := quick.Check(test, cfg); err != nil {
+		t.Error(err)
+	}
+}
+
 type closeTest struct {
 	Self   enode.ID
 	Target enode.ID
