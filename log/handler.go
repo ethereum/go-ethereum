@@ -72,38 +72,6 @@ func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &discardHandler{}
 }
 
-type funcHandler struct {
-	handler handlerFunc
-	attrs   []slog.Attr
-}
-
-type handlerFunc func(_ context.Context, r slog.Record) error
-
-// FuncHandler returns a handler which forwards all records to the provided handler function
-func FuncHandler(fn handlerFunc) slog.Handler {
-	return &funcHandler{fn, []slog.Attr{}}
-}
-
-func (h funcHandler) Handle(_ context.Context, r slog.Record) error {
-	r.AddAttrs(h.attrs...)
-	return h.handler(context.Background(), r)
-}
-
-func (h *funcHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return true
-}
-
-func (h *funcHandler) WithGroup(name string) slog.Handler {
-	panic("not implemented")
-}
-
-func (h *funcHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &funcHandler{
-		h.handler,
-		append(h.attrs, attrs...),
-	}
-}
-
 type terminalHandler struct {
 	mu       sync.Mutex
 	wr       io.Writer
