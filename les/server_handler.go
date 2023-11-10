@@ -19,6 +19,7 @@ package les
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -163,8 +164,8 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	}()
 
 	// Mark the peer as being served.
-	p.serving.Store(true)
-	defer p.serving.Store(false)
+	atomic.StoreUint32(&p.serving, 1)
+	defer atomic.StoreUint32(&p.serving, 0)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {

@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -135,7 +136,7 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		default:
 		}
-		if peer1.serving.Load() && peer2.serving.Load() {
+		if atomic.LoadUint32(&peer1.serving) == 1 && atomic.LoadUint32(&peer2.serving) == 1 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)

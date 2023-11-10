@@ -25,6 +25,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -379,7 +380,7 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		default:
 		}
-		if peer1.serving.Load() && peer2.serving.Load() {
+		if atomic.LoadUint32(&peer1.serving) == 1 && atomic.LoadUint32(&peer2.serving) == 1 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -440,7 +441,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 			return nil, nil, nil
 		default:
 		}
-		if peer.serving.Load() {
+		if atomic.LoadUint32(&peer.serving) == 1 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -504,7 +505,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 			return nil, nil, nil
 		default:
 		}
-		if peer.serving.Load() {
+		if atomic.LoadUint32(&peer.serving) == 1 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
