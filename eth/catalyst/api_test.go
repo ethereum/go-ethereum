@@ -1521,16 +1521,13 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 	}
 
 	txs = append(txs, types.NewTx(&inner))
-	sidecars := []*types.BlobTxSidecar{
-		{
-			Blobs:       make([]kzg4844.Blob, 1),
-			Commitments: make([]kzg4844.Commitment, 1),
-			Proofs:      make([]kzg4844.Proof, 1),
-		},
-	}
+
+	blobs := make([]kzg4844.Blob, 1)
+	commitments := make([]kzg4844.Commitment, 1)
+	proofs := make([]kzg4844.Proof, 1)
 
 	block := types.NewBlock(&header, txs, nil, nil, trie.NewStackTrie(nil))
-	envelope := engine.BlockToExecutableData(block, nil, sidecars)
+	envelope := engine.BlockToExecutableData(block, nil, blobs, commitments, proofs)
 	var want int
 	for _, tx := range txs {
 		want += len(tx.BlobHashes())

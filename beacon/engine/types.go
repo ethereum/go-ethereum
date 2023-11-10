@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -236,7 +237,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash)
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar) *ExecutionPayloadEnvelope {
+func BlockToExecutableData(block *types.Block, fees *big.Int, blobs []kzg4844.Blob, commitments []kzg4844.Commitment, proofs []kzg4844.Proof) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
@@ -257,19 +258,17 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		ExcessBlobGas: block.ExcessBlobGas(),
 		// TODO BeaconRoot
 	}
-	bundle := BlobsBundleV1{
+	blobsBundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
 		Proofs:      make([]hexutil.Bytes, 0),
 	}
-	for _, sidecar := range sidecars {
-		for j := range sidecar.Blobs {
-			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
-			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
-			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
-		}
+	for i := range blobs {
+		blobsBundle.Blobs = append(blobsBundle.Blobs, hexutil.Bytes(blobs[i][:]))
+		blobsBundle.Commitments = append(blobsBundle.Commitments, hexutil.Bytes(commitments[i][:]))
+		blobsBundle.Proofs = append(blobsBundle.Proofs, hexutil.Bytes(proofs[i][:]))
 	}
-	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &bundle}
+	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &blobsBundle}
 }
 
 // ExecutionPayloadBodyV1 is used in the response to GetPayloadBodiesByHashV1 and GetPayloadBodiesByRangeV1
