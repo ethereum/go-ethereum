@@ -28,9 +28,7 @@ const schema string = `
     # Strings may be either decimal or 0x-prefixed hexadecimal. Output values are all
     # 0x-prefixed hexadecimal.
     scalar BigInt
-    # Long is a 64 bit unsigned integer. Input is accepted as either a JSON number or as a string.
-    # Strings may be either decimal or 0x-prefixed hexadecimal. Output values are all
-    # 0x-prefixed hexadecimal.
+    # Long is a 64 bit unsigned integer.
     scalar Long
 
     schema {
@@ -59,7 +57,7 @@ const schema string = `
     # Log is an Ethereum event log.
     type Log {
         # Index is the index of this log in the block.
-        index: Long!
+        index: Int!
         # Account is the account which generated this log - this will always
         # be a contract account.
         account(block: Long): Account!
@@ -85,7 +83,7 @@ const schema string = `
         nonce: Long!
         # Index is the index of this transaction in the parent block. This will
         # be null if the transaction has not yet been mined.
-        index: Long
+        index: Int
         # From is the account that sent this transaction - this will always be
         # an externally owned account.
         from(block: Long): Account!
@@ -140,7 +138,7 @@ const schema string = `
         s: BigInt!
         v: BigInt!
         # Envelope transaction support
-        type: Long
+        type: Int
         accessList: [AccessTuple!]
         # Raw is the canonical encoding of the transaction.
         # For legacy transactions, it returns the RLP encoding.
@@ -185,7 +183,7 @@ const schema string = `
         transactionsRoot: Bytes32!
         # TransactionCount is the number of transactions in this block. if
         # transactions are not available for this block, this field will be null.
-        transactionCount: Long
+        transactionCount: Int
         # StateRoot is the keccak256 hash of the state trie after this block was processed.
         stateRoot: Bytes32!
         # ReceiptsRoot is the keccak256 hash of the trie of transaction receipts in this block.
@@ -216,7 +214,7 @@ const schema string = `
         totalDifficulty: BigInt!
         # OmmerCount is the number of ommers (AKA uncles) associated with this
         # block. If ommers are unavailable, this field will be null.
-        ommerCount: Long
+        ommerCount: Int
         # Ommers is a list of ommer (AKA uncle) blocks associated with this block.
         # If ommers are unavailable, this field will be null. Depending on your
         # node, the transactions, transactionAt, transactionCount, ommers,
@@ -224,7 +222,7 @@ const schema string = `
         ommers: [Block]
         # OmmerAt returns the ommer (AKA uncle) at the specified index. If ommers
         # are unavailable, or the index is out of bounds, this field will be null.
-        ommerAt(index: Long!): Block
+        ommerAt(index: Int!): Block
         # OmmerHash is the keccak256 hash of all the ommers (AKA uncles)
         # associated with this block.
         ommerHash: Bytes32!
@@ -234,7 +232,7 @@ const schema string = `
         # TransactionAt returns the transaction at the specified index. If
         # transactions are unavailable for this block, or if the index is out of
         # bounds, this field will be null.
-        transactionAt(index: Long!): Transaction
+        transactionAt(index: Int!): Transaction
         # Logs returns a filtered set of logs from this block.
         logs(filter: BlockFilterCriteria!): [Log!]!
         # Account fetches an Ethereum account at the current block's state.
@@ -319,7 +317,7 @@ const schema string = `
     # Pending represents the current pending state.
     type Pending {
       # TransactionCount is the number of transactions in the pending state.
-      transactionCount: Long!
+      transactionCount: Int!
       # Transactions is a list of transactions in the current pending state.
       transactions: [Transaction!]
       # Account fetches an Ethereum account for the pending state.
