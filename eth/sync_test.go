@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,14 +39,14 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 
 	// Create an empty handler and ensure it's in snap sync mode
 	empty := newTestHandler()
-	if !empty.handler.snapSync.Load() {
+	if atomic.LoadUint32(&empty.handler.snapSync) == 0 {
 		t.Fatalf("snap sync disabled on pristine blockchain")
 	}
 	defer empty.close()
 
 	// Create a full handler and ensure snap sync ends up disabled
 	full := newTestHandlerWithBlocks(1024)
-	if full.handler.snapSync.Load() {
+	if atomic.LoadUint32(&full.handler.snapSync) == 1 {
 		t.Fatalf("snap sync not disabled on non-empty blockchain")
 	}
 	defer full.close()
@@ -90,7 +91,7 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	if err := empty.handler.doSync(op); err != nil {
 		t.Fatal("sync failed:", err)
 	}
-	if empty.handler.snapSync.Load() {
+	if atomic.LoadUint32(&empty.handler.snapSync) == 1 {
 		t.Fatalf("snap sync not disabled after successful synchronisation")
 	}
 }
