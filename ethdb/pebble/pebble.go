@@ -535,7 +535,7 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
-	return b.b.Commit(pebble.Sync)
+	return b.b.Commit(pebble.NoSync)
 }
 
 // Reset resets the batch for reuse.
