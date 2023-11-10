@@ -18,7 +18,7 @@ func BenchmarkTimer(b *testing.B) {
 func TestGetOrRegisterTimer(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredTimer("foo", r).Update(47)
-	if tm := GetOrRegisterTimer("foo", r).Snapshot(); tm.Count() != 1 {
+	if tm := GetOrRegisterTimer("foo", r); tm.Count() != 1 {
 		t.Fatal(tm)
 	}
 }
@@ -27,7 +27,7 @@ func TestTimerExtremes(t *testing.T) {
 	tm := NewTimer()
 	tm.Update(math.MaxInt64)
 	tm.Update(0)
-	if stdDev := tm.Snapshot().StdDev(); stdDev != 4.611686018427388e+18 {
+	if stdDev := tm.StdDev(); stdDev != 4.611686018427388e+18 {
 		t.Errorf("tm.StdDev(): 4.611686018427388e+18 != %v\n", stdDev)
 	}
 }
@@ -56,7 +56,7 @@ func TestTimerFunc(t *testing.T) {
 	})
 	var (
 		drift    = time.Millisecond * 2
-		measured = time.Duration(tm.Snapshot().Max())
+		measured = time.Duration(tm.Max())
 		ceil     = actualTime + drift
 		floor    = actualTime - drift
 	)
@@ -66,7 +66,7 @@ func TestTimerFunc(t *testing.T) {
 }
 
 func TestTimerZero(t *testing.T) {
-	tm := NewTimer().Snapshot()
+	tm := NewTimer()
 	if count := tm.Count(); count != 0 {
 		t.Errorf("tm.Count(): 0 != %v\n", count)
 	}
@@ -110,5 +110,5 @@ func ExampleGetOrRegisterTimer() {
 	m := "account.create.latency"
 	t := GetOrRegisterTimer(m, nil)
 	t.Update(47)
-	fmt.Println(t.Snapshot().Max()) // Output: 47
+	fmt.Println(t.Max()) // Output: 47
 }

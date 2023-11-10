@@ -75,27 +75,27 @@ func (c *collector) Add(name string, i any) error {
 	return nil
 }
 
-func (c *collector) addCounter(name string, m metrics.CounterSnapshot) {
+func (c *collector) addCounter(name string, m metrics.Counter) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64Snapshot) {
+func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addGauge(name string, m metrics.GaugeSnapshot) {
+func (c *collector) addGauge(name string, m metrics.Gauge) {
 	c.writeGaugeCounter(name, m.Value())
 }
 
-func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64Snapshot) {
+func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64) {
 	c.writeGaugeCounter(name, m.Value())
 }
 
-func (c *collector) addGaugeInfo(name string, m metrics.GaugeInfoSnapshot) {
+func (c *collector) addGaugeInfo(name string, m metrics.GaugeInfo) {
 	c.writeGaugeInfo(name, m.Value())
 }
 
-func (c *collector) addHistogram(name string, m metrics.HistogramSnapshot) {
+func (c *collector) addHistogram(name string, m metrics.Histogram) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())
@@ -106,11 +106,11 @@ func (c *collector) addHistogram(name string, m metrics.HistogramSnapshot) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addMeter(name string, m metrics.MeterSnapshot) {
+func (c *collector) addMeter(name string, m metrics.Meter) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
+func (c *collector) addTimer(name string, m metrics.Timer) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())
@@ -121,12 +121,13 @@ func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnapshot) {
-	if m.Count() <= 0 {
+func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
+	if len(m.Values()) <= 0 {
 		return
 	}
-	ps := m.Percentiles([]float64{0.50, 0.95, 0.99})
-	c.writeSummaryCounter(name, m.Count())
+	ps := m.Percentiles([]float64{50, 95, 99})
+	val := m.Values()
+	c.writeSummaryCounter(name, len(val))
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	c.writeSummaryPercentile(name, "0.50", ps[0])
 	c.writeSummaryPercentile(name, "0.95", ps[1])
