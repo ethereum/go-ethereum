@@ -41,7 +41,7 @@ func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Bloc
 		block.SetCoinbase(common.Address{seed})
 		// Add one tx to every secondblock
 		if !empty && i%2 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
+			signer := types.MakeSigner(params.TestChainConfig, block.Number())
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)

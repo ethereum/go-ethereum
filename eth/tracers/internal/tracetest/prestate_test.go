@@ -92,7 +92,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// Configure a blockchain with the given prestate
 			var (
-				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
+				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
 				origin, _ = signer.Sender(tx)
 				txContext = vm.TxContext{
 					Origin:   origin,

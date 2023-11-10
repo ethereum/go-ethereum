@@ -85,7 +85,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
 		return fmt.Errorf("failed to parse testcase input: %v", err)
 	}
-	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
+	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
 	origin, _ := signer.Sender(tx)
 	txContext := vm.TxContext{
 		Origin:   origin,

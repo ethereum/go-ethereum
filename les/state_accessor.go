@@ -57,7 +57,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(leth.blockchain.Config(), block.Number(), block.Time())
+	signer := types.MakeSigner(leth.blockchain.Config(), block.Number())
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
