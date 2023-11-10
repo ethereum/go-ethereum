@@ -163,19 +163,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
-	// Calculate the BlobBaseFee
-	var excessBlobGas uint64
+	// If excessBlobGas is defined, add it to the vmContext.
 	if pre.Env.ExcessBlobGas != nil {
-		excessBlobGas := *pre.Env.ExcessBlobGas
-		vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+		vmContext.ExcessBlobGas = pre.Env.ExcessBlobGas
 	} else {
 		// If it is not explicitly defined, but we have the parent values, we try
 		// to calculate it ourselves.
 		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
 		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
 		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
-			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+			excessBlobGas := eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
+			vmContext.ExcessBlobGas = &excessBlobGas
 		}
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
@@ -191,7 +189,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	var blobGasUsed uint64
 	for i, tx := range txs {
-		if tx.Type() == types.BlobTxType && vmContext.BlobBaseFee == nil {
+		if tx.Type() == types.BlobTxType && vmContext.ExcessBlobGas == nil {
 			errMsg := "blob tx used but field env.ExcessBlobGas missing"
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
@@ -324,8 +322,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
 		execRs.WithdrawalsRoot = &h
 	}
-	if vmContext.BlobBaseFee != nil {
-		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
+	if vmContext.ExcessBlobGas != nil {
+		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(vmContext.ExcessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
 	// Re-create statedb instance with new root upon the updated database
