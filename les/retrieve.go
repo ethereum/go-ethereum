@@ -18,7 +18,7 @@ package les
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -110,7 +110,7 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	case <-shutdown:
-		sentReq.stop(errors.New("client is shutting down"))
+		sentReq.stop(fmt.Errorf("client is shutting down"))
 	}
 	return sentReq.getError()
 }

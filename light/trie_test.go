@@ -19,7 +19,6 @@ package light
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -79,9 +78,9 @@ func diffTries(t1, t2 state.Trie) error {
 	case i2.Err != nil:
 		return fmt.Errorf("light trie iterator error: %v", i2.Err)
 	case i1.Next():
-		return errors.New("full trie iterator has more k/v pairs")
+		return fmt.Errorf("full trie iterator has more k/v pairs")
 	case i2.Next():
-		return errors.New("light trie iterator has more k/v pairs")
+		return fmt.Errorf("light trie iterator has more k/v pairs")
 	}
 	return nil
 }
