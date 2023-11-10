@@ -71,6 +71,7 @@ func getChain() *core.BlockChain {
 		TrieDirtyLimit:      0,
 		TrieTimeLimit:       5 * time.Minute,
 		TrieCleanNoPrefetch: true,
+		TrieCleanRejournal:  0,
 		SnapshotLimit:       100,
 		SnapshotWait:        true,
 	}
