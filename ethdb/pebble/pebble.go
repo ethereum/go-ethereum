@@ -379,12 +379,9 @@ func upperBound(prefix []byte) (limit []byte) {
 	return limit
 }
 
-// Stat returns the internal metrics of Pebble in a text format. It's a developer
-// method to read everything there is to read independent of Pebble version.
-//
-// The property is unused in Pebble as there's only one thing to retrieve.
+// Stat returns a particular internal stat of the database.
 func (d *Database) Stat(property string) (string, error) {
-	return d.db.Metrics().String(), nil
+	return "", nil
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
