@@ -23,10 +23,10 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/exp/slog"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-colorable"
+	"golang.org/x/exp/slog"
 )
 
 func TestEncryption(t *testing.T) {

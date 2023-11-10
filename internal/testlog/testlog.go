@@ -18,154 +18,24 @@
 package testlog
 
 import (
-	"context"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/exp/slog"
 )
 
-// logger implements log.Logger such that all output goes to the unit test log via
-// t.Logf(). All methods in between logger.Trace, logger.Debug, etc. are marked as test
-// helpers, so the file and line number in unit test output correspond to the call site
-// which emitted the log message.
-type logger struct {
-	t  *testing.T
-	l  log.Logger
-	mu *sync.Mutex
-	h  *bufHandler
+type relay struct {
+	t *testing.T
 }
 
-type bufHandler struct {
-	buf   []slog.Record
-	attrs []slog.Attr
-	level slog.Level
-}
-
-func (h *bufHandler) Handle(_ context.Context, r slog.Record) error {
-	h.buf = append(h.buf, r)
-	return nil
-}
-
-func (h *bufHandler) Enabled(_ context.Context, lvl slog.Level) bool {
-	return lvl <= h.level
-}
-
-// TODO: does testlogger make use of attrs?
-func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	records := make([]slog.Record, len(h.buf))
-	copy(records[:], h.buf[:])
-	return &bufHandler{
-		records,
-		append(h.attrs, attrs...),
-		h.level,
-	}
-}
-
-func (h *bufHandler) WithGroup(_ string) slog.Handler {
-	panic("not implemented")
+func (r *relay) Write(p []byte) (n int, err error) {
+	r.t.Logf(string(p))
+	return len(p), nil
 }
 
 // Logger returns a logger which logs to the unit test log of t.
 func Logger(t *testing.T, level slog.Level) log.Logger {
-	handler := bufHandler{
-		[]slog.Record{},
-		[]slog.Attr{},
-		level,
-	}
-	return &logger{
-		t:  t,
-		l:  log.NewLogger(&handler),
-		mu: new(sync.Mutex),
-		h:  &handler,
-	}
-}
-
-// LoggerWithHandler returns
-func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
-	var bh bufHandler
-	return &logger{
-		t:  t,
-		l:  log.NewLogger(handler),
-		mu: new(sync.Mutex),
-		h:  &bh,
-	}
-}
-
-func (l *logger) Handler() slog.Handler {
-	return l.l.Handler()
-}
-
-func (l *logger) Trace(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Trace(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Log(level slog.Level, msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Log(level, msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Debug(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Debug(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Info(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Info(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Warn(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Warn(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Error(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Error(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) Crit(msg string, ctx ...interface{}) {
-	l.t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.l.Crit(msg, ctx...)
-	l.flush()
-}
-
-func (l *logger) With(ctx ...interface{}) log.Logger {
-	return &logger{l.t, l.l.With(ctx...), l.mu, l.h}
-}
-
-func (l *logger) New(ctx ...interface{}) log.Logger {
-	return l.With(ctx...)
-}
-
-// flush writes all buffered messages and clears the buffer.
-func (l *logger) flush() {
-	l.t.Helper()
-	for _, r := range l.h.buf {
-		l.t.Logf("%s", log.TerminalFormat(r, false))
-	}
-	l.h.buf = nil
+	r := relay{t}
+	handler := log.TerminalHandlerWithLevel(&r, level, false)
+	return log.NewLogger(handler)
 }

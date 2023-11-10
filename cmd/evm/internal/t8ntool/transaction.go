@@ -24,7 +24,6 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/exp/slog"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -34,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/exp/slog"
 )
 
 type result struct {

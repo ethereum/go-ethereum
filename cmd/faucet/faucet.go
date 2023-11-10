@@ -39,7 +39,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slog"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -59,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/gorilla/websocket"
+	"golang.org/x/exp/slog"
 )
 
 var (

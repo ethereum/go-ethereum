@@ -110,6 +110,9 @@ type terminalHandler struct {
 	lvl      slog.Level
 	useColor bool
 	attrs    []slog.Attr
+	// fieldPadding is a map with maximum field value lengths seen until now
+	// to allow padding log contexts in a bit smarter way.
+	fieldPadding map[string]int
 }
 
 // TerminalHandler returns a handler which formats log records at all levels optimized for human readability on
@@ -134,13 +137,14 @@ func TerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) slog.
 		lvl,
 		useColor,
 		[]slog.Attr{},
+		make(map[string]int),
 	}
 }
 
 func (h *terminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.wr.Write(TerminalFormat(r, h.attrs, h.useColor))
+	h.wr.Write(h.TerminalFormat(r, h.useColor))
 	return nil
 }
 
@@ -159,6 +163,7 @@ func (h *terminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		h.lvl,
 		h.useColor,
 		append(h.attrs, attrs...),
+		make(map[string]int),
 	}
 }
 

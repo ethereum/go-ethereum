@@ -18,7 +18,6 @@ package discover
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
@@ -31,8 +30,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
@@ -560,14 +557,7 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 
 	// Prefix logs with node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
-	cfg.Log = testlog.LoggerWithHandler(t, log.FuncHandler(func(_ context.Context, r slog.Record) error {
-		if r.Level <= log.LevelTrace {
-			return nil
-		}
-
-		t.Logf("%s %s", lprefix, log.TerminalFormat(r, false))
-		return nil
-	}))
+	cfg.Log = testlog.Logger(t, log.LevelTrace).With("node-id", lprefix)
 
 	// Listen.
 	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})
