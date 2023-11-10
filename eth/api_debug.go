@@ -204,16 +204,11 @@ type storageEntry struct {
 }
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
-func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
-	var block *types.Block
-
-	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if err != nil {
-		return StorageRangeResult{}, err
-	}
-
+func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+	// Retrieve the block
+	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
-		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
+		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
 	_, _, statedb, release, err := api.eth.stateAtTransaction(ctx, block, txIndex, 0)
 	if err != nil {
