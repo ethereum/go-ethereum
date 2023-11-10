@@ -230,9 +230,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	if origin == nil && !diskMore {
 		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
-			if err := stackTr.Update(key, vals[i]); err != nil {
-				return nil, err
-			}
+			stackTr.Update(key, vals[i])
 		}
 		if gotRoot := stackTr.Hash(); gotRoot != root {
 			return &proofResult{
