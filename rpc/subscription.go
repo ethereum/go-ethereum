@@ -32,17 +32,8 @@ import (
 )
 
 var (
-	// ErrNotificationsUnsupported is returned by the client when the connection doesn't
-	// support notifications. You can use this error value to check for subscription
-	// support like this:
-	//
-	//	sub, err := client.EthSubscribe(ctx, channel, "newHeads", true)
-	//	if errors.Is(err, rpc.ErrNotificationsUnsupported) {
-	//		// Server does not support subscriptions, fall back to polling.
-	//	}
-	//
-	ErrNotificationsUnsupported = notificationsUnsupportedError{}
-
+	// ErrNotificationsUnsupported is returned when the connection doesn't support notifications
+	ErrNotificationsUnsupported = errors.New("notifications not supported")
 	// ErrSubscriptionNotFound is returned when the notification for the given id is not found
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
