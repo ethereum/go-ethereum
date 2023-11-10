@@ -192,7 +192,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		// First reset and write 100 items.
-		if _, err := f.TruncateHead(0); err != nil {
+		if err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -227,7 +227,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			_, truncateErr = f.TruncateHead(10)
+			truncateErr = f.TruncateHead(10)
 			wg.Done()
 		}()
 		go func() {

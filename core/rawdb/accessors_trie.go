@@ -46,23 +46,21 @@ const HashScheme = "hashScheme"
 // on extra state diffs to survive deep reorg.
 const PathScheme = "pathScheme"
 
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
+// nodeHasher used to derive the hash of trie node.
+type nodeHasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() interface{} { return &nodeHasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
 }
 
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
+func newNodeHasher() *nodeHasher       { return hasherPool.Get().(*nodeHasher) }
+func returnHasherToPool(h *nodeHasher) { hasherPool.Put(h) }
 
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
+func (h *nodeHasher) hashData(data []byte) (n common.Hash) {
+	h.sha.Reset()
+	h.sha.Write(data)
+	h.sha.Read(n[:])
+	return n
 }
 
 // ReadAccountTrieNode retrieves the account trie node and the associated node
@@ -72,9 +70,9 @@ func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) ([]byte, common.H
 	if err != nil {
 		return nil, common.Hash{}
 	}
-	h := newHasher()
-	defer h.release()
-	return data, h.hash(data)
+	hasher := newNodeHasher()
+	defer returnHasherToPool(hasher)
+	return data, hasher.hashData(data)
 }
 
 // HasAccountTrieNode checks the account trie node presence with the specified
@@ -84,9 +82,9 @@ func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) 
 	if err != nil {
 		return false
 	}
-	h := newHasher()
-	defer h.release()
-	return h.hash(data) == hash
+	hasher := newNodeHasher()
+	defer returnHasherToPool(hasher)
+	return hasher.hashData(data) == hash
 }
 
 // WriteAccountTrieNode writes the provided account trie node into database.
@@ -110,9 +108,9 @@ func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path 
 	if err != nil {
 		return nil, common.Hash{}
 	}
-	h := newHasher()
-	defer h.release()
-	return data, h.hash(data)
+	hasher := newNodeHasher()
+	defer returnHasherToPool(hasher)
+	return data, hasher.hashData(data)
 }
 
 // HasStorageTrieNode checks the storage trie node presence with the provided
@@ -122,9 +120,9 @@ func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path [
 	if err != nil {
 		return false
 	}
-	h := newHasher()
-	defer h.release()
-	return h.hash(data) == hash
+	hasher := newNodeHasher()
+	defer returnHasherToPool(hasher)
+	return hasher.hashData(data) == hash
 }
 
 // WriteStorageTrieNode writes the provided storage trie node into database.

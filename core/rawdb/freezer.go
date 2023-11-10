@@ -275,46 +275,43 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 }
 
 // TruncateHead discards any recent data above the provided threshold number.
-// It returns the previous head number.
-func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
+func (f *Freezer) TruncateHead(items uint64) error {
 	if f.readonly {
-		return 0, errReadOnly
+		return errReadOnly
 	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	oitems := f.frozen.Load()
-	if oitems <= items {
-		return oitems, nil
+	if f.frozen.Load() <= items {
+		return nil
 	}
 	for _, table := range f.tables {
 		if err := table.truncateHead(items); err != nil {
-			return 0, err
+			return err
 		}
 	}
 	f.frozen.Store(items)
-	return oitems, nil
+	return nil
 }
 
 // TruncateTail discards any recent data below the provided threshold number.
-func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
+func (f *Freezer) TruncateTail(tail uint64) error {
 	if f.readonly {
-		return 0, errReadOnly
+		return errReadOnly
 	}
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()
 
-	old := f.tail.Load()
-	if old >= tail {
-		return old, nil
+	if f.tail.Load() >= tail {
+		return nil
 	}
 	for _, table := range f.tables {
 		if err := table.truncateTail(tail); err != nil {
-			return 0, err
+			return err
 		}
 	}
 	f.tail.Store(tail)
-	return old, nil
+	return nil
 }
 
 // Sync flushes all data tables to disk.

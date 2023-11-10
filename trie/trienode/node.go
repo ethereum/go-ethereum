@@ -25,8 +25,8 @@ import (
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
-// node hash. It is general enough that can be used to represent trie node
-// corresponding to different trie implementations.
+// unique hash identifier. It is general enough that can be used to represent
+// trie nodes corresponding to different trie implementations.
 type Node struct {
 	Hash common.Hash // Node hash, empty for deleted node
 	Blob []byte      // Encoded node blob, nil for the deleted node
@@ -42,13 +42,35 @@ func (n *Node) IsDeleted() bool {
 	return n.Hash == (common.Hash{})
 }
 
+// WithPrev wraps the Node with the previous node value attached.
+type WithPrev struct {
+	*Node
+	Prev []byte // Encoded original value, nil means it's non-existent
+}
+
+// Unwrap returns the internal Node object.
+func (n *WithPrev) Unwrap() *Node {
+	return n.Node
+}
+
+// Size returns the total memory size used by this node. It overloads
+// the function in Node by counting the size of previous value as well.
+func (n *WithPrev) Size() int {
+	return n.Node.Size() + len(n.Prev)
+}
+
 // New constructs a node with provided node information.
 func New(hash common.Hash, blob []byte) *Node {
 	return &Node{Hash: hash, Blob: blob}
 }
 
-// NewDeleted constructs a node which is deleted.
-func NewDeleted() *Node { return New(common.Hash{}, nil) }
+// NewWithPrev constructs a node with provided node information.
+func NewWithPrev(hash common.Hash, blob []byte, prev []byte) *WithPrev {
+	return &WithPrev{
+		Node: New(hash, blob),
+		Prev: prev,
+	}
+}
 
 // leaf represents a trie leaf node
 type leaf struct {
@@ -61,7 +83,7 @@ type leaf struct {
 type NodeSet struct {
 	Owner   common.Hash
 	Leaves  []*leaf
-	Nodes   map[string]*Node
+	Nodes   map[string]*WithPrev
 	updates int // the count of updated and inserted nodes
 	deletes int // the count of deleted nodes
 }
@@ -71,7 +93,7 @@ type NodeSet struct {
 func NewNodeSet(owner common.Hash) *NodeSet {
 	return &NodeSet{
 		Owner: owner,
-		Nodes: make(map[string]*Node),
+		Nodes: make(map[string]*WithPrev),
 	}
 }
 
@@ -82,17 +104,17 @@ func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
 	for path := range set.Nodes {
 		paths = append(paths, path)
 	}
-	// Bottom-up, the longest path first
+	// Bottom-up, longest path first
 	slices.SortFunc(paths, func(a, b string) bool {
 		return a > b // Sort in reverse order
 	})
 	for _, path := range paths {
-		callback(path, set.Nodes[path])
+		callback(path, set.Nodes[path].Unwrap())
 	}
 }
 
 // AddNode adds the provided node into set.
-func (set *NodeSet) AddNode(path []byte, n *Node) {
+func (set *NodeSet) AddNode(path []byte, n *WithPrev) {
 	if n.IsDeleted() {
 		set.deletes += 1
 	} else {
@@ -102,7 +124,7 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 }
 
 // Merge adds a set of nodes into the set.
-func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
+func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*WithPrev) error {
 	if set.Owner != owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, owner)
 	}
@@ -150,11 +172,16 @@ func (set *NodeSet) Summary() string {
 		for path, n := range set.Nodes {
 			// Deletion
 			if n.IsDeleted() {
-				fmt.Fprintf(out, "  [-]: %x\n", path)
+				fmt.Fprintf(out, "  [-]: %x prev: %x\n", path, n.Prev)
 				continue
 			}
-			// Insertion or update
-			fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
+			// Insertion
+			if len(n.Prev) == 0 {
+				fmt.Fprintf(out, "  [+]: %x -> %v\n", path, n.Hash)
+				continue
+			}
+			// Update
+			fmt.Fprintf(out, "  [*]: %x -> %v prev: %x\n", path, n.Hash, n.Prev)
 		}
 	}
 	for _, n := range set.Leaves {
@@ -189,13 +216,4 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	}
 	set.Sets[other.Owner] = other
 	return nil
-}
-
-// Flatten returns a two-dimensional map for internal nodes.
-func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
-	for owner, set := range set.Sets {
-		nodes[owner] = set.Nodes
-	}
-	return nodes
 }

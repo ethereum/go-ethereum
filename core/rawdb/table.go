@@ -97,13 +97,13 @@ func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err e
 
 // TruncateHead is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) TruncateHead(items uint64) (uint64, error) {
+func (t *table) TruncateHead(items uint64) error {
 	return t.db.TruncateHead(items)
 }
 
 // TruncateTail is a noop passthrough that just forwards the request to the underlying
 // database.
-func (t *table) TruncateTail(items uint64) (uint64, error) {
+func (t *table) TruncateTail(items uint64) error {
 	return t.db.TruncateTail(items)
 }
 
