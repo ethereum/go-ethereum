@@ -399,17 +399,17 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 
 func TestOverrideAccountMarshal(t *testing.T) {
 	om := map[common.Address]OverrideAccount{
-		{0x11}: {
+		common.Address{0x11}: OverrideAccount{
 			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
-		{0xaa}: {
+		common.Address{0xaa}: OverrideAccount{
 			Nonce: 5,
 		},
-		{0xbb}: {
+		common.Address{0xbb}: OverrideAccount{
 			Code: []byte{1},
 		},
-		{0xcc}: {
+		common.Address{0xcc}: OverrideAccount{
 			// 'code', 'balance', 'state' should be set when input is
 			// a non-nil but empty value.
 			Code:    []byte{},
