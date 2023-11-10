@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -217,6 +216,7 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
+
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %v not found", blockNrOrHash)
 	}
@@ -226,20 +226,18 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	}
 	defer release()
 
-	return storageRangeAt(statedb, block.Root(), contractAddress, keyStart, maxResult)
-}
-
-func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
-	storageRoot := statedb.GetStorageRoot(address)
-	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
-		return StorageRangeResult{}, nil // empty storage
-	}
-	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
+	st, err := statedb.StorageTrie(contractAddress)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
-	trieIt, err := tr.NodeIterator(start)
+	if st == nil {
+		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
+	}
+	return storageRangeAt(st, keyStart, maxResult)
+}
+
+func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
+	trieIt, err := st.NodeIterator(start)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
@@ -251,7 +249,7 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 			return StorageRangeResult{}, err
 		}
 		e := storageEntry{Value: common.BytesToHash(content)}
-		if preimage := tr.GetKey(it.Key); preimage != nil {
+		if preimage := st.GetKey(it.Key); preimage != nil {
 			preimage := common.BytesToHash(preimage)
 			e.Key = &preimage
 		}
