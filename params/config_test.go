@@ -121,7 +121,6 @@ func TestCheckCompatible(t *testing.T) {
 
 func TestConfigRules(t *testing.T) {
 	c := &ChainConfig{
-		LondonBlock:  new(big.Int),
 		ShanghaiTime: newUint64(500),
 	}
 	var stamp uint64

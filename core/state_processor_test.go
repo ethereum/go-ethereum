@@ -403,7 +403,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	if config.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
 	}
-	if config.IsShanghai(header.Number, header.Time) {
+	if config.IsShanghai(header.Time) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
 	var receipts []*types.Receipt
@@ -423,7 +423,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
-	if config.IsShanghai(header.Number, header.Time) {
+	if config.IsShanghai(header.Time) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
 	}
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
