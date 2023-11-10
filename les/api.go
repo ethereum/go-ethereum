@@ -21,12 +21,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-var errUnknownBenchmarkType = errors.New("unknown benchmark type")
+var (
+	errNoCheckpoint         = errors.New("no local checkpoint provided")
+	errNotActivated         = errors.New("checkpoint registrar is not activated")
+	errUnknownBenchmarkType = errors.New("unknown benchmark type")
+)
 
 // LightServerAPI provides an API to access the LES light server.
 type LightServerAPI struct {
@@ -346,4 +351,58 @@ func (api *DebugAPI) FreezeClient(node string) error {
 	} else {
 		return fmt.Errorf("client %064x is not connected", id[:])
 	}
+}
+
+// LightAPI provides an API to access the LES light server or light client.
+type LightAPI struct {
+	backend *lesCommons
+}
+
+// NewLightAPI creates a new LES service API.
+func NewLightAPI(backend *lesCommons) *LightAPI {
+	return &LightAPI{backend: backend}
+}
+
+// LatestCheckpoint returns the latest local checkpoint package.
+//
+// The checkpoint package consists of 4 strings:
+//
+//	result[0], hex encoded latest section index
+//	result[1], 32 bytes hex encoded latest section head hash
+//	result[2], 32 bytes hex encoded latest section canonical hash trie root hash
+//	result[3], 32 bytes hex encoded latest section bloom trie root hash
+func (api *LightAPI) LatestCheckpoint() ([4]string, error) {
+	var res [4]string
+	cp := api.backend.latestLocalCheckpoint()
+	if cp.Empty() {
+		return res, errNoCheckpoint
+	}
+	res[0] = hexutil.EncodeUint64(cp.SectionIndex)
+	res[1], res[2], res[3] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
+	return res, nil
+}
+
+// GetCheckpoint returns the specific local checkpoint package.
+//
+// The checkpoint package consists of 3 strings:
+//
+//	result[0], 32 bytes hex encoded latest section head hash
+//	result[1], 32 bytes hex encoded latest section canonical hash trie root hash
+//	result[2], 32 bytes hex encoded latest section bloom trie root hash
+func (api *LightAPI) GetCheckpoint(index uint64) ([3]string, error) {
+	var res [3]string
+	cp := api.backend.localCheckpoint(index)
+	if cp.Empty() {
+		return res, errNoCheckpoint
+	}
+	res[0], res[1], res[2] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
+	return res, nil
+}
+
+// GetCheckpointContractAddress returns the contract contract address in hex format.
+func (api *LightAPI) GetCheckpointContractAddress() (string, error) {
+	if api.backend.oracle == nil {
+		return "", errNotActivated
+	}
+	return api.backend.oracle.Contract().ContractAddr().Hex(), nil
 }
