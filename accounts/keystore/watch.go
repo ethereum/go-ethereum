@@ -20,7 +20,6 @@
 package keystore
 
 import (
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -78,9 +77,7 @@ func (w *watcher) loop() {
 	}
 	defer watcher.Close()
 	if err := watcher.Add(w.ac.keydir); err != nil {
-		if !os.IsNotExist(err) {
-			logger.Warn("Failed to watch keystore folder", "err", err)
-		}
+		logger.Warn("Failed to watch keystore folder", "err", err)
 		return
 	}
 
