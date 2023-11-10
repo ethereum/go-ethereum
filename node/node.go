@@ -101,11 +101,10 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-	server := rpc.NewServer()
-	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
+
 	node := &Node{
 		config:        conf,
-		inprocHandler: server,
+		inprocHandler: rpc.NewServer(),
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
@@ -404,11 +403,6 @@ func (n *Node) startRPC() error {
 		openAPIs, allAPIs = n.getAPIs()
 	)
 
-	rpcConfig := rpcEndpointConfig{
-		batchItemLimit:         n.config.BatchRequestLimit,
-		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
-	}
-
 	initHttp := func(server *httpServer, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
@@ -418,7 +412,6 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-			rpcEndpointConfig:  rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -432,10 +425,9 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		if err := server.enableWS(openAPIs, wsConfig{
-			Modules:           n.config.WSModules,
-			Origins:           n.config.WSOrigins,
-			prefix:            n.config.WSPathPrefix,
-			rpcEndpointConfig: rpcConfig,
+			Modules: n.config.WSModules,
+			Origins: n.config.WSOrigins,
+			prefix:  n.config.WSPathPrefix,
 		}); err != nil {
 			return err
 		}
@@ -449,29 +441,26 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		sharedConfig := rpcConfig
-		sharedConfig.jwtSecret = secret
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
-			rpcEndpointConfig:  sharedConfig,
+			jwtSecret:          secret,
 		}); err != nil {
 			return err
 		}
 		servers = append(servers, server)
-
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(allAPIs, wsConfig{
-			Modules:           DefaultAuthModules,
-			Origins:           DefaultAuthOrigins,
-			prefix:            DefaultAuthPrefix,
-			rpcEndpointConfig: sharedConfig,
+			Modules:   DefaultAuthModules,
+			Origins:   DefaultAuthOrigins,
+			prefix:    DefaultAuthPrefix,
+			jwtSecret: secret,
 		}); err != nil {
 			return err
 		}
