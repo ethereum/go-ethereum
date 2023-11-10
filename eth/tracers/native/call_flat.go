@@ -129,9 +129,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 		}
 	}
 
-	// Create inner call tracer with default configuration, don't forward
-	// the OnlyTopCall or WithLog to inner for now
-	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, nil)
+	tracer, err := tracers.DefaultDirectory.New("callTracer", ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
