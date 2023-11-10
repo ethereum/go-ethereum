@@ -18,7 +18,6 @@ package txpool
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -37,32 +36,6 @@ type Transaction struct {
 	BlobTxProofs  []kzg4844.Proof      // Proofs needed by the blob pool
 }
 
-// LazyTransaction contains a small subset of the transaction properties that is
-// enough for the miner and other APIs to handle large batches of transactions;
-// and supports pulling up the entire transaction when really needed.
-type LazyTransaction struct {
-	Pool SubPool      // Transaction subpool to pull the real transaction up
-	Hash common.Hash  // Transaction hash to pull up if needed
-	Tx   *Transaction // Transaction if already resolved
-
-	Time      time.Time // Time when the transaction was first seen
-	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
-	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
-}
-
-// Resolve retrieves the full transaction belonging to a lazy handle if it is still
-// maintained by the transaction pool.
-func (ltx *LazyTransaction) Resolve() *Transaction {
-	if ltx.Tx == nil {
-		ltx.Tx = ltx.Pool.Get(ltx.Hash)
-	}
-	return ltx.Tx
-}
-
-// AddressReserver is passed by the main transaction pool to subpools, so they
-// may request (and relinquish) exclusive access to certain addresses.
-type AddressReserver func(addr common.Address, reserve bool) error
-
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
 // blob pool). Since independent of how many specialized pools we have, they do
 // need to be updated in lockstep and assemble into one coherent view for block
@@ -80,7 +53,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip *big.Int, head *types.Header, reserve AddressReserver) error
+	Init(gasTip *big.Int, head *types.Header) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.
@@ -108,7 +81,7 @@ type SubPool interface {
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.
-	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
+	Pending(enforceTips bool) map[common.Address][]*types.Transaction
 
 	// SubscribeTransactions subscribes to new transaction events.
 	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
