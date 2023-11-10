@@ -146,7 +146,9 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 			if _, exist := middleStateRoots[common.BytesToHash(checkKey)]; exist {
 				log.Debug("Forcibly delete the middle state roots", "hash", common.BytesToHash(checkKey))
 			} else {
-				if stateBloom.Contain(checkKey) {
+				if ok, err := stateBloom.Contain(checkKey); err != nil {
+					return err
+				} else if ok {
 					continue
 				}
 			}
