@@ -79,7 +79,7 @@ type Client struct {
 	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
 
-	idCounter atomic.Uint32
+	idCounter uint32
 
 	// This function, if non-nil, is called when the connection is lost.
 	reconnectFunc reconnectFunc
@@ -263,7 +263,7 @@ func (c *Client) RegisterName(name string, receiver interface{}) error {
 }
 
 func (c *Client) nextID() json.RawMessage {
-	id := c.idCounter.Add(1)
+	id := atomic.AddUint32(&c.idCounter, 1)
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
