@@ -31,10 +31,14 @@ func testNode(i int) *enode.Node {
 }
 
 func TestQueueIteratorFIFO(t *testing.T) {
+	t.Parallel()
+
 	testQueueIterator(t, true)
 }
 
 func TestQueueIteratorLIFO(t *testing.T) {
+	t.Parallel()
+
 	testQueueIterator(t, false)
 }
 

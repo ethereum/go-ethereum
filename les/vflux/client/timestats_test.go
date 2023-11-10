@@ -26,6 +26,8 @@ import (
 )
 
 func TestTransition(t *testing.T) {
+	t.Parallel()
+
 	var epsilon = 0.01
 	var cases = []time.Duration{
 		time.Millisecond, minResponseTime,
@@ -47,6 +49,8 @@ func TestTransition(t *testing.T) {
 var maxResponseWeights = TimeoutWeights(maxResponseTime)
 
 func TestValue(t *testing.T) {
+	t.Parallel()
+
 	noexp := utils.ExpirationFactor{Factor: 1}
 	for i := 0; i < 1000; i++ {
 		max := minResponseTime + time.Duration(rand.Int63n(int64(maxResponseTime-minResponseTime)))
@@ -70,6 +74,8 @@ func TestValue(t *testing.T) {
 }
 
 func TestAddSubExpire(t *testing.T) {
+	t.Parallel()
+
 	var (
 		sum1, sum2                 ResponseTimeStats
 		sum1ValueExp, sum2ValueExp float64
@@ -110,6 +116,8 @@ func TestAddSubExpire(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
+	t.Parallel()
+
 	testTimeoutRange(t, 0, time.Second)
 	testTimeoutRange(t, time.Second, time.Second*2)
 	testTimeoutRange(t, time.Second, maxResponseTime)

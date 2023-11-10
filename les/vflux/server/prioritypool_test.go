@@ -48,6 +48,8 @@ func (c *ppTestClient) estimatePriority(cap uint64, addBalance int64, future, bi
 }
 
 func TestPriorityPool(t *testing.T) {
+	t.Parallel()
+
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()
 	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))
@@ -160,6 +162,8 @@ func TestPriorityPool(t *testing.T) {
 }
 
 func TestCapacityCurve(t *testing.T) {
+	t.Parallel()
+
 	clock := &mclock.Simulated{}
 	setup := newServerSetup()
 	setup.balanceField = setup.setup.NewField("ppTestClient", reflect.TypeOf(&ppTestClient{}))

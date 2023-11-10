@@ -36,6 +36,8 @@ func checkF64(t *testing.T, name string, value, exp, tol float64) {
 }
 
 func TestServerBasket(t *testing.T) {
+	t.Parallel()
+
 	var s serverBasket
 	s.init(2)
 	// add some requests with different request value factors
@@ -70,6 +72,8 @@ func TestServerBasket(t *testing.T) {
 }
 
 func TestConvertMapping(t *testing.T) {
+	t.Parallel()
+
 	b := requestBasket{items: []basketItem{{3, 3}, {1, 1}, {2, 2}}}
 	oldMap := []string{"req3", "req1", "req2"}
 	newMap := []string{"req1", "req2", "req3", "req4"}
@@ -82,6 +86,8 @@ func TestConvertMapping(t *testing.T) {
 }
 
 func TestReqValueFactor(t *testing.T) {
+	t.Parallel()
+
 	var ref referenceBasket
 	ref.basket = requestBasket{items: make([]basketItem, 4)}
 	for i := range ref.basket.items {
@@ -95,6 +101,8 @@ func TestReqValueFactor(t *testing.T) {
 }
 
 func TestNormalize(t *testing.T) {
+	t.Parallel()
+
 	for cycle := 0; cycle < 100; cycle += 1 {
 		// Initialize data for testing
 		valueRange, lower := 1000000, 1000000
@@ -119,6 +127,8 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestReqValueAdjustment(t *testing.T) {
+	t.Parallel()
+
 	var s1, s2 serverBasket
 	s1.init(3)
 	s2.init(3)

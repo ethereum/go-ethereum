@@ -326,9 +326,21 @@ func (s *ServerPoolTest) checkNodes(t *testing.T, nodes []int) {
 	}
 }
 
-func TestServerPool(t *testing.T)               { testServerPool(t, false, false) }
-func TestServerPoolWithPreNeg(t *testing.T)     { testServerPool(t, true, false) }
-func TestServerPoolWithPreNegFail(t *testing.T) { testServerPool(t, true, true) }
+func TestServerPool(t *testing.T) {
+	t.Parallel()
+
+	testServerPool(t, false, false)
+}
+func TestServerPoolWithPreNeg(t *testing.T) {
+	t.Parallel()
+
+	testServerPool(t, true, false)
+}
+func TestServerPoolWithPreNegFail(t *testing.T) {
+	t.Parallel()
+
+	testServerPool(t, true, true)
+}
 func testServerPool(t *testing.T, preNeg, fail bool) {
 	s := newServerPoolTest(preNeg, fail)
 	nodes := s.setNodes(100, 200, 200, true, false)
@@ -339,8 +351,16 @@ func testServerPool(t *testing.T, preNeg, fail bool) {
 	s.checkNodes(t, nodes)
 }
 
-func TestServerPoolChangedNodes(t *testing.T)           { testServerPoolChangedNodes(t, false) }
-func TestServerPoolChangedNodesWithPreNeg(t *testing.T) { testServerPoolChangedNodes(t, true) }
+func TestServerPoolChangedNodes(t *testing.T) {
+	t.Parallel()
+
+	testServerPoolChangedNodes(t, false)
+}
+func TestServerPoolChangedNodesWithPreNeg(t *testing.T) {
+	t.Parallel()
+
+	testServerPoolChangedNodes(t, true)
+}
 func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
 	s := newServerPoolTest(preNeg, false)
 	nodes := s.setNodes(100, 200, 200, true, false)
@@ -358,8 +378,14 @@ func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
 	s.stop()
 }
 
-func TestServerPoolRestartNoDiscovery(t *testing.T) { testServerPoolRestartNoDiscovery(t, false) }
+func TestServerPoolRestartNoDiscovery(t *testing.T) {
+	t.Parallel()
+
+	testServerPoolRestartNoDiscovery(t, false)
+}
 func TestServerPoolRestartNoDiscoveryWithPreNeg(t *testing.T) {
+	t.Parallel()
+
 	testServerPoolRestartNoDiscovery(t, true)
 }
 func testServerPoolRestartNoDiscovery(t *testing.T, preNeg bool) {
@@ -377,8 +403,14 @@ func testServerPoolRestartNoDiscovery(t *testing.T, preNeg bool) {
 	s.checkNodes(t, nodes)
 }
 
-func TestServerPoolTrustedNoDiscovery(t *testing.T) { testServerPoolTrustedNoDiscovery(t, false) }
+func TestServerPoolTrustedNoDiscovery(t *testing.T) {
+	t.Parallel()
+
+	testServerPoolTrustedNoDiscovery(t, false)
+}
 func TestServerPoolTrustedNoDiscoveryWithPreNeg(t *testing.T) {
+	t.Parallel()
+
 	testServerPoolTrustedNoDiscovery(t, true)
 }
 func testServerPoolTrustedNoDiscovery(t *testing.T, preNeg bool) {

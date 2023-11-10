@@ -32,6 +32,8 @@ func expval(v uint64) utils.ExpiredValue {
 }
 
 func TestNodeDB(t *testing.T) {
+	t.Parallel()
+
 	ndb := newNodeDB(rawdb.NewMemoryDatabase(), mclock.System{})
 	defer ndb.close()
 
@@ -85,6 +87,8 @@ func TestNodeDB(t *testing.T) {
 }
 
 func TestNodeDBExpiration(t *testing.T) {
+	t.Parallel()
+
 	var (
 		iterated int
 		done     = make(chan struct{}, 1)
