@@ -584,7 +584,7 @@ func makeLargeTestTrie() (*Database, *StateTrie, *loggingDb) {
 	// Create an empty trie
 	logDb := &loggingDb{0, memorydb.New()}
 	triedb := NewDatabase(rawdb.NewDatabase(logDb))
-	trie, _ := NewStateTrie(TrieID(types.EmptyRootHash), triedb)
+	trie, _ := NewStateTrie(TrieID(common.Hash{}), triedb)
 
 	// Fill it with some arbitrary data
 	for i := 0; i < 10000; i++ {
