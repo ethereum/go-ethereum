@@ -87,11 +87,11 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 		go c.runIterator(doneCh, it)
 	}
 	var (
-		added   atomic.Uint64
-		updated atomic.Uint64
-		skipped atomic.Uint64
-		recent  atomic.Uint64
-		removed atomic.Uint64
+		added   uint64
+		updated uint64
+		skipped uint64
+		recent  uint64
+		removed uint64
 		wg      sync.WaitGroup
 	)
 	wg.Add(nthreads)
@@ -103,15 +103,15 @@ func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
 				case n := <-c.ch:
 					switch c.updateNode(n) {
 					case nodeSkipIncompat:
-						skipped.Add(1)
+						atomic.AddUint64(&skipped, 1)
 					case nodeSkipRecent:
-						recent.Add(1)
+						atomic.AddUint64(&recent, 1)
 					case nodeRemoved:
-						removed.Add(1)
+						atomic.AddUint64(&removed, 1)
 					case nodeAdded:
-						added.Add(1)
+						atomic.AddUint64(&added, 1)
 					default:
-						updated.Add(1)
+						atomic.AddUint64(&updated, 1)
 					}
 				case <-c.closed:
 					return
@@ -138,11 +138,11 @@ loop:
 			break loop
 		case <-statusTicker.C:
 			log.Info("Crawling in progress",
-				"added", added.Load(),
-				"updated", updated.Load(),
-				"removed", removed.Load(),
-				"ignored(recent)", recent.Load(),
-				"ignored(incompatible)", skipped.Load())
+				"added", atomic.LoadUint64(&added),
+				"updated", atomic.LoadUint64(&updated),
+				"removed", atomic.LoadUint64(&removed),
+				"ignored(recent)", atomic.LoadUint64(&recent),
+				"ignored(incompatible)", atomic.LoadUint64(&skipped))
 		}
 	}
 
