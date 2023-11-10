@@ -3,9 +3,8 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"sort"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 // Write sorts writes each metric in the given registry periodically to the
@@ -19,12 +18,12 @@ func Write(r Registry, d time.Duration, w io.Writer) {
 // WriteOnce sorts and writes metrics in the given registry to the given
 // io.Writer.
 func WriteOnce(r Registry, w io.Writer) {
-	var namedMetrics []namedMetric
+	var namedMetrics namedMetricSlice
 	r.Each(func(name string, i interface{}) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
 
-	slices.SortFunc(namedMetrics, namedMetric.less)
+	sort.Sort(namedMetrics)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
@@ -92,6 +91,13 @@ type namedMetric struct {
 	m    interface{}
 }
 
-func (m namedMetric) less(other namedMetric) bool {
-	return m.name < other.name
+// namedMetricSlice is a slice of namedMetrics that implements sort.Interface.
+type namedMetricSlice []namedMetric
+
+func (nms namedMetricSlice) Len() int { return len(nms) }
+
+func (nms namedMetricSlice) Swap(i, j int) { nms[i], nms[j] = nms[j], nms[i] }
+
+func (nms namedMetricSlice) Less(i, j int) bool {
+	return nms[i].name < nms[j].name
 }

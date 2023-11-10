@@ -2,10 +2,9 @@ package metrics
 
 import (
 	"math"
+	"sort"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 // Initial slice capacity for the values stored in a ResettingTimer
@@ -187,7 +186,7 @@ func (t *ResettingTimerSnapshot) Mean() float64 {
 }
 
 func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
-	slices.Sort(t.values)
+	sort.Sort(Int64Slice(t.values))
 
 	count := len(t.values)
 	if count > 0 {
@@ -233,3 +232,10 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 
 	t.calculated = true
 }
+
+// Int64Slice attaches the methods of sort.Interface to []int64, sorting in increasing order.
+type Int64Slice []int64
+
+func (s Int64Slice) Len() int           { return len(s) }
+func (s Int64Slice) Less(i, j int) bool { return s[i] < s[j] }
+func (s Int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

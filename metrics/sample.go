@@ -3,10 +3,9 @@ package metrics
 import (
 	"math"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 const rescaleThreshold = time.Hour
@@ -283,17 +282,17 @@ func SampleMin(values []int64) int64 {
 }
 
 // SamplePercentiles returns an arbitrary percentile of the slice of int64.
-func SamplePercentile(values []int64, p float64) float64 {
+func SamplePercentile(values int64Slice, p float64) float64 {
 	return SamplePercentiles(values, []float64{p})[0]
 }
 
 // SamplePercentiles returns a slice of arbitrary percentiles of the slice of
 // int64.
-func SamplePercentiles(values []int64, ps []float64) []float64 {
+func SamplePercentiles(values int64Slice, ps []float64) []float64 {
 	scores := make([]float64, len(ps))
 	size := len(values)
 	if size > 0 {
-		slices.Sort(values)
+		sort.Sort(values)
 		for i, p := range ps {
 			pos := p * float64(size+1)
 			if pos < 1.0 {
@@ -634,3 +633,9 @@ func (h *expDecaySampleHeap) down(i, n int) {
 		i = j
 	}
 }
+
+type int64Slice []int64
+
+func (p int64Slice) Len() int           { return len(p) }
+func (p int64Slice) Less(i, j int) bool { return p[i] < p[j] }
+func (p int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }

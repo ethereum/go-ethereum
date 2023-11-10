@@ -1,20 +1,19 @@
 package metrics
 
 import (
+	"sort"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 func TestMetricsSorting(t *testing.T) {
-	var namedMetrics = []namedMetric{
+	var namedMetrics = namedMetricSlice{
 		{name: "zzz"},
 		{name: "bbb"},
 		{name: "fff"},
 		{name: "ggg"},
 	}
 
-	slices.SortFunc(namedMetrics, namedMetric.less)
+	sort.Sort(namedMetrics)
 	for i, name := range []string{"bbb", "fff", "ggg", "zzz"} {
 		if namedMetrics[i].name != name {
 			t.Fail()
