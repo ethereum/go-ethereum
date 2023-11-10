@@ -21,14 +21,11 @@ package secp256k1
 #  define USE_SCALAR_8X32
 #endif
 
-#ifndef NDEBUG
-#  define NDEBUG
-#endif
-
 #define USE_ENDOMORPHISM
 #define USE_NUM_NONE
 #define USE_FIELD_INV_BUILTIN
 #define USE_SCALAR_INV_BUILTIN
+#define NDEBUG
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
 #include "ext.h"
