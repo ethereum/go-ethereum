@@ -165,10 +165,7 @@ func runRandTest(rt randTest) error {
 		case opHash:
 			tr.Hash()
 		case opCommit:
-			hash, nodes, err := tr.Commit(false)
-			if err != nil {
-				return err
-			}
+			hash, nodes := tr.Commit(false)
 			if nodes != nil {
 				if err := triedb.Update(hash, origin, trienode.NewWithNodeSet(nodes)); err != nil {
 					return err
