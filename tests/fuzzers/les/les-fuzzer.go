@@ -45,9 +45,9 @@ var (
 	testChainLen     = 256
 	testContractCode = common.Hex2Bytes("606060405260cc8060106000396000f360606040526000357c01000000000000000000000000000000000000000000000000000000009004806360cd2685146041578063c16431b914606b57603f565b005b6055600480803590602001909190505060a9565b6040518082815260200191505060405180910390f35b60886004808035906020019091908035906020019091905050608a565b005b80600060005083606481101560025790900160005b50819055505b5050565b6000600060005082606481101560025790900160005b5054905060c7565b91905056")
 
-	chain     *core.BlockChain
-	addresses []common.Address
-	txHashes  []common.Hash
+	chain      *core.BlockChain
+	addrHashes []common.Hash
+	txHashes   []common.Hash
 
 	chtTrie   *trie.Trie
 	bloomTrie *trie.Trie
@@ -55,7 +55,7 @@ var (
 	bloomKeys [][]byte
 )
 
-func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []common.Hash) {
+func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 	gspec := &core.Genesis{
 		Config:   params.TestChainConfig,
 		Alloc:    core.GenesisAlloc{bankAddr: {Balance: bankFunds}},
@@ -77,7 +77,7 @@ func makechain() (bc *core.BlockChain, addresses []common.Address, txHashes []co
 				tx, _ = types.SignTx(types.NewTransaction(nonce, addr, big.NewInt(10000), params.TxGas, big.NewInt(params.GWei), nil), signer, bankKey)
 			}
 			gen.AddTx(tx)
-			addresses = append(addresses, addr)
+			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
 			txHashes = append(txHashes, tx.Hash())
 		})
 	bc, _ = core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
@@ -107,7 +107,7 @@ func makeTries() (chtTrie *trie.Trie, bloomTrie *trie.Trie, chtKeys, bloomKeys [
 }
 
 func init() {
-	chain, addresses, txHashes = makechain()
+	chain, addrHashes, txHashes = makechain()
 	chtTrie, bloomTrie, chtKeys, bloomKeys = makeTries()
 }
 
@@ -116,8 +116,7 @@ type fuzzer struct {
 	pool  *txpool.TxPool
 
 	chainLen  int
-	addresses []common.Address
-	txs       []common.Hash
+	addr, txs []common.Hash
 	nonce     uint64
 
 	chtKeys   [][]byte
@@ -136,7 +135,7 @@ func newFuzzer(input []byte) *fuzzer {
 	return &fuzzer{
 		chain:     chain,
 		chainLen:  testChainLen,
-		addresses: addresses,
+		addr:      addrHashes,
 		txs:       txHashes,
 		chtTrie:   chtTrie,
 		bloomTrie: bloomTrie,
@@ -199,12 +198,12 @@ func (f *fuzzer) randomBlockHash() common.Hash {
 	return common.BytesToHash(f.read(common.HashLength))
 }
 
-func (f *fuzzer) randomAddress() []byte {
-	i := f.randomInt(3 * len(f.addresses))
-	if i < len(f.addresses) {
-		return f.addresses[i].Bytes()
+func (f *fuzzer) randomAddrHash() []byte {
+	i := f.randomInt(3 * len(f.addr))
+	if i < len(f.addr) {
+		return f.addr[i].Bytes()
 	}
-	return f.read(common.AddressLength)
+	return f.read(common.HashLength)
 }
 
 func (f *fuzzer) randomCHTTrieKey() []byte {
@@ -316,8 +315,8 @@ func Fuzz(input []byte) int {
 			req := &l.GetCodePacket{Reqs: make([]l.CodeReq, f.randomInt(l.MaxCodeFetch+1))}
 			for i := range req.Reqs {
 				req.Reqs[i] = l.CodeReq{
-					BHash:          f.randomBlockHash(),
-					AccountAddress: f.randomAddress(),
+					BHash:  f.randomBlockHash(),
+					AccKey: f.randomAddrHash(),
 				}
 			}
 			f.doFuzz(l.GetCodeMsg, req)
@@ -334,15 +333,15 @@ func Fuzz(input []byte) int {
 			for i := range req.Reqs {
 				if f.randomBool() {
 					req.Reqs[i] = l.ProofReq{
-						BHash:          f.randomBlockHash(),
-						AccountAddress: f.randomAddress(),
-						Key:            f.randomAddress(),
-						FromLevel:      uint(f.randomX(3)),
+						BHash:     f.randomBlockHash(),
+						AccKey:    f.randomAddrHash(),
+						Key:       f.randomAddrHash(),
+						FromLevel: uint(f.randomX(3)),
 					}
 				} else {
 					req.Reqs[i] = l.ProofReq{
 						BHash:     f.randomBlockHash(),
-						Key:       f.randomAddress(),
+						Key:       f.randomAddrHash(),
 						FromLevel: uint(f.randomX(3)),
 					}
 				}
