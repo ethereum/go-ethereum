@@ -74,6 +74,30 @@ func TestCreation(t *testing.T) {
 				{30000000, 2000000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}},          // Future Shanghai block
 			},
 		},
+		// Rinkeby test cases
+		{
+			params.RinkebyChainConfig,
+			params.RinkebyGenesisHash,
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0x3b8e0691), Next: 1}},             // Unsynced, last Frontier block
+				{1, 0, ID{Hash: checksumToBytes(0x60949295), Next: 2}},             // First and last Homestead block
+				{2, 0, ID{Hash: checksumToBytes(0x8bde40dd), Next: 3}},             // First and last Tangerine block
+				{3, 0, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}},       // First Spurious block
+				{1035300, 0, ID{Hash: checksumToBytes(0xcb3a64bb), Next: 1035301}}, // Last Spurious block
+				{1035301, 0, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // First Byzantium block
+				{3660662, 0, ID{Hash: checksumToBytes(0x8d748b57), Next: 3660663}}, // Last Byzantium block
+				{3660663, 0, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // First Constantinople block
+				{4321233, 0, ID{Hash: checksumToBytes(0xe49cab14), Next: 4321234}}, // Last Constantinople block
+				{4321234, 0, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // First Petersburg block
+				{5435344, 0, ID{Hash: checksumToBytes(0xafec6b27), Next: 5435345}}, // Last Petersburg block
+				{5435345, 0, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // First Istanbul block
+				{8290927, 0, ID{Hash: checksumToBytes(0xcbdb8838), Next: 8290928}}, // Last Istanbul block
+				{8290928, 0, ID{Hash: checksumToBytes(0x6910c8bd), Next: 8897988}}, // First Berlin block
+				{8897987, 0, ID{Hash: checksumToBytes(0x6910c8bd), Next: 8897988}}, // Last Berlin block
+				{8897988, 0, ID{Hash: checksumToBytes(0x8E29F2F3), Next: 0}},       // First London block
+				{10000000, 0, ID{Hash: checksumToBytes(0x8E29F2F3), Next: 0}},      // Future London block
+			},
+		},
 		// Goerli test cases
 		{
 			params.GoerliChainConfig,

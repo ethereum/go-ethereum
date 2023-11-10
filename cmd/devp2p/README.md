@@ -44,7 +44,7 @@ set to standard output. The following filters are supported:
 - `-limit <N>` limits the output set to N entries, taking the top N nodes by score
 - `-ip <CIDR>` filters nodes by IP subnet
 - `-min-age <duration>` filters nodes by 'first seen' time
-- `-eth-network <mainnet/goerli/sepolia>` filters nodes by "eth" ENR entry
+- `-eth-network <mainnet/rinkeby/goerli/sepolia>` filters nodes by "eth" ENR entry
 - `-les-server` filters nodes by LES server support
 - `-snap` filters nodes by snap protocol support
 

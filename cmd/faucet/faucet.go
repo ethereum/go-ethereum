@@ -86,6 +86,7 @@ var (
 	twitterTokenV1Flag = flag.String("twitter.token.v1", "", "Bearer token to authenticate with the v1.1 Twitter API")
 
 	goerliFlag  = flag.Bool("goerli", false, "Initializes the faucet with Görli network config")
+	rinkebyFlag = flag.Bool("rinkeby", false, "Initializes the faucet with Rinkeby network config")
 	sepoliaFlag = flag.Bool("sepolia", false, "Initializes the faucet with Sepolia network config")
 )
 
@@ -139,7 +140,7 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *sepoliaFlag)
+	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *rinkebyFlag, *sepoliaFlag)
 	if err != nil {
 		log.Crit("Failed to parse genesis config", "err", err)
 	}
@@ -879,7 +880,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 }
 
 // getGenesis returns a genesis based on input args
-func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool) (*core.Genesis, error) {
+func getGenesis(genesisFlag string, goerliFlag bool, rinkebyFlag bool, sepoliaFlag bool) (*core.Genesis, error) {
 	switch {
 	case genesisFlag != "":
 		var genesis core.Genesis
@@ -887,6 +888,8 @@ func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool) (*core.Ge
 		return &genesis, err
 	case goerliFlag:
 		return core.DefaultGoerliGenesisBlock(), nil
+	case rinkebyFlag:
+		return core.DefaultRinkebyGenesisBlock(), nil
 	case sepoliaFlag:
 		return core.DefaultSepoliaGenesisBlock(), nil
 	default:
