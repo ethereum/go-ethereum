@@ -214,8 +214,19 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	return results[0].Interface(), nil
 }
 
+// Is t context.Context or *context.Context?
+func isContextType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t == contextType
+}
+
 // Does t satisfy the error interface?
 func isErrorType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
 	return t.Implements(errorType)
 }
 
@@ -234,7 +245,7 @@ func isPubSub(methodType reflect.Type) bool {
 	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
 		return false
 	}
-	return methodType.In(1) == contextType &&
+	return isContextType(methodType.In(1)) &&
 		isSubscriptionType(methodType.Out(0)) &&
 		isErrorType(methodType.Out(1))
 }
