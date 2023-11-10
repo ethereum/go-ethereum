@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"golang.org/x/exp/slices"
 )
 
 const jsonIndent = "    "
@@ -77,8 +77,8 @@ func (ns nodeSet) nodes() []*enode.Node {
 		result = append(result, n.N)
 	}
 	// Sort by ID.
-	slices.SortFunc(result, func(a, b *enode.Node) bool {
-		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
+	sort.Slice(result, func(i, j int) bool {
+		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
 	})
 	return result
 }
@@ -103,8 +103,8 @@ func (ns nodeSet) topN(n int) nodeSet {
 	for _, v := range ns {
 		byscore = append(byscore, v)
 	}
-	slices.SortFunc(byscore, func(a, b nodeJSON) bool {
-		return a.Score >= b.Score
+	sort.Slice(byscore, func(i, j int) bool {
+		return byscore[i].Score >= byscore[j].Score
 	})
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {
