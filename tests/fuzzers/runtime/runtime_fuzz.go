@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rlp
+package runtime
 
-import "testing"
+import (
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
+)
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
+// Fuzz is the basic entry point for the go-fuzz tool
+//
+// This returns 1 for valid parse:able/runnable code, 0
+// for invalid opcode.
+func Fuzz(input []byte) int {
+	_, _, err := runtime.Execute(input, input, &runtime.Config{
+		GasLimit: 12000000,
 	})
+	// invalid opcode
+	if err != nil && len(err.Error()) > 6 && err.Error()[:7] == "invalid" {
+		return 0
+	}
+	return 1
 }

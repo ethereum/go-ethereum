@@ -14,11 +14,37 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// build +gofuzz
+
 package secp256k1
 
-import "testing"
+import (
+	"fmt"
 
-func TestFuzzer(t *testing.T) {
-	test := "00000000N0000000/R00000000000000000U0000S0000000mkhP000000000000000U"
-	Fuzz([]byte(test))
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	fuzz "github.com/google/gofuzz"
+)
+
+func Fuzz(input []byte) int {
+	var (
+		fuzzer = fuzz.NewFromGoFuzz(input)
+		curveA = secp256k1.S256()
+		curveB = btcec.S256()
+		dataP1 []byte
+		dataP2 []byte
+	)
+	// first point
+	fuzzer.Fuzz(&dataP1)
+	x1, y1 := curveB.ScalarBaseMult(dataP1)
+	// second point
+	fuzzer.Fuzz(&dataP2)
+	x2, y2 := curveB.ScalarBaseMult(dataP2)
+	resAX, resAY := curveA.Add(x1, y1, x2, y2)
+	resBX, resBY := curveB.Add(x1, y1, x2, y2)
+	if resAX.Cmp(resBX) != 0 || resAY.Cmp(resBY) != 0 {
+		fmt.Printf("%s %s %s %s\n", x1, y1, x2, y2)
+		panic(fmt.Sprintf("Addition failed: geth: %s %s btcd: %s %s", resAX, resAY, resBX, resBY))
+	}
+	return 0
 }

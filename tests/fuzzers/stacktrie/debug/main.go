@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package keystore
+package main
 
-import "testing"
+import (
+	"fmt"
+	"os"
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
-	})
+	"github.com/ethereum/go-ethereum/tests/fuzzers/stacktrie"
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: debug <file>")
+		os.Exit(1)
+	}
+	crasher := os.Args[1]
+	data, err := os.ReadFile(crasher)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
+		os.Exit(1)
+	}
+	stacktrie.Debug(data)
 }

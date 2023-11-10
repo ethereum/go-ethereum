@@ -1,5 +1,5 @@
-#!/bin/bash -eu
-# Copyright 2022 Google LLC
+#/bin/bash -eu
+# Copyright 2020 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,17 @@
 # limitations under the License.
 #
 ################################################################################
+
+# This file is for integration with Google OSS-Fuzz.
+# The following ENV variables are available when executing on OSS-fuzz:
+#
+# /out/         $OUT    Directory to store build artifacts (fuzz targets, dictionaries, options files, seed corpus archives).
+# /src/         $SRC    Directory to checkout source files.
+# /work/        $WORK   Directory to store intermediate files.
+#
+# $CC, $CXX, $CCC       The C and C++ compiler binaries.
+# $CFLAGS, $CXXFLAGS    C and C++ compiler flags.
+# $LIB_FUZZING_ENGINE   C++ compiler argument to link fuzz target against the prebuilt engine library (e.g. libFuzzer).
 
 # This sets the -coverpgk for the coverage report when the corpus is executed through go test
 coverpkg="github.com/ethereum/go-ethereum/..."
@@ -48,38 +59,25 @@ DOG
   cd -
 }
 
-function build_native_go_fuzzer() {
-	fuzzer=$1
-	function=$2
-	path=$3
-	tags="-tags gofuzz"
+function compile_fuzzer {
+  # Inputs:
+  # $1: The package to fuzz, within go-ethereum
+  # $2: The name of the fuzzing function
+  # $3: The name to give to the final fuzzing-binary
 
-	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
-	else
-		go-118-fuzz-build $tags -o $fuzzer.a -func $function $path
-		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
-	fi
-}
-
-function compile_fuzzer() {
   path=$GOPATH/src/github.com/ethereum/go-ethereum/$1
-  function=$2
+  func=$2
   fuzzer=$3
 
   echo "Building $fuzzer"
-  cd $path
 
-  # Install build dependencies
-  go install github.com/AdamKorcz/go-118-fuzz-build@latest
-  go get github.com/AdamKorcz/go-118-fuzz-build/testing
-
-  # Test if file contains a line with "func $function(" and "testing.F".
-  if [ $(grep -r "func $function(" $path | grep "testing.F" | wc -l) -eq 1 ]
-  then
-    build_native_go_fuzzer $fuzzer $function $path
+  # Do a coverage-build or a regular build
+  if [[ $SANITIZER = *coverage* ]]; then
+    coverbuild $path $func $fuzzer $coverpkg
   else
-    echo "Could not find the function: func ${function}(f *testing.F)"
+    (cd $path && \
+        go-fuzz -func $func -o $WORK/$fuzzer.a . && \
+        $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $WORK/$fuzzer.a -o $OUT/$fuzzer)
   fi
 
   ## Check if there exists a seed corpus file
@@ -89,11 +87,9 @@ function compile_fuzzer() {
     cp $corpusfile $OUT/
     echo "Found seed corpus: $corpusfile"
   fi
-  cd -
 }
 
-compile_fuzzer tests/fuzzers/bitutil  FuzzEncoder      fuzzBitutilEncoder
-compile_fuzzer tests/fuzzers/bitutil  FuzzDecoder      fuzzBitutilDecoder
+compile_fuzzer tests/fuzzers/bitutil  Fuzz      fuzzBitutilCompress
 compile_fuzzer tests/fuzzers/bn256    FuzzAdd   fuzzBn256Add
 compile_fuzzer tests/fuzzers/bn256    FuzzMul   fuzzBn256Mul
 compile_fuzzer tests/fuzzers/bn256    FuzzPair  fuzzBn256Pair
