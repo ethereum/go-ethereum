@@ -53,10 +53,31 @@ func (g *GoToolchain) Go(command string, args ...string) *exec.Cmd {
 	} else if os.Getenv("CC") != "" {
 		tool.Env = append(tool.Env, "CC="+os.Getenv("CC"))
 	}
-	// CKZG by default is not portable, append the necessary build flags to make
-	// it not rely on modern CPU instructions and enable linking against
-	tool.Env = append(tool.Env, "CGO_CFLAGS=-D__BLST_PORTABLE__")
+	return tool
+}
 
+// Install creates an invocation of 'go install'. The command is configured to output
+// executables to the given 'gobin' directory.
+//
+// This can be used to install auxiliary build tools without modifying the local go.mod and
+// go.sum files. To install tools which are not required by go.mod, ensure that all module
+// paths in 'args' contain a module version suffix (e.g. "...@latest").
+func (g *GoToolchain) Install(gobin string, args ...string) *exec.Cmd {
+	if !filepath.IsAbs(gobin) {
+		panic("GOBIN must be an absolute path")
+	}
+	tool := g.goTool("install")
+	tool.Env = append(tool.Env, "GOBIN="+gobin)
+	tool.Args = append(tool.Args, "-mod=readonly")
+	tool.Args = append(tool.Args, args...)
+
+	// Ensure GOPATH is set because go install seems to absolutely require it. This uses
+	// 'go env' because it resolves the default value when GOPATH is not set in the
+	// environment. Ignore errors running go env and leave any complaining about GOPATH to
+	// the install command.
+	pathTool := g.goTool("env", "GOPATH")
+	output, _ := pathTool.Output()
+	tool.Env = append(tool.Env, "GOPATH="+string(output))
 	return tool
 }
 

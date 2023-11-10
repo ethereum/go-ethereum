@@ -207,9 +207,9 @@ func doInstall(cmdline []string) {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
-	// Disable CLI markdown doc generation in release builds and enable linking
-	// the CKZG library since we can make it portable here.
-	buildTags := []string{"urfave_cli_no_docs", "ckzg"}
+
+	// Disable CLI markdown doc generation in release builds.
+	buildTags := []string{"urfave_cli_no_docs"}
 
 	// Configure the build.
 	env := build.Env()
@@ -221,6 +221,7 @@ func doInstall(cmdline []string) {
 	if env.CI && runtime.GOARCH == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
+
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
@@ -298,7 +299,7 @@ func doTest(cmdline []string) {
 		csdb := build.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
-	gotest := tc.Go("test", "-tags=ckzg")
+	gotest := tc.Go("test")
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
