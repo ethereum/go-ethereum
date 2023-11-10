@@ -66,6 +66,7 @@ jobs:
       go: 1.21.x
       env:
         - azure-linux
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -99,6 +100,7 @@ jobs:
       go: 1.21.x
       env:
         - azure-osx
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -111,6 +113,8 @@ jobs:
       arch: amd64
       dist: bionic
       go: 1.21.x
+      env:
+        - GO111MODULE=on
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
@@ -120,6 +124,8 @@ jobs:
       arch: arm64
       dist: bionic
       go: 1.20.x
+      env:
+        - GO111MODULE=on
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
@@ -127,6 +133,8 @@ jobs:
       os: linux
       dist: bionic
       go: 1.20.x
+      env:
+        - GO111MODULE=on
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
@@ -138,6 +146,7 @@ jobs:
       go: 1.21.x
       env:
         - ubuntu-ppa
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -161,6 +170,7 @@ jobs:
       go: 1.21.x
       env:
         - azure-purge
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -172,6 +182,8 @@ jobs:
       os: linux
       dist: bionic
       go: 1.21.x
+      env:
+        - GO111MODULE=on
       script:
         - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES
 
