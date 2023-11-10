@@ -328,9 +328,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 
 		// Cache the original value of mutated storage slots
 		if origin == nil {
-			if origin = s.db.storagesOrigin[s.address]; origin == nil {
+			if origin = s.db.storagesOrigin[s.addrHash]; origin == nil {
 				origin = make(map[common.Hash][]byte)
-				s.db.storagesOrigin[s.address] = origin
+				s.db.storagesOrigin[s.addrHash] = origin
 			}
 		}
 		// Track the original value of slot only if it's mutated first time
