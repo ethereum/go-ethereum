@@ -156,29 +156,12 @@ func FuzzPair(data []byte) int {
 	if !bytes.Equal(clPair, gPair) {
 		panic("pairing mismatch: cloudflare/google")
 	}
+
 	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
 	if err != nil {
 		panic(fmt.Sprintf("gnark/bn254 encountered error: %v", err))
 	}
-
-	// gnark uses a different pairing algorithm which might produce
-	// different but also correct outputs, we need to scale the output by s
-
-	u, _ := new(big.Int).SetString("0x44e992b44a6909f1", 0)
-	u_exp2 := new(big.Int).Exp(u, big.NewInt(2), nil)   // u^2
-	u_6_exp2 := new(big.Int).Mul(big.NewInt(6), u_exp2) // 6*u^2
-	u_3 := new(big.Int).Mul(big.NewInt(3), u)           // 3*u
-	inner := u_6_exp2.Add(u_6_exp2, u_3)                // 6*u^2 + 3*u
-	inner.Add(inner, big.NewInt(1))                     // 6*u^2 + 3*u + 1
-	u_2 := new(big.Int).Mul(big.NewInt(2), u)           // 2*u
-	s := u_2.Mul(u_2, inner)                            // 2*u(6*u^2 + 3*u + 1)
-
-	gRes := new(bn254.GT)
-	if err := gRes.SetBytes(clPair); err != nil {
-		panic(err)
-	}
-	gRes = gRes.Exp(*gRes, s)
-	if !bytes.Equal(cPair.Marshal(), gRes.Marshal()) {
+	if !bytes.Equal(clPair, cPair.Marshal()) {
 		panic("pairing mismatch: cloudflare/gnark")
 	}
 
