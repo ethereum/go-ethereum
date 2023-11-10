@@ -24,42 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestCalcExcessDataGas(t *testing.T) {
-	var tests = []struct {
-		excess uint64
-		blobs  uint64
-		want   uint64
-	}{
-		// The excess data gas should not increase from zero if the used blob
-		// slots are below - or equal - to the target.
-		{0, 0, 0},
-		{0, 1, 0},
-		{0, params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob, 0},
-
-		// If the target data gas is exceeded, the excessDataGas should increase
-		// by however much it was overshot
-		{0, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 1, params.BlobTxDataGasPerBlob},
-		{1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 1, params.BlobTxDataGasPerBlob + 1},
-		{1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) + 2, 2*params.BlobTxDataGasPerBlob + 1},
-
-		// The excess data gas should decrease by however much the target was
-		// under-shot, capped at zero.
-		{params.BlobTxTargetDataGasPerBlock, params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob, params.BlobTxTargetDataGasPerBlock},
-		{params.BlobTxTargetDataGasPerBlock, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 1, params.BlobTxDataGasPerBlob},
-		{params.BlobTxTargetDataGasPerBlock, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 2, 0},
-		{params.BlobTxDataGasPerBlob - 1, (params.BlobTxTargetDataGasPerBlock / params.BlobTxDataGasPerBlob) - 1, 0},
-	}
-	for _, tt := range tests {
-		result := CalcExcessDataGas(tt.excess, tt.blobs*params.BlobTxDataGasPerBlob)
-		if result != tt.want {
-			t.Errorf("excess data gas mismatch: have %v, want %v", result, tt.want)
-		}
-	}
-}
-
 func TestCalcBlobFee(t *testing.T) {
 	tests := []struct {
-		excessDataGas uint64
+		excessDataGas int64
 		blobfee       int64
 	}{
 		{0, 1},
@@ -67,8 +34,12 @@ func TestCalcBlobFee(t *testing.T) {
 		{1542707, 2},
 		{10 * 1024 * 1024, 111},
 	}
+	have := CalcBlobFee(nil)
+	if have.Int64() != params.BlobTxMinDataGasprice {
+		t.Errorf("nil test: blobfee mismatch: have %v, want %v", have, params.BlobTxMinDataGasprice)
+	}
 	for i, tt := range tests {
-		have := CalcBlobFee(tt.excessDataGas)
+		have := CalcBlobFee(big.NewInt(tt.excessDataGas))
 		if have.Int64() != tt.blobfee {
 			t.Errorf("test %d: blobfee mismatch: have %v want %v", i, have, tt.blobfee)
 		}

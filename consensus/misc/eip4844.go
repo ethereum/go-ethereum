@@ -17,11 +17,8 @@
 package misc
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -30,54 +27,13 @@ var (
 	dataGaspriceUpdateFraction = big.NewInt(params.BlobTxDataGaspriceUpdateFraction)
 )
 
-// VerifyEIP4844Header verifies the presence of the excessDataGas field and that
-// if the current block contains no transactions, the excessDataGas is updated
-// accordingly.
-func VerifyEIP4844Header(parent, header *types.Header) error {
-	// Verify the header is not malformed
-	if header.ExcessDataGas == nil {
-		return errors.New("header is missing excessDataGas")
-	}
-	if header.DataGasUsed == nil {
-		return errors.New("header is missing dataGasUsed")
-	}
-	// Verify that the data gas used remains within reasonable limits.
-	if *header.DataGasUsed > params.BlobTxMaxDataGasPerBlock {
-		return fmt.Errorf("data gas used %d exceeds maximum allowance %d", *header.DataGasUsed, params.BlobTxMaxDataGasPerBlock)
-	}
-	if *header.DataGasUsed%params.BlobTxDataGasPerBlob != 0 {
-		return fmt.Errorf("data gas used %d not a multiple of data gas per blob %d", header.DataGasUsed, params.BlobTxDataGasPerBlob)
-	}
-	// Verify the excessDataGas is correct based on the parent header
-	var (
-		parentExcessDataGas uint64
-		parentDataGasUsed   uint64
-	)
-	if parent.ExcessDataGas != nil {
-		parentExcessDataGas = *parent.ExcessDataGas
-		parentDataGasUsed = *parent.DataGasUsed
-	}
-	expectedExcessDataGas := CalcExcessDataGas(parentExcessDataGas, parentDataGasUsed)
-	if *header.ExcessDataGas != expectedExcessDataGas {
-		return fmt.Errorf("invalid excessDataGas: have %d, want %d, parent excessDataGas %d, parent blobDataUsed %d",
-			*header.ExcessDataGas, expectedExcessDataGas, parentExcessDataGas, parentDataGasUsed)
-	}
-	return nil
-}
-
-// CalcExcessDataGas calculates the excess data gas after applying the set of
-// blobs on top of the excess data gas.
-func CalcExcessDataGas(parentExcessDataGas uint64, parentDataGasUsed uint64) uint64 {
-	excessDataGas := parentExcessDataGas + parentDataGasUsed
-	if excessDataGas < params.BlobTxTargetDataGasPerBlock {
-		return 0
-	}
-	return excessDataGas - params.BlobTxTargetDataGasPerBlock
-}
-
 // CalcBlobFee calculates the blobfee from the header's excess data gas field.
-func CalcBlobFee(excessDataGas uint64) *big.Int {
-	return fakeExponential(minDataGasPrice, new(big.Int).SetUint64(excessDataGas), dataGaspriceUpdateFraction)
+func CalcBlobFee(excessDataGas *big.Int) *big.Int {
+	// If this block does not yet have EIP-4844 enabled, return the starting fee
+	if excessDataGas == nil {
+		return big.NewInt(params.BlobTxMinDataGasprice)
+	}
+	return fakeExponential(minDataGasPrice, excessDataGas, dataGaspriceUpdateFraction)
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using

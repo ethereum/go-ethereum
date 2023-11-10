@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -794,21 +793,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 				return errInvalidBody
 			}
 			if withdrawalListHashes[index] != *header.WithdrawalsHash {
-				return errInvalidBody
-			}
-		}
-		// Blocks must have a number of blobs corresponding to the header gas usage,
-		// and zero before the Cancun hardfork
-		var blobs int
-		for _, tx := range txLists[index] {
-			blobs += len(tx.BlobHashes())
-		}
-		if header.DataGasUsed != nil {
-			if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-				return errInvalidBody
-			}
-		} else {
-			if blobs != 0 {
 				return errInvalidBody
 			}
 		}
