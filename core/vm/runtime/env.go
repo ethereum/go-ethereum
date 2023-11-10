@@ -23,9 +23,8 @@ import (
 
 func NewEnv(cfg *Config) *vm.EVM {
 	txContext := vm.TxContext{
-		Origin:     cfg.Origin,
-		GasPrice:   cfg.GasPrice,
-		BlobHashes: cfg.BlobHashes,
+		Origin:   cfg.Origin,
+		GasPrice: cfg.GasPrice,
 	}
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
