@@ -6,7 +6,6 @@
         "eip155Block": 0,
         "eip158Block": 0,
         "byzantiumBlock": 0,
-        "terminalTotalDifficultyPassed": true,
         "ethash": {}
     },
     "nonce": "0xdeadbeefdeadbeef",

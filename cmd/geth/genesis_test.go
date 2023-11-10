@@ -41,9 +41,7 @@ var customGenesisTests = []struct {
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
-			"config"     : {
-				"terminalTotalDifficultyPassed": true
-			}
+			"config"     : {}
 		}`,
 		query:  "eth.getBlock(0).nonce",
 		result: "0x0000000000001338",
@@ -61,10 +59,9 @@ var customGenesisTests = []struct {
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
 			"config"     : {
-				"homesteadBlock"                : 42,
-				"daoForkBlock"                  : 141,
-				"daoForkSupport"                : true,
-				"terminalTotalDifficultyPassed" : true
+				"homesteadBlock" : 42,
+				"daoForkBlock"   : 141,
+				"daoForkSupport" : true
 			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
@@ -114,10 +111,8 @@ func TestCustomBackend(t *testing.T) {
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
-			"config"     : {
-				"terminalTotalDifficultyPassed": true
-			}
-		}`
+			"config"     : {}
+	}`
 	type backendTest struct {
 		initArgs   []string
 		initExpect string

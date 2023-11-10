@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth"
 	ethdownloader "github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -494,6 +495,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
 	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
+	config.Ethash.PowMode = ethash.ModeFake
 	return New(stack, &config)
 }
 

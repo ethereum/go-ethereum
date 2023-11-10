@@ -58,9 +58,11 @@ var (
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
-	fsHeaderSafetyNet = 2048            // Number of headers to discard in case a chain violation is detected
-	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
-	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in fast sync
+	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during fast sync
+	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
+	fsHeaderForceVerify    = 24              // Number of headers to verify before and after the pivot to accept it
+	fsHeaderContCheck      = 3 * time.Second // Time interval to check for header continuations during state download
+	fsMinFullBlocks        = 64              // Number of blocks to retrieve fully even in fast sync
 )
 
 var (
@@ -164,7 +166,7 @@ type LightChain interface {
 	GetTd(common.Hash, uint64) *big.Int
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
-	InsertHeaderChain([]*types.Header) (int, error)
+	InsertHeaderChain([]*types.Header, int) (int, error)
 
 	// SetHead rewinds the local chain to a new head.
 	SetHead(uint64) error
@@ -1602,11 +1604,24 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 
 				// In case of header only syncing, validate the chunk immediately
 				if mode == FastSync || mode == LightSync {
-					if n, err := d.lightchain.InsertHeaderChain(chunk); err != nil {
+					// If we're importing pure headers, verify based on their recentness
+					var pivot uint64
+
+					d.pivotLock.RLock()
+					if d.pivotHeader != nil {
+						pivot = d.pivotHeader.Number.Uint64()
+					}
+					d.pivotLock.RUnlock()
+
+					frequency := fsHeaderCheckFrequency
+					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
+						frequency = 1
+					}
+					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
 						rollbackErr = err
 
 						// If some headers were inserted, track them as uncertain
-						if mode == FastSync && n > 0 && rollback == 0 {
+						if (mode == FastSync || frequency > 1) && n > 0 && rollback == 0 {
 							rollback = chunk[0].Number.Uint64()
 						}
 						log.Warn("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "parent", chunk[n].ParentHash, "err", err)

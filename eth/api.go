@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -85,8 +86,11 @@ func NewMinerAPI(e *Ethereum) *MinerAPI {
 // usable by this process. If mining is already running, this method adjust the
 // number of threads allowed to use and updates the minimum price required by the
 // transaction pool.
-func (api *MinerAPI) Start() error {
-	return api.e.StartMining()
+func (api *MinerAPI) Start(threads *int) error {
+	if threads == nil {
+		return api.e.StartMining(runtime.NumCPU())
+	}
+	return api.e.StartMining(*threads)
 }
 
 // Stop terminates the miner, both at the consensus engine level as well as at

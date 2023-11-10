@@ -161,11 +161,18 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 	// Construct the fetcher by offering all necessary APIs
 	validator := func(header *types.Header) error {
 		// Disable seal verification explicitly if we are running in ulc mode.
-		return engine.VerifyHeader(chain, header)
+		return engine.VerifyHeader(chain, header, ulc == nil)
 	}
 	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
 	dropper := func(id string) { peers.unregister(id) }
-	inserter := func(headers []*types.Header) (int, error) { return chain.InsertHeaderChain(headers) }
+	inserter := func(headers []*types.Header) (int, error) {
+		// Disable PoW checking explicitly if we are running in ulc mode.
+		checkFreq := 1
+		if ulc != nil {
+			checkFreq = 0
+		}
+		return chain.InsertHeaderChain(headers, checkFreq)
+	}
 	f := &lightFetcher{
 		ulc:         ulc,
 		peerset:     peers,
