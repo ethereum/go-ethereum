@@ -19,8 +19,10 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -52,9 +54,8 @@ func TestGeneratePOSChain(t *testing.T) {
 			Difficulty: common.Big1,
 			GasLimit:   5_000_000,
 		}
-		gendb  = rawdb.NewMemoryDatabase()
-		signer = types.LatestSigner(gspec.Config)
-		db     = rawdb.NewMemoryDatabase()
+		gendb = rawdb.NewMemoryDatabase()
+		db    = rawdb.NewMemoryDatabase()
 	)
 
 	config.TerminalTotalDifficultyPassed = true
@@ -82,10 +83,20 @@ func TestGeneratePOSChain(t *testing.T) {
 	}
 	genesis := gspec.MustCommit(gendb, trie.NewDatabase(gendb, trie.HashDefaults))
 
-	chain, _ := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
+	genchain, genreceipts := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(address), address, big.NewInt(1000), params.TxGas, new(big.Int).Add(gen.BaseFee(), common.Big1), nil), signer, key)
+
+		// Add value transfer tx.
+		tx := types.MustSignNewTx(key, gen.Signer(), &types.LegacyTx{
+			Nonce:    gen.TxNonce(address),
+			To:       &address,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: new(big.Int).Add(gen.BaseFee(), common.Big1),
+		})
 		gen.AddTx(tx)
+
+		// Add withdrawals.
 		if i == 1 {
 			gen.AddWithdrawal(&types.Withdrawal{
 				Validator: 42,
@@ -116,20 +127,39 @@ func TestGeneratePOSChain(t *testing.T) {
 	blockchain, _ := NewBlockChain(db, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 
-	if i, err := blockchain.InsertChain(chain); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
-		return
+	if i, err := blockchain.InsertChain(genchain); err != nil {
+		t.Fatalf("insert error (block %d): %v\n", genchain[i].NumberU64(), err)
 	}
 
 	// enforce that withdrawal indexes are monotonically increasing from 0
 	var (
 		withdrawalIndex uint64
-		head            = blockchain.CurrentBlock().Number.Uint64()
 	)
-	for i := 0; i < int(head); i++ {
-		block := blockchain.GetBlockByNumber(uint64(i))
+	for i := range genchain {
+		blocknum := genchain[i].NumberU64()
+		block := blockchain.GetBlockByNumber(blocknum)
 		if block == nil {
-			t.Fatalf("block %d not found", i)
+			t.Fatalf("block %d not found", blocknum)
+		}
+
+		// Verify receipts.
+		genBlockReceipts := genreceipts[i]
+		for _, r := range genBlockReceipts {
+			if r.BlockNumber.Cmp(block.Number()) != 0 {
+				t.Errorf("receipt has wrong block number %d, want %d", r.BlockNumber, block.Number())
+			}
+			if r.BlockHash != block.Hash() {
+				t.Errorf("receipt has wrong block hash %v, want %v", r.BlockHash, block.Hash())
+			}
+
+			// patch up empty logs list to make DeepEqual below work
+			if r.Logs == nil {
+				r.Logs = []*types.Log{}
+			}
+		}
+		blockchainReceipts := blockchain.GetReceiptsByHash(block.Hash())
+		if !reflect.DeepEqual(genBlockReceipts, blockchainReceipts) {
+			t.Fatalf("receipts mismatch\ngenerated: %s\nblockchain: %s", spew.Sdump(genBlockReceipts), spew.Sdump(blockchainReceipts))
 		}
 
 		// Verify withdrawals.
@@ -144,7 +174,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		}
 
 		// Verify parent beacon root.
-		want := common.Hash{byte(i)}
+		want := common.Hash{byte(blocknum)}
 		if got := block.BeaconRoot(); *got != want {
 			t.Fatalf("block %d, wrong parent beacon root: got %s, want %s", i, got, want)
 		}
