@@ -59,13 +59,13 @@ const (
 	GetBlockBodiesMsg             = 0x05
 	BlockBodiesMsg                = 0x06
 	NewBlockMsg                   = 0x07
-	NewPooledTransactionHashesMsg = 0x08
-	GetPooledTransactionsMsg      = 0x09
-	PooledTransactionsMsg         = 0x0a
 	GetNodeDataMsg                = 0x0d
 	NodeDataMsg                   = 0x0e
 	GetReceiptsMsg                = 0x0f
 	ReceiptsMsg                   = 0x10
+	NewPooledTransactionHashesMsg = 0x08
+	GetPooledTransactionsMsg      = 0x09
+	PooledTransactionsMsg         = 0x0a
 )
 
 var (
@@ -363,17 +363,6 @@ func (*BlockBodiesPacket) Kind() byte   { return BlockBodiesMsg }
 func (*NewBlockPacket) Name() string { return "NewBlock" }
 func (*NewBlockPacket) Kind() byte   { return NewBlockMsg }
 
-func (*NewPooledTransactionHashesPacket66) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket66) Kind() byte   { return NewPooledTransactionHashesMsg }
-func (*NewPooledTransactionHashesPacket68) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket68) Kind() byte   { return NewPooledTransactionHashesMsg }
-
-func (*GetPooledTransactionsPacket) Name() string { return "GetPooledTransactions" }
-func (*GetPooledTransactionsPacket) Kind() byte   { return GetPooledTransactionsMsg }
-
-func (*PooledTransactionsPacket) Name() string { return "PooledTransactions" }
-func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
-
 func (*GetNodeDataPacket) Name() string { return "GetNodeData" }
 func (*GetNodeDataPacket) Kind() byte   { return GetNodeDataMsg }
 
@@ -385,3 +374,15 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
+
+func (*NewPooledTransactionHashesPacket66) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket66) Kind() byte   { return NewPooledTransactionHashesMsg }
+
+func (*NewPooledTransactionHashesPacket68) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket68) Kind() byte   { return NewPooledTransactionHashesMsg }
+
+func (*GetPooledTransactionsPacket) Name() string { return "GetPooledTransactions" }
+func (*GetPooledTransactionsPacket) Kind() byte   { return GetPooledTransactionsMsg }
+
+func (*PooledTransactionsPacket) Name() string { return "PooledTransactions" }
+func (*PooledTransactionsPacket) Kind() byte   { return PooledTransactionsMsg }
