@@ -61,7 +61,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 		close(sub.postC)
 	} else {
 		if mux.subm == nil {
-			mux.subm = make(map[reflect.Type][]*TypeMuxSubscription, len(types))
+			mux.subm = make(map[reflect.Type][]*TypeMuxSubscription)
 		}
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
