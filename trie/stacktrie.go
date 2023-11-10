@@ -420,17 +420,17 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 		return
 
 	case branchNode:
-		var nodes fullNode
+		var nodes rawFullNode
 		for i, child := range st.children {
 			if child == nil {
-				nodes.Children[i] = nilValueNode
+				nodes[i] = nilValueNode
 				continue
 			}
 			child.hashRec(hasher, append(path, byte(i)))
 			if len(child.val) < 32 {
-				nodes.Children[i] = rawNode(child.val)
+				nodes[i] = rawNode(child.val)
 			} else {
-				nodes.Children[i] = hashNode(child.val)
+				nodes[i] = hashNode(child.val)
 			}
 
 			// Release child back to pool.
@@ -444,7 +444,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 	case extNode:
 		st.children[0].hashRec(hasher, append(path, st.key...))
 
-		n := shortNode{Key: hexToCompact(st.key)}
+		n := rawShortNode{Key: hexToCompact(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
 		} else {
@@ -460,7 +460,7 @@ func (st *StackTrie) hashRec(hasher *hasher, path []byte) {
 
 	case leafNode:
 		st.key = append(st.key, byte(16))
-		n := shortNode{Key: hexToCompact(st.key), Val: valueNode(st.val)}
+		n := rawShortNode{Key: hexToCompact(st.key), Val: valueNode(st.val)}
 
 		n.encode(hasher.encbuf)
 		encodedNode = hasher.encodedBytes()

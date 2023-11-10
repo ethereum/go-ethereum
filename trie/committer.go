@@ -142,10 +142,12 @@ func (c *committer) store(path []byte, n node) node {
 	// We have the hash already, estimate the RLP encoding-size of the node.
 	// The size is used for mem tracking, does not need to be exact
 	var (
+		size  = estimateSize(n)
 		nhash = common.BytesToHash(hash)
 		mnode = &memoryNode{
 			hash: nhash,
-			node: nodeToBytes(n),
+			node: simplifyNode(n),
+			size: uint16(size),
 		}
 	)
 	// Collect the dirty node to nodeset for return.
@@ -164,29 +166,31 @@ func (c *committer) store(path []byte, n node) node {
 	return hash
 }
 
-// mptResolver the children resolver in merkle-patricia-tree.
-type mptResolver struct{}
-
-// ForEach implements childResolver, decodes the provided node and
-// traverses the children inside.
-func (resolver mptResolver) forEach(node []byte, onChild func(common.Hash)) {
-	forGatherChildren(mustDecodeNodeUnsafe(nil, node), onChild)
-}
-
-// forGatherChildren traverses the node hierarchy and invokes the callback
-// for all the hashnode children.
-func forGatherChildren(n node, onChild func(hash common.Hash)) {
+// estimateSize estimates the size of an rlp-encoded node, without actually
+// rlp-encoding it (zero allocs). This method has been experimentally tried, and with a trie
+// with 1000 leaves, the only errors above 1% are on small shortnodes, where this
+// method overestimates by 2 or 3 bytes (e.g. 37 instead of 35)
+func estimateSize(n node) int {
 	switch n := n.(type) {
 	case *shortNode:
-		forGatherChildren(n.Val, onChild)
+		// A short node contains a compacted key, and a value.
+		return 3 + len(n.Key) + estimateSize(n.Val)
 	case *fullNode:
+		// A full node contains up to 16 hashes (some nils), and a key
+		s := 3
 		for i := 0; i < 16; i++ {
-			forGatherChildren(n.Children[i], onChild)
+			if child := n.Children[i]; child != nil {
+				s += estimateSize(child)
+			} else {
+				s++
+			}
 		}
+		return s
+	case valueNode:
+		return 1 + len(n)
 	case hashNode:
-		onChild(common.BytesToHash(n))
-	case valueNode, nil:
+		return 1 + len(n)
 	default:
-		panic(fmt.Sprintf("unknown node type: %T", n))
+		panic(fmt.Sprintf("node type %T", n))
 	}
 }
