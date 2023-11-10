@@ -30,16 +30,13 @@ import (
 // enough for the miner and other APIs to handle large batches of transactions;
 // and supports pulling up the entire transaction when really needed.
 type LazyTransaction struct {
-	Pool LazyResolver       // Transaction resolver to pull the real transaction up
+	Pool SubPool            // Transaction subpool to pull the real transaction up
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
 	Time      time.Time // Time when the transaction was first seen
 	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
 	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
-
-	Gas     uint64 // Amount of gas required by the transaction
-	BlobGas uint64 // Amount of blob gas required by the transaction
 }
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still
@@ -49,14 +46,6 @@ func (ltx *LazyTransaction) Resolve() *types.Transaction {
 		ltx.Tx = ltx.Pool.Get(ltx.Hash)
 	}
 	return ltx.Tx
-}
-
-// LazyResolver is a minimal interface needed for a transaction pool to satisfy
-// resolving lazy transactions. It's mostly a helper to avoid the entire sub-
-// pool being injected into the lazy transaction.
-type LazyResolver interface {
-	// Get returns a transaction if it is contained in the pool, or nil otherwise.
-	Get(hash common.Hash) *types.Transaction
 }
 
 // AddressReserver is passed by the main transaction pool to subpools, so they
@@ -110,10 +99,8 @@ type SubPool interface {
 	// account and sorted by nonce.
 	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 
-	// SubscribeTransactions subscribes to new transaction events. The subscriber
-	// can decide whether to receive notifications only for newly seen transactions
-	// or also for reorged out ones.
-	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
 
 	// Nonce returns the next nonce of an account, with all transactions executable
 	// by the pool already applied on top.

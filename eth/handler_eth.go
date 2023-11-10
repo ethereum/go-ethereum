@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -74,11 +73,6 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.txFetcher.Notify(peer.ID(), packet.Hashes)
 
 	case *eth.TransactionsPacket:
-		for _, tx := range *packet {
-			if tx.Type() == types.BlobTxType {
-				return errors.New("disallowed broadcast blob transaction")
-			}
-		}
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
 
 	case *eth.PooledTransactionsResponse:
@@ -96,7 +90,9 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
 	if h.merger.PoSFinalized() {
-		return errors.New("disallowed block announcement")
+		// TODO (MariusVanDerWijden) drop non-updated peers after the merge
+		return nil
+		// return errors.New("unexpected block announces")
 	}
 	// Schedule all the unknown hashes for retrieval
 	var (
@@ -122,7 +118,9 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
 	if h.merger.PoSFinalized() {
-		return errors.New("disallowed block broadcast")
+		// TODO (MariusVanDerWijden) drop non-updated peers after the merge
+		return nil
+		// return errors.New("unexpected block announces")
 	}
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
