@@ -123,26 +123,6 @@ func (set *NodeSet) AddNode(path []byte, n *WithPrev) {
 	set.Nodes[string(path)] = n
 }
 
-// Merge adds a set of nodes into the set.
-func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*WithPrev) error {
-	if set.Owner != owner {
-		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, owner)
-	}
-	for path, node := range nodes {
-		prev, ok := set.Nodes[path]
-		if ok {
-			// overwrite happens, revoke the counter
-			if prev.IsDeleted() {
-				set.deletes -= 1
-			} else {
-				set.updates -= 1
-			}
-		}
-		set.AddNode([]byte(path), node)
-	}
-	return nil
-}
-
 // AddLeaf adds the provided leaf node into set. TODO(rjl493456442) how can
 // we get rid of it?
 func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
@@ -210,9 +190,9 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
-	subset, present := set.Sets[other.Owner]
+	_, present := set.Sets[other.Owner]
 	if present {
-		return subset.Merge(other.Owner, other.Nodes)
+		return fmt.Errorf("duplicate trie for owner %#x", other.Owner)
 	}
 	set.Sets[other.Owner] = other
 	return nil

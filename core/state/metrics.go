@@ -27,11 +27,4 @@ var (
 	storageTriesUpdatedMeter = metrics.NewRegisteredMeter("state/update/storagenodes", nil)
 	accountTrieDeletedMeter  = metrics.NewRegisteredMeter("state/delete/accountnodes", nil)
 	storageTriesDeletedMeter = metrics.NewRegisteredMeter("state/delete/storagenodes", nil)
-
-	slotDeletionMaxCount = metrics.NewRegisteredGauge("state/delete/storage/max/slot", nil)
-	slotDeletionMaxSize  = metrics.NewRegisteredGauge("state/delete/storage/max/size", nil)
-	slotDeletionTimer    = metrics.NewRegisteredResettingTimer("state/delete/storage/timer", nil)
-	slotDeletionCount    = metrics.NewRegisteredMeter("state/delete/storage/slot", nil)
-	slotDeletionSize     = metrics.NewRegisteredMeter("state/delete/storage/size", nil)
-	slotDeletionSkip     = metrics.NewRegisteredGauge("state/delete/storage/skip", nil)
 )
