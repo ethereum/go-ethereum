@@ -2053,10 +2053,11 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	var logs []*types.Log
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
+			l := *log
 			if removed {
-				log.Removed = true
+				l.Removed = true
 			}
-			logs = append(logs, log)
+			logs = append(logs, &l)
 		}
 	}
 	return logs
