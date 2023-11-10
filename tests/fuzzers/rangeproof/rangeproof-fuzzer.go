@@ -21,18 +21,24 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/exp/slices"
 )
 
 type kv struct {
 	k, v []byte
 	t    bool
 }
+
+type entrySlice []*kv
+
+func (p entrySlice) Len() int           { return len(p) }
+func (p entrySlice) Less(i, j int) bool { return bytes.Compare(p[i].k, p[j].k) < 0 }
+func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 type fuzzer struct {
 	input     io.Reader
@@ -91,16 +97,14 @@ func (f *fuzzer) fuzz() int {
 	if f.exhausted {
 		return 0 // input too short
 	}
-	var entries []*kv
+	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, kv)
 	}
 	if len(entries) <= 1 {
 		return 0
 	}
-	slices.SortFunc(entries, func(a, b *kv) bool {
-		return bytes.Compare(a.k, b.k) < 0
-	})
+	sort.Sort(entries)
 
 	var ok = 0
 	for {
