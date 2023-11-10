@@ -132,7 +132,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		)
 
 		defer blockchain.Stop()
-		bigNumber := new(big.Int).SetBytes(common.MaxHash.Bytes())
+		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
 		for i, tt := range []struct {

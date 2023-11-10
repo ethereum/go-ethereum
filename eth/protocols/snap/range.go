@@ -67,7 +67,7 @@ func (r *hashRange) End() common.Hash {
 	// If the end overflows (non divisible range), return a shorter interval
 	next, overflow := new(uint256.Int).AddOverflow(r.current, r.step)
 	if overflow {
-		return common.MaxHash
+		return common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	}
 	return next.SubUint64(next, 1).Bytes32()
 }
