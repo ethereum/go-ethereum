@@ -531,14 +531,8 @@ func (g *Genesis) ToBlock() *types.Block {
 			withdrawals = nil
 		}
 		if conf.IsCancun(num) {
-			head.ExcessBlobGas = g.ExcessBlobGas
-			head.BlobGasUsed = g.BlobGasUsed
-			if head.ExcessBlobGas == nil {
-				head.ExcessBlobGas = nil
-			}
-			if head.BlobGasUsed == nil {
-				head.BlobGasUsed = nil
-			}
+			head.ExcessBlobGas = nil
+			head.BlobGasUsed = nil
 		}
 	}
 
