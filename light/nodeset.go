@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trienode
+package light
 
 import (
 	"errors"
@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ProofSet stores a set of trie nodes. It implements trie.Database and can also
+// NodeSet stores a set of trie nodes. It implements trie.Database and can also
 // act as a cache for another trie.Database.
-type ProofSet struct {
+type NodeSet struct {
 	nodes map[string][]byte
 	order []string
 
@@ -36,15 +36,15 @@ type ProofSet struct {
 	lock     sync.RWMutex
 }
 
-// NewProofSet creates an empty node set
-func NewProofSet() *ProofSet {
-	return &ProofSet{
+// NewNodeSet creates an empty node set
+func NewNodeSet() *NodeSet {
+	return &NodeSet{
 		nodes: make(map[string][]byte),
 	}
 }
 
 // Put stores a new node in the set
-func (db *ProofSet) Put(key []byte, value []byte) error {
+func (db *NodeSet) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -61,7 +61,7 @@ func (db *ProofSet) Put(key []byte, value []byte) error {
 }
 
 // Delete removes a node from the set
-func (db *ProofSet) Delete(key []byte) error {
+func (db *NodeSet) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -70,7 +70,7 @@ func (db *ProofSet) Delete(key []byte) error {
 }
 
 // Get returns a stored node
-func (db *ProofSet) Get(key []byte) ([]byte, error) {
+func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -81,13 +81,13 @@ func (db *ProofSet) Get(key []byte) ([]byte, error) {
 }
 
 // Has returns true if the node set contains the given key
-func (db *ProofSet) Has(key []byte) (bool, error) {
+func (db *NodeSet) Has(key []byte) (bool, error) {
 	_, err := db.Get(key)
 	return err == nil, nil
 }
 
 // KeyCount returns the number of nodes in the set
-func (db *ProofSet) KeyCount() int {
+func (db *NodeSet) KeyCount() int {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -95,19 +95,19 @@ func (db *ProofSet) KeyCount() int {
 }
 
 // DataSize returns the aggregated data size of nodes in the set
-func (db *ProofSet) DataSize() int {
+func (db *NodeSet) DataSize() int {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
 	return db.dataSize
 }
 
-// List converts the node set to a ProofList
-func (db *ProofSet) List() ProofList {
+// NodeList converts the node set to a NodeList
+func (db *NodeSet) NodeList() NodeList {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var values ProofList
+	var values NodeList
 	for _, key := range db.order {
 		values = append(values, db.nodes[key])
 	}
@@ -115,7 +115,7 @@ func (db *ProofSet) List() ProofList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *ProofSet) Store(target ethdb.KeyValueWriter) {
+func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -124,36 +124,36 @@ func (db *ProofSet) Store(target ethdb.KeyValueWriter) {
 	}
 }
 
-// ProofList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
-type ProofList []rlp.RawValue
+// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
+type NodeList []rlp.RawValue
 
 // Store writes the contents of the list to the given database
-func (n ProofList) Store(db ethdb.KeyValueWriter) {
+func (n NodeList) Store(db ethdb.KeyValueWriter) {
 	for _, node := range n {
 		db.Put(crypto.Keccak256(node), node)
 	}
 }
 
-// Set converts the node list to a ProofSet
-func (n ProofList) Set() *ProofSet {
-	db := NewProofSet()
+// NodeSet converts the node list to a NodeSet
+func (n NodeList) NodeSet() *NodeSet {
+	db := NewNodeSet()
 	n.Store(db)
 	return db
 }
 
 // Put stores a new node at the end of the list
-func (n *ProofList) Put(key []byte, value []byte) error {
+func (n *NodeList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
 }
 
 // Delete panics as there's no reason to remove a node from the list.
-func (n *ProofList) Delete(key []byte) error {
+func (n *NodeList) Delete(key []byte) error {
 	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list
-func (n ProofList) DataSize() int {
+func (n NodeList) DataSize() int {
 	var size int
 	for _, node := range n {
 		size += len(node)
