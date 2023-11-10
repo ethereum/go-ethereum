@@ -1106,9 +1106,17 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, withdrawals types.Withdrawals, noTxs bool) *newPayloadResult {
 	req := &getWorkReq{
-		params: params,
+		params: &generateParams{
+			timestamp:   timestamp,
+			forceTime:   true,
+			parentHash:  parent,
+			coinbase:    coinbase,
+			random:      random,
+			withdrawals: withdrawals,
+			noTxs:       noTxs,
+		},
 		result: make(chan *newPayloadResult, 1),
 	}
 	select {

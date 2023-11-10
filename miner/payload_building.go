@@ -175,20 +175,10 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
-	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		noTxs:       true,
-	}
-	empty := w.getSealingBlock(emptyParams)
+	empty := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
 	if empty.err != nil {
 		return nil, empty.err
 	}
-
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, args.Id())
 
@@ -205,21 +195,11 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		// by the timestamp parameter.
 		endTimer := time.NewTimer(time.Second * 12)
 
-		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			noTxs:       false,
-		}
-
 		for {
 			select {
 			case <-timer.C:
 				start := time.Now()
-				r := w.getSealingBlock(fullParams)
+				r := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
 				}
