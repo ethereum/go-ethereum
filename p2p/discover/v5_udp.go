@@ -142,7 +142,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:         newMeteredConn(conn),
+		conn:         conn,
 		localNode:    ln,
 		db:           ln.Database(),
 		netrestrict:  cfg.NetRestrict,
