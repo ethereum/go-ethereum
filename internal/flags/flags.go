@@ -68,7 +68,6 @@ type DirectoryFlag struct {
 	Value DirectoryString
 
 	Aliases []string
-	EnvVars []string
 }
 
 // For cli.Flag:
@@ -103,7 +102,7 @@ func (f *DirectoryFlag) GetCategory() string { return f.Category }
 func (f *DirectoryFlag) TakesValue() bool     { return true }
 func (f *DirectoryFlag) GetUsage() string     { return f.Usage }
 func (f *DirectoryFlag) GetValue() string     { return f.Value.String() }
-func (f *DirectoryFlag) GetEnvVars() []string { return f.EnvVars }
+func (f *DirectoryFlag) GetEnvVars() []string { return nil } // env not supported
 
 func (f *DirectoryFlag) GetDefaultText() string {
 	if f.DefaultText != "" {
@@ -157,7 +156,6 @@ type TextMarshalerFlag struct {
 	Value TextMarshaler
 
 	Aliases []string
-	EnvVars []string
 }
 
 // For cli.Flag:
@@ -189,7 +187,7 @@ func (f *TextMarshalerFlag) GetCategory() string { return f.Category }
 
 func (f *TextMarshalerFlag) TakesValue() bool     { return true }
 func (f *TextMarshalerFlag) GetUsage() string     { return f.Usage }
-func (f *TextMarshalerFlag) GetEnvVars() []string { return f.EnvVars }
+func (f *TextMarshalerFlag) GetEnvVars() []string { return nil } // env not supported
 
 func (f *TextMarshalerFlag) GetValue() string {
 	t, err := f.Value.MarshalText()
@@ -239,7 +237,6 @@ type BigFlag struct {
 	Value *big.Int
 
 	Aliases []string
-	EnvVars []string
 }
 
 // For cli.Flag:
@@ -274,7 +271,7 @@ func (f *BigFlag) GetCategory() string { return f.Category }
 func (f *BigFlag) TakesValue() bool     { return true }
 func (f *BigFlag) GetUsage() string     { return f.Usage }
 func (f *BigFlag) GetValue() string     { return f.Value.String() }
-func (f *BigFlag) GetEnvVars() []string { return f.EnvVars }
+func (f *BigFlag) GetEnvVars() []string { return nil } // env not supported
 
 func (f *BigFlag) GetDefaultText() string {
 	if f.DefaultText != "" {
