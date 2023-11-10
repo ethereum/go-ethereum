@@ -27,7 +27,6 @@
         "transactionHash": "0x92ea4a28224d033afb20e0cc2b290d4c7c2d61f6a4800a680e4e19ac962ee941",
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0x5208",
-        "effectiveGasPrice": null,
         "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "transactionIndex": "0x0"
       }

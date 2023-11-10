@@ -275,8 +275,7 @@ func TestT8n(t *testing.T) {
 		tt.Run("evm-test", args...)
 		// Compare the expected output, if provided
 		if tc.expOut != "" {
-			file := fmt.Sprintf("%v/%v", tc.base, tc.expOut)
-			want, err := os.ReadFile(file)
+			want, err := os.ReadFile(fmt.Sprintf("%v/%v", tc.base, tc.expOut))
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
@@ -284,9 +283,9 @@ func TestT8n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Fatalf("test %d, file %v: json parsing failed: %v", i, file, err)
+				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
-				t.Fatalf("test %d, file %v: output wrong, have \n%v\nwant\n%v\n", i, file, string(have), string(want))
+				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
 			}
 		}
 		tt.WaitExit()
