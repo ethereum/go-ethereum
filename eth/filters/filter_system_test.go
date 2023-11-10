@@ -121,7 +121,7 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 }
 
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
-	logs := rawdb.ReadLogs(b.db, hash, number)
+	logs := rawdb.ReadLogs(b.db, hash, number, params.TestChainConfig)
 	return logs, nil
 }
 
