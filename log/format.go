@@ -32,16 +32,20 @@ var locationTrims = []string{
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
 // format output.
 func PrintOrigins(print bool) {
-	locationEnabled.Store(print)
+	if print {
+		atomic.StoreUint32(&locationEnabled, 1)
+	} else {
+		atomic.StoreUint32(&locationEnabled, 0)
+	}
 }
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
 // should append the log locations too when printing entries.
-var locationEnabled atomic.Bool
+var locationEnabled uint32
 
 // locationLength is the maxmimum path length encountered, which all logs are
 // padded to to aid in alignment.
-var locationLength atomic.Uint32
+var locationLength uint32
 
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
@@ -105,17 +109,17 @@ func TerminalFormat(usecolor bool) Format {
 
 		b := &bytes.Buffer{}
 		lvl := r.Lvl.AlignedString()
-		if locationEnabled.Load() {
+		if atomic.LoadUint32(&locationEnabled) != 0 {
 			// Log origin printing was requested, format the location path and line number
 			location := fmt.Sprintf("%+v", r.Call)
 			for _, prefix := range locationTrims {
 				location = strings.TrimPrefix(location, prefix)
 			}
 			// Maintain the maximum location length for fancyer alignment
-			align := int(locationLength.Load())
+			align := int(atomic.LoadUint32(&locationLength))
 			if align < len(location) {
 				align = len(location)
-				locationLength.Store(uint32(align))
+				atomic.StoreUint32(&locationLength, uint32(align))
 			}
 			padding := strings.Repeat(" ", align-len(location))
 
