@@ -59,13 +59,13 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 			continue
 		}
 		period := binary.BigEndian.Uint64(iter.Key()[kl : kl+8])
-		if cs.periods.First == 0 {
-			cs.periods.First = period
-		} else if cs.periods.Next != period {
+		if cs.periods.Start == 0 {
+			cs.periods.Start = period
+		} else if cs.periods.End != period {
 			log.Warn("Gap in the canonical chain database")
 			break // continuity guaranteed
 		}
-		cs.periods.Next = period + 1
+		cs.periods.End = period + 1
 	}
 	iter.Release()
 	return cs
@@ -86,7 +86,7 @@ func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
 // continuous. Can be used either with a batch or database backend.
 func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, value T) error {
 	if !cs.periods.CanExpand(period) {
-		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.First, cs.periods.Next, period)
+		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.Start, cs.periods.End, period)
 	}
 	enc, err := cs.encode(value)
 	if err != nil {
@@ -102,19 +102,19 @@ func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, va
 
 // deleteFrom removes items starting from the given period.
 func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
-	if fromPeriod >= cs.periods.Next {
+	if fromPeriod >= cs.periods.End {
 		return
 	}
-	if fromPeriod < cs.periods.First {
-		fromPeriod = cs.periods.First
+	if fromPeriod < cs.periods.Start {
+		fromPeriod = cs.periods.Start
 	}
-	deleted = Range{First: fromPeriod, Next: cs.periods.Next}
-	for period := fromPeriod; period < cs.periods.Next; period++ {
+	deleted = Range{Start: fromPeriod, End: cs.periods.End}
+	for period := fromPeriod; period < cs.periods.End; period++ {
 		batch.Delete(cs.databaseKey(period))
 		cs.cache.Remove(period)
 	}
-	if fromPeriod > cs.periods.First {
-		cs.periods.Next = fromPeriod
+	if fromPeriod > cs.periods.Start {
+		cs.periods.End = fromPeriod
 	} else {
 		cs.periods = Range{}
 	}

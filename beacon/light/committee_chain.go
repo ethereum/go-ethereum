@@ -146,23 +146,23 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	for !s.updates.periods.IsEmpty() {
-		update, ok := s.updates.get(s.updates.periods.Next - 1)
+		update, ok := s.updates.get(s.updates.periods.End - 1)
 		if !ok {
-			log.Error("Sync committee update missing", "period", s.updates.periods.Next-1)
+			log.Error("Sync committee update missing", "period", s.updates.periods.End-1)
 			s.Reset()
 			break
 		}
 		if valid, err := s.verifyUpdate(update); err != nil {
-			log.Error("Error validating update", "period", s.updates.periods.Next-1, "error", err)
+			log.Error("Error validating update", "period", s.updates.periods.End-1, "error", err)
 		} else if valid {
 			break
 		}
-		if err := s.rollback(s.updates.periods.Next); err != nil {
+		if err := s.rollback(s.updates.periods.End); err != nil {
 			log.Error("Error writing batch into chain database", "error", err)
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
-		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.First, "last period", s.committees.periods.Next-1)
+		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.Start, "last period", s.committees.periods.End-1)
 	}
 	return s
 }
@@ -171,27 +171,27 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 func (s *CommitteeChain) checkConstraints() bool {
 	isNotInFixedRootRange := func(r Range) bool {
 		return s.fixedRoots.periods.IsEmpty() ||
-			r.First < s.fixedRoots.periods.First ||
-			r.First >= s.fixedRoots.periods.Next
+			r.Start < s.fixedRoots.periods.Start ||
+			r.Start >= s.fixedRoots.periods.End
 	}
 
 	valid := true
 	if !s.updates.periods.IsEmpty() {
 		if isNotInFixedRootRange(s.updates.periods) {
-			log.Error("First update is not in the fixed roots range")
+			log.Error("Start update is not in the fixed roots range")
 			valid = false
 		}
-		if s.committees.periods.First > s.updates.periods.First || s.committees.periods.Next <= s.updates.periods.Next {
+		if s.committees.periods.Start > s.updates.periods.Start || s.committees.periods.End <= s.updates.periods.End {
 			log.Error("Missing committees in update range")
 			valid = false
 		}
 	}
 	if !s.committees.periods.IsEmpty() {
 		if isNotInFixedRootRange(s.committees.periods) {
-			log.Error("First committee is not in the fixed roots range")
+			log.Error("Start committee is not in the fixed roots range")
 			valid = false
 		}
-		if s.committees.periods.Next > s.fixedRoots.periods.Next && s.committees.periods.Next > s.updates.periods.Next+1 {
+		if s.committees.periods.End > s.fixedRoots.periods.End && s.committees.periods.End > s.updates.periods.End+1 {
 			log.Error("Last committee is neither in the fixed roots range nor proven by updates")
 			valid = false
 		}
@@ -238,7 +238,7 @@ func (s *CommitteeChain) AddFixedRoot(period uint64, root common.Hash) error {
 		// if the old root exists and matches the new one then it is guaranteed
 		// that the given period is after the existing fixed range and the roots
 		// in between can also be fixed.
-		for p := s.fixedRoots.periods.Next; p < period; p++ {
+		for p := s.fixedRoots.periods.End; p < period; p++ {
 			if err := s.fixedRoots.add(batch, p, s.getCommitteeRoot(p)); err != nil {
 				return err
 			}
@@ -267,12 +267,12 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
-	if period >= s.fixedRoots.periods.Next {
+	if period >= s.fixedRoots.periods.End {
 		return nil
 	}
 	batch := s.db.NewBatch()
 	s.fixedRoots.deleteFrom(batch, period)
-	if s.updates.periods.IsEmpty() || period <= s.updates.periods.First {
+	if s.updates.periods.IsEmpty() || period <= s.updates.periods.Start {
 		// Note: the first period of the update chain should always be fixed so if
 		// the fixed root at the first update is removed then the entire update chain
 		// and the proven committees have to be removed. Earlier committees in the
@@ -284,7 +284,7 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 		// get unfixed but are still proven by the update chain. If there were
 		// committees present after the range proven by updates, those should be
 		// removed if the belonging fixed roots are also removed.
-		fromPeriod := s.updates.periods.Next + 1 // not proven by updates
+		fromPeriod := s.updates.periods.End + 1 // not proven by updates
 		if period > fromPeriod {
 			fromPeriod = period // also not justified by fixed roots
 		}
@@ -300,7 +300,7 @@ func (s *CommitteeChain) DeleteFixedRootsFrom(period uint64) error {
 // deleteCommitteesFrom deletes committees starting from the given period.
 func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) {
 	deleted := s.committees.deleteFrom(batch, period)
-	for period := deleted.First; period < deleted.Next; period++ {
+	for period := deleted.Start; period < deleted.End; period++ {
 		s.committeeCache.Remove(period)
 	}
 }
@@ -414,20 +414,20 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 		return 0, false
 	}
 	if !s.updates.periods.IsEmpty() {
-		return s.updates.periods.Next, true
+		return s.updates.periods.End, true
 	}
-	return s.committees.periods.Next - 1, true
+	return s.committees.periods.End - 1, true
 }
 
 // rollback removes all committees and fixed roots from the given period and updates
 // starting from the previous period.
 func (s *CommitteeChain) rollback(period uint64) error {
-	max := s.updates.periods.Next + 1
-	if s.committees.periods.Next > max {
-		max = s.committees.periods.Next
+	max := s.updates.periods.End + 1
+	if s.committees.periods.End > max {
+		max = s.committees.periods.End
 	}
-	if s.fixedRoots.periods.Next > max {
-		max = s.fixedRoots.periods.Next
+	if s.fixedRoots.periods.End > max {
+		max = s.fixedRoots.periods.End
 	}
 	for max > period {
 		max--
