@@ -123,7 +123,7 @@ func (NilTimer) Stop() {}
 func (NilTimer) Sum() int64 { return 0 }
 
 // Time is a no-op.
-func (NilTimer) Time(f func()) { f() }
+func (NilTimer) Time(func()) {}
 
 // Update is a no-op.
 func (NilTimer) Update(time.Duration) {}
