@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -72,40 +71,32 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash) *txpool.Transaction {
+func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if tx := p.pool[hash]; tx != nil {
-		return &txpool.Transaction{Tx: tx}
-	}
-	return nil
+	return p.pool[hash]
 }
 
-// Add appends a batch of transactions to the pool, and notifies any
+// AddRemotes appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
-	unwrapped := make([]*types.Transaction, len(txs))
-	for i, tx := range txs {
-		unwrapped[i] = tx.Tx
-	}
+func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	for _, tx := range unwrapped {
+	for _, tx := range txs {
 		p.pool[tx.Hash()] = tx
 	}
-
-	p.txFeed.Send(core.NewTxsEvent{Txs: unwrapped})
-	return make([]error, len(unwrapped))
+	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+	return make([]error, len(txs))
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*types.Transaction {
+func (p *testTxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	batches := make(map[common.Address][]*types.Transaction)
+	batches := make(map[common.Address]types.Transactions)
 	for _, tx := range p.pool {
 		from, _ := types.Sender(types.HomesteadSigner{}, tx)
 		batches[from] = append(batches[from], tx)

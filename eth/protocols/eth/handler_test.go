@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -114,22 +113,19 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 	for _, block := range bs {
 		chain.StateCache().TrieDB().Commit(block.Root(), false)
 	}
-	txconfig := legacypool.DefaultConfig
+	txconfig := txpool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
-
-	pool := legacypool.New(txconfig, chain)
-	txpool, _ := txpool.New(new(big.Int).SetUint64(txconfig.PriceLimit), chain, []txpool.SubPool{pool})
 
 	return &testBackend{
 		db:     db,
 		chain:  chain,
-		txpool: txpool,
+		txpool: txpool.New(txconfig, params.TestChainConfig, chain),
 	}
 }
 
 // close tears down the transaction pool and chain behind the mock backend.
 func (b *testBackend) close() {
-	b.txpool.Close()
+	b.txpool.Stop()
 	b.chain.Stop()
 }
 

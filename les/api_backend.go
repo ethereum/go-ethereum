@@ -224,11 +224,11 @@ func (b *LesApiBackend) Stats() (pending int, queued int) {
 	return b.eth.txPool.Stats(), 0
 }
 
-func (b *LesApiBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
+func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
+func (b *LesApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
 	return b.eth.txPool.ContentFrom(addr)
 }
 

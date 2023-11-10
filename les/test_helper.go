@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -233,11 +232,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
-	txpoolConfig := legacypool.DefaultConfig
+	txpoolConfig := txpool.DefaultConfig
 	txpoolConfig.Journal = ""
-
-	pool := legacypool.New(txpoolConfig, simulation.Blockchain())
-	txpool, _ := txpool.New(new(big.Int).SetUint64(txpoolConfig.PriceLimit), simulation.Blockchain(), []txpool.SubPool{pool})
+	txpool := txpool.New(txpoolConfig, gspec.Config, simulation.Blockchain())
 
 	server := &LesServer{
 		lesCommons: lesCommons{
