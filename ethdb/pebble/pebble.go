@@ -307,8 +307,7 @@ func (d *Database) NewBatch() ethdb.Batch {
 // batch object without any pre-allocated space.
 func (d *Database) NewBatchWithSize(_ int) ethdb.Batch {
 	return &batch{
-		b:  d.db.NewBatch(),
-		db: d,
+		b: d.db.NewBatch(),
 	}
 }
 
