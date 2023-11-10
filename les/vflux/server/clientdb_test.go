@@ -46,42 +46,34 @@ func TestNodeDB(t *testing.T) {
 		{enode.ID{}, "127.0.0.1", expval(100), false},
 		{enode.ID{}, "127.0.0.1", expval(200), false},
 	}
-
 	for _, c := range cases {
 		if c.positive {
 			ndb.setBalance(c.id.Bytes(), false, c.balance)
-
 			if pb := ndb.getOrNewBalance(c.id.Bytes(), false); !reflect.DeepEqual(pb, c.balance) {
 				t.Fatalf("Positive balance mismatch, want %v, got %v", c.balance, pb)
 			}
 		} else {
 			ndb.setBalance([]byte(c.ip), true, c.balance)
-
 			if nb := ndb.getOrNewBalance([]byte(c.ip), true); !reflect.DeepEqual(nb, c.balance) {
 				t.Fatalf("Negative balance mismatch, want %v, got %v", c.balance, nb)
 			}
 		}
 	}
-
 	for _, c := range cases {
 		if c.positive {
 			ndb.delBalance(c.id.Bytes(), false)
-
 			if pb := ndb.getOrNewBalance(c.id.Bytes(), false); !reflect.DeepEqual(pb, utils.ExpiredValue{}) {
 				t.Fatalf("Positive balance mismatch, want %v, got %v", utils.ExpiredValue{}, pb)
 			}
 		} else {
 			ndb.delBalance([]byte(c.ip), true)
-
 			if nb := ndb.getOrNewBalance([]byte(c.ip), true); !reflect.DeepEqual(nb, utils.ExpiredValue{}) {
 				t.Fatalf("Negative balance mismatch, want %v, got %v", utils.ExpiredValue{}, nb)
 			}
 		}
 	}
-
 	posExp, negExp := utils.Fixed64(1000), utils.Fixed64(2000)
 	ndb.setExpiration(posExp, negExp)
-
 	if pos, neg := ndb.getExpiration(); pos != posExp || neg != negExp {
 		t.Fatalf("Expiration mismatch, want %v / %v, got %v / %v", posExp, negExp, pos, neg)
 	}
@@ -97,13 +89,11 @@ func TestNodeDBExpiration(t *testing.T) {
 		iterated int
 		done     = make(chan struct{}, 1)
 	)
-
 	callback := func(now mclock.AbsTime, neg bool, b utils.ExpiredValue) bool {
 		iterated += 1
 		return true
 	}
 	clock := &mclock.Simulated{}
-
 	ndb := newNodeDB(rawdb.NewMemoryDatabase(), clock)
 	defer ndb.close()
 	ndb.evictCallBack = callback
@@ -124,11 +114,9 @@ func TestNodeDBExpiration(t *testing.T) {
 		{[]byte("127.0.0.3"), true, expval(1)},
 		{[]byte("127.0.0.4"), true, expval(1)},
 	}
-
 	for _, c := range cases {
 		ndb.setBalance(c.id, c.neg, c.balance)
 	}
-
 	clock.WaitForTimers(1)
 	clock.Run(time.Hour + time.Minute)
 	select {
@@ -136,7 +124,6 @@ func TestNodeDBExpiration(t *testing.T) {
 	case <-time.NewTimer(time.Second).C:
 		t.Fatalf("timeout")
 	}
-
 	if iterated != 8 {
 		t.Fatalf("Failed to evict useless balances, want %v, got %d", 8, iterated)
 	}
@@ -144,7 +131,6 @@ func TestNodeDBExpiration(t *testing.T) {
 	for _, c := range cases {
 		ndb.setBalance(c.id, c.neg, c.balance)
 	}
-
 	clock.WaitForTimers(1)
 	clock.Run(time.Hour + time.Minute)
 	select {
@@ -152,7 +138,6 @@ func TestNodeDBExpiration(t *testing.T) {
 	case <-time.NewTimer(time.Second).C:
 		t.Fatalf("timeout")
 	}
-
 	if iterated != 16 {
 		t.Fatalf("Failed to evict useless balances, want %v, got %d", 16, iterated)
 	}

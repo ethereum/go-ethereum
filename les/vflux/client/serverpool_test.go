@@ -47,7 +47,6 @@ func testNodeIndex(id enode.ID) int {
 	if id[0] != 42 {
 		return -1
 	}
-
 	return int(id[1]) + int(id[2])*256
 }
 
@@ -86,7 +85,6 @@ func newServerPoolTest(preNeg, preNegFail bool) *ServerPoolTest {
 	for i := range nodes {
 		nodes[i] = enode.SignNull(&enr.Record{}, testNodeID(i))
 	}
-
 	return &ServerPoolTest{
 		clock:      &mclock.Simulated{},
 		db:         memorydb.New(),
@@ -116,7 +114,6 @@ func (s *ServerPoolTest) addTrusted(i int) {
 
 func (s *ServerPoolTest) start() {
 	var testQuery QueryFunc
-
 	s.queryWg = new(sync.WaitGroup)
 	if s.preNeg {
 		testQuery = func(node *enode.Node) int {
@@ -125,14 +122,11 @@ func (s *ServerPoolTest) start() {
 				s.preNegLock.Unlock()
 				return 0
 			}
-
 			s.queryWg.Add(1)
-
 			idx := testNodeIndex(node.ID())
 			n := &s.testNodes[idx]
 			canConnect := !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle
 			s.preNegLock.Unlock()
-
 			defer s.queryWg.Done()
 
 			if s.preNegFail {
@@ -140,17 +134,14 @@ func (s *ServerPoolTest) start() {
 				s.beginWait()
 				s.clock.Sleep(time.Second * 5)
 				s.endWait()
-
 				return -1
 			}
-
 			switch idx % 3 {
 			case 0:
 				// pre-neg returns true only if connection is possible
 				if canConnect {
 					return 1
 				}
-
 				return 0
 			case 1:
 				// pre-neg returns true but connection might still fail
@@ -160,14 +151,11 @@ func (s *ServerPoolTest) start() {
 				if canConnect {
 					return 1
 				}
-
 				s.beginWait()
 				s.clock.Sleep(time.Second * 5)
 				s.endWait()
-
 				return -1
 			}
-
 			return -1
 		}
 	}
@@ -184,10 +172,8 @@ func (s *ServerPoolTest) start() {
 	s.disconnect = make(map[int][]int)
 	s.sp.Start()
 	s.quit = make(chan chan struct{})
-
 	go func() {
 		last := int32(-1)
-
 		for {
 			select {
 			case <-time.After(time.Millisecond * 100):
@@ -196,7 +182,6 @@ func (s *ServerPoolTest) start() {
 					// advance clock if test is stuck (might happen in rare cases)
 					s.clock.Run(time.Second)
 				}
-
 				last = c
 			case quit := <-s.quit:
 				close(quit)
@@ -221,18 +206,15 @@ func (s *ServerPoolTest) stop() {
 	s.preNegLock.Lock()
 	s.stopping = false
 	s.preNegLock.Unlock()
-
 	for i := range s.testNodes {
 		n := &s.testNodes[i]
 		if n.connected {
 			n.totalConn += s.cycle
 		}
-
 		n.connected = false
 		n.node = nil
 		n.nextConnCycle = 0
 	}
-
 	s.conn, s.servedConn = 0, 0
 }
 
@@ -246,20 +228,15 @@ func (s *ServerPoolTest) run() {
 				s.preNegLock.Lock()
 				n.connected = false
 				s.preNegLock.Unlock()
-
 				n.node = nil
 				s.conn--
-
 				if n.service {
 					s.servedConn--
 				}
-
 				n.nextConnCycle = s.cycle + n.waitCycles
 			}
-
 			delete(s.disconnect, s.cycle)
 		}
-
 		if s.conn < spTestTarget {
 			s.dialCount++
 			s.beginWait()
@@ -268,14 +245,12 @@ func (s *ServerPoolTest) run() {
 			dial := s.spi.Node()
 			id := dial.ID()
 			idx := testNodeIndex(id)
-
 			n := &s.testNodes[idx]
 			if !n.connected && n.connectCycles != 0 && s.cycle >= n.nextConnCycle {
 				s.conn++
 				if n.service {
 					s.servedConn++
 				}
-
 				n.totalConn -= s.cycle
 				s.preNegLock.Lock()
 				n.connected = true
@@ -284,13 +259,11 @@ func (s *ServerPoolTest) run() {
 				s.disconnect[dc] = append(s.disconnect[dc], idx)
 				n.node = dial
 				nv, _ := s.sp.RegisterNode(n.node)
-
 				if n.service {
 					nv.Served([]ServedRequest{{ReqType: 0, Amount: 100}}, 0)
 				}
 			}
 		}
-
 		s.serviceCycles += s.servedConn
 		s.clock.Run(time.Second)
 		s.preNegLock.Lock()
@@ -305,9 +278,7 @@ func (s *ServerPoolTest) setNodes(count, conn, wait int, service, trusted bool) 
 		for s.testNodes[idx].connectCycles != 0 || s.testNodes[idx].connected {
 			idx = rand.Intn(spTestNodes)
 		}
-
 		res = append(res, idx)
-
 		s.preNegLock.Lock()
 		s.testNodes[idx] = spTestNode{
 			connectCycles: conn,
@@ -315,12 +286,10 @@ func (s *ServerPoolTest) setNodes(count, conn, wait int, service, trusted bool) 
 			service:       service,
 		}
 		s.preNegLock.Unlock()
-
 		if trusted {
 			s.addTrusted(idx)
 		}
 	}
-
 	return
 }
 
@@ -330,12 +299,10 @@ func (s *ServerPoolTest) resetNodes() {
 			n.totalConn += s.cycle
 			s.sp.UnregisterNode(n.node)
 		}
-
 		s.preNegLock.Lock()
 		s.testNodes[i] = spTestNode{totalConn: n.totalConn}
 		s.preNegLock.Unlock()
 	}
-
 	s.conn, s.servedConn = 0, 0
 	s.disconnect = make(map[int][]int)
 	s.trusted = nil
@@ -343,21 +310,17 @@ func (s *ServerPoolTest) resetNodes() {
 
 func (s *ServerPoolTest) checkNodes(t *testing.T, nodes []int) {
 	var sum int
-
 	for _, idx := range nodes {
 		n := &s.testNodes[idx]
 		if n.connected {
 			n.totalConn += s.cycle
 		}
-
 		sum += n.totalConn
-
 		n.totalConn = 0
 		if n.connected {
 			n.totalConn -= s.cycle
 		}
 	}
-
 	if sum < spMinTotal || sum > spMaxTotal {
 		t.Errorf("Total connection amount %d outside expected range %d to %d", sum, spMinTotal, spMaxTotal)
 	}
@@ -385,7 +348,6 @@ func testServerPoolChangedNodes(t *testing.T, preNeg bool) {
 	s.start()
 	s.run()
 	s.checkNodes(t, nodes)
-
 	for i := 0; i < 3; i++ {
 		s.resetNodes()
 		nodes := s.setNodes(100, 200, 200, true, false)

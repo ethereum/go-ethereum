@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -187,7 +188,7 @@ func discv4Resolve(ctx *cli.Context) error {
 
 func discv4ResolveJSON(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 
 	nodesFile := ctx.Args().Get(0)
@@ -222,7 +223,7 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 
 func discv4Crawl(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
-		return fmt.Errorf("need nodes file as argument")
+		return errors.New("need nodes file as argument")
 	}
 
 	nodesFile := ctx.Args().First()
@@ -376,8 +377,7 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 }
 
 func parseBootnodes(ctx *cli.Context) ([]*enode.Node, error) {
-	s := params.RinkebyBootnodes
-
+	s := params.MainnetBootnodes
 	if ctx.IsSet(bootnodesFlag.Name) {
 		input := ctx.String(bootnodesFlag.Name)
 		if input == "" {

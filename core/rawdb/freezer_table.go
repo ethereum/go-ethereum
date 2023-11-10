@@ -779,8 +779,7 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 		if !t.noCompression {
 			decompressedSize, _ = snappy.DecodedLen(item)
 		}
-
-		if i > 0 && uint64(outputSize+decompressedSize) > maxBytes {
+		if i > 0 && maxBytes != 0 && uint64(outputSize+decompressedSize) > maxBytes {
 			break
 		}
 
@@ -802,8 +801,10 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 }
 
 // retrieveItems reads up to 'count' items from the table. It reads at least
-// one item, but otherwise avoids reading more than maxBytes bytes.
-// It returns the (potentially compressed) data, and the sizes.
+// one item, but otherwise avoids reading more than maxBytes bytes. Freezer
+// will ignore the size limitation and continuously allocate memory to store
+// data if maxBytes is 0. It returns the (potentially compressed) data, and
+// the sizes.
 func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []int, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -826,30 +827,22 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	if start+count > items {
 		count = items - start
 	}
-
-	var (
-		output     = make([]byte, maxBytes) // Buffer to read data into
-		outputSize int                      // Used size of that buffer
-	)
+	var output []byte // Buffer to read data into
+	if maxBytes != 0 {
+		output = make([]byte, 0, maxBytes)
+	} else {
+		output = make([]byte, 0, 1024) // initial buffer cap
+	}
 	// readData is a helper method to read a single data item from disk.
 	readData := func(fileId, start uint32, length int) error {
-		// In case a small limit is used, and the elements are large, may need to
-		// realloc the read-buffer when reading the first (and only) item.
-		if len(output) < length {
-			output = make([]byte, length)
-		}
-
+		output = grow(output, length)
 		dataFile, exist := t.files[fileId]
 		if !exist {
 			return fmt.Errorf("missing data file %d", fileId)
 		}
-
-		if _, err := dataFile.ReadAt(output[outputSize:outputSize+length], int64(start)); err != nil {
+		if _, err := dataFile.ReadAt(output[len(output)-length:], int64(start)); err != nil {
 			return err
 		}
-
-		outputSize += length
-
 		return nil
 	}
 	// Read all the indexes in one go
@@ -883,8 +876,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 
 			readStart = 0
 		}
-
-		if i > 0 && uint64(totalSize+size) > maxBytes {
+		if i > 0 && uint64(totalSize+size) > maxBytes && maxBytes != 0 {
 			// About to break out due to byte limit being exceeded. We don't
 			// read this last item, but we need to do the deferred reads now.
 			if unreadSize > 0 {
@@ -899,8 +891,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 		unreadSize += size
 		totalSize += size
 		sizes = append(sizes, size)
-
-		if i == len(indices)-2 || uint64(totalSize) > maxBytes {
+		if i == len(indices)-2 || (uint64(totalSize) > maxBytes && maxBytes != 0) {
 			// Last item, need to do the read now
 			if err := readData(secondIndex.filenum, readStart, unreadSize); err != nil {
 				return nil, nil, err
@@ -912,8 +903,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 
 	// Update metrics.
 	t.readMeter.Mark(int64(totalSize))
-
-	return output[:outputSize], sizes, nil
+	return output, sizes, nil
 }
 
 // has returns an indicator whether the specified number data is still accessible
@@ -1049,15 +1039,15 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 // Bor related changes
 //
 
-// Fill adds empty data till given number (convenience method for backward compatibilty)
+// Fill adds empty data till given number (convenience method for backward compatibility)
 func (t *freezerTable) Fill(number uint64) error {
 	if t.items.Load() < number {
 		b := t.newBatch()
-		log.Info("Filling all data into freezer for backward compatablity", "name", t.name, "items", t.items, "number", number)
+		log.Info("Filling all data into freezer for backward compatibility", "name", t.name, "items", &t.items, "number", number)
 
 		for t.items.Load() < number {
 			if err := b.Append(t.items.Load(), nil); err != nil {
-				log.Error("Failed to fill data into freezer", "name", t.name, "items", t.items, "number", number, "err", err)
+				log.Error("Failed to fill data into freezer", "name", t.name, "items", &t.items, "number", number, "err", err)
 				return err
 			}
 		}

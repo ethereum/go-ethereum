@@ -18,6 +18,7 @@ package ethtest
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"time"
 
@@ -302,6 +303,5 @@ func (c *Conn) ReadSnap(id uint64) (Message, error) {
 
 		return snpMsg.(Message), nil
 	}
-
-	return nil, fmt.Errorf("request timed out")
+	return nil, errors.New("request timed out")
 }

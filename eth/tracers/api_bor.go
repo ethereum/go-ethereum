@@ -44,10 +44,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	}
 
 	// block object cannot be converted to JSON since much of the fields are non-public
-	blockFields, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig(), api.backend.ChainDb())
-	if err != nil {
-		return nil, err
-	}
+	blockFields := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig(), api.backend.ChainDb())
 
 	res.Block = blockFields
 
@@ -71,7 +68,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 
 	// Execute all the transaction contained within the block concurrently
 	var (
-		signer                = types.MakeSigner(api.backend.ChainConfig(), block.Number())
+		signer                = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		txs, stateSyncPresent = api.getAllBlockTransactions(ctx, block)
 		deleteEmptyObjects    = api.backend.ChainConfig().IsEIP158(block.Number())
 	)
@@ -95,7 +92,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 
 		if borTx {
 			callmsg := prepareCallMessage(*message)
-			execRes, err = statefull.ApplyBorMessage(*vmenv, callmsg)
+			execRes, err = statefull.ApplyBorMessage(vmenv, callmsg)
 		} else {
 			execRes, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit), nil)
 		}

@@ -306,15 +306,11 @@ func rpcRequest(t *testing.T, url, method string, extraHeaders ...string) *http.
 }
 
 func batchRpcRequest(t *testing.T, url string, methods []string, extraHeaders ...string) *http.Response {
-	t.Helper()
-
 	reqs := make([]string, len(methods))
 	for i, m := range methods {
 		reqs[i] = fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, m)
 	}
-
 	body := fmt.Sprintf(`[%s]`, strings.Join(reqs, ","))
-
 	return baseRpcRequest(t, url, body, extraHeaders...)
 }
 
@@ -323,12 +319,10 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 
 	// Create the request.
 	body := bytes.NewReader([]byte(bodyStr))
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body)
+	req, err := http.NewRequest(http.MethodPost, url, body)
 	if err != nil {
 		t.Fatal("could not create http request:", err)
 	}
-
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("accept-encoding", "identity")
 
@@ -336,7 +330,6 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	if len(extraHeaders)%2 != 0 {
 		panic("odd extraHeaders length")
 	}
-
 	for i := 0; i < len(extraHeaders); i += 2 {
 		key, value := extraHeaders[i], extraHeaders[i+1]
 		if strings.EqualFold(key, "host") {
@@ -348,14 +341,11 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 
 	// Perform the request.
 	t.Logf("checking RPC/HTTP on %s %v", url, extraHeaders)
-
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	t.Cleanup(func() { resp.Body.Close() })
-
 	return resp
 }
 
@@ -367,18 +357,17 @@ func (testClaim) Valid() error {
 
 func TestJWT(t *testing.T) {
 	var secret = []byte("secret")
-
 	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
 		if method == nil {
 			method = jwt.SigningMethodHS256
 		}
-
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
-
 		return ss
 	}
-	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")}, nil)
+	cfg := rpcEndpointConfig{jwtSecret: []byte("secret")}
+	httpcfg := &httpConfig{rpcEndpointConfig: cfg}
+	wscfg := &wsConfig{Origins: []string{"*"}, rpcEndpointConfig: cfg}
+	srv := createAndStartServer(t, httpcfg, true, wscfg, nil)
 	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
 	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 
@@ -410,9 +399,7 @@ func TestJWT(t *testing.T) {
 		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
 			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
 		}
-
 		token = tokenFn()
-		// nolint:bodyclose
 		if resp := rpcRequest(t, htUrl, testMethod, "Authorization", token); resp.StatusCode != 200 {
 			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
 		}
@@ -421,7 +408,7 @@ func TestJWT(t *testing.T) {
 	expFail := []func() string{
 		// future
 		func() string {
-			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 1}))
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 2}))
 		},
 		// stale
 		func() string {
@@ -472,9 +459,6 @@ func TestJWT(t *testing.T) {
 			return fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
 		},
 	}
-
-	var resp *http.Response
-
 	for i, tokenFn := range expFail {
 		token := tokenFn()
 		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
@@ -482,14 +466,11 @@ func TestJWT(t *testing.T) {
 		}
 
 		token = tokenFn()
-		resp = rpcRequest(t, htUrl, testMethod, "Authorization", token)
-
+		resp := rpcRequest(t, htUrl, testMethod, "Authorization", token)
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
 	}
-
-	defer resp.Body.Close()
 	srv.stop()
 }
 

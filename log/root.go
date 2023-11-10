@@ -108,6 +108,15 @@ func Crit(msg string, ctx ...interface{}) {
 	os.Exit(1)
 }
 
+// Output is a convenient alias for write, allowing for the modification of
+// the calldepth (number of stack frames to skip).
+// calldepth influences the reported line number of the log message.
+// A calldepth of zero reports the immediate caller of Output.
+// Non-zero calldepth skips as many stack frames.
+func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
+	root.write(msg, lvl, ctx, calldepth+skipLevel)
+}
+
 func OnTrace(fn func(l Logging)) {
 	if root.GetHandler().Level() >= LvlTrace {
 		fn(root.Trace)
@@ -138,13 +147,4 @@ func OnCrit(fn func(l Logging)) {
 	if root.GetHandler().Level() >= LvlCrit {
 		fn(root.Crit)
 	}
-}
-
-// Output is a convenient alias for write, allowing for the modification of
-// the calldepth (number of stack frames to skip).
-// calldepth influences the reported line number of the log message.
-// A calldepth of zero reports the immediate caller of Output.
-// Non-zero calldepth skips as many stack frames.
-func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
-	root.write(msg, lvl, ctx, calldepth+skipLevel)
 }

@@ -109,6 +109,9 @@ func TestValidation(t *testing.T) {
 	// Config that has not timestamp enabled
 	legacyConfig := *params.MainnetChainConfig
 	legacyConfig.ShanghaiBlock = nil
+	legacyConfig.CancunBlock = nil
+	legacyConfig.PragueBlock = nil
+	legacyConfig.VerkleBlock = nil
 
 	tests := []struct {
 		config *params.ChainConfig

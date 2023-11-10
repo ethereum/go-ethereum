@@ -333,13 +333,13 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 
 	// Generate the Merkle proofs for the first and last account
 	proof := light.NewNodeSet()
-	if err := tr.Prove(req.Origin[:], 0, proof); err != nil {
+	if err := tr.Prove(req.Origin[:], proof); err != nil {
 		log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 		return nil, nil
 	}
 
 	if last != (common.Hash{}) {
-		if err := tr.Prove(last[:], 0, proof); err != nil {
+		if err := tr.Prove(last[:], proof); err != nil {
 			log.Warn("Failed to prove account range", "last", last, "err", err)
 			return nil, nil
 		}
@@ -453,13 +453,13 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			}
 
 			proof := light.NewNodeSet()
-			if err := stTrie.Prove(origin[:], 0, proof); err != nil {
+			if err := stTrie.Prove(origin[:], proof); err != nil {
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return nil, nil
 			}
 
 			if last != (common.Hash{}) {
-				if err := stTrie.Prove(last[:], 0, proof); err != nil {
+				if err := stTrie.Prove(last[:], proof); err != nil {
 					log.Warn("Failed to prove storage range", "last", last, "err", err)
 					return nil, nil
 				}

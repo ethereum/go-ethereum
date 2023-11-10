@@ -136,31 +136,25 @@ func (b *balance) addValue(now mclock.AbsTime, amount int64, pos bool, force boo
 		val    utils.ExpiredValue
 		offset utils.Fixed64
 	)
-
 	if pos {
 		offset, val = b.posExp.LogOffset(now), b.pos
 	} else {
 		offset, val = b.negExp.LogOffset(now), b.neg
 	}
-
 	old := val.Value(offset)
 	if amount > 0 && (amount > maxBalance || old > maxBalance-uint64(amount)) {
 		if !force {
 			return old, 0, 0, errBalanceOverflow
 		}
-
 		val = utils.ExpiredValue{}
 		amount = maxBalance
 	}
-
 	net := val.Add(amount, offset)
-
 	if pos {
 		b.pos = val
 	} else {
 		b.neg = val
 	}
-
 	return old, val.Value(offset), net, nil
 }
 
@@ -170,14 +164,11 @@ func (b *balance) setValue(now mclock.AbsTime, pos uint64, neg uint64) error {
 	if pos > maxBalance || neg > maxBalance {
 		return errBalanceOverflow
 	}
-
 	var pb, nb utils.ExpiredValue
-
 	pb.Add(int64(pos), b.posExp.LogOffset(now))
 	nb.Add(int64(neg), b.negExp.LogOffset(now))
 	b.pos = pb
 	b.neg = nb
-
 	return nil
 }
 
@@ -196,7 +187,6 @@ func (n *nodeBalance) GetBalance() (uint64, uint64) {
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-
 	return n.balance.posValue(now), n.balance.negValue(now)
 }
 
@@ -208,7 +198,6 @@ func (n *nodeBalance) GetRawBalance() (utils.ExpiredValue, utils.ExpiredValue) {
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-
 	return n.balance.pos, n.balance.neg
 }
 
@@ -228,17 +217,13 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
 		n.updateBalance(now)
-
 		if old, new, _, err = n.balance.addValue(now, amount, true, false); err != nil {
 			return false
 		}
-
 		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
 		n.storeBalance(true, false)
-
 		return true
 	})
-
 	if err != nil {
 		return old, old, err
 	}
@@ -246,7 +231,6 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 	for _, cb := range callbacks {
 		cb()
 	}
-
 	if n.setFlags {
 		if setPriority {
 			n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
@@ -254,7 +238,6 @@ func (n *nodeBalance) AddBalance(amount int64) (uint64, uint64, error) {
 		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
 	}
-
 	return old, new, nil
 }
 
@@ -269,21 +252,17 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 	// Operation with holding the lock
 	n.bt.updateTotalBalance(n, func() bool {
 		n.updateBalance(now)
-
 		if err := n.balance.setValue(now, pos, neg); err != nil {
 			return false
 		}
-
 		callbacks, setPriority = n.checkCallbacks(now), n.checkPriorityStatus()
 		n.storeBalance(true, true)
-
 		return true
 	})
 	// Operation without holding the lock
 	for _, cb := range callbacks {
 		cb()
 	}
-
 	if n.setFlags {
 		if setPriority {
 			n.bt.ns.SetStateSub(n.node, n.bt.setup.priorityFlag, nodestate.Flags{}, 0)
@@ -291,7 +270,6 @@ func (n *nodeBalance) SetBalance(pos, neg uint64) error {
 		// Note: priority flag is automatically removed by the zero priority callback if necessary
 		n.signalPriorityUpdate()
 	}
-
 	return nil
 }
 
@@ -304,9 +282,7 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 		fcost = float64(cost)
 		now   = n.bt.clock.Now()
 	)
-
 	n.updateBalance(now)
-
 	if !n.balance.pos.IsZero() {
 		posCost := -int64(fcost * n.posFactor.RequestFactor)
 		if posCost == 0 {
@@ -314,24 +290,19 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 			newBalance = n.balance.posValue(now)
 		} else {
 			var net int64
-
 			_, newBalance, net, _ = n.balance.addValue(now, posCost, true, false)
 			if posCost == net {
 				fcost = 0
 			} else {
 				fcost *= 1 - float64(net)/float64(posCost)
 			}
-
 			check = true
 		}
 	}
-
 	if fcost > 0 && n.negFactor.RequestFactor != 0 {
 		n.balance.addValue(now, int64(fcost*n.negFactor.RequestFactor), false, false)
-
 		check = true
 	}
-
 	n.sumReqCost += cost
 
 	var callbacks []func()
@@ -347,7 +318,6 @@ func (n *nodeBalance) RequestServed(cost uint64) (newBalance uint64) {
 			}
 		})
 	}
-
 	return
 }
 
@@ -358,7 +328,6 @@ func (n *nodeBalance) priority(capacity uint64) int64 {
 
 	now := n.bt.clock.Now()
 	n.updateBalance(now)
-
 	return n.balanceToPriority(now, n.balance, capacity)
 }
 
@@ -378,22 +347,17 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 	if addBalance != 0 {
 		b.addValue(now, addBalance, true, true)
 	}
-
 	if future > 0 {
 		var avgReqCost float64
-
 		dt := time.Duration(n.lastUpdate - n.initTime)
 		if dt > time.Second {
 			avgReqCost = float64(n.sumReqCost) * 2 / float64(dt)
 		}
-
 		b = n.reducedBalance(b, now, future, capacity, avgReqCost)
 	}
-
 	if bias > 0 {
 		b = n.reducedBalance(b, now.Add(future), bias, capacity, 0)
 	}
-
 	pri := n.balanceToPriority(now, b, capacity)
 	// Ensure that biased estimates are always lower than actual priorities, even if
 	// the bias is very small.
@@ -403,11 +367,9 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 	if pri >= current {
 		pri = current - 1
 	}
-
 	if update {
 		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
 	}
-
 	return pri
 }
 
@@ -420,7 +382,6 @@ func (n *nodeBalance) SetPriceFactors(posFactor, negFactor PriceFactors) {
 	n.posFactor, n.negFactor = posFactor, negFactor
 	callbacks := n.checkCallbacks(now)
 	n.lock.Unlock()
-
 	if callbacks != nil {
 		n.bt.ns.Operation(func() {
 			for _, cb := range callbacks {
@@ -444,10 +405,8 @@ func (n *nodeBalance) activate() {
 		if n.active {
 			return false
 		}
-
 		n.active = true
 		n.lastUpdate = n.bt.clock.Now()
-
 		return true
 	})
 }
@@ -458,17 +417,13 @@ func (n *nodeBalance) deactivate() {
 		if !n.active {
 			return false
 		}
-
 		n.updateBalance(n.bt.clock.Now())
-
 		if n.updateEvent != nil {
 			n.updateEvent.Stop()
 			n.updateEvent = nil
 		}
-
 		n.storeBalance(true, true)
 		n.active = false
-
 		return true
 	})
 }
@@ -486,7 +441,6 @@ func (n *nodeBalance) storeBalance(pos, neg bool) {
 	if pos {
 		n.bt.storeBalance(n.node.ID().Bytes(), false, n.balance.pos)
 	}
-
 	if neg {
 		n.bt.storeBalance([]byte(n.connAddress), true, n.balance.neg)
 	}
@@ -499,17 +453,14 @@ func (n *nodeBalance) storeBalance(pos, neg bool) {
 // Note 2: the callback function runs inside a NodeStateMachine operation
 func (n *nodeBalance) addCallback(id int, threshold int64, callback func()) {
 	n.removeCallback(id)
-
 	idx := 0
 	for idx < n.callbackCount && threshold > n.callbacks[idx].threshold {
 		idx++
 	}
-
 	for i := n.callbackCount - 1; i >= idx; i-- {
 		n.callbackIndex[n.callbacks[i].id]++
 		n.callbacks[i+1] = n.callbacks[i]
 	}
-
 	n.callbackCount++
 	n.callbackIndex[id] = idx
 	n.callbacks[idx] = balanceCallback{id, threshold, callback}
@@ -525,15 +476,12 @@ func (n *nodeBalance) removeCallback(id int) bool {
 	if idx == -1 {
 		return false
 	}
-
 	n.callbackIndex[id] = -1
 	for i := idx; i < n.callbackCount-1; i++ {
 		n.callbackIndex[n.callbacks[i+1].id]--
 		n.callbacks[i] = n.callbacks[i+1]
 	}
-
 	n.callbackCount--
-
 	return true
 }
 
@@ -544,7 +492,6 @@ func (n *nodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
 	if n.callbackCount == 0 || n.capacity == 0 {
 		return
 	}
-
 	pri := n.balanceToPriority(now, n.balance, n.capacity)
 	for n.callbackCount != 0 && n.callbacks[n.callbackCount-1].threshold >= pri {
 		n.callbackCount--
@@ -552,7 +499,6 @@ func (n *nodeBalance) checkCallbacks(now mclock.AbsTime) (callbacks []func()) {
 		callbacks = append(callbacks, n.callbacks[n.callbackCount].callback)
 	}
 	n.scheduleCheck(now)
-
 	return
 }
 
@@ -564,10 +510,8 @@ func (n *nodeBalance) scheduleCheck(now mclock.AbsTime) {
 		if !ok {
 			n.nextUpdate = 0
 			n.updateAfter(0)
-
 			return
 		}
-
 		if n.nextUpdate == 0 || n.nextUpdate > now.Add(d) {
 			if d > time.Second {
 				// Note: if the scheduled update is not in the very near future then we
@@ -576,7 +520,6 @@ func (n *nodeBalance) scheduleCheck(now mclock.AbsTime) {
 				// brings the expected firing time a little bit closer.
 				d = ((d - time.Second) * 7 / 8) + time.Second
 			}
-
 			n.nextUpdate = now.Add(d)
 			n.updateAfter(d)
 		}
@@ -594,7 +537,6 @@ func (n *nodeBalance) updateAfter(dt time.Duration) {
 		} else {
 			n.updateEvent = n.bt.clock.AfterFunc(dt, func() {
 				var callbacks []func()
-
 				n.lock.Lock()
 				if n.callbackCount != 0 {
 					now := n.bt.clock.Now()
@@ -602,7 +544,6 @@ func (n *nodeBalance) updateAfter(dt time.Duration) {
 					callbacks = n.checkCallbacks(now)
 				}
 				n.lock.Unlock()
-
 				if callbacks != nil {
 					n.bt.ns.Operation(func() {
 						for _, cb := range callbacks {
@@ -622,7 +563,6 @@ func (n *nodeBalance) balanceExhausted() {
 	n.storeBalance(true, false)
 	n.hasPriority = false
 	n.lock.Unlock()
-
 	if n.setFlags {
 		n.bt.ns.SetStateSub(n.node, nodestate.Flags{}, n.bt.setup.priorityFlag, 0)
 	}
@@ -635,10 +575,8 @@ func (n *nodeBalance) checkPriorityStatus() bool {
 	if !n.hasPriority && !n.balance.pos.IsZero() {
 		n.hasPriority = true
 		n.addCallback(balanceCallbackZero, 0, func() { n.balanceExhausted() })
-
 		return true
 	}
-
 	return false
 }
 
@@ -659,7 +597,6 @@ func (n *nodeBalance) setCapacity(capacity uint64) {
 	n.capacity = capacity
 	callbacks := n.checkCallbacks(now)
 	n.lock.Unlock()
-
 	for _, cb := range callbacks {
 		cb()
 	}
@@ -673,7 +610,6 @@ func (n *nodeBalance) balanceToPriority(now mclock.AbsTime, b balance, capacity 
 	if pos > 0 {
 		return int64(pos / capacity)
 	}
-
 	return -int64(b.negValue(now))
 }
 
@@ -684,7 +620,6 @@ func (n *nodeBalance) priorityToBalance(priority int64, capacity uint64) (uint64
 	if priority > 0 {
 		return uint64(priority) * n.capacity, 0
 	}
-
 	return 0, uint64(-priority)
 }
 
@@ -697,24 +632,20 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 		at  = start.Add(dt / 2)
 		dtf = float64(dt)
 	)
-
 	if !b.pos.IsZero() {
 		factor := n.posFactor.connectionPrice(capacity, avgReqCost)
 		diff := -int64(dtf * factor)
 		_, _, net, _ := b.addValue(at, diff, true, false)
-
 		if net == diff {
 			dtf = 0
 		} else {
 			dtf += float64(net) / factor
 		}
 	}
-
 	if dtf > 0 {
 		factor := n.negFactor.connectionPrice(capacity, avgReqCost)
 		b.addValue(at, int64(dtf*factor), false, false)
 	}
-
 	return b
 }
 
@@ -731,20 +662,16 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		targetPos, targetNeg = n.priorityToBalance(priority, n.capacity)
 		diffTime             float64
 	)
-
 	if pos > 0 {
 		timePrice := n.posFactor.connectionPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
-
 		if targetPos > 0 {
 			if targetPos > pos {
 				return 0, true
 			}
-
 			diffTime = float64(pos-targetPos) / timePrice
-
 			return time.Duration(diffTime), true
 		} else {
 			diffTime = float64(pos) / timePrice
@@ -754,16 +681,13 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 			return 0, true
 		}
 	}
-
 	neg := n.balance.negValue(now)
 	if targetNeg > neg {
 		timePrice := n.negFactor.connectionPrice(n.capacity, 0)
 		if timePrice < 1e-100 {
 			return 0, false
 		}
-
 		diffTime += float64(targetNeg-neg) / timePrice
 	}
-
 	return time.Duration(diffTime), true
 }

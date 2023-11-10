@@ -34,6 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	errInvalidTopic   = errors.New("invalid topic(s)")
+	errFilterNotFound = errors.New("filter not found")
+)
+
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
@@ -423,7 +428,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 	api.filtersMu.Unlock()
 
 	if !found || f.typ != LogsSubscription {
-		return nil, fmt.Errorf("filter not found")
+		return nil, errFilterNotFound
 	}
 
 	borConfig := api.chainConfig.Bor
@@ -532,7 +537,7 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		}
 	}
 
-	return []interface{}{}, fmt.Errorf("filter not found")
+	return []interface{}{}, errFilterNotFound
 }
 
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil,
@@ -573,7 +578,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	if raw.BlockHash != nil {
 		if raw.FromBlock != nil || raw.ToBlock != nil {
 			// BlockHash is mutually exclusive with FromBlock/ToBlock criteria
-			return fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
+			return errors.New("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
 		}
 
 		args.BlockHash = raw.BlockHash
@@ -653,11 +658,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 						args.Topics[i] = append(args.Topics[i], parsed)
 					} else {
-						return fmt.Errorf("invalid topic(s)")
+						return errInvalidTopic
 					}
 				}
 			default:
-				return fmt.Errorf("invalid topic(s)")
+				return errInvalidTopic
 			}
 		}
 	}

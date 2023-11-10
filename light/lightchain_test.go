@@ -43,11 +43,9 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	headers := make([]*types.Header, len(blocks))
-
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
-
 	return headers
 }
 
@@ -58,7 +56,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	db := rawdb.NewMemoryDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
-	blockchain, _ := NewLightChain(&dummyOdr{db: db, indexerConfig: TestClientIndexerConfig}, gspec.Config, ethash.NewFaker(), nil, nil)
+	blockchain, _ := NewLightChain(&dummyOdr{db: db, indexerConfig: TestClientIndexerConfig}, gspec.Config, ethash.NewFaker(), nil)
 
 	// Create and inject the requested chain
 	if n == 0 {
@@ -66,8 +64,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	}
 	// Header-only chain requested
 	headers := makeHeaderChain(genesis.Header(), n, db, canonicalSeed)
-	_, err := blockchain.InsertHeaderChain(headers, 1)
-
+	_, err := blockchain.InsertHeaderChain(headers)
 	return db, blockchain, err
 }
 
@@ -79,12 +76,10 @@ func newTestLightChain() *LightChain {
 		Config:     params.TestChainConfig,
 	}
 	gspec.MustCommit(db)
-
-	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker(), nil, nil)
+	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker(), nil)
 	if err != nil {
 		panic(err)
 	}
-
 	return lc
 }
 
@@ -99,25 +94,21 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 	var hash1, hash2 common.Hash
 	hash1 = LightChain.GetHeaderByNumber(uint64(i)).Hash()
 	hash2 = LightChain2.GetHeaderByNumber(uint64(i)).Hash()
-
 	if hash1 != hash2 {
 		t.Errorf("chain content mismatch at %d: have hash %v, want hash %v", i, hash2, hash1)
 	}
 	// Extend the newly created chain
 	headerChainB := makeHeaderChain(LightChain2.CurrentHeader(), n, db, forkSeed)
-	if _, err := LightChain2.InsertHeaderChain(headerChainB, 1); err != nil {
+	if _, err := LightChain2.InsertHeaderChain(headerChainB); err != nil {
 		t.Fatalf("failed to insert forking chain: %v", err)
 	}
 	// Sanity check that the forked chain can be imported into the original
 	var tdPre, tdPost *big.Int
-
 	cur := LightChain.CurrentHeader()
 	tdPre = LightChain.GetTd(cur.Hash(), cur.Number.Uint64())
-
 	if err := testHeaderChainImport(headerChainB, LightChain); err != nil {
 		t.Fatalf("failed to import forked header chain: %v", err)
 	}
-
 	last := headerChainB[len(headerChainB)-1]
 	tdPost = LightChain.GetTd(last.Hash(), last.Number.Uint64())
 	// Compare the total difficulties of the chains
@@ -129,7 +120,7 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := lightchain.engine.VerifyHeader(lightchain.hc, header, true); err != nil {
+		if err := lightchain.engine.VerifyHeader(lightchain.hc, header); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
@@ -139,7 +130,6 @@ func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error 
 		rawdb.WriteHeader(lightchain.chainDb, header)
 		lightchain.chainmu.Unlock()
 	}
-
 	return nil
 }
 
@@ -257,7 +247,6 @@ func TestBrokenHeaderChain(t *testing.T) {
 
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
 	var chain []*types.Header
-
 	for i, difficulty := range d {
 		header := &types.Header{
 			Coinbase:    common.Address{seed},
@@ -272,10 +261,8 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 		} else {
 			header.ParentHash = chain[i-1].Hash()
 		}
-
 		chain = append(chain, types.CopyHeader(header))
 	}
-
 	return chain
 }
 
@@ -313,8 +300,8 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 	bc := newTestLightChain()
 
 	// Insert an easy and a difficult chain afterwards
-	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, first, 11), 1)
-	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, second, 22), 1)
+	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, first, 11))
+	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, second, 22))
 	// Check that the chain is valid number and link wise
 	prev := bc.CurrentHeader()
 	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number.Uint64() - 1); header.Number.Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number.Uint64()-1) {
@@ -335,11 +322,9 @@ func TestBadHeaderHashes(t *testing.T) {
 
 	// Create a chain, ban a hash and try to import
 	var err error
-
 	headers := makeHeaderChainWithDiff(bc.genesisBlock, []int{1, 2, 4}, 10)
 	core.BadHashes[headers[2].Hash()] = true
-
-	if _, err = bc.InsertHeaderChain(headers, 1); !errors.Is(err, core.ErrBannedHash) {
+	if _, err = bc.InsertHeaderChain(headers); !errors.Is(err, core.ErrBannedHash) {
 		t.Errorf("error mismatch: have: %v, want %v", err, core.ErrBannedHash)
 	}
 }
@@ -352,24 +337,20 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	// Create a chain, import and ban afterwards
 	headers := makeHeaderChainWithDiff(bc.genesisBlock, []int{1, 2, 3, 4}, 10)
 
-	if _, err := bc.InsertHeaderChain(headers, 1); err != nil {
+	if _, err := bc.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to import headers: %v", err)
 	}
-
 	if bc.CurrentHeader().Hash() != headers[3].Hash() {
 		t.Errorf("last header hash mismatch: have: %x, want %x", bc.CurrentHeader().Hash(), headers[3].Hash())
 	}
-
 	core.BadHashes[headers[3].Hash()] = true
-
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
 
 	// Create a new LightChain and check that it rolled back the state.
-	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, ethash.NewFaker(), nil, nil)
+	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, ethash.NewFaker(), nil)
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
-
 	if ncm.CurrentHeader().Hash() != headers[2].Hash() {
 		t.Errorf("last header hash mismatch: have: %x, want %x", ncm.CurrentHeader().Hash(), headers[2].Hash())
 	}

@@ -125,7 +125,7 @@ func (gc *GenesisContractsClient) LastStateId(state *state.StateDB, number uint6
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, state, nil)
+	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, state, nil, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,6 @@
 # This file configures github.com/golangci/golangci-lint.
 
 run:
-  go: '1.20'
   timeout: 20m
   tests: true
   # default is true. Enables skipping of directories:
@@ -9,180 +8,60 @@ run:
   skip-dirs-use-default: true
   skip-files:
     - core/genesis_alloc.go
-    - gen_.*.go
-    - .*_gen.go
 
 linters:
+  disable-all: true
   enable:
     - goconst
     - goimports
+    - gosimple
+    - govet
+    - ineffassign
     - misspell
     - unconvert
-    - bodyclose
-    - containedctx
-    - contextcheck
-    - decorder
+    - typecheck
+    - unused
+    - staticcheck
+    - bidichk
     - durationcheck
-    - errchkjson
-    - errname
-    - exhaustive
     - exportloopref
-    - gocognit
-    - gofmt
-    # - gomnd
-    # - gomoddirectives
-    - gosec
-    - makezero
-    - nestif
-    - nilerr
-    - nilnil
-    - noctx
-    #- nosprintfhostport # TODO: do we use IPv6?
-    - paralleltest
-    - prealloc
-    - predeclared
-    #- promlinter
-    #- revive
-    # - tagliatelle
-    - tenv
-    - thelper
-    - tparallel
-    - unconvert
-    - unparam
-    - wsl
-    - asasalint
-    #- errorlint causes stack overflow. TODO: recheck after each golangci update
+    - whitespace
+
+    # - structcheck # lots of false positives
+    # - errcheck #lot of false positives
+    # - contextcheck
+    # - errchkjson # lots of false positives
+    # - errorlint # this check crashes
+    # - exhaustive # silly check
+    # - makezero # false positives
+    # - nilerr # several intentional
 
 linters-settings:
   gofmt:
     simplify: true
-    auto-fix: false
-
   goconst:
     min-len: 3 # minimum length of string constant
-    min-occurrences: 2 # minimum number of occurrences
-    numbers: true
-
-  goimports:
-    local-prefixes: github.com/ethereum/go-ethereum
-
-  nestif:
-    min-complexity: 5
-
-  prealloc:
-    for-loops: true
-
-  gocritic:
-    # Which checks should be enabled; can't be combined with 'disabled-checks';
-    # See https://go-critic.github.io/overview#checks-overview
-    # To check which checks are enabled run `GL_DEBUG=gocritic ./build/bin/golangci-lint run`
-    # By default list of stable checks is used.
-    enabled-checks:
-      - badLock
-      - filepathJoin
-      - sortSlice
-      - sprintfQuotedString
-      - syncMapLoadAndDelete
-      - weakCond
-      - boolExprSimplify
-      - httpNoBody
-      - ioutilDeprecated
-      - nestingReduce
-      - preferFilepathJoin
-      - redundantSprint
-      - stringConcatSimplify
-      - timeExprSimplify
-      - typeAssertChain
-      - yodaStyleExpr
-      - truncateCmp
-      - equalFold
-      - preferDecodeRune
-      - preferFprint
-      - preferStringWriter
-      - preferWriteByte
-      - sliceClear
-      #- ruleguard
-
-    # Which checks should be disabled; can't be combined with 'enabled-checks'; default is empty
-    disabled-checks:
-      - regexpMust
-      - exitAfterDefer
-      - dupBranchBody
-      - singleCaseSwitch
-      - unlambda
-      - captLocal
-      - commentFormatting
-      - ifElseChain
-      - importShadow
-      - builtinShadow
-
-    # Enable multiple checks by tags, run `GL_DEBUG=gocritic golangci-lint run` to see all tags and checks.
-    # Empty list by default. See https://github.com/go-critic/go-critic#usage -> section "Tags".
-    enabled-tags:
-      - performance
-      - diagnostic
-      - opinionated
-      - style
-    disabled-tags:
-      - experimental
-  govet:
-    disable:
-      - deepequalerrors
-      - fieldalignment
-      - shadow
-      - unsafeptr
-    check-shadowing: true
-    enable-all: true
-    settings:
-      printf:
-        # Run `go tool vet help printf` to see available settings for `printf` analyzer.
-        funcs:
-          - (github.com/ethereum/go-ethereum/log.Logger).Trace
-          - (github.com/ethereum/go-ethereum/log.Logger).Debug
-          - (github.com/ethereum/go-ethereum/log.Logger).Info
-          - (github.com/ethereum/go-ethereum/log.Logger).Warn
-          - (github.com/ethereum/go-ethereum/log.Logger).Error
-          - (github.com/ethereum/go-ethereum/log.Logger).Crit
+    min-occurrences: 6 # minimum number of occurrences
 
 issues:
   exclude-rules:
     - path: crypto/bn256/cloudflare/optate.go
       linters:
         - deadcode
-    - path: crypto/bn256/cloudflare
-      linters:
-        - deadcode
-    - path: p2p/discv5/
-      linters:
-        - deadcode
-    - path: core/vm/instructions_test.go
-      linters:
-        - goconst
-    - path: cmd/faucet/
-      linters:
-        - deadcode
-    # Exclude some linters from running on tests files.
-    - path: test\.go
-      linters:
-        - gosec
-        - unused
-        - deadcode
-        - gocritic
-    - path: cmd/devp2p
-      linters:
-        - gosec
-        - unused
-        - deadcode
-        - gocritic
-    - path: metrics/sample\.go
-      linters:
-        - gosec
-        - gocritic
-    - path: p2p/simulations
-      linters:
-        - gosec
-        - gocritic
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  #new: true
-  new-from-rev: origin/master
+        - staticcheck
+    - path: internal/build/pgp.go
+      text: 'SA1019: "golang.org/x/crypto/openpgp" is deprecated: this package is unmaintained except for security fixes.'
+    - path: core/vm/contracts.go
+      text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
+    - path: accounts/usbwallet/trezor.go
+      text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
+    - path: accounts/usbwallet/trezor/
+      text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
+  exclude:
+    - 'SA1019: event.TypeMux is deprecated: use Feed'
+    - 'SA1019: strings.Title is deprecated'
+    - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
+    - 'SA1029: should not use built-in type string as key for value'
+    - 'SA1019: "io/ioutil" has been deprecated since Go 1.19: As of Go 1.16, the same functionality is now provided by package [io] or package [os], and those implementations should be preferred in new code. See the specific function documentation for details'
+    - 'SA1019: grpc.WithInsecure is deprecated: use WithTransportCredentials and insecure.NewCredentials() instead. Will be supported throughout 1.x'
+    - "SA1019: rand.Read has been deprecated since Go 1.20 because it shouldn't be used: For almost all use cases, crypto/rand.Read is more appropriate"
