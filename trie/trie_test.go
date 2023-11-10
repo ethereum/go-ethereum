@@ -408,36 +408,39 @@ func verifyAccessList(old *Trie, new *Trie, set *NodeSet) error {
 	// Check insertion set
 	for path := range inserts {
 		n, ok := set.nodes[path]
-		if !ok || n.IsDeleted() {
+		if !ok || n.isDeleted() {
 			return errors.New("expect new node")
 		}
-		if len(n.Prev) > 0 {
+		_, ok = set.accessList[path]
+		if ok {
 			return errors.New("unexpected origin value")
 		}
 	}
 	// Check deletion set
 	for path, blob := range deletes {
 		n, ok := set.nodes[path]
-		if !ok || !n.IsDeleted() {
+		if !ok || !n.isDeleted() {
 			return errors.New("expect deleted node")
 		}
-		if len(n.Prev) == 0 {
+		v, ok := set.accessList[path]
+		if !ok {
 			return errors.New("expect origin value")
 		}
-		if !bytes.Equal(n.Prev, blob) {
+		if !bytes.Equal(v, blob) {
 			return errors.New("invalid origin value")
 		}
 	}
 	// Check update set
 	for path, blob := range updates {
 		n, ok := set.nodes[path]
-		if !ok || n.IsDeleted() {
+		if !ok || n.isDeleted() {
 			return errors.New("expect updated node")
 		}
-		if len(n.Prev) == 0 {
+		v, ok := set.accessList[path]
+		if !ok {
 			return errors.New("expect origin value")
 		}
-		if !bytes.Equal(n.Prev, blob) {
+		if !bytes.Equal(v, blob) {
 			return errors.New("invalid origin value")
 		}
 	}

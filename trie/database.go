@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -608,11 +607,11 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	for _, owner := range order {
 		subset := nodes.sets[owner]
-		subset.forEachWithOrder(func(path string, n *trienode.Node) {
-			if n.IsDeleted() {
+		subset.forEachWithOrder(func(path string, n *memoryNode) {
+			if n.isDeleted() {
 				return // ignore deletion
 			}
-			db.insert(n.Hash, n.Blob)
+			db.insert(n.hash, n.node)
 		})
 	}
 	// Link up the account trie and storage trie if the node points
