@@ -65,6 +65,9 @@ type DumpAccount struct {
 type Dump struct {
 	Root     string                 `json:"root"`
 	Accounts map[string]DumpAccount `json:"accounts"`
+	// Next can be set to represent that this dump is only partial, and Next
+	// is where an iterator should be positioned in order to continue the dump.
+	Next []byte `json:"next,omitempty"` // nil if no more accounts
 }
 
 // OnRoot implements DumpCollector interface
@@ -79,25 +82,6 @@ func (d *Dump) OnAccount(addr *common.Address, account DumpAccount) {
 	}
 	if addr != nil {
 		d.Accounts[(*addr).String()] = account
-	}
-}
-
-// IteratorDump is an implementation for iterating over data.
-type IteratorDump struct {
-	Root     string                         `json:"root"`
-	Accounts map[common.Address]DumpAccount `json:"accounts"`
-	Next     []byte                         `json:"next,omitempty"` // nil if no more accounts
-}
-
-// OnRoot implements DumpCollector interface
-func (d *IteratorDump) OnRoot(root common.Hash) {
-	d.Root = fmt.Sprintf("%x", root)
-}
-
-// OnAccount implements DumpCollector interface
-func (d *IteratorDump) OnAccount(addr *common.Address, account DumpAccount) {
-	if addr != nil {
-		d.Accounts[*addr] = account
 	}
 }
 
@@ -227,12 +211,13 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	return nextKey
 }
 
-// RawDump returns the entire state an a single large object
+// RawDump returns the state. If the processing is aborted e.g. due to options
+// reaching Max, the `Next` key is set on the returned Dump.
 func (s *StateDB) RawDump(opts *DumpConfig) Dump {
 	dump := &Dump{
 		Accounts: make(map[string]DumpAccount),
 	}
-	s.DumpToCollector(dump, opts)
+	dump.Next = s.DumpToCollector(dump, opts)
 	return *dump
 }
 
@@ -241,7 +226,7 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 	dump := s.RawDump(opts)
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
-		fmt.Println("Dump err", err)
+		log.Error("Error dumping state", "err", err)
 	}
 	return json
 }
@@ -249,13 +234,4 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
 func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) {
 	s.DumpToCollector(iterativeDump{output}, opts)
-}
-
-// IteratorDump dumps out a batch of accounts starts with the given start key
-func (s *StateDB) IteratorDump(opts *DumpConfig) IteratorDump {
-	iterator := &IteratorDump{
-		Accounts: make(map[common.Address]DumpAccount),
-	}
-	iterator.Next = s.DumpToCollector(iterator, opts)
-	return *iterator
 }
