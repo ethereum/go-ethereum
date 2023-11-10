@@ -150,11 +150,6 @@ devfakeauthor = false           # Run miner without validator set authorization 
       ip = "99.911.221.66"
       region = "us-north-1"
 
-[blobpool]
-  datadir = "blobpool"     # Data directory to store blob transactions in
-  datacap = 10737418240    # Disk space to allocate for pending blob transactions (soft limit)
-  pricebump = 100          # Price bump percentage to replace an already existing blob transaction
-
 [cache]
   cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for mumbai/devnet)
   gc = 25                  # Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)

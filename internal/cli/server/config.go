@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -117,8 +116,6 @@ type Config struct {
 
 	// Telemetry has the telemetry related settings
 	Telemetry *TelemetryConfig `hcl:"telemetry,block" toml:"telemetry,block"`
-
-	BlobPool *BlobPoolConfig `hcl:"blobpool,block" toml:"blobpool,block"`
 
 	// Cache has the cache related settings
 	Cache *CacheConfig `hcl:"cache,block" toml:"cache,block"`
@@ -516,17 +513,6 @@ type InfluxDBConfig struct {
 	Organization string `hcl:"organization,optional" toml:"organization,optional"`
 }
 
-type BlobPoolConfig struct {
-	// Data directory to store blob transactions in
-	DataDir string `hcl:"datadir,optional" toml:"datadir,optional"`
-
-	// Disk space to allocate for pending blob transactions (soft limit)
-	DataCap uint64 `hcl:"datacap,optional" toml:"datacap,optional"`
-
-	// Price bump percentage to replace an already existing blob transaction
-	PriceBump uint64 `hcl:"pricebump,optional" toml:"pricebump,optional"`
-}
-
 type CacheConfig struct {
 	// Cache is the amount of cache of the node
 	Cache uint64 `hcl:"cache,optional" toml:"cache,optional"`
@@ -747,11 +733,6 @@ func DefaultConfig() *Config {
 				Organization: "",
 			},
 		},
-		BlobPool: &BlobPoolConfig{
-			DataDir:   blobpool.DefaultConfig.Datadir,
-			DataCap:   blobpool.DefaultConfig.Datacap,
-			PriceBump: blobpool.DefaultConfig.PriceBump,
-		},
 		Cache: &CacheConfig{
 			Cache:         1024, // geth's default (suitable for mumbai)
 			PercDatabase:  50,
@@ -969,13 +950,6 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.TxPool.AccountQueue = c.TxPool.AccountQueue
 		n.TxPool.GlobalQueue = c.TxPool.GlobalQueue
 		n.TxPool.Lifetime = c.TxPool.LifeTime
-	}
-
-	// blobpool options
-	{
-		n.BlobPool.Datadir = c.BlobPool.DataDir
-		n.BlobPool.Datacap = c.BlobPool.DataCap
-		n.BlobPool.PriceBump = c.BlobPool.PriceBump
 	}
 
 	// miner options
