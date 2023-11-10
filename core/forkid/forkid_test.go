@@ -18,14 +18,10 @@ package forkid
 
 import (
 	"bytes"
-	"hash/crc32"
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -40,13 +36,13 @@ func TestCreation(t *testing.T) {
 	}
 	tests := []struct {
 		config  *params.ChainConfig
-		genesis *types.Block
+		genesis common.Hash
 		cases   []testcase
 	}{
 		// Mainnet test cases
 		{
 			params.MainnetChainConfig,
-			core.DefaultGenesisBlock().ToBlock(),
+			params.MainnetGenesisHash,
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},                    // Unsynced
 				{1149999, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},              // Last Frontier block
@@ -81,7 +77,7 @@ func TestCreation(t *testing.T) {
 		// Goerli test cases
 		{
 			params.GoerliChainConfig,
-			core.DefaultGoerliGenesisBlock().ToBlock(),
+			params.GoerliGenesisHash,
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
 				{1561650, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},             // Last Petersburg block
@@ -98,7 +94,7 @@ func TestCreation(t *testing.T) {
 		// Sepolia test cases
 		{
 			params.SepoliaChainConfig,
-			core.DefaultSepoliaGenesisBlock().ToBlock(),
+			params.SepoliaGenesisHash,
 			[]testcase{
 				{0, 0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin and first London block
 				{1735370, 0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}},             // Last London block
@@ -383,58 +379,6 @@ func TestEncoding(t *testing.T) {
 		}
 		if !bytes.Equal(have, tt.want) {
 			t.Errorf("test %d: RLP mismatch: have %x, want %x", i, have, tt.want)
-		}
-	}
-}
-
-// Tests that time-based forks which are active at genesis are not included in
-// forkid hash.
-func TestTimeBasedForkInGenesis(t *testing.T) {
-	var (
-		time       = uint64(1690475657)
-		genesis    = types.NewBlockWithHeader(&types.Header{Time: time})
-		forkidHash = checksumToBytes(crc32.ChecksumIEEE(genesis.Hash().Bytes()))
-		config     = func(shanghai, cancun uint64) *params.ChainConfig {
-			return &params.ChainConfig{
-				ChainID:                       big.NewInt(1337),
-				HomesteadBlock:                big.NewInt(0),
-				DAOForkBlock:                  nil,
-				DAOForkSupport:                true,
-				EIP150Block:                   big.NewInt(0),
-				EIP155Block:                   big.NewInt(0),
-				EIP158Block:                   big.NewInt(0),
-				ByzantiumBlock:                big.NewInt(0),
-				ConstantinopleBlock:           big.NewInt(0),
-				PetersburgBlock:               big.NewInt(0),
-				IstanbulBlock:                 big.NewInt(0),
-				MuirGlacierBlock:              big.NewInt(0),
-				BerlinBlock:                   big.NewInt(0),
-				LondonBlock:                   big.NewInt(0),
-				TerminalTotalDifficulty:       big.NewInt(0),
-				TerminalTotalDifficultyPassed: true,
-				MergeNetsplitBlock:            big.NewInt(0),
-				ShanghaiTime:                  &shanghai,
-				CancunTime:                    &cancun,
-				Ethash:                        new(params.EthashConfig),
-			}
-		}
-	)
-	tests := []struct {
-		config *params.ChainConfig
-		want   ID
-	}{
-		// Shanghai active before genesis, skip
-		{config(time-1, time+1), ID{Hash: forkidHash, Next: time + 1}},
-
-		// Shanghai active at genesis, skip
-		{config(time, time+1), ID{Hash: forkidHash, Next: time + 1}},
-
-		// Shanghai not active, skip
-		{config(time+1, time+2), ID{Hash: forkidHash, Next: time + 1}},
-	}
-	for _, tt := range tests {
-		if have := NewID(tt.config, genesis, 0, time); have != tt.want {
-			t.Fatalf("incorrect forkid hash: have %x, want %x", have, tt.want)
 		}
 	}
 }
