@@ -448,10 +448,10 @@ func (c *Config) KeyDirConfig() (string, error) {
 	return keydir, err
 }
 
-// GetKeyStoreDir retrieves the key directory and will create
+// getKeyStoreDir retrieves the key directory and will create
 // and ephemeral one if necessary.
-func (c *Config) GetKeyStoreDir() (string, bool, error) {
-	keydir, err := c.KeyDirConfig()
+func getKeyStoreDir(conf *Config) (string, bool, error) {
+	keydir, err := conf.KeyDirConfig()
 	if err != nil {
 		return "", false, err
 	}
