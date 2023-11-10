@@ -302,7 +302,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 }
 
 // ProcessCode injects the received data for requested item. Note it can
-// happen that the single response commits two pending requests(e.g.
+// happpen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
 // be treated as "non-requested" item or "already-processed" item but
@@ -391,7 +391,7 @@ func (s *Sync) Pending() int {
 	return len(s.nodeReqs) + len(s.codeReqs)
 }
 
-// scheduleNodeRequest inserts a new state retrieval request into the fetch queue. If there
+// schedule inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
@@ -406,7 +406,7 @@ func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
 	s.queue.Push(string(req.path), prio)
 }
 
-// scheduleCodeRequest inserts a new state retrieval request into the fetch queue. If there
+// schedule inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleCodeRequest(req *codeRequest) {
@@ -556,7 +556,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	return requests, nil
 }
 
-// commitNodeRequest finalizes a retrieval request and stores it into the membatch. If any
+// commit finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitNodeRequest(req *nodeRequest) error {
@@ -591,7 +591,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	return nil
 }
 
-// commitCodeRequest finalizes a retrieval request and stores it into the membatch. If any
+// commit finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitCodeRequest(req *codeRequest) error {
