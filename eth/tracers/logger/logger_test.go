@@ -18,7 +18,7 @@ package logger
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -85,7 +85,7 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}{
 		{"empty err and no fields", &StructLog{},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
-		{"with err", &StructLog{Err: errors.New("this failed")},
+		{"with err", &StructLog{Err: fmt.Errorf("this failed")},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`},
 		{"with mem", &StructLog{Memory: make([]byte, 2), MemorySize: 2},
 			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
