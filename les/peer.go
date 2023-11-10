@@ -998,6 +998,9 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			recentTx -= blockSafetyMargin - txIndexRecentOffset
 		}
 	}
+	if server.config.UltraLightOnlyAnnounce {
+		recentTx = txIndexDisabled
+	}
 	if recentTx != txIndexUnlimited && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
 	}
@@ -1006,18 +1009,20 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
-		*lists = (*lists).add("serveHeaders", nil)
-		*lists = (*lists).add("serveChainSince", uint64(0))
-		*lists = (*lists).add("serveStateSince", uint64(0))
+		if !server.config.UltraLightOnlyAnnounce {
+			*lists = (*lists).add("serveHeaders", nil)
+			*lists = (*lists).add("serveChainSince", uint64(0))
+			*lists = (*lists).add("serveStateSince", uint64(0))
 
-		// If local ethereum node is running in archive mode, advertise ourselves we have
-		// all version state data. Otherwise only recent state is available.
-		stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
-		if server.archiveMode {
-			stateRecent = 0
+			// If local ethereum node is running in archive mode, advertise ourselves we have
+			// all version state data. Otherwise only recent state is available.
+			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
+			if server.archiveMode {
+				stateRecent = 0
+			}
+			*lists = (*lists).add("serveRecentState", stateRecent)
+			*lists = (*lists).add("txRelay", nil)
 		}
-		*lists = (*lists).add("serveRecentState", stateRecent)
-		*lists = (*lists).add("txRelay", nil)
 		if p.version >= lpv4 {
 			*lists = (*lists).add("recentTxLookup", recentTx)
 		}

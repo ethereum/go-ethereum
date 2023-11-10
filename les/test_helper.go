@@ -177,7 +177,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet) (*clientHandler, func()) {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -210,8 +210,9 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		eventMux:   evmux,
 		merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 	}
-	client.handler = newClientHandler(client)
+	client.handler = newClientHandler(ulcServers, ulcFraction, client)
 
+	client.handler.start()
 	return client.handler, func() {
 		client.handler.stop()
 	}
@@ -306,8 +307,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 }
 
 // handshakeWithClient executes the handshake with the remote client peer.
-// (used by temporarily disabled tests)
-/*func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
+func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, costList RequestCostList, recentTxLookup uint64) {
 	// It only works for the simulated client peer
 	if p.speer == nil {
 		t.Fatal("handshake for server peer only")
@@ -337,7 +337,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
-}*/
+}
 
 // close terminates the local side of the peer, notifying the remote protocol
 // manager of termination.
@@ -405,8 +405,7 @@ type testClient struct {
 }
 
 // newRawPeer creates a new server peer connects to the server and do the handshake.
-// (used by temporarily disabled tests)
-/*func (client *testClient) newRawPeer(t *testing.T, name string, version int, recentTxLookup uint64) (*testPeer, func(), <-chan error) {
+func (client *testClient) newRawPeer(t *testing.T, name string, version int, recentTxLookup uint64) (*testPeer, func(), <-chan error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -454,7 +453,7 @@ type testClient struct {
 		tp.close()
 	}
 	return tp, closePeer, errCh
-}*/
+}
 
 // testServer represents a server object for testing with necessary auxiliary fields.
 type testServer struct {
@@ -522,12 +521,14 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 
 // testnetConfig wraps all the configurations for testing network.
 type testnetConfig struct {
-	blocks    int
-	protocol  int
-	indexFn   indexerCallback
-	simClock  bool
-	connect   bool
-	nopruning bool
+	blocks      int
+	protocol    int
+	indexFn     indexerCallback
+	ulcServers  []string
+	ulcFraction int
+	simClock    bool
+	connect     bool
+	nopruning   bool
 }
 
 func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testClient, func()) {
@@ -552,7 +553,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
 	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
-	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers)
+	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
@@ -568,6 +569,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	)
 	if config.connect {
 		done := make(chan struct{})
+		client.syncEnd = func(_ *types.Header) { close(done) }
 		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server, client, false)
 		if err != nil {
 			t.Fatalf("Failed to connect testing peers %v", err)
