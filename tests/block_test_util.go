@@ -116,7 +116,9 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// import pre accounts & construct test genesis block & state root
 	var (
 		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{}
+		tconf = &trie.Config{
+			Preimages: true,
+		}
 	)
 	if scheme == rawdb.PathScheme {
 		tconf.PathDB = pathdb.Defaults

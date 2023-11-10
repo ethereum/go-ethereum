@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -153,25 +154,28 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
-		account := DumpAccount{
-			Balance:   data.Balance.String(),
-			Nonce:     data.Nonce,
-			Root:      data.Root[:],
-			CodeHash:  data.CodeHash,
-			SecureKey: it.Key,
-		}
 		var (
-			addrBytes = s.trie.GetKey(it.Key)
-			addr      = common.BytesToAddress(addrBytes)
+			account = DumpAccount{
+				Balance:   data.Balance.String(),
+				Nonce:     data.Nonce,
+				Root:      data.Root[:],
+				CodeHash:  data.CodeHash,
+				SecureKey: it.Key,
+			}
 			address   *common.Address
+			addr      common.Address
+			addrBytes = s.trie.GetKey(it.Key)
 		)
+		if addrBytes == nil { // Preimage not present in memory. Check database.
+			addrBytes = rawdb.ReadPreimage(s.Database().DiskDB(), common.BytesToHash(it.Key))
+		}
 		if addrBytes == nil {
-			// Preimage missing
 			missingPreimages++
 			if conf.OnlyWithAddresses {
 				continue
 			}
 		} else {
+			addr = common.BytesToAddress(addrBytes)
 			address = &addr
 		}
 		obj := newObject(s, addr, &data)
