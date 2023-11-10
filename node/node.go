@@ -449,11 +449,8 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		sharedConfig := rpcEndpointConfig{
-			jwtSecret:              secret,
-			batchItemLimit:         engineAPIBatchItemLimit,
-			batchResponseSizeLimit: engineAPIBatchResponseSizeLimit,
-		}
+		sharedConfig := rpcConfig
+		sharedConfig.jwtSecret = secret
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
