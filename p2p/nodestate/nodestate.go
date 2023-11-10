@@ -333,7 +333,7 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 		fields:    make([]*fieldInfo, len(setup.fields)),
 	}
 	ns.opWait = sync.NewCond(&ns.lock)
-	stateNameMap := make(map[string]int, len(setup.flags))
+	stateNameMap := make(map[string]int)
 	for index, flag := range setup.flags {
 		if _, ok := stateNameMap[flag.name]; ok {
 			panic("Node state flag name collision: " + flag.name)
@@ -343,7 +343,7 @@ func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Cloc
 			ns.saveFlags |= bitMask(1) << uint(index)
 		}
 	}
-	fieldNameMap := make(map[string]int, len(setup.fields))
+	fieldNameMap := make(map[string]int)
 	for index, field := range setup.fields {
 		if _, ok := fieldNameMap[field.name]; ok {
 			panic("Node field name collision: " + field.name)

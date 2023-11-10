@@ -329,7 +329,7 @@ func (t *Trackers) MeanCapacities() map[uint64]float64 {
 // meanCapacities is the internal lockless version of MeanCapacities used for
 // debug logging.
 func (t *Trackers) meanCapacities() map[uint64]float64 {
-	capacities := make(map[uint64]float64, len(t.trackers))
+	capacities := make(map[uint64]float64)
 	for _, tt := range t.trackers {
 		tt.lock.RLock()
 		for key, val := range tt.capacity {
