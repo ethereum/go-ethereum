@@ -534,10 +534,10 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.ExcessBlobGas = g.ExcessBlobGas
 			head.BlobGasUsed = g.BlobGasUsed
 			if head.ExcessBlobGas == nil {
-				head.ExcessBlobGas = new(uint64)
+				head.ExcessBlobGas = nil
 			}
 			if head.BlobGasUsed == nil {
-				head.BlobGasUsed = new(uint64)
+				head.BlobGasUsed = nil
 			}
 		}
 	}

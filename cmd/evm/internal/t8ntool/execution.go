@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -167,19 +166,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
-	// If excessBlobGas is defined, add it to the vmContext.
-	if pre.Env.ExcessBlobGas != nil {
-		vmContext.ExcessBlobGas = pre.Env.ExcessBlobGas
-	} else {
-		// If it is not explicitly defined, but we have the parent values, we try
-		// to calculate it ourselves.
-		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
-		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
-		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas := eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
-			vmContext.ExcessBlobGas = &excessBlobGas
-		}
-	}
+
+	vmContext.ExcessBlobGas = nil
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&

@@ -489,7 +489,7 @@ func (b *Block) ExcessBlobGas() *uint64 {
 		excessBlobGas = new(uint64)
 		*excessBlobGas = *b.header.ExcessBlobGas
 	}
-	return excessBlobGas
+	return nil
 }
 
 func (b *Block) BlobGasUsed() *uint64 {
@@ -498,7 +498,7 @@ func (b *Block) BlobGasUsed() *uint64 {
 		blobGasUsed = new(uint64)
 		*blobGasUsed = *b.header.BlobGasUsed
 	}
-	return blobGasUsed
+	return nil
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding
