@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
@@ -273,7 +272,7 @@ func (dl *diffLayer) Stale() bool {
 
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
+func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 	data, err := dl.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -281,7 +280,7 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 	if len(data) == 0 { // can be both nil and []byte{}
 		return nil, nil
 	}
-	account := new(types.SlimAccount)
+	account := new(Account)
 	if err := rlp.DecodeBytes(data, account); err != nil {
 		panic(err)
 	}
@@ -293,8 +292,8 @@ func (dl *diffLayer) Account(hash common.Hash) (*types.SlimAccount, error) {
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
-	// Check staleness before reaching further.
 	dl.lock.RLock()
+	// Check staleness before reaching further.
 	if dl.Stale() {
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale

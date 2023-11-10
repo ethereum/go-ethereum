@@ -43,10 +43,11 @@ func randomHash() common.Hash {
 
 // randomAccount generates a random account and returns it RLP encoded.
 func randomAccount() []byte {
-	a := &types.StateAccount{
+	root := randomHash()
+	a := Account{
 		Balance:  big.NewInt(rand.Int63()),
 		Nonce:    rand.Uint64(),
-		Root:     randomHash(),
+		Root:     root[:],
 		CodeHash: types.EmptyCodeHash[:],
 	}
 	data, _ := rlp.EncodeToBytes(a)
@@ -464,7 +465,7 @@ func TestReadStateDuringFlattening(t *testing.T) {
 	snap := snaps.Snapshot(common.HexToHash("0xa3"))
 
 	// Register the testing hook to access the state after flattening
-	var result = make(chan *types.SlimAccount)
+	var result = make(chan *Account)
 	snaps.onFlatten = func() {
 		// Spin up a thread to read the account from the pre-created
 		// snapshot handler. It's expected to be blocked.

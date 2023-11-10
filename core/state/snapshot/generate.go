@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -572,7 +573,12 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
-		var acc types.StateAccount
+		var acc struct {
+			Nonce    uint64
+			Balance  *big.Int
+			Root     common.Hash
+			CodeHash []byte
+		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
@@ -588,7 +594,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				}
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
-				data := types.SlimAccountRLP(acc)
+				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
 				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
 				snapGeneratedAccountMeter.Mark(1)
@@ -634,7 +640,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	origin := common.CopyBytes(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
-		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, types.FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
