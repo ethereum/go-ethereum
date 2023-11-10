@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"sync"
 	"testing"
 )
 
@@ -12,30 +11,6 @@ func BenchmarkRegistry(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		r.Each(func(string, interface{}) {})
 	}
-}
-
-func BenchmarkRegistryGetOrRegisterParallel_8(b *testing.B) {
-	benchmarkRegistryGetOrRegisterParallel(b, 8)
-}
-
-func BenchmarkRegistryGetOrRegisterParallel_32(b *testing.B) {
-	benchmarkRegistryGetOrRegisterParallel(b, 32)
-}
-
-func benchmarkRegistryGetOrRegisterParallel(b *testing.B, amount int) {
-	r := NewRegistry()
-	b.ResetTimer()
-	var wg sync.WaitGroup
-	for i := 0; i < amount; i++ {
-		wg.Add(1)
-		go func() {
-			for i := 0; i < b.N; i++ {
-				r.GetOrRegister("foo", NewMeter)
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
 }
 
 func TestRegistry(t *testing.T) {
