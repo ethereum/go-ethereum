@@ -52,7 +52,6 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
-	r.Set(enr.UDP(30303))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 

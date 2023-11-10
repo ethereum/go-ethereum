@@ -216,7 +216,7 @@ func (p *TalkRequest) RequestID() []byte      { return p.ReqID }
 func (p *TalkRequest) SetRequestID(id []byte) { p.ReqID = id }
 
 func (p *TalkRequest) AppendLogInfo(ctx []interface{}) []interface{} {
-	return append(ctx, "proto", p.Protocol, "req", hexutil.Bytes(p.ReqID), "len", len(p.Message))
+	return append(ctx, "proto", p.Protocol, "reqid", hexutil.Bytes(p.ReqID), "len", len(p.Message))
 }
 
 func (*TalkResponse) Name() string             { return "TALKRESP/v5" }
@@ -225,5 +225,5 @@ func (p *TalkResponse) RequestID() []byte      { return p.ReqID }
 func (p *TalkResponse) SetRequestID(id []byte) { p.ReqID = id }
 
 func (p *TalkResponse) AppendLogInfo(ctx []interface{}) []interface{} {
-	return append(ctx, "req", hexutil.Bytes(p.ReqID), "len", len(p.Message))
+	return append(ctx, "req", p.ReqID, "len", len(p.Message))
 }
