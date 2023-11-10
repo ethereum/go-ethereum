@@ -46,13 +46,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -152,6 +151,13 @@ func (i info) gpl() bool {
 	}
 	return false
 }
+
+// authors implements the sort.Interface for strings in case-insensitive mode.
+type authors []string
+
+func (as authors) Len() int           { return len(as) }
+func (as authors) Less(i, j int) bool { return strings.ToLower(as[i]) < strings.ToLower(as[j]) }
+func (as authors) Swap(i, j int)      { as[i], as[j] = as[j], as[i] }
 
 func main() {
 	var (
@@ -293,9 +299,7 @@ func writeAuthors(files []string) {
 		}
 	}
 	// Write sorted list of authors back to the file.
-	slices.SortFunc(list, func(a, b string) bool {
-		return strings.ToLower(a) < strings.ToLower(b)
-	})
+	sort.Sort(authors(list))
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)
 	for _, a := range list {
