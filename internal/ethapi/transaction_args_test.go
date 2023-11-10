@@ -18,7 +18,7 @@ package ethapi
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -138,28 +138,28 @@ func TestSetFeeDefaults(t *testing.T) {
 			false,
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			nil,
-			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx pre-London, priorityFee set",
 			false,
 			&TransactionArgs{MaxPriorityFeePerGas: fortytwo},
 			nil,
-			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee",
 			true,
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1000))},
 			nil,
-			errors.New("maxFeePerGas (0x3e) < maxPriorityFeePerGas (0x3e8)"),
+			fmt.Errorf("maxFeePerGas (0x3e) < maxPriorityFeePerGas (0x3e8)"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee while setting default",
 			true,
 			&TransactionArgs{MaxFeePerGas: (*hexutil.Big)(big.NewInt(7))},
 			nil,
-			errors.New("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
+			fmt.Errorf("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
 		},
 
 		// Misc
@@ -168,21 +168,21 @@ func TestSetFeeDefaults(t *testing.T) {
 			false,
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
-			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxPriorityFee",
 			false,
 			&TransactionArgs{GasPrice: fortytwo, MaxPriorityFeePerGas: fortytwo},
 			nil,
-			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxFee",
 			true,
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
-			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 	}
 
