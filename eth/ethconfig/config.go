@@ -198,8 +198,8 @@ type Config struct {
 	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// OverrideCancun (TODO: remove after the fork)
-	OverrideCancun *uint64 `toml:",omitempty"`
+	// OverrideShanghai (TODO: remove after the fork)
+	OverrideShanghai *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
