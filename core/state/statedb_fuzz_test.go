@@ -95,9 +95,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 			},
 		},
 		{
-			name: "Selfdestruct",
+			name: "Suicide",
 			fn: func(a testAction, s *StateDB) {
-				s.SelfDestruct(addr)
+				s.Suicide(addr)
 			},
 		},
 	}
