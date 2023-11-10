@@ -1032,45 +1032,35 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
-// Priority order for bootnodes configuration:
-//
-// 1. --bootnodes flag
-// 2. Config file
-// 3. Network preset flags (e.g. --goerli)
-// 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
-	if ctx.IsSet(BootnodesFlag.Name) {
+	switch {
+	case ctx.IsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
-	} else {
-		if cfg.BootstrapNodes != nil {
-			return // Already set by config file, don't apply defaults.
-		}
-		switch {
-		case ctx.Bool(HoleskyFlag.Name):
-			urls = params.HoleskyBootnodes
-		case ctx.Bool(SepoliaFlag.Name):
-			urls = params.SepoliaBootnodes
-		case ctx.Bool(GoerliFlag.Name):
-			urls = params.GoerliBootnodes
-		}
+	case ctx.Bool(HoleskyFlag.Name):
+		urls = params.HoleskyBootnodes
+	case ctx.Bool(SepoliaFlag.Name):
+		urls = params.SepoliaBootnodes
+	case ctx.Bool(GoerliFlag.Name):
+		urls = params.GoerliBootnodes
 	}
-	cfg.BootstrapNodes = mustParseBootnodes(urls)
-}
 
-func mustParseBootnodes(urls []string) []*enode.Node {
-	nodes := make([]*enode.Node, 0, len(urls))
+	// don't apply defaults if BootstrapNodes is already set
+	if cfg.BootstrapNodes != nil {
+		return
+	}
+
+	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
-				return nil
+				continue
 			}
-			nodes = append(nodes, node)
+			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
 		}
 	}
-	return nodes
 }
 
 // setBootstrapNodesV5 creates a list of bootstrap nodes from the command line
