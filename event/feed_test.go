@@ -17,7 +17,6 @@
 package event
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -69,7 +68,7 @@ func checkPanic(want error, fn func()) (err error) {
 	defer func() {
 		panic := recover()
 		if panic == nil {
-			err = errors.New("didn't panic")
+			err = fmt.Errorf("didn't panic")
 		} else if !reflect.DeepEqual(panic, want) {
 			err = fmt.Errorf("panicked with wrong error: got %q, want %q", panic, want)
 		}
