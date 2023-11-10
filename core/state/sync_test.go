@@ -125,7 +125,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if err != nil {
 		return err
 	}
-	it := newNodeIterator(state)
+	it := NewNodeIterator(state)
 	for it.Next() {
 	}
 	return it.Error
