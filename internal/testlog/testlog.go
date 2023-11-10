@@ -36,6 +36,6 @@ func (r *relay) Write(p []byte) (n int, err error) {
 // Logger returns a logger which logs to the unit test log of t.
 func Logger(t *testing.T, level log.Lvl) log.Logger {
 	l := log.New()
-	l.SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(&relay{t}, log.TerminalFormat(false))))
+	l.SetHandler(log.LvlFilterHandler(level, log.StreamHandler(&relay{t}, log.TerminalFormat(false))))
 	return l
 }
