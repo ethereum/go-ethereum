@@ -367,31 +367,13 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		s.filler.resume()
 	}
 	defer func() {
-		// The filler needs to be suspended, but since it can block for a while
-		// when there are many blocks queued up for full-sync importing, run it
-		// on a separate goroutine and consume head messages that need instant
-		// replies.
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			if filled := s.filler.suspend(); filled != nil {
-				// If something was filled, try to delete stale sync helpers. If
-				// unsuccessful, warn the user, but not much else we can do (it's
-				// a programming error, just let users report an issue and don't
-				// choke in the meantime).
-				if err := s.cleanStales(filled); err != nil {
-					log.Error("Failed to clean stale beacon headers", "err", err)
-				}
-			}
-		}()
-		// Wait for the suspend to finish, consuming head events in the meantime
-		// and dropping them on the floor.
-		for {
-			select {
-			case <-done:
-				return
-			case event := <-s.headEvents:
-				event.errc <- errors.New("beacon syncer reorging")
+		if filled := s.filler.suspend(); filled != nil {
+			// If something was filled, try to delete stale sync helpers. If
+			// unsuccessful, warn the user, but not much else we can do (it's
+			// a programming error, just let users report an issue and don't
+			// choke in the meantime).
+			if err := s.cleanStales(filled); err != nil {
+				log.Error("Failed to clean stale beacon headers", "err", err)
 			}
 		}
 	}()
