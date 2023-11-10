@@ -915,14 +915,10 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 
 	// Create a bunch of filters that will
 	// timeout either in 100ms or 200ms
-	subs := make([]*Subscription, 20)
-	for i := 0; i < len(subs); i++ {
+	fids := make([]rpc.ID, 20)
+	for i := 0; i < len(fids); i++ {
 		fid := api.NewPendingTransactionFilter(nil)
-		f, ok := api.filters[fid]
-		if !ok {
-			t.Fatalf("Filter %s should exist", fid)
-		}
-		subs[i] = f.s
+		fids[i] = fid
 		// Wait for at least one tx to arrive in filter
 		for {
 			hashes, err := api.GetFilterChanges(fid)
@@ -936,13 +932,21 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		}
 	}
 
-	// Wait until filters have timed out and have been uninstalled.
-	for _, sub := range subs {
-		select {
-		case <-sub.Err():
-		case <-time.After(1 * time.Second):
-			t.Fatalf("Filter timeout is hanging")
+	// Wait until filters have timed out
+	time.Sleep(3 * timeout)
+
+	// If tx loop doesn't consume `done` after a second
+	// it's hanging.
+	select {
+	case done <- struct{}{}:
+		// Check that all filters have been uninstalled
+		for _, fid := range fids {
+			if _, err := api.GetFilterChanges(fid); err == nil {
+				t.Errorf("Filter %s should have been uninstalled\n", fid)
+			}
 		}
+	case <-time.After(1 * time.Second):
+		t.Error("Tx sending loop hangs")
 	}
 }
 
