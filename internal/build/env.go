@@ -170,8 +170,5 @@ func applyEnvFlags(env Environment) Environment {
 	if *CronJobFlag {
 		env.IsCronJob = true
 	}
-	if *UbuntuVersionFlag != "" {
-		env.UbuntuVersion = *UbuntuVersionFlag
-	}
 	return env
 }
