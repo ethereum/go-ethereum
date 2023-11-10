@@ -334,7 +334,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 		txsWithKeys = inputData.Txs
 	}
 	// We may have to sign the transactions.
-	signer := types.LatestSignerForChainID(chainConfig.ChainID)
+	signer := types.MakeSigner(chainConfig, big.NewInt(int64(env.Number)), env.Timestamp)
 	return signUnsignedTransactions(txsWithKeys, signer)
 }
 
