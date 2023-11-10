@@ -249,11 +249,7 @@ func init() {
 	app.Before = func(ctx *cli.Context) error {
 		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
 		flags.MigrateGlobalFlags(ctx)
-		if err := debug.Setup(ctx); err != nil {
-			return err
-		}
-		flags.CheckEnvVars(ctx, app.Flags, "GETH")
-		return nil
+		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
