@@ -24,13 +24,13 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -270,8 +270,8 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 			}
 		}
 	}
-	slices.Sort(forksByBlock)
-	slices.Sort(forksByTime)
+	sort.Slice(forksByBlock, func(i, j int) bool { return forksByBlock[i] < forksByBlock[j] })
+	sort.Slice(forksByTime, func(i, j int) bool { return forksByTime[i] < forksByTime[j] })
 
 	// Deduplicate fork identifiers applying multiple forks
 	for i := 1; i < len(forksByBlock); i++ {

@@ -30,28 +30,32 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"sort"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/slices"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }
 
-func makelist(g *core.Genesis) []allocItem {
-	items := make([]allocItem, 0, len(g.Alloc))
+type allocList []allocItem
+
+func (a allocList) Len() int           { return len(a) }
+func (a allocList) Less(i, j int) bool { return a[i].Addr.Cmp(a[j].Addr) < 0 }
+func (a allocList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+func makelist(g *core.Genesis) allocList {
+	a := make(allocList, 0, len(g.Alloc))
 	for addr, account := range g.Alloc {
 		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
 		bigAddr := new(big.Int).SetBytes(addr.Bytes())
-		items = append(items, allocItem{bigAddr, account.Balance})
+		a = append(a, allocItem{bigAddr, account.Balance})
 	}
-	slices.SortFunc(items, func(a, b allocItem) bool {
-		return a.Addr.Cmp(b.Addr) < 0
-	})
-	return items
+	sort.Sort(a)
+	return a
 }
 
 func makealloc(g *core.Genesis) string {
