@@ -158,7 +158,7 @@ func (i *bbInput) ToBlock() *types.Block {
 	if i.Header.Nonce != nil {
 		header.Nonce = *i.Header.Nonce
 	}
-	if i.Header.Difficulty != nil {
+	if header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
 	return types.NewBlockWithHeader(header).WithBody(i.Txs, i.Ommers).WithWithdrawals(i.Withdrawals)
