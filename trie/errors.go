@@ -17,16 +17,10 @@
 package trie
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 )
-
-// ErrCommitted is returned when a already committed trie is requested for usage.
-// The potential usages can be `Get`, `Update`, `Delete`, `NodeIterator`, `Prove`
-// and so on.
-var ErrCommitted = errors.New("trie is already committed")
 
 // MissingNodeError is returned by the trie functions (Get, Update, Delete)
 // in the case where a trie node is not present in the local database. It contains

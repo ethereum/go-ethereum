@@ -382,6 +382,8 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	}
 	var (
 		trieMore       bool
+		nodeIt         = tr.NodeIterator(origin)
+		iter           = trie.NewIterator(nodeIt)
 		kvkeys, kvvals = result.keys, result.vals
 
 		// counters
@@ -395,12 +397,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		start    = time.Now()
 		internal time.Duration
 	)
-	nodeIt, err := tr.NodeIterator(origin)
-	if err != nil {
-		return false, nil, err
-	}
 	nodeIt.AddResolver(resolver)
-	iter := trie.NewIterator(nodeIt)
 
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {

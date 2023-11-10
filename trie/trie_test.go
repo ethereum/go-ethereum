@@ -521,7 +521,7 @@ func runRandTest(rt randTest) bool {
 			origin = root
 		case opItercheckhash:
 			checktr := NewEmpty(triedb)
-			it := NewIterator(tr.MustNodeIterator(nil))
+			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
@@ -530,8 +530,8 @@ func runRandTest(rt randTest) bool {
 			}
 		case opNodeDiff:
 			var (
-				origIter = origTrie.MustNodeIterator(nil)
-				curIter  = tr.MustNodeIterator(nil)
+				origIter = origTrie.NodeIterator(nil)
+				curIter  = tr.NodeIterator(nil)
 				origSeen = make(map[string]struct{})
 				curSeen  = make(map[string]struct{})
 			)
@@ -710,7 +710,7 @@ func TestTinyTrie(t *testing.T) {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
 	checktr := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
-	it := NewIterator(trie.MustNodeIterator(nil))
+	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		checktr.MustUpdate(it.Key, it.Value)
 	}

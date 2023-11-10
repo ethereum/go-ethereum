@@ -113,8 +113,8 @@ func NewDatabaseWithConfig(diskdb ethdb.Database, config *Config) *Database {
 }
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
-// An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
+// Nil is returned in case the state is not available.
+func (db *Database) Reader(blockRoot common.Hash) Reader {
 	return db.backend.(*hashdb.Database).Reader(blockRoot)
 }
 

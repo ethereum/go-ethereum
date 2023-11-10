@@ -43,8 +43,7 @@ func newStateTest() *stateTest {
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil)
 	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
@@ -58,10 +57,9 @@ func TestDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	root, _ := s.state.Commit(false)
+	s.state.Commit(false)
 
 	// check that DumpToCollector contains the state objects that are in trie
-	s.state, _ = New(root, tdb, nil)
 	got := string(s.state.Dump(nil))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
@@ -97,8 +95,7 @@ func TestDump(t *testing.T) {
 
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil)
 	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
@@ -114,8 +111,7 @@ func TestIterativeDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	root, _ := s.state.Commit(false)
-	s.state, _ = New(root, tdb, nil)
+	s.state.Commit(false)
 
 	b := &bytes.Buffer{}
 	s.state.IterativeDump(nil, json.NewEncoder(b))

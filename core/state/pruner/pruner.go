@@ -420,10 +420,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if err != nil {
 		return err
 	}
-	accIter, err := t.NodeIterator(nil)
-	if err != nil {
-		return err
-	}
+	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
 		hash := accIter.Hash()
 
@@ -444,10 +441,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				if err != nil {
 					return err
 				}
-				storageIter, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					return err
-				}
+				storageIter := storageTrie.NodeIterator(nil)
 				for storageIter.Next(true) {
 					hash := storageIter.Hash()
 					if hash != (common.Hash{}) {

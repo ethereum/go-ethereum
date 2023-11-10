@@ -140,11 +140,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	log.Info("Trie dumping started", "root", s.trie.Hash())
 	c.OnRoot(s.trie.Hash())
 
-	trieIt, err := s.trie.NodeIterator(conf.Start)
-	if err != nil {
-		return nil
-	}
-	it := trie.NewIterator(trieIt)
+	it := trie.NewIterator(s.trie.NodeIterator(conf.Start))
 	for it.Next() {
 		var data types.StateAccount
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
@@ -182,12 +178,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				log.Error("Failed to load storage trie", "err", err)
 				continue
 			}
-			trieIt, err := tr.NodeIterator(nil)
-			if err != nil {
-				log.Error("Failed to create trie iterator", "err", err)
-				continue
-			}
-			storageIt := trie.NewIterator(trieIt)
+			storageIt := trie.NewIterator(tr.NodeIterator(nil))
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Value)
 				if err != nil {

@@ -226,14 +226,14 @@ func TestAccessListLeak(t *testing.T) {
 	}{
 		{
 			func(tr *Trie) {
-				it := tr.MustNodeIterator(nil)
+				it := tr.NodeIterator(nil)
 				for it.Next(true) {
 				}
 			},
 		},
 		{
 			func(tr *Trie) {
-				it := NewIterator(tr.MustNodeIterator(nil))
+				it := NewIterator(tr.NodeIterator(nil))
 				for it.Next() {
 				}
 			},
@@ -300,7 +300,7 @@ func compareSet(setA, setB map[string]struct{}) bool {
 
 func forNodes(tr *Trie) map[string][]byte {
 	var (
-		it    = tr.MustNodeIterator(nil)
+		it    = tr.NodeIterator(nil)
 		nodes = make(map[string][]byte)
 	)
 	for it.Next(true) {
@@ -319,7 +319,7 @@ func iterNodes(db *Database, root common.Hash) map[string][]byte {
 
 func forHashedNodes(tr *Trie) map[string][]byte {
 	var (
-		it    = tr.MustNodeIterator(nil)
+		it    = tr.NodeIterator(nil)
 		nodes = make(map[string][]byte)
 	)
 	for it.Next(true) {

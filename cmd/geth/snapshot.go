@@ -292,12 +292,7 @@ func traverseState(ctx *cli.Context) error {
 		lastReport time.Time
 		start      = time.Now()
 	)
-	acctIt, err := t.NodeIterator(nil)
-	if err != nil {
-		log.Error("Failed to open iterator", "root", root, "err", err)
-		return err
-	}
-	accIter := trie.NewIterator(acctIt)
+	accIter := trie.NewIterator(t.NodeIterator(nil))
 	for accIter.Next() {
 		accounts += 1
 		var acc types.StateAccount
@@ -312,12 +307,7 @@ func traverseState(ctx *cli.Context) error {
 				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
 			}
-			storageIt, err := storageTrie.NodeIterator(nil)
-			if err != nil {
-				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-				return err
-			}
-			storageIter := trie.NewIterator(storageIt)
+			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
 			for storageIter.Next() {
 				slots += 1
 			}
@@ -395,11 +385,7 @@ func traverseRawState(ctx *cli.Context) error {
 		hasher     = crypto.NewKeccakState()
 		got        = make([]byte, 32)
 	)
-	accIter, err := t.NodeIterator(nil)
-	if err != nil {
-		log.Error("Failed to open iterator", "root", root, "err", err)
-		return err
-	}
+	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
 		nodes += 1
 		node := accIter.Hash()
@@ -436,11 +422,7 @@ func traverseRawState(ctx *cli.Context) error {
 					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 					return errors.New("missing storage trie")
 				}
-				storageIter, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-					return err
-				}
+				storageIter := storageTrie.NodeIterator(nil)
 				for storageIter.Next(true) {
 					nodes += 1
 					node := storageIter.Hash()
