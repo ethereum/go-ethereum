@@ -108,14 +108,13 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 						fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 					}
 				}
-				// Dump any state to aid debugging
-				if dump {
-					dump := state.RawDump(nil)
-					result.State = &dump
-				}
 				if err != nil {
-					// Test failed, mark as so
+					// Test failed, mark as so and dump any state to aid debugging
 					result.Pass, result.Error = false, err.Error()
+					if dump {
+						dump := state.RawDump(nil)
+						result.State = &dump
+					}
 				}
 			})
 			results = append(results, *result)
