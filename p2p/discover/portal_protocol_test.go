@@ -3,6 +3,8 @@ package discover
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/optimism-java/utp-go"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,6 +51,112 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	}
 
 	return portalProtocol, nil
+}
+
+func TestPortalWireProtocolUdp(t *testing.T) {
+	node1, err := setupLocalPortalNode(":7777", nil)
+	assert.NoError(t, err)
+	node1.log = testlog.Logger(t, log.LvlTrace)
+	err = node1.Start()
+	assert.NoError(t, err)
+
+	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
+	assert.NoError(t, err)
+	node2.log = testlog.Logger(t, log.LvlTrace)
+	err = node2.Start()
+	assert.NoError(t, err)
+
+	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
+	assert.NoError(t, err)
+	node3.log = testlog.Logger(t, log.LvlTrace)
+	err = node3.Start()
+	assert.NoError(t, err)
+	time.Sleep(10 * time.Second)
+
+	assert.Equal(t, 2, len(node1.table.Nodes()))
+	assert.Equal(t, 2, len(node2.table.Nodes()))
+	assert.Equal(t, 2, len(node3.table.Nodes()))
+
+	rAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:7777")
+	lAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:7778")
+
+	var wg sync.WaitGroup
+	wg.Add(4)
+
+	cid := uint32(12)
+	cliSendMsgWithCid := "there are connection id : 12!"
+	cliSendMsgWithRandomCid := "there are connection id: random!"
+
+	serverEchoWithCid := "accept connection sends back msg: echo"
+	serverEchoWithRandomCid := "ccept connection with random cid sends msg: echo"
+	go func() {
+		var acceptConn *utp.Conn
+		defer func() {
+			wg.Done()
+			_ = acceptConn.Close()
+		}()
+		acceptConn, err := node1.utp.AcceptUTPWithConnId(cid)
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 100)
+		n, err := acceptConn.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		assert.Equal(t, cliSendMsgWithCid, string(buf[:n]))
+		acceptConn.Write([]byte(serverEchoWithCid))
+	}()
+	go func() {
+		defer wg.Done()
+		randomConnIdConn, err := node1.utp.Accept()
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 100)
+		n, err := randomConnIdConn.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		assert.Equal(t, cliSendMsgWithRandomCid, string(buf[:n]))
+		randomConnIdConn.Write([]byte(serverEchoWithRandomCid))
+	}()
+
+	go func() {
+		defer wg.Done()
+		connWithConnId, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithConnId(cid), utp.WithSocketManager(node2.utpSm))
+		if err != nil {
+			panic(err)
+		}
+		_, err = connWithConnId.Write([]byte("there are connection id : 12!"))
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 100)
+		n, err := connWithConnId.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		assert.Equal(t, serverEchoWithCid, string(buf[:n]))
+	}()
+	go func() {
+		defer wg.Done()
+		randomConnIdConn, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithSocketManager(node2.utpSm))
+		if err != nil {
+			panic(err)
+		}
+		_, err = randomConnIdConn.Write([]byte(cliSendMsgWithRandomCid))
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 100)
+		n, err := randomConnIdConn.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		assert.Equal(t, serverEchoWithRandomCid, string(buf[:n]))
+	}()
+	wg.Wait()
 }
 
 func TestPortalWireProtocol(t *testing.T) {
@@ -122,8 +230,8 @@ func TestPortalWireProtocol(t *testing.T) {
 	err = node1.storage.Put([]byte("large_test_key"), largeTestContent)
 	assert.NoError(t, err)
 
-	//flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
-	//assert.NoError(t, err)
-	//assert.Equal(t, portalwire.ContentConnIdSelector, flag)
-	//assert.Equal(t, largeTestContent, content)
+	flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
+	assert.NoError(t, err)
+	assert.Equal(t, portalwire.ContentConnIdSelector, flag)
+	assert.Equal(t, largeTestContent, content)
 }
