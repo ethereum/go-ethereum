@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -82,7 +81,8 @@ type PortalProtocol struct {
 	nodeRadius     *uint256.Int
 	DiscV5         *UDPv5
 	utp            *utp.Listener
-	utpPackets     chan *utp.UdpMessage
+	utpSm          *utp.SocketManager
+	packetRouter   *utp.PacketRouter
 	ListenAddr     string
 	localNode      *enode.LocalNode
 	log            log.Logger
@@ -163,24 +163,39 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	//	}
 	//}
 
-	p.utpPackets = make(chan *utp.UdpMessage, 10)
-	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithCustomHandler(
+	p.packetRouter = utp.NewSocketRouter(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
-			id := crypto.Keccak256([]byte(addr.String()))
-			_, err := p.DiscV5.TalkRequestToID(enode.ID(id), addr, portalwire.UTPNetwork, buf)
-			return 0, err
-		},
-		func() ([]byte, *net.UDPAddr, error) {
-			select {
-			case msg := <-p.utpPackets:
-				if msg != nil {
-					return msg.Buf, msg.Addr, nil
-				} else {
-					return nil, nil, errClosed
+
+			nodes := p.table.Nodes()
+			var target *enode.Node
+			for _, node := range nodes {
+				if addr.Port != node.UDP() {
+					continue
+				}
+				if addr.IP != nil && addr.IP.To4().String() == node.IP().To4().String() {
+					target = node
+					p.log.Trace("target info", "ip", node.IP().To4().String(), "port", node.UDP(), "bufLength", len(buf))
+					break
+				}
+				if addr.IP == nil {
+					nodeIp := node.IP().To4().String()
+					if nodeIp == "127.0.0.1" || nodeIp == "0.0.0.0" {
+						target = node
+						p.log.Trace("target info", "ip", nodeIp, "port", node.UDP(), "bufLength", len(buf))
+						break
+					}
 				}
 			}
-		},
-	))
+
+			_, err := p.DiscV5.TalkRequest(target, portalwire.UTPNetwork, buf)
+			return len(buf), err
+		})
+
+	p.utpSm, err = utp.NewSocketManager("utp", laddr, utp.WithPacketRouter(p.packetRouter), utp.WithBlockPacketCount(50))
+	if err != nil {
+		return nil, err
+	}
+	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithSocketManager(p.utpSm))
 
 	if err != nil {
 		return nil, err
@@ -458,11 +473,15 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
-	p.utpPackets <- &utp.UdpMessage{Buf: msg, Addr: addr}
+	if len(msg) == 0 {
+		fmt.Println("receive a emtpy msg")
+	}
+	p.packetRouter.ReceiveMessage(msg, addr)
 	return []byte("")
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
+	p.log.Error("handleTalkRequest", "id", id, "addr", addr)
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
