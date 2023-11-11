@@ -368,7 +368,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"},"0x91ff9a805d36f54e3e272e230f3e3f5c1b330804":{"balance":"0x0"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x0000000000000000000000000000000000000000":{"balance":"0x0"},"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
