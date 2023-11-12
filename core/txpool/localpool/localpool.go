@@ -20,6 +20,7 @@ package localpool
 import (
 	"errors"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -32,6 +33,8 @@ import (
 
 var (
 	errNotLocal = errors.New("non-local transaction added to local txpool")
+
+	txMaxSize uint64 = 128 * 1024 // 128KB
 )
 
 var _ txpool.SubPool = new(LocalPool)
@@ -41,9 +44,12 @@ type LocalPool struct {
 	allAccounts map[common.Address]nonceOrderedList
 
 	signer       types.Signer
-	currentState *state.StateDB // Current state in the blockchain head
-	reserver     txpool.AddressReserver
 	chain        BlockChain
+	currentState *state.StateDB // Current state in the blockchain head
+	currentHead  atomic.Pointer[types.Header]
+
+	txFeed   event.Feed
+	reserver txpool.AddressReserver
 }
 
 func NewLocalPool(chain BlockChain, signer types.Signer) (*LocalPool, error) {
@@ -52,14 +58,18 @@ func NewLocalPool(chain BlockChain, signer types.Signer) (*LocalPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LocalPool{
+	pool := LocalPool{
 		chain:        chain,
 		currentState: currentState,
 		signer:       signer,
-	}, nil
+		allTxs:       make(map[common.Hash]*types.Transaction),
+		allAccounts:  make(map[common.Address]nonceOrderedList),
+	}
+	pool.currentHead.Store(head)
+	return &pool, nil
 }
 
-// Filter is a selector used to decide whether a transaction whould be added
+// Filter is a selector used to decide whether a transaction would be added
 // to this particular subpool.
 func (l *LocalPool) Filter(tx *types.Transaction) bool {
 	// Only disallow blob txs, all other txs should be allowed
@@ -76,7 +86,6 @@ func (l *LocalPool) Filter(tx *types.Transaction) bool {
 func (l *LocalPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.AddressReserver) error {
 	l.reserver = reserve
 	// TODO load transactions.rlp
-	// todo run reorg procedure
 	l.Reset(nil, head)
 	return errors.New("not implemented")
 }
@@ -93,6 +102,7 @@ func (l *LocalPool) Reset(oldHead, newHead *types.Header) {
 	if err != nil {
 		log.Error("Could not get new state in LocalPool", "head", newHead.Hash())
 	}
+	l.currentHead.Store(newHead)
 	l.currentState = newState
 	l.runReorg()
 	// todo should I reinsert local transactions that have been mined?
@@ -129,9 +139,16 @@ func (l *LocalPool) Add(txs []*types.Transaction, local bool, sync bool) []error
 		}
 		return errs
 	}
+	var successfulTxs = make([]*types.Transaction, 0, len(txs))
 	for i, tx := range txs {
-		errs[i] = l.add(tx)
+		err := l.add(tx)
+		errs[i] = err
+		if err == nil {
+			successfulTxs = append(successfulTxs, tx)
+		}
 	}
+	// notify all listeners about successfully added txs
+	l.txFeed.Send(core.NewTxsEvent{Txs: successfulTxs})
 	return nil
 }
 
@@ -141,10 +158,21 @@ func (l *LocalPool) add(tx *types.Transaction) error {
 		log.Info("Ignoring already known transaction", "hash", tx.Hash())
 		return nil
 	}
-	sender, err := l.signer.Sender(tx)
-	if err != nil {
+	// Validate tx basics
+	opts := &txpool.ValidationOptions{
+		Config: l.chain.Config(),
+		Accept: 0 |
+			1<<types.LegacyTxType |
+			1<<types.AccessListTxType |
+			1<<types.DynamicFeeTxType,
+		MaxSize: txMaxSize,
+		MinTip:  new(big.Int),
+	}
+	if err := txpool.ValidateTransaction(tx, l.currentHead.Load(), l.signer, opts); err != nil {
 		return err
 	}
+	// sender is already verified at this point
+	sender, _ := l.signer.Sender(tx)
 	if _, ok := l.allAccounts[sender]; !ok {
 		if err := l.reserver(sender, true); err != nil {
 			log.Warn("Could not reserve account", "account", sender)
@@ -184,8 +212,7 @@ func (l *LocalPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyT
 // can decide whether to receive notifications only for newly seen transactions
 // or also for reorged out ones.
 func (l *LocalPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
-	// todo impl
-	return nil
+	return l.txFeed.Subscribe(ch)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
