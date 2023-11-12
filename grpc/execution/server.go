@@ -151,6 +151,10 @@ type ExecutionServiceServerV1Alpha2 struct {
 func NewExecutionServiceServerV1Alpha2(eth *eth.Ethereum) *ExecutionServiceServerV1Alpha2 {
 	bc := eth.BlockChain()
 
+	if merger := eth.Merger(); !merger.PoSFinalized() {
+		merger.FinalizePoS()
+	}
+
 	return &ExecutionServiceServerV1Alpha2{
 		eth: eth,
 		bc:  bc,
