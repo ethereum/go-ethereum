@@ -87,7 +87,7 @@ func (l *LocalPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Add
 	l.reserver = reserve
 	// TODO load transactions.rlp
 	l.Reset(nil, head)
-	return errors.New("not implemented")
+	return nil
 }
 
 func (l *LocalPool) Close() error {
@@ -149,7 +149,7 @@ func (l *LocalPool) Add(txs []*types.Transaction, local bool, sync bool) []error
 	}
 	// notify all listeners about successfully added txs
 	l.txFeed.Send(core.NewTxsEvent{Txs: successfulTxs})
-	return nil
+	return errs
 }
 
 func (l *LocalPool) add(tx *types.Transaction) error {
