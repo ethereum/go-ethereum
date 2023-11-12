@@ -18,6 +18,7 @@ package usbwallet
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -93,7 +94,7 @@ func NewLedgerHub() (*Hub, error) {
 		0x4011, /* HID + WebUSB Ledger Nano X */
 		0x5011, /* HID + WebUSB Ledger Nano S Plus */
 		0x6011, /* HID + WebUSB Ledger Nano FTS */
-	}, 0xffa0, 0, newLedgerDriver)
+	}, 0, 2, newLedgerDriver)
 }
 
 // NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.
@@ -182,6 +183,8 @@ func (hub *Hub) refreshWallets() {
 		return
 	}
 	hub.enumFails.Store(0)
+
+	fmt.Printf("enumerate: %#v", infos)
 
 	for _, info := range infos {
 		for _, id := range hub.productIDs {
