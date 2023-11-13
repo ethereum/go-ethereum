@@ -7,7 +7,7 @@ on:
 
 jobs:
   push_to_registry:
-    if: ${{ github.event.label.CI == 'Build' }}
+    if: ${{ github.event.label.name == 'CI' && github.event.label.description == 'Build' }}
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
     steps:
