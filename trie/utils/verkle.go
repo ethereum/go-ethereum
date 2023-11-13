@@ -84,28 +84,20 @@ func NewPointCache(maxItems int) *PointCache {
 	}
 }
 
-// get loads the cached commitment, or nil if it's not existent.
-func (c *PointCache) get(addr string) (*verkle.Point, bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.lru.Get(addr)
-}
-
 // Get returns the cached commitment for the specified address, or computing
 // it on the flight.
 func (c *PointCache) Get(addr []byte) *verkle.Point {
-	p, ok := c.get(string(addr))
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	p, ok := c.lru.Get(string(addr))
 	if ok {
 		cacheHitGauge.Inc(1)
 		return p
 	}
 	cacheMissGauge.Inc(1)
 	p = evaluateAddressPoint(addr)
-
-	c.lock.Lock()
 	c.lru.Add(string(addr), p)
-	c.lock.Unlock()
 	return p
 }
 
