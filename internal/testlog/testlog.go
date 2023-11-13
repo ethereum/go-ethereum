@@ -180,18 +180,13 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 	attrs = append(h.attrs, attrs...)
 
 	fmt.Fprintf(buf, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Message)
+	if length := len(r.Message); length < 40 {
+		buf.Write(bytes.Repeat([]byte{' '}, 40-length))
+	}
 
-	for i, attr := range attrs {
-		if i != 0 {
-			buf.WriteByte(' ')
-		}
-
+	for _, attr := range attrs {
 		rawVal := attr.Value.Any()
-		val := log.FormatLogfmtValue(rawVal, true)
-
-		buf.WriteString(attr.Key)
-		buf.WriteByte('=')
-		buf.WriteString(val)
+		fmt.Fprintf(buf, " %s=%s", attr.Key, log.FormatLogfmtValue(rawVal, true))
 	}
 	buf.WriteByte('\n')
 	return buf.String()
