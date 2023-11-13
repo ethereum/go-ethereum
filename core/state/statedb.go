@@ -433,7 +433,8 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	}
 	stateObject := s.GetOrNewStateObject(addr)
 	// If object was already in memory, it might have cached
-	// storage slots. These should be cleared.
+	// storage slots. These might not be
+	// overridden in the new storage set and should be cleared.
 	stateObject.clearStorageCache()
 	for k, v := range storage {
 		stateObject.SetState(k, v)
