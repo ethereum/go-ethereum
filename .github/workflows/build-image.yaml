@@ -32,4 +32,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ github.run_number }}
+          tags: "anglyuboslav/go-eth-lab:${{ github.run_number }}"
