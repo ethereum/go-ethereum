@@ -55,6 +55,24 @@ func TestInstructionIteratorInvalid(t *testing.T) {
 	}
 }
 
+// Tests disassembling the instructions for PUSH0
+func TestInstructionIteratorPUSH0(t *testing.T) {
+	cnt := 0
+	script, _ := hex.DecodeString("5900")
+
+	it := NewInstructionIterator(script)
+	for it.Next() {
+		cnt++
+	}
+
+	if err := it.Error(); err != nil {
+		t.Errorf("Expected 2, but encountered error %v instead.", err)
+	}
+	if cnt != 2 {
+		t.Errorf("Expected 2, but got %v instead.", cnt)
+	}
+}
+
 // Tests disassembling the instructions for empty evm code
 func TestInstructionIteratorEmpty(t *testing.T) {
 	cnt := 0
