@@ -100,7 +100,7 @@ var websiteTmpl string
 func main() {
 	// Parse the flags and set up the logger to print everything requested
 	flag.Parse()
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(os.Stderr, slog.Level(*logFlag), true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, slog.Level(*logFlag), true)))
 
 	// Construct the payout tiers
 	amounts := make([]string, *tiersFlag)

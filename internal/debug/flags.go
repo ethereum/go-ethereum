@@ -66,7 +66,7 @@ var (
 		Hidden:   true,
 		Category: flags.LoggingCategory,
 	}
-	LogFormatFlag = &cli.StringFlag{
+	logFormatFlag = &cli.StringFlag{
 		Name:     "log.format",
 		Usage:    "Log format to use (json|logfmt|terminal)",
 		Category: flags.LoggingCategory,
@@ -151,7 +151,7 @@ var Flags = []cli.Flag{
 	logVmoduleFlag,
 	vmoduleFlag,
 	logjsonFlag,
-	LogFormatFlag,
+	logFormatFlag,
 	logFileFlag,
 	logRotateFlag,
 	logMaxSizeMBsFlag,
@@ -168,14 +168,22 @@ var Flags = []cli.Flag{
 }
 
 var (
-	glogger    *log.GlogHandler
-	logOutputF *os.File
+	glogger                *log.GlogHandler
+	logOutputF             *os.File
+	defaultTerminalHandler *log.TerminalHandler
 )
 
 func init() {
-	glogger = log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
+	defaultTerminalHandler = log.NewTerminalHandler(os.Stderr, false)
+	glogger = log.NewGlogHandler(defaultTerminalHandler)
 	glogger.Verbosity(log.LvlInfo)
 	log.SetDefault(log.NewLogger(glogger))
+}
+
+func ResetLogging() {
+	if defaultTerminalHandler != nil {
+		defaultTerminalHandler.ResetFieldPadding()
+	}
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
@@ -186,7 +194,7 @@ func Setup(ctx *cli.Context) error {
 		fileOutput     io.Writer
 		terminalOutput = io.Writer(os.Stderr)
 		output         io.Writer
-		logFmtFlag     = ctx.String(LogFormatFlag.Name)
+		logFmtFlag     = ctx.String(logFormatFlag.Name)
 	)
 	var (
 		logFile  = ctx.String(logFileFlag.Name)
@@ -249,10 +257,10 @@ func Setup(ctx *cli.Context) error {
 				output = terminalOutput
 			}
 		}
-		handler = log.TerminalHandler(output, useColor)
+		handler = log.NewTerminalHandler(output, useColor)
 	default:
 		// Unknown log format specified
-		return fmt.Errorf("unknown log format: %v", ctx.String(LogFormatFlag.Name))
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
 	}
 
 	glogger = log.NewGlogHandler(handler)

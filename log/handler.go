@@ -72,7 +72,7 @@ func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &discardHandler{}
 }
 
-type terminalHandler struct {
+type TerminalHandler struct {
 	mu       sync.Mutex
 	wr       io.Writer
 	lvl      slog.Level
@@ -83,7 +83,7 @@ type terminalHandler struct {
 	fieldPadding map[string]int
 }
 
-// TerminalHandler returns a handler which formats log records at all levels optimized for human readability on
+// NewTerminalHandler returns a handler which formats log records at all levels optimized for human readability on
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
@@ -92,14 +92,14 @@ type terminalHandler struct {
 // Example:
 //
 //	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-func TerminalHandler(wr io.Writer, useColor bool) slog.Handler {
-	return TerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
+func NewTerminalHandler(wr io.Writer, useColor bool) *TerminalHandler {
+	return NewTerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
 }
 
-// TerminalHandlerWithLevel returns the same handler as TerminalHandler but only outputs
+// NewTerminalHandlerWithLevel returns the same handler as NewTerminalHandler but only outputs
 // records which are less than or equal to the specified verbosity level.
-func TerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) slog.Handler {
-	return &terminalHandler{
+func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *TerminalHandler {
+	return &TerminalHandler{
 		sync.Mutex{},
 		wr,
 		lvl,
@@ -109,23 +109,23 @@ func TerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) slog.
 	}
 }
 
-func (h *terminalHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.wr.Write(h.TerminalFormat(r, h.useColor))
 	return nil
 }
 
-func (h *terminalHandler) Enabled(_ context.Context, level slog.Level) bool {
+func (h *TerminalHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.lvl
 }
 
-func (h *terminalHandler) WithGroup(name string) slog.Handler {
+func (h *TerminalHandler) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
 
-func (h *terminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &terminalHandler{
+func (h *TerminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &TerminalHandler{
 		sync.Mutex{},
 		h.wr,
 		h.lvl,
@@ -133,6 +133,13 @@ func (h *terminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		append(h.attrs, attrs...),
 		make(map[string]int),
 	}
+}
+
+// ResetFieldPadding zeroes the field-padding for all attribute pairs.
+func (t *TerminalHandler) ResetFieldPadding() {
+	t.mu.Lock()
+	t.fieldPadding = make(map[string]int)
+	t.mu.Unlock()
 }
 
 type leveler struct{ minLevel slog.Level }

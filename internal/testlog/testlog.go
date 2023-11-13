@@ -166,7 +166,7 @@ func (l *logger) New(ctx ...interface{}) log.Logger {
 	return l.With(ctx...)
 }
 
-// terminalFormat formats a message similarly to the TerminalHandler in the log package.
+// terminalFormat formats a message similarly to the NewTerminalHandler in the log package.
 // The difference is that terminalFormat does not escape messages/attributes and does not pad attributes.
 func (h *bufHandler) terminalFormat(r slog.Record) string {
 	buf := &bytes.Buffer{}

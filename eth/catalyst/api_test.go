@@ -1562,7 +1562,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 
 // This checks that beaconRoot is applied to the state from the engine API.
 func TestParentBeaconBlockRoot(t *testing.T) {
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
 
 	genesis, blocks := generateMergeChain(10, true)
 

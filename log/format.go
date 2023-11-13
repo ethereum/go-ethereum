@@ -44,7 +44,7 @@ type TerminalStringer interface {
 	TerminalString() string
 }
 
-func (h *terminalHandler) TerminalFormat(r slog.Record, usecolor bool) []byte {
+func (h *TerminalHandler) TerminalFormat(r slog.Record, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
 	var color = 0
 	if usecolor {
@@ -82,7 +82,7 @@ func (h *terminalHandler) TerminalFormat(r slog.Record, usecolor bool) []byte {
 	return b.Bytes()
 }
 
-func (h *terminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
+func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
 	attrs := []slog.Attr{}
 	r.Attrs(func(attr slog.Attr) bool {
 		attrs = append(attrs, attr)

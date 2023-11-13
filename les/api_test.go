@@ -53,7 +53,7 @@ var (
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.Level(*loglevel), true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.Level(*loglevel), true)))
 	// register the Delivery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterLifecycles(services)

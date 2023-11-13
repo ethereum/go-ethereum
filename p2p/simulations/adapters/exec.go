@@ -403,7 +403,7 @@ func initLogging() {
 		verbosity = log.FromLegacyLevel(int(conf.Node.LogVerbosity))
 	}
 	// Reinitialize the logger
-	innerHandler = log.TerminalHandler(writer, true)
+	innerHandler = log.NewTerminalHandler(writer, true)
 	glogger = log.NewGlogHandler(innerHandler)
 	glogger.Verbosity(verbosity)
 	log.SetDefault(log.NewLogger(glogger))

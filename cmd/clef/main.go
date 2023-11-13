@@ -493,7 +493,7 @@ func initialize(c *cli.Context) error {
 	if usecolor {
 		output = colorable.NewColorable(logOutput)
 	}
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(output, slog.Level(c.Int(logLevelFlag.Name)), usecolor)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, slog.Level(c.Int(logLevelFlag.Name)), usecolor)))
 
 	return nil
 }

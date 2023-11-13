@@ -218,7 +218,7 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 // BuildBlock constructs a block from the given inputs.
 func BuildBlock(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
 	log.SetDefault(log.NewLogger(glogger))
 

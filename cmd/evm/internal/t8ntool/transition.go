@@ -83,7 +83,7 @@ type input struct {
 
 func Transition(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
 	log.SetDefault(log.NewLogger(glogger))
 

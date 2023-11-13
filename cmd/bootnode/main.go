@@ -53,7 +53,7 @@ func main() {
 	)
 	flag.Parse()
 
-	glogger := log.NewGlogHandler(log.TerminalHandler(os.Stderr, false))
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 	glogger.Verbosity(slog.Level(*verbosity))
 	glogger.Vmodule(*vmodule)
 	log.SetDefault(log.NewLogger(glogger))

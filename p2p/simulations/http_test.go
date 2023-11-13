@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 	loglevel := flag.Int("loglevel", 2, "verbosity of logs")
 
 	flag.Parse()
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.Level(*loglevel), true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.Level(*loglevel), true)))
 	os.Exit(m.Run())
 }
 

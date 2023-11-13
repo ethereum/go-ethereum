@@ -232,7 +232,7 @@ func abigen(c *cli.Context) error {
 }
 
 func main() {
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)

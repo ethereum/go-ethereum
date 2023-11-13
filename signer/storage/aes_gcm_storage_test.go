@@ -90,7 +90,7 @@ func TestFileStorage(t *testing.T) {
 	}
 }
 func TestEnd2End(t *testing.T) {
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
 
 	d := t.TempDir()
 
@@ -112,7 +112,7 @@ func TestEnd2End(t *testing.T) {
 func TestSwappedKeys(t *testing.T) {
 	// It should not be possible to swap the keys/values, so that
 	// K1:V1, K2:V2 can be swapped into K1:V2, K2:V1
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
 
 	d := t.TempDir()
 

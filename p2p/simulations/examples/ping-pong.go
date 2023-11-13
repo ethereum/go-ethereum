@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	// set the log level to Trace
-	log.SetDefault(log.NewLogger(log.TerminalHandlerWithLevel(os.Stderr, log.LevelTrace, false)))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, false)))
 
 	// register a single ping-pong service
 	services := map[string]adapters.LifecycleConstructor{
