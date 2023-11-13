@@ -1877,7 +1877,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 					Fatalf("Could not read genesis from database: %v", err)
 				}
 				if !genesis.Config.TerminalTotalDifficultyPassed {
-					Fatalf("Bad genesis configuration: ttd must be passed in block 0 in developer mode")
+					Fatalf("Bad developer-mode genesis configuration: terminal total difficulty must be passed in block 0 in developer mode")
+				}
+				if genesis.Config.TerminalTotalDifficulty == nil {
+					Fatalf("Bad developer-mode genesis configuration:  terminal total difficulty must be specified.")
+				}
+				if genesis.Difficulty.Cmp(genesis.Config.TerminalTotalDifficulty) != 1 {
+					Fatalf("Bad developer-mode genesis configuration:  genesis block difficulty must be greater than ttd")
 				}
 			}
 			chaindb.Close()
