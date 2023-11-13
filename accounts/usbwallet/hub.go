@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -48,7 +50,7 @@ type Hub struct {
 	scheme     string                  // Protocol scheme prefixing account and wallet URLs.
 	vendorID   uint16                  // USB vendor identifier used for device discovery
 	productIDs []uint16                // USB product identifiers used for device discovery
-	usageID    uint16                  // USB usage page identifier used for macOS device discovery
+	usageIDs   []uint16                // USB usage page identifier used for macOS device discovery
 	endpointID int                     // USB endpoint identifier used for non-macOS device discovery
 	makeDriver func(log.Logger) driver // Factory method to construct a vendor specific driver
 
@@ -93,22 +95,22 @@ func NewLedgerHub() (*Hub, error) {
 		0x4011, /* HID + WebUSB Ledger Nano X */
 		0x5011, /* HID + WebUSB Ledger Nano S Plus */
 		0x6011, /* HID + WebUSB Ledger Nano FTS */
-	}, 0xffa0, 0, newLedgerDriver)
+	}, []uint16{0xffa0, 0}, 2, newLedgerDriver)
 }
 
 // NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.
 func NewTrezorHubWithHID() (*Hub, error) {
-	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor HID */}, 0xff00, 0, newTrezorDriver)
+	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor HID */}, []uint16{0xff00}, 0, newTrezorDriver)
 }
 
 // NewTrezorHubWithWebUSB creates a new hardware wallet manager for Trezor devices with
 // firmware version > 1.8.0
 func NewTrezorHubWithWebUSB() (*Hub, error) {
-	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor WebUSB */}, 0xffff /* No usage id on webusb, don't match unset (0) */, 0, newTrezorDriver)
+	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor WebUSB */}, []uint16{0xffff} /* No usage id on webusb, don't match unset (0) */, 0, newTrezorDriver)
 }
 
 // newHub creates a new hardware wallet manager for generic USB devices.
-func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
+func newHub(scheme string, vendorID uint16, productIDs []uint16, usageIDs []uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
 	if !usb.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
@@ -116,7 +118,7 @@ func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16,
 		scheme:     scheme,
 		vendorID:   vendorID,
 		productIDs: productIDs,
-		usageID:    usageID,
+		usageIDs:   usageIDs,
 		endpointID: endpointID,
 		makeDriver: makeDriver,
 		quit:       make(chan chan error),
@@ -186,7 +188,9 @@ func (hub *Hub) refreshWallets() {
 	for _, info := range infos {
 		for _, id := range hub.productIDs {
 			// Windows and Macos use UsageID matching, Linux uses Interface matching
-			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
+			if info.ProductID == id &&
+				info.Path != "" &&
+				(slices.Contains(hub.usageIDs, info.UsagePage) || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
