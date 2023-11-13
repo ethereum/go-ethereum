@@ -1,13 +1,14 @@
 name: Publish Docker image
 
-on:  
+on:
   pull_request:
     branches:
       - master
+ 
 
 jobs:
   push_to_registry:
-    if: ${{ github.event.label.name == 'CI' }}
+    if: ${{ github.event.label.name == 'CI' }})
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
     steps:
