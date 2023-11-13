@@ -66,7 +66,7 @@ var (
 		Hidden:   true,
 		Category: flags.LoggingCategory,
 	}
-	logFormatFlag = &cli.StringFlag{
+	LogFormatFlag = &cli.StringFlag{
 		Name:     "log.format",
 		Usage:    "Log format to use (json|logfmt|terminal)",
 		Category: flags.LoggingCategory,
@@ -151,7 +151,7 @@ var Flags = []cli.Flag{
 	logVmoduleFlag,
 	vmoduleFlag,
 	logjsonFlag,
-	logFormatFlag,
+	LogFormatFlag,
 	logFileFlag,
 	logRotateFlag,
 	logMaxSizeMBsFlag,
@@ -186,7 +186,7 @@ func Setup(ctx *cli.Context) error {
 		fileOutput     io.Writer
 		terminalOutput = io.Writer(os.Stderr)
 		output         io.Writer
-		logFmtFlag     = ctx.String(logFormatFlag.Name)
+		logFmtFlag     = ctx.String(LogFormatFlag.Name)
 	)
 	var (
 		logFile  = ctx.String(logFileFlag.Name)
@@ -252,7 +252,7 @@ func Setup(ctx *cli.Context) error {
 		handler = log.TerminalHandler(output, useColor)
 	default:
 		// Unknown log format specified
-		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+		return fmt.Errorf("unknown log format: %v", ctx.String(LogFormatFlag.Name))
 	}
 
 	glogger = log.NewGlogHandler(handler)
