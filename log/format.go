@@ -98,7 +98,7 @@ func (h *terminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
 
 		key := escapeString(attr.Key)
 		rawVal := attr.Value.Any()
-		val := formatLogfmtValue(rawVal, true)
+		val := FormatLogfmtValue(rawVal, true)
 
 		// XXX: we should probably check that all of your key bytes aren't invalid
 		// TODO (jwasinger) above comment was from log15 code.  what does it mean?  check that key bytes are ascii characters?
@@ -150,7 +150,7 @@ func formatShared(value interface{}) (result interface{}) {
 }
 
 // formatValue formats a value for serialization
-func formatLogfmtValue(value interface{}, term bool) string {
+func FormatLogfmtValue(value interface{}, term bool) string {
 	if value == nil {
 		return "nil"
 	}
