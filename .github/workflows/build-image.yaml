@@ -8,7 +8,7 @@ on:
 
 jobs:
   push_to_registry:
-    if: ${{ github.event.label.name == 'CI' }}
+    if: ${{ github.event.label.name == 'CI' && github.event.label.description == 'Build'}}
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
     steps:
@@ -20,12 +20,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN}}
-      
-    #   - name: Extract metadata (tags, labels) for Docker
-    #     id: meta
-    #     uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-    #     with:
-    #       images: angelov/my-docker-hub-repository
       
       - name: Build and push Docker image
         uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
