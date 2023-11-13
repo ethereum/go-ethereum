@@ -3,8 +3,7 @@ name: Publish Docker image
 on:  
   pull_request:
     branches:
-      - main
-
+      - master
 jobs:
   push_to_registry:
     if: ${{ github.event.label.name == 'Build' }}
