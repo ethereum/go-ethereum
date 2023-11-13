@@ -111,9 +111,13 @@ jobs:
     before_script:
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - docker --version  # document the version travis is using
+      - docker pull xinfinorg/devnet:latest # build the "previous" tag so that our devnet environment can run with both old and new code at the same time.
+      - docker tag xinfinorg/devnet:latest xinfinorg/devnet:previous
+      - docker rmi xinfinorg/devnet:latest
       - docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
     script:
       - docker push xinfinorg/devnet:latest
+      - docker push xinfinorg/devnet:previous
 
   - stage: (Devnet)Terraform plan
     if: branch = dev-upgrade AND type = push AND tag IS blank
