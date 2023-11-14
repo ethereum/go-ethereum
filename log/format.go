@@ -166,7 +166,7 @@ func FormatLogfmtValue(value interface{}, term bool) string {
 		// Big ints get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
-			return "<nil>"
+			return "nil"
 		}
 		return formatLogfmtBigInt(v)
 
@@ -174,7 +174,7 @@ func FormatLogfmtValue(value interface{}, term bool) string {
 		// Uint256s get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
-			return "<nil>"
+			return "nil"
 		}
 		return formatLogfmtUint256(v)
 	}
