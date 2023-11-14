@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net"
 	"sort"
@@ -165,7 +166,6 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 
 	p.packetRouter = utp.NewSocketRouter(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
-
 			nodes := p.table.Nodes()
 			var target *enode.Node
 			for _, node := range nodes {
@@ -174,24 +174,28 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 				}
 				if addr.IP != nil && addr.IP.To4().String() == node.IP().To4().String() {
 					target = node
-					p.log.Trace("target info", "ip", node.IP().To4().String(), "port", node.UDP(), "bufLength", len(buf))
+
 					break
 				}
 				if addr.IP == nil {
 					nodeIp := node.IP().To4().String()
 					if nodeIp == "127.0.0.1" || nodeIp == "0.0.0.0" {
 						target = node
-						p.log.Trace("target info", "ip", nodeIp, "port", node.UDP(), "bufLength", len(buf))
 						break
 					}
 				}
 			}
 
+			p.log.Trace("send to target data", "ip", target.IP().String(), "port", target.UDP(), "bufLength", len(buf))
 			_, err := p.DiscV5.TalkRequest(target, portalwire.UTPNetwork, buf)
 			return len(buf), err
 		})
 
-	p.utpSm, err = utp.NewSocketManager("utp", laddr, utp.WithPacketRouter(p.packetRouter), utp.WithBlockPacketCount(50))
+	logger, err := zap.NewDevelopmentConfig().Build()
+	if err != nil {
+		return nil, err
+	}
+	p.utpSm, err = utp.NewSocketManager("utp", laddr, utp.WithLogger(logger.Named(listenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithBlockPacketCount(50), utp.WithMaxPacketSize(1145))
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +354,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		laddr := p.utp.Addr().(*utp.Addr)
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
-		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(rctx), utp.WithConnId(uint32(connId)))
+		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(rctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
 		if err != nil {
 			rcancel()
 			return 0xff, nil, err
@@ -363,8 +367,8 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 		// Read ALL the data from the connection until EOF and return it
 		data := make([]byte, 0)
+		buf := make([]byte, 1024)
 		for {
-			buf := make([]byte, 1024)
 			var n int
 			n, err = conn.Read(buf)
 			if err != nil {
@@ -473,9 +477,7 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
-	if len(msg) == 0 {
-		fmt.Println("receive a emtpy msg")
-	}
+	p.log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
 	p.packetRouter.ReceiveMessage(msg, addr)
 	return []byte("")
 }
@@ -695,8 +697,14 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			ctx, cancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
 			var conn *utp.Conn
 			conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+			defer func(conn *utp.Conn) {
+				err := conn.Close()
+				if err != nil {
+					p.log.Error("failed to close utp connection", "err", err)
+				}
+			}(conn)
 			if err != nil {
-				p.log.Error("failed to accept utp connection", "err", err)
+				p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
 				cancel()
 				return
 			}

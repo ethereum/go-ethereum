@@ -2,8 +2,11 @@ package discover
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/optimism-java/utp-go"
+	"io"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -88,7 +91,10 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	cliSendMsgWithRandomCid := "there are connection id: random!"
 
 	serverEchoWithCid := "accept connection sends back msg: echo"
-	serverEchoWithRandomCid := "ccept connection with random cid sends msg: echo"
+	//serverEchoWithRandomCid := "ccept connection with random cid sends msg: echo"
+
+	largeTestContent := make([]byte, 1199)
+	_, err = rand.Read(largeTestContent)
 	go func() {
 		var acceptConn *utp.Conn
 		defer func() {
@@ -108,7 +114,11 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		acceptConn.Write([]byte(serverEchoWithCid))
 	}()
 	go func() {
-		defer wg.Done()
+		var randomConnIdConn net.Conn
+		defer func() {
+			wg.Done()
+			_ = randomConnIdConn.Close()
+		}()
 		randomConnIdConn, err := node1.utp.Accept()
 		if err != nil {
 			panic(err)
@@ -119,11 +129,16 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 			panic(err)
 		}
 		assert.Equal(t, cliSendMsgWithRandomCid, string(buf[:n]))
-		randomConnIdConn.Write([]byte(serverEchoWithRandomCid))
+
+		randomConnIdConn.Write(largeTestContent)
 	}()
 
 	go func() {
-		defer wg.Done()
+		var connWithConnId net.Conn
+		defer func() {
+			wg.Done()
+			//_ = connWithConnId.Close()
+		}()
 		connWithConnId, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithConnId(cid), utp.WithSocketManager(node2.utpSm))
 		if err != nil {
 			panic(err)
@@ -140,7 +155,11 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		assert.Equal(t, serverEchoWithCid, string(buf[:n]))
 	}()
 	go func() {
-		defer wg.Done()
+		var randomConnIdConn net.Conn
+		defer func() {
+			wg.Done()
+			//_ = randomConnIdConn.Close()
+		}()
 		randomConnIdConn, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithSocketManager(node2.utpSm))
 		if err != nil {
 			panic(err)
@@ -149,12 +168,20 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		buf := make([]byte, 100)
-		n, err := randomConnIdConn.Read(buf)
-		if err != nil {
-			panic(err)
+
+		data := make([]byte, 0)
+		buf := make([]byte, 1024)
+		for {
+			var n int
+			n, err = randomConnIdConn.Read(buf)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+			}
+			data = append(data, buf[:n]...)
 		}
-		assert.Equal(t, serverEchoWithRandomCid, string(buf[:n]))
+		assert.Equal(t, largeTestContent, data)
 	}()
 	wg.Wait()
 }
@@ -232,6 +259,6 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
 	assert.NoError(t, err)
-	assert.Equal(t, portalwire.ContentConnIdSelector, flag)
 	assert.Equal(t, largeTestContent, content)
+	assert.Equal(t, portalwire.ContentConnIdSelector, flag)
 }

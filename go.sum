@@ -501,6 +501,8 @@ github.com/optimism-java/utp-go v0.0.0-20231030043430-a1331c25fa98 h1:uxUbd8LFc2
 github.com/optimism-java/utp-go v0.0.0-20231030043430-a1331c25fa98/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
 github.com/optimism-java/utp-go v0.0.0-20231111152515-b2c1e9aba225 h1:UUVmsVAv/4v0TMW3AFPwxAkuyNjKsAWVyqxfR10gMGE=
 github.com/optimism-java/utp-go v0.0.0-20231111152515-b2c1e9aba225/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
+github.com/optimism-java/utp-go v0.0.0-20231114114639-92925ba7e35e h1:61Mw2nE4trMg/Ze/0oFD5o5yKog2UuLUlbUnBS0lCh8=
+github.com/optimism-java/utp-go v0.0.0-20231114114639-92925ba7e35e/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
 github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7 h1:oYW+YCJ1pachXTQmzR3rNLYGGz4g/UgFcjb28p/viDM=
 github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7/go.mod h1:CRroGNssyjTd/qIG2FyxByd2S8JEAZXBl4qUrZf8GS0=
