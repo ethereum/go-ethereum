@@ -40,6 +40,9 @@ jobs:
         image: anglyuboslav/hardhat:1.0.0
         ports:
           - 8545:8545
+    steps:
+      - name: Run hardhat tests
+        run: echo "HARDHAT"
         
 
     
