@@ -119,9 +119,10 @@ func (f *ResettableFreezer) Ancient(kind string, number uint64) ([]byte, error) 
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//   - at most 'max' items,
-//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//     return as many items as fit into maxByteSize
+//   - at most 'count' items,
+//   - if maxBytes is specified: at least 1 item (even if exceeding the maxByteSize),
+//     but will otherwise return as many items as fit into maxByteSize.
+//   - if maxBytes is not specified, 'count' items will be returned if they are present.
 func (f *ResettableFreezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()

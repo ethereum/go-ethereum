@@ -386,6 +386,8 @@ func TestLogFilterCreation(t *testing.T) {
 			{FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)}, false},
 			// from block "higher" than to block
 			{FilterCriteria{FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, false},
+			// topics more then 4
+			{FilterCriteria{Topics: [][]common.Hash{{}, {}, {}, {}, {}}}, false},
 		}
 	)
 
@@ -420,6 +422,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		0: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
 		1: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		2: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)},
+		3: {Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
 	}
 
 	for i, test := range testCases {
@@ -429,7 +432,10 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	}
 }
 
+// TestLogFilterUninstall tests invalid getLogs requests
 func TestInvalidGetLogsRequest(t *testing.T) {
+	t.Parallel()
+
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		_, sys    = newTestFilterSystem(t, db, Config{})
@@ -442,12 +448,28 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
 		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
 		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+		3: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
 	}
 
 	for i, test := range testCases {
 		if _, err := api.GetLogs(context.Background(), test); err == nil {
 			t.Errorf("Expected Logs for case #%d to fail", i)
 		}
+	}
+}
+
+// TestInvalidGetRangeLogsRequest tests getLogs with invalid block range
+func TestInvalidGetRangeLogsRequest(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(t, db, Config{})
+		api    = NewFilterAPI(sys, false)
+	)
+
+	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
+		t.Errorf("Expected Logs for invalid range return error, but got: %v", err)
 	}
 }
 

@@ -218,10 +218,9 @@ func Setup(ctx *cli.Context) error {
 		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
 	}
 	var (
-		stdHandler = log.StreamHandler(output, logfmt)
-		ostream    = stdHandler
-		logFile    = ctx.String(logFileFlag.Name)
-		rotation   = ctx.Bool(logRotateFlag.Name)
+		ostream  = log.StreamHandler(output, logfmt)
+		logFile  = ctx.String(logFileFlag.Name)
+		rotation = ctx.Bool(logRotateFlag.Name)
 	)
 	if len(logFile) > 0 {
 		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
@@ -242,20 +241,21 @@ func Setup(ctx *cli.Context) error {
 		} else {
 			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
 		}
-		ostream = log.MultiHandler(log.StreamHandler(&lumberjack.Logger{
+		lumberWriter := &lumberjack.Logger{
 			Filename:   logFile,
 			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
 			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
 			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
 			Compress:   ctx.Bool(logCompressFlag.Name),
-		}, logfmt), stdHandler)
-	} else if logFile != "" {
-		if logOutputStream, err := log.FileHandler(logFile, logfmt); err != nil {
-			return err
-		} else {
-			ostream = log.MultiHandler(logOutputStream, stdHandler)
-			context = append(context, "location", logFile)
 		}
+		ostream = log.StreamHandler(io.MultiWriter(output, lumberWriter), logfmt)
+	} else if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		ostream = log.StreamHandler(io.MultiWriter(output, f), logfmt)
+		context = append(context, "location", logFile)
 	}
 	glogger.SetHandler(ostream)
 

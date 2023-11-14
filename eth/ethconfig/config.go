@@ -59,7 +59,7 @@ var LightClientGPO = gasprice.Config{
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
 	SyncMode:           downloader.SnapSync,
-	NetworkId:          1,
+	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
 	StateHistory:       params.FullImmutabilityThreshold,
@@ -87,8 +87,9 @@ type Config struct {
 	// If nil, the Ethereum main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
 
-	// Protocol options
-	NetworkId uint64 // Network ID to use for selecting peers to connect to
+	// Network ID separates blockchains on the peer-to-peer networking level. When left
+	// zero, the chain ID is used as network ID.
+	NetworkId uint64
 	SyncMode  downloader.SyncMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for

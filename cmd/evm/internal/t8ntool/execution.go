@@ -116,8 +116,8 @@ type rejectedTx struct {
 
 // Apply applies a set of transactions to a pre-state
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
-	txs types.Transactions, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)) (*state.StateDB, *ExecutionResult, error) {
+	txIt txIterator, miningReward int64,
+	getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -190,15 +190,19 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
 	var blobGasUsed uint64
-	for i, tx := range txs {
+
+	for i := 0; txIt.Next(); i++ {
+		tx, err := txIt.Tx()
+		if err != nil {
+			log.Warn("rejected tx", "index", i, "error", err)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+			continue
+		}
 		if tx.Type() == types.BlobTxType && vmContext.BlobBaseFee == nil {
 			errMsg := "blob tx used but field env.ExcessBlobGas missing"
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
-		}
-		if tx.Type() == types.BlobTxType {
-			blobGasUsed += uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
 		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
@@ -206,9 +210,19 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			continue
 		}
+		if tx.Type() == types.BlobTxType {
+			txBlobGas := uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
+				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
+				log.Warn("rejected tx", "index", i, "err", err)
+				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
+				continue
+			}
+			blobGasUsed += txBlobGas
+		}
 		tracer, err := getTracerFn(txIndex, tx.Hash())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		vmConfig.Tracer = tracer
 		statedb.SetTxContext(tx.Hash(), txIndex)
@@ -231,7 +245,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
-			return nil, nil, NewError(ErrorMissingBlockhash, hashError)
+			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
 		gasUsed += msgResult.UsedGas
 
@@ -306,7 +320,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
 	if err != nil {
-		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
@@ -332,9 +346,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	// for accessing latest states.
 	statedb, err = state.New(root, statedb.Database(), nil)
 	if err != nil {
-		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
-	return statedb, execRs, nil
+	body, _ := rlp.EncodeToBytes(includedTxs)
+	return statedb, execRs, body, nil
 }
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
