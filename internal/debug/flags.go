@@ -167,9 +167,14 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
+type writerCloser interface {
+	Write([]byte) (int, error)
+	Close() error
+}
+
 var (
 	glogger                *log.GlogHandler
-	logOutputF             *os.File
+	logOutputF             writerCloser
 	defaultTerminalHandler *log.TerminalHandler
 )
 
@@ -191,7 +196,6 @@ func ResetLogging() {
 func Setup(ctx *cli.Context) error {
 	var (
 		handler        slog.Handler
-		fileOutput     io.Writer
 		terminalOutput = io.Writer(os.Stderr)
 		output         io.Writer
 		logFmtFlag     = ctx.String(logFormatFlag.Name)
@@ -219,20 +223,20 @@ func Setup(ctx *cli.Context) error {
 		} else {
 			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
 		}
-		fileOutput = &lumberjack.Logger{
+		logOutputF = &lumberjack.Logger{
 			Filename:   logFile,
 			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
 			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
 			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
 			Compress:   ctx.Bool(logCompressFlag.Name),
 		}
-		output = io.MultiWriter(terminalOutput, fileOutput)
+		output = io.MultiWriter(terminalOutput, logOutputF)
 	} else if logFile != "" {
 		var err error
-		if fileOutput, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+		if logOutputF, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
 			return err
 		}
-		output = io.MultiWriter(fileOutput, terminalOutput)
+		output = io.MultiWriter(logOutputF, terminalOutput)
 		context = append(context, "location", logFile)
 	} else {
 		output = terminalOutput
@@ -251,8 +255,8 @@ func Setup(ctx *cli.Context) error {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if useColor {
 			terminalOutput = colorable.NewColorableStderr()
-			if fileOutput != nil {
-				output = io.MultiWriter(fileOutput, terminalOutput)
+			if logOutputF != nil {
+				output = io.MultiWriter(logOutputF, terminalOutput)
 			} else {
 				output = terminalOutput
 			}
