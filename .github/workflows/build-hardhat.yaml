@@ -42,7 +42,7 @@ jobs:
           - 8545:8545
     steps:
       - name: Run hardhat tests
-        run: echo "HARDHAT"
+        run: docker exec hardhat bash -c "npx hardhat test"
         
 
     
