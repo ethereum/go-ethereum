@@ -177,7 +177,7 @@ func validatePoolInternals(pool *LegacyPool) error {
 	defer pool.mu.RUnlock()
 
 	// Ensure the total transaction set is consistent with pending + queued
-	pending, queued := pool.stats()
+	pending, queued, _, _ := pool.stats()
 	if total := pool.all.Count(); total != pending+queued {
 		return fmt.Errorf("total transaction count %d != %d pending + %d queued", total, pending, queued)
 	}
@@ -828,7 +828,7 @@ func TestGapFilling(t *testing.T) {
 		transaction(0, 100000, key),
 		transaction(2, 100000, key),
 	})
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 1 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
 	}
@@ -845,7 +845,7 @@ func TestGapFilling(t *testing.T) {
 	if err := pool.addRemoteSync(transaction(1, 100000, key)); err != nil {
 		t.Fatalf("failed to add gapped transaction: %v", err)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
@@ -1029,7 +1029,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	if err := pool.addRemote(pricedTransaction(1, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
@@ -1044,7 +1044,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	time.Sleep(2 * evictionInterval)
 
 	// Transactions should not be evicted from the queue yet since lifetime duration has not passed
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
@@ -1058,7 +1058,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	// Wait a bit for eviction to run and clean up any leftovers, and ensure only the local remains
 	time.Sleep(2 * config.Lifetime)
 
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
@@ -1081,7 +1081,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	<-pool.requestReset(nil, nil)
 
 	// make sure queue, pending are cleared
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
@@ -1111,7 +1111,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 	time.Sleep(6 * evictionInterval)
 
 	// All gapped transactions shouldn't be kicked out
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1124,7 +1124,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 
 	// The whole life time pass after last promotion, kick out stale transactions
 	time.Sleep(2 * config.Lifetime)
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1232,6 +1232,93 @@ func TestPendingGlobalLimiting(t *testing.T) {
 	}
 }
 
+// Test if the queued transaction slots per account or by total
+// go beyond the threshold, then transactions are dropped to prevent
+// DOS.
+func TestSlotsLimit(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	pool.config.GlobalQueue = uint64(6)
+	pool.config.AccountQueue = uint64(4)
+
+	// Create a number of test accounts and fund them
+	keys := make([]*ecdsa.PrivateKey, 2)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000000))
+	}
+
+	// Compute maximal data size for transactions (lower bound).
+	//
+	// It is assumed the fields in the transaction (except of the data) are:
+	//   - nonce     <= 32 bytes
+	//   - gasPrice  <= 32 bytes
+	//   - gasLimit  <= 32 bytes
+	//   - recipient == 20 bytes
+	//   - value     <= 32 bytes
+	//   - signature == 65 bytes
+	// All those fields are summed up to at most 213 bytes.
+	baseSize := uint64(213)
+	dataSize := txMaxSize - baseSize
+	maxGas := pool.currentHead.Load().GasLimit
+
+	tx := pricedDataTransaction(1, maxGas, big.NewInt(1), keys[0], baseSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots := pool.Stats()
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+	if queuedSlots != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+
+	// 4-slot transaction makes total number of queued slots per account is
+	// higher than AccountQueue, drop this higher nonce transaction
+	tx = pricedDataTransaction(2, maxGas, big.NewInt(1), keys[0], dataSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+	if queuedSlots != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+
+	// 2-slot transaction is acceptable
+	tx = pricedDataTransaction(2, maxGas, big.NewInt(1), keys[0], dataSize/2)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if queuedSlots != 3 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
+	}
+
+	// 4-slot transaction from account 2 makes global queued slots is higher
+	// than GlobalQueue, the 2-slot nonce 2 is dropped
+	tx = pricedDataTransaction(1, maxGas, big.NewInt(1), keys[1], dataSize)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction: %v ", err)
+	}
+	_, queued, _, queuedSlots = pool.Stats()
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if queuedSlots != 5 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 5)
+	}
+}
+
 // Test the limit on transaction size is enforced correctly.
 // This test verifies every transaction having allowed size
 // is added to the pool, and longer transactions are rejected.
@@ -1275,7 +1362,7 @@ func TestAllowedTxSize(t *testing.T) {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
 	// Run some sanity checks on the pool internals
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1415,7 +1502,7 @@ func TestRepricing(t *testing.T) {
 	pool.addRemotesSync(txs)
 	pool.addLocal(ltx)
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 7 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 7)
 	}
@@ -1431,7 +1518,7 @@ func TestRepricing(t *testing.T) {
 	// Reprice the pool and check that underpriced transactions get dropped
 	pool.SetGasTip(big.NewInt(2))
 
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1465,7 +1552,7 @@ func TestRepricing(t *testing.T) {
 	if err := pool.addLocal(tx); err != nil {
 		t.Fatalf("failed to add underpriced local transaction: %v", err)
 	}
-	if pending, _ = pool.Stats(); pending != 3 {
+	if pending, _, _, _ = pool.Stats(); pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
 	if err := validateEvents(events, 1); err != nil {
@@ -1536,7 +1623,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 	pool.addRemotesSync(txs)
 	pool.addLocal(ltx)
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 7 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 7)
 	}
@@ -1552,7 +1639,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 	// Reprice the pool and check that underpriced transactions get dropped
 	pool.SetGasTip(big.NewInt(2))
 
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1589,7 +1676,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 	if err := pool.addLocal(tx); err != nil {
 		t.Fatalf("failed to add underpriced local transaction: %v", err)
 	}
-	if pending, _ = pool.Stats(); pending != 3 {
+	if pending, _, _, _ = pool.Stats(); pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
 	if err := validateEvents(events, 1); err != nil {
@@ -1662,10 +1749,10 @@ func TestRepricingKeepsLocals(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	expPending, expQueued := 1000, 1000
 	validate := func() {
-		pending, queued = pool.Stats()
+		pending, queued, _, _ = pool.Stats()
 		if pending != expPending {
 			t.Fatalf("pending transactions mismatched: have %d, want %d", pending, expPending)
 		}
@@ -1735,7 +1822,7 @@ func TestUnderpricing(t *testing.T) {
 	pool.addRemotes(txs)
 	pool.addLocal(ltx)
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
@@ -1770,7 +1857,7 @@ func TestUnderpricing(t *testing.T) {
 	if err := pool.addRemote(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); err != txpool.ErrFutureReplacePending {
 		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, txpool.ErrFutureReplacePending)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1792,7 +1879,7 @@ func TestUnderpricing(t *testing.T) {
 	if err := pool.addLocal(ltx); err != nil {
 		t.Fatalf("failed to add new underpriced local transaction: %v", err)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
@@ -1843,7 +1930,7 @@ func TestStableUnderpricing(t *testing.T) {
 	}
 	pool.addRemotesSync(txs)
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != int(config.GlobalSlots) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, config.GlobalSlots)
 	}
@@ -1860,7 +1947,7 @@ func TestStableUnderpricing(t *testing.T) {
 	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil {
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != int(config.GlobalSlots) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, config.GlobalSlots)
 	}
@@ -1914,7 +2001,7 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 	pool.addRemotes(txs) // Pend K0:0, K0:1; Que K1:1
 	pool.addLocal(ltx)   // +K2:0 => Pend K0:0, K0:1, K2:0; Que K1:1
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
@@ -1948,7 +2035,7 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 	if err := pool.addRemoteSync(tx); err != nil { // +K1:3, -K1:0 => Pend K0:0 K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}
@@ -1970,7 +2057,7 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 	if err := pool.addLocal(ltx); err != nil {
 		t.Fatalf("failed to add new underpriced local transaction: %v", err)
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
@@ -2022,7 +2109,7 @@ func TestDualHeapEviction(t *testing.T) {
 			}
 			pool.addRemotesSync([]*types.Transaction{tx})
 		}
-		pending, queued := pool.Stats()
+		pending, queued, _, _ := pool.Stats()
 		if pending+queued != 20 {
 			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 10)
 		}
@@ -2076,7 +2163,7 @@ func TestDeduplication(t *testing.T) {
 			t.Errorf("add %d failed: %v", i, err)
 		}
 	}
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 1 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
 	}
@@ -2096,7 +2183,7 @@ func TestDeduplication(t *testing.T) {
 			t.Errorf("add %d failed: %v", i, err)
 		}
 	}
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != len(txs) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, len(txs))
 	}
@@ -2351,7 +2438,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 4 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 4)
 	}
@@ -2369,7 +2456,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	pool = New(config, blockchain)
 	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
 
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if queued != 0 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
 	}
@@ -2396,7 +2483,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	pool = New(config, blockchain)
 	pool.Init(new(big.Int).SetUint64(config.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
 
-	pending, queued = pool.Stats()
+	pending, queued, _, _ = pool.Stats()
 	if pending != 0 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
@@ -2445,7 +2532,7 @@ func TestStatusCheck(t *testing.T) {
 	// Import the transaction and ensure they are correctly added
 	pool.addRemotesSync(txs)
 
-	pending, queued := pool.Stats()
+	pending, queued, _, _ := pool.Stats()
 	if pending != 2 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
 	}

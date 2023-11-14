@@ -356,12 +356,17 @@ func (pool *LegacyPool) loop() {
 		// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
-			pending, queued := pool.stats()
+			pending, queued, pendingSlots, queuedSlots := pool.stats()
 			pool.mu.RUnlock()
 			stales := int(pool.priced.stales.Load())
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
-				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
+				log.Debug(
+					"Transaction pool status report",
+					"executable", pending, "executable slots", pendingSlots,
+					"queued", queued, "queued slots", queuedSlots,
+					"stales", stales,
+				)
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 
@@ -457,27 +462,35 @@ func (pool *LegacyPool) Nonce(addr common.Address) uint64 {
 	return pool.pendingNonces.get(addr)
 }
 
-// Stats retrieves the current pool stats, namely the number of pending and the
-// number of queued (non-executable) transactions.
-func (pool *LegacyPool) Stats() (int, int) {
+// Stats retrieves the current pool stats, namely the number of pending transactions,
+// slots, and the number of queued (non-executable) transactions, slots.
+func (pool *LegacyPool) Stats() (int, int, int, int) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
 	return pool.stats()
 }
 
-// stats retrieves the current pool stats, namely the number of pending and the
-// number of queued (non-executable) transactions.
-func (pool *LegacyPool) stats() (int, int) {
+// stats retrieves the current pool stats, namely the number of pending transactions,
+// slots and the number of queued (non-executable) transactions, slots.
+func (pool *LegacyPool) stats() (int, int, int, int) {
 	pending := 0
 	for _, list := range pool.pending {
 		pending += list.Len()
+	}
+	pendingSlots := 0
+	for _, list := range pool.pending {
+		pendingSlots += list.TotalSlots()
 	}
 	queued := 0
 	for _, list := range pool.queue {
 		queued += list.Len()
 	}
-	return pending, queued
+	queuedSlots := 0
+	for _, list := range pool.queue {
+		queuedSlots += list.TotalSlots()
+	}
+	return pending, queued, pendingSlots, queuedSlots
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
@@ -1487,25 +1500,48 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 	return promoted
 }
 
+// removeLastPendingTransaction removes the highest nonce transaction of the sender from
+// the pending transactions, returns the number of transaction slot of that transaction
+func (pool *LegacyPool) removeLastPendingTransaction(sender common.Address) uint64 {
+	list := pool.pending[sender]
+
+	// Remove the transaction with highest nonce
+	lastTx := list.LastElement()
+	list.Remove(lastTx)
+
+	// Drop the transaction from the global pools too
+	pool.all.Remove(lastTx.Hash())
+	// Update the account nonce to the dropped transaction
+	pool.pendingNonces.setIfLower(sender, lastTx.Nonce())
+	log.Trace("Removed fairness-exceeding pending transaction", "hash", lastTx.Hash())
+
+	pool.priced.Removed(1)
+	pendingGauge.Dec(1)
+	if pool.locals.contains(sender) {
+		localGauge.Dec(1)
+	}
+	return uint64(numSlots(lastTx))
+}
+
 // truncatePending removes transactions from the pending queue if the pool is above the
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
 func (pool *LegacyPool) truncatePending() {
 	pending := uint64(0)
+	droppedTxs := 0
 	for _, list := range pool.pending {
-		pending += uint64(list.Len())
+		pending += uint64(list.TotalSlots())
 	}
 	if pending <= pool.config.GlobalSlots {
 		return
 	}
 
-	pendingBeforeCap := pending
 	// Assemble a spam order to penalize large transactors first
 	spammers := prque.New[int64, common.Address](nil)
 	for addr, list := range pool.pending {
 		// Only evict transactions from high rollers
-		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {
-			spammers.Push(addr, int64(list.Len()))
+		if !pool.locals.contains(addr) && uint64(list.TotalSlots()) > pool.config.AccountSlots {
+			spammers.Push(addr, int64(list.TotalSlots()))
 		}
 	}
 	// Gradually drop transactions from offenders
@@ -1518,29 +1554,23 @@ func (pool *LegacyPool) truncatePending() {
 		// Equalize balances until all the same or below threshold
 		if len(offenders) > 1 {
 			// Calculate the equalization threshold for all current offenders
-			threshold := pool.pending[offender].Len()
+			threshold := pool.pending[offender].TotalSlots()
 
 			// Iteratively reduce all offenders until below limit or threshold reached
-			for pending > pool.config.GlobalSlots && pool.pending[offenders[len(offenders)-2]].Len() > threshold {
+			for pending > pool.config.GlobalSlots {
+				lowerThanThreshold := 0
 				for i := 0; i < len(offenders)-1; i++ {
-					list := pool.pending[offenders[i]]
-
-					caps := list.Cap(list.Len() - 1)
-					for _, tx := range caps {
-						// Drop the transaction from the global pools too
-						hash := tx.Hash()
-						pool.all.Remove(hash)
-
-						// Update the account nonce to the dropped transaction
-						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce())
-						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+					if pool.pending[offenders[i]].TotalSlots() <= threshold {
+						lowerThanThreshold++
+						continue
 					}
-					pool.priced.Removed(len(caps))
-					pendingGauge.Dec(int64(len(caps)))
-					if pool.locals.contains(offenders[i]) {
-						localGauge.Dec(int64(len(caps)))
-					}
-					pending--
+
+					pending -= pool.removeLastPendingTransaction(offenders[i])
+					droppedTxs++
+				}
+
+				if lowerThanThreshold == len(offenders)-1 {
+					break
 				}
 			}
 		}
@@ -1548,37 +1578,30 @@ func (pool *LegacyPool) truncatePending() {
 
 	// If still above threshold, reduce to limit or min allowance
 	if pending > pool.config.GlobalSlots && len(offenders) > 0 {
-		for pending > pool.config.GlobalSlots && uint64(pool.pending[offenders[len(offenders)-1]].Len()) > pool.config.AccountSlots {
+		for pending > pool.config.GlobalSlots {
+			lowerThanThreshold := 0
 			for _, addr := range offenders {
-				list := pool.pending[addr]
-
-				caps := list.Cap(list.Len() - 1)
-				for _, tx := range caps {
-					// Drop the transaction from the global pools too
-					hash := tx.Hash()
-					pool.all.Remove(hash)
-
-					// Update the account nonce to the dropped transaction
-					pool.pendingNonces.setIfLower(addr, tx.Nonce())
-					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+				if uint64(pool.pending[addr].TotalSlots()) <= pool.config.AccountSlots {
+					lowerThanThreshold++
+					continue
 				}
-				pool.priced.Removed(len(caps))
-				pendingGauge.Dec(int64(len(caps)))
-				if pool.locals.contains(addr) {
-					localGauge.Dec(int64(len(caps)))
-				}
-				pending--
+				pending -= pool.removeLastPendingTransaction(addr)
+				droppedTxs++
+			}
+
+			if lowerThanThreshold == len(offenders) {
+				break
 			}
 		}
 	}
-	pendingRateLimitMeter.Mark(int64(pendingBeforeCap - pending))
+	pendingRateLimitMeter.Mark(int64(droppedTxs))
 }
 
 // truncateQueue drops the oldest transactions in the queue if the pool is above the global queue limit.
 func (pool *LegacyPool) truncateQueue() {
 	queued := uint64(0)
 	for _, list := range pool.queue {
-		queued += uint64(list.Len())
+		queued += uint64(list.TotalSlots())
 	}
 	if queued <= pool.config.GlobalQueue {
 		return
@@ -1594,26 +1617,26 @@ func (pool *LegacyPool) truncateQueue() {
 	sort.Sort(sort.Reverse(addresses))
 
 	// Drop transactions until the total is below the limit or only locals remain
-	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
+	for drop := int(queued - pool.config.GlobalQueue); drop > 0 && len(addresses) > 0; {
 		addr := addresses[len(addresses)-1]
 		list := pool.queue[addr.address]
 
 		addresses = addresses[:len(addresses)-1]
 
 		// Drop all transactions if they are less than the overflow
-		if size := uint64(list.Len()); size <= drop {
+		if list.TotalSlots() <= drop {
 			for _, tx := range list.Flatten() {
 				pool.removeTx(tx.Hash(), true, true)
 			}
-			drop -= size
-			queuedRateLimitMeter.Mark(int64(size))
+			drop -= list.TotalSlots()
+			queuedRateLimitMeter.Mark(int64(list.Len()))
 			continue
 		}
 		// Otherwise drop only last few transactions
 		txs := list.Flatten()
 		for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
 			pool.removeTx(txs[i].Hash(), true, true)
-			drop--
+			drop -= numSlots(txs[i])
 			queuedRateLimitMeter.Mark(1)
 		}
 	}
