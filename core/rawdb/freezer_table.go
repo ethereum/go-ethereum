@@ -467,6 +467,31 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	return nil
 }
 
+// readIndexEntry reads the index entry at the given index.
+func (t *freezerTable) readIndexEntry(index uint64) (entry indexEntry, err error) {
+	buffer := make([]byte, indexEntrySize)
+	if _, err := t.index.ReadAt(buffer, int64(index*indexEntrySize)); err != nil {
+		return indexEntry{}, err
+	}
+	entry.unmarshalBinary(buffer)
+	return entry, nil
+}
+
+// hiddenBytes calculates the current size of hidden items in bytes
+func (t *freezerTable) hiddenBytes() (uint32, error) {
+	itemHidden := t.itemHidden.Load()
+	itemOffset := t.itemOffset.Load()
+	// no hidden items if the two markers are the same
+	if itemHidden == itemOffset {
+		return 0, nil
+	}
+	itemHiddenIndexEntry, errHidden := t.readIndexEntry(itemHidden - itemOffset)
+	if errHidden != nil {
+		return 0, fmt.Errorf("failed to read index entry, itemHidden: %d, err: %v", itemHidden, errHidden)
+	}
+	return itemHiddenIndexEntry.offset, nil
+}
+
 // truncateTail discards any recent data before the provided threshold number.
 func (t *freezerTable) truncateTail(items uint64) error {
 	t.lock.Lock()
@@ -495,6 +520,12 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		newTail.unmarshalBinary(buffer)
 		newTailId = newTail.filenum
 	}
+	// Save the old size for metrics tracking. This needs to be done
+	// before any updates to either itemHidden or itemOffset.
+	oldSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
 	// Update the virtual tail marker and hidden these entries in table.
 	t.itemHidden.Store(items)
 	if err := writeMetadata(t.meta, newMetadata(items)); err != nil {
@@ -509,18 +540,12 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if t.tailId > newTailId {
 		return fmt.Errorf("invalid index, tail-file %d, item-file %d", t.tailId, newTailId)
 	}
-	// Hidden items exceed the current tail file, drop the relevant
-	// data files. We need to truncate, save the old size for metrics
-	// tracking.
-	oldSize, err := t.sizeNolock()
-	if err != nil {
-		return err
-	}
 	// Count how many items can be deleted from the file.
 	var (
 		newDeleted = items
 		deleted    = t.itemOffset.Load()
 	)
+	// Hidden items exceed the current tail file, drop the relevant data files.
 	for current := items - 1; current >= deleted; current -= 1 {
 		if _, err := t.index.ReadAt(buffer, int64((current-deleted+1)*indexEntrySize)); err != nil {
 			return err
@@ -877,7 +902,11 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
+	hiddenBytes, err := t.hiddenBytes()
+	if err != nil {
+		return 0, err
+	}
+	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size()) - uint64(hiddenBytes)
 	return total, nil
 }
 
