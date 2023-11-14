@@ -177,7 +177,7 @@ func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 	switch attr.Key {
 	case slog.TimeKey:
 		if attr.Value.Kind() == slog.KindTime {
-			return slog.Time("t", attr.Value.Time())
+			return slog.Any("t", attr.Value.Time().Format(timeFormat))
 		}
 	case slog.LevelKey:
 		if l, ok := attr.Value.Any().(slog.Level); ok {
