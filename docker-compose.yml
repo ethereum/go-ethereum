@@ -1,0 +1,6 @@
+version: "3.9"
+services:
+  geth:
+    image: anglyuboslav/go-eth-lab
+    command: 
+      - --dev
