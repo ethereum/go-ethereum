@@ -4,3 +4,8 @@ services:
     image: anglyuboslav/go-eth-lab
     command: 
       - --dev
+  hardhat:
+    image: anglyuboslav/hardhat:1.0.0
+    ports:
+      - 8545:8545
+    
