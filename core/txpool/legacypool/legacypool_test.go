@@ -1515,7 +1515,7 @@ func TestMinGasPriceEnforced(t *testing.T) {
 		t.Fatalf("Min tip not enforced")
 	}
 
-	if err := pool.Add([]*txpool.Transaction{{Tx: tx}}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("Min tip not enforced")
 	}
 
@@ -1526,7 +1526,7 @@ func TestMinGasPriceEnforced(t *testing.T) {
 		t.Fatalf("Min tip not enforced")
 	}
 
-	if err := pool.Add([]*txpool.Transaction{{Tx: tx}}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("Min tip not enforced")
 	}
 }

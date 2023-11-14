@@ -152,10 +152,6 @@ var DefaultConfig = Config{
 	Lifetime: 3 * time.Hour,
 }
 
-func (config *Config) PrioritizeLocals() bool {
-	return !config.NoLocals
-}
-
 // sanitize checks the provided user configurations and changes anything that's
 // unreasonable or unworkable.
 func (config *Config) sanitize() Config {
@@ -600,7 +596,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load(),
 	}
-	if local && pool.config.PrioritizeLocals() {
+	if local {
 		opts.MinTip = new(big.Int)
 	}
 	if err := txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
@@ -963,6 +959,9 @@ func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
 // If sync is set, the method will block until all internal maintenance related
 // to the add is finished. Only use this during tests for determinism!
 func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error {
+	// Do not treat as local if local transactions have been disabled
+	local = local && !pool.config.NoLocals
+
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
 		errs = make([]error, len(txs))
