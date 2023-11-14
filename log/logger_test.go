@@ -144,9 +144,10 @@ func TestLoggerOutput(t *testing.T) {
 
 }
 
+const termTimeFormat = "01-02|15:04:05.000"
+
 func BenchmarkAppendFormat(b *testing.B) {
 	var now = time.Now()
-
 	b.Run("fmt time.Format", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
@@ -158,22 +159,22 @@ func BenchmarkAppendFormat(b *testing.B) {
 			now.AppendFormat(nil, termTimeFormat)
 		}
 	})
-	//var buf = new(bytes.Buffer)
-	//b.Run("time.Custom", func(b *testing.B) {
-	//	for i := 0; i < b.N; i++ {
-	//		writeTimeTermFormat(buf, now)
-	//		buf.Reset()
-	//	}
-	//})
+	var buf = new(bytes.Buffer)
+	b.Run("time.Custom", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			writeTimeTermFormat(buf, now)
+			buf.Reset()
+		}
+	})
 }
 
-//func TestTimeFormat(t *testing.T) {
-//	var now = time.Now()
-//	want := now.AppendFormat(nil, termTimeFormat)
-//	var b = new(bytes.Buffer)
-//	writeTimeTermFormat(b, now)
-//	have := b.Bytes()
-//	if !bytes.Equal(have, want) {
-//		t.Errorf("have != want\nhave: %q\nwant: %q\n", have, want)
-//	}
-//}
+func TestTermTimeFormat(t *testing.T) {
+	var now = time.Now()
+	want := now.AppendFormat(nil, termTimeFormat)
+	var b = new(bytes.Buffer)
+	writeTimeTermFormat(b, now)
+	have := b.Bytes()
+	if !bytes.Equal(have, want) {
+		t.Errorf("have != want\nhave: %q\nwant: %q\n", have, want)
+	}
+}

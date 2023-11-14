@@ -15,7 +15,6 @@ import (
 
 const (
 	timeFormat        = "2006-01-02T15:04:05-0700"
-	termTimeFormat    = "01-02|15:04:05.000"
 	floatFormat       = 'f'
 	termMsgJust       = 40
 	termCtxMaxPadding = 40
@@ -49,40 +48,43 @@ type TerminalStringer interface {
 
 func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
-	var color = 0
+	var color = ""
 	if usecolor {
 		switch r.Level {
 		case LevelCrit:
-			color = 35
+			color = "\x1b[35m"
 		case slog.LevelError:
-			color = 31
+			color = "\x1b[31m"
 		case slog.LevelWarn:
-			color = 33
+			color = "\x1b[33m"
 		case slog.LevelInfo:
-			color = 32
+			color = "\x1b[32m"
 		case slog.LevelDebug:
-			color = 36
+			color = "\x1b[36m"
 		case LevelTrace:
-			color = 34
+			color = "\x1b[34m"
 		}
 	}
 	if buf == nil {
 		buf = make([]byte, 0, 30+termMsgJust)
 	}
 	b := bytes.NewBuffer(buf)
-	lvl := LevelAlignedString(r.Level)
-	if color > 0 {
-		// TODO improve this
-		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), msg)
+
+	if color != "" { // Start color
+		b.WriteString(color)
+		b.WriteString(LevelAlignedString(r.Level))
+		b.WriteString("\x1b[0m")
 	} else {
-		b.WriteString(lvl)
-		b.WriteString("[")
-		writeTimeTermFormat(b, r.Time)
-		b.WriteString("] ")
-		b.WriteString(msg)
+		b.WriteString(LevelAlignedString(r.Level))
 	}
+	b.WriteString("[")
+	writeTimeTermFormat(b, r.Time)
+	b.WriteString("] ")
+	b.WriteString(msg)
+
 	// try to justify the log output for short messages
-	length := utf8.RuneCountInString(msg)
+	//length := utf8.RuneCountInString(msg)
+	length := len(msg)
 	if (r.NumAttrs()+len(h.attrs)) > 0 && length < termMsgJust {
 		b.Write(spaces[:termMsgJust-length])
 	}
@@ -92,17 +94,18 @@ func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor boo
 	return b.Bytes()
 }
 
-func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
+func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string) {
 	writeAttr := func(attr slog.Attr, first, last bool) {
 		//if !first {
 		buf.WriteByte(' ')
 		//}
-		key := escapeString(attr.Key)
-		if color > 0 {
-			// TODO improve this
-			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=", color, key)
+
+		if color != "" {
+			buf.WriteString(color)
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			buf.WriteString("\x1b[0m=")
 		} else {
-			buf.WriteString(key)
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteByte('=')
 		}
 		tmp := buf.AvailableBuffer()
@@ -302,34 +305,32 @@ func appendU256(dst []byte, n *uint256.Int) []byte {
 // escaping/quoting if needed.
 func appendEscapeString(dst []byte, s string) []byte {
 	needsQuoting := false
+	needsEscaping := false
 	for _, r := range s {
-		// We quote everything below " (0x22) and above~ (0x7E), plus equal-sign
-		if r <= '"' || r > '~' || r == '=' {
+		// If it contains spaces or equal-sign, we need to quote it.
+		if r == ' ' || r == '=' {
 			needsQuoting = true
+			continue
+		}
+		// We need to escape it, if it contains
+		// - character " (0x22) and lower (except space)
+		// - characters above ~ (0x7E), plus equal-sign
+		if r <= '"' || r > '~' {
+			needsEscaping = true
 			break
 		}
 	}
-	if !needsQuoting {
-		return append(dst, []byte(s)...)
+	if needsEscaping {
+		return strconv.AppendQuote(dst, s)
 	}
-	return strconv.AppendQuote(dst, s)
-}
-
-// escapeString checks if the provided string needs escaping/quoting, and
-// calls strconv.Quote if needed
-func escapeString(s string) string {
-	needsQuoting := false
-	for _, r := range s {
-		// We quote everything below " (0x22) and above~ (0x7E), plus equal-sign
-		if r <= '"' || r > '~' || r == '=' {
-			needsQuoting = true
-			break
-		}
+	// No escaping needed, but we might have to place within quote-marks, in case
+	// it contained a space
+	if needsQuoting {
+		dst = append(dst, '"')
+		dst = append(dst, []byte(s)...)
+		return append(dst, '"')
 	}
-	if !needsQuoting {
-		return s
-	}
-	return strconv.Quote(s)
+	return append(dst, []byte(s)...)
 }
 
 // escapeMessage checks if the provided string needs escaping/quoting, similarly
@@ -355,7 +356,7 @@ func escapeMessage(s string) string {
 	return strconv.Quote(s)
 }
 
-// writeTimeTermFormat
+// writeTimeTermFormat writes on the format "01-02|15:04:05.000"
 func writeTimeTermFormat(buf *bytes.Buffer, t time.Time) {
 	_, month, day := t.Date()
 	writePosIntWidth(buf, int(month), 2)
