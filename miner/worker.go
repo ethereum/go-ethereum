@@ -155,6 +155,13 @@ type intervalAdjust struct {
 	inc   bool
 }
 
+// prioritizedTransaction represents a single transaction that
+// should be processed as the first transaction in the next block.
+type prioritizedTransaction struct {
+	blockNumber uint64
+	tx          *types.Transaction
+}
+
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
@@ -222,6 +229,7 @@ type worker struct {
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
 	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker
+	prioritizedTx          *prioritizedTransaction
 
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
@@ -1136,6 +1144,17 @@ loop:
 				// but it's a trade-off between tracing overhead & block usage rate
 				log.Trace("Circuit capacity limit reached in a block", "acc_rows", w.current.accRows, "tx", tx.Hash().String())
 				log.Info("Skipping message", "tx", tx.Hash().String(), "block", w.current.header.Number, "reason", "accumulated row consumption overflow")
+
+				// Prioritize transaction for the next block.
+				// If there are no new L1 messages, this transaction will be the 1st transaction in the next block,
+				// at which point we can definitively decide if we should skip it or not.
+				log.Debug("Prioritizing transaction for next block", "blockNumber", w.current.header.Number.Uint64()+1, "tx", tx.Hash().String())
+				w.prioritizedTx = &prioritizedTransaction{
+					blockNumber: w.current.header.Number.Uint64() + 1,
+					tx:          tx,
+				}
+				atomic.AddInt32(&w.newTxs, int32(1))
+
 				circuitCapacityReached = true
 				break loop
 			} else {
@@ -1410,6 +1429,19 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			log.Error("Failed to create L1 message set", "l1Messages", l1Messages, "err", err)
 			return
 		}
+		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		if skipCommit {
+			return
+		}
+	}
+	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
+		w.prioritizedTx = nil
+	}
+	if !circuitCapacityReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
+		tx := w.prioritizedTx.tx
+		from, _ := types.Sender(w.current.signer, tx) // error already checked before
+		txList := map[common.Address]types.Transactions{from: []*types.Transaction{tx}}
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, txList, header.BaseFee)
 		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
 			return
