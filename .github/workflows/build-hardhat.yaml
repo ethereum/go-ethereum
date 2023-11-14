@@ -1,0 +1,45 @@
+name: Publish Docker image
+
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - labeled
+ 
+
+jobs:
+  hardhat-image-build:
+    if: ${{ github.event.label.name == 'CI:Deploy'}}
+    name: Build Hardhat image and push it to DockerHub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN}}
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: "anglyuboslav/hardhat:${{ github.run_number }}"
+  hardhat-env:
+    name: Build hardhat devnet
+    runs-on: ubuntu-latest
+    services:
+      go-eth:
+        image: anglyuboslav/go-eth-lab:12
+      hardhat:
+        image: anglyuboslav/hardhat:1.0.0
+        ports:
+          - 8545:8545
+        
+
+    
