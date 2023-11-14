@@ -127,7 +127,7 @@ require (
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
-	github.com/optimism-java/utp-go v0.0.0-20231111152515-b2c1e9aba225 // indirect
+	github.com/optimism-java/utp-go v0.0.0-20231114114639-92925ba7e35e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.0 // indirect
