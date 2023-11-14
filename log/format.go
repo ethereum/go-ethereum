@@ -123,32 +123,6 @@ func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
 	buf.WriteByte('\n')
 }
 
-func formatShared(value interface{}) (result interface{}) {
-	defer func() {
-		if err := recover(); err != nil {
-			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && v.IsNil() {
-				result = "nil"
-			} else {
-				panic(err)
-			}
-		}
-	}()
-
-	switch v := value.(type) {
-	case time.Time:
-		return v.Format(timeFormat)
-
-	case error:
-		return v.Error()
-
-	case fmt.Stringer:
-		return v.String()
-
-	default:
-		return v
-	}
-}
-
 // formatValue formats a value for serialization
 func FormatLogfmtValue(value interface{}, term bool) string {
 	if value == nil {
@@ -177,6 +151,11 @@ func FormatLogfmtValue(value interface{}, term bool) string {
 			return "nil"
 		}
 		return formatLogfmtUint256(v)
+	case error:
+		return v.Error()
+
+	case fmt.Stringer:
+		return v.String()
 	}
 	if term {
 		if s, ok := value.(TerminalStringer); ok {
@@ -184,7 +163,6 @@ func FormatLogfmtValue(value interface{}, term bool) string {
 			return escapeString(s.TerminalString())
 		}
 	}
-	value = formatShared(value)
 	switch v := value.(type) {
 	case bool:
 		return strconv.FormatBool(v)
