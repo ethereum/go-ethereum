@@ -23,9 +23,7 @@ jobs:
             cd hardhat
             npm install -y
             npm install --save-dev hardhat -y
-            npx hardhat init -y
-            npm install --save-dev @nomicfoundation/hardhat-toolbox -y            
-    
+            npm install --save-dev @nomicfoundation/hardhat-toolbox -y                
 
       - name: Deploy Hardhat project
         run: |
