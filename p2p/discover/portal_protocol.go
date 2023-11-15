@@ -7,12 +7,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"math/big"
 	"net"
 	"sort"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/log"
@@ -782,6 +783,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		}
 	}
 
+	fmt.Println(contentKeys)
 	if contentKeyBitsets.Count() == 0 {
 		idBuffer := make([]byte, 2)
 		binary.BigEndian.PutUint16(idBuffer, uint16(0))
