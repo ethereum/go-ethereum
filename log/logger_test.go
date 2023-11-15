@@ -51,7 +51,3 @@ func BenchmarkTraceLogging(b *testing.B) {
 		Trace("a message", "v", i)
 	}
 }
-
-func TestLoggingWithAttrs(t *testing.T) {
-	// TODO: test logger.With(...)
-}

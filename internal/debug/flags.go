@@ -228,10 +228,10 @@ func Setup(ctx *cli.Context) error {
 		output = io.MultiWriter(terminalOutput, logOutputFile)
 	} else if logFile != "" {
 		var err error
-		if logOutputF, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
 			return err
 		}
-		output = io.MultiWriter(logOutputF, terminalOutput)
+		output = io.MultiWriter(logOutputFile, terminalOutput)
 		context = append(context, "location", logFile)
 	} else {
 		output = terminalOutput
@@ -250,8 +250,8 @@ func Setup(ctx *cli.Context) error {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if useColor {
 			terminalOutput = colorable.NewColorableStderr()
-			if logOutputF != nil {
-				output = io.MultiWriter(logOutputF, terminalOutput)
+			if logOutputFile != nil {
+				output = io.MultiWriter(logOutputFile, terminalOutput)
 			} else {
 				output = terminalOutput
 			}
@@ -337,8 +337,8 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
-	if logOutputF != nil {
-		logOutputF.Close()
+	if logOutputFile != nil {
+		logOutputFile.Close()
 	}
 }
 
