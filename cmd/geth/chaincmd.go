@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/urfave/cli/v2"
 )
@@ -265,9 +264,7 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
+	utils.SetupMetricsFromCLI(ctx)
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
