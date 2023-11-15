@@ -1,9 +1,17 @@
 name: Hardhat Deploy and Test
 
-on: [workflow_dispatch]
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - labeled
+ 
 
 jobs:
-  deploy_and_test:
+  deploy_hardhat_project:
+    if: ${{ github.event.label.name == 'CI:Deploy'}}
+    name: Build And Push GETH Image
     runs-on: ubuntu-latest
 
     steps:
