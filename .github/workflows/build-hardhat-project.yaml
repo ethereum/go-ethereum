@@ -31,5 +31,7 @@ jobs:
             npx hardhat run scripts/deploy.js --network localhost
 
       - name: Run tests
-        run: npx hardhat test --network localhost
+        run: |
+          cd hardhat
+          npx hardhat test --network localhost
     
