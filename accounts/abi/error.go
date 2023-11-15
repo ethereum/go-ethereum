@@ -84,10 +84,10 @@ func (e Error) String() string {
 
 func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
-		return "", errors.New("invalid data for unpacking")
+		return "", errors.New("invalid data for unpacking, length is less than 4")
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return "", errors.New("invalid data for unpacking")
+		return "", errors.New("invalid data for unpacking, first four bytes are not equal with error's signature")
 	}
 	return e.Inputs.Unpack(data[4:])
 }
