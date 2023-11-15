@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"io"
+	"math/big"
 	"net"
 	"sort"
 	"time"
@@ -23,6 +24,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
 	"github.com/optimism-java/utp-go"
+	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
@@ -539,6 +541,22 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 		}
 
 		return resp
+	case portalwire.OFFER:
+		offerRequest := &portalwire.Offer{}
+		err := offerRequest.UnmarshalSSZ(msg[1:])
+		if err != nil {
+			p.log.Error("failed to unmarshal offer request", "err", err)
+			return nil
+		}
+
+		p.log.Trace("received offer request", "protocol", p.protocolId, "source", id, "offerRequest", offerRequest)
+		resp, err := p.handleOffer(id, addr, offerRequest)
+		if err != nil {
+			p.log.Error("failed to handle offer request", "err", err)
+			return nil
+		}
+
+		return resp
 	}
 
 	return nil
@@ -747,6 +765,48 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 	}
 }
 
+func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *portalwire.Offer) ([]byte, error) {
+	contentKeyBitsets := bitfield.NewBitlist(uint64(len(request.ContentKeys)))
+	contentKeys := make([][]byte, 0)
+	for i, contentKey := range request.ContentKeys {
+		contentId := p.storage.ContentId(contentKey)
+		if contentId != nil {
+			if p.inRange(p.Self().ID(), p.nodeRadius, contentId) {
+				if _, err := p.storage.Get(contentKey, contentId); err != nil {
+					contentKeyBitsets.SetBitAt(uint64(i), true)
+					contentKeys = append(contentKeys, contentKey)
+				}
+			}
+		} else {
+			return nil, nil
+		}
+	}
+
+	if contentKeyBitsets.Count() == 0 {
+		idBuffer := make([]byte, 2)
+		binary.BigEndian.PutUint16(idBuffer, uint16(0))
+		acceptMsg := &portalwire.Accept{
+			ConnectionId: idBuffer,
+			ContentKeys:  contentKeyBitsets.BytesNoTrim(),
+		}
+
+		p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
+		var acceptMsgBytes []byte
+		acceptMsgBytes, err := acceptMsg.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+
+		talkRespBytes := make([]byte, 0, len(acceptMsgBytes)+1)
+		talkRespBytes = append(talkRespBytes, portalwire.ACCEPT)
+		talkRespBytes = append(talkRespBytes, acceptMsgBytes...)
+
+		return talkRespBytes, nil
+	}
+
+	return nil, nil
+}
+
 func (p *PortalProtocol) Self() *enode.Node {
 	return p.DiscV5.LocalNode().Node()
 }
@@ -874,4 +934,10 @@ func (p *PortalProtocol) findNodesCloseToContent(contentId []byte) []*enode.Node
 	}
 
 	return allNodes
+}
+
+func (p *PortalProtocol) inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
+	distance := enode.LogDist(nodeId, enode.ID(contentId))
+	disBig := new(big.Int).SetInt64(int64(distance))
+	return nodeRadius.CmpBig(disBig) > 0
 }

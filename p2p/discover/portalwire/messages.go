@@ -28,11 +28,23 @@ const (
 	ACCEPT      byte = 0x07
 )
 
+// Content selectors for the portal protocol.
 const (
 	ContentConnIdSelector byte = 0x00
 	ContentRawSelector    byte = 0x01
 	ContentEnrsSelector   byte = 0x02
 )
+
+// Offer request types for the portal protocol.
+const (
+	OfferRequestDirect   byte = 0x00
+	OfferRequestDatabase byte = 0x01
+)
+
+type ContentKV struct {
+	ContentKey []byte
+	Content    []byte
+}
 
 // Request messages for the portal protocol.
 type (
