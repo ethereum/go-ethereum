@@ -152,9 +152,12 @@ func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 	h.lock.RUnlock()
 
+	patterns := []pattern{}
+	patterns = append(patterns, h.patterns...)
+
 	res := GlogHandler{
 		origin:    h.origin.WithAttrs(attrs),
-		patterns:  h.patterns,
+		patterns:  patterns,
 		siteCache: siteCache,
 		location:  h.location,
 	}
