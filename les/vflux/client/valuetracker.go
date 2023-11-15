@@ -257,7 +257,7 @@ func (vt *ValueTracker) loadFromDb(mapping []string) error {
 	}
 	if version != vtVersion {
 		log.Error("Unknown ValueTracker version", "stored", version, "current", nvtVersion)
-		return fmt.Errorf("Unknown ValueTracker version %d (current version is %d)", version, vtVersion)
+		return fmt.Errorf("unknown ValueTracker version %d (current version is %d)", version, vtVersion)
 	}
 	var vte valueTrackerEncV1
 	if err := rlp.Decode(r, &vte); err != nil {
@@ -295,7 +295,7 @@ loop:
 	} else {
 		if vte.RefBasketMapping >= uint(len(vt.mappings)) {
 			log.Error("Unknown request basket mapping", "stored", vte.RefBasketMapping, "current", vt.currentMapping)
-			return fmt.Errorf("Unknown request basket mapping %d (current version is %d)", vte.RefBasketMapping, vt.currentMapping)
+			return fmt.Errorf("unknown request basket mapping %d (current version is %d)", vte.RefBasketMapping, vt.currentMapping)
 		}
 		vt.refBasket.basket = vte.RefBasket.convertMapping(vt.mappings[vte.RefBasketMapping], mapping, vt.initRefBasket)
 	}
