@@ -1349,6 +1349,83 @@ func TestForkLogsReborn(t *testing.T) {
 	}
 }
 
+// TestForkLogsRebornWithFilterLogs check that the simulated reorgs
+// correctly remove and reborn logs with FilterLogs.
+// Steps:
+//  1. Deploy the Callable contract.
+//  2. Set up an event subscription.
+//  3. Save the current block which will serve as parent for the fork.
+//  4. Send a transaction.
+//  5. Check that the event was included.
+//  6. Fork by using the parent block as ancestor.
+//  7. Mine two blocks to trigger a reorg.
+//  8. Check that the event was removed.
+//  9. Re-send the transaction and mine a block.
+//  10. Check that the event was reborn.
+func TestForkLogsRebornWithFilterLogs(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	// 1.
+	parsed, _ := abi.JSON(strings.NewReader(callableAbi))
+	auth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
+	_, _, contract, err := bind.DeployContract(auth, parsed, common.FromHex(callableBin), sim)
+	if err != nil {
+		t.Errorf("deploying contract: %v", err)
+	}
+	sim.Commit()
+	// 2.
+	logs, sub, err := contract.FilterLogs(nil, "Called")
+	if err != nil {
+		t.Errorf("watching logs: %v", err)
+	}
+	defer sub.Unsubscribe()
+	// 3.
+	parent := sim.blockchain.CurrentBlock()
+	// 4.
+	tx, err := contract.Transact(auth, "Call")
+	if err != nil {
+		t.Errorf("transacting: %v", err)
+	}
+	sim.Commit()
+	// 5.
+	log := <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+	// 6.
+	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+	// 7.
+	sim.Commit()
+	sim.Commit()
+	// 8.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if !log.Removed {
+		t.Error("Event should be removed")
+	}
+	// 9.
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+	sim.Commit()
+	// 10.
+	log = <-logs
+	if log.TxHash != tx.Hash() {
+		t.Error("wrong event tx hash")
+	}
+	if log.Removed {
+		t.Error("Event should be included")
+	}
+}
+
 // TestForkResendTx checks that re-sending a TX after a fork
 // is possible and does not cause a "nonce mismatch" panic.
 // Steps:
