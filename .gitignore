@@ -50,3 +50,11 @@ profile.cov
 logs/
 
 tests/spec-tests/
+
+# Hardhat
+node_modules
+.env
+coverage
+typechain
+cache
+artifacts
