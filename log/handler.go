@@ -100,12 +100,10 @@ func NewTerminalHandler(wr io.Writer, useColor bool) *TerminalHandler {
 // records which are less than or equal to the specified verbosity level.
 func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *TerminalHandler {
 	return &TerminalHandler{
-		sync.Mutex{},
-		wr,
-		lvl,
-		useColor,
-		[]slog.Attr{},
-		make(map[string]int),
+		wr:           wr,
+		lvl:          lvl,
+		useColor:     useColor,
+		fieldPadding: make(map[string]int),
 	}
 }
 
@@ -126,12 +124,11 @@ func (h *TerminalHandler) WithGroup(name string) slog.Handler {
 
 func (h *TerminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &TerminalHandler{
-		sync.Mutex{},
-		h.wr,
-		h.lvl,
-		h.useColor,
-		append(h.attrs, attrs...),
-		make(map[string]int),
+		wr:           h.wr,
+		lvl:          h.lvl,
+		useColor:     h.useColor,
+		attrs:        append(h.attrs, attrs...),
+		fieldPadding: make(map[string]int),
 	}
 }
 
