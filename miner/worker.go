@@ -461,7 +461,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
+			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.PeriodMs > 0) {
 				// Short circuit if no new transaction arrives.
 				if w.newTxs.Load() == 0 {
 					timer.Reset(recommit)
@@ -565,7 +565,7 @@ func (w *worker) mainLoop() {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
-				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
+				if w.chainConfig.Clique != nil && w.chainConfig.Clique.PeriodMs == 0 {
 					w.commitWork(nil, time.Now().Unix())
 				}
 			}
