@@ -143,7 +143,7 @@ func TestHandshake(t *testing.T) {
 				return err
 			}
 			if reqType != announceTypeSigned {
-				return errors.New("Expected announceTypeSigned")
+				return errors.New("expected announceTypeSigned")
 			}
 			return nil
 		})

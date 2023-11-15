@@ -248,7 +248,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
+		return nil, fmt.Errorf("failed to register the Ethereum service: %w", err)
 	}
 
 	// Assemble the ethstats monitoring and reporting service'

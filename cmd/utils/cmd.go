@@ -460,7 +460,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		case OpBatchAdd:
 			batch.Put(key, val)
 		default:
-			return fmt.Errorf("unknown op %d\n", op)
+			return fmt.Errorf("unknown op %d", op)
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
