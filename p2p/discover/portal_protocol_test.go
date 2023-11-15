@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/optimism-java/utp-go"
 	"io"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/optimism-java/utp-go"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
@@ -57,19 +58,19 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 }
 
 func TestPortalWireProtocolUdp(t *testing.T) {
-	node1, err := setupLocalPortalNode(":7777", nil)
+	node1, err := setupLocalPortalNode(":8777", nil)
 	assert.NoError(t, err)
 	node1.log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
 
-	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
+	node2, err := setupLocalPortalNode(":8778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node2.log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
 
-	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
+	node3, err := setupLocalPortalNode(":8779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node3.log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
@@ -80,8 +81,8 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	assert.Equal(t, 2, len(node2.table.Nodes()))
 	assert.Equal(t, 2, len(node3.table.Nodes()))
 
-	rAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:7777")
-	lAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:7778")
+	rAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8777")
+	lAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8778")
 
 	var wg sync.WaitGroup
 	wg.Add(4)
@@ -95,6 +96,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 
 	largeTestContent := make([]byte, 1199)
 	_, err = rand.Read(largeTestContent)
+	assert.NoError(t, err)
 	go func() {
 		var acceptConn *utp.Conn
 		defer func() {
@@ -250,7 +252,7 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	// create a byte slice of length 1199 and fill it with random data
 	// this will be used as a test content
-	largeTestContent := make([]byte, 1199)
+	largeTestContent := make([]byte, 2000)
 	_, err = rand.Read(largeTestContent)
 	assert.NoError(t, err)
 

@@ -1,9 +1,5 @@
 package portalwire
 
-import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
-)
-
 // Protocol IDs for the portal protocol.
 const (
 	StateNetwork             = "0x500a"
@@ -100,18 +96,18 @@ type (
 	}
 )
 
-func getTalkReqOverheadByLen(protocolIdLen int) int {
-	return 16 + // IV size
-		55 + // header size
-		1 + // talkReq msg id
-		3 + // rlp encoding outer list, max length will be encoded in 2 bytes
-		9 + // request id (max = 8) + 1 byte from rlp encoding byte string
-		protocolIdLen + 1 + // + 1 is necessary due to rlp encoding of byte string
-		3 + // rlp encoding response byte string, max length in 2 bytes
-		16 // HMAC
-}
-
-func getTalkReqOverhead(protocolId string) int {
-	protocolIdBytes, _ := hexutil.Decode(protocolId)
-	return getTalkReqOverheadByLen(len(protocolIdBytes))
-}
+//func getTalkReqOverheadByLen(protocolIdLen int) int {
+//	return 16 + // IV size
+//		55 + // header size
+//		1 + // talkReq msg id
+//		3 + // rlp encoding outer list, max length will be encoded in 2 bytes
+//		9 + // request id (max = 8) + 1 byte from rlp encoding byte string
+//		protocolIdLen + 1 + // + 1 is necessary due to rlp encoding of byte string
+//		3 + // rlp encoding response byte string, max length in 2 bytes
+//		16 // HMAC
+//}
+//
+//func getTalkReqOverhead(protocolId string) int {
+//	protocolIdBytes, _ := hexutil.Decode(protocolId)
+//	return getTalkReqOverheadByLen(len(protocolIdBytes))
+//}
