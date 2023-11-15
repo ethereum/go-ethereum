@@ -559,8 +559,6 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	// TODO: Need to handle that sub 1 second periods will never increment header.Time.
-	// Or maybe next line handles that?
 	header.Time = parent.Time + c.config.PeriodMs/1000
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
@@ -603,7 +601,6 @@ func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	log.Trace("start of seal")
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -653,13 +650,8 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 
-	// Don't let delay be longer than target block period
-	// if delay.Milliseconds() > int64(c.config.PeriodMs) {
-	// 	log.Trace("old delay", "delay", common.PrettyDuration(delay))
-	// 	delay = time.Millisecond*time.Duration(c.config.PeriodMs) - 20*time.Millisecond
-	// 	log.Trace("new delay", "delay", common.PrettyDuration(delay))
-	// }
-
+	// For now, hard code delay to 20ms less than block period.
+	// This may cause deadlocks with certain numbers of nodes, more testing is needed.
 	delay = time.Millisecond * (time.Duration(c.config.PeriodMs - 20))
 
 	// Wait until sealing is terminated or delay timeout.
