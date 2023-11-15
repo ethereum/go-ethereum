@@ -16,7 +16,7 @@ jobs:
           node-version: 20.9.0
     
       - name: Run geth devnet
-        run: docker run --name go-ethereum -p 8545:8545 -p 30303:30303 anglyuboslav/geth --dev --http --http.addr 0.0.0.0
+        run: docker run --name go-ethereum -p 8545:8545 -p 30303:30303 -d anglyuboslav/geth --dev --http --http.addr 0.0.0.0
 
       - name: Install dependencies
         run: | 
