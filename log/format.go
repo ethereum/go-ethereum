@@ -169,9 +169,9 @@ func FormatLogfmtValue(value interface{}, term bool) (result string) {
 	}
 	switch v := value.(type) {
 	case error:
-		return v.Error()
+		return escapeString(v.Error())
 	case fmt.Stringer:
-		return v.String()
+		return escapeString(v.String())
 	case bool:
 		return strconv.FormatBool(v)
 	case float32:
