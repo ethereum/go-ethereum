@@ -744,7 +744,7 @@ The verbosity of individual packages and source files can be raised using `debug
 | Client  | Method invocation                                 |
 | :------ | ------------------------------------------------- |
 | Console | `debug.verbosity(level)`                          |
-| RPC     | `{"method": "debug_vmodule", "params": [number]}` |
+| RPC     | `{"method": "debug_verbosity", "params": [number]}` |
 
 ### debug_vmodule
 
