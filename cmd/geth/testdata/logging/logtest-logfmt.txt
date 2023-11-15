@@ -18,8 +18,10 @@ t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Bash escapes in value"  key="\x1b[1G\x1
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Bash escapes in key"    "\x1b[1G\x1b[K\x1b[1A"=value
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Bash escapes in message  \x1b[1G\x1b[K\x1b[1A end" key=value
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="\x1b[35mColored\x1b[0m[" "\x1b[35mColored\x1b[0m["="\x1b[35mColored\x1b[0m["
-t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Custom Stringer value"   2562047h47m16.854s=2562047h47m16.854s
-t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Lazy evaluation of value" key="lazy value"
+t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="an error message with quotes" error="this is an 'error'"
+t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Custom Stringer value"        2562047h47m16.854s=2562047h47m16.854s
+t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="a custom stringer that emits quoted text" output="output with 'quotes'"
+t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="Lazy evaluation of value"     key="lazy value"
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="A message with wonky 💩 characters"
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩"
 t=xxxxxxxxxxxxxxxxxxxxxxxx lvl=info msg="A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above"
