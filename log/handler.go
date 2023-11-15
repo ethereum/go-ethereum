@@ -188,13 +188,13 @@ func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 		attr = slog.Any(attr.Key, v.Format(timeFormat))
 	case *big.Int:
 		if v == nil {
-			attr.Value = slog.StringValue("<nil>")
+			attr.Value = slog.StringValue("nil")
 		} else {
 			attr.Value = slog.StringValue(v.String())
 		}
 	case *uint256.Int:
 		if v == nil {
-			attr.Value = slog.StringValue("<nil>")
+			attr.Value = slog.StringValue("nil")
 		} else {
 			attr.Value = slog.StringValue(v.Dec())
 		}
