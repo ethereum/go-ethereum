@@ -167,14 +167,9 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
-type writerCloser interface {
-	Write([]byte) (int, error)
-	Close() error
-}
-
 var (
 	glogger                *log.GlogHandler
-	logOutputF             writerCloser
+	logOutputFile          io.WriteCloser
 	defaultTerminalHandler *log.TerminalHandler
 )
 
@@ -223,14 +218,14 @@ func Setup(ctx *cli.Context) error {
 		} else {
 			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
 		}
-		logOutputF = &lumberjack.Logger{
+		logOutputFile = &lumberjack.Logger{
 			Filename:   logFile,
 			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
 			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
 			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
 			Compress:   ctx.Bool(logCompressFlag.Name),
 		}
-		output = io.MultiWriter(terminalOutput, logOutputF)
+		output = io.MultiWriter(terminalOutput, logOutputFile)
 	} else if logFile != "" {
 		var err error
 		if logOutputF, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
