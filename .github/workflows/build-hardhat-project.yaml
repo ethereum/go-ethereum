@@ -1,0 +1,41 @@
+name: Hardhat Deploy and Test
+
+on: [workflow_dispatch]
+
+jobs:
+  deploy_and_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.9.0
+      - name: Set up Docker Compose
+        uses: docker/compose-cli@v1
+        with: 
+            version: '3.0'
+    
+      - name: Run geth devnet
+        run: docker compose up -d
+
+      - name: Install dependencies
+        run: | 
+            cd hardhat
+            npm install -y
+            npm install --save-dev hardhat -y
+            npx hardhat init -y
+            npm install --save-dev @nomicfoundation/hardhat-toolbox -y            
+    
+
+      - name: Deploy Hardhat project
+        run: |
+            cd hardhat
+            npx hardhat run scripts/deploy.js --network localhost
+
+      - name: Run tests
+        run: npx hardhat test --network localhost
+    

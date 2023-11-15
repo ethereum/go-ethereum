@@ -1,6 +1,8 @@
 version: "3.9"
 services:
   geth:
-    image: anglyuboslav/go-eth-lab
-    command: 
-      - --dev
+    image: anglyuboslav/geth
+    command: --dev --http --http.addr 0.0.0.0
+    ports:
+      - 8545:8545
+      - 30303:30303
