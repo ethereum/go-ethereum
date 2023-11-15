@@ -161,6 +161,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		} else {
 			addr = common.BytesToAddress(addrBytes)
 			address = &addr
+			account.Address = address
 		}
 		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
