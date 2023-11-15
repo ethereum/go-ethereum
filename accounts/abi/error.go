@@ -87,7 +87,7 @@ func (e *Error) Unpack(data []byte) (interface{}, error) {
 		return "", fmt.Errorf("invalid data length for unpacking: got %v, want 4", len(data))
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return "", errors.New("invalid data for unpacking, first four bytes are not equal with error's signature")
+		return "", fmt.Errorf("invalid event ID, got %v want %v", data[:4], e.ID[:4])
 	}
 	return e.Inputs.Unpack(data[4:])
 }
