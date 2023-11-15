@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set the name of the container you want to create an image from
-container_name="limechain-task-geth-1"
+container_name="go-ethereum"
 
 # Get the container ID by filtering the output of `docker ps`
 container_id=$(docker ps -qf "name=$container_name")
