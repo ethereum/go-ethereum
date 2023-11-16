@@ -235,9 +235,10 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
 	acc1SignedHash = SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
 	acc2SignedHash = SignHashByPK(acc2Key, types.VoteSigHash(voteForSign).Bytes())
 	acc3SignedHash = SignHashByPK(acc3Key, types.VoteSigHash(voteForSign).Bytes())
+	voteSignedHash := SignHashByPK(voterKey, types.VoteSigHash(voteForSign).Bytes())
 
 	var signaturesThr []types.Signature
-	signaturesThr = append(signaturesThr, acc1SignedHash, acc2SignedHash, acc3SignedHash)
+	signaturesThr = append(signaturesThr, acc1SignedHash, acc2SignedHash, acc3SignedHash, voteSignedHash)
 	quorumCert = &types.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signaturesThr,

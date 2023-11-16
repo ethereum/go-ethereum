@@ -42,7 +42,7 @@ var (
 	MainnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        73, // based on masternode is 108
+			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			MinePeriod:           2,
@@ -52,7 +52,7 @@ var (
 	TestnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        7, //based on masternode is 10
+			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
 			MinePeriod:           2,
@@ -62,7 +62,7 @@ var (
 	DevnetV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        73, // based on masternode is 108
+			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        10,
 			MinePeriod:           2,
@@ -72,21 +72,21 @@ var (
 	UnitTestV2Configs = map[uint64]*V2Config{
 		Default: {
 			SwitchRound:          0,
-			CertThreshold:        3,
+			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 2,
 			TimeoutPeriod:        4,
 			MinePeriod:           2,
 		},
 		10: {
 			SwitchRound:          10,
-			CertThreshold:        5,
+			CertThreshold:        1,
 			TimeoutSyncThreshold: 2,
 			TimeoutPeriod:        4,
 			MinePeriod:           3,
 		},
 		899: {
 			SwitchRound:          899,
-			CertThreshold:        5,
+			CertThreshold:        1,
 			TimeoutSyncThreshold: 4,
 			TimeoutPeriod:        5,
 			MinePeriod:           2,
@@ -325,11 +325,11 @@ type V2 struct {
 }
 
 type V2Config struct {
-	SwitchRound          uint64 `json:"switchRound"`          // v1 to v2 switch block number
-	MinePeriod           int    `json:"minePeriod"`           // Miner mine period to mine a block
-	TimeoutSyncThreshold int    `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
-	TimeoutPeriod        int    `json:"timeoutPeriod"`        // Duration in ms
-	CertThreshold        int    `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
+	SwitchRound          uint64  `json:"switchRound"`          // v1 to v2 switch block number
+	MinePeriod           int     `json:"minePeriod"`           // Miner mine period to mine a block
+	TimeoutSyncThreshold int     `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
+	TimeoutPeriod        int     `json:"timeoutPeriod"`        // Duration in ms
+	CertThreshold        float64 `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
 }
 
 func (c *XDPoSConfig) String() string {

@@ -75,8 +75,14 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 	go x.ForensicsProcessor.DetectEquivocationInVotePool(voteMsg, x.votePool)
 	go x.ForensicsProcessor.ProcessVoteEquivocation(chain, x, voteMsg)
 
+	epochInfo, err := x.getEpochSwitchInfo(chain, chain.CurrentHeader(), chain.CurrentHeader().Hash())
+	if err != nil {
+		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
+		return fmt.Errorf("Fail on voteHandler due to failure in getting epoch switch info")
+	}
+
 	certThreshold := x.config.V2.Config(uint64(voteMsg.ProposedBlockInfo.Round)).CertThreshold
-	thresholdReached := numberOfVotesInPool >= certThreshold
+	thresholdReached := float64(numberOfVotesInPool) >= float64(epochInfo.MasternodesLen)*certThreshold
 	if thresholdReached {
 		log.Info(fmt.Sprintf("[voteHandler] Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 
@@ -156,9 +162,15 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		}
 	}
 
+	epochInfo, err := x.getEpochSwitchInfo(chain, chain.CurrentHeader(), chain.CurrentHeader().Hash())
+	if err != nil {
+		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
+		return fmt.Errorf("Fail on voteHandler due to failure in getting epoch switch info")
+	}
+
 	// Skip and wait for the next vote to process again if valid votes is less than what we required
 	certThreshold := x.config.V2.Config(uint64(currentVoteMsg.(*types.Vote).ProposedBlockInfo.Round)).CertThreshold
-	if len(validSignatures) < certThreshold {
+	if float64(len(validSignatures)) < float64(epochInfo.MasternodesLen)*certThreshold {
 		log.Warn("[onVotePoolThresholdReached] Not enough valid signatures to generate QC", "VotesSignaturesAfterFilter", validSignatures, "NumberOfValidVotes", len(validSignatures), "NumberOfVotes", len(pooledVotes))
 		return nil
 	}
@@ -168,7 +180,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		Signatures:        validSignatures,
 		GapNumber:         currentVoteMsg.(*types.Vote).GapNumber,
 	}
-	err := x.processQC(chain, quorumCert)
+	err = x.processQC(chain, quorumCert)
 	if err != nil {
 		log.Error("Error while processing QC in the Vote handler after reaching pool threshold, ", err)
 		return err

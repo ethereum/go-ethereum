@@ -35,7 +35,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 
 	// Set round to 1
 	engineV2.SetNewRoundFaker(blockchain, types.Round(1), false)
-	// Create two vote messages which will not reach vote pool threshold
+	// Create three vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
 	voteMsg := &types.Vote{
@@ -52,8 +52,16 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	assert.Equal(t, types.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, types.Round(1), currentRound)
 
-	signedHash = SignHashByPK(acc2Key, voteSigningHash.Bytes())
+	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
 
+	signedHash = SignHashByPK(acc2Key, voteSigningHash.Bytes())
 	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
@@ -104,7 +112,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
-	// Create two vote messages which will not reach vote pool threshold
+	// Create three vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
 	voteMsg := &types.Vote{
@@ -121,6 +129,15 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 	assert.Equal(t, types.Round(0), highestQuorumCert.ProposedBlockInfo.Round)
 	assert.Equal(t, types.Round(5), currentRound)
 	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	signedHash = SignHashByPK(acc2Key, voteSigningHash.Bytes())
 	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
@@ -213,7 +230,7 @@ func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testi
 }
 
 func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 5
@@ -230,15 +247,27 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 		GapNumber:         450,
 	}
 	voteSigningHash := types.VoteSigHash(voteForSign)
-	// Create two vote message which will not reach vote pool threshold
-	signedHash := SignHashByPK(acc1Key, voteSigningHash.Bytes())
+
+	// Create three vote message which will not reach vote pool threshold
+	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
 	voteMsg := &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
 		GapNumber:         450,
 	}
 
-	err := engineV2.VoteHandler(blockchain, voteMsg)
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+
+	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	currentRound, lockQuorumCert, highestQuorumCert, _, _, _ := engineV2.GetPropertiesFaker()
 	// initialised with nil and 0 round
@@ -302,13 +331,19 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(6),
+		Signature: []byte{3},
+	}
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
+	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
 	assert.Equal(t, types.Round(6), currentRound)
 
 	// Create a timeout message that should trigger timeout pool hook
 	timeoutMsg = &types.Timeout{
 		Round:     types.Round(6),
-		Signature: []byte{3},
+		Signature: []byte{4},
 	}
 
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
@@ -325,7 +360,7 @@ func TestProcessVoteMsgThenTimeoutMsg(t *testing.T) {
 	tc := syncInfoMsg.(*types.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)
 	assert.Equal(t, types.Round(6), tc.Round)
-	sigatures := []types.Signature{[]byte{1}, []byte{2}, []byte{3}}
+	sigatures := []types.Signature{[]byte{1}, []byte{2}, []byte{3}, []byte{4}}
 	assert.ElementsMatch(t, tc.Signatures, sigatures)
 	// Round shall be +1 now
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
@@ -430,7 +465,7 @@ func TestProcessVoteMsgFailIfVerifyBlockInfoFail(t *testing.T) {
 		GapNumber:         450,
 	}
 	voteSigningHash := types.VoteSigHash(voteForSign)
-	// Create two vote message which will not reach vote pool threshold
+	// Create three vote message which will not reach vote pool threshold
 	signedHash := SignHashByPK(acc1Key, voteSigningHash.Bytes())
 	voteMsg := &types.Vote{
 		ProposedBlockInfo: blockInfo,
@@ -453,13 +488,20 @@ func TestProcessVoteMsgFailIfVerifyBlockInfoFail(t *testing.T) {
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
 	assert.Equal(t, types.Round(5), currentRound)
 
 	// Create a vote message that should trigger vote pool hook
 	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
-		Signature:         SignHashByPK(acc3Key, voteSigningHash.Bytes()),
+		Signature:         SignHashByPK(voterKey, voteSigningHash.Bytes()),
 		GapNumber:         450,
 	}
 

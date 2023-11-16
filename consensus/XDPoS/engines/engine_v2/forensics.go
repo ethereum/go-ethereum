@@ -80,10 +80,10 @@ func (f *Forensics) SetCommittedQCs(headers []types.Header, incomingQC types.Quo
 }
 
 /*
-	Entry point for processing forensics.
-	Triggered once processQC is successfully.
-	Forensics runs in a seperate go routine as its no system critical
-	Link to the flow diagram: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/97878029/Forensics+Diagram+flow
+Entry point for processing forensics.
+Triggered once processQC is successfully.
+Forensics runs in a seperate go routine as its no system critical
+Link to the flow diagram: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/97878029/Forensics+Diagram+flow
 */
 func (f *Forensics) ProcessForensics(chain consensus.ChainReader, engine *XDPoS_v2, incomingQC types.QuorumCert) error {
 	log.Debug("Received a QC in forensics", "QC", incomingQC)
@@ -387,10 +387,10 @@ func generateVoteEquivocationId(signer common.Address, round1, round2 types.Roun
 }
 
 /*
-	Entry point for processing vote equivocation.
-	Triggered once handle vote is successfully.
-	Forensics runs in a seperate go routine as its no system critical
-	Link to the flow diagram: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/99516417/Vote+Equivocation+detection+specification
+Entry point for processing vote equivocation.
+Triggered once handle vote is successfully.
+Forensics runs in a seperate go routine as its no system critical
+Link to the flow diagram: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/99516417/Vote+Equivocation+detection+specification
 */
 func (f *Forensics) ProcessVoteEquivocation(chain consensus.ChainReader, engine *XDPoS_v2, incomingVote *types.Vote) error {
 	log.Debug("Received a vote in forensics", "vote", incomingVote)

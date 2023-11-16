@@ -114,6 +114,7 @@ type EpochSwitchInfo struct {
 	Penalties                  []common.Address
 	Standbynodes               []common.Address
 	Masternodes                []common.Address
+	MasternodesLen             int
 	EpochSwitchBlockInfo       *BlockInfo
 	EpochSwitchParentBlockInfo *BlockInfo
 }
