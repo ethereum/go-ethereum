@@ -776,16 +776,16 @@ func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationP
 		return nil, fmt.Errorf("scheme %s does not match wallet scheme %s", account.URL.Scheme, w.Hub.scheme)
 	}
 
-	parts := strings.SplitN(account.URL.Path, "/", 2)
-	if len(parts) != 2 {
+	url, path, found := strings.Cut(account.URL.Path, "/")
+	if !found {
 		return nil, fmt.Errorf("invalid URL format: %s", account.URL)
 	}
 
-	if parts[0] != fmt.Sprintf("%x", w.PublicKey[1:3]) {
+	if url != fmt.Sprintf("%x", w.PublicKey[1:3]) {
 		return nil, fmt.Errorf("URL %s is not for this wallet", account.URL)
 	}
 
-	return accounts.ParseDerivationPath(parts[1])
+	return accounts.ParseDerivationPath(path)
 }
 
 // Session represents a secured communication session with the wallet.

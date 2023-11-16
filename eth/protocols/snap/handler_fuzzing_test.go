@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,13 +29,62 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	fuzz "github.com/google/gofuzz"
 )
+
+func FuzzARange(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &GetAccountRangePacket{}, GetAccountRangeMsg)
+	})
+}
+
+func FuzzSRange(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &GetStorageRangesPacket{}, GetStorageRangesMsg)
+	})
+}
+
+func FuzzByteCodes(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &GetByteCodesPacket{}, GetByteCodesMsg)
+	})
+}
+
+func FuzzTrieNodes(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		doFuzz(data, &GetTrieNodesPacket{}, GetTrieNodesMsg)
+	})
+}
+
+func doFuzz(input []byte, obj interface{}, code int) {
+	bc := getChain()
+	defer bc.Stop()
+	fuzz.NewFromGoFuzz(input).Fuzz(obj)
+	var data []byte
+	switch p := obj.(type) {
+	case *GetTrieNodesPacket:
+		p.Root = trieRoot
+		data, _ = rlp.EncodeToBytes(obj)
+	default:
+		data, _ = rlp.EncodeToBytes(obj)
+	}
+	cli := &dummyRW{
+		code: uint64(code),
+		data: data,
+	}
+	peer := NewFakePeer(65, "gazonk01", cli)
+	err := HandleMessage(&dummyBackend{bc}, peer)
+	switch {
+	case err == nil && cli.writeCount != 1:
+		panic(fmt.Sprintf("Expected 1 response, got %d", cli.writeCount))
+	case err != nil && cli.writeCount != 0:
+		panic(fmt.Sprintf("Expected 0 response, got %d", cli.writeCount))
+	}
+}
 
 var trieRoot common.Hash
 
@@ -86,10 +136,10 @@ type dummyBackend struct {
 	chain *core.BlockChain
 }
 
-func (d *dummyBackend) Chain() *core.BlockChain                { return d.chain }
-func (d *dummyBackend) RunPeer(*snap.Peer, snap.Handler) error { return nil }
-func (d *dummyBackend) PeerInfo(enode.ID) interface{}          { return "Foo" }
-func (d *dummyBackend) Handle(*snap.Peer, snap.Packet) error   { return nil }
+func (d *dummyBackend) Chain() *core.BlockChain       { return d.chain }
+func (d *dummyBackend) RunPeer(*Peer, Handler) error  { return nil }
+func (d *dummyBackend) PeerInfo(enode.ID) interface{} { return "Foo" }
+func (d *dummyBackend) Handle(*Peer, Packet) error    { return nil }
 
 type dummyRW struct {
 	code       uint64
@@ -109,35 +159,4 @@ func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
 func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 	d.writeCount++
 	return nil
-}
-
-func doFuzz(input []byte, obj interface{}, code int) int {
-	if len(input) > 1024*4 {
-		return -1
-	}
-	bc := getChain()
-	defer bc.Stop()
-	backend := &dummyBackend{bc}
-	fuzz.NewFromGoFuzz(input).Fuzz(obj)
-	var data []byte
-	switch p := obj.(type) {
-	case *snap.GetTrieNodesPacket:
-		p.Root = trieRoot
-		data, _ = rlp.EncodeToBytes(obj)
-	default:
-		data, _ = rlp.EncodeToBytes(obj)
-	}
-	cli := &dummyRW{
-		code: uint64(code),
-		data: data,
-	}
-	peer := snap.NewFakePeer(65, "gazonk01", cli)
-	err := snap.HandleMessage(backend, peer)
-	switch {
-	case err == nil && cli.writeCount != 1:
-		panic(fmt.Sprintf("Expected 1 response, got %d", cli.writeCount))
-	case err != nil && cli.writeCount != 0:
-		panic(fmt.Sprintf("Expected 0 response, got %d", cli.writeCount))
-	}
-	return 1
 }

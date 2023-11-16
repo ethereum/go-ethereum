@@ -571,7 +571,7 @@ func testIncompleteSync(t *testing.T, scheme string) {
 			hash := crypto.Keccak256Hash(result.Data)
 			if hash != root {
 				addedKeys = append(addedKeys, result.Path)
-				addedHashes = append(addedHashes, crypto.Keccak256Hash(result.Data))
+				addedHashes = append(addedHashes, hash)
 			}
 		}
 		// Fetch the next batch to retrieve
