@@ -39,8 +39,8 @@ t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted known block" number=1012 hash=
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted new block" number=1 hash=0x0000000000000000000000000000000000000000000000000000000000001235 txs=2 gas=1123 other=second
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted known block" number=99 hash=0x0000000000000000000000000000000000000000000000000000000000012322 txs=10 gas=1 other=third
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=warn msg="Inserted known block" number=1012 hash=0x0000000000000000000000000000000000000000000000000000000000001234 txs=200 gas=99 other=fourth
-t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*big.Int)(nil) <nil>=nil
-t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*uint256.Int)(nil) <nil>=nil
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*big.Int)(nil) <nil>=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*uint256.Int)(nil) <nil>=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(fmt.Stringer)(nil) res=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nil-concrete-stringer res=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="error(nil) " res=<nil>
