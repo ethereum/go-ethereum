@@ -126,12 +126,12 @@ func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color int) {
 // formatValue formats a value for serialization
 func FormatLogfmtValue(value interface{}, term bool) (result string) {
 	if value == nil {
-		return "nil"
+		return "<nil>"
 	}
 	defer func() {
 		if err := recover(); err != nil {
 			if v := reflect.ValueOf(value); v.Kind() == reflect.Ptr && v.IsNil() {
-				result = "nil"
+				result = "<nil>"
 			} else {
 				panic(err)
 			}
@@ -149,7 +149,7 @@ func FormatLogfmtValue(value interface{}, term bool) (result string) {
 		// Big ints get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
-			return "nil"
+			return "<nil>"
 		}
 		return formatLogfmtBigInt(v)
 
@@ -157,7 +157,7 @@ func FormatLogfmtValue(value interface{}, term bool) (result string) {
 		// Uint256s get consumed by the Stringer clause, so we need to handle
 		// them earlier on.
 		if v == nil {
-			return "nil"
+			return "<nil>"
 		}
 		return formatLogfmtUint256(v)
 	}
