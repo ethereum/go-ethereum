@@ -22,33 +22,31 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	fuzz "github.com/google/gofuzz"
 )
 
 // TestReplicate can be used to replicate crashers from the fuzzing tests.
 // Just replace testString with the data in .quoted
 func TestReplicate(t *testing.T) {
-	testString := "\x20\x20\x20\x20\x20\x20\x20\x20\x80\x00\x00\x00\x20\x20\x20\x20\x00"
-	data := []byte(testString)
-	fuzzAbi(data)
+	//t.Skip("Test only useful for reproducing issues")
+	fuzzAbi([]byte("\x20\x20\x20\x20\x20\x20\x20\x20\x80\x00\x00\x00\x20\x20\x20\x20\x00"))
+	//fuzzAbi([]byte("asdfasdfkadsf;lasdf;lasd;lfk"))
 }
 
-func Fuzz(f *testing.F) {
+// FuzzABI is the main entrypoint for fuzzing
+func FuzzABI(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		fuzzAbi(data)
 	})
 }
 
 var (
-	names            = []string{"_name", "name", "NAME", "name_", "__", "_name_", "n"}
-	stateMut         = []string{"", "pure", "view", "payable"}
-	stateMutabilites = []*string{&stateMut[0], &stateMut[1], &stateMut[2], &stateMut[3]}
-	pays             = []string{"", "true", "false"}
-	payables         = []*string{&pays[0], &pays[1]}
-	vNames           = []string{"a", "b", "c", "d", "e", "f", "g"}
-	varNames         = append(vNames, names...)
-	varTypes         = []string{"bool", "address", "bytes", "string",
+	names    = []string{"_name", "name", "NAME", "name_", "__", "_name_", "n"}
+	stateMut = []string{"pure", "view", "payable"}
+	pays     = []string{"true", "false"}
+	vNames   = []string{"a", "b", "c", "d", "e", "f", "g"}
+	varNames = append(vNames, names...)
+	varTypes = []string{"bool", "address", "bytes", "string",
 		"uint8", "int8", "uint8", "int8", "uint16", "int16",
 		"uint24", "int24", "uint32", "int32", "uint40", "int40", "uint48", "int48", "uint56", "int56",
 		"uint64", "int64", "uint72", "int72", "uint80", "int80", "uint88", "int88", "uint96", "int96",
@@ -62,7 +60,7 @@ var (
 		"bytes32", "bytes"}
 )
 
-func unpackPack(abi abi.ABI, method string, input []byte) ([]interface{}, bool) {
+func unpackPack(abi ABI, method string, input []byte) ([]interface{}, bool) {
 	if out, err := abi.Unpack(method, input); err == nil {
 		_, err := abi.Pack(method, out...)
 		if err != nil {
@@ -78,7 +76,7 @@ func unpackPack(abi abi.ABI, method string, input []byte) ([]interface{}, bool) 
 	return nil, false
 }
 
-func packUnpack(abi abi.ABI, method string, input *[]interface{}) bool {
+func packUnpack(abi ABI, method string, input *[]interface{}) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
 		outptr := reflect.New(reflect.TypeOf(input))
 		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
@@ -94,12 +92,12 @@ func packUnpack(abi abi.ABI, method string, input *[]interface{}) bool {
 	return false
 }
 
-type args struct {
+type arg struct {
 	name string
 	typ  string
 }
 
-func createABI(name string, stateMutability, payable *string, inputs []args) (abi.ABI, error) {
+func createABI(name string, stateMutability, payable *string, inputs []arg) (ABI, error) {
 	sig := fmt.Sprintf(`[{ "type" : "function", "name" : "%v" `, name)
 	if stateMutability != nil {
 		sig += fmt.Sprintf(`, "stateMutability": "%v" `, *stateMutability)
@@ -126,56 +124,55 @@ func createABI(name string, stateMutability, payable *string, inputs []args) (ab
 		sig += "} ]"
 	}
 	sig += `}]`
-
-	return abi.JSON(strings.NewReader(sig))
+	//fmt.Printf("sig: %s\n", sig)
+	return JSON(strings.NewReader(sig))
 }
 
-func fuzzAbi(input []byte) int {
-	good := false
-	fuzzer := fuzz.NewFromGoFuzz(input)
-
-	name := names[getUInt(fuzzer)%len(names)]
-	stateM := stateMutabilites[getUInt(fuzzer)%len(stateMutabilites)]
-	payable := payables[getUInt(fuzzer)%len(payables)]
-	maxLen := 5
-	for k := 1; k < maxLen; k++ {
-		var arg []args
-		for i := k; i > 0; i-- {
-			argName := varNames[i]
-			argTyp := varTypes[getUInt(fuzzer)%len(varTypes)]
-			if getUInt(fuzzer)%10 == 0 {
-				argTyp += "[]"
-			} else if getUInt(fuzzer)%10 == 0 {
-				arrayArgs := getUInt(fuzzer)%30 + 1
-				argTyp += fmt.Sprintf("[%d]", arrayArgs)
-			}
-			arg = append(arg, args{
-				name: argName,
-				typ:  argTyp,
-			})
+func fuzzAbi(input []byte) {
+	var (
+		fuzzer    = fuzz.NewFromGoFuzz(input)
+		name      = oneOf(fuzzer, names)
+		stateM    = oneOfOrNil(fuzzer, stateMut)
+		payable   = oneOfOrNil(fuzzer, pays)
+		arguments []arg
+	)
+	for i := 0; i < upTo(fuzzer, 10); i++ {
+		argName := oneOf(fuzzer, varNames)
+		argTyp := oneOf(fuzzer, varTypes)
+		switch upTo(fuzzer, 10) {
+		case 0: // 10% chance to make it a slice
+			argTyp += "[]"
+		case 1: // 10% chance to make it an array
+			argTyp += fmt.Sprintf("[%d]", 1+upTo(fuzzer, 30))
+		default:
 		}
-		abi, err := createABI(name, stateM, payable, arg)
-		if err != nil {
-			continue
-		}
-		structs, b := unpackPack(abi, name, input)
-		c := packUnpack(abi, name, &structs)
-		good = good || b || c
+		arguments = append(arguments, arg{name: argName, typ: argTyp})
 	}
-	if good {
-		return 1
+	abi, err := createABI(name, stateM, payable, arguments)
+	if err != nil {
+		//fmt.Printf("err: %v\n", err)
+		panic(err)
 	}
-	return 0
+	structs, _ := unpackPack(abi, name, input)
+	_ = packUnpack(abi, name, &structs)
 }
 
-func getUInt(fuzzer *fuzz.Fuzzer) int {
+func upTo(fuzzer *fuzz.Fuzzer, max int) int {
 	var i int
 	fuzzer.Fuzz(&i)
 	if i < 0 {
-		i = -i
-		if i < 0 {
-			return 0
-		}
+		return (-1 - i) % max
 	}
-	return i
+	return i % max
+}
+
+func oneOf(fuzzer *fuzz.Fuzzer, options []string) string {
+	return options[upTo(fuzzer, len(options))]
+}
+
+func oneOfOrNil(fuzzer *fuzz.Fuzzer, options []string) *string {
+	if i := upTo(fuzzer, len(options)+1); i < len(options) {
+		return &options[i]
+	}
+	return nil
 }

@@ -18,22 +18,24 @@ INFO [XX-XX|XX:XX:XX.XXX] Bash escapes in value                    key="\x1b[1G\
 INFO [XX-XX|XX:XX:XX.XXX] Bash escapes in key                      "\x1b[1G\x1b[K\x1b[1A"=value
 INFO [XX-XX|XX:XX:XX.XXX] "Bash escapes in message  \x1b[1G\x1b[K\x1b[1A end" key=value
 INFO [XX-XX|XX:XX:XX.XXX] "\x1b[35mColored\x1b[0m["                "\x1b[35mColored\x1b[0m["="\x1b[35mColored\x1b[0m["
+INFO [XX-XX|XX:XX:XX.XXX] an error message with quotes             error="this is an 'error'"
 INFO [XX-XX|XX:XX:XX.XXX] Custom Stringer value                    2562047h47m16.854s=2562047h47m16.854s
+INFO [XX-XX|XX:XX:XX.XXX] a custom stringer that emits quoted text output="output with 'quotes'"
 INFO [XX-XX|XX:XX:XX.XXX] Lazy evaluation of value                 key="lazy value"
-INFO [XX-XX|XX:XX:XX.XXX] "A message with wonky 💩 characters"
-INFO [XX-XX|XX:XX:XX.XXX] "A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩"
-INFO [XX-XX|XX:XX:XX.XXX] A multiline message
-LALA [XXZXXZXXZXXZXXZXXX] Actually part of message above
+INFO [XX-XX|XX:XX:XX.XXX] "A message with wonky 💩 characters" 
+INFO [XX-XX|XX:XX:XX.XXX] "A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩" 
+INFO [XX-XX|XX:XX:XX.XXX] A multiline message 
+LALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above 
 INFO [XX-XX|XX:XX:XX.XXX] boolean                                  true=true false=false
 INFO [XX-XX|XX:XX:XX.XXX] repeated-key 1                           foo=alpha foo=beta
 INFO [XX-XX|XX:XX:XX.XXX] repeated-key 2                           xx=short xx=longer
-INFO [XX-XX|XX:XX:XX.XXX] log at level info
-WARN [XX-XX|XX:XX:XX.XXX] log at level warn
-ERROR[XX-XX|XX:XX:XX.XXX] log at level error
+INFO [XX-XX|XX:XX:XX.XXX] log at level info 
+WARN [XX-XX|XX:XX:XX.XXX] log at level warn 
+ERROR[XX-XX|XX:XX:XX.XXX] log at level error 
 INFO [XX-XX|XX:XX:XX.XXX] test                                     bar=short a="aligned left"
 INFO [XX-XX|XX:XX:XX.XXX] test                                     bar="a long message" a=1
 INFO [XX-XX|XX:XX:XX.XXX] test                                     bar=short            a="aligned right"
-INFO [XX-XX|XX:XX:XX.XXX] The following logs should align so that the key-fields make 5 columns
+INFO [XX-XX|XX:XX:XX.XXX] The following logs should align so that the key-fields make 5 columns 
 INFO [XX-XX|XX:XX:XX.XXX] Inserted known block                     number=1012 hash=000000..001234 txs=200 gas=1,123,123 other=first
 INFO [XX-XX|XX:XX:XX.XXX] Inserted new block                       number=1    hash=000000..001235 txs=2   gas=1123      other=second
 INFO [XX-XX|XX:XX:XX.XXX] Inserted known block                     number=99   hash=000000..012322 txs=10  gas=1         other=third

@@ -14,12 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package keystore
+package vm
 
-import "testing"
+import (
+	"testing"
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
+	"github.com/ethereum/go-ethereum/common"
+)
+
+func FuzzPrecompiledContracts(f *testing.F) {
+	// Create list of addresses
+	var addrs []common.Address
+	for k := range allPrecompiles {
+		addrs = append(addrs, k)
+	}
+	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
+		a := addrs[int(addr)%len(addrs)]
+		p := allPrecompiles[a]
+		gas := p.RequiredGas(input)
+		if gas > 10_000_000 {
+			return
+		}
+		inWant := string(input)
+		RunPrecompiledContract(p, input, gas)
+		if inHave := string(input); inWant != inHave {
+			t.Errorf("Precompiled %v modified input data", a)
+		}
 	})
 }
