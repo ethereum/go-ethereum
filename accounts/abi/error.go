@@ -18,7 +18,6 @@ package abi
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strings"
 
