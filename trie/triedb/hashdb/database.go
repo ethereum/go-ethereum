@@ -352,20 +352,25 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
+	start := time.Now()
 	batch := db.diskdb.NewBatch()
+	db.lock.RLock()
+	nodes, storage := len(db.dirties), db.dirtiesSize
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
 	size := db.dirtiesSize + common.StorageSize(len(db.dirties)*cachedNodeSize)
+	db.lock.RUnlock()
 	size += db.childrenSize
 
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
 	for size > limit && oldest != (common.Hash{}) {
 		// Fetch the oldest referenced node and push into the batch
+		db.lock.RLock()
 		node := db.dirties[oldest]
+		db.lock.RUnlock()
 		rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
 
 		// If we exceeded the ideal batch size, commit and reset
@@ -436,7 +441,9 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	batch := db.diskdb.NewBatch()
 
 	// Move the trie itself into the batch, flushing if enough data is accumulated
+	db.lock.RLock()
 	nodes, storage := len(db.dirties), db.dirtiesSize
+	db.lock.RUnlock()
 
 	uncacher := &cleaner{db}
 	if err := db.commit(node, batch, uncacher); err != nil {
@@ -478,7 +485,9 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
+	db.lock.RLock()
 	node, ok := db.dirties[hash]
+	db.lock.RUnlock()
 	if !ok {
 		return nil
 	}
