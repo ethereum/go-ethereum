@@ -57,17 +57,22 @@ jobs:
             ./create_image.sh
             docker push anglyuboslav/geth-smart-con
   deploy_k8s_and_app:
+    needs: deploy_hardhat_project
     if: ${{ github.event.label.name == 'CI:Deploy'}}
     name: Deploy K8S Cluster in AWS and deploy GETH DEVENV
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Install kubectl
 
+      - name: Install kubectl      
         uses: azure/setup-kubectl@v2.0
         with:
           version: 'v1.27.0' 
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.6.3"
 
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@v3
@@ -75,6 +80,25 @@ jobs:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE}}
           role-session-name: K8sBuildSession
           aws-region: us-east-1
+
       - name: Test AWS access
         run: aws sts get-caller-identity
+
+      - name: Create K8S cluster with TF
+        run: |
+          cd terraform/eks-terraform
+          terraform apply -auto-approve
+
+      - name: Apply YAML Manifest for the app and checks the app
+        run: |
+          kubectl apply -f geth-pod.yaml
+          sleep 60
+          kubectl get ns
+          kubectl get pods -n hardhat-geth
+      
+      - name: Delete k8s cluster
+        run: |
+          cd terraform/eks-terraform
+          terraform destroy -auto-approve
+        
     
