@@ -1,5 +1,9 @@
 name: Hardhat Deploy and Test
 
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
+
 on:
   pull_request:
     branches:
@@ -52,4 +56,25 @@ jobs:
         run: |
             ./create_image.sh
             docker push anglyuboslav/geth-smart-con
+  deploy_k8s_and_app:
+    if: ${{ github.event.label.name == 'CI:Deploy'}}
+    name: Deploy K8S Cluster in AWS and deploy GETH DEVENV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install kubectl
+
+        uses: azure/setup-kubectl@v2.0
+        with:
+          version: 'v1.27.0' 
+
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE}}
+          role-session-name: K8sBuildSession
+          aws-region: us-east-1
+      - name: Test AWS access
+        run: aws sts get-caller-identity
     
