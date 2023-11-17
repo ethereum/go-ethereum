@@ -147,7 +147,7 @@ func (l *leveler) Level() slog.Level {
 
 func JSONHandler(wr io.Writer) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplace,
+		ReplaceAttr: builtinReplaceJSON,
 	})
 }
 
@@ -157,7 +157,7 @@ func JSONHandler(wr io.Writer) slog.Handler {
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtHandler(wr io.Writer) slog.Handler {
 	return slog.NewTextHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplace,
+		ReplaceAttr: builtinReplaceLogfmt,
 	})
 }
 
@@ -165,16 +165,28 @@ func LogfmtHandler(wr io.Writer) slog.Handler {
 // records which are less than or equal to the specified verbosity level.
 func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
 	return slog.NewTextHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplace,
+		ReplaceAttr: builtinReplaceLogfmt,
 		Level:       &leveler{level},
 	})
 }
 
-func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
+func builtinReplaceLogfmt(_ []string, attr slog.Attr) slog.Attr {
+	return builtinReplace(nil, attr, true)
+}
+
+func builtinReplaceJSON(_ []string, attr slog.Attr) slog.Attr {
+	return builtinReplace(nil, attr, false)
+}
+
+func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
 	switch attr.Key {
 	case slog.TimeKey:
 		if attr.Value.Kind() == slog.KindTime {
-			return slog.String("t", attr.Value.Time().Format(timeFormat))
+			if logfmt {
+				return slog.String("t", attr.Value.Time().Format(timeFormat))
+			} else {
+				return slog.Attr{"t", attr.Value}
+			}
 		}
 	case slog.LevelKey:
 		if l, ok := attr.Value.Any().(slog.Level); ok {
@@ -185,7 +197,9 @@ func builtinReplace(_ []string, attr slog.Attr) slog.Attr {
 
 	switch v := attr.Value.Any().(type) {
 	case time.Time:
-		attr = slog.Any(attr.Key, v.Format(timeFormat))
+		if logfmt {
+			attr = slog.String(attr.Key, v.Format(timeFormat))
+		}
 	case *big.Int:
 		if v == nil {
 			attr.Value = slog.StringValue("<nil>")
