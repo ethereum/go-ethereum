@@ -727,8 +727,8 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 		}
 
 		if receipt.EffectiveGasPrice == nil {
-		fields["effectiveGasPrice"] = new(hexutil.Big)
-	}
+			fields["effectiveGasPrice"] = new(hexutil.Big)
+		}
 
 		// Assign receipt status or post state.
 		if len(receipt.PostState) > 0 {
