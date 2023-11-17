@@ -5,4 +5,3 @@ services:
     command: --dev --http --http.addr 0.0.0.0
     ports:
       - 8545:8545
-      - 30303:30303
