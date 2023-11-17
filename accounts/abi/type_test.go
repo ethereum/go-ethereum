@@ -31,6 +31,7 @@ type typeWithoutStringer Type
 
 // Tests that all allowed types get recognized by the type parser.
 func TestTypeRegexp(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		blob       string
 		components []ArgumentMarshaling
@@ -117,6 +118,7 @@ func TestTypeRegexp(t *testing.T) {
 }
 
 func TestTypeCheck(t *testing.T) {
+	t.Parallel()
 	for i, test := range []struct {
 		typ        string
 		components []ArgumentMarshaling
@@ -308,6 +310,7 @@ func TestTypeCheck(t *testing.T) {
 }
 
 func TestInternalType(t *testing.T) {
+	t.Parallel()
 	components := []ArgumentMarshaling{{Name: "a", Type: "int64"}}
 	internalType := "struct a.b[]"
 	kind := Type{
@@ -332,6 +335,7 @@ func TestInternalType(t *testing.T) {
 }
 
 func TestGetTypeSize(t *testing.T) {
+	t.Parallel()
 	var testCases = []struct {
 		typ        string
 		components []ArgumentMarshaling
@@ -368,6 +372,7 @@ func TestGetTypeSize(t *testing.T) {
 }
 
 func TestNewFixedBytesOver32(t *testing.T) {
+	t.Parallel()
 	_, err := NewType("bytes4096", "", nil)
 	if err == nil {
 		t.Errorf("fixed bytes with size over 32 is not spec'd")

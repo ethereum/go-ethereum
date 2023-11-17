@@ -170,8 +170,11 @@ var reflectTests = []reflectTest{
 }
 
 func TestReflectNameToStruct(t *testing.T) {
+	t.Parallel()
 	for _, test := range reflectTests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			m, err := mapArgNamesToStructFields(test.args, reflect.ValueOf(test.struc))
 			if len(test.err) > 0 {
 				if err == nil || err.Error() != test.err {
@@ -192,6 +195,7 @@ func TestReflectNameToStruct(t *testing.T) {
 }
 
 func TestConvertType(t *testing.T) {
+	t.Parallel()
 	// Test Basic Struct
 	type T struct {
 		X *big.Int
