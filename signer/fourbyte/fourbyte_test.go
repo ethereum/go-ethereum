@@ -17,8 +17,8 @@
 package fourbyte
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -32,14 +32,14 @@ func TestEmbeddedDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var abistruct abi.ABI
 	for id, selector := range db.embedded {
 		abistring, err := parseSelector(selector)
 		if err != nil {
 			t.Errorf("Failed to convert selector to ABI: %v", err)
 			continue
 		}
-		abistruct, err := abi.JSON(strings.NewReader(string(abistring)))
-		if err != nil {
+		if err := json.Unmarshal(abistring, &abistruct); err != nil {
 			t.Errorf("Failed to parse ABI: %v", err)
 			continue
 		}
