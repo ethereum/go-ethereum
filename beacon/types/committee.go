@@ -129,9 +129,9 @@ func (s *SerializedSyncCommittee) Deserialize() (*SyncCommittee, error) {
 			return nil, err
 		}
 		if i < params.SyncCommitteeSize {
-			sc.keys[i] = key
+			sc.Keys[i] = key
 		} else {
-			sc.aggregate = key
+			sc.Aggregate = key
 		}
 	}
 	return sc, nil
@@ -142,8 +142,8 @@ func (s *SerializedSyncCommittee) Deserialize() (*SyncCommittee, error) {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/beacon-chain.md#syncaggregate
 type SyncCommittee struct {
-	keys      [params.SyncCommitteeSize]*bls.Pubkey
-	aggregate *bls.Pubkey
+	Keys      [params.SyncCommitteeSize]*bls.Pubkey
+	Aggregate *bls.Pubkey
 }
 
 // VerifySignature returns true if the given sync aggregate is a valid signature
@@ -156,7 +156,7 @@ func (sc *SyncCommittee) VerifySignature(signingRoot common.Hash, signature *Syn
 	if err := sig.Deserialize(&signature.Signature); err != nil {
 		return false
 	}
-	for i, key := range sc.keys {
+	for i, key := range sc.Keys {
 		if signature.Signers[i/8]&(byte(1)<<(i%8)) != 0 {
 			keys = append(keys, key)
 		}
