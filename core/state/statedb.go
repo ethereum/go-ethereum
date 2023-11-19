@@ -1439,12 +1439,17 @@ func (s *StateDB) CommitForProof() {
 			s.trie = trie
 		}
 	}
+	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; obj.deleted {
 			s.deleteStateObject(obj)
 		} else {
 			s.updateStateObject(obj)
 		}
+		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	if s.prefetcher != nil {
+		s.prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
 	}
 	if len(s.stateObjectsPending) > 0 {
 		s.stateObjectsPending = make(map[common.Address]struct{})
