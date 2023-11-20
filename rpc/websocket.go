@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"compress/flate"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -48,17 +49,22 @@ var wsBufferPool = new(sync.Pool)
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
 func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
+	enableCompression := s.compressionLevel != flate.NoCompression
 	var upgrader = websocket.Upgrader{
-		ReadBufferSize:  wsReadBuffer,
-		WriteBufferSize: wsWriteBuffer,
-		WriteBufferPool: wsBufferPool,
-		CheckOrigin:     wsHandshakeValidator(allowedOrigins),
+		EnableCompression: enableCompression,
+		ReadBufferSize:    wsReadBuffer,
+		WriteBufferSize:   wsWriteBuffer,
+		WriteBufferPool:   wsBufferPool,
+		CheckOrigin:       wsHandshakeValidator(allowedOrigins),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Debug("WebSocket upgrade failed", "err", err)
 			return
+		}
+		if enableCompression {
+			_ = conn.SetCompressionLevel(s.compressionLevel)
 		}
 		codec := newWebsocketCodec(conn, r.Host, r.Header, wsDefaultReadLimit)
 		s.ServeCodec(codec, 0)
