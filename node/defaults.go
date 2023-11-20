@@ -21,22 +21,25 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 )
 
 const (
-	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort = 8545        // Default TCP port for the HTTP RPC server
-	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort   = 8546        // Default TCP port for the websocket RPC server
+	DefaultHTTPHost         = "localhost"      // Default host interface for the HTTP RPC server
+	DefaultHTTPPort         = 8545             // Default TCP port for the HTTP RPC server
+	DefaultHTTPWriteTimeOut = 10 * time.Second // Default write timeout for the HTTP RPC server
+	DefaultWSHost           = "localhost"      // Default host interface for the websocket RPC server
+	DefaultWSPort           = 8546             // Default TCP port for the websocket RPC server
 )
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
 	DataDir:          DefaultDataDir(),
 	HTTPPort:         DefaultHTTPPort,
+	HTTPWriteTimeout: DefaultHTTPWriteTimeOut,
 	HTTPModules:      []string{"net", "web3"},
 	HTTPVirtualHosts: []string{"localhost"},
 	WSPort:           DefaultWSPort,
