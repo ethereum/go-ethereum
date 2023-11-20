@@ -224,7 +224,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		vmConfig.Tracer = tracer
+		if tracer != nil {
+			vmConfig.Tracer = tracer
+		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
 
 		var (
@@ -248,8 +250,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
 		gasUsed += msgResult.UsedGas
-		if err := tracer.Write(); err != nil {
-			return nil, nil, nil, err
+		if tracer != nil {
+			if err := tracer.Write(); err != nil {
+				return nil, nil, nil, err
+			}
 		}
 
 		// Receipt:
