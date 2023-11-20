@@ -33,12 +33,12 @@ import (
 )
 
 const (
-	wsReadBuffer       = 1024
-	wsWriteBuffer      = 1024
+	wsReadBuffer       = 3 * 1024
+	wsWriteBuffer      = 3 * 1024
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsDefaultReadLimit = 32 * 1024 * 1024
+	wsDefaultReadLimit = 5 * 32 * 1024 * 1024
 )
 
 var wsBufferPool = new(sync.Pool)
