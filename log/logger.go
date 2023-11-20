@@ -166,12 +166,6 @@ func (l *logger) write(level slog.Level, msg string, attrs ...any) {
 		attrs = append(attrs, nil, errorKey, "Normalized odd number of arguments by adding nil")
 	}
 
-	// TODO we will want to 'sanitize' record keys:
-	// e.g. an attr is provided with key name 'time' (conflicting with the built-in time key name).
-	// ReplaceAttr() has no way to differentiate between this provided attribute and Record.Time.
-	// To get around this, in the below loop, we can prefix the attr with a fixed string value,
-	// which then gets stripped from the handler before printing.
-
 	// evaluate lazy values
 	var hadErr bool
 	for i := 1; i < len(attrs); i += 2 {
