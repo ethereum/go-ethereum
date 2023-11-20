@@ -30,6 +30,10 @@ var (
 		Name:  "trace",
 		Usage: "Output full trace logs to files <txhash>.jsonl",
 	}
+	TraceTracerFlag = &cli.StringFlag{
+		Name:  "trace.tracer",
+		Usage: "Tracer name",
+	}
 	TraceDisableMemoryFlag = &cli.BoolFlag{
 		Name:  "trace.nomemory",
 		Value: true,
