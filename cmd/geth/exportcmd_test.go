@@ -27,6 +27,7 @@ import (
 
 // TestExport does a basic test of "geth export", exporting the test-genesis.
 func TestExport(t *testing.T) {
+	t.Parallel()
 	outfile := fmt.Sprintf("%v/testExport.out", os.TempDir())
 	defer os.Remove(outfile)
 	geth := runGeth(t, "--datadir", initGeth(t), "export", outfile)

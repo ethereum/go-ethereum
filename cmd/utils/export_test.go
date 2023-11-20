@@ -170,6 +170,7 @@ func testDeletion(t *testing.T, f string) {
 
 // TestImportFutureFormat tests that we reject unsupported future versions.
 func TestImportFutureFormat(t *testing.T) {
+	t.Parallel()
 	f := fmt.Sprintf("%v/tempdump-future", os.TempDir())
 	defer func() {
 		os.Remove(f)

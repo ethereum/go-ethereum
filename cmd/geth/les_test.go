@@ -156,6 +156,7 @@ func startClient(t *testing.T, name string) *gethrpc {
 }
 
 func TestPriorityClient(t *testing.T) {
+	t.Parallel()
 	lightServer := startLightServer(t)
 	defer lightServer.killAndWait()
 
