@@ -96,9 +96,7 @@ func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor boo
 
 func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string) {
 	writeAttr := func(attr slog.Attr, first, last bool) {
-		//if !first {
 		buf.WriteByte(' ')
-		//}
 
 		if color != "" {
 			buf.WriteString(color)
