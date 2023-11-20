@@ -866,6 +866,12 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getTxBlockTraceOnTopOfBlock',
+			call: 'scroll_getTxBlockTraceOnTopOfBlock',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null, null]
+		}),
+		new web3._extend.Method({
 			name: 'getL1MessageByIndex',
 			call: 'scroll_getL1MessageByIndex',
 			params: 1
