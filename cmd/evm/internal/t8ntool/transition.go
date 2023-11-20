@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -89,7 +90,7 @@ func Transition(ctx *cli.Context) error {
 		err    error
 		tracer vm.EVMLogger
 	)
-	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
+	var getTracer func(txIndex int, txHash common.Hash) (tracers.Tracer, error)
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
@@ -122,7 +123,7 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
-		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+		getTracer = func(txIndex int, txHash common.Hash) (tracers.Tracer, error) {
 			if prevFile != nil {
 				prevFile.Close()
 			}
@@ -134,7 +135,7 @@ func Transition(ctx *cli.Context) error {
 			return logger.NewJSONLogger(logConfig, traceFile), nil
 		}
 	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
+		getTracer = func(txIndex int, txHash common.Hash) (tracer tracers.Tracer, err error) {
 			return nil, nil
 		}
 	}
