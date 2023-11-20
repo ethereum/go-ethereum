@@ -57,18 +57,18 @@ func (tx *txJSON) yParityValue() (*big.Int, error) {
 	if tx.YParity != nil {
 		val := uint64(*tx.YParity)
 		if val != 0 && val != 1 {
-			return nil, errors.New("'yParity' field must be 0 or 1")
+			return nil, errInvalidYParity
 		}
 		bigval := new(big.Int).SetUint64(val)
 		if tx.V != nil && tx.V.ToInt().Cmp(bigval) != 0 {
-			return nil, errors.New("'v' and 'yParity' fields do not match")
+			return nil, errVYParityMismatch
 		}
 		return bigval, nil
 	}
 	if tx.V != nil {
 		return tx.V.ToInt(), nil
 	}
-	return nil, errors.New("missing 'yParity' or 'v' field in transaction")
+	return nil, errVYParityMissing
 }
 
 // MarshalJSON marshals as JSON with a hash.
