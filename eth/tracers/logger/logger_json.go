@@ -100,3 +100,7 @@ func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 func (l *JSONLogger) CaptureTxStart(gasLimit uint64) {}
 
 func (l *JSONLogger) CaptureTxEnd(restGas uint64) {}
+
+func (l *JSONLogger) GetResult() (json.RawMessage, error) { return nil, nil }
+
+func (l *JSONLogger) Stop(err error) {}
