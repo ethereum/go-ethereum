@@ -424,6 +424,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.Cache.TriesInMemory,
 		Group:   "Cache",
 	})
+	f.IntFlag(&flagset.IntFlag{
+		Name:    "cache.blocklogs",
+		Usage:   "Size (in number of blocks) of the log cache for filtering",
+		Value:   &c.cliConfig.Cache.FilterLogCacheSize,
+		Default: c.cliConfig.Cache.FilterLogCacheSize,
+		Group:   "Cache",
+	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "txlookuplimit",
 		Usage:   "Number of recent blocks to maintain transactions index for",

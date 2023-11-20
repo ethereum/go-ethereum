@@ -104,6 +104,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```cache```: Megabytes of memory allocated to internal caching (default: 1024)
 
+- ```cache.blocklogs```: Size (in number of blocks) of the log cache for filtering (default: 32)
+
 - ```cache.database```: Percentage of cache memory allowance to use for database io (default: 50)
 
 - ```cache.gc```: Percentage of cache memory allowance to use for trie pruning (default: 25)
@@ -115,10 +117,6 @@ The ```bor server``` command runs the Bor client.
 - ```cache.snapshot```: Percentage of cache memory allowance to use for snapshot caching (default: 10)
 
 - ```cache.trie```: Percentage of cache memory allowance to use for trie caching (default: 15)
-
-- ```cache.trie.journal```: Disk journal directory for trie cache to survive node restarts (default: triecache)
-
-- ```cache.trie.rejournal```: Time interval to regenerate the trie cache journal (default: 1h0m0s)
 
 - ```cache.triesinmemory```: Number of block states (tries) to keep in memory (default: 128)
 
@@ -182,7 +180,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```rpc.gascap```: Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite) (default: 50000000)
 
-- ```rpc.txfeecap```: Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 5)
+- ```rpc.txfeecap```: Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap) (default: 1)
 
 - ```ws```: Enable the WS-RPC server (default: false)
 
@@ -233,6 +231,8 @@ The ```bor server``` command runs the Bor client.
 - ```port```: Network listening port (default: 30303)
 
 - ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
+
+- ```v4disc```: Enables the V4 discovery mechanism (default: true)
 
 - ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
 

@@ -155,6 +155,7 @@ syncmode = "full"
   # preimages = false
   # txlookuplimit = 2350000
   # triesinmemory = 128
+  # blocklogs = 32
   # timeout = "1h0m0s"
   # fdlimit = 0
 

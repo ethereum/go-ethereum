@@ -540,6 +540,10 @@ type CacheConfig struct {
 
 	// Number of block states to keep in memory (default = 128)
 	TriesInMemory uint64 `hcl:"triesinmemory,optional" toml:"triesinmemory,optional"`
+
+	// This is the number of blocks for which logs will be cached in the filter system.
+	FilterLogCacheSize int `hcl:"blocklogs,optional" toml:"blocklogs,optional"`
+
 	// Time after which the Merkle Patricia Trie is stored to disc from memory
 	TrieTimeout    time.Duration `hcl:"-,optional" toml:"-"`
 	TrieTimeoutRaw string        `hcl:"timeout,optional" toml:"timeout,optional"`
@@ -734,17 +738,18 @@ func DefaultConfig() *Config {
 			},
 		},
 		Cache: &CacheConfig{
-			Cache:         1024, // geth's default (suitable for mumbai)
-			PercDatabase:  50,
-			PercTrie:      15,
-			PercGc:        25,
-			PercSnapshot:  10,
-			NoPrefetch:    false,
-			Preimages:     false,
-			TxLookupLimit: 2350000,
-			TriesInMemory: 128,
-			TrieTimeout:   60 * time.Minute,
-			FDLimit:       0,
+			Cache:              1024, // geth's default (suitable for mumbai)
+			PercDatabase:       50,
+			PercTrie:           15,
+			PercGc:             25,
+			PercSnapshot:       10,
+			NoPrefetch:         false,
+			Preimages:          false,
+			TxLookupLimit:      2350000,
+			TriesInMemory:      128,
+			FilterLogCacheSize: ethconfig.Defaults.FilterLogCacheSize,
+			TrieTimeout:        60 * time.Minute,
+			FDLimit:            0,
 		},
 		ExtraDB: &ExtraDBConfig{
 			// These are LevelDB defaults, specifying here for clarity in code and in logging.
@@ -1108,6 +1113,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.TxLookupLimit = c.Cache.TxLookupLimit
 		n.TrieTimeout = c.Cache.TrieTimeout
 		n.TriesInMemory = c.Cache.TriesInMemory
+		n.FilterLogCacheSize = c.Cache.FilterLogCacheSize
 	}
 
 	// LevelDB

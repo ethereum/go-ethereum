@@ -160,6 +160,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   preimages = false        # Enable recording the SHA3/keccak preimages of trie keys
   txlookuplimit = 2350000  # Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
   triesinmemory = 128      # Number of block states (tries) to keep in memory
+  blocklogs = 32           # Size (in number of blocks) of the log cache for filtering
   timeout = "1h0m0s"       # Time after which the Merkle Patricia Trie is stored to disc from memory
   fdlimit = 0              # Raise the open file descriptor resource limit (default = system fd limit)
 
