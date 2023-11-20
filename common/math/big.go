@@ -93,7 +93,7 @@ func NewDecimal256(x int64) *Decimal256 {
 func (i *Decimal256) UnmarshalText(input []byte) error {
 	bigint, ok := ParseBig256(string(input))
 	if !ok {
-		return fmt.Errorf("invalid hex or decimal integer %q", input)
+		return fmt.Errorf("invalid  hex or decimal integer %q", input)
 	}
 	*i = Decimal256(*bigint)
 	return nil
