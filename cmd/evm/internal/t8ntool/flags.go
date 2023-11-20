@@ -32,11 +32,11 @@ var (
 	}
 	TraceTracerFlag = &cli.StringFlag{
 		Name:  "trace.tracer",
-		Usage: "Tracer name",
+		Usage: "The type of tracer. It could be callTracer or prestateTracer",
 	}
 	TraceTracerConfigFlag = &cli.StringFlag{
 		Name:  "trace.tracer.config",
-		Usage: "The config of trace.tracer, in JSON encoded format",
+		Usage: "The configurations of --trace.tracer, in JSON encoded format",
 	}
 	TraceDisableMemoryFlag = &cli.BoolFlag{
 		Name:  "trace.nomemory",
