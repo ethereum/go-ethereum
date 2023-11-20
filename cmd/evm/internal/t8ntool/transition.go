@@ -113,10 +113,6 @@ func Transition(ctx *cli.Context) error {
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
-	var (
-		err    error
-		tracer vm.EVMLogger
-	)
 	var getTracer func(txIndex int, txHash common.Hash) (*traceWriter, error)
 
 	baseDir, err := createBasedir(ctx)
@@ -218,9 +214,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	prestate.Env = *inputData.Env
 
-	vmConfig := vm.Config{
-		Tracer: tracer,
-	}
+	vmConfig := vm.Config{}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
