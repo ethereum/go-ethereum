@@ -64,6 +64,10 @@ func Decode(input string) ([]byte, error) {
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
+	// better compatible with odd size string
+	if len(input)%2 != 0 {
+		input = "0x0" + input[2:]
+	}
 	b, err := hex.DecodeString(input[2:])
 	if err != nil {
 		err = mapError(err)
