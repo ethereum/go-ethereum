@@ -113,12 +113,12 @@ func Transition(ctx *cli.Context) error {
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
-	var getTracer func(txIndex int, txHash common.Hash) (*traceWriter, error)
-
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
+
+	getTracer := func(txIndex int, txHash common.Hash) (*traceWriter, error) { return nil, nil }
 	if ctx.Bool(TraceFlag.Name) {
 		if ctx.IsSet(TraceTracerFlag.Name) {
 			var config json.RawMessage
@@ -172,10 +172,6 @@ func Transition(ctx *cli.Context) error {
 				prevFile = traceFile
 				return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), ""}, nil
 			}
-		}
-	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (*traceWriter, error) {
-			return nil, nil
 		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
