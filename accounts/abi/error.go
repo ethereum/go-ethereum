@@ -86,7 +86,7 @@ func (e *Error) Unpack(data []byte) (interface{}, error) {
 		return "", fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return "", fmt.Errorf("invalid event ID, got %v want %v", data[:4], e.ID[:4])
+		return "", fmt.Errorf("invalid identifier, have %#x want %#x", data[:4], e.ID[:4])
 	}
 	return e.Inputs.Unpack(data[4:])
 }
