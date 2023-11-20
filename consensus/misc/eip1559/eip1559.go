@@ -39,7 +39,7 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 	}
 
 	// <specular modification>
-	if !config.EnableL2GasLimitApi { // gasLimit can adjust instantly on L2s
+	if !config.EnableL2EngineApi { // gasLimit can adjust instantly on L2s
 		if err := misc.VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 			return err
 		}

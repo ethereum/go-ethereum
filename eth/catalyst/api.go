@@ -321,7 +321,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 		// <specular modification>
-	} else if !api.eth.Miner().IsL2EngineApiEnabled() { // minor Engine API divergence: allow proposers to reorg their own chain
+	} else if !api.eth.BlockChain().Config().EnableL2EngineApi { // minor Engine API divergence: allow proposers to reorg their own chain
 		// <specular modification/>
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
@@ -367,7 +367,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		// <specular modification>
-		if api.eth.BlockChain().Config().EnableL2GasLimitApi && payloadAttributes.GasLimit == nil {
+		if api.eth.BlockChain().Config().EnableL2EngineApi && payloadAttributes.GasLimit == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("gasLimit parameter is required"))
 		}
 		transactions := make(types.Transactions, 0, len(payloadAttributes.Transactions))
@@ -738,7 +738,7 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.Pa
 // TODO(karalabe): Spin this goroutine down somehow
 func (api *ConsensusAPI) heartbeat() {
 	// <specular modification>
-	if api.eth.Miner().IsL2EngineApiEnabled() { // don't start the api heartbeat, there is no transition
+	if api.eth.BlockChain().Config().EnableL2EngineApi { // don't start the api heartbeat, there is no transition
 		return
 	}
 	// <specular modification/>

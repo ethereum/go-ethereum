@@ -62,10 +62,6 @@ type Config struct {
 	Recommit  time.Duration  // The time interval for miner to re-create mining work.
 
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
-
-	// <specular modification>
-	EnableL2EngineApi bool `toml:",omitempty"`
-	// <specular modification/>
 }
 
 // DefaultConfig contains default settings for miner.
@@ -257,10 +253,3 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	return miner.worker.buildPayload(args)
 }
-
-// <specular modification>
-func (miner *Miner) IsL2EngineApiEnabled() bool {
-	return miner.worker.config.EnableL2EngineApi
-}
-
-// <specular modification/>

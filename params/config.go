@@ -335,7 +335,7 @@ type ChainConfig struct {
 	IsDevMode bool          `json:"isDev,omitempty"`
 
 	// <specular modification>
-	EnableL2GasLimitApi bool `json:"enableL2GasLimitApi,omitempty"`
+	EnableL2EngineApi bool `json:"enableL2EngineApi,omitempty"`
 	// <specular modification/>
 }
 
@@ -370,7 +370,7 @@ func (c *ChainConfig) Description() string {
 	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
 	switch {
 	// <specular modification>
-	case c.EnableL2GasLimitApi:
+	case c.EnableL2EngineApi:
 		banner += "Consensus: L2 gas limit API enabled\n"
 	// <specular modification/>
 	case c.Ethash != nil:

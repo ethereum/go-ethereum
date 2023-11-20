@@ -710,7 +710,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	// the miner to speed block sealing up a bit.
 	state, err := w.chain.StateAt(parent.Root)
 	// <specular modification>
-	if w.config.EnableL2EngineApi { // Allow the miner to reorg its own chain arbitrarily deep
+	if w.chainConfig.EnableL2EngineApi { // Allow the miner to reorg its own chain arbitrarily deep
 		if historicalBackend, ok := w.eth.(BackendWithHistoricalState); ok {
 			var release tracers.StateReleaseFunc
 			parentBlock := w.eth.BlockChain().GetBlockByHash(parent.Hash())
@@ -942,7 +942,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Set the extra field.
 	// <specular modification>
-	if len(w.extra) != 0 && !w.config.EnableL2EngineApi { // L2 chains must not set any extra data.
+	if len(w.extra) != 0 && !w.chainConfig.EnableL2EngineApi { // L2 chains must not set any extra data.
 		header.Extra = w.extra
 	}
 	// <specular modification/>
@@ -962,7 +962,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// <specular modification>
 	if genParams.gasLimit != nil { // override gas limit if specified
 		header.GasLimit = *genParams.gasLimit
-	} else if w.chain.Config().EnableL2GasLimitApi && w.config.GasCeil != 0 {
+	} else if w.chain.Config().EnableL2EngineApi && w.config.GasCeil != 0 {
 		// configure the gas limit of pending blocks with the miner gas limit config when L2 gas limit config is enabled
 		header.GasLimit = w.config.GasCeil
 	}
