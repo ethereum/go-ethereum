@@ -83,7 +83,7 @@ func (e Error) String() string {
 
 func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
-		return "", fmt.Errorf("invalid data length for unpacking: got %v, want 4", len(data))
+		return "", fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
 		return "", fmt.Errorf("invalid event ID, got %v want %v", data[:4], e.ID[:4])
