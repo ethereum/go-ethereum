@@ -125,10 +125,13 @@ func Transition(ctx *cli.Context) error {
 	}
 	if ctx.Bool(TraceFlag.Name) {
 		if ctx.IsSet(TraceTracerFlag.Name) {
-			config := &tracers.TraceConfig{}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config.TracerConfig)
+			var config json.RawMessage
+			if ctx.IsSet(TraceTracerConfigFlag.Name) {
+				config = []byte(ctx.String(TraceTracerConfigFlag.Name))
+			}
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
 			if err != nil {
-				return NewError(ErrorConfig, fmt.Errorf("%w unknown value of --%s", err, TraceTracerFlag))
+				return NewError(ErrorConfig, fmt.Errorf("can't instantiate a trace instance: %w", err))
 			}
 
 			getTracer = func(txIndex int, txHash common.Hash) (*traceWriter, error) {
