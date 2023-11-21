@@ -188,9 +188,7 @@ func (hub *Hub) refreshWallets() {
 	for _, info := range infos {
 		for _, id := range hub.productIDs {
 			// Windows and Macos use UsageID matching, Linux uses Interface matching
-			if info.ProductID == id &&
-				info.Path != "" &&
-				(slices.Contains(hub.usageIDs, info.UsagePage) || info.Interface == hub.endpointID) {
+			if info.ProductID == id && info.Path != "" && (slices.Contains(hub.usageIDs, info.UsagePage) || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
