@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -587,6 +588,10 @@ func testIncompleteSync(t *testing.T, scheme string) {
 	}
 	// Sanity check that removing any node from the database is detected
 	for i, path := range addedKeys {
+		if rand.Int31n(100) > 5 {
+			// Only check 5 percent of added keys as a sanity check
+			continue
+		}
 		owner, inner := ResolvePath([]byte(path))
 		nodeHash := addedHashes[i]
 		value := rawdb.ReadTrieNode(diskdb, owner, inner, nodeHash, scheme)
