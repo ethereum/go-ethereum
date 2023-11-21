@@ -77,7 +77,7 @@ func (c *transfer) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
-func Run(input []byte, ctx *precompileContext) ([]byte, error) {
+func (c *transfer) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	// TODO: filter out non-allowed callers
 
