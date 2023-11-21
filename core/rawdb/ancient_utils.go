@@ -18,9 +18,12 @@ package rawdb
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 type tableSize struct {
@@ -142,5 +145,25 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 		return err
 	}
 	table.dumpIndexStdout(start, end)
+	return nil
+}
+
+func ResetStateFreezerTableOffset(ancient string, virtualTail uint64) error {
+	path, tables := filepath.Join(ancient, stateFreezerName), stateFreezerNoSnappy
+
+	for name, disableSnappy := range tables {
+		log.Info("Handle table", "name", name, "disableSnappy", disableSnappy)
+		table, err := newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, false)
+		if err != nil {
+			log.Error("New table failed", "error", err)
+			return err
+		}
+		// Reset the metadata of the freezer table
+		err = table.ResetItemsOffset(virtualTail)
+		if err != nil {
+			log.Error("Reset items offset of the table", "name", name, "error", err)
+			return err
+		}
+	}
 	return nil
 }

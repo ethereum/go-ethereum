@@ -958,3 +958,33 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
 }
+
+func (t *freezerTable) ResetItemsOffset(virtualTail uint64) error {
+	stat, err := t.index.Stat()
+	if err != nil {
+		return err
+	}
+
+	if stat.Size() == 0 {
+		return fmt.Errorf("Stat size is zero when ResetVirtualTail.")
+	}
+
+	var firstIndex indexEntry
+
+	buffer := make([]byte, indexEntrySize)
+
+	t.index.ReadAt(buffer, 0)
+	firstIndex.unmarshalBinary(buffer)
+
+	firstIndex.offset = uint32(virtualTail)
+	t.index.WriteAt(firstIndex.append(nil), 0)
+
+	var firstIndex2 indexEntry
+	buffer2 := make([]byte, indexEntrySize)
+	t.index.ReadAt(buffer2, 0)
+	firstIndex2.unmarshalBinary(buffer2)
+
+	log.Info("Reset Index", "filenum", t.index.Name(), "offset", firstIndex2.offset)
+
+	return nil
+}

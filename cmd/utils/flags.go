@@ -259,6 +259,12 @@ var (
 		Value:    &defaultSyncMode,
 		Category: flags.StateCategory,
 	}
+	// hbss2pbss command options
+	ForceFlag = &cli.BoolFlag{
+		Name:  "force",
+		Usage: "Force convert hbss trie node to pbss trie node. Ingore any metadata",
+		Value: false,
+	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
 		Usage:    `Blockchain garbage collection mode, only relevant in state.scheme=hash ("full", "archive")`,
