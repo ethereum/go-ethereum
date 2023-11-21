@@ -609,6 +609,8 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
 // The purpose of this structure is to implement the missing APIs.
+//
+// The pebble iterator is not thread-safe.
 type pebbleIterator struct {
 	iter     *pebble.Iterator
 	moved    bool
