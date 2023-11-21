@@ -185,12 +185,8 @@ func (hub *Hub) refreshWallets() {
 	hub.enumFails.Store(0)
 
 	for _, info := range infos {
-		for _, id := range hub.productIDs {
-			// Windows and Macos use UsageID matching, Linux uses Interface matching
-			if info.ProductID == id && info.Path != "" && (slices.Contains(hub.usageIDs, info.UsagePage) || info.Interface == hub.endpointID) {
-				devices = append(devices, info)
-				break
-			}
+		if hub.matchDevice(info) {
+			devices = append(devices, info)
 		}
 	}
 	if runtime.GOOS == "linux" {
@@ -247,6 +243,13 @@ func (hub *Hub) refreshWallets() {
 	for _, event := range events {
 		hub.updateFeed.Send(event)
 	}
+}
+
+func (hub *Hub) matchDevice(info usb.DeviceInfo) bool {
+	// Windows and Macos use UsageID matching, Linux uses Interface matching
+	return slices.Contains(hub.productIDs, info.ProductID) &&
+		info.Path != "" &&
+		(slices.Contains(hub.usageIDs, info.UsagePage) || info.Interface == hub.endpointID)
 }
 
 // Subscribe implements accounts.Backend, creating an async subscription to
