@@ -98,8 +98,8 @@ func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
 	}
 }
 
-func (l *logger) Handler() slog.Handler {
-	return l.l.Handler()
+func (l *logger) Inner() *slog.Logger {
+	return l.l.Inner()
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {

@@ -2,22 +2,26 @@ package log
 
 import (
 	"os"
-	"sync/atomic"
+	"sync"
 
 	"golang.org/x/exp/slog"
 )
 
 var (
-	root = new(atomic.Value)
+	rootMu sync.Mutex
+	root logger
 )
 
 func init() {
 	defaultLogger := &logger{slog.New(DiscardHandler())}
-	root.Store(defaultLogger)
+	SetDefault(defaultLogger)
 }
 
 func SetDefault(l Logger) {
-	root.Store(l)
+	rootMu.Lock()
+	defer rootMu.Unlock()
+	root := l
+	slog.SetDefault(root.Inner())
 }
 
 // Root returns the root logger
@@ -26,8 +30,10 @@ func Root() Logger {
 }
 
 func rootLogger() *logger {
-	res, _ := root.Load().(*logger)
-	return res
+	rootMu.Lock()
+	defer rootMu.Unlock()
+	res := root
+	return &res
 }
 
 // The following functions bypass the exported logger methods (logger.Debug,
