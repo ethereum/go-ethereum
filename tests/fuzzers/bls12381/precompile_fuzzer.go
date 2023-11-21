@@ -19,6 +19,8 @@ package bls
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -60,6 +62,32 @@ func checkInput(id byte, inputLen int) bool {
 	panic("programmer error")
 }
 
+var vmBlockCtx = vm.BlockContext{
+	CanTransfer: func(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+		return db.GetBalance(addr).Cmp(amount) >= 0
+	},
+	Transfer: func(vm.StateDB, common.Address, common.Address, *big.Int) {
+		panic("transfer: not implemented")
+	},
+	GetHash: func(u uint64) common.Hash {
+		panic("getHash: not implemented")
+	},
+	Coinbase:    common.Address{},
+	BlockNumber: new(big.Int).SetUint64(10),
+	Time:        uint64(time.Now().Unix()),
+}
+
+var vmTxCtx = vm.TxContext{
+	GasPrice: common.Big1,
+	Origin:   common.HexToAddress("a11ce"),
+}
+
+// Create a global mock EVM for use in the following tests.
+var mockEVM = &vm.EVM{
+	Context:   vmBlockCtx,
+	TxContext: vmTxCtx,
+}
+
 // The function must return
 //
 //   - 1 if the fuzzer should increase priority of the
@@ -82,7 +110,7 @@ func fuzz(id byte, data []byte) int {
 	}
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
-	_, err := precompile.Run(cpy)
+	_, err := precompile.Run(cpy, vm.NewContext(common.HexToAddress("1337"), mockEVM))
 	if !bytes.Equal(cpy, data) {
 		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}
