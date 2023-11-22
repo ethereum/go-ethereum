@@ -683,7 +683,7 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 	hash := make([]byte, 32)
 	trienodes := res.Nodes
 	if got, want := len(trienodes), len(tc.expHashes); got != want {
-		return fmt.Errorf("wrong trienode count, got %d, want %d\n", got, want)
+		return fmt.Errorf("wrong trienode count, got %d, want %d", got, want)
 	}
 	for i, trienode := range trienodes {
 		hasher.Reset()

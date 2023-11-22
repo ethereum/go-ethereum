@@ -183,6 +183,7 @@ var typedData = apitypes.TypedData{
 }
 
 func TestSignData(t *testing.T) {
+	t.Parallel()
 	api, control := setup(t)
 	//Create two accounts
 	createAccount(control, api, t)
@@ -248,6 +249,7 @@ func TestSignData(t *testing.T) {
 }
 
 func TestDomainChainId(t *testing.T) {
+	t.Parallel()
 	withoutChainID := apitypes.TypedData{
 		Types: apitypes.Types{
 			"EIP712Domain": []apitypes.Type{
@@ -289,6 +291,7 @@ func TestDomainChainId(t *testing.T) {
 }
 
 func TestHashStruct(t *testing.T) {
+	t.Parallel()
 	hash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
 		t.Fatal(err)
@@ -309,6 +312,7 @@ func TestHashStruct(t *testing.T) {
 }
 
 func TestEncodeType(t *testing.T) {
+	t.Parallel()
 	domainTypeEncoding := string(typedData.EncodeType("EIP712Domain"))
 	if domainTypeEncoding != "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)" {
 		t.Errorf("Expected different encodeType result (got %s)", domainTypeEncoding)
@@ -321,6 +325,7 @@ func TestEncodeType(t *testing.T) {
 }
 
 func TestTypeHash(t *testing.T) {
+	t.Parallel()
 	mailTypeHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.TypeHash(typedData.PrimaryType)))
 	if mailTypeHash != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2" {
 		t.Errorf("Expected different typeHash result (got %s)", mailTypeHash)
@@ -328,6 +333,7 @@ func TestTypeHash(t *testing.T) {
 }
 
 func TestEncodeData(t *testing.T) {
+	t.Parallel()
 	hash, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -339,6 +345,7 @@ func TestEncodeData(t *testing.T) {
 }
 
 func TestFormatter(t *testing.T) {
+	t.Parallel()
 	var d apitypes.TypedData
 	err := json.Unmarshal([]byte(jsonTypedData), &d)
 	if err != nil {
@@ -368,6 +375,7 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 }
 
 func TestJsonFiles(t *testing.T) {
+	t.Parallel()
 	testfiles, err := os.ReadDir("testdata/")
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
@@ -402,6 +410,7 @@ func TestJsonFiles(t *testing.T) {
 // TestFuzzerFiles tests some files that have been found by fuzzing to cause
 // crashes or hangs.
 func TestFuzzerFiles(t *testing.T) {
+	t.Parallel()
 	corpusdir := path.Join("testdata", "fuzzing")
 	testfiles, err := os.ReadDir(corpusdir)
 	if err != nil {
@@ -514,6 +523,7 @@ var gnosisTx = `
 // TestGnosisTypedData tests the scenario where a user submits a full EIP-712
 // struct without using the gnosis-specific endpoint
 func TestGnosisTypedData(t *testing.T) {
+	t.Parallel()
 	var td apitypes.TypedData
 	err := json.Unmarshal([]byte(gnosisTypedData), &td)
 	if err != nil {
@@ -532,6 +542,7 @@ func TestGnosisTypedData(t *testing.T) {
 // TestGnosisCustomData tests the scenario where a user submits only the gnosis-safe
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomData(t *testing.T) {
+	t.Parallel()
 	var tx core.GnosisSafeTx
 	err := json.Unmarshal([]byte(gnosisTx), &tx)
 	if err != nil {
@@ -644,6 +655,7 @@ var gnosisTxWithChainId = `
 `
 
 func TestGnosisTypedDataWithChainId(t *testing.T) {
+	t.Parallel()
 	var td apitypes.TypedData
 	err := json.Unmarshal([]byte(gnosisTypedDataWithChainId), &td)
 	if err != nil {
@@ -662,6 +674,7 @@ func TestGnosisTypedDataWithChainId(t *testing.T) {
 // TestGnosisCustomData tests the scenario where a user submits only the gnosis-safe
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomDataWithChainId(t *testing.T) {
+	t.Parallel()
 	var tx core.GnosisSafeTx
 	err := json.Unmarshal([]byte(gnosisTxWithChainId), &tx)
 	if err != nil {
@@ -813,6 +826,7 @@ var complexTypedData = `
 `
 
 func TestComplexTypedData(t *testing.T) {
+	t.Parallel()
 	var td apitypes.TypedData
 	err := json.Unmarshal([]byte(complexTypedData), &td)
 	if err != nil {
@@ -829,6 +843,7 @@ func TestComplexTypedData(t *testing.T) {
 }
 
 func TestGnosisSafe(t *testing.T) {
+	t.Parallel()
 	// json missing chain id
 	js := "{\n  \"safe\": \"0x899FcB1437DE65DC6315f5a69C017dd3F2837557\",\n  \"to\": \"0x899FcB1437DE65DC6315f5a69C017dd3F2837557\",\n  \"value\": \"0\",\n  \"data\": \"0x0d582f13000000000000000000000000d3ed2b8756b942c98c851722f3bd507a17b4745f0000000000000000000000000000000000000000000000000000000000000005\",\n  \"operation\": 0,\n  \"gasToken\": \"0x0000000000000000000000000000000000000000\",\n  \"safeTxGas\": 0,\n  \"baseGas\": 0,\n  \"gasPrice\": \"0\",\n  \"refundReceiver\": \"0x0000000000000000000000000000000000000000\",\n  \"nonce\": 0,\n  \"executionDate\": null,\n  \"submissionDate\": \"2022-02-23T14:09:00.018475Z\",\n  \"modified\": \"2022-12-01T15:52:21.214357Z\",\n  \"blockNumber\": null,\n  \"transactionHash\": null,\n  \"safeTxHash\": \"0x6f0f5cffee69087c9d2471e477a63cab2ae171cf433e754315d558d8836274f4\",\n  \"executor\": null,\n  \"isExecuted\": false,\n  \"isSuccessful\": null,\n  \"ethGasPrice\": null,\n  \"maxFeePerGas\": null,\n  \"maxPriorityFeePerGas\": null,\n  \"gasUsed\": null,\n  \"fee\": null,\n  \"origin\": \"https://gnosis-safe.io\",\n  \"dataDecoded\": {\n    \"method\": \"addOwnerWithThreshold\",\n    \"parameters\": [\n      {\n        \"name\": \"owner\",\n        \"type\": \"address\",\n        \"value\": \"0xD3Ed2b8756b942c98c851722F3bd507a17B4745F\"\n      },\n      {\n        \"name\": \"_threshold\",\n        \"type\": \"uint256\",\n        \"value\": \"5\"\n      }\n    ]\n  },\n  \"confirmationsRequired\": 4,\n  \"confirmations\": [\n    {\n      \"owner\": \"0x30B714E065B879F5c042A75Bb40a220A0BE27966\",\n      \"submissionDate\": \"2022-03-01T14:56:22Z\",\n      \"transactionHash\": \"0x6d0a9c83ac7578ef3be1f2afce089fb83b619583dfa779b82f4422fd64ff3ee9\",\n      \"signature\": \"0x00000000000000000000000030b714e065b879f5c042a75bb40a220a0be27966000000000000000000000000000000000000000000000000000000000000000001\",\n      \"signatureType\": \"APPROVED_HASH\"\n    },\n    {\n      \"owner\": \"0x8300dFEa25Da0eb744fC0D98c23283F86AB8c10C\",\n      \"submissionDate\": \"2022-12-01T15:52:21.214357Z\",\n      \"transactionHash\": null,\n      \"signature\": \"0xbce73de4cc6ee208e933a93c794dcb8ba1810f9848d1eec416b7be4dae9854c07dbf1720e60bbd310d2159197a380c941cfdb55b3ce58f9dd69efd395d7bef881b\",\n      \"signatureType\": \"EOA\"\n    }\n  ],\n  \"trusted\": true,\n  \"signatures\": null\n}\n"
 	var gnosisTx core.GnosisSafeTx
@@ -984,6 +999,7 @@ var complexTypedDataLCRefType = `
 `
 
 func TestComplexTypedDataWithLowercaseReftype(t *testing.T) {
+	t.Parallel()
 	var td apitypes.TypedData
 	err := json.Unmarshal([]byte(complexTypedDataLCRefType), &td)
 	if err != nil {

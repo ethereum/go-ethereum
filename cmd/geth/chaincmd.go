@@ -224,14 +224,21 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func dumpGenesis(ctx *cli.Context) error {
-	// if there is a testnet preset enabled, dump that
+	// check if there is a testnet preset enabled
+	var genesis *core.Genesis
 	if utils.IsNetworkPreset(ctx) {
-		genesis := utils.MakeGenesis(ctx)
+		genesis = utils.MakeGenesis(ctx)
+	} else if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
+		genesis = core.DeveloperGenesisBlock(11_500_000, nil)
+	}
+
+	if genesis != nil {
 		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
 			utils.Fatalf("could not encode genesis: %s", err)
 		}
 		return nil
 	}
+
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
@@ -256,7 +263,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	if ctx.IsSet(utils.DataDirFlag.Name) {
 		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
 	}
-	utils.Fatalf("no network preset provided, no existing genesis in the default datadir")
+	utils.Fatalf("no network preset provided, and no genesis exists in the default datadir")
 	return nil
 }
 
