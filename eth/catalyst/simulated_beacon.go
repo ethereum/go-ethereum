@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -84,6 +85,11 @@ type SimulatedBeacon struct {
 	lastBlockTime      uint64
 }
 
+// NewSimulatedBeacon constructs a new simulated beacon chain.
+// Period sets the period in which blocks should be produced.
+// If period is set to 0, a block is produced on every transaction.
+// If period is set to math.MaxUint64, blocks can only be produced
+// via Commit, Fork and AdjustTime.
 func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
@@ -120,6 +126,11 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 func (c *SimulatedBeacon) Start() error {
 	if c.period == 0 {
 		go c.loopOnDemand()
+	} else if c.period == math.MaxUint64 {
+		// if period is set to MaxUint, do not mine at all
+		// this is used in the simulated backend
+		// where blocks are explicitly mined via
+		// Commit, AdjustTime and Fork
 	} else {
 		go c.loop()
 	}

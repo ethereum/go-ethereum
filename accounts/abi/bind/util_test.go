@@ -55,12 +55,15 @@ var waitDeployedTests = map[string]struct {
 func TestWaitDeployed(t *testing.T) {
 	t.Parallel()
 	for name, test := range waitDeployedTests {
-		backend := backends.NewSimulatedBackend(
+		backend, err := backends.NewSimulatedBackend(
 			core.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 			},
 			10000000,
 		)
+		if err != nil {
+			t.Fatalf("could not init simulated backend: %v", err)
+		}
 		defer backend.Close()
 
 		// Create the transaction
@@ -68,11 +71,10 @@ func TestWaitDeployed(t *testing.T) {
 		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
-		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		tx, _ = types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
 
 		// Wait for it to get mined in the background.
 		var (
-			err     error
 			address common.Address
 			mined   = make(chan struct{})
 			ctx     = context.Background()
@@ -101,13 +103,15 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
-	t.Parallel()
-	backend := backends.NewSimulatedBackend(
+	backend, err := backends.NewSimulatedBackend(
 		core.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 		},
 		10000000,
 	)
+	if err != nil {
+		t.Fatalf("could not init simulated backend: %v", err)
+	}
 	defer backend.Close()
 
 	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
