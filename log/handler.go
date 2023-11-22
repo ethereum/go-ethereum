@@ -213,7 +213,11 @@ func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
 			attr.Value = slog.StringValue(v.Dec())
 		}
 	case fmt.Stringer:
-		attr.Value = slog.StringValue(v.String())
+		if v == nil || (reflect.ValueOf(v).Kind() == reflect.Pointer && reflect.ValueOf(v).IsNil()) {
+			attr.Value = slog.StringValue("<nil>")
+		} else {
+			attr.Value = slog.StringValue(v.String())
+		}
 	}
 	return attr
 }
