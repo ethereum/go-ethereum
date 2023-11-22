@@ -69,20 +69,18 @@ var mockEVM = &EVM{
 	TxContext: vmTxCtx,
 }
 
-// Native transfer precompile to make bridging to native token possible.
-type transfer struct{}
+// Native token mint precompile to make bridging to native token possible.
+type mint struct{}
 
-func (c *transfer) RequiredGas(input []byte) uint64 {
+func (c *mint) RequiredGas(input []byte) uint64 {
 	// TODO: determine appropriate gas cost
 	return 100
 }
 
-func (c *transfer) Run(input []byte, ctx *precompileContext) ([]byte, error) {
+func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	// TODO: filter out non-allowed callers
-
-	// From
-	_ = common.BytesToAddress(input[0:32])
+	_ = common.BytesToAddress(input[0:32]) // From
 
 	to := common.BytesToAddress(input[32:64])
 
@@ -95,10 +93,35 @@ func (c *transfer) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 	// Mint case: Create native token out of thin air
 	ctx.evm.StateDB.AddBalance(to, value)
 
-	// if !ctx.CanTransfer(ctx.evm.StateDB, from, value) {
-	// 	return nil, ErrInsufficientBalance
-	// }
-	// ctx.Transfer(ctx.evm, from, to, value)
+	return input, nil
+}
+
+// Native token burn precompile to make bridging back to L1 possible.
+type burn struct{}
+
+func (c *burn) RequiredGas(input []byte) uint64 {
+	// TODO: determine appropriate gas cost
+	return 100
+}
+
+func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
+
+	// TODO: filter out non-allowed callers
+	_ = common.BytesToAddress(input[0:32]) // From
+
+	// Address to get their tokens burned
+	addrReqTokenBurn := common.BytesToAddress(input[32:64])
+
+	var parsed bool
+	value, parsed := math.ParseBig256(hexutil.Encode(input[64:96]))
+	if !parsed {
+		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[64:96]))
+	}
+
+	if !ctx.CanTransfer(ctx.evm.StateDB, addrReqTokenBurn, value) {
+		return nil, ErrInsufficientBalance
+	}
+	ctx.evm.StateDB.SubBalance(addrReqTokenBurn, value)
 
 	return input, nil
 }
