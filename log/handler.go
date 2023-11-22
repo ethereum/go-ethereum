@@ -212,6 +212,8 @@ func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
 		} else {
 			attr.Value = slog.StringValue(v.Dec())
 		}
+	case fmt.Stringer:
+		attr.Value = slog.StringValue(v.String())
 	}
 	return attr
 }

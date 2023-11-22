@@ -136,6 +136,9 @@ type Logger interface {
 
 	// Inner returns the underlying slog logger that is wrapped
 	Inner() *slog.Logger
+
+	// Write logs a message at the specified level
+	Write(level slog.Level, msg string, attrs ...any)
 }
 
 type logger struct {
@@ -155,7 +158,7 @@ func (l *logger) Inner() *slog.Logger {
 }
 
 // write logs a message at the specified level:
-func (l *logger) write(level slog.Level, msg string, attrs ...any) {
+func (l *logger) Write(level slog.Level, msg string, attrs ...any) {
 	if !l.inner.Enabled(context.Background(), level) {
 		return
 	}
@@ -192,7 +195,7 @@ func (l *logger) write(level slog.Level, msg string, attrs ...any) {
 }
 
 func (l *logger) Log(level slog.Level, msg string, attrs ...any) {
-	l.write(level, msg, attrs...)
+	l.Write(level, msg, attrs...)
 }
 
 func (l *logger) With(ctx ...interface{}) Logger {
@@ -204,26 +207,26 @@ func (l *logger) New(ctx ...interface{}) Logger {
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
-	l.write(LevelTrace, msg, ctx...)
+	l.Write(LevelTrace, msg, ctx...)
 }
 
 func (l *logger) Debug(msg string, ctx ...interface{}) {
-	l.write(slog.LevelDebug, msg, ctx...)
+	l.Write(slog.LevelDebug, msg, ctx...)
 }
 
 func (l *logger) Info(msg string, ctx ...interface{}) {
-	l.write(slog.LevelInfo, msg, ctx...)
+	l.Write(slog.LevelInfo, msg, ctx...)
 }
 
 func (l *logger) Warn(msg string, ctx ...any) {
-	l.write(slog.LevelWarn, msg, ctx...)
+	l.Write(slog.LevelWarn, msg, ctx...)
 }
 
 func (l *logger) Error(msg string, ctx ...interface{}) {
-	l.write(slog.LevelError, msg, ctx...)
+	l.Write(slog.LevelError, msg, ctx...)
 }
 
 func (l *logger) Crit(msg string, ctx ...interface{}) {
-	l.write(LevelCrit, msg, ctx...)
+	l.Write(LevelCrit, msg, ctx...)
 	os.Exit(1)
 }
