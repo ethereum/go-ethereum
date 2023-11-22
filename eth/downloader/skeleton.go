@@ -1120,10 +1120,22 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	number := filled.Number.Uint64()
 	log.Trace("Cleaning stale beacon headers", "filled", number, "hash", filled.Hash())
 
-	// If the filled header is below the linked subchain, something's
-	// corrupted internally. Report and error and refuse to do anything.
-	if number < s.progress.Subchains[0].Tail {
+	// If the filled header is below and discontinuous with the linked subchain,
+	// something's corrupted internally. Report and error and refuse to do anything.
+	if number+1 < s.progress.Subchains[0].Tail {
 		return fmt.Errorf("filled header below beacon header tail: %d < %d", number, s.progress.Subchains[0].Tail)
+	}
+	// Determine the new tail based on the given filled header. If it's still
+	// in the range of skeleton chain, use the next header adjacent to the
+	// filled one (it's expected to link with the filled one, otherwise
+	// something corrupted); otherwise use the filled one if the whole skeleton
+	// chain is consumed.
+	newTail := filled
+	if number < s.progress.Subchains[0].Head {
+		newTail = rawdb.ReadSkeletonHeader(s.db, number+1)
+		if newTail.ParentHash != filled.Hash() {
+			return fmt.Errorf("filled header is discontinuous with subchain: %d %s", number, filled.Hash())
+		}
 	}
 	// Subchain seems trimmable, push the tail forward up to the last
 	// filled header and delete everything before it - if available. In
@@ -1131,15 +1143,18 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	// head to keep it consistent with the data on disk.
 	var (
 		start = s.progress.Subchains[0].Tail // start deleting from the first known header
-		end   = number                       // delete until the requested threshold
+		end   = newTail.Number.Uint64()      // delete skeleton headers before the new tail
 		batch = s.db.NewBatch()
 	)
-	s.progress.Subchains[0].Tail = number
-	s.progress.Subchains[0].Next = filled.ParentHash
+	s.progress.Subchains[0].Tail = newTail.Number.Uint64()
+	s.progress.Subchains[0].Next = newTail.ParentHash
 
+	// If more headers were filled than available, push the entire subchain
+	// forward to keep tracking the node's block imports.
+	//
+	// Note that the new tail will be the filled one in this case, which is
+	// unexpected, but we cannot do anything else to improve the situation.
 	if s.progress.Subchains[0].Head < number {
-		// If more headers were filled than available, push the entire
-		// subchain forward to keep tracking the node's block imports
 		end = s.progress.Subchains[0].Head + 1 // delete the entire original range, including the head
 		s.progress.Subchains[0].Head = number  // assign a new head (tail is already assigned to this)
 
