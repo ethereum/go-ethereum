@@ -2346,7 +2346,11 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	var roundNumber = types.Round(0)
 	engine, ok := bc.Engine().(*XDPoS.XDPoS)
 	if ok {
+		var err error
 		roundNumber, err = engine.EngineV2.GetRoundNumber(block.Header())
+		if err != nil {
+			log.Error("reportBlock", "GetRoundNumber", err)
+		}
 	}
 
 	var receiptString string
