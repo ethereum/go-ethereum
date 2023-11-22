@@ -22,8 +22,7 @@ func SetDefault(l Logger) {
 
 // Root returns the root logger
 func Root() Logger {
-	res, _ := root.Load().(Logger)
-	return res
+	return root.Load().(Logger)
 }
 
 // The following functions bypass the exported logger methods (logger.Debug,
