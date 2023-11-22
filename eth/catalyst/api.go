@@ -611,7 +611,8 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (engine.PayloadS
 	// Although we don't want to trigger a sync, if there is one already in
 	// progress, try to extend if with the current payload request to relieve
 	// some strain from the forkchoice update.
-	if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
+	err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header())
+	if err == nil {
 		log.Debug("Payload accepted for sync extension", "number", block.NumberU64(), "hash", block.Hash())
 		return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 	}
@@ -623,12 +624,12 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (engine.PayloadS
 		// In full sync mode, failure to import a well-formed block can only mean
 		// that the parent state is missing and the syncer rejected extending the
 		// current cycle with the new payload.
-		log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash())
+		log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash(), "reason", err)
 	} else {
 		// In non-full sync mode (i.e. snap sync) all payloads are rejected until
 		// snap sync terminates as snap sync relies on direct database injections
 		// and cannot afford concurrent out-if-band modifications via imports.
-		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash())
+		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash(), "reason", err)
 	}
 	return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 }
