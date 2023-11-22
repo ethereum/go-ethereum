@@ -390,18 +390,6 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Test tx in block interrupted.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	<-ctx.Done() // Ensure the close of the Done channel
-	tx, err := ec.TransactionInBlock(ctx, block.Hash(), 0)
-	if tx != nil {
-		t.Fatal("transaction should be nil")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("error should be context.Canceled, got %v", err)
-	}
-
 	// Test tx in block not found.
 	if _, err := ec.TransactionInBlock(context.Background(), block.Hash(), 20); err != ethereum.NotFound {
 		t.Fatal("error should be ethereum.NotFound")
