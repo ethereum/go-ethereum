@@ -2,11 +2,12 @@ package log
 
 import (
 	"os"
+	"sync/atomic"
 
 	"golang.org/x/exp/slog"
 )
 
-var root Logger
+var root atomic.Value
 
 func init() {
 	defaultLogger := &logger{slog.New(DiscardHandler())}
@@ -15,13 +16,14 @@ func init() {
 
 // SetDefault sets the default global logger
 func SetDefault(l Logger) {
-	root = l
-	slog.SetDefault(root.Inner())
+	root.Store(l)
+	slog.SetDefault(l.Inner())
 }
 
 // Root returns the root logger
 func Root() Logger {
-	return root
+	res, _ := root.Load().(Logger)
+	return res
 }
 
 // The following functions bypass the exported logger methods (logger.Debug,
