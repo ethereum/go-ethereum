@@ -49,7 +49,8 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContractWithCt
 	common.BytesToAddress([]byte{2}):    precompileWrapper{&sha256hash{}},
 	common.BytesToAddress([]byte{3}):    precompileWrapper{&ripemd160hash{}},
 	common.BytesToAddress([]byte{4}):    precompileWrapper{&dataCopy{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
@@ -63,7 +64,8 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContractWithCt
 	common.BytesToAddress([]byte{6}):    precompileWrapper{&bn256AddByzantium{}},
 	common.BytesToAddress([]byte{7}):    precompileWrapper{&bn256ScalarMulByzantium{}},
 	common.BytesToAddress([]byte{8}):    precompileWrapper{&bn256PairingByzantium{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
@@ -78,7 +80,8 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContractWithCtx
 	common.BytesToAddress([]byte{7}):    precompileWrapper{&bn256ScalarMulIstanbul{}},
 	common.BytesToAddress([]byte{8}):    precompileWrapper{&bn256PairingIstanbul{}},
 	common.BytesToAddress([]byte{9}):    precompileWrapper{&blake2F{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
@@ -93,7 +96,8 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContractWithCtx{
 	common.BytesToAddress([]byte{7}):    precompileWrapper{&bn256ScalarMulIstanbul{}},
 	common.BytesToAddress([]byte{8}):    precompileWrapper{&bn256PairingIstanbul{}},
 	common.BytesToAddress([]byte{9}):    precompileWrapper{&blake2F{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
@@ -109,7 +113,8 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContractWithCtx{
 	common.BytesToAddress([]byte{8}):    precompileWrapper{&bn256PairingIstanbul{}},
 	common.BytesToAddress([]byte{9}):    precompileWrapper{&blake2F{}},
 	common.BytesToAddress([]byte{0x0a}): precompileWrapper{&kzgPointEvaluation{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -124,7 +129,8 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContractWithCtx{
 	common.BytesToAddress([]byte{16}):   precompileWrapper{&bls12381Pairing{}},
 	common.BytesToAddress([]byte{17}):   precompileWrapper{&bls12381MapG1{}},
 	common.BytesToAddress([]byte{18}):   precompileWrapper{&bls12381MapG2{}},
-	common.BytesToAddress([]byte{0x89}): &transfer{},
+	common.BytesToAddress([]byte{0x89}): &mint{},
+	common.BytesToAddress([]byte{0x90}): &burn{},
 }
 
 var (
