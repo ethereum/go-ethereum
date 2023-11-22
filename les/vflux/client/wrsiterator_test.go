@@ -37,6 +37,8 @@ var (
 const iterTestNodeCount = 6
 
 func TestWrsIterator(t *testing.T) {
+	t.Parallel()
+
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	w := NewWrsIterator(ns, sfTest2, sfTest3.Or(sfTest4), sfiTestWeight)
 	ns.Start()

@@ -107,6 +107,8 @@ func (b *balanceTestSetup) stop() {
 }
 
 func TestAddBalance(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 
@@ -143,6 +145,8 @@ func TestAddBalance(t *testing.T) {
 }
 
 func TestSetBalance(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
@@ -167,6 +171,8 @@ func TestSetBalance(t *testing.T) {
 }
 
 func TestBalanceTimeCost(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
@@ -207,6 +213,8 @@ func TestBalanceTimeCost(t *testing.T) {
 }
 
 func TestBalanceReqCost(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
@@ -235,6 +243,8 @@ func TestBalanceReqCost(t *testing.T) {
 }
 
 func TestBalanceToPriority(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
@@ -260,6 +270,8 @@ func TestBalanceToPriority(t *testing.T) {
 }
 
 func TestEstimatedPriority(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000000000)
@@ -299,6 +311,8 @@ func TestEstimatedPriority(t *testing.T) {
 }
 
 func TestPositiveBalanceCounting(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 
@@ -340,6 +354,8 @@ func TestPositiveBalanceCounting(t *testing.T) {
 }
 
 func TestCallbackChecking(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000000)
@@ -363,6 +379,8 @@ func TestCallbackChecking(t *testing.T) {
 }
 
 func TestCallback(t *testing.T) {
+	t.Parallel()
+
 	b := newBalanceTestSetup(nil, nil, nil)
 	defer b.stop()
 	node := b.newNode(1000)
@@ -392,6 +410,8 @@ func TestCallback(t *testing.T) {
 }
 
 func TestBalancePersistence(t *testing.T) {
+	t.Parallel()
+
 	posExp := &utils.Expirer{}
 	negExp := &utils.Expirer{}
 	posExp.SetRate(0, math.Log(2)/float64(time.Hour*2)) // halves every two hours

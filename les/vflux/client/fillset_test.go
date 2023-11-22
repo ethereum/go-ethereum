@@ -65,6 +65,8 @@ func (i *testIter) waiting(timeout time.Duration) bool {
 }
 
 func TestFillSet(t *testing.T) {
+	t.Parallel()
+
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	iter := &testIter{
 		waitCh: make(chan struct{}),

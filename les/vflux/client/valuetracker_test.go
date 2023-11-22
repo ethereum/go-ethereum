@@ -38,6 +38,8 @@ const (
 )
 
 func TestValueTracker(t *testing.T) {
+	t.Parallel()
+
 	db := memorydb.New()
 	clock := &mclock.Simulated{}
 	requestList := make([]RequestInfo, testReqTypes)

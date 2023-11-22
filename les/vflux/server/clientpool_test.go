@@ -32,26 +32,38 @@ import (
 const defaultConnectedBias = time.Minute * 3
 
 func TestClientPoolL10C100Free(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 10, 100, 0, true)
 }
 
 func TestClientPoolL40C200Free(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 40, 200, 0, true)
 }
 
 func TestClientPoolL100C300Free(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 100, 300, 0, true)
 }
 
 func TestClientPoolL10C100P4(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 10, 100, 4, false)
 }
 
 func TestClientPoolL40C200P30(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 40, 200, 30, false)
 }
 
 func TestClientPoolL100C300P20(t *testing.T) {
+	t.Parallel()
+
 	testClientPool(t, 100, 300, 20, false)
 }
 
@@ -244,6 +256,8 @@ func testPriorityConnect(t *testing.T, pool *ClientPool, p *poolTestPeer, cap ui
 }
 
 func TestConnectPaidClient(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -260,6 +274,8 @@ func TestConnectPaidClient(t *testing.T) {
 }
 
 func TestConnectPaidClientToSmallPool(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -278,6 +294,8 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 }
 
 func TestConnectPaidClientToFullPool(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -304,6 +322,8 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 }
 
 func TestPaidClientKickedOut(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock    mclock.Simulated
 		db       = rawdb.NewMemoryDatabase()
@@ -337,6 +357,8 @@ func TestPaidClientKickedOut(t *testing.T) {
 }
 
 func TestConnectFreeClient(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -353,6 +375,8 @@ func TestConnectFreeClient(t *testing.T) {
 }
 
 func TestConnectFreeClientToFullPool(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -381,6 +405,8 @@ func TestConnectFreeClientToFullPool(t *testing.T) {
 }
 
 func TestFreeClientKickedOut(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock  mclock.Simulated
 		db     = rawdb.NewMemoryDatabase()
@@ -425,6 +451,8 @@ func TestFreeClientKickedOut(t *testing.T) {
 }
 
 func TestPositiveBalanceCalculation(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock  mclock.Simulated
 		db     = rawdb.NewMemoryDatabase()
@@ -448,6 +476,8 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 }
 
 func TestDowngradePriorityClient(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock  mclock.Simulated
 		db     = rawdb.NewMemoryDatabase()
@@ -484,6 +514,8 @@ func TestDowngradePriorityClient(t *testing.T) {
 }
 
 func TestNegativeBalanceCalculation(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
@@ -523,6 +555,8 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 }
 
 func TestInactiveClient(t *testing.T) {
+	t.Parallel()
+
 	var (
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
