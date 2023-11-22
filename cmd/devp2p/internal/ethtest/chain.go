@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/exp/slices"
 )
 
 // Chain is a lightweight blockchain-like store which can read a hivechain
@@ -47,7 +48,7 @@ import (
 type Chain struct {
 	genesis core.Genesis
 	blocks  []*types.Block
-	state   map[common.Address]state.DumpAccount
+	state   map[common.Address]state.DumpAccount // state of head block
 	senders map[common.Address]*senderInfo
 	config  *params.ChainConfig
 }
@@ -92,6 +93,42 @@ type senderInfo struct {
 // Head returns the chain head.
 func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
+}
+
+// AccountsInHashOrder returns all accounts of the head state, ordered by hash of address.
+func (c *Chain) AccountsInHashOrder() []state.DumpAccount {
+	list := make([]state.DumpAccount, len(c.state))
+	i := 0
+	for addr, acc := range c.state {
+		addr := addr
+		list[i] = acc
+		list[i].Address = &addr
+		if len(acc.SecureKey) != 32 {
+			panic(fmt.Errorf("missing/invalid SecureKey in dump account %v", addr))
+		}
+		i++
+	}
+	slices.SortFunc(list, func(x, y state.DumpAccount) int {
+		return bytes.Compare(x.SecureKey, y.SecureKey)
+	})
+	return list
+}
+
+// CodeHashes returns all bytecode hashes contained in the head state.
+func (c *Chain) CodeHashes() []common.Hash {
+	var hashes []common.Hash
+	seen := make(map[common.Hash]struct{})
+	seen[types.EmptyCodeHash] = struct{}{}
+	for _, acc := range c.state {
+		h := common.BytesToHash(acc.CodeHash)
+		if _, ok := seen[h]; ok {
+			continue
+		}
+		hashes = append(hashes, h)
+		seen[h] = struct{}{}
+	}
+	slices.SortFunc(hashes, (common.Hash).Cmp)
+	return hashes
 }
 
 // Len returns the length of the chain.

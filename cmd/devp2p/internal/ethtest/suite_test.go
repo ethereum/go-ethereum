@@ -65,7 +65,7 @@ func TestEthSuite(t *testing.T) {
 	}
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
-			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
+			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
 				t.Fatal()
 			}
@@ -80,19 +80,19 @@ func TestSnapSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata/snap", jwtPath)
+	geth, err := runGeth("./testdata", jwtPath)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
 	}
 	defer geth.Close()
 
-	suite, err := NewSuite(geth.Server().Self(), "./testdata/snap", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
+	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
 	for _, test := range suite.SnapTests() {
 		t.Run(test.Name, func(t *testing.T) {
-			result := utesting.RunTAP([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
+			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
 				t.Fatal()
 			}
