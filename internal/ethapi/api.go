@@ -1240,10 +1240,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		balance := state.GetBalance(*args.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
-			if args.Value.ToInt().Cmp(available) >= 0 {
-				return 0, core.ErrInsufficientFundsForTransfer
+			value := args.Value.ToInt()
+			if value.Cmp(available) >= 0 {
+				return 0, fmt.Errorf("%w: address: %s, have: %v, want: %v+(gas)", core.ErrInsufficientFunds, *args.From, available, value)
 			}
-			available.Sub(available, args.Value.ToInt())
+			available.Sub(available, value)
 		}
 		allowance := new(big.Int).Div(available, feeCap)
 

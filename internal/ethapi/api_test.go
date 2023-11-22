@@ -621,6 +621,11 @@ func TestEstimateGas(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
 	}))
+
+	balance, err := api.GetBalance(context.Background(), accounts[0].addr, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get balance of account0: %v", err)
+	}
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        TransactionArgs
@@ -649,6 +654,40 @@ func TestEstimateGas(t *testing.T) {
 			},
 			expectErr: core.ErrInsufficientFunds,
 			want:      21000,
+		},
+		// transfer all balance + null gasPrice
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(balance),
+			},
+			expectErr: nil,
+			want:      21000,
+		},
+		// transfer all balance + 0 gasPrice
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:     &accounts[0].addr,
+				To:       &accounts[1].addr,
+				Value:    (*hexutil.Big)(balance),
+				GasPrice: (*hexutil.Big)(big.NewInt(0)),
+			},
+			expectErr: nil,
+			want:      21000,
+		},
+		// transfer all balance + 1 gasPrice
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:     &accounts[0].addr,
+				To:       &accounts[1].addr,
+				Value:    (*hexutil.Big)(balance),
+				GasPrice: (*hexutil.Big)(big.NewInt(1)),
+			},
+			expectErr: core.ErrInsufficientFunds,
 		},
 		// empty create
 		{
