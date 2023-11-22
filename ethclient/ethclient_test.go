@@ -396,7 +396,7 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 	}
 
 	// Test tx in block found.
-	tx, err = ec.TransactionInBlock(context.Background(), block.Hash(), 0)
+	tx, err := ec.TransactionInBlock(context.Background(), block.Hash(), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
