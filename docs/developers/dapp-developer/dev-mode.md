@@ -295,7 +295,7 @@ geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain 
 
 It is possible to use a custom genesis block configuration in development mode. To obtain a compatible configuration, run `geth --dev dumpgenesis`. The resulting genesis has proof-of-stake and all pre-merge hard forks activated at block 0. Precompile addresses are funded to prevent them being removed from the state per EIP158.
 
-Users are free to modify the generated template provided they keep pre-merge hard-forks and proof-of-stack transition activated at block 0.
+Users are free to modify the generated template provided they keep pre-merge hard-forks and proof-of-stake transition activated at block 0.
 
 ## Summary {#summary}
 
