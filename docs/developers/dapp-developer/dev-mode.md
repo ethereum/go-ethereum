@@ -291,7 +291,11 @@ Geth will fail to start in dev-mode if keys have been manually created or import
 geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
 ```
 
-**Note** that this is an edge-case that applies when both the `--datadir` and `--dev` flags are used and a key has been manually created or imported into the keystore.
+## Using a Custom Genesis Configuration
+
+It is possible to use a custom genesis block configuration in development mode. To obtain a compatible configuration, run `geth --dev dumpgenesis`. The resulting genesis has proof-of-stake and all pre-merge hard forks activated at block 0. Precompile addresses are funded to prevent them being removed from the state per EIP158.
+
+Users are free to modify the generated template provided they keep pre-merge hard-forks and proof-of-stake transition activated at block 0.
 
 ## Summary {#summary}
 
