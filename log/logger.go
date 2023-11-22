@@ -105,8 +105,6 @@ func LevelString(l slog.Level) string {
 
 // A Logger writes key/value pairs to a Handler
 type Logger interface {
-	// TODO: add WithGroup()?
-
 	// With returns a new Logger that has this logger's attributes plus the given attributes
 	With(ctx ...interface{}) Logger
 
@@ -134,9 +132,6 @@ type Logger interface {
 	// Crit logs a message at the crit level with context key/value pairs, and exits
 	Crit(msg string, ctx ...interface{})
 
-	// Inner returns the underlying slog logger that is wrapped
-	Inner() *slog.Logger
-
 	// Write logs a message at the specified level
 	Write(level slog.Level, msg string, attrs ...any)
 }
@@ -150,11 +145,6 @@ func NewLogger(h slog.Handler) Logger {
 	return &logger{
 		slog.New(h),
 	}
-}
-
-// Inner returns the underlying slog logger that 
-func (l *logger) Inner() *slog.Logger {
-	return l.inner
 }
 
 // write logs a message at the specified level:

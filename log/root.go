@@ -17,7 +17,9 @@ func init() {
 // SetDefault sets the default global logger
 func SetDefault(l Logger) {
 	root.Store(l)
-	slog.SetDefault(l.Inner())
+	if lg, ok := l.(*logger); ok {
+		slog.SetDefault(lg.inner)
+	}
 }
 
 // Root returns the root logger

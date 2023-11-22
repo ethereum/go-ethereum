@@ -98,10 +98,6 @@ func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
 	}
 }
 
-func (l *logger) Inner() *slog.Logger {
-	return l.l.Inner()
-}
-
 func (l *logger) Write(level slog.Level, msg string, ctx ...interface{}) {}
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
