@@ -51,11 +51,9 @@ var (
 	errUnexpectedNode = errors.New("unexpected node")
 
 	// errWriteImmutable is returned if write to background immutable nodebuffer
-	// under asyncnodebuffer
 	errWriteImmutable = errors.New("write immutable node buffer")
 
-	// errFlushMutable is returned if flush the background mutable nodebuffer
-	// to disk, under asyncnodebuffer
+	// errFlushMutable is returned if flush the background mutable nodebuffer to disk
 	errFlushMutable = errors.New("flush mutable node buffer")
 
 	// errRevertImmutable is returned if revert the background immutable nodebuffer

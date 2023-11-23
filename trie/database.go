@@ -148,9 +148,11 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.backend.Commit(root, report)
 }
 
-// Size returns the storage size of diff layer nodes above the persistent disk
-// layer, the dirty nodes buffered within the disk layer, and the size of cached
-// preimages.
+// Size returns the sizes of:
+// - the diff layer nodes above the persistent disk layer,
+// - the mutable dirty nodes buffered within the disk layer,
+// - the immutable nodes in the disk layer,
+// - the cached preimages.
 func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize, common.StorageSize) {
 	var (
 		diffs, nodes, nodesImmutable common.StorageSize

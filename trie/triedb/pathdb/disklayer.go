@@ -64,7 +64,9 @@ type trienodebuffer interface {
 	// empty returns an indicator if trienodebuffer contains any state transition inside.
 	empty() bool
 
-	// getSize return the trienodebuffer used size.
+	// getSize return the trienodebuffer used size, includes:
+	// - the mutable dirty nodes buffered within the disk layer,
+	// - the immutable nodes in the disk layer.
 	getSize() (uint64, uint64)
 
 	// getAllNodes return all the trie nodes are cached in trienodebuffer.
@@ -336,7 +338,9 @@ func (dl *diskLayer) setBufferSize(size int) error {
 	return dl.buffer.setSize(size, dl.db.diskdb, dl.cleans, dl.id)
 }
 
-// size returns the approximate size of cached nodes in the disk layer.
+// size returns the approximate size of:
+// - the mutable dirty nodes buffered within the disk layer,
+// - the immutable nodes in the disk layer.
 func (dl *diskLayer) size() (common.StorageSize, common.StorageSize) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
