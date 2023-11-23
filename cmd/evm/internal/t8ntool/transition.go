@@ -80,97 +80,50 @@ type input struct {
 	TxRlp string            `json:"txsRlp,omitempty"`
 }
 
-type traceWriter struct {
-	tracers.Tracer
-	filename string
-}
-
-func (t *traceWriter) Write() error {
-	if len(t.filename) == 0 {
-		return nil
-	}
-	file, err := os.Create(t.filename)
-	if err != nil {
-		return NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-	}
-	defer file.Close()
-
-	result, err := t.GetResult()
-	if err != nil {
-		return err
-	}
-	if result == nil {
-		return nil
-	}
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
-}
-
 func Transition(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
+	var getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) { return nil, nil }
+
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
 
-	getTracer := func(txIndex int, txHash common.Hash) (*traceWriter, error) { return nil, nil }
 	if ctx.Bool(TraceFlag.Name) {
 		if ctx.IsSet(TraceTracerFlag.Name) {
 			var config json.RawMessage
 			if ctx.IsSet(TraceTracerConfigFlag.Name) {
 				config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
-			if err != nil {
-				return NewError(ErrorConfig, fmt.Errorf("can't instantiate a trace instance: %w", err))
-			}
-
-			getTracer = func(txIndex int, txHash common.Hash) (*traceWriter, error) {
-				traceFile := path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String()))
+			getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+				if err != nil {
+					return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				}
+				tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+				if err != nil {
+					return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+				}
 				return &traceWriter{tracer, traceFile}, nil
 			}
 		} else {
-			if ctx.IsSet(TraceDisableMemoryFlag.Name) && ctx.IsSet(TraceEnableMemoryFlag.Name) {
-				return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-			}
-			if ctx.IsSet(TraceDisableReturnDataFlag.Name) && ctx.IsSet(TraceEnableReturnDataFlag.Name) {
-				return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-			}
-			if ctx.IsSet(TraceDisableMemoryFlag.Name) {
-				log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-			}
-			if ctx.IsSet(TraceDisableReturnDataFlag.Name) {
-				log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-			}
 			// Configure the EVM logger
 			logConfig := &logger.Config{
 				DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-				EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name) || ctx.Bool(TraceEnableMemoryFlag.Name),
-				EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name) || ctx.Bool(TraceEnableReturnDataFlag.Name),
+				EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+				EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 				Debug:            true,
 			}
-			var prevFile *os.File
-			// This one closes the last file
-			defer func() {
-				if prevFile != nil {
-					prevFile.Close()
-				}
-			}()
-			getTracer = func(txIndex int, txHash common.Hash) (*traceWriter, error) {
-				if prevFile != nil {
-					prevFile.Close()
-				}
+			getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
 				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 				if err != nil {
 					return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 				}
-				prevFile = traceFile
-				return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), ""}, nil
+				return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), traceFile}, nil
 			}
 		}
 	}
