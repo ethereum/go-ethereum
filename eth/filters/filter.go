@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,11 +39,13 @@ type Filter struct {
 	begin, end int64        // Range interval if filtering multiple blocks
 
 	matcher *bloombits.Matcher
+
+	maxBlockRange int64
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash, maxBlockRange ...int64) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -69,6 +72,12 @@ func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Add
 	filter.matcher = bloombits.NewMatcher(size, filters)
 	filter.begin = begin
 	filter.end = end
+
+	if len(maxBlockRange) > 0 {
+		filter.maxBlockRange = maxBlockRange[0]
+	} else {
+		filter.maxBlockRange = -1
+	}
 
 	return filter
 }
@@ -155,6 +164,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	if f.end, err = resolveSpecial(f.end); err != nil {
 		return nil, err
+	}
+
+	// if maxBlockRange configured then check for it
+	if f.maxBlockRange != -1 && f.end-f.begin+1 > f.maxBlockRange {
+		return nil, fmt.Errorf("block range is larger than max block range, block range = %d, max block range = %d", f.end-f.begin+1, f.maxBlockRange)
 	}
 
 	logChan, errChan := f.rangeLogsAsync(ctx)

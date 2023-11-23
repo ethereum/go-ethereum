@@ -54,20 +54,22 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys       *FilterSystem
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
-	timeout   time.Duration
+	sys           *FilterSystem
+	events        *EventSystem
+	filtersMu     sync.Mutex
+	filters       map[rpc.ID]*filter
+	timeout       time.Duration
+	maxBlockRange int64
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
-func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
+func NewFilterAPI(system *FilterSystem, lightMode bool, maxBlockRange int64) *FilterAPI {
 	api := &FilterAPI{
-		sys:     system,
-		events:  NewEventSystem(system, lightMode),
-		filters: make(map[rpc.ID]*filter),
-		timeout: system.cfg.Timeout,
+		sys:           system,
+		events:        NewEventSystem(system, lightMode),
+		filters:       make(map[rpc.ID]*filter),
+		timeout:       system.cfg.Timeout,
+		maxBlockRange: maxBlockRange,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -348,7 +350,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 			end = crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
+		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics, api.maxBlockRange)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)

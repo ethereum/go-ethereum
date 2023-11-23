@@ -76,7 +76,8 @@ var Defaults = Config{
 	RPCGasCap:          50000000,
 	RPCEVMTimeout:      5 * time.Second,
 	GPO:                FullNodeGPO,
-	RPCTxFeeCap:        1, // 1 ether
+	RPCTxFeeCap:        1,  // 1 ether
+	MaxBlockRange:      -1, // Default unconfigured value: no block range limit for backward compatibility
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -168,6 +169,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// Max block range for eth_getLogs api method
+	MaxBlockRange int64
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

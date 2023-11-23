@@ -944,6 +944,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+
+	// Max block range for `eth_getLogs` method
+	MaxBlockRangeFlag = &cli.Int64Flag{
+		Name:  "rpc.getlogs.maxrange",
+		Usage: "Limit max fetched block range for `eth_getLogs` method",
+	}
 )
 
 var (
@@ -1605,6 +1612,14 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setMaxBlockRange(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.IsSet(MaxBlockRangeFlag.Name) {
+		cfg.MaxBlockRange = ctx.Int64(MaxBlockRangeFlag.Name)
+	} else {
+		cfg.MaxBlockRange = -1
+	}
+}
+
 // CheckExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
@@ -1660,6 +1675,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
+	setMaxBlockRange(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
@@ -1956,7 +1972,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
+		Service:   filters.NewFilterAPI(filterSystem, isLightClient, ethcfg.MaxBlockRange),
 	}})
 	return filterSystem
 }
