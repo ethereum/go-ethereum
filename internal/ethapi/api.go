@@ -1282,9 +1282,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Optimization: if the transaction succeeded with gasLimit set to the first execution's 
 	// usedGas + gasRefund, then return that value immediately. Else, continue with the binary search.
-	_, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, result.UsedGas + result.GasRefund)
-	if err == nil {
-		return hexutil.Uint64(result.UsedGas + result.GasRefund), nil
+	optimisticGasLimit := result.UsedGas + result.GasRefund
+	failed, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, optimisticGasLimit)
+	if !failed && err == nil {
+		return hexutil.Uint64(optimisticGasLimit), nil
 	}
 
 	// For almost any transaction, the gas consumed by the unconstrained execution above
