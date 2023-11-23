@@ -394,7 +394,7 @@ const (
 func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	var finishedFn = func() bool {
 		size--
-		return size > 0
+		return size == 0
 	}
 	return reflect.ValueOf(generateSteps(finishedFn, r))
 }
