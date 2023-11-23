@@ -9,9 +9,6 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 [![isabelschoeps](https://travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.com/ethereum/go-ethereum)
 [![isabelschoeps](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
 
-Automated builds are available for stable releases and the unstable master branch. Binary
-archives are published at https://geth.ethereum.org/downloads/.
+## Building for trust human not use without License and you must about 21+ age and supporter company  
 
-## Building the source
-
-For prerequisites and detailed build instructions please read the [isabelschoeps](https://geth.ethereum.org/docs/getting-started/installing-geth).
+For prerequisites and detailed build instructions please read the [isabelschoeps]
