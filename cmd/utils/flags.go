@@ -945,7 +945,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.MetricsCategory,
 	}
 
-
 	// Max block range for `eth_getLogs` method
 	MaxBlockRangeFlag = &cli.Int64Flag{
 		Name:  "rpc.getlogs.maxrange",
