@@ -1188,6 +1188,28 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+// setLes shows the deprecation warnings for LES flags.
+func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.IsSet(LightServeFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightServeFlag.Name)
+	}
+	if ctx.IsSet(LightIngressFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightIngressFlag.Name)
+	}
+	if ctx.IsSet(LightEgressFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightEgressFlag.Name)
+	}
+	if ctx.IsSet(LightMaxPeersFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightMaxPeersFlag.Name)
+	}
+	if ctx.IsSet(LightNoPruneFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightNoPruneFlag.Name)
+	}
+	if ctx.IsSet(LightNoSyncServeFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightNoSyncServeFlag.Name)
+	}
+}
+
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles(max int) int {
@@ -1561,6 +1583,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
+	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
