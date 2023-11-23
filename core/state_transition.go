@@ -35,6 +35,7 @@ type ExecutionResult struct {
 	UsedGas    uint64 // Total used gas but include the refunded gas
 	Err        error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
+	GasRefund  uint64 // Total gas refunded
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -445,6 +446,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
 		ReturnData: ret,
+		GasRefund:	st.state.GetRefund(),
 	}, nil
 }
 

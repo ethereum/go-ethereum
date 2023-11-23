@@ -1279,6 +1279,14 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		return 0, fmt.Errorf("gas required exceeds allowance (%d)", hi)
 	}
+
+	// Optimization: if the transaction succeeded with gasLimit set to the first execution's 
+	// usedGas + gasRefund, then return that value immediately. Else, continue with the binary search.
+	_, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, result.UsedGas + result.GasRefund)
+	if err == nil {
+		return hexutil.Uint64(result.UsedGas + result.GasRefund), nil
+	}
+
 	// For almost any transaction, the gas consumed by the unconstrained execution above
 	// lower-bounds the gas limit required for it to succeed. One exception is those txs that
 	// explicitly check gas remaining in order to successfully execute within a given limit, but we
