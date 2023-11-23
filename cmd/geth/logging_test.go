@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/internal/reexec"
 )
@@ -95,6 +96,53 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 	}
 	if len(haveLines) != len(wantLines) {
 		t.Errorf("format %v, want %d lines, have %d", format, len(haveLines), len(wantLines))
+	}
+}
+
+func TestJsonLogging(t *testing.T) {
+	t.Parallel()
+	haveB, err := runSelf("--log.format", "json", "logtest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readFile, err := os.Open("testdata/logging/logtest-json.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLines := split(readFile)
+	haveLines := split(bytes.NewBuffer(haveB))
+	for i, wantLine := range wantLines {
+		if i > len(haveLines)-1 {
+			t.Fatalf("format %v, line %d missing, want:%v", "json", i, wantLine)
+		}
+		haveLine := haveLines[i]
+		for strings.Contains(haveLine, "Unknown config environment variable") {
+			// This can happen on CI runs. Drop it.
+			haveLines = append(haveLines[:i], haveLines[i+1:]...)
+			haveLine = haveLines[i]
+		}
+		var have, want []byte
+		{
+			var h map[string]any
+			if err := json.Unmarshal([]byte(haveLine), &h); err != nil {
+				t.Fatal(err)
+			}
+			h["t"] = "xxx"
+			have, _ = json.Marshal(h)
+		}
+		{
+			var w map[string]any
+			if err := json.Unmarshal([]byte(wantLine), &w); err != nil {
+				t.Fatal(err)
+			}
+			w["t"] = "xxx"
+			want, _ = json.Marshal(w)
+		}
+		if !bytes.Equal(have, want) {
+			// show an intelligent diff
+			t.Logf(nicediff(have, want))
+			t.Errorf("file content wrong")
+		}
 	}
 }
 
