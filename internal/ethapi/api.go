@@ -1280,7 +1280,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, fmt.Errorf("gas required exceeds allowance (%d)", hi)
 	}
 
-	// Optimization: if the transaction succeeded with gasLimit set to the first execution's 
+	// Optimization: if the transaction succeeded with gasLimit set to the first execution's
 	// usedGas + gasRefund, then return that value immediately. Else, continue with the binary search.
 	optimisticGasLimit := result.UsedGas + result.GasRefund
 	failed, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, optimisticGasLimit)
