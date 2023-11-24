@@ -1,0 +1,46 @@
+name: go-ethereum workflow
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - '**'
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.20.5
+    - name: Lint
+      run: go run build/ci.go lint
+    - name: Build
+      run: go run build/ci.go install -dlgo
+
+  test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      
+    needs: lint
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.20.5
+    - name: Install Submodules
+      run: git submodule update --init --depth 1 --recursive
+    - name: Test
+      run: go run build/ci.go test -dlgo
+    
