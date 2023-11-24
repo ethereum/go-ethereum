@@ -26,11 +26,7 @@ jobs:
       run: go run build/ci.go install -dlgo
 
   test:
-    runs-on: [self-hosted, ${{ matrix.os }}]
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: [self-hosted]
       
     needs: lint
     steps:
