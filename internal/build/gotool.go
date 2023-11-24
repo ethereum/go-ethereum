@@ -144,6 +144,7 @@ func Version(csdb *ChecksumDB, version string) (string, error) {
 			continue
 		}
 		if parts[0] == version {
+			parts[0] = strings.Trim(parts[0], "\r")
 			log.Printf("Found version %q", parts[1])
 			return parts[1], nil
 		}
