@@ -206,13 +206,13 @@ var unpackTests = []unpackTest{
 		def:  `[{"type":"bool"}]`,
 		enc:  "",
 		want: false,
-		err:  "abi: attempting to unmarshall an empty string while arguments are expected",
+		err:  "abi: attempting to unmarshal an empty string while arguments are expected",
 	},
 	{
 		def:  `[{"type":"bytes32","indexed":true},{"type":"uint256","indexed":false}]`,
 		enc:  "",
 		want: false,
-		err:  "abi: attempting to unmarshall an empty string while arguments are expected",
+		err:  "abi: attempting to unmarshal an empty string while arguments are expected",
 	},
 	{
 		def:  `[{"type":"bool","indexed":true},{"type":"uint64","indexed":true}]`,

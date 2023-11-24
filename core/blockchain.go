@@ -1868,7 +1868,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			// After merge we expect few side chains. Simply count
 			// all blocks the CL gives us for GC processing time
 			bc.gcproc += res.procTime
-			bc.logger.OnBlockEnd(nil)
+			if bc.logger != nil {
+				bc.logger.OnBlockEnd(nil)
+			}
 			return it.index, nil // Direct block insertion of a single block
 		}
 		switch res.status {
@@ -1897,7 +1899,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
-		bc.logger.OnBlockEnd(nil)
+		if bc.logger != nil {
+			bc.logger.OnBlockEnd(nil)
+		}
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones

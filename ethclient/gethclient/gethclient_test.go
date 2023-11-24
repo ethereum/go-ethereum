@@ -42,6 +42,7 @@ var (
 	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr     = crypto.PubkeyToAddress(testKey.PublicKey)
 	testContract = common.HexToAddress("0xbeef")
+	testEmpty    = common.HexToAddress("0xeeee")
 	testSlot     = common.HexToHash("0xdeadbeef")
 	testValue    = crypto.Keccak256Hash(testSlot[:])
 	testBalance  = big.NewInt(2e15)
@@ -80,8 +81,11 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
-		Alloc: core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
-			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}}},
+		Alloc: core.GenesisAlloc{
+			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
+			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
+			testEmpty:    {Balance: big.NewInt(1)},
+		},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
@@ -110,6 +114,12 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestGetProof2",
 			func(t *testing.T) { testGetProof(t, client, testContract) },
+		}, {
+			"TestGetProofEmpty",
+			func(t *testing.T) { testGetProof(t, client, testEmpty) },
+		}, {
+			"TestGetProofNonExistent",
+			func(t *testing.T) { testGetProofNonExistent(t, client) },
 		}, {
 			"TestGetProofCanonicalizeKeys",
 			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
@@ -271,6 +281,38 @@ func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
 	}
 	if result.StorageProof[0].Key != hashSizedKey {
 		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+}
+
+func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
+	addr := common.HexToAddress("0x0001")
+	ec := New(client)
+	result, err := ec.GetProof(context.Background(), addr, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
+	}
+	// test nonce
+	if result.Nonce != 0 {
+		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
+	}
+	// test balance
+	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
+	}
+	// test storage
+	if have := len(result.StorageProof); have != 0 {
+		t.Fatalf("invalid storage proof, want 0 proof, got %v proof(s)", have)
+	}
+	// test codeHash
+	if have, want := result.CodeHash, (common.Hash{}); have != want {
+		t.Fatalf("codehash wrong, have %v want %v ", have, want)
+	}
+	// test codeHash
+	if have, want := result.StorageHash, (common.Hash{}); have != want {
+		t.Fatalf("storagehash wrong, have %v want %v ", have, want)
 	}
 }
 

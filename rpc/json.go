@@ -46,6 +46,17 @@ type subscriptionResult struct {
 	Result json.RawMessage `json:"result,omitempty"`
 }
 
+type subscriptionResultEnc struct {
+	ID     string `json:"subscription"`
+	Result any    `json:"result"`
+}
+
+type jsonrpcSubscriptionNotification struct {
+	Version string                `json:"jsonrpc"`
+	Method  string                `json:"method"`
+	Params  subscriptionResultEnc `json:"params"`
+}
+
 // A value of this type can a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
@@ -86,8 +97,8 @@ func (msg *jsonrpcMessage) isUnsubscribe() bool {
 }
 
 func (msg *jsonrpcMessage) namespace() string {
-	elem := strings.SplitN(msg.Method, serviceMethodSeparator, 2)
-	return elem[0]
+	before, _, _ := strings.Cut(msg.Method, serviceMethodSeparator)
+	return before
 }
 
 func (msg *jsonrpcMessage) String() string {

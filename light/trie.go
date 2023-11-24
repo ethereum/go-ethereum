@@ -55,7 +55,7 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (state.Trie, error) {
+func (db *odrDatabase) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, _ state.Trie) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, address, root)}, nil
 }
 

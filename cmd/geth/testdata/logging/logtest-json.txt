@@ -1,0 +1,49 @@
+{"111,222,333,444,555,678,999":"111222333444555678999","lvl":"info","msg":"big.Int","t":"2023-11-09T08:33:19.464383209+01:00"}
+{"-111,222,333,444,555,678,999":"-111222333444555678999","lvl":"info","msg":"-big.Int","t":"2023-11-09T08:33:19.46455928+01:00"}
+{"11,122,233,344,455,567,899,900":"11122233344455567899900","lvl":"info","msg":"big.Int","t":"2023-11-09T08:33:19.464582073+01:00"}
+{"-11,122,233,344,455,567,899,900":"-11122233344455567899900","lvl":"info","msg":"-big.Int","t":"2023-11-09T08:33:19.464594846+01:00"}
+{"111,222,333,444,555,678,999":"0x607851afc94ca2517","lvl":"info","msg":"uint256","t":"2023-11-09T08:33:19.464607873+01:00"}
+{"11,122,233,344,455,567,899,900":"0x25aeffe8aaa1ef67cfc","lvl":"info","msg":"uint256","t":"2023-11-09T08:33:19.464694639+01:00"}
+{"1,000,000":1000000,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464708835+01:00"}
+{"-1,000,000":-1000000,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464725054+01:00"}
+{"9,223,372,036,854,775,807":9223372036854775807,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464735773+01:00"}
+{"-9,223,372,036,854,775,808":-9223372036854775808,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464744532+01:00"}
+{"1,000,000":1000000,"lvl":"info","msg":"uint64","t":"2023-11-09T08:33:19.464752807+01:00"}
+{"18,446,744,073,709,551,615":18446744073709551615,"lvl":"info","msg":"uint64","t":"2023-11-09T08:33:19.464779296+01:00"}
+{"key":"special \r\n\t chars","lvl":"info","msg":"Special chars in value","t":"2023-11-09T08:33:19.464794181+01:00"}
+{"lvl":"info","msg":"Special chars in key","special \n\t chars":"value","t":"2023-11-09T08:33:19.464827197+01:00"}
+{"lvl":"info","msg":"nospace","nospace":"nospace","t":"2023-11-09T08:33:19.464841118+01:00"}
+{"lvl":"info","msg":"with space","t":"2023-11-09T08:33:19.464862818+01:00","with nospace":"with nospace"}
+{"key":"\u001b[1G\u001b[K\u001b[1A","lvl":"info","msg":"Bash escapes in value","t":"2023-11-09T08:33:19.464876802+01:00"}
+{"\u001b[1G\u001b[K\u001b[1A":"value","lvl":"info","msg":"Bash escapes in key","t":"2023-11-09T08:33:19.464885416+01:00"}
+{"key":"value","lvl":"info","msg":"Bash escapes in message  \u001b[1G\u001b[K\u001b[1A end","t":"2023-11-09T08:33:19.464906946+01:00"}
+{"\u001b[35mColored\u001b[0m[":"\u001b[35mColored\u001b[0m[","lvl":"info","msg":"\u001b[35mColored\u001b[0m[","t":"2023-11-09T08:33:19.464921455+01:00"}
+{"2562047h47m16.854s":"2562047h47m16.854s","lvl":"info","msg":"Custom Stringer value","t":"2023-11-09T08:33:19.464943893+01:00"}
+{"key":"lazy value","lvl":"info","msg":"Lazy evaluation of value","t":"2023-11-09T08:33:19.465013552+01:00"}
+{"lvl":"info","msg":"A message with wonky 💩 characters","t":"2023-11-09T08:33:19.465069437+01:00"}
+{"lvl":"info","msg":"A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩","t":"2023-11-09T08:33:19.465083053+01:00"}
+{"lvl":"info","msg":"A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above","t":"2023-11-09T08:33:19.465104289+01:00"}
+{"false":"false","lvl":"info","msg":"boolean","t":"2023-11-09T08:33:19.465117185+01:00","true":"true"}
+{"foo":"beta","lvl":"info","msg":"repeated-key 1","t":"2023-11-09T08:33:19.465143425+01:00"}
+{"lvl":"info","msg":"repeated-key 2","t":"2023-11-09T08:33:19.465156323+01:00","xx":"longer"}
+{"lvl":"info","msg":"log at level info","t":"2023-11-09T08:33:19.465193158+01:00"}
+{"lvl":"warn","msg":"log at level warn","t":"2023-11-09T08:33:19.465228964+01:00"}
+{"lvl":"eror","msg":"log at level error","t":"2023-11-09T08:33:19.465240352+01:00"}
+{"a":"aligned left","bar":"short","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465247226+01:00"}
+{"a":1,"bar":"a long message","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465269028+01:00"}
+{"a":"aligned right","bar":"short","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465313611+01:00"}
+{"lvl":"info","msg":"The following logs should align so that the key-fields make 5 columns","t":"2023-11-09T08:33:19.465328188+01:00"}
+{"gas":1123123,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","lvl":"info","msg":"Inserted known block","number":1012,"other":"first","t":"2023-11-09T08:33:19.465350507+01:00","txs":200}
+{"gas":1123,"hash":"0x0000000000000000000000000000000000000000000000000000000000001235","lvl":"info","msg":"Inserted new block","number":1,"other":"second","t":"2023-11-09T08:33:19.465387952+01:00","txs":2}
+{"gas":1,"hash":"0x0000000000000000000000000000000000000000000000000000000000012322","lvl":"info","msg":"Inserted known block","number":99,"other":"third","t":"2023-11-09T08:33:19.465406687+01:00","txs":10}
+{"gas":99,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","lvl":"warn","msg":"Inserted known block","number":1012,"other":"fourth","t":"2023-11-09T08:33:19.465433025+01:00","txs":200}
+{"\u003cnil\u003e":"\u003cnil\u003e","lvl":"info","msg":"(*big.Int)(nil)","t":"2023-11-09T08:33:19.465450283+01:00"}
+{"\u003cnil\u003e":"nil","lvl":"info","msg":"(*uint256.Int)(nil)","t":"2023-11-09T08:33:19.465472953+01:00"}
+{"lvl":"info","msg":"(fmt.Stringer)(nil)","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465538633+01:00"}
+{"lvl":"info","msg":"nil-concrete-stringer","res":"nil","t":"2023-11-09T08:33:19.465552355+01:00"}
+{"lvl":"info","msg":"error(nil) ","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465601029+01:00"}
+{"lvl":"info","msg":"nil-concrete-error","res":"","t":"2023-11-09T08:33:19.46561622+01:00"}
+{"lvl":"info","msg":"nil-custom-struct","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465638888+01:00"}
+{"lvl":"info","msg":"raw nil","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465673664+01:00"}
+{"lvl":"info","msg":"(*uint64)(nil)","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465700264+01:00"}
+{"level":"level","lvl":"lvl","msg":"msg","t":"t","time":"time"}

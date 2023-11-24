@@ -581,6 +581,7 @@ func accountImport(c *cli.Context) error {
 		return err
 	}
 	if first != second {
+		//lint:ignore ST1005 This is a message for the user
 		return errors.New("Passwords do not match")
 	}
 	acc, err := internalApi.ImportRawKey(hex.EncodeToString(crypto.FromECDSA(pKey)), first)

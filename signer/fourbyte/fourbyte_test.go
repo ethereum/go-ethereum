@@ -17,8 +17,8 @@
 package fourbyte
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -27,18 +27,19 @@ import (
 
 // Tests that all the selectors contained in the 4byte database are valid.
 func TestEmbeddedDatabase(t *testing.T) {
+	t.Parallel()
 	db, err := New()
 	if err != nil {
 		t.Fatal(err)
 	}
+	var abistruct abi.ABI
 	for id, selector := range db.embedded {
 		abistring, err := parseSelector(selector)
 		if err != nil {
 			t.Errorf("Failed to convert selector to ABI: %v", err)
 			continue
 		}
-		abistruct, err := abi.JSON(strings.NewReader(string(abistring)))
-		if err != nil {
+		if err := json.Unmarshal(abistring, &abistruct); err != nil {
 			t.Errorf("Failed to parse ABI: %v", err)
 			continue
 		}
@@ -55,6 +56,7 @@ func TestEmbeddedDatabase(t *testing.T) {
 
 // Tests that custom 4byte datasets can be handled too.
 func TestCustomDatabase(t *testing.T) {
+	t.Parallel()
 	// Create a new custom 4byte database with no embedded component
 	tmpdir := t.TempDir()
 	filename := fmt.Sprintf("%s/4byte_custom.json", tmpdir)

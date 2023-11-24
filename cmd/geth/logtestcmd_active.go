@@ -19,6 +19,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -38,6 +39,12 @@ var logTestCommand = &cli.Command{
 	Description: `
 This command is only meant for testing.
 `}
+
+type customQuotedStringer struct {
+}
+func (c customQuotedStringer) String() string {
+	return "output with 'quotes'"
+}
 
 // logTest is an entry point which spits out some logs. This is used by testing
 // to verify expected outputs
@@ -70,6 +77,8 @@ func logTest(ctx *cli.Context) error {
 		log.Info("uint64", "18,446,744,073,709,551,615", uint64(math.MaxUint64))
 	}
 	{ // Special characters
+
+
 		log.Info("Special chars in value", "key", "special \r\n\t chars")
 		log.Info("Special chars in key", "special \n\t chars", "value")
 
@@ -83,9 +92,13 @@ func logTest(ctx *cli.Context) error {
 
 		colored := fmt.Sprintf("\u001B[%dmColored\u001B[0m[", 35)
 		log.Info(colored, colored, colored)
+		err := errors.New("this is an 'error'")
+		log.Info("an error message with quotes", "error", err)
 	}
 	{ // Custom Stringer() - type
 		log.Info("Custom Stringer value", "2562047h47m16.854s", common.PrettyDuration(time.Duration(9223372036854775807)))
+		var c customQuotedStringer
+		log.Info("a custom stringer that emits quoted text", "output", c)
 	}
 	{ // Lazy eval
 		log.Info("Lazy evaluation of value", "key", log.Lazy{Fn: func() interface{} { return "lazy value" }})
@@ -130,5 +143,30 @@ func logTest(ctx *cli.Context) error {
 		log.Info("Inserted known block", "number", 99, "hash", common.HexToHash("0x12322"), "txs", 10, "gas", 1, "other", "third")
 		log.Warn("Inserted known block", "number", 1_012, "hash", common.HexToHash("0x1234"), "txs", 200, "gas", 99, "other", "fourth")
 	}
+	{ // Various types of nil
+		type customStruct struct {
+			A string
+			B *uint64
+		}
+		log.Info("(*big.Int)(nil)", "<nil>", (*big.Int)(nil))
+		log.Info("(*uint256.Int)(nil)", "<nil>", (*uint256.Int)(nil))
+		log.Info("(fmt.Stringer)(nil)", "res", (fmt.Stringer)(nil))
+		log.Info("nil-concrete-stringer", "res", (*time.Time)(nil))
+
+		log.Info("error(nil) ", "res", error(nil))
+		log.Info("nil-concrete-error", "res", (*customError)(nil))
+
+		log.Info("nil-custom-struct", "res", (*customStruct)(nil))
+		log.Info("raw nil", "res", nil)
+		log.Info("(*uint64)(nil)", "res", (*uint64)(nil))
+	}
+	{ // Logging with 'reserved' keys
+		log.Info("Using keys 't', 'lvl', 'time', 'level' and 'msg'", "t", "t", "time", "time", "lvl", "lvl", "level", "level", "msg", "msg")
+	}
 	return nil
 }
+
+// customError is a type which implements error
+type customError struct{}
+
+func (c *customError) Error() string { return "" }

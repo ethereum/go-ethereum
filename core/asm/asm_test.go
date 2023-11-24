@@ -22,53 +22,37 @@ import (
 	"encoding/hex"
 )
 
-// Tests disassembling the instructions for valid evm code
-func TestInstructionIteratorValid(t *testing.T) {
-	cnt := 0
-	script, _ := hex.DecodeString("61000000")
+// Tests disassembling instructions
+func TestInstructionIterator(t *testing.T) {
+	for i, tc := range []struct {
+		want    int
+		code    string
+		wantErr string
+	}{
+		{2, "61000000", ""},                             // valid code
+		{0, "6100", "incomplete push instruction at 0"}, // invalid code
+		{2, "5900", ""},                                 // push0
+		{0, "", ""},                                     // empty
 
-	it := NewInstructionIterator(script)
-	for it.Next() {
-		cnt++
-	}
-
-	if err := it.Error(); err != nil {
-		t.Errorf("Expected 2, but encountered error %v instead.", err)
-	}
-	if cnt != 2 {
-		t.Errorf("Expected 2, but got %v instead.", cnt)
-	}
-}
-
-// Tests disassembling the instructions for invalid evm code
-func TestInstructionIteratorInvalid(t *testing.T) {
-	cnt := 0
-	script, _ := hex.DecodeString("6100")
-
-	it := NewInstructionIterator(script)
-	for it.Next() {
-		cnt++
-	}
-
-	if it.Error() == nil {
-		t.Errorf("Expected an error, but got %v instead.", cnt)
-	}
-}
-
-// Tests disassembling the instructions for empty evm code
-func TestInstructionIteratorEmpty(t *testing.T) {
-	cnt := 0
-	script, _ := hex.DecodeString("")
-
-	it := NewInstructionIterator(script)
-	for it.Next() {
-		cnt++
-	}
-
-	if err := it.Error(); err != nil {
-		t.Errorf("Expected 0, but encountered error %v instead.", err)
-	}
-	if cnt != 0 {
-		t.Errorf("Expected 0, but got %v instead.", cnt)
+	} {
+		var (
+			have    int
+			code, _ = hex.DecodeString(tc.code)
+			it      = NewInstructionIterator(code)
+		)
+		for it.Next() {
+			have++
+		}
+		var haveErr = ""
+		if it.Error() != nil {
+			haveErr = it.Error().Error()
+		}
+		if haveErr != tc.wantErr {
+			t.Errorf("test %d: encountered error: %q want %q", i, haveErr, tc.wantErr)
+			continue
+		}
+		if have != tc.want {
+			t.Errorf("wrong instruction count, have %d want %d", have, tc.want)
+		}
 	}
 }

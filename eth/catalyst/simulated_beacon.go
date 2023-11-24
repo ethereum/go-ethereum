@@ -82,10 +82,6 @@ type SimulatedBeacon struct {
 }
 
 func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
-	chainConfig := eth.APIBackend.ChainConfig()
-	if !chainConfig.IsDevMode {
-		return nil, errors.New("incompatible pre-existing chain configuration")
-	}
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),

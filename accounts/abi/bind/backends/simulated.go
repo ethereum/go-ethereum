@@ -846,7 +846,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	defer b.mu.Unlock()
 
 	if len(b.pendingBlock.Transactions()) != 0 {
-		return errors.New("Could not adjust time on non-empty block")
+		return errors.New("could not adjust time on non-empty block")
 	}
 	// Get the last block
 	block := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())

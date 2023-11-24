@@ -451,3 +451,97 @@ func TestTransactionSizes(t *testing.T) {
 		}
 	}
 }
+
+func TestYParityJSONUnmarshalling(t *testing.T) {
+	baseJson := map[string]interface{}{
+		// type is filled in by the test
+		"chainId":              "0x7",
+		"nonce":                "0x0",
+		"to":                   "0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425",
+		"gas":                  "0x124f8",
+		"gasPrice":             "0x693d4ca8",
+		"maxPriorityFeePerGas": "0x3b9aca00",
+		"maxFeePerGas":         "0x6fc23ac00",
+		"maxFeePerBlobGas":     "0x3b9aca00",
+		"value":                "0x0",
+		"input":                "0x",
+		"accessList":           []interface{}{},
+		"blobVersionedHashes": []string{
+			"0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014",
+		},
+
+		// v and yParity are filled in by the test
+		"r": "0x2a922afc784d07e98012da29f2f37cae1f73eda78aa8805d3df6ee5dbb41ec1",
+		"s": "0x4f1f75ae6bcdf4970b4f305da1a15d8c5ddb21f555444beab77c9af2baab14",
+	}
+
+	tests := []struct {
+		name    string
+		v       string
+		yParity string
+		wantErr error
+	}{
+		// Valid v and yParity
+		{"valid v and yParity, 0x0", "0x0", "0x0", nil},
+		{"valid v and yParity, 0x1", "0x1", "0x1", nil},
+
+		// Valid v, missing yParity
+		{"valid v, missing yParity, 0x0", "0x0", "", nil},
+		{"valid v, missing yParity, 0x1", "0x1", "", nil},
+
+		// Valid yParity, missing v
+		{"valid yParity, missing v, 0x0", "", "0x0", nil},
+		{"valid yParity, missing v, 0x1", "", "0x1", nil},
+
+		// Invalid yParity
+		{"invalid yParity, 0x2", "", "0x2", errInvalidYParity},
+
+		// Conflicting v and yParity
+		{"conflicting v and yParity", "0x1", "0x0", errVYParityMismatch},
+
+		// Missing v and yParity
+		{"missing v and yParity", "", "", errVYParityMissing},
+	}
+
+	// Run for all types that accept yParity
+	t.Parallel()
+	for _, txType := range []uint64{
+		AccessListTxType,
+		DynamicFeeTxType,
+		BlobTxType,
+	} {
+		txType := txType
+		for _, test := range tests {
+			test := test
+			t.Run(fmt.Sprintf("txType=%d: %s", txType, test.name), func(t *testing.T) {
+				// Copy the base json
+				testJson := make(map[string]interface{})
+				for k, v := range baseJson {
+					testJson[k] = v
+				}
+
+				// Set v, yParity and type
+				if test.v != "" {
+					testJson["v"] = test.v
+				}
+				if test.yParity != "" {
+					testJson["yParity"] = test.yParity
+				}
+				testJson["type"] = fmt.Sprintf("0x%x", txType)
+
+				// Marshal the JSON
+				jsonBytes, err := json.Marshal(testJson)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// Unmarshal the tx
+				var tx Transaction
+				err = tx.UnmarshalJSON(jsonBytes)
+				if err != test.wantErr {
+					t.Fatalf("wrong error: got %v, want %v", err, test.wantErr)
+				}
+			})
+		}
+	}
+}

@@ -58,6 +58,7 @@ func censor(input string, start, end int) string {
 }
 
 func TestLogging(t *testing.T) {
+	t.Parallel()
 	testConsoleLogging(t, "terminal", 6, 24)
 	testConsoleLogging(t, "logfmt", 2, 26)
 }
@@ -98,6 +99,7 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 }
 
 func TestVmodule(t *testing.T) {
+	t.Parallel()
 	checkOutput := func(level int, want, wantNot string) {
 		t.Helper()
 		output, err := runSelf("--log.format", "terminal", "--verbosity=0", "--log.vmodule", fmt.Sprintf("logtestcmd_active.go=%d", level), "logtest")
@@ -145,6 +147,7 @@ func nicediff(have, want []byte) string {
 }
 
 func TestFileOut(t *testing.T) {
+	t.Parallel()
 	var (
 		have, want []byte
 		err        error
@@ -165,6 +168,7 @@ func TestFileOut(t *testing.T) {
 }
 
 func TestRotatingFileOut(t *testing.T) {
+	t.Parallel()
 	var (
 		have, want []byte
 		err        error
