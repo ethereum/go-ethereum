@@ -468,14 +468,16 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
 		var balacne *big.Int
 		if tx.To() != nil {
+			// Bypass the validation for trading and lending transactions as their nonce are not incremented
+			if tx.IsSkipNonceTransaction() {
+				continue
+			}
 			if value, ok := feeCapacity[*tx.To()]; ok {
 				balacne = value
 			}
 		}
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, balacne, block.Number())
-		// Set nonce to fix issue #256
-		msg.SetNonce(statedb.GetNonce(*tx.From()))
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
 		vmenv := vm.NewEVM(vmctx, statedb, XDCxState, api.config, vm.Config{})
