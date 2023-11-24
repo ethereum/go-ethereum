@@ -34,3 +34,13 @@ var (
 
 	U2560 = uint256.NewInt(0)
 )
+
+var (
+	Uint1   = uint256.NewInt(1)
+	Uint2   = uint256.NewInt(2)
+	Uint3   = uint256.NewInt(3)
+	Uint0   = uint256.NewInt(0)
+	Uint32  = uint256.NewInt(32)
+	Uint256 = uint256.NewInt(256)
+	Uint257 = uint256.NewInt(257)
+)
