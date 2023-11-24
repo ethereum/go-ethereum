@@ -585,6 +585,10 @@ var (
 // runBn256Pairing implements the Bn256Pairing precompile, referenced by both
 // Byzantium and Istanbul operations.
 func runBn256Pairing(input []byte) ([]byte, error) {
+	// Allow at most 4 inputs
+	if len(input) > 4*192 {
+		return nil, errBadPairingInput
+	}
 	// Handle some corner cases cheaply
 	if len(input)%192 > 0 {
 		return nil, errBadPairingInput
