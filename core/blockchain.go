@@ -236,13 +236,14 @@ type BlockChain struct {
 	stopping      atomic.Bool    // false if chain is running, true when stopped
 	procInterrupt atomic.Bool    // interrupt signaler for block processing
 
-	engine            consensus.Engine
-	validator         Validator // Block and state validator interface
-	prefetcher        Prefetcher
-	processor         Processor // Block transaction processor interface
-	parallelProcessor Processor // Parallel block transaction processor interface
-	forker            *ForkChoice
-	vmConfig          vm.Config
+	engine                       consensus.Engine
+	validator                    Validator // Block and state validator interface
+	prefetcher                   Prefetcher
+	processor                    Processor // Block transaction processor interface
+	parallelProcessor            Processor // Parallel block transaction processor interface
+	parallelSpeculativeProcesses int       // Number of parallel speculative processes
+	forker                       *ForkChoice
+	vmConfig                     vm.Config
 
 	// Bor related changes
 	borReceiptsCache *lru.Cache[common.Hash, *types.Receipt] // Cache for the most recent bor receipt receipts per block
@@ -482,7 +483,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 }
 
 // NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
-func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
 
 	if err != nil {
@@ -501,6 +502,7 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 	}
 
 	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
+	bc.parallelSpeculativeProcesses = numprocs
 
 	return bc, nil
 }
