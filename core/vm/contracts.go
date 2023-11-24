@@ -35,7 +35,8 @@ import (
 )
 
 var (
-	errPrecompileDisabled = errors.New("sha256, ripemd160, blake2f precompiles temporarily disabled")
+	errPrecompileDisabled     = errors.New("sha256, ripemd160, blake2f precompiles temporarily disabled")
+	errModexpUnsupportedInput = errors.New("modexp temporarily only accepts inputs of 32 bytes (256 bits) or less")
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -427,9 +428,19 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
+		baseLenBigInt = new(big.Int).SetBytes(getData(input, 0, 32))
+		expLenBigInt  = new(big.Int).SetBytes(getData(input, 32, 32))
+		modLenBigInt  = new(big.Int).SetBytes(getData(input, 64, 32))
+	)
+	// Check that all inputs are `u256` (32 - bytes) or less, revert otherwise
+	var lenLimit = new(big.Int).SetInt64(32)
+	if baseLenBigInt.Cmp(lenLimit) > 0 || expLenBigInt.Cmp(lenLimit) > 0 || modLenBigInt.Cmp(lenLimit) > 0 {
+		return nil, errModexpUnsupportedInput
+	}
+	var (
+		baseLen = baseLenBigInt.Uint64()
+		expLen  = expLenBigInt.Uint64()
+		modLen  = modLenBigInt.Uint64()
 	)
 	if len(input) > 96 {
 		input = input[96:]
