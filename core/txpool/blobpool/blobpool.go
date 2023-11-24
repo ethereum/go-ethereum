@@ -632,7 +632,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	// Ensure that there's no over-draft, this is expected to happen when some
 	// transactions get included without publishing on the network
 	var (
-		balance = uint256.MustFromBig(p.state.GetBalance(addr))
+		balance = p.state.GetBalance(addr)
 		spent   = p.spent[addr]
 	)
 	if spent.Cmp(balance) > 0 {
