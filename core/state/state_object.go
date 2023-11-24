@@ -54,28 +54,6 @@ func (s Storage) Copy() Storage {
 	return cpy
 }
 
-// BalanceChangeReason is used to indicate the reason for a balance change, useful
-// for tracing and reporting.
-type BalanceChangeReason byte
-
-const (
-	BalanceChangeUnspecified BalanceChangeReason = iota
-	BalanceChangeRewardMineUncle
-	BalanceChangeRewardMineBlock
-	BalanceChangeDaoRefundContract
-	BalanceChangeDaoAdjustBalance
-	BalanceChangeTransfer
-	BalanceChangeGenesisBalance
-	BalanceChangeGasBuy
-	BalanceChangeRewardTransactionFee
-	BalanceChangeGasRefund
-	BalanceChangeTouchAccount
-	BalanceChangeSuicideRefund
-	BalanceChangeSuicideWithdraw
-	BalanceChangeBurn
-	BalanceChangeWithdrawal
-)
-
 // stateObject represents an Ethereum account which is being modified.
 //
 // The usage pattern is as follows:
