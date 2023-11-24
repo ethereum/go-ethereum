@@ -1849,7 +1849,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 
 		// The traced section of block import.
-		err, stop, res := bc.processBlock(block, statedb, followupInterrupt, start, setHead)
+		err, stop, res := bc.processBlock(block, statedb, &followupInterrupt, start, setHead)
 		if err != nil || stop {
 			return it.index, err
 		}
@@ -1933,7 +1933,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, followupInterrupt atomic.Bool, start time.Time, setHead bool) (blockEndErr error, _ bool, _ *blockProcessingResult) {
+func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, followupInterrupt *atomic.Bool, start time.Time, setHead bool) (blockEndErr error, _ bool, _ *blockProcessingResult) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
