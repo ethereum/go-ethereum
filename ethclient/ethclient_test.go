@@ -598,8 +598,9 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pending != 1 {
-		t.Fatalf("unexpected pending, wanted 1 got: %v", pending)
+	// After nerfing the pending block, pending transaction count will be 0
+	if pending != 0 {
+		t.Fatalf("unexpected pending, wanted 0 got: %v", pending)
 	}
 	// Query balance
 	balance, err := ec.BalanceAt(context.Background(), testAddr, nil)
@@ -617,7 +618,8 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if balance.Cmp(penBalance) == 0 {
+	// After nerfing the pending block, pending balance will be equal to balance
+	if balance.Cmp(penBalance) != 0 {
 		t.Fatalf("unexpected balance: %v %v", balance, penBalance)
 	}
 	// NonceAt
