@@ -195,6 +195,8 @@ type BlockchainLogger interface {
 	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
 	OnBlockEnd(err error)
 	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
+	OnBeaconBlockRootStart(root common.Hash)
+	OnBeaconBlockRootEnd()
 }
 
 // BlockChain represents the canonical chain given a database with a genesis

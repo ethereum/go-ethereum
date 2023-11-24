@@ -100,7 +100,7 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
 	)
-	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
+	ProcessBeaconBlockRoot(root, vmenv, b.statedb, nil)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has

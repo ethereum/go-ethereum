@@ -58,6 +58,9 @@ func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	fmt.Printf("CaptureExit: output=%s, gasUsed=%v, err=%v\n", hexutil.Bytes(output), gasUsed, err)
 }
 
+func (p *Printer) OnBeaconBlockRootStart(root common.Hash) {}
+func (p *Printer) OnBeaconBlockRootEnd()                   {}
+
 func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	buf, err := json.Marshal(tx)
 	if err != nil {
