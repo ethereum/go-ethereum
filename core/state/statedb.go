@@ -1382,7 +1382,6 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 // PrepareBlock prepares the statedb for execution of a block. It tracks
 // the addresses of enabled precompiles for debugging purposes.
 func (s *StateDB) PrepareBlock(precompiles []common.Address) {
-	s.precompiles = make(map[common.Address]struct{})
 	for _, addr := range precompiles {
 		s.precompiles[addr] = struct{}{}
 	}
