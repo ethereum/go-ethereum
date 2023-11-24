@@ -1614,6 +1614,10 @@ func (d *Downloader) processSnapSyncContent() error {
 		}
 		// Split around the pivot block and process the two sides via snap/full sync
 		if !d.committed.Load() {
+			if len(results) == 0 {
+				continue
+			}
+
 			latest := results[len(results)-1].Header
 			// If the height is above the pivot block by 2 sets, it means the pivot
 			// become stale in the network, and it was garbage collected, move to a
