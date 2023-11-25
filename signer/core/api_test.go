@@ -61,7 +61,7 @@ func (ui *headlessUi) ApproveTx(request *core.SignTxRequest) (core.SignTxRespons
 	case "M": // modify
 		// The headless UI always modifies the transaction
 		old := big.Int(request.Transaction.Value)
-		newVal := new(big.Int).Add(&old, big.NewInt(1))
+		newVal := new(big.Int).Add(&old, common.Big1)
 		request.Transaction.Value = hexutil.Big(*newVal)
 		return core.SignTxResponse{request.Transaction, true}, nil
 	default:

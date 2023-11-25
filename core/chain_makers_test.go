@@ -41,7 +41,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey) // 658bdf435d810c91414ec09147daa6db62406379
 		aa      = common.Address{0xaa}
 		bb      = common.Address{0xbb}
-		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
+		funds   = common.Big0.Mul(big.NewInt(1337), big.NewInt(params.Ether))
 		config  = *params.AllEthashProtocolChanges
 		asm4788 = common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 		gspec   = &Genesis{

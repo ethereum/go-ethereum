@@ -131,7 +131,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 			}
 
 			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
-			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && evt.Block.Number().Cmp(big.NewInt(2)) == 0 {
+			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && evt.Block.Number().Cmp(common.Big2) == 0 {
 				return
 			}
 		case <-timer.C:

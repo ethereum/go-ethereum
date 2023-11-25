@@ -1810,7 +1810,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			chaindb.Close()
 		}
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
-			cfg.Miner.GasPrice = big.NewInt(1)
+			cfg.Miner.GasPrice = common.Big1
 		}
 	default:
 		if cfg.NetworkId == 1 {

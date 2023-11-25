@@ -267,15 +267,15 @@ type bigModExp struct {
 }
 
 var (
-	big0      = big.NewInt(0)
-	big1      = big.NewInt(1)
-	big3      = big.NewInt(3)
+	big0      = common.Big0
+	big1      = common.Big1
+	big3      = common.Big3
 	big4      = big.NewInt(4)
 	big7      = big.NewInt(7)
 	big8      = big.NewInt(8)
 	big16     = big.NewInt(16)
 	big20     = big.NewInt(20)
-	big32     = big.NewInt(32)
+	big32     = common.Big32
 	big64     = big.NewInt(64)
 	big96     = big.NewInt(96)
 	big480    = big.NewInt(480)

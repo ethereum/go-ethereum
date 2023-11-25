@@ -157,7 +157,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
 		genesis.Alloc[crypto.PubkeyToAddress(faucet.PublicKey)] = core.GenesisAccount{
-			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
+			Balance: new(big.Int).Exp(common.Big2, big.NewInt(128), nil),
 		}
 	}
 	// Sort the signers and embed into the extra-data section
@@ -210,7 +210,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		GPO:             ethconfig.Defaults.GPO,
 		Miner: miner.Config{
 			GasCeil:  genesis.GasLimit * 11 / 10,
-			GasPrice: big.NewInt(1),
+			GasPrice: common.Big1,
 			Recommit: time.Second,
 		},
 	})

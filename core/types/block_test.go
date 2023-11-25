@@ -104,17 +104,17 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	}}
 	to := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 	txdata := &DynamicFeeTx{
-		ChainID:    big.NewInt(1),
+		ChainID:    common.Big1,
 		Nonce:      0,
 		To:         &to,
 		Gas:        123457,
 		GasFeeCap:  new(big.Int).Set(block.BaseFee()),
-		GasTipCap:  big.NewInt(0),
+		GasTipCap:  common.Big0,
 		AccessList: accesses,
 		Data:       []byte{},
 	}
 	tx2 := NewTx(txdata)
-	tx2, err := tx2.WithSignature(LatestSignerForChainID(big.NewInt(1)), common.Hex2Bytes("fe38ca4e44a30002ac54af7cf922a6ac2ba11b7d22f548e8ecb3f51f41cb31b06de6a5cbae13c0c856e33acf021b51819636cfc009d39eafb9f606d546e305a800"))
+	tx2, err := tx2.WithSignature(LatestSignerForChainID(common.Big1), common.Hex2Bytes("fe38ca4e44a30002ac54af7cf922a6ac2ba11b7d22f548e8ecb3f51f41cb31b06de6a5cbae13c0c856e33acf021b51819636cfc009d39eafb9f606d546e305a800"))
 	if err != nil {
 		t.Fatal("invalid signature error: ", err)
 	}
@@ -169,7 +169,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	// Create ACL tx.
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
 	tx2 := NewTx(&AccessListTx{
-		ChainID:    big.NewInt(1),
+		ChainID:    common.Big1,
 		Nonce:      0,
 		To:         &to,
 		Gas:        123457,
@@ -177,7 +177,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 		AccessList: AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}},
 	})
 	sig2 := common.Hex2Bytes("3dbacc8d0259f2508625e97fdfc57cd85fdd16e5821bc2c10bdd1a52649e8335476e10695b183a87b0aa292a7f4b78ef0c3fbe62aa2c42c84e1d9c3da159ef1401")
-	tx2, _ = tx2.WithSignature(NewEIP2930Signer(big.NewInt(1)), sig2)
+	tx2, _ = tx2.WithSignature(NewEIP2930Signer(common.Big1), sig2)
 
 	check("len(Transactions)", len(block.Transactions()), 2)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())

@@ -52,14 +52,14 @@ func testSetupGenesis(t *testing.T, scheme string) {
 	var (
 		customghash = common.HexToHash("0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50")
 		customg     = Genesis{
-			Config: &params.ChainConfig{HomesteadBlock: big.NewInt(3)},
+			Config: &params.ChainConfig{HomesteadBlock: common.Big3},
 			Alloc: GenesisAlloc{
-				{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+				{1}: {Balance: common.Big1, Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			},
 		}
 		oldcustomg = customg
 	)
-	oldcustomg.Config = &params.ChainConfig{HomesteadBlock: big.NewInt(2)}
+	oldcustomg.Config = &params.ChainConfig{HomesteadBlock: common.Big2}
 
 	tests := []struct {
 		name       string
@@ -145,8 +145,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			wantConfig: customg.Config,
 			wantErr: &params.ConfigCompatError{
 				What:          "Homestead fork block",
-				StoredBlock:   big.NewInt(2),
-				NewBlock:      big.NewInt(3),
+				StoredBlock:   common.Big2,
+				NewBlock:      common.Big3,
 				RewindToBlock: 1,
 			},
 		},
@@ -229,8 +229,8 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 	var (
 		db    = rawdb.NewMemoryDatabase()
 		alloc = &GenesisAlloc{
-			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
-			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
+			{1}: {Balance: common.Big1, Storage: map[common.Hash]common.Hash{{1}: {1}}},
+			{2}: {Balance: common.Big2, Storage: map[common.Hash]common.Hash{{2}: {2}}},
 		}
 		hash, _ = alloc.hash(false)
 	)
@@ -266,28 +266,28 @@ func newDbConfig(scheme string) *trie.Config {
 func TestVerkleGenesisCommit(t *testing.T) {
 	var verkleTime uint64 = 0
 	verkleConfig := &params.ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:                       common.Big1,
+		HomesteadBlock:                common.Big0,
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
-		EIP150Block:                   big.NewInt(0),
-		EIP155Block:                   big.NewInt(0),
-		EIP158Block:                   big.NewInt(0),
-		ByzantiumBlock:                big.NewInt(0),
-		ConstantinopleBlock:           big.NewInt(0),
-		PetersburgBlock:               big.NewInt(0),
-		IstanbulBlock:                 big.NewInt(0),
-		MuirGlacierBlock:              big.NewInt(0),
-		BerlinBlock:                   big.NewInt(0),
-		LondonBlock:                   big.NewInt(0),
-		ArrowGlacierBlock:             big.NewInt(0),
-		GrayGlacierBlock:              big.NewInt(0),
+		EIP150Block:                   common.Big0,
+		EIP155Block:                   common.Big0,
+		EIP158Block:                   common.Big0,
+		ByzantiumBlock:                common.Big0,
+		ConstantinopleBlock:           common.Big0,
+		PetersburgBlock:               common.Big0,
+		IstanbulBlock:                 common.Big0,
+		MuirGlacierBlock:              common.Big0,
+		BerlinBlock:                   common.Big0,
+		LondonBlock:                   common.Big0,
+		ArrowGlacierBlock:             common.Big0,
+		GrayGlacierBlock:              common.Big0,
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  &verkleTime,
 		CancunTime:                    &verkleTime,
 		PragueTime:                    &verkleTime,
 		VerkleTime:                    &verkleTime,
-		TerminalTotalDifficulty:       big.NewInt(0),
+		TerminalTotalDifficulty:       common.Big0,
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        nil,
 		Clique:                        nil,
@@ -297,9 +297,9 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Config:     verkleConfig,
 		Timestamp:  verkleTime,
-		Difficulty: big.NewInt(0),
+		Difficulty: common.Big0,
 		Alloc: GenesisAlloc{
-			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+			{1}: {Balance: common.Big1, Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
 	}
 

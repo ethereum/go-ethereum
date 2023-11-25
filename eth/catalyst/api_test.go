@@ -78,20 +78,20 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		ExtraData:  []byte("test genesis"),
 		Timestamp:  9000,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Difficulty: big.NewInt(0),
+		Difficulty: common.Big0,
 	}
 	testNonce := uint64(0)
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
-		tx, _ := types.SignTx(types.NewTransaction(testNonce, common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"), big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(&config), testKey)
+		tx, _ := types.SignTx(types.NewTransaction(testNonce, common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"), common.Big1, params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(&config), testKey)
 		g.AddTx(tx)
 		testNonce++
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, n, generate)
 
 	if !merged {
-		totalDifficulty := big.NewInt(0)
+		totalDifficulty := common.Big0
 		for _, b := range blocks {
 			totalDifficulty.Add(totalDifficulty, b.Difficulty())
 		}
@@ -533,7 +533,7 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	// invalid ttd
 	api := NewConsensusAPI(ethservice)
 	config := engine.TransitionConfigurationV1{
-		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
+		TerminalTotalDifficulty: (*hexutil.Big)(common.Big0),
 		TerminalBlockHash:       common.Hash{},
 		TerminalBlockNumber:     0,
 	}
@@ -761,7 +761,7 @@ func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header, withdr
 // Can be used to make modified payloads look valid.
 func setBlockhash(data *engine.ExecutableData) *engine.ExecutableData {
 	txs, _ := decodeTransactions(data.Transactions)
-	number := big.NewInt(0)
+	number := common.Big0
 	number.SetUint64(data.Number)
 	header := &types.Header{
 		ParentHash:  data.ParentHash,

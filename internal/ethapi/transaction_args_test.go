@@ -53,7 +53,7 @@ func TestSetFeeDefaults(t *testing.T) {
 	var (
 		b        = newBackendMock()
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
-		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
+		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, common.Big2), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
 	)
 
@@ -215,18 +215,18 @@ type backendMock struct {
 func newBackendMock() *backendMock {
 	config := &params.ChainConfig{
 		ChainID:             big.NewInt(42),
-		HomesteadBlock:      big.NewInt(0),
+		HomesteadBlock:      common.Big0,
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
+		EIP150Block:         common.Big0,
+		EIP155Block:         common.Big0,
+		EIP158Block:         common.Big0,
+		ByzantiumBlock:      common.Big0,
+		ConstantinopleBlock: common.Big0,
+		PetersburgBlock:     common.Big0,
+		IstanbulBlock:       common.Big0,
+		MuirGlacierBlock:    common.Big0,
+		BerlinBlock:         common.Big0,
 		LondonBlock:         big.NewInt(1000),
 	}
 	return &backendMock{

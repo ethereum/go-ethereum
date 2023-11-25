@@ -66,8 +66,8 @@ var (
 
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 
-	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
-	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
+	diffInTurn = common.Big2 // Block difficulty for in-turn signatures
+	diffNoTurn = common.Big1 // Block difficulty for out-of-turn signatures
 )
 
 // Various error messages to mark blocks invalid. These should be private to

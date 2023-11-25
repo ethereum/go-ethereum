@@ -209,7 +209,7 @@ func (p *skeletonTestPeer) RequestReceipts([]common.Hash, chan *eth.Response) (*
 func TestSkeletonSyncInit(t *testing.T) {
 	// Create a few key headers
 	var (
-		genesis  = &types.Header{Number: big.NewInt(0)}
+		genesis  = &types.Header{Number: common.Big0}
 		block49  = &types.Header{Number: big.NewInt(49)}
 		block49B = &types.Header{Number: big.NewInt(49), Extra: []byte("B")}
 		block50  = &types.Header{Number: big.NewInt(50), ParentHash: block49.Hash()}
@@ -399,7 +399,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 func TestSkeletonSyncExtend(t *testing.T) {
 	// Create a few key headers
 	var (
-		genesis  = &types.Header{Number: big.NewInt(0)}
+		genesis  = &types.Header{Number: common.Big0}
 		block49  = &types.Header{Number: big.NewInt(49)}
 		block49B = &types.Header{Number: big.NewInt(49), Extra: []byte("B")}
 		block50  = &types.Header{Number: big.NewInt(50), ParentHash: block49.Hash()}
@@ -518,7 +518,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 
 	// Since skeleton headers don't need to be meaningful, beyond a parent hash
 	// progression, create a long fake chain to test with.
-	chain := []*types.Header{{Number: big.NewInt(0)}}
+	chain := []*types.Header{{Number: common.Big0}}
 	for i := 1; i < 10000; i++ {
 		chain = append(chain, &types.Header{
 			ParentHash: chain[i-1].Hash(),

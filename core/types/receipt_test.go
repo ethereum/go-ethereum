@@ -93,21 +93,21 @@ var (
 	txs = Transactions{
 		NewTx(&LegacyTx{
 			Nonce:    1,
-			Value:    big.NewInt(1),
+			Value:    common.Big1,
 			Gas:      1,
 			GasPrice: big.NewInt(11),
 		}),
 		NewTx(&LegacyTx{
 			To:       &to2,
 			Nonce:    2,
-			Value:    big.NewInt(2),
+			Value:    common.Big2,
 			Gas:      2,
 			GasPrice: big.NewInt(22),
 		}),
 		NewTx(&AccessListTx{
 			To:       &to3,
 			Nonce:    3,
-			Value:    big.NewInt(3),
+			Value:    common.Big3,
 			Gas:      3,
 			GasPrice: big.NewInt(33),
 		}),
@@ -151,7 +151,7 @@ var (
 		}),
 	}
 
-	blockNumber = big.NewInt(1)
+	blockNumber = common.Big1
 	blockTime   = uint64(2)
 	blockHash   = common.BytesToHash([]byte{0x03, 0x14})
 
@@ -508,7 +508,7 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.ContractAddress = common.Address{0xff, 0xff, 0x33}
 	cpy.GasUsed = 0xffffffff
 	cpy.Logs = clearComputedFieldsOnLogs(receipt.Logs)
-	cpy.EffectiveGasPrice = big.NewInt(0)
+	cpy.EffectiveGasPrice = common.Big0
 	cpy.BlobGasUsed = 0
 	cpy.BlobGasPrice = nil
 	return &cpy

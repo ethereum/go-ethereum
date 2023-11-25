@@ -18,7 +18,6 @@ package types
 
 import (
 	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -93,8 +92,8 @@ func BenchmarkBloom9Lookup(b *testing.B) {
 
 func BenchmarkCreateBloom(b *testing.B) {
 	var txs = Transactions{
-		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
-		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil),
+		NewContractCreation(1, common.Big1, 1, common.Big1, nil),
+		NewTransaction(2, common.HexToAddress("0x2"), common.Big2, 2, common.Big2, nil),
 	}
 	var rSmall = Receipts{
 		&Receipt{

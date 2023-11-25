@@ -76,7 +76,7 @@ func TestNewUnpacker(t *testing.T) {
 			[]interface{}{
 				[]byte{0x64, 0x61, 0x76, 0x65},
 				true,
-				[]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+				[]*big.Int{common.Big1, common.Big2, common.Big3},
 			},
 		}, {
 			`[{"type":"function","name":"send","inputs":[{"type":"uint256"}]}]`,

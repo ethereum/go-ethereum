@@ -107,7 +107,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			Config:    &config,
 			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
 			Alloc: map[common.Address]GenesisAccount{
-				addr: {Balance: big.NewInt(1)},
+				addr: {Balance: common.Big1},
 			},
 			BaseFee:    big.NewInt(params.InitialBaseFee),
 			Difficulty: new(big.Int),
@@ -122,7 +122,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 				header.ParentHash = blocks[i-1].Hash()
 			}
 			header.Extra = make([]byte, 32+crypto.SignatureLength)
-			header.Difficulty = big.NewInt(2)
+			header.Difficulty = common.Big2
 
 			sig, _ := crypto.Sign(engine.SealHash(header).Bytes(), key)
 			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)

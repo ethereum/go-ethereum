@@ -281,7 +281,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
-		context.Difficulty = big.NewInt(0)
+		context.Difficulty = common.Big0
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
@@ -357,7 +357,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	if t.json.Env.Random != nil {
 		// Post-Merge
 		genesis.Mixhash = common.BigToHash(t.json.Env.Random)
-		genesis.Difficulty = big.NewInt(0)
+		genesis.Difficulty = common.Big0
 	}
 	return genesis
 }

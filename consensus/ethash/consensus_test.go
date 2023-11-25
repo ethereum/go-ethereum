@@ -77,7 +77,7 @@ func TestCalcDifficulty(t *testing.T) {
 	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
 
 	for name, test := range tests {
-		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
+		number := new(big.Int).Sub(test.CurrentBlocknumber, common.Big1)
 		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
 			Number:     number,
 			Time:       test.ParentTimestamp,

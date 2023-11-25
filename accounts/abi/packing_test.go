@@ -70,7 +70,7 @@ var packUnpackTests = []packUnpackTest{
 	{
 		def:      `[{"type": "uint17"}]`,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000001",
-		unpacked: big.NewInt(1),
+		unpacked: common.Big1,
 	},
 	{
 		def:      `[{"type": "uint32"}]`,
@@ -100,12 +100,12 @@ var packUnpackTests = []packUnpackTest{
 	},
 	{
 		def:      `[{"type": "uint256"}]`,
-		unpacked: big.NewInt(2),
+		unpacked: common.Big2,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000002",
 	},
 	{
 		def:      `[{"type": "uint256[]"}]`,
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*big.Int{common.Big1, common.Big2},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
@@ -140,7 +140,7 @@ var packUnpackTests = []packUnpackTest{
 	{
 		def:      `[{"type": "int17"}]`,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000001",
-		unpacked: big.NewInt(1),
+		unpacked: common.Big1,
 	},
 	{
 		def:      `[{"type": "int32"}]`,
@@ -175,7 +175,7 @@ var packUnpackTests = []packUnpackTest{
 	},
 	{
 		def:      `[{"type": "int256"}]`,
-		unpacked: big.NewInt(2),
+		unpacked: common.Big2,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000002",
 	},
 	{
@@ -185,7 +185,7 @@ var packUnpackTests = []packUnpackTest{
 	},
 	{
 		def:      `[{"type": "int256[]"}]`,
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*big.Int{common.Big1, common.Big2},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
@@ -470,14 +470,14 @@ var packUnpackTests = []packUnpackTest{
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*big.Int{common.Big1, common.Big2},
 	},
 	{
 		def: `[{"type": "int256[3]"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000003",
-		unpacked: [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+		unpacked: [3]*big.Int{common.Big1, common.Big2, common.Big3},
 	},
 	// multi dimensional, if these pass, all types that don't require length prefix should pass
 	{
@@ -652,14 +652,14 @@ var packUnpackTests = []packUnpackTest{
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*big.Int{common.Big1, common.Big2},
 	},
 	{
 		def: `[{"type": "uint256[3]"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000003",
-		unpacked: [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+		unpacked: [3]*big.Int{common.Big1, common.Big2, common.Big3},
 	},
 	{
 		def: `[{"type": "string[4]"}]`,
@@ -718,7 +718,7 @@ var packUnpackTests = []packUnpackTest{
 			"00000000000000000000000000000000000000000000000000000000000000c8" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"00000000000000000000000000000000000000000000000000000000000003e8",
-		unpacked: [][][2]*big.Int{{{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}, {{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}},
+		unpacked: [][][2]*big.Int{{{common.Big1, big.NewInt(200)}, {common.Big1, big.NewInt(1000)}}, {{common.Big1, big.NewInt(200)}, {common.Big1, big.NewInt(1000)}}},
 	},
 	// struct outputs
 	{
@@ -728,28 +728,28 @@ var packUnpackTests = []packUnpackTest{
 		unpacked: struct {
 			Int1 *big.Int
 			Int2 *big.Int
-		}{big.NewInt(1), big.NewInt(2)},
+		}{common.Big1, common.Big2},
 	},
 	{
 		def:    `[{"components": [{"name":"int_one","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def:    `[{"components": [{"name":"int__one","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def:    `[{"components": [{"name":"int_one_","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def: `[{"components": [{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}], "type":"tuple"}]`,
@@ -758,7 +758,7 @@ var packUnpackTests = []packUnpackTest{
 		unpacked: struct {
 			IntOne *big.Int
 			Intone *big.Int
-		}{big.NewInt(1), big.NewInt(2)},
+		}{common.Big1, common.Big2},
 	},
 	{
 		def:      `[{"type": "string"}]`,
@@ -842,7 +842,7 @@ var packUnpackTests = []packUnpackTest{
 			C *big.Int
 			D bool
 			E [2][3][32]byte
-		}{1, big.NewInt(1), big.NewInt(-1), true, [2][3][32]byte{{{1}, {2}, {3}}, {{3}, {4}, {5}}}},
+		}{1, common.Big1, big.NewInt(-1), true, [2][3][32]byte{{{1}, {2}, {3}}, {{3}, {4}, {5}}}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" + // struct[a]
 			"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]
 			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" + // struct[c]
@@ -868,7 +868,7 @@ var packUnpackTests = []packUnpackTest{
 			D []string
 			E []*big.Int
 			F []common.Address
-		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{{1}, {2}}},
+		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{common.Big1, big.NewInt(-1)}, []common.Address{{1}, {2}}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
 			"00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]
@@ -909,8 +909,8 @@ var packUnpackTests = []packUnpackTest{
 			A: struct {
 				A *big.Int
 				B []*big.Int
-			}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}},
-			B: []*big.Int{big.NewInt(1), big.NewInt(2)}},
+			}{common.Big1, []*big.Int{common.Big1, common.Big2}},
+			B: []*big.Int{common.Big1, common.Big2}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
 			"0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 			"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset
@@ -932,8 +932,8 @@ var packUnpackTests = []packUnpackTest{
 			A *big.Int
 			B []*big.Int
 		}{
-			{big.NewInt(-1), []*big.Int{big.NewInt(1), big.NewInt(3)}},
-			{big.NewInt(1), []*big.Int{big.NewInt(2), big.NewInt(-1)}},
+			{big.NewInt(-1), []*big.Int{common.Big1, common.Big3}},
+			{common.Big1, []*big.Int{common.Big2, big.NewInt(-1)}},
 		},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" + // tuple length
@@ -958,8 +958,8 @@ var packUnpackTests = []packUnpackTest{
 			A *big.Int
 			B *big.Int
 		}{
-			{big.NewInt(-1), big.NewInt(1)},
-			{big.NewInt(1), big.NewInt(-1)},
+			{big.NewInt(-1), common.Big1},
+			{common.Big1, big.NewInt(-1)},
 		},
 		packed: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" + // tuple[0].a
 			"0000000000000000000000000000000000000000000000000000000000000001" + // tuple[0].b
@@ -972,8 +972,8 @@ var packUnpackTests = []packUnpackTest{
 		unpacked: [2]struct {
 			A []*big.Int
 		}{
-			{[]*big.Int{big.NewInt(-1), big.NewInt(1)}},
-			{[]*big.Int{big.NewInt(1), big.NewInt(-1)}},
+			{[]*big.Int{big.NewInt(-1), common.Big1}},
+			{[]*big.Int{common.Big1, big.NewInt(-1)}},
 		},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000040" + // tuple[0] offset

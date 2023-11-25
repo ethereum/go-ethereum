@@ -60,11 +60,11 @@ func TestSimulatedBackend(t *testing.T) {
 
 	// generate a transaction and confirm you can retrieve it
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	code := `6060604052600a8060106000396000f360606040526008565b00`
 	var gas uint64 = 3000000
-	tx := types.NewContractCreation(0, big.NewInt(0), gas, gasPrice, common.FromHex(code))
+	tx := types.NewContractCreation(0, common.Big0, gas, gasPrice, common.FromHex(code))
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, key)
 
 	err = sim.SendTransaction(context.Background(), tx)
@@ -165,7 +165,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 
 	// Create tx and send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -265,7 +265,7 @@ func TestBlockByNumber(t *testing.T) {
 		t.Errorf("did not get most recent block, instead got block number %v", block.NumberU64())
 	}
 
-	blockByNumber, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	blockByNumber, err := sim.BlockByNumber(bgCtx, common.Big1)
 	if err != nil {
 		t.Errorf("could not get block by number: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestNonceAt(t *testing.T) {
 	defer sim.Close()
 	bgCtx := context.Background()
 
-	nonce, err := sim.NonceAt(bgCtx, testAddr, big.NewInt(0))
+	nonce, err := sim.NonceAt(bgCtx, testAddr, common.Big0)
 	if err != nil {
 		t.Errorf("could not get nonce for test addr: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestNonceAt(t *testing.T) {
 
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(nonce, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -307,7 +307,7 @@ func TestNonceAt(t *testing.T) {
 	}
 	sim.Commit()
 
-	newNonce, err := sim.NonceAt(bgCtx, testAddr, big.NewInt(1))
+	newNonce, err := sim.NonceAt(bgCtx, testAddr, common.Big1)
 	if err != nil {
 		t.Errorf("could not get nonce for test addr: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestNonceAt(t *testing.T) {
 	// create some more blocks
 	sim.Commit()
 	// Check that we can get data for an older block/state
-	newNonce, err = sim.NonceAt(bgCtx, testAddr, big.NewInt(1))
+	newNonce, err = sim.NonceAt(bgCtx, testAddr, common.Big1)
 	if err != nil {
 		t.Fatalf("could not get nonce for test addr: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestSendTransaction(t *testing.T) {
 
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -351,7 +351,7 @@ func TestSendTransaction(t *testing.T) {
 	}
 	sim.Commit()
 
-	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	block, err := sim.BlockByNumber(bgCtx, common.Big1)
 	if err != nil {
 		t.Errorf("could not get block at height 1: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestTransactionByHash(t *testing.T) {
 
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -451,8 +451,8 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &addr,
 			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    big.NewInt(1),
+			GasPrice: common.Big0,
+			Value:    common.Big1,
 			Data:     nil,
 		}, params.TxGas, nil, nil},
 
@@ -460,8 +460,8 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
-			GasPrice: big.NewInt(0),
-			Value:    big.NewInt(1),
+			GasPrice: common.Big0,
+			Value:    common.Big1,
 			Data:     nil,
 		}, 0, errors.New("execution reverted"), nil},
 
@@ -469,7 +469,7 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    nil,
 			Data:     common.Hex2Bytes("d8b98391"),
 		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
@@ -478,7 +478,7 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    nil,
 			Data:     common.Hex2Bytes("aa8b1d30"),
 		}, 0, errors.New("execution reverted"), nil},
@@ -487,7 +487,7 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    nil,
 			Data:     common.Hex2Bytes("50f6fe34"),
 		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
@@ -496,7 +496,7 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    nil,
 			Data:     common.Hex2Bytes("b9b046f9"),
 		}, 0, errors.New("invalid opcode: INVALID"), nil},
@@ -505,7 +505,7 @@ func TestEstimateGas(t *testing.T) {
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    nil,
 			Data:     common.Hex2Bytes("e09fface"),
 		}, 21275, nil, nil},
@@ -552,7 +552,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
-			GasPrice: big.NewInt(0),
+			GasPrice: common.Big0,
 			Value:    big.NewInt(100000000000),
 			Data:     nil,
 		}, 21000, nil},
@@ -589,7 +589,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			To:        &addr,
 			Gas:       0,
 			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
-			GasTipCap: big.NewInt(1),
+			GasTipCap: common.Big1,
 			Value:     big.NewInt(1e17), // the remaining balance for fee is 2.1ether
 			Data:      nil,
 		}, params.TxGas, nil},
@@ -599,7 +599,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			To:        &addr,
 			Gas:       0,
 			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
-			GasTipCap: big.NewInt(1),
+			GasTipCap: common.Big1,
 			Value:     big.NewInt(1e17 + 1), // the remaining balance for fee is 2.1ether
 			Data:      nil,
 		}, params.TxGas, errors.New("gas required exceeds allowance (20999)")}, // 20999=(2.2ether-0.1ether-1wei)/(1e14)
@@ -669,7 +669,7 @@ func TestHeaderByNumber(t *testing.T) {
 		t.Errorf("could not get header for blockheight of 1: %v", err)
 	}
 
-	blockHeader, err := sim.HeaderByNumber(bgCtx, big.NewInt(1))
+	blockHeader, err := sim.HeaderByNumber(bgCtx, common.Big1)
 	if err != nil {
 		t.Errorf("could not get header for blockheight of 1: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestHeaderByNumber(t *testing.T) {
 		t.Errorf("did not get blockheader for block 1. instead got block %v", blockHeader.Number.Int64())
 	}
 
-	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	block, err := sim.BlockByNumber(bgCtx, common.Big1)
 	if err != nil {
 		t.Errorf("could not get block for blockheight of 1: %v", err)
 	}
@@ -712,7 +712,7 @@ func TestTransactionCount(t *testing.T) {
 	}
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -769,7 +769,7 @@ func TestTransactionInBlock(t *testing.T) {
 	}
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -827,7 +827,7 @@ func TestPendingNonceAt(t *testing.T) {
 
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -882,7 +882,7 @@ func TestTransactionReceipt(t *testing.T) {
 
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	tx := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, testKey)
@@ -1366,7 +1366,7 @@ func TestForkResendTx(t *testing.T) {
 	parent := sim.blockchain.CurrentBlock()
 	// 2.
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
@@ -1409,7 +1409,7 @@ func TestCommitReturnValue(t *testing.T) {
 
 	// Create a block in the original chain (containing a transaction to force different block hashes)
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, common.Big1)
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
 	sim.SendTransaction(context.Background(), tx)

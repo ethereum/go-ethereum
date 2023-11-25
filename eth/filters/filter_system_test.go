@@ -373,13 +373,13 @@ func TestLogFilterCreation(t *testing.T) {
 			// defaults
 			{FilterCriteria{}, true},
 			// valid block number range
-			{FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(2)}, true},
+			{FilterCriteria{FromBlock: common.Big1, ToBlock: common.Big2}, true},
 			// "mined" block range to pending
-			{FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, true},
+			{FilterCriteria{FromBlock: common.Big1, ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, true},
 			// new mined and pending blocks
 			{FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, true},
 			// from block "higher" than to block
-			{FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}, false},
+			{FilterCriteria{FromBlock: common.Big2, ToBlock: common.Big1}, false},
 			// from block "higher" than to block
 			{FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)}, false},
 			// from block "higher" than to block
@@ -468,7 +468,7 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 		api    = NewFilterAPI(sys, false)
 	)
 
-	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
+	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: common.Big2, ToBlock: common.Big1}); err != errInvalidBlockRange {
 		t.Errorf("Expected Logs for invalid range return error, but got: %v", err)
 	}
 }
@@ -522,13 +522,13 @@ func TestLogFilter(t *testing.T) {
 			// logs in the pending block
 			6: {FilterCriteria{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, allLogs[:2], ""},
 			// mined logs with block num >= 2 or pending logs
-			7: {FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, expectedCase7, ""},
+			7: {FilterCriteria{FromBlock: common.Big2, ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, expectedCase7, ""},
 			// all "mined" logs with block num >= 2
-			8: {FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, allLogs[3:], ""},
+			8: {FilterCriteria{FromBlock: common.Big2, ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, allLogs[3:], ""},
 			// all "mined" logs
 			9: {FilterCriteria{ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}, allLogs, ""},
 			// all "mined" logs with 1>= block num <=2 and topic secondTopic
-			10: {FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(2), Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
+			10: {FilterCriteria{FromBlock: common.Big1, ToBlock: common.Big2, Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
 			// all "mined" and pending logs with topic firstTopic
 			11: {FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), Topics: [][]common.Hash{{firstTopic}}}, expectedCase11, ""},
 			// match all logs due to wildcard topic
@@ -679,7 +679,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 			},
 			// match none due to only matching mined logs within a specific block range
 			{
-				ethereum.FilterQuery{FromBlock: big.NewInt(1), ToBlock: big.NewInt(2)},
+				ethereum.FilterQuery{FromBlock: common.Big1, ToBlock: common.Big2},
 				nil,
 				nil, nil, nil,
 			},
@@ -691,7 +691,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 			},
 			// match none due to matching logs from a specific block number to new mined blocks
 			{
-				ethereum.FilterQuery{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+				ethereum.FilterQuery{FromBlock: common.Big1, ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
 				nil,
 				nil, nil, nil,
 			},
@@ -810,11 +810,11 @@ func TestLightFilterLogs(t *testing.T) {
 			// match logs based on addresses and topics
 			3: {FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}}, allLogs[3:5], ""},
 			// all logs with block num >= 3
-			4: {FilterCriteria{FromBlock: big.NewInt(3), ToBlock: big.NewInt(5)}, allLogs[1:], ""},
+			4: {FilterCriteria{FromBlock: common.Big3, ToBlock: big.NewInt(5)}, allLogs[1:], ""},
 			// all logs
-			5: {FilterCriteria{FromBlock: big.NewInt(0), ToBlock: big.NewInt(5)}, allLogs, ""},
+			5: {FilterCriteria{FromBlock: common.Big0, ToBlock: big.NewInt(5)}, allLogs, ""},
 			// all logs with 1>= block num <=2 and topic secondTopic
-			6: {FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(3), Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
+			6: {FilterCriteria{FromBlock: common.Big2, ToBlock: common.Big3, Topics: [][]common.Hash{{secondTopic}}}, allLogs[3:4], ""},
 		}
 
 		key, _  = crypto.GenerateKey()

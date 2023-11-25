@@ -95,7 +95,7 @@ func benchRLP(b *testing.B, encode bool) {
 					GasPrice: big.NewInt(500),
 					Gas:      1000000,
 					To:       &to,
-					Value:    big.NewInt(1),
+					Value:    common.Big1,
 				}),
 		},
 		{
@@ -106,7 +106,7 @@ func benchRLP(b *testing.B, encode bool) {
 					GasPrice: big.NewInt(500),
 					Gas:      1000000,
 					To:       &to,
-					Value:    big.NewInt(1),
+					Value:    common.Big1,
 				}),
 		},
 		{
@@ -116,7 +116,7 @@ func benchRLP(b *testing.B, encode bool) {
 					Nonce:     1,
 					Gas:       1000000,
 					To:        &to,
-					Value:     big.NewInt(1),
+					Value:     common.Big1,
 					GasTipCap: big.NewInt(500),
 					GasFeeCap: big.NewInt(500),
 				}),

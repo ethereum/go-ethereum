@@ -136,7 +136,7 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	if payload.full != nil {
 		return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 	}
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	return engine.BlockToExecutableData(payload.empty, common.Big0, nil)
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
@@ -145,7 +145,7 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	return engine.BlockToExecutableData(payload.empty, common.Big0, nil)
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -48,19 +49,19 @@ func TestCheckCompatible(t *testing.T) {
 			headBlock: 3,
 			wantErr: &ConfigCompatError{
 				What:          "Homestead fork block",
-				StoredBlock:   big.NewInt(0),
+				StoredBlock:   common.Big0,
 				NewBlock:      nil,
 				RewindToBlock: 0,
 			},
 		},
 		{
 			stored:    AllEthashProtocolChanges,
-			new:       &ChainConfig{HomesteadBlock: big.NewInt(1)},
+			new:       &ChainConfig{HomesteadBlock: common.Big1},
 			headBlock: 3,
 			wantErr: &ConfigCompatError{
 				What:          "Homestead fork block",
-				StoredBlock:   big.NewInt(0),
-				NewBlock:      big.NewInt(1),
+				StoredBlock:   common.Big0,
+				NewBlock:      common.Big1,
 				RewindToBlock: 0,
 			},
 		},
@@ -125,15 +126,15 @@ func TestConfigRules(t *testing.T) {
 		ShanghaiTime: newUint64(500),
 	}
 	var stamp uint64
-	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
+	if r := c.Rules(common.Big0, true, stamp); r.IsShanghai {
 		t.Errorf("expected %v to not be shanghai", stamp)
 	}
 	stamp = 500
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+	if r := c.Rules(common.Big0, true, stamp); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", stamp)
 	}
 	stamp = math.MaxInt64
-	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+	if r := c.Rules(common.Big0, true, stamp); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", stamp)
 	}
 }

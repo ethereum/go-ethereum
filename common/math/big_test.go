@@ -31,16 +31,16 @@ func TestHexOrDecimal256(t *testing.T) {
 		num   *big.Int
 		ok    bool
 	}{
-		{"", big.NewInt(0), true},
-		{"0", big.NewInt(0), true},
-		{"0x0", big.NewInt(0), true},
+		{"", common.Big0, true},
+		{"0", common.Big0, true},
+		{"0x0", common.Big0, true},
 		{"12345678", big.NewInt(12345678), true},
 		{"0x12345678", big.NewInt(0x12345678), true},
 		{"0X12345678", big.NewInt(0x12345678), true},
 		// Tests for leading zero behaviour:
 		{"0123456789", big.NewInt(123456789), true}, // note: not octal
-		{"00", big.NewInt(0), true},
-		{"0x00", big.NewInt(0), true},
+		{"00", common.Big0, true},
+		{"0x00", common.Big0, true},
 		{"0x012345678abc", big.NewInt(0x12345678abc), true},
 		// Invalid syntax:
 		{"abcdef", nil, false},
@@ -105,9 +105,9 @@ func TestFirstBigSet(t *testing.T) {
 		num *big.Int
 		ix  int
 	}{
-		{big.NewInt(0), 0},
-		{big.NewInt(1), 0},
-		{big.NewInt(2), 1},
+		{common.Big0, 0},
+		{common.Big1, 0},
+		{common.Big2, 1},
 		{big.NewInt(0x100), 8},
 	}
 	for _, test := range tests {
@@ -123,8 +123,8 @@ func TestPaddedBigBytes(t *testing.T) {
 		n      int
 		result []byte
 	}{
-		{num: big.NewInt(0), n: 4, result: []byte{0, 0, 0, 0}},
-		{num: big.NewInt(1), n: 4, result: []byte{0, 0, 0, 1}},
+		{num: common.Big0, n: 4, result: []byte{0, 0, 0, 0}},
+		{num: common.Big1, n: 4, result: []byte{0, 0, 0, 1}},
 		{num: big.NewInt(512), n: 4, result: []byte{0, 0, 2, 0}},
 		{num: BigPow(2, 32), n: 4, result: []byte{1, 0, 0, 0, 0}},
 	}
@@ -194,15 +194,15 @@ func TestReadBits(t *testing.T) {
 
 func TestU256(t *testing.T) {
 	tests := []struct{ x, y *big.Int }{
-		{x: big.NewInt(0), y: big.NewInt(0)},
-		{x: big.NewInt(1), y: big.NewInt(1)},
+		{x: common.Big0, y: common.Big0},
+		{x: common.Big1, y: common.Big1},
 		{x: BigPow(2, 255), y: BigPow(2, 255)},
-		{x: BigPow(2, 256), y: big.NewInt(0)},
-		{x: new(big.Int).Add(BigPow(2, 256), big.NewInt(1)), y: big.NewInt(1)},
+		{x: BigPow(2, 256), y: common.Big0},
+		{x: new(big.Int).Add(BigPow(2, 256), common.Big1), y: common.Big1},
 		// negative values
-		{x: big.NewInt(-1), y: new(big.Int).Sub(BigPow(2, 256), big.NewInt(1))},
-		{x: big.NewInt(-2), y: new(big.Int).Sub(BigPow(2, 256), big.NewInt(2))},
-		{x: BigPow(2, -255), y: big.NewInt(1)},
+		{x: big.NewInt(-1), y: new(big.Int).Sub(BigPow(2, 256), common.Big1)},
+		{x: big.NewInt(-2), y: new(big.Int).Sub(BigPow(2, 256), common.Big2)},
+		{x: BigPow(2, -255), y: common.Big1},
 	}
 	for _, test := range tests {
 		if y := U256(new(big.Int).Set(test.x)); y.Cmp(test.y) != 0 {
@@ -215,7 +215,7 @@ func TestU256Bytes(t *testing.T) {
 	ubytes := make([]byte, 32)
 	ubytes[31] = 1
 
-	unsigned := U256Bytes(big.NewInt(1))
+	unsigned := U256Bytes(common.Big1)
 	if !bytes.Equal(unsigned, ubytes) {
 		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
@@ -280,23 +280,23 @@ func TestLittleEndianByteAt(t *testing.T) {
 
 func TestS256(t *testing.T) {
 	tests := []struct{ x, y *big.Int }{
-		{x: big.NewInt(0), y: big.NewInt(0)},
-		{x: big.NewInt(1), y: big.NewInt(1)},
-		{x: big.NewInt(2), y: big.NewInt(2)},
+		{x: common.Big0, y: common.Big0},
+		{x: common.Big1, y: common.Big1},
+		{x: common.Big2, y: common.Big2},
 		{
-			x: new(big.Int).Sub(BigPow(2, 255), big.NewInt(1)),
-			y: new(big.Int).Sub(BigPow(2, 255), big.NewInt(1)),
+			x: new(big.Int).Sub(BigPow(2, 255), common.Big1),
+			y: new(big.Int).Sub(BigPow(2, 255), common.Big1),
 		},
 		{
 			x: BigPow(2, 255),
 			y: new(big.Int).Neg(BigPow(2, 255)),
 		},
 		{
-			x: new(big.Int).Sub(BigPow(2, 256), big.NewInt(1)),
+			x: new(big.Int).Sub(BigPow(2, 256), common.Big1),
 			y: big.NewInt(-1),
 		},
 		{
-			x: new(big.Int).Sub(BigPow(2, 256), big.NewInt(2)),
+			x: new(big.Int).Sub(BigPow(2, 256), common.Big2),
 			y: big.NewInt(-2),
 		},
 	}
@@ -309,12 +309,12 @@ func TestS256(t *testing.T) {
 
 func TestExp(t *testing.T) {
 	tests := []struct{ base, exponent, result *big.Int }{
-		{base: big.NewInt(0), exponent: big.NewInt(0), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(0), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(1), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(2), result: big.NewInt(1)},
-		{base: big.NewInt(3), exponent: big.NewInt(144), result: MustParseBig256("507528786056415600719754159741696356908742250191663887263627442114881")},
-		{base: big.NewInt(2), exponent: big.NewInt(255), result: MustParseBig256("57896044618658097711785492504343953926634992332820282019728792003956564819968")},
+		{base: common.Big0, exponent: common.Big0, result: common.Big1},
+		{base: common.Big1, exponent: common.Big0, result: common.Big1},
+		{base: common.Big1, exponent: common.Big1, result: common.Big1},
+		{base: common.Big1, exponent: common.Big2, result: common.Big1},
+		{base: common.Big3, exponent: big.NewInt(144), result: MustParseBig256("507528786056415600719754159741696356908742250191663887263627442114881")},
+		{base: common.Big2, exponent: big.NewInt(255), result: MustParseBig256("57896044618658097711785492504343953926634992332820282019728792003956564819968")},
 	}
 	for _, test := range tests {
 		if result := Exp(test.base, test.exponent); result.Cmp(test.result) != 0 {

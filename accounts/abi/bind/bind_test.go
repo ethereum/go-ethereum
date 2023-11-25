@@ -364,7 +364,7 @@ var bindTests = []struct {
 
 			if str, num, _, err := getter.Getter(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if str != "Hi" || num.Cmp(big.NewInt(1)) != 0 {
+			} else if str != "Hi" || num.Cmp(common.Big1) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
 			}
 		`,
@@ -410,7 +410,7 @@ var bindTests = []struct {
 
 			if res, err := tupler.Tuple(nil); err != nil {
 				t.Fatalf("Failed to call structure retriever: %v", err)
-			} else if res.A != "Hi" || res.B.Cmp(big.NewInt(1)) != 0 {
+			} else if res.A != "Hi" || res.B.Cmp(common.Big1) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
@@ -1262,8 +1262,8 @@ var bindTests = []struct {
 			}
 
 			a := TupleS{
-				A: big.NewInt(1),
-				B: []*big.Int{big.NewInt(2), big.NewInt(3)},
+				A: common.Big1,
+				B: []*big.Int{common.Big2, common.Big3},
 				C: []TupleT{
 					{
 						X: big.NewInt(4),
@@ -1405,11 +1405,11 @@ var bindTests = []struct {
 			res, err := testContract.Add(&bind.CallOpts{
 				From: auth.From,
 				Pending: false,
-			}, big.NewInt(1), big.NewInt(2))
+			}, common.Big1, common.Big2)
 			if err != nil {
 				t.Fatalf("Failed to call linked contract: %v", err)
 			}
-			if res.Cmp(big.NewInt(3)) != 0 {
+			if res.Cmp(common.Big3) != 0 {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
@@ -1486,7 +1486,7 @@ var bindTests = []struct {
 				}
 			}
 		}()
-		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		contract.Foo(auth, common.Big1, common.Big2)
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1497,7 +1497,7 @@ var bindTests = []struct {
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
-		contract.Foo0(auth, big.NewInt(1))
+		contract.Foo0(auth, common.Big1)
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1685,7 +1685,7 @@ var bindTests = []struct {
 			}
 			if num, err := pav.ViewFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if num.Cmp(big.NewInt(1)) != 0 {
+			} else if num.Cmp(common.Big1) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
@@ -1838,10 +1838,10 @@ var bindTests = []struct {
 			}
 			var count int
 			for it.Next() {
-				if it.Event.S.A.Cmp(big.NewInt(1)) != 0 {
+				if it.Event.S.A.Cmp(common.Big1) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
-				if it.Event.S.B.Cmp(big.NewInt(2)) != 0 {
+				if it.Event.S.B.Cmp(common.Big2) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
 				count += 1

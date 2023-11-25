@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 )
@@ -541,8 +542,8 @@ var decodeTests = []decodeTest{
 	{input: "C0", ptr: new(string), error: "rlp: expected input string or byte for string"},
 
 	// big ints
-	{input: "80", ptr: new(*big.Int), value: big.NewInt(0)},
-	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
+	{input: "80", ptr: new(*big.Int), value: common.Big0},
+	{input: "01", ptr: new(*big.Int), value: common.Big1},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
 	{input: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001", ptr: new(*big.Int), value: veryVeryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
@@ -753,7 +754,7 @@ var decodeTests = []decodeTest{
 	{
 		input: "C20102",
 		ptr:   new(optionalBigIntField),
-		value: optionalBigIntField{A: 1, B: big.NewInt(2)},
+		value: optionalBigIntField{A: 1, B: common.Big2},
 	},
 	{
 		input: "C101",

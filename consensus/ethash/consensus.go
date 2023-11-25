@@ -260,7 +260,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return err
 	}
 	// Verify that the block number is parent's +1
-	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
+	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(common.Big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
 	if chain.Config().IsShanghai(header.Number, header.Time) {
@@ -318,8 +318,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	expDiffPeriod = big.NewInt(100000)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
+	big1          = common.Big1
+	big2          = common.Big2
 	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
@@ -541,7 +541,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	big8  = big.NewInt(8)
-	big32 = big.NewInt(32)
+	big32 = common.Big32
 )
 
 // AccumulateRewards credits the coinbase of the given block with the mining

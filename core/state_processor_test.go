@@ -47,20 +47,20 @@ func u64(val uint64) *uint64 { return &val }
 func TestStateProcessorErrors(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
-			ChainID:                       big.NewInt(1),
-			HomesteadBlock:                big.NewInt(0),
-			EIP150Block:                   big.NewInt(0),
-			EIP155Block:                   big.NewInt(0),
-			EIP158Block:                   big.NewInt(0),
-			ByzantiumBlock:                big.NewInt(0),
-			ConstantinopleBlock:           big.NewInt(0),
-			PetersburgBlock:               big.NewInt(0),
-			IstanbulBlock:                 big.NewInt(0),
-			MuirGlacierBlock:              big.NewInt(0),
-			BerlinBlock:                   big.NewInt(0),
-			LondonBlock:                   big.NewInt(0),
+			ChainID:                       common.Big1,
+			HomesteadBlock:                common.Big0,
+			EIP150Block:                   common.Big0,
+			EIP155Block:                   common.Big0,
+			EIP158Block:                   common.Big0,
+			ByzantiumBlock:                common.Big0,
+			ConstantinopleBlock:           common.Big0,
+			PetersburgBlock:               common.Big0,
+			IstanbulBlock:                 common.Big0,
+			MuirGlacierBlock:              common.Big0,
+			BerlinBlock:                   common.Big0,
+			LondonBlock:                   common.Big0,
 			Ethash:                        new(params.EthashConfig),
-			TerminalTotalDifficulty:       big.NewInt(0),
+			TerminalTotalDifficulty:       common.Big0,
 			TerminalTotalDifficultyPassed: true,
 			ShanghaiTime:                  new(uint64),
 			CancunTime:                    new(uint64),
@@ -80,7 +80,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			GasFeeCap: gasFeeCap,
 			Gas:       gasLimit,
 			To:        &to,
-			Value:     big.NewInt(0),
+			Value:     common.Big0,
 		}), signer, key1)
 		return tx
 	}
@@ -90,7 +90,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			GasTipCap: gasTipCap,
 			GasFeeCap: gasFeeCap,
 			Gas:       gasLimit,
-			Value:     big.NewInt(0),
+			Value:     common.Big0,
 			Data:      data,
 		}), signer, key1)
 		return tx
@@ -142,26 +142,26 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrNonceTooLow
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, params.TxGas, big.NewInt(875000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 1 [0x0026256b3939ed97e2c4a6f3fce8ecf83bdcfa6d507c47838c308a1fb0436f62]: nonce too low: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 0 state: 1",
 			},
 			{ // ErrNonceTooHigh
 				txs: []*types.Transaction{
-					makeTx(key1, 100, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(key1, 100, common.Address{}, common.Big0, params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xdebad714ca7f363bd0d8121c4518ad48fa469ca81b0a081be3d10c17460f751b]: nonce too high: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 100 state: 0",
 			},
 			{ // ErrNonceMax
 				txs: []*types.Transaction{
-					makeTx(key2, math.MaxUint64, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(875000000), nil),
+					makeTx(key2, math.MaxUint64, common.Address{}, common.Big0, params.TxGas, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0x84ea18d60eb2bb3b040e3add0eb72f757727122cc257dd858c67cb6591a85986]: nonce has max value: address 0xfd0810DD14796680f72adf1a371963d0745BCc64, nonce: 18446744073709551615",
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), 21000000, big.NewInt(875000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, 21000000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xbd49d8dadfd47fb846986695f7d4da3f7b2c48c8da82dbc211a26eb124883de9]: gas limit reached",
 			},
@@ -173,7 +173,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrInsufficientFunds
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(900000000000000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, params.TxGas, big.NewInt(900000000000000000), nil),
 				},
 				want: "could not apply tx 0 [0x4a69690c4b0cd85e64d0d9ea06302455b01e10a83db964d60281739752003440]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 18900000000000000000000",
 			},
@@ -183,37 +183,37 @@ func TestStateProcessorErrors(t *testing.T) {
 			// multiplication len(data) +gas_per_byte overflows uint64. Not testable at the moment
 			{ // ErrIntrinsicGas
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas-1000, big.NewInt(875000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, params.TxGas-1000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xcf3b049a0b516cb4f9274b3e2a264359e2ba53b2fb64b7bda2c634d5c9d01fca]: intrinsic gas too low: have 20000, want 21000",
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas*1000, big.NewInt(875000000), nil),
+					makeTx(key1, 0, common.Address{}, common.Big0, params.TxGas*1000, big.NewInt(875000000), nil),
 				},
 				want: "could not apply tx 0 [0xbd49d8dadfd47fb846986695f7d4da3f7b2c48c8da82dbc211a26eb124883de9]: gas limit reached",
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, common.Big0, common.Big0),
 				},
 				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0, baseFee: 875000000",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, common.Big1),
 				},
 				want: "could not apply tx 0 [0x15b8391b9981f266b32f3ab7da564bbeb3d6c21628364ea9b32a21139f89f712]: max priority fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas bit length: 257",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
+					mkDynamicTx(0, common.Address{}, params.TxGas, common.Big1, tooBigNumber),
 				},
 				want: "could not apply tx 0 [0x48bc299b83fdb345c57478f239e89814bb3063eb4e4b49f3b6057a69255c16bd]: max fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas bit length: 257",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, common.Big2, common.Big1),
 				},
 				want: "could not apply tx 0 [0xf987a31ff0c71895780a7612f965a0c8b056deb54e020bb44fa478092f14c9b4]: max priority fee per gas higher than max fee per gas: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas: 2, maxFeePerGas: 1",
 			},
@@ -224,7 +224,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				// This test is designed to have the effective cost be covered by the balance, but
 				// the extended requirement on FeeCap*gas < balance to fail
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(50000000000000)),
+					mkDynamicTx(0, common.Address{}, params.TxGas, common.Big1, big.NewInt(50000000000000)),
 				},
 				want: "could not apply tx 0 [0x413603cd096a87f41b1660d3ed3e27d62e1da78eac138961c0a1314ed43bd129]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 1050000000000000000",
 			},
@@ -248,7 +248,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrBlobFeeCapTooLow
 				txs: []*types.Transaction{
-					mkBlobTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1), big.NewInt(0), []common.Hash{(common.Hash{1})}),
+					mkBlobTx(0, common.Address{}, params.TxGas, common.Big1, common.Big1, common.Big0, []common.Hash{(common.Hash{1})}),
 				},
 				want: "could not apply tx 0 [0x6c11015985ce82db691d7b2d017acda296db88b811c3c60dc71449c76256c716]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 1, baseFee: 875000000",
 			},
@@ -270,16 +270,16 @@ func TestStateProcessorErrors(t *testing.T) {
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
 				Config: &params.ChainConfig{
-					ChainID:             big.NewInt(1),
-					HomesteadBlock:      big.NewInt(0),
-					EIP150Block:         big.NewInt(0),
-					EIP155Block:         big.NewInt(0),
-					EIP158Block:         big.NewInt(0),
-					ByzantiumBlock:      big.NewInt(0),
-					ConstantinopleBlock: big.NewInt(0),
-					PetersburgBlock:     big.NewInt(0),
-					IstanbulBlock:       big.NewInt(0),
-					MuirGlacierBlock:    big.NewInt(0),
+					ChainID:             common.Big1,
+					HomesteadBlock:      common.Big0,
+					EIP150Block:         common.Big0,
+					EIP155Block:         common.Big0,
+					EIP158Block:         common.Big0,
+					ByzantiumBlock:      common.Big0,
+					ConstantinopleBlock: common.Big0,
+					PetersburgBlock:     common.Big0,
+					IstanbulBlock:       common.Big0,
+					MuirGlacierBlock:    common.Big0,
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -297,7 +297,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrTxTypeNotSupported
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, common.Big0, common.Big0),
 				},
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 			},
@@ -336,7 +336,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrSenderNoEOA
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, common.Big0, common.Big0),
 				},
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
 			},
@@ -358,7 +358,7 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
-	difficulty := big.NewInt(0)
+	difficulty := common.Big0
 	if !config.TerminalTotalDifficultyPassed {
 		fakeChainReader := newChainMaker(nil, config, engine)
 		difficulty = engine.CalcDifficulty(fakeChainReader, parent.Time()+10, &types.Header{

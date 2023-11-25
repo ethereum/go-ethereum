@@ -403,7 +403,7 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	}
 	return EIP155Signer{
 		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainIdMul: new(big.Int).Mul(chainId, common.Big2),
 	}
 }
 
@@ -580,5 +580,5 @@ func deriveChainId(v *big.Int) *big.Int {
 		return new(big.Int).SetUint64((v - 35) / 2)
 	}
 	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
+	return v.Div(v, common.Big2)
 }

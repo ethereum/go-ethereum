@@ -352,8 +352,8 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		st = NewStackTrie(nil)
 	}
 	// Test with a larger trie
-	keyB := big.NewInt(1)
-	keyDelta := big.NewInt(1)
+	keyB := common.Big1
+	keyDelta := common.Big1
 	var vals [][]byte
 	getValue := func(i int) []byte {
 		if i%2 == 0 { // large

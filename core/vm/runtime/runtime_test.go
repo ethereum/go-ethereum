@@ -175,7 +175,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
-			ChainID:             big.NewInt(1),
+			ChainID:             common.Big1,
 			HomesteadBlock:      new(big.Int),
 			ByzantiumBlock:      new(big.Int),
 			ConstantinopleBlock: new(big.Int),
@@ -220,7 +220,7 @@ func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 		Time:       1000,
 		Nonce:      types.BlockNonce{0x1},
 		Extra:      []byte{},
-		Difficulty: big.NewInt(0),
+		Difficulty: common.Big0,
 		GasLimit:   100000,
 	}
 	return &header

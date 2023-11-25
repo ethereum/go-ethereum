@@ -72,8 +72,8 @@ func TestToFilterArg(t *testing.T) {
 			"without BlockHash",
 			ethereum.FilterQuery{
 				Addresses: addresses,
-				FromBlock: big.NewInt(1),
-				ToBlock:   big.NewInt(2),
+				FromBlock: common.Big1,
+				ToBlock:   common.Big2,
 				Topics:    [][]common.Hash{},
 			},
 			map[string]interface{}{
@@ -133,7 +133,7 @@ func TestToFilterArg(t *testing.T) {
 			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
-				FromBlock: big.NewInt(1),
+				FromBlock: common.Big1,
 				Topics:    [][]common.Hash{},
 			},
 			nil,
@@ -144,7 +144,7 @@ func TestToFilterArg(t *testing.T) {
 			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
-				ToBlock:   big.NewInt(1),
+				ToBlock:   common.Big1,
 				Topics:    [][]common.Hash{},
 			},
 			nil,
@@ -155,8 +155,8 @@ func TestToFilterArg(t *testing.T) {
 			ethereum.FilterQuery{
 				Addresses: addresses,
 				BlockHash: &blockHash,
-				FromBlock: big.NewInt(1),
-				ToBlock:   big.NewInt(2),
+				FromBlock: common.Big1,
+				ToBlock:   common.Big2,
 				Topics:    [][]common.Hash{},
 			},
 			nil,
@@ -302,11 +302,11 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 		wantErr error
 	}{
 		"genesis": {
-			block: big.NewInt(0),
+			block: common.Big0,
 			want:  chain[0].Header(),
 		},
 		"first_block": {
-			block: big.NewInt(1),
+			block: common.Big1,
 			want:  chain[1].Header(),
 		},
 		"future_block": {
@@ -326,7 +326,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 				t.Fatalf("HeaderByNumber(%v) error = %q, want %q", tt.block, err, tt.wantErr)
 			}
 			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
-				got.Number = big.NewInt(0) // hack to make DeepEqual work
+				got.Number = common.Big0 // hack to make DeepEqual work
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v)\n   = %v\nwant %v", tt.block, got, tt.want)
@@ -344,23 +344,23 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 	}{
 		"valid_account_genesis": {
 			account: testAddr,
-			block:   big.NewInt(0),
+			block:   common.Big0,
 			want:    testBalance,
 		},
 		"valid_account": {
 			account: testAddr,
-			block:   big.NewInt(1),
+			block:   common.Big1,
 			want:    testBalance,
 		},
 		"non_existent_account": {
 			account: common.Address{1},
-			block:   big.NewInt(1),
-			want:    big.NewInt(0),
+			block:   common.Big1,
+			want:    common.Big0,
 		},
 		"future_block": {
 			account: testAddr,
 			block:   big.NewInt(1000000000),
-			want:    big.NewInt(0),
+			want:    common.Big0,
 			wantErr: errors.New("header not found"),
 		},
 	}
@@ -504,12 +504,12 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	}
 
 	// FeeHistory
-	history, err := ec.FeeHistory(context.Background(), 1, big.NewInt(2), []float64{95, 99})
+	history, err := ec.FeeHistory(context.Background(), 1, common.Big2, []float64{95, 99})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	want := &ethereum.FeeHistory{
-		OldestBlock: big.NewInt(2),
+		OldestBlock: common.Big2,
 		Reward: [][]*big.Int{
 			{
 				big.NewInt(234375000),
@@ -535,7 +535,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 		From:  testAddr,
 		To:    &common.Address{},
 		Gas:   21000,
-		Value: big.NewInt(1),
+		Value: common.Big1,
 	}
 	gas, err := ec.EstimateGas(context.Background(), msg)
 	if err != nil {
@@ -544,7 +544,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 	if gas != 21000 {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
-	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
+	block, err := ec.HeaderByNumber(context.Background(), common.Big1)
 	if err != nil {
 		t.Fatalf("BlockByNumber error: %v", err)
 	}
@@ -562,7 +562,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		From:  testAddr,
 		To:    &common.Address{},
 		Gas:   21000,
-		Value: big.NewInt(1),
+		Value: common.Big1,
 	}
 	gas, err := ec.EstimateGas(context.Background(), msg)
 	if err != nil {
@@ -572,7 +572,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected gas price: %v", gas)
 	}
 	// CallContract
-	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
+	if _, err := ec.CallContract(context.Background(), msg, common.Big1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// PendingCallContract
@@ -584,7 +584,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func testAtFunctions(t *testing.T, client *rpc.Client) {
 	ec := NewClient(client)
 
-	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
+	block, err := ec.HeaderByNumber(context.Background(), common.Big1)
 	if err != nil {
 		t.Fatalf("BlockByNumber error: %v", err)
 	}
@@ -684,7 +684,7 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	ctx := context.Background()
 
 	// Retrieve testTx1 via RPC.
-	block2, err := ec.HeaderByNumber(ctx, big.NewInt(2))
+	block2, err := ec.HeaderByNumber(ctx, common.Big2)
 	if err != nil {
 		t.Fatal("can't get block 1:", err)
 	}
@@ -734,7 +734,7 @@ func sendTransaction(ec *Client) error {
 	tx, err := types.SignNewTx(testKey, signer, &types.LegacyTx{
 		Nonce:    nonce,
 		To:       &common.Address{2},
-		Value:    big.NewInt(1),
+		Value:    common.Big1,
 		Gas:      22000,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})

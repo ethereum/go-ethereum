@@ -142,7 +142,7 @@ func TestG1MultiplicativeProperties(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a := g.rand()
 		s1, s2, s3 := randScalar(q), randScalar(q), randScalar(q)
-		sone := big.NewInt(1)
+		sone := common.Big1
 		g.MulScalar(t0, zero, s1)
 		if !g.Equal(t0, zero) {
 			t.Fatal(" 0 ^ s == 0")
@@ -178,8 +178,8 @@ func TestG1MultiExpExpected(t *testing.T) {
 	one := g.one()
 	var scalars [2]*big.Int
 	var bases [2]*PointG1
-	scalars[0] = big.NewInt(2)
-	scalars[1] = big.NewInt(3)
+	scalars[0] = common.Big2
+	scalars[1] = common.Big3
 	bases[0], bases[1] = new(PointG1).Set(one), new(PointG1).Set(one)
 	expected, result := g.New(), g.New()
 	g.MulScalar(expected, one, big.NewInt(5))

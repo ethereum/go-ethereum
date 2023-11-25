@@ -195,7 +195,7 @@ func TestBadBlockStorage(t *testing.T) {
 
 	// Create a test block to move around the database and make sure it's really new
 	block := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(1),
+		Number:      common.Big1,
 		Extra:       []byte("bad block"),
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.EmptyTxsHash,
@@ -213,7 +213,7 @@ func TestBadBlockStorage(t *testing.T) {
 	}
 	// Write one more bad block
 	blockTwo := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(2),
+		Number:      common.Big2,
 		Extra:       []byte("bad block two"),
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.EmptyTxsHash,
@@ -344,8 +344,8 @@ func TestBlockReceiptStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a live block since we need metadata to reconstruct the receipt
-	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
-	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), common.Big1, 1, common.Big1, nil)
+	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), common.Big2, 2, common.Big2, nil)
 
 	body := &types.Body{Transactions: types.Transactions{tx1, tx2}}
 
@@ -443,7 +443,7 @@ func TestAncientStorage(t *testing.T) {
 
 	// Create a test block
 	block := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(0),
+		Number:      common.Big0,
 		Extra:       []byte("test block"),
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.EmptyTxsHash,
@@ -692,8 +692,8 @@ func TestReadLogs(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	// Create a live block since we need metadata to reconstruct the receipt
-	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
-	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), common.Big1, 1, common.Big1, nil)
+	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), common.Big2, 2, common.Big2, nil)
 
 	body := &types.Body{Transactions: types.Transactions{tx1, tx2}}
 
@@ -774,23 +774,23 @@ func TestDeriveLogFields(t *testing.T) {
 	txs := types.Transactions{
 		types.NewTx(&types.LegacyTx{
 			Nonce:    1,
-			Value:    big.NewInt(1),
+			Value:    common.Big1,
 			Gas:      1,
-			GasPrice: big.NewInt(1),
+			GasPrice: common.Big1,
 		}),
 		types.NewTx(&types.LegacyTx{
 			To:       &to2,
 			Nonce:    2,
-			Value:    big.NewInt(2),
+			Value:    common.Big2,
 			Gas:      2,
-			GasPrice: big.NewInt(2),
+			GasPrice: common.Big2,
 		}),
 		types.NewTx(&types.AccessListTx{
 			To:       &to3,
 			Nonce:    3,
-			Value:    big.NewInt(3),
+			Value:    common.Big3,
 			Gas:      3,
-			GasPrice: big.NewInt(3),
+			GasPrice: common.Big3,
 		}),
 	}
 	// Create the corresponding receipts
@@ -816,7 +816,7 @@ func TestDeriveLogFields(t *testing.T) {
 	}
 
 	// Derive log metadata fields
-	number := big.NewInt(1)
+	number := common.Big1
 	hash := common.BytesToHash([]byte{0x03, 0x14})
 	if err := deriveLogFields(receipts, hash, number.Uint64(), txs); err != nil {
 		t.Fatal(err)

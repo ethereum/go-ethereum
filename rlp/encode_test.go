@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 )
@@ -108,11 +109,11 @@ var encTests = []encTest{
 	{val: uint64(0xFFFFFFFFFFFFFFFF), output: "88FFFFFFFFFFFFFFFF"},
 
 	// big integers (should match uint for small values)
-	{val: big.NewInt(0), output: "80"},
-	{val: big.NewInt(1), output: "01"},
+	{val: common.Big0, output: "80"},
+	{val: common.Big1, output: "01"},
 	{val: big.NewInt(127), output: "7F"},
 	{val: big.NewInt(128), output: "8180"},
-	{val: big.NewInt(256), output: "820100"},
+	{val: common.Big256, output: "820100"},
 	{val: big.NewInt(1024), output: "820400"},
 	{val: big.NewInt(0xFFFFFF), output: "83FFFFFF"},
 	{val: big.NewInt(0xFFFFFFFF), output: "84FFFFFFFF"},
@@ -141,7 +142,7 @@ var encTests = []encTest{
 	},
 
 	// non-pointer big.Int
-	{val: *big.NewInt(0), output: "80"},
+	{val: *common.Big0, output: "80"},
 	{val: *big.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// negative ints are not supported

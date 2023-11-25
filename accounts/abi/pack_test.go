@@ -113,7 +113,7 @@ func TestMethodPack(t *testing.T) {
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
-	packed, err = abi.Pack("slice256", []*big.Int{big.NewInt(1), big.NewInt(2)})
+	packed, err = abi.Pack("slice256", []*big.Int{common.Big1, common.Big2})
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,7 +122,7 @@ func TestMethodPack(t *testing.T) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 
-	a := [2][2]*big.Int{{big.NewInt(1), big.NewInt(1)}, {big.NewInt(2), big.NewInt(0)}}
+	a := [2][2]*big.Int{{common.Big1, common.Big1}, {common.Big2, common.Big0}}
 	sig = abi.Methods["nestedArray"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)

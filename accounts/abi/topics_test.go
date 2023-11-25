@@ -55,7 +55,7 @@ func TestMakeTopics(t *testing.T) {
 		},
 		{
 			"support *big.Int types in topics",
-			args{[][]interface{}{{big.NewInt(1).Lsh(big.NewInt(2), 254)}}},
+			args{[][]interface{}{{common.Big1.Lsh(common.Big2, 254)}}},
 			[][]common.Hash{{common.Hash{128}}},
 			false,
 		},

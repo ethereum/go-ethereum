@@ -39,7 +39,7 @@ var (
 	emptyTx = NewTransaction(
 		0,
 		common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
-		big.NewInt(0), 0, big.NewInt(0),
+		common.Big0, 0, common.Big0,
 		nil,
 	)
 
@@ -48,7 +48,7 @@ var (
 		testAddr,
 		big.NewInt(10),
 		2000,
-		big.NewInt(1),
+		common.Big1,
 		common.FromHex("5544"),
 	).WithSignature(
 		HomesteadSigner{},
@@ -56,17 +56,17 @@ var (
 	)
 
 	emptyEip2718Tx = NewTx(&AccessListTx{
-		ChainID:  big.NewInt(1),
+		ChainID:  common.Big1,
 		Nonce:    3,
 		To:       &testAddr,
 		Value:    big.NewInt(10),
 		Gas:      25000,
-		GasPrice: big.NewInt(1),
+		GasPrice: common.Big1,
 		Data:     common.FromHex("5544"),
 	})
 
 	signedEip2718Tx, _ = emptyEip2718Tx.WithSignature(
-		NewEIP2930Signer(big.NewInt(1)),
+		NewEIP2930Signer(common.Big1),
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
@@ -102,7 +102,7 @@ func TestTransactionEncode(t *testing.T) {
 }
 
 func TestEIP2718TransactionSigHash(t *testing.T) {
-	s := NewEIP2930Signer(big.NewInt(1))
+	s := NewEIP2930Signer(common.Big1)
 	if s.Hash(emptyEip2718Tx) != common.HexToHash("49b486f0ec0a60dfbbca2d30cb07c9e8ffb2a2ff41f29a1ab6737475f6ff69f3") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", s.Hash(emptyEip2718Tx))
 	}
@@ -116,11 +116,11 @@ func TestEIP2930Signer(t *testing.T) {
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		keyAddr = crypto.PubkeyToAddress(key.PublicKey)
-		signer1 = NewEIP2930Signer(big.NewInt(1))
-		signer2 = NewEIP2930Signer(big.NewInt(2))
+		signer1 = NewEIP2930Signer(common.Big1)
+		signer2 = NewEIP2930Signer(common.Big2)
 		tx0     = NewTx(&AccessListTx{Nonce: 1})
-		tx1     = NewTx(&AccessListTx{ChainID: big.NewInt(1), Nonce: 1})
-		tx2, _  = SignNewTx(key, signer2, &AccessListTx{ChainID: big.NewInt(2), Nonce: 1})
+		tx1     = NewTx(&AccessListTx{ChainID: common.Big1, Nonce: 1})
+		tx2, _  = SignNewTx(key, signer2, &AccessListTx{ChainID: common.Big2, Nonce: 1})
 	)
 
 	tests := []struct {
@@ -278,7 +278,7 @@ func TestTransactionCoding(t *testing.T) {
 				Nonce:    i,
 				To:       &recipient,
 				Gas:      1,
-				GasPrice: big.NewInt(2),
+				GasPrice: common.Big2,
 				Data:     []byte("abcdef"),
 			}
 		case 1:
@@ -286,13 +286,13 @@ func TestTransactionCoding(t *testing.T) {
 			txdata = &LegacyTx{
 				Nonce:    i,
 				Gas:      1,
-				GasPrice: big.NewInt(2),
+				GasPrice: common.Big2,
 				Data:     []byte("abcdef"),
 			}
 		case 2:
 			// Tx with non-zero access list.
 			txdata = &AccessListTx{
-				ChainID:    big.NewInt(1),
+				ChainID:    common.Big1,
 				Nonce:      i,
 				To:         &recipient,
 				Gas:        123457,
@@ -303,7 +303,7 @@ func TestTransactionCoding(t *testing.T) {
 		case 3:
 			// Tx with empty access list.
 			txdata = &AccessListTx{
-				ChainID:  big.NewInt(1),
+				ChainID:  common.Big1,
 				Nonce:    i,
 				To:       &recipient,
 				Gas:      123457,
@@ -313,7 +313,7 @@ func TestTransactionCoding(t *testing.T) {
 		case 4:
 			// Contract creation with access list.
 			txdata = &AccessListTx{
-				ChainID:    big.NewInt(1),
+				ChainID:    common.Big1,
 				Nonce:      i,
 				Gas:        123457,
 				GasPrice:   big.NewInt(10),
@@ -402,7 +402,7 @@ func TestTransactionSizes(t *testing.T) {
 			GasPrice: big.NewInt(500),
 			Gas:      1000000,
 			To:       &to,
-			Value:    big.NewInt(1),
+			Value:    common.Big1,
 		},
 		&AccessListTx{
 			ChainID:  big.NewInt(123),
@@ -410,7 +410,7 @@ func TestTransactionSizes(t *testing.T) {
 			GasPrice: big.NewInt(500),
 			Gas:      1000000,
 			To:       &to,
-			Value:    big.NewInt(1),
+			Value:    common.Big1,
 			AccessList: AccessList{
 				AccessTuple{
 					Address:     common.HexToAddress("0x01"),
@@ -422,7 +422,7 @@ func TestTransactionSizes(t *testing.T) {
 			Nonce:     1,
 			Gas:       1000000,
 			To:        &to,
-			Value:     big.NewInt(1),
+			Value:     common.Big1,
 			GasTipCap: big.NewInt(500),
 			GasFeeCap: big.NewInt(500),
 		},

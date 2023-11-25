@@ -195,7 +195,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 			dad: {
 				Code:    []byte{byte(vm.PC), byte(vm.PC), byte(vm.SLOAD), byte(vm.SLOAD)},
 				Nonce:   0,
-				Balance: big.NewInt(0),
+				Balance: common.Big0,
 			},
 		},
 		BaseFee: big.NewInt(params.InitialBaseFee),
@@ -292,7 +292,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 					// LOG0(0, 0), LOG0(0, 0), RETURN(0, 0)
 					Code:    common.Hex2Bytes("60006000a060006000a060006000f3"),
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 			},
 		}

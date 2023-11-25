@@ -321,10 +321,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if b.header.Difficulty == nil {
 			if config.TerminalTotalDifficulty == nil {
 				// Clique chain
-				b.header.Difficulty = big.NewInt(2)
+				b.header.Difficulty = common.Big2
 			} else {
 				// Post-merge chain
-				b.header.Difficulty = big.NewInt(0)
+				b.header.Difficulty = common.Big0
 			}
 		}
 		// Mutate the state and block according to any hard-fork specs

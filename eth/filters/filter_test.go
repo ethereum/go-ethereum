@@ -113,7 +113,7 @@ func TestFilters(t *testing.T) {
 		// Sender account
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
-		signer  = types.NewLondonSigner(big.NewInt(1))
+		signer  = types.NewLondonSigner(common.Big1)
 		// Logging contract
 		contract  = common.Address{0xfe}
 		contract2 = common.Address{0xff}
@@ -165,9 +165,9 @@ func TestFilters(t *testing.T) {
 		gspec = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc: core.GenesisAlloc{
-				addr:      {Balance: big.NewInt(0).Mul(big.NewInt(100), big.NewInt(params.Ether))},
-				contract:  {Balance: big.NewInt(0), Code: bytecode},
-				contract2: {Balance: big.NewInt(0), Code: bytecode},
+				addr:      {Balance: common.Big0.Mul(big.NewInt(100), big.NewInt(params.Ether))},
+				contract:  {Balance: common.Big0, Code: bytecode},
+				contract2: {Balance: common.Big0, Code: bytecode},
 			},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}

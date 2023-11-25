@@ -151,7 +151,7 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
 	if creation {
-		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), common.Big0, testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
 		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
 	}
@@ -364,7 +364,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 	t.Parallel()
 	local := new(params.ChainConfig)
 	*local = *ethashChainConfig
-	local.TerminalTotalDifficulty = big.NewInt(0)
+	local.TerminalTotalDifficulty = common.Big0
 	testGetSealingWork(t, local, ethash.NewFaker())
 }
 

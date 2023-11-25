@@ -85,14 +85,14 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 		data := make([]byte, nbytes)
 		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
 		signer := gen.Signer()
-		gasPrice := big.NewInt(0)
+		gasPrice := common.Big0
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
 		tx, _ := types.SignNewTx(benchRootKey, signer, &types.LegacyTx{
 			Nonce:    gen.TxNonce(benchRootAddr),
 			To:       &toaddr,
-			Value:    big.NewInt(1),
+			Value:    common.Big1,
 			Gas:      gas,
 			Data:     data,
 			GasPrice: gasPrice,
@@ -124,7 +124,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
-		gasPrice := big.NewInt(0)
+		gasPrice := common.Big0
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
@@ -138,7 +138,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 			burn := new(big.Int).SetUint64(params.TxGas)
 			burn.Mul(burn, gen.header.BaseFee)
 			availableFunds.Sub(availableFunds, burn)
-			if availableFunds.Cmp(big.NewInt(1)) < 0 {
+			if availableFunds.Cmp(common.Big1) < 0 {
 				panic("not enough funds")
 			}
 			tx, err := types.SignNewTx(ringKeys[from], signer,
@@ -250,7 +250,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 			Coinbase:    common.Address{},
 			Number:      big.NewInt(int64(n)),
 			ParentHash:  hash,
-			Difficulty:  big.NewInt(1),
+			Difficulty:  common.Big1,
 			UncleHash:   types.EmptyUncleHash,
 			TxHash:      types.EmptyTxsHash,
 			ReceiptHash: types.EmptyReceiptsHash,

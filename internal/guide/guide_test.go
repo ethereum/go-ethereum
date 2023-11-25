@@ -23,7 +23,6 @@
 package guide
 
 import (
-	"math/big"
 	"path/filepath"
 	"testing"
 	"time"
@@ -70,8 +69,8 @@ func TestAccountManagement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
-	chain := big.NewInt(1)
+	tx := types.NewTransaction(0, common.Address{}, common.Big0, 0, common.Big0, nil)
+	chain := common.Big1
 
 	// Sign a transaction with a single authorization
 	if _, err := ks.SignTxWithPassphrase(signer, "Signer password", tx, chain); err != nil {

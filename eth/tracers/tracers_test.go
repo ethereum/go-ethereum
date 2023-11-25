@@ -72,7 +72,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = core.GenesisAccount{
 		Nonce:   1,
 		Code:    loop,
-		Balance: big.NewInt(1),
+		Balance: common.Big1,
 	}
 	alloc[from] = core.GenesisAccount{
 		Nonce:   1,

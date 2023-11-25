@@ -1281,7 +1281,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	if reset != nil {
 		pool.demoteUnexecutables()
 		if reset.newHead != nil {
-			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, common.Big1)) {
 				pendingBaseFee := eip1559.CalcBaseFee(pool.chainconfig, reset.newHead)
 				pool.priced.SetBaseFee(pendingBaseFee)
 			} else {

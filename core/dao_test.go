@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -29,9 +30,9 @@ import (
 // Tests that DAO-fork enabled clients can properly filter out fork-commencing
 // blocks based on their extradata fields.
 func TestDAOForkRangeExtradata(t *testing.T) {
-	forkBlock := big.NewInt(32)
+	forkBlock := common.Big32
 	chainConfig := *params.NonActivatedConfig
-	chainConfig.HomesteadBlock = big.NewInt(0)
+	chainConfig.HomesteadBlock = common.Big0
 
 	// Generate a common prefix for both pro-forkers and non-forkers
 	gspec := &Genesis{
@@ -43,7 +44,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Create the concurrent, conflicting two nodes
 	proDb := rawdb.NewMemoryDatabase()
 	proConf := *params.NonActivatedConfig
-	proConf.HomesteadBlock = big.NewInt(0)
+	proConf.HomesteadBlock = common.Big0
 	proConf.DAOForkBlock = forkBlock
 	proConf.DAOForkSupport = true
 	progspec := &Genesis{
@@ -55,7 +56,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 
 	conDb := rawdb.NewMemoryDatabase()
 	conConf := *params.NonActivatedConfig
-	conConf.HomesteadBlock = big.NewInt(0)
+	conConf.HomesteadBlock = common.Big0
 	conConf.DAOForkBlock = forkBlock
 	conConf.DAOForkSupport = false
 	congspec := &Genesis{

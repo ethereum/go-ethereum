@@ -36,7 +36,7 @@ func TestTransactionPriceNonceSortLegacy(t *testing.T) {
 
 func TestTransactionPriceNonceSort1559(t *testing.T) {
 	t.Parallel()
-	testTransactionPriceNonceSort(t, big.NewInt(0))
+	testTransactionPriceNonceSort(t, common.Big0)
 	testTransactionPriceNonceSort(t, big.NewInt(5))
 	testTransactionPriceNonceSort(t, big.NewInt(50))
 }
@@ -153,7 +153,7 @@ func TestTransactionTimeSort(t *testing.T) {
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
-		tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+		tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), 100, common.Big1, nil), signer, key)
 		tx.SetTime(time.Unix(0, int64(len(keys)-start)))
 
 		groups[addr] = append(groups[addr], &txpool.LazyTransaction{

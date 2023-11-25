@@ -19,6 +19,7 @@ package math
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
 
@@ -26,10 +27,10 @@ import (
 var (
 	tt255     = BigPow(2, 255)
 	tt256     = BigPow(2, 256)
-	tt256m1   = new(big.Int).Sub(tt256, big.NewInt(1))
+	tt256m1   = new(big.Int).Sub(tt256, common.Big1)
 	tt63      = BigPow(2, 63)
 	MaxBig256 = new(big.Int).Set(tt256m1)
-	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
+	MaxBig63  = new(big.Int).Sub(tt63, common.Big1)
 )
 
 const (
@@ -255,7 +256,7 @@ func S256(x *big.Int) *big.Int {
 //
 // Courtesy @karalabe and @chfast
 func Exp(base, exponent *big.Int) *big.Int {
-	result := big.NewInt(1)
+	result := common.Big1
 
 	for _, word := range exponent.Bits() {
 		for i := 0; i < wordBits; i++ {

@@ -73,7 +73,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 func newTestLightChain() *LightChain {
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
-		Difficulty: big.NewInt(1),
+		Difficulty: common.Big1,
 		Config:     params.TestChainConfig,
 	}
 	gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))

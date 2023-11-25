@@ -1580,9 +1580,9 @@ func testEIP155Transition(t *testing.T, scheme string) {
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
 			Config: &params.ChainConfig{
-				ChainID:        big.NewInt(1),
-				EIP150Block:    big.NewInt(0),
-				EIP155Block:    big.NewInt(2),
+				ChainID:        common.Big1,
+				EIP150Block:    common.Big0,
+				EIP155Block:    common.Big2,
 				HomesteadBlock: new(big.Int),
 			},
 			Alloc: GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
@@ -1654,9 +1654,9 @@ func testEIP155Transition(t *testing.T, scheme string) {
 
 	// generate an invalid chain id transaction
 	config := &params.ChainConfig{
-		ChainID:        big.NewInt(2),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(2),
+		ChainID:        common.Big2,
+		EIP150Block:    common.Big0,
+		EIP155Block:    common.Big2,
 		HomesteadBlock: new(big.Int),
 	}
 	blocks, _ = GenerateChain(config, blocks[len(blocks)-1], ethash.NewFaker(), genDb, 4, func(i int, block *BlockGen) {
@@ -1694,11 +1694,11 @@ func testEIP161AccountRemoval(t *testing.T, scheme string) {
 		theAddr = common.Address{1}
 		gspec   = &Genesis{
 			Config: &params.ChainConfig{
-				ChainID:        big.NewInt(1),
+				ChainID:        common.Big1,
 				HomesteadBlock: new(big.Int),
 				EIP155Block:    new(big.Int),
 				EIP150Block:    new(big.Int),
-				EIP158Block:    big.NewInt(2),
+				EIP158Block:    common.Big2,
 			},
 			Alloc: GenesisAlloc{address: {Balance: funds}},
 		}
@@ -2156,7 +2156,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		merger.FinalizePoS()
 
 		// Set the terminal total difficulty in the config
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+		gspec.Config.TerminalTotalDifficulty = common.Big0
 	}
 	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
@@ -2431,7 +2431,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	)
 	// Apply merging since genesis
 	if mergeHeight == 0 {
-		genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+		genesis.Config.TerminalTotalDifficulty = common.Big0
 		mergeBlock = uint64(0)
 	}
 
@@ -2781,7 +2781,7 @@ func TestTransactionIndices(t *testing.T) {
 	for _, l := range limit {
 		frdir := t.TempDir()
 		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
+		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), common.Big0)
 
 		l := l
 		chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
@@ -2804,7 +2804,7 @@ func TestTransactionIndices(t *testing.T) {
 	ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	defer ancientDb.Close()
 
-	rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
+	rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), common.Big0)
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
 	for _, l := range limit {
 		l := l
@@ -2920,7 +2920,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 				testBankAddress: {Balance: bankFunds},
 				common.HexToAddress("0xc0de"): {
 					Code:    []byte{0x60, 0x01, 0x50},
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				}, // push 1, pop
 			},
 			GasLimit: 100e6, // 100 M
@@ -2934,7 +2934,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 		for txi := 0; txi < numTxs; txi++ {
 			uniq := uint64(i*numTxs + txi)
 			recipient := recipientFn(uniq)
-			tx, err := types.SignTx(types.NewTransaction(uniq, recipient, big.NewInt(1), params.TxGas, block.header.BaseFee, nil), signer, testBankKey)
+			tx, err := types.SignTx(types.NewTransaction(uniq, recipient, common.Big1, params.TxGas, block.header.BaseFee, nil), signer, testBankKey)
 			if err != nil {
 				b.Error(err)
 			}
@@ -3101,7 +3101,7 @@ func testDeleteCreateRevert(t *testing.T, scheme string) {
 					// Code needs to just selfdestruct
 					Code:    []byte{byte(vm.PC), byte(vm.SELFDESTRUCT)},
 					Nonce:   1,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 				// The address 0xBBBB send 1 wei to 0xAAAA, then reverts
 				bb: {
@@ -3116,7 +3116,7 @@ func testDeleteCreateRevert(t *testing.T, scheme string) {
 						byte(vm.CALL),
 						byte(vm.REVERT),
 					},
-					Balance: big.NewInt(1),
+					Balance: common.Big1,
 				},
 			},
 		}
@@ -3126,11 +3126,11 @@ func testDeleteCreateRevert(t *testing.T, scheme string) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AAAA
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		// One transaction to BBBB
 		tx, _ = types.SignTx(types.NewTransaction(1, bb,
-			big.NewInt(0), 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -3225,13 +3225,13 @@ func testDeleteRecreateSlots(t *testing.T, scheme string) {
 				// Code needs to just selfdestruct
 				Code:    aaCode,
 				Nonce:   1,
-				Balance: big.NewInt(0),
+				Balance: common.Big0,
 				Storage: aaStorage,
 			},
 			// The contract BB recreates AA
 			bb: {
 				Code:    bbCode,
-				Balance: big.NewInt(1),
+				Balance: common.Big1,
 			},
 		},
 	}
@@ -3239,11 +3239,11 @@ func testDeleteRecreateSlots(t *testing.T, scheme string) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		// One transaction to BB, to recreate AA
 		tx, _ = types.SignTx(types.NewTransaction(1, bb,
-			big.NewInt(0), 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -3311,7 +3311,7 @@ func testDeleteRecreateAccount(t *testing.T, scheme string) {
 				// Code needs to just selfdestruct
 				Code:    aaCode,
 				Nonce:   1,
-				Balance: big.NewInt(0),
+				Balance: common.Big0,
 				Storage: aaStorage,
 			},
 		},
@@ -3321,11 +3321,11 @@ func testDeleteRecreateAccount(t *testing.T, scheme string) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to AA, to kill it
 		tx, _ := types.SignTx(types.NewTransaction(0, aa,
-			big.NewInt(0), 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		// One transaction to AA, to recreate it (but without storage
 		tx, _ = types.SignTx(types.NewTransaction(1, aa,
-			big.NewInt(1), 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big1, 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 	})
 	// Import the canonical chain
@@ -3432,13 +3432,13 @@ func testDeleteRecreateSlotsAcrossManyBlocks(t *testing.T, scheme string) {
 				// Code needs to just selfdestruct
 				Code:    aaCode,
 				Nonce:   1,
-				Balance: big.NewInt(0),
+				Balance: common.Big0,
 				Storage: aaStorage,
 			},
 			// The contract BB recreates AA
 			bb: {
 				Code:    bbCode,
-				Balance: big.NewInt(1),
+				Balance: common.Big1,
 			},
 		},
 	}
@@ -3457,7 +3457,7 @@ func testDeleteRecreateSlotsAcrossManyBlocks(t *testing.T, scheme string) {
 	var expectations []*expectation
 	var newDestruct = func(e *expectation, b *BlockGen) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, aa,
-			big.NewInt(0), 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 50000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		nonce++
 		if e.exist {
 			e.exist = false
@@ -3468,7 +3468,7 @@ func testDeleteRecreateSlotsAcrossManyBlocks(t *testing.T, scheme string) {
 	}
 	var newResurrect = func(e *expectation, b *BlockGen) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		nonce++
 		if !e.exist {
 			e.exist = true
@@ -3627,7 +3627,7 @@ func testInitThenFailCreateContract(t *testing.T, scheme string) {
 			// The contract BB tries to create code onto AA
 			bb: {
 				Code:    bbCode,
-				Balance: big.NewInt(1),
+				Balance: common.Big1,
 			},
 		},
 	}
@@ -3636,7 +3636,7 @@ func testInitThenFailCreateContract(t *testing.T, scheme string) {
 		b.SetCoinbase(common.Address{1})
 		// One transaction to BB
 		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+			common.Big0, 100000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
 		b.AddTx(tx)
 		nonce++
 	})
@@ -3706,7 +3706,7 @@ func testEIP2718Transition(t *testing.T, scheme string) {
 						byte(vm.SLOAD),
 					},
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 			},
 		}
@@ -3792,7 +3792,7 @@ func testEIP1559Transition(t *testing.T, scheme string) {
 						byte(vm.SLOAD),
 					},
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 			},
 		}
@@ -3817,7 +3817,7 @@ func testEIP1559Transition(t *testing.T, scheme string) {
 			To:         &aa,
 			Gas:        30000,
 			GasFeeCap:  newGwei(5),
-			GasTipCap:  big.NewInt(2),
+			GasTipCap:  common.Big2,
 			AccessList: accesses,
 			Data:       []byte{},
 		}
@@ -3950,7 +3950,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 
 	// Generate the side chain and import them
 	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
+		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, common.Big1, params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
@@ -4283,7 +4283,7 @@ func TestTxIndexer(t *testing.T) {
 	for _, c := range cases {
 		frdir := t.TempDir()
 		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
+		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), common.Big0)
 
 		// Index the initial blocks from ancient store
 		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA)
@@ -4314,9 +4314,9 @@ func TestCreateThenDeletePreByzantium(t *testing.T) {
 	// deliberate: we want to use pre-byz rules where we have intermediate state roots
 	// between transactions.
 	testCreateThenDelete(t, &params.ChainConfig{
-		ChainID:        big.NewInt(3),
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
+		ChainID:        common.Big3,
+		HomesteadBlock: common.Big0,
+		EIP150Block:    common.Big0,
 		EIP155Block:    big.NewInt(10),
 		EIP158Block:    big.NewInt(10),
 		ByzantiumBlock: big.NewInt(1_700_000),
@@ -4364,7 +4364,7 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 	nonce := uint64(0)
 	signer := types.HomesteadSigner{}
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
-		fee := big.NewInt(1)
+		fee := common.Big1
 		if b.header.BaseFee != nil {
 			fee = b.header.BaseFee
 		}
@@ -4450,7 +4450,7 @@ func TestDeleteThenCreate(t *testing.T) {
 	nonce := uint64(0)
 	signer := types.HomesteadSigner{}
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
-		fee := big.NewInt(1)
+		fee := common.Big1
 		if b.header.BaseFee != nil {
 			fee = b.header.BaseFee
 		}
@@ -4562,7 +4562,7 @@ func TestTransientStorageReset(t *testing.T) {
 	nonce := uint64(0)
 	signer := types.HomesteadSigner{}
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
-		fee := big.NewInt(1)
+		fee := common.Big1
 		if b.header.BaseFee != nil {
 			fee = b.header.BaseFee
 		}
@@ -4635,7 +4635,7 @@ func TestEIP3651(t *testing.T) {
 						byte(vm.SLOAD),
 					},
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 				// The address 0xBBBB calls 0xAAAA
 				bb: {
@@ -4651,7 +4651,7 @@ func TestEIP3651(t *testing.T) {
 						byte(vm.DELEGATECALL),
 					},
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: common.Big0,
 				},
 			},
 		}
@@ -4673,7 +4673,7 @@ func TestEIP3651(t *testing.T) {
 			To:         &bb,
 			Gas:        500000,
 			GasFeeCap:  newGwei(5),
-			GasTipCap:  big.NewInt(2),
+			GasTipCap:  common.Big2,
 			AccessList: nil,
 			Data:       []byte{},
 		}

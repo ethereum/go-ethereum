@@ -57,7 +57,7 @@ type vmContext struct {
 }
 
 func testCtx() *vmContext {
-	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
+	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: common.Big1}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
 func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
@@ -65,7 +65,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 		env             = vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Tracer: tracer})
 		gasLimit uint64 = 31000
 		startGas uint64 = 10000
-		value           = big.NewInt(0)
+		value           = common.Big0
 		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
@@ -180,11 +180,11 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: common.Big1}, vm.TxContext{GasPrice: common.Big1}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
+		Contract: vm.NewContract(&account{}, &account{}, common.Big0, 0),
 	}
-	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
+	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, common.Big0)
 	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
@@ -204,8 +204,8 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
-		tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
+		env := vm.NewEVM(vm.BlockContext{BlockNumber: common.Big1}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer})
+		tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 1000, common.Big0)
 		tracer.CaptureEnd(nil, 0, nil)
 		ret, err := tracer.GetResult()
 		if err != nil {
@@ -229,7 +229,7 @@ func TestNoStepExec(t *testing.T) {
 }
 
 func TestIsPrecompile(t *testing.T) {
-	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
+	chaincfg := &params.ChainConfig{ChainID: common.Big1, HomesteadBlock: common.Big0, DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: common.Big0, EIP155Block: common.Big0, EIP158Block: common.Big0, ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: common.Big0, PetersburgBlock: common.Big0, IstanbulBlock: big.NewInt(200), MuirGlacierBlock: common.Big0, BerlinBlock: big.NewInt(300), LondonBlock: common.Big0, TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
@@ -273,7 +273,7 @@ func TestEnterExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
+		Contract: vm.NewContract(&account{}, &account{}, common.Big0, 0),
 	}
 	tracer.CaptureEnter(vm.CALL, scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
 	tracer.CaptureExit([]byte{}, 400, nil)

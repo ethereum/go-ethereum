@@ -736,7 +736,7 @@ func TestCommitCopy(t *testing.T) {
 	// Copy the committed state database, the copied one is not functional.
 	state.Commit(0, true)
 	copied := state.Copy()
-	if balance := copied.GetBalance(addr); balance.Cmp(big.NewInt(0)) != 0 {
+	if balance := copied.GetBalance(addr); balance.Cmp(common.Big0) != 0 {
 		t.Fatalf("unexpected balance: have %v", balance)
 	}
 	if code := copied.GetCode(addr); code != nil {
@@ -766,7 +766,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
 
 	addr := common.BytesToAddress([]byte("so"))
-	state.SetBalance(addr, big.NewInt(1))
+	state.SetBalance(addr, common.Big1)
 
 	root, _ := state.Commit(0, false)
 	state, _ = New(root, state.db, state.snaps)
@@ -776,7 +776,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state.Finalise(true)
 
 	id := state.Snapshot()
-	state.SetBalance(addr, big.NewInt(2))
+	state.SetBalance(addr, common.Big2)
 	state.RevertToSnapshot(id)
 
 	// Commit the entire state and make sure we don't crash and have the correct state
@@ -818,7 +818,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 	state, _ := New(types.EmptyRootHash, db, nil)
 	addr := common.BytesToAddress([]byte("so"))
 	{
-		state.SetBalance(addr, big.NewInt(1))
+		state.SetBalance(addr, common.Big1)
 		state.SetCode(addr, []byte{1, 2, 3})
 		a2 := common.BytesToAddress([]byte("another"))
 		state.SetBalance(a2, big.NewInt(100))
@@ -846,7 +846,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		t.Errorf("expected %d, got %d", exp, got)
 	}
 	// Modify the state
-	state.SetBalance(addr, big.NewInt(2))
+	state.SetBalance(addr, common.Big2)
 	root, err := state.Commit(0, false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
@@ -1114,13 +1114,13 @@ func TestResetObject(t *testing.T) {
 		slotB    = common.HexToHash("0x2")
 	)
 	// Initialize account with balance and storage in first transaction.
-	state.SetBalance(addr, big.NewInt(1))
+	state.SetBalance(addr, common.Big1)
 	state.SetState(addr, slotA, common.BytesToHash([]byte{0x1}))
 	state.IntermediateRoot(true)
 
 	// Reset account and mutate balance and storages
 	state.CreateAccount(addr)
-	state.SetBalance(addr, big.NewInt(2))
+	state.SetBalance(addr, common.Big2)
 	state.SetState(addr, slotB, common.BytesToHash([]byte{0x2}))
 	root, _ := state.Commit(0, true)
 
@@ -1146,7 +1146,7 @@ func TestDeleteStorage(t *testing.T) {
 		addr     = common.HexToAddress("0x1")
 	)
 	// Initialize account and populate storage
-	state.SetBalance(addr, big.NewInt(1))
+	state.SetBalance(addr, common.Big1)
 	state.CreateAccount(addr)
 	for i := 0; i < 1000; i++ {
 		slot := common.Hash(uint256.NewInt(uint64(i)).Bytes32())

@@ -297,7 +297,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		var (
 			blockReward = big.NewInt(miningReward)
 			minerReward = new(big.Int).Set(blockReward)
-			perOmmer    = new(big.Int).Div(blockReward, big.NewInt(32))
+			perOmmer    = new(big.Int).Div(blockReward, common.Big32)
 		)
 		for _, ommer := range pre.Env.Ommers {
 			// Add 1/32th for each ommer included

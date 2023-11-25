@@ -269,7 +269,7 @@ func TestInternals(t *testing.T) {
 		origin    = common.HexToAddress("0x00000000000000000000000000000000feed")
 		txContext = vm.TxContext{
 			Origin:   origin,
-			GasPrice: big.NewInt(1),
+			GasPrice: common.Big1,
 		}
 		context = vm.BlockContext{
 			CanTransfer: core.CanTransfer,
@@ -382,11 +382,11 @@ func TestInternals(t *testing.T) {
 			msg := &core.Message{
 				To:                &to,
 				From:              origin,
-				Value:             big.NewInt(0),
+				Value:             common.Big0,
 				GasLimit:          80000,
-				GasPrice:          big.NewInt(0),
-				GasFeeCap:         big.NewInt(0),
-				GasTipCap:         big.NewInt(0),
+				GasPrice:          common.Big0,
+				GasFeeCap:         common.Big0,
+				GasTipCap:         common.Big0,
 				SkipAccountChecks: false,
 			}
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))

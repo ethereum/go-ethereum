@@ -3,7 +3,7 @@ package bls12381
 import (
 	"bytes"
 	"crypto/rand"
-	"math/big"
+	"github.com/ethereum/go-ethereum/common"
 	"testing"
 )
 
@@ -20,7 +20,7 @@ func TestFieldElementValidation(t *testing.T) {
 		t.Fatal("modulus must be invalid")
 	}
 	n := modulus.big()
-	n.Add(n, big.NewInt(1))
+	n.Add(n, common.Big1)
 	if new(fe).setBig(n).isValid() {
 		t.Fatal("number greater than modulus must be invalid")
 	}
@@ -114,14 +114,14 @@ func TestFieldElementHelpers(t *testing.T) {
 	if !one.isOne() {
 		t.Fatal("'one' is not one")
 	}
-	odd := new(fe).setBig(big.NewInt(1))
+	odd := new(fe).setBig(common.Big1)
 	if !odd.isOdd() {
 		t.Fatal("1 must be odd")
 	}
 	if odd.isEven() {
 		t.Fatal("1 must not be even")
 	}
-	even := new(fe).setBig(big.NewInt(2))
+	even := new(fe).setBig(common.Big2)
 	if !even.isEven() {
 		t.Fatal("2 must be even")
 	}

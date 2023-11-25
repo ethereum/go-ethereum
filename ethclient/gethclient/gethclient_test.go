@@ -84,7 +84,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		Alloc: core.GenesisAlloc{
 			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
 			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
-			testEmpty:    {Balance: big.NewInt(1)},
+			testEmpty:    {Balance: common.Big1},
 		},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
@@ -170,7 +170,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		To:       &common.Address{},
 		Gas:      21000,
 		GasPrice: big.NewInt(765625000),
-		Value:    big.NewInt(1),
+		Value:    common.Big1,
 	}
 	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
 	if err != nil {
@@ -191,7 +191,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		To:       nil,
 		Gas:      100000,
 		GasPrice: big.NewInt(1000000000),
-		Value:    big.NewInt(1),
+		Value:    common.Big1,
 		Data:     common.FromHex("0x608060806080608155fd"),
 	}
 	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
@@ -299,7 +299,7 @@ func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
 		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
 	}
 	// test balance
-	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+	if result.Balance.Cmp(common.Big0) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
 	}
 	// test storage
@@ -349,7 +349,7 @@ func testGetNodeInfo(t *testing.T, client *rpc.Client) {
 
 func testSetHead(t *testing.T, client *rpc.Client) {
 	ec := New(client)
-	err := ec.SetHead(context.Background(), big.NewInt(0))
+	err := ec.SetHead(context.Background(), common.Big0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(0, common.Address{1}, common.Big1, 22000, common.Big1, nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
@@ -401,7 +401,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Create transaction
-	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(1, common.Address{1}, common.Big1, 22000, common.Big1, nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
@@ -430,10 +430,10 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		To:       &common.Address{},
 		Gas:      21000,
 		GasPrice: big.NewInt(1000000000),
-		Value:    big.NewInt(1),
+		Value:    common.Big1,
 	}
 	// CallContract without override
-	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), nil); err != nil {
+	if _, err := ec.CallContract(context.Background(), msg, common.Big0, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// CallContract with override
@@ -442,7 +442,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 	mapAcc := make(map[common.Address]OverrideAccount)
 	mapAcc[testAddr] = override
-	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
+	if _, err := ec.CallContract(context.Background(), msg, common.Big0, &mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -463,7 +463,7 @@ func TestOverrideAccountMarshal(t *testing.T) {
 			// 'code', 'balance', 'state' should be set when input is
 			// a non-nil but empty value.
 			Code:    []byte{},
-			Balance: big.NewInt(0),
+			Balance: common.Big0,
 			State:   map[common.Hash]common.Hash{},
 			// For 'stateDiff' the behavior is different, empty map
 			// is ignored because it makes no difference.
@@ -514,8 +514,8 @@ func TestBlockOverridesMarshal(t *testing.T) {
 		},
 		{
 			bo: BlockOverrides{
-				Number:     big.NewInt(1),
-				Difficulty: big.NewInt(2),
+				Number:     common.Big1,
+				Difficulty: common.Big2,
 				Time:       3,
 				GasLimit:   4,
 				BaseFee:    big.NewInt(5),
@@ -540,7 +540,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 		To:       &common.Address{},
 		Gas:      50000,
 		GasPrice: big.NewInt(1000000000),
-		Value:    big.NewInt(1),
+		Value:    common.Big1,
 	}
 	override := OverrideAccount{
 		// Returns coinbase address.
@@ -548,7 +548,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	}
 	mapAcc := make(map[common.Address]OverrideAccount)
 	mapAcc[common.Address{}] = override
-	res, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc)
+	res, err := ec.CallContract(context.Background(), msg, common.Big0, &mapAcc)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -560,7 +560,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	bo := BlockOverrides{
 		Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
 	}
-	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, big.NewInt(0), &mapAcc, bo)
+	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, common.Big0, &mapAcc, bo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

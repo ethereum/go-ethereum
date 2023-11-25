@@ -200,7 +200,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	expectedReceivedMap := map[string]interface{}{
 		"name":   hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": common.Big1,
 		"memo":   []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
@@ -242,7 +242,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	expectedReceivedMap := map[string]interface{}{
 		"names":  hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": common.Big1,
 		"memo":   []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
@@ -267,7 +267,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 	expectedReceivedMap := map[string]interface{}{
 		"addresses": hash,
 		"sender":    common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount":    big.NewInt(1),
+		"amount":    common.Big1,
 		"memo":      []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
@@ -293,7 +293,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	expectedReceivedMap := map[string]interface{}{
 		"function": functionTy,
 		"sender":   common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount":   big.NewInt(1),
+		"amount":   common.Big1,
 		"memo":     []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)
@@ -315,7 +315,7 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 	expectedReceivedMap := map[string]interface{}{
 		"content": hash,
 		"sender":  common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount":  big.NewInt(1),
+		"amount":  common.Big1,
 		"memo":    []byte{88},
 	}
 	unpackAndCheck(t, bc, expectedReceivedMap, mockLog)

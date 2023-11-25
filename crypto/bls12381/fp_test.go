@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestFpSerialization(t *testing.T) {
@@ -363,11 +365,11 @@ func TestFpExponentiation(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
 		u := new(fe)
-		exp(u, a, big.NewInt(0))
+		exp(u, a, common.Big0)
 		if !u.isOne() {
 			t.Fatal("a^0 == 1")
 		}
-		exp(u, a, big.NewInt(1))
+		exp(u, a, common.Big1)
 		if !u.equal(a) {
 			t.Fatal("a^1 == a")
 		}
@@ -384,7 +386,7 @@ func TestFpExponentiation(t *testing.T) {
 		if !u.equal(a) {
 			t.Fatal("a^p == a")
 		}
-		exp(u, a, p.Sub(p, big.NewInt(1)))
+		exp(u, a, p.Sub(p, common.Big1))
 		if !u.isOne() {
 			t.Fatal("a^(p-1) == 1")
 		}
@@ -411,7 +413,7 @@ func TestFpInversion(t *testing.T) {
 		}
 		v := new(fe)
 		p := modulus.big()
-		exp(u, a, p.Sub(p, big.NewInt(2)))
+		exp(u, a, p.Sub(p, common.Big2))
 		inverse(v, a)
 		if !v.equal(u) {
 			t.Fatal("a^(p-2) == a^-1")
@@ -738,11 +740,11 @@ func TestFp2Exponentiation(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe2).rand(rand.Reader)
 		u := field.new()
-		field.exp(u, a, big.NewInt(0))
+		field.exp(u, a, common.Big0)
 		if !u.equal(field.one()) {
 			t.Fatal("a^0 == 1")
 		}
-		field.exp(u, a, big.NewInt(1))
+		field.exp(u, a, common.Big1)
 		if !u.equal(a) {
 			t.Fatal("a^1 == a")
 		}
@@ -1117,11 +1119,11 @@ func TestFp6Exponentiation(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe6).rand(rand.Reader)
 		u := field.new()
-		field.exp(u, a, big.NewInt(0))
+		field.exp(u, a, common.Big0)
 		if !u.equal(field.one()) {
 			t.Fatal("a^0 == 1")
 		}
-		field.exp(u, a, big.NewInt(1))
+		field.exp(u, a, common.Big1)
 		if !u.equal(a) {
 			t.Fatal("a^1 == a")
 		}
@@ -1340,11 +1342,11 @@ func TestFp12Exponentiation(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe12).rand(rand.Reader)
 		u := field.new()
-		field.exp(u, a, big.NewInt(0))
+		field.exp(u, a, common.Big0)
 		if !u.equal(field.one()) {
 			t.Fatal("a^0 == 1")
 		}
-		field.exp(u, a, big.NewInt(1))
+		field.exp(u, a, common.Big1)
 		if !u.equal(a) {
 			t.Fatal("a^1 == a")
 		}

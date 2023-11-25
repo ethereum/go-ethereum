@@ -2,6 +2,8 @@ package bn256
 
 import (
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var half = new(big.Int).Rsh(Order, 1)
@@ -110,6 +112,6 @@ func round(num, denom *big.Int) {
 	num.DivMod(num, denom, r)
 
 	if r.Cmp(half) == 1 {
-		num.Add(num, big.NewInt(1))
+		num.Add(num, common.Big1)
 	}
 }

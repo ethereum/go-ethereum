@@ -20,12 +20,13 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
 	mainnetChainConfig = params.ChainConfig{
-		ChainID:        big.NewInt(1),
+		ChainID:        common.Big1,
 		HomesteadBlock: big.NewInt(1150000),
 		DAOForkBlock:   big.NewInt(1920000),
 		DAOForkSupport: true,
@@ -36,11 +37,11 @@ var (
 	}
 
 	ropstenChainConfig = params.ChainConfig{
-		ChainID:                       big.NewInt(3),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:                       common.Big3,
+		HomesteadBlock:                common.Big0,
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                true,
-		EIP150Block:                   big.NewInt(0),
+		EIP150Block:                   common.Big0,
 		EIP155Block:                   big.NewInt(10),
 		EIP158Block:                   big.NewInt(10),
 		ByzantiumBlock:                big.NewInt(1_700_000),
@@ -74,27 +75,27 @@ func TestDifficulty(t *testing.T) {
 	dt.config("Frontier", params.ChainConfig{})
 
 	dt.config("Homestead", params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
+		HomesteadBlock: common.Big0,
 	})
 
 	dt.config("Byzantium", params.ChainConfig{
-		ByzantiumBlock: big.NewInt(0),
+		ByzantiumBlock: common.Big0,
 	})
 
 	dt.config("Frontier", ropstenChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
 	dt.config("Constantinople", params.ChainConfig{
-		ConstantinopleBlock: big.NewInt(0),
+		ConstantinopleBlock: common.Big0,
 	})
 	dt.config("EIP2384", params.ChainConfig{
-		MuirGlacierBlock: big.NewInt(0),
+		MuirGlacierBlock: common.Big0,
 	})
 	dt.config("EIP4345", params.ChainConfig{
-		ArrowGlacierBlock: big.NewInt(0),
+		ArrowGlacierBlock: common.Big0,
 	})
 	dt.config("EIP5133", params.ChainConfig{
-		GrayGlacierBlock: big.NewInt(0),
+		GrayGlacierBlock: common.Big0,
 	})
 	dt.config("difficulty.json", mainnetChainConfig)
 

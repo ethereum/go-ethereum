@@ -143,7 +143,7 @@ func TestCreateGas(t *testing.T) {
 			vmctx := BlockContext{
 				CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
 				Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
-				BlockNumber: big.NewInt(0),
+				BlockNumber: common.Big0,
 			}
 			config := Config{}
 			if tt.eip3860 {

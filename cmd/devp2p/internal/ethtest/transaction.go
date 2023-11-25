@@ -19,7 +19,6 @@ package ethtest
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -369,7 +368,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 
 func generateTx(chainConfig *params.ChainConfig, nonce uint64, gas uint64) *types.Transaction {
 	var to common.Address
-	tx := types.NewTransaction(nonce, to, big.NewInt(1), gas, big.NewInt(1), []byte{})
+	tx := types.NewTransaction(nonce, to, common.Big1, gas, common.Big1, []byte{})
 	return signWithFaucet(chainConfig, tx)
 }
 

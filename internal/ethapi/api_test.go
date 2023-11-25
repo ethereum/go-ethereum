@@ -152,7 +152,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				To:       nil,
 				Value:    big.NewInt(8),
 				Data:     []byte{0, 1, 2, 3, 4},
-				V:        big.NewInt(32),
+				V:        common.Big32,
 				R:        big.NewInt(10),
 				S:        big.NewInt(11),
 			},
@@ -190,7 +190,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 						StorageKeys: []common.Hash{types.EmptyRootHash},
 					},
 				},
-				V: big.NewInt(32),
+				V: common.Big32,
 				R: big.NewInt(10),
 				S: big.NewInt(11),
 			},
@@ -236,7 +236,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 						StorageKeys: []common.Hash{types.EmptyRootHash},
 					},
 				},
-				V: big.NewInt(32),
+				V: common.Big32,
 				R: big.NewInt(10),
 				S: big.NewInt(11),
 			},
@@ -283,7 +283,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 						StorageKeys: []common.Hash{types.EmptyRootHash},
 					},
 				},
-				V: big.NewInt(32),
+				V: common.Big32,
 				R: big.NewInt(10),
 				S: big.NewInt(11),
 			},
@@ -327,7 +327,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				Value:      big.NewInt(8),
 				Data:       []byte{0, 1, 2, 3, 4},
 				AccessList: types.AccessList{},
-				V:          big.NewInt(32),
+				V:          common.Big32,
 				R:          big.NewInt(10),
 				S:          big.NewInt(11),
 			},
@@ -440,7 +440,7 @@ func (b *testBackend) setPendingBlock(block *types.Block) {
 
 func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(0), nil
+	return common.Big0, nil
 }
 func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
@@ -534,7 +534,7 @@ func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if b.pending != nil && hash == b.pending.Hash() {
 		return nil
 	}
-	return big.NewInt(1)
+	return common.Big1
 }
 func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
@@ -660,7 +660,7 @@ func TestEstimateGas(t *testing.T) {
 			blockNumber: rpc.LatestBlockNumber,
 			call:        TransactionArgs{},
 			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(common.Big1, big.NewInt(params.Ether)))},
 			},
 			expectErr: nil,
 			want:      53000,
@@ -673,7 +673,7 @@ func TestEstimateGas(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(common.Big0)},
 			},
 			expectErr: core.ErrInsufficientFunds,
 		},
@@ -825,7 +825,7 @@ func TestCall(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(common.Big1, big.NewInt(params.Ether)))},
 			},
 			want: "0x",
 		},
@@ -1433,7 +1433,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 	)
 
 	// Set the terminal total difficulty in the config
-	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+	genesis.Config.TerminalTotalDifficulty = common.Big0
 	genesis.Config.TerminalTotalDifficultyPassed = true
 	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
@@ -1458,7 +1458,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
 			fee := big.NewInt(500)
 			fee.Add(fee, b.BaseFee())
-			tx, err = types.SignTx(types.NewTx(&types.DynamicFeeTx{Nonce: uint64(i), To: &contract, Gas: 60000, Value: big.NewInt(1), GasTipCap: big.NewInt(500), GasFeeCap: fee, Data: common.FromHex(data)}), signer, acc1Key)
+			tx, err = types.SignTx(types.NewTx(&types.DynamicFeeTx{Nonce: uint64(i), To: &contract, Gas: 60000, Value: common.Big1, GasTipCap: big.NewInt(500), GasFeeCap: fee, Data: common.FromHex(data)}), signer, acc1Key)
 		case 4:
 			// access list with contract create
 			accessList := types.AccessList{{

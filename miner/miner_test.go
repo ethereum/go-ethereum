@@ -278,18 +278,18 @@ func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address
 		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Difficulty: big.NewInt(1),
+		Difficulty: common.Big1,
 		Alloc: map[common.Address]core.GenesisAccount{
-			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
-			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
-			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
-			common.BytesToAddress([]byte{4}): {Balance: big.NewInt(1)}, // Identity
-			common.BytesToAddress([]byte{5}): {Balance: big.NewInt(1)}, // ModExp
-			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
-			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
-			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
-			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			common.BytesToAddress([]byte{1}): {Balance: common.Big1}, // ECRecover
+			common.BytesToAddress([]byte{2}): {Balance: common.Big1}, // SHA256
+			common.BytesToAddress([]byte{3}): {Balance: common.Big1}, // RIPEMD
+			common.BytesToAddress([]byte{4}): {Balance: common.Big1}, // Identity
+			common.BytesToAddress([]byte{5}): {Balance: common.Big1}, // ModExp
+			common.BytesToAddress([]byte{6}): {Balance: common.Big1}, // ECAdd
+			common.BytesToAddress([]byte{7}): {Balance: common.Big1}, // ECScalarMul
+			common.BytesToAddress([]byte{8}): {Balance: common.Big1}, // ECPairing
+			common.BytesToAddress([]byte{9}): {Balance: common.Big1}, // BLAKE2b
+			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), big.NewInt(9))},
 		},
 	}
 }

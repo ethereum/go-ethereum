@@ -181,7 +181,7 @@ func TestConstructor(t *testing.T) {
 		t.Error("Missing expected constructor")
 	}
 	// Test pack/unpack
-	packed, err := abi.Pack("", big.NewInt(1), big.NewInt(2))
+	packed, err := abi.Pack("", common.Big1, common.Big2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -190,10 +190,10 @@ func TestConstructor(t *testing.T) {
 		t.Error(err)
 	}
 
-	if !reflect.DeepEqual(unpacked[0], big.NewInt(1)) {
+	if !reflect.DeepEqual(unpacked[0], common.Big1) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
-	if !reflect.DeepEqual(unpacked[1], big.NewInt(2)) {
+	if !reflect.DeepEqual(unpacked[1], common.Big2) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
 }
@@ -483,7 +483,7 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 
 	// test string, fixed array uint256[2]
 	strin := "hello world"
-	arrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	arrin := [2]*big.Int{common.Big1, common.Big2}
 	fixedArrStrPack, err := abi.Pack("fixedArrStr", strin, arrin)
 	if err != nil {
 		t.Error(err)
@@ -509,7 +509,7 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 
 	// test byte array, fixed array uint256[2]
 	bytesin := []byte(strin)
-	arrin = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	arrin = [2]*big.Int{common.Big1, common.Big2}
 	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesin, arrin)
 	if err != nil {
 		t.Error(err)
@@ -535,8 +535,8 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 
 	// test string, fixed array uint256[2], dynamic array uint256[]
 	strin = "hello world"
-	fixedarrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	dynarrin := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	fixedarrin := [2]*big.Int{common.Big1, common.Big2}
+	dynarrin := []*big.Int{common.Big1, common.Big2, common.Big3}
 	mixedArrStrPack, err := abi.Pack("mixedArrStr", strin, fixedarrin, dynarrin)
 	if err != nil {
 		t.Error(err)
@@ -574,8 +574,8 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 
 	// test string, fixed array uint256[2], fixed array uint256[3]
 	strin = "hello world"
-	fixedarrin1 := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedarrin2 := [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	fixedarrin1 := [2]*big.Int{common.Big1, common.Big2}
+	fixedarrin2 := [3]*big.Int{common.Big1, common.Big2, common.Big3}
 	doubleFixedArrStrPack, err := abi.Pack("doubleFixedArrStr", strin, fixedarrin1, fixedarrin2)
 	if err != nil {
 		t.Error(err)
@@ -607,9 +607,9 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 
 	// test string, fixed array uint256[2], dynamic array uint256[], fixed array uint256[3]
 	strin = "hello world"
-	fixedarrin1 = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
-	dynarrin = []*big.Int{big.NewInt(1), big.NewInt(2)}
-	fixedarrin2 = [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	fixedarrin1 = [2]*big.Int{common.Big1, common.Big2}
+	dynarrin = []*big.Int{common.Big1, common.Big2}
+	fixedarrin2 = [3]*big.Int{common.Big1, common.Big2, common.Big3}
 	multipleMixedArrStrPack, err := abi.Pack("multipleMixedArrStr", strin, fixedarrin1, dynarrin, fixedarrin2)
 	if err != nil {
 		t.Error(err)
@@ -795,7 +795,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 	receivedMap := map[string]interface{}{}
 	expectedReceivedMap := map[string]interface{}{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": common.Big1,
 		"memo":   []byte{88},
 	}
 	if err := abi.UnpackIntoMap(receivedMap, "received", data); err != nil {
@@ -858,7 +858,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	if len(sendMap) != 1 {
 		t.Error("unpacked `send` map expected to have length 1")
 	}
-	if sendMap["amount"].(*big.Int).Cmp(big.NewInt(1)) != 0 {
+	if sendMap["amount"].(*big.Int).Cmp(common.Big1) != 0 {
 		t.Error("unpacked `send` map expected `amount` value of 1")
 	}
 
@@ -939,7 +939,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	}
 	expectedReceivedMap := map[string]interface{}{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": common.Big1,
 		"memo":   []byte{88},
 	}
 	if err = abi.UnpackIntoMap(receivedMap, "Received", data); err != nil {

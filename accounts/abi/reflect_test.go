@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type reflectTest struct {
@@ -210,52 +212,52 @@ func TestConvertType(t *testing.T) {
 		Tag:  "json:\"" + "y" + "\"",
 	})
 	val := reflect.New(reflect.StructOf(fields))
-	val.Elem().Field(0).Set(reflect.ValueOf(big.NewInt(1)))
-	val.Elem().Field(1).Set(reflect.ValueOf(big.NewInt(2)))
+	val.Elem().Field(0).Set(reflect.ValueOf(common.Big1))
+	val.Elem().Field(1).Set(reflect.ValueOf(common.Big2))
 	// ConvertType
 	out := *ConvertType(val.Interface(), new(T)).(*T)
-	if out.X.Cmp(big.NewInt(1)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out.X, big.NewInt(1))
+	if out.X.Cmp(common.Big1) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out.X, common.Big1)
 	}
-	if out.Y.Cmp(big.NewInt(2)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out.Y, big.NewInt(2))
+	if out.Y.Cmp(common.Big2) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out.Y, common.Big2)
 	}
 	// Slice Type
 	val2 := reflect.MakeSlice(reflect.SliceOf(reflect.StructOf(fields)), 2, 2)
-	val2.Index(0).Field(0).Set(reflect.ValueOf(big.NewInt(1)))
-	val2.Index(0).Field(1).Set(reflect.ValueOf(big.NewInt(2)))
-	val2.Index(1).Field(0).Set(reflect.ValueOf(big.NewInt(3)))
+	val2.Index(0).Field(0).Set(reflect.ValueOf(common.Big1))
+	val2.Index(0).Field(1).Set(reflect.ValueOf(common.Big2))
+	val2.Index(1).Field(0).Set(reflect.ValueOf(common.Big3))
 	val2.Index(1).Field(1).Set(reflect.ValueOf(big.NewInt(4)))
 	out2 := *ConvertType(val2.Interface(), new([]T)).(*[]T)
-	if out2[0].X.Cmp(big.NewInt(1)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
+	if out2[0].X.Cmp(common.Big1) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, common.Big1)
 	}
-	if out2[0].Y.Cmp(big.NewInt(2)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
+	if out2[0].Y.Cmp(common.Big2) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, common.Big2)
 	}
-	if out2[1].X.Cmp(big.NewInt(3)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
+	if out2[1].X.Cmp(common.Big3) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, common.Big1)
 	}
 	if out2[1].Y.Cmp(big.NewInt(4)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, common.Big2)
 	}
 	// Array Type
 	val3 := reflect.New(reflect.ArrayOf(2, reflect.StructOf(fields)))
-	val3.Elem().Index(0).Field(0).Set(reflect.ValueOf(big.NewInt(1)))
-	val3.Elem().Index(0).Field(1).Set(reflect.ValueOf(big.NewInt(2)))
-	val3.Elem().Index(1).Field(0).Set(reflect.ValueOf(big.NewInt(3)))
+	val3.Elem().Index(0).Field(0).Set(reflect.ValueOf(common.Big1))
+	val3.Elem().Index(0).Field(1).Set(reflect.ValueOf(common.Big2))
+	val3.Elem().Index(1).Field(0).Set(reflect.ValueOf(common.Big3))
 	val3.Elem().Index(1).Field(1).Set(reflect.ValueOf(big.NewInt(4)))
 	out3 := *ConvertType(val3.Interface(), new([2]T)).(*[2]T)
-	if out3[0].X.Cmp(big.NewInt(1)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
+	if out3[0].X.Cmp(common.Big1) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, common.Big1)
 	}
-	if out3[0].Y.Cmp(big.NewInt(2)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
+	if out3[0].Y.Cmp(common.Big2) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, common.Big2)
 	}
-	if out3[1].X.Cmp(big.NewInt(3)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
+	if out3[1].X.Cmp(common.Big3) != 0 {
+		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, common.Big1)
 	}
 	if out3[1].Y.Cmp(big.NewInt(4)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, common.Big2)
 	}
 }

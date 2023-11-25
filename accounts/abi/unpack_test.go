@@ -133,7 +133,7 @@ var unpackTests = []unpackTest{
 		want: struct {
 			IntOne *big.Int
 			Intone *big.Int
-		}{IntOne: big.NewInt(1)},
+		}{IntOne: common.Big1},
 	},
 	{
 		def: `[{"name":"int_one","type":"int256"},{"name":"IntOne","type":"int256"}]`,
@@ -186,21 +186,21 @@ var unpackTests = []unpackTest{
 		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
 		want: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def: `[{"name":"int__one","type":"int256"}]`,
 		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
 		want: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def: `[{"name":"int_one_","type":"int256"}]`,
 		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
 		want: struct {
 			IntOne *big.Int
-		}{big.NewInt(1)},
+		}{common.Big1},
 	},
 	{
 		def:  `[{"type":"bool"}]`,
@@ -307,7 +307,7 @@ type methodMultiOutput struct {
 func methodMultiReturn(require *require.Assertions) (ABI, []byte, methodMultiOutput) {
 	const definition = `[
 	{ "name" : "multi", "type": "function", "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
-	var expected = methodMultiOutput{big.NewInt(1), "hello"}
+	var expected = methodMultiOutput{common.Big1, "hello"}
 
 	abi, err := JSON(strings.NewReader(definition))
 	require.NoError(err)
@@ -572,7 +572,7 @@ func TestUnmarshal(t *testing.T) {
 		t.Error(err)
 	}
 
-	if Int == nil || Int.Cmp(big.NewInt(1)) != 0 {
+	if Int == nil || Int.Cmp(common.Big1) != 0 {
 		t.Error("expected Int to be 1 got", Int)
 	}
 
@@ -696,9 +696,9 @@ func TestUnmarshal(t *testing.T) {
 		t.Error(err)
 	}
 	var testAgainstIntArray [3]*big.Int
-	testAgainstIntArray[0] = big.NewInt(1)
-	testAgainstIntArray[1] = big.NewInt(2)
-	testAgainstIntArray[2] = big.NewInt(3)
+	testAgainstIntArray[0] = common.Big1
+	testAgainstIntArray[1] = common.Big2
+	testAgainstIntArray[2] = common.Big3
 
 	for i, Int := range intArray {
 		if Int.Cmp(testAgainstIntArray[i]) != 0 {
@@ -798,7 +798,7 @@ func TestUnpackTuple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	} else {
-		if ret0.Result.A.Cmp(big.NewInt(1)) != 0 {
+		if ret0.Result.A.Cmp(common.Big1) != 0 {
 			t.Errorf("unexpected value unpacked: want %x, got %x", 1, ret0.Result.A)
 		}
 		if ret0.Result.B.Cmp(big.NewInt(-1)) != 0 {
@@ -853,17 +853,17 @@ func TestUnpackTuple(t *testing.T) {
 	var ret Ret
 	var expected = Ret{
 		FieldS: S{
-			A: big.NewInt(1),
-			B: []*big.Int{big.NewInt(1), big.NewInt(2)},
+			A: common.Big1,
+			B: []*big.Int{common.Big1, common.Big2},
 			C: []T{
-				{big.NewInt(1), big.NewInt(2)},
-				{big.NewInt(2), big.NewInt(1)},
+				{common.Big1, common.Big2},
+				{common.Big2, common.Big1},
 			},
 		},
 		FieldT: T{
-			big.NewInt(0), big.NewInt(1),
+			common.Big0, common.Big1,
 		},
-		A: big.NewInt(1),
+		A: common.Big1,
 	}
 
 	err = abi.UnpackIntoInterface(&ret, "tuple", buff.Bytes())
@@ -959,7 +959,7 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 	if !ok {
 		panic("bug")
 	}
-	maxU64Plus1 := new(big.Int).Add(maxU64, big.NewInt(1))
+	maxU64Plus1 := new(big.Int).Add(maxU64, common.Big1)
 	cases := []struct {
 		decodeType  string
 		inputValue  *big.Int
@@ -1066,12 +1066,12 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 		},
 		{
 			decodeType: "int64",
-			inputValue: new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)),
+			inputValue: new(big.Int).Add(big.NewInt(math.MaxInt64), common.Big1),
 			err:        errBadInt64,
 		},
 		{
 			decodeType: "int64",
-			inputValue: new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
+			inputValue: new(big.Int).Sub(big.NewInt(math.MinInt64), common.Big1),
 			err:        errBadInt64,
 		},
 		{

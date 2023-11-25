@@ -315,7 +315,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.relay.NewHead(pool.head, m, r)
 
 	// Update fork indicator by next pending block number
-	next := new(big.Int).Add(head.Number, big.NewInt(1))
+	next := new(big.Int).Add(head.Number, common.Big1)
 	pool.istanbul = pool.config.IsIstanbul(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
 	pool.shanghai = pool.config.IsShanghai(next, uint64(time.Now().Unix()))

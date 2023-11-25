@@ -506,7 +506,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			},
 			config: &TraceCallConfig{
 				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(common.Big1, big.NewInt(params.Ether)))},
 				},
 			},
 			want: `{"gas":21000,"failed":false,"returnValue":""}`,

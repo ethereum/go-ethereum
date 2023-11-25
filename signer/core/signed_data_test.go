@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"path"
 	"strings"
@@ -857,7 +856,7 @@ func TestGnosisSafe(t *testing.T) {
 	if bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
 		t.Fatal("expected inequality")
 	}
-	gnosisTx.ChainId = (*math.HexOrDecimal256)(big.NewInt(1))
+	gnosisTx.ChainId = (*math.HexOrDecimal256)(common.Big1)
 	sighash, _, _ = apitypes.TypedDataAndHash(gnosisTx.ToTypedData())
 	if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
 		t.Fatal("expected equality")

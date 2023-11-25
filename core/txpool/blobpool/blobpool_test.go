@@ -98,16 +98,16 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	// The base fee at 5714 ETH translates into the 21000 base gas higher than
 	// mainnet ether existence, use that as a cap for the tests.
 	var (
-		blockNumber = new(big.Int).Add(bc.config.LondonBlock, big.NewInt(1))
+		blockNumber = new(big.Int).Add(bc.config.LondonBlock, common.Big1)
 		blockTime   = *bc.config.CancunTime + 1
 		gasLimit    = uint64(30_000_000)
 	)
 	lo := new(big.Int)
 	hi := new(big.Int).Mul(big.NewInt(5714), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 
-	for new(big.Int).Add(lo, big.NewInt(1)).Cmp(hi) != 0 {
+	for new(big.Int).Add(lo, common.Big1).Cmp(hi) != 0 {
 		mid := new(big.Int).Add(lo, hi)
-		mid.Div(mid, big.NewInt(2))
+		mid.Div(mid, common.Big2)
 
 		if eip1559.CalcBaseFee(bc.config, &types.Header{
 			Number:   blockNumber,
@@ -125,11 +125,11 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	// The excess blob gas at 2^27 translates into a blob fee higher than mainnet
 	// ether existence, use that as a cap for the tests.
 	lo = new(big.Int)
-	hi = new(big.Int).Exp(big.NewInt(2), big.NewInt(27), nil)
+	hi = new(big.Int).Exp(common.Big2, big.NewInt(27), nil)
 
-	for new(big.Int).Add(lo, big.NewInt(1)).Cmp(hi) != 0 {
+	for new(big.Int).Add(lo, common.Big1).Cmp(hi) != 0 {
 		mid := new(big.Int).Add(lo, hi)
-		mid.Div(mid, big.NewInt(2))
+		mid.Div(mid, common.Big2)
 
 		if eip4844.CalcBlobFee(mid.Uint64()).Cmp(bc.blobfee.ToBig()) > 0 {
 			hi = mid
@@ -150,7 +150,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 
 func (bc *testBlockChain) CurrentFinalBlock() *types.Header {
 	return &types.Header{
-		Number: big.NewInt(0),
+		Number: common.Big0,
 	}
 }
 
@@ -532,7 +532,7 @@ func TestOpenDrops(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(common.Big1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -647,7 +647,7 @@ func TestOpenIndex(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(common.Big1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -749,7 +749,7 @@ func TestOpenHeap(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(common.Big1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -829,7 +829,7 @@ func TestOpenCap(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage, Datacap: datacap}, chain)
-		if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		if err := pool.Init(common.Big1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -1231,7 +1231,7 @@ func TestAdd(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain)
-		if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		if err := pool.Init(common.Big1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
