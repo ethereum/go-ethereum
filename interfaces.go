@@ -29,8 +29,6 @@ import (
 // NotFound is returned by API methods if the requested item does not exist.
 var NotFound = errors.New("not found")
 
-// TODO: move subscription to package event
-
 // Subscription represents an event subscription where events are
 // delivered on a data channel.
 type Subscription interface {
