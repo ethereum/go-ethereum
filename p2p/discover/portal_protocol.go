@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/tetratelabs/wabin/leb128"
 	"go.uber.org/zap"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -54,6 +56,35 @@ const (
 
 	defaultUTPReadTimeout = 60 * time.Second
 )
+
+const (
+	TransientOfferRequestKind byte = 0x01
+	PersistOfferRequestKind   byte = 0x02
+)
+
+type ContentElement struct {
+	Node        enode.ID
+	ContentKeys [][]byte
+	Contents    [][]byte
+}
+
+type ContentEntry struct {
+	ContentKey []byte
+	Content    []byte
+}
+
+type TransientOfferRequest struct {
+	Contents []*ContentEntry
+}
+
+type PersistOfferRequest struct {
+	ContentKeys [][]byte
+}
+
+type OfferRequest struct {
+	Kind    byte
+	Request interface{}
+}
 
 type PortalProtocolConfig struct {
 	BootstrapNodes []*enode.Node
@@ -100,9 +131,11 @@ type PortalProtocol struct {
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
 	storage        Storage
+
+	contentQueue chan *ContentElement
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage, contentQueue chan *ContentElement) (*PortalProtocol, error) {
 	nodeDB, err := enode.OpenDB(config.NodeDBPath)
 	if err != nil {
 		return nil, err
@@ -126,6 +159,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		localNode:      localNode,
 		validSchemes:   enode.ValidSchemes,
 		storage:        storage,
+		contentQueue:   contentQueue,
 	}
 
 	return protocol, nil
@@ -331,6 +365,152 @@ func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte,
 	return p.processContent(node, talkResp)
 }
 
+func (p *PortalProtocol) offer(node *enode.Node, offerRequest *OfferRequest) ([]byte, error) {
+	contentKeys := getContentKeys(offerRequest)
+
+	offer := &portalwire.Offer{
+		ContentKeys: contentKeys,
+	}
+
+	p.log.Trace("Sending offer request", "offer", offer)
+	offerBytes, err := offer.MarshalSSZ()
+	if err != nil {
+		p.log.Error("failed to marshal offer request", "err", err)
+		return nil, err
+	}
+
+	talkRequestBytes := make([]byte, 0, len(offerBytes)+1)
+	talkRequestBytes = append(talkRequestBytes, portalwire.OFFER)
+	talkRequestBytes = append(talkRequestBytes, offerBytes...)
+
+	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
+	if err != nil {
+		p.log.Error("failed to send offer request", "err", err)
+		return nil, err
+	}
+
+	return p.processOffer(node, talkResp, offerRequest)
+}
+
+func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *OfferRequest) ([]byte, error) {
+	var err error
+	if resp[0] != portalwire.ACCEPT {
+		return nil, fmt.Errorf("invalid accept response")
+	}
+
+	accept := &portalwire.Accept{}
+	err = accept.UnmarshalSSZ(resp[1:])
+	if err != nil {
+		return nil, err
+	}
+
+	p.log.Trace("Received accept response", "id", target.ID(), "accept", accept)
+
+	var contentKeyLen int
+	if request.Kind == TransientOfferRequestKind {
+		contentKeyLen = len(request.Request.(*TransientOfferRequest).Contents)
+	} else {
+		contentKeyLen = len(request.Request.(*PersistOfferRequest).ContentKeys)
+	}
+
+	contentKeyBitlist := bitfield.Bitlist(accept.ContentKeys)
+	if int(contentKeyBitlist.Count()) != contentKeyLen {
+		return nil, fmt.Errorf("accepted content key bitlist has invalid size, expected %d, got %d", contentKeyLen, contentKeyBitlist.Len())
+	}
+
+	if contentKeyBitlist.Count() == 0 {
+		return nil, nil
+	}
+
+	connId := binary.BigEndian.Uint16(accept.ConnectionId[:])
+	go func(ctx context.Context) {
+		var conn net.Conn
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				contents := make([][]byte, 0, contentKeyBitlist.Count())
+				var content []byte
+				if request.Kind == TransientOfferRequestKind {
+					for _, index := range contentKeyBitlist.BitIndices() {
+						content = request.Request.(*TransientOfferRequest).Contents[index].Content
+						contents = append(contents, content)
+					}
+				} else {
+					for _, index := range contentKeyBitlist.BitIndices() {
+						contentKey := request.Request.(*PersistOfferRequest).ContentKeys[index]
+						contentId := p.storage.ContentId(contentKey)
+						if contentId != nil {
+							content, err = p.storage.Get(contentKey, contentId)
+							if err != nil {
+								p.log.Error("failed to get content from storage", "err", err)
+								contents = append(contents, []byte{})
+							} else {
+								contents = append(contents, content)
+							}
+						} else {
+							contents = append(contents, []byte{})
+						}
+					}
+				}
+
+				var contentsPayload []byte
+				contentsPayload, err = encodeContents(contents)
+				if err != nil {
+					p.log.Error("failed to encode contents", "err", err)
+					return
+				}
+
+				connctx, conncancel := context.WithTimeout(ctx, defaultUTPConnectTimeout)
+				laddr := p.utp.Addr().(*utp.Addr)
+				raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
+				conn, err = utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+
+				if err != nil {
+					conncancel()
+					p.log.Error("failed to dial utp connection", "err", err)
+					return
+				}
+				conncancel()
+
+				err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
+				if err != nil {
+					p.log.Error("failed to set write deadline", "err", err)
+					err = conn.Close()
+					if err != nil {
+						p.log.Error("failed to close utp connection", "err", err)
+						return
+					}
+
+					return
+				}
+
+				var written int
+				written, err = conn.Write(contentsPayload)
+				if err != nil {
+					p.log.Error("failed to write to utp connection", "err", err)
+					err = conn.Close()
+					if err != nil {
+						p.log.Error("failed to close utp connection", "err", err)
+						return
+					}
+					return
+				}
+				p.log.Trace("Sent content response", "id", target.ID(), "contents", contents, "size", written)
+				err = conn.Close()
+				if err != nil {
+					p.log.Error("failed to close utp connection", "err", err)
+					return
+				}
+				return
+			}
+		}
+	}(p.closeCtx)
+
+	return accept.ContentKeys, nil
+}
+
 func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, interface{}, error) {
 	if resp[0] != portalwire.CONTENT {
 		return 0xff, nil, fmt.Errorf("invalid content response")
@@ -354,7 +534,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.log.Trace("Received content response", "id", target.ID(), "connIdMsg", connIdMsg)
-		connctx, conncancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
+		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
@@ -373,18 +553,18 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		data := make([]byte, 0)
 		buf := make([]byte, 1024)
 		for {
-			var n int
-			n, err = conn.Read(buf)
+			var read int
+			read, err = conn.Read(buf)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
-					p.log.Trace("Received content response", "id", target.ID(), "data", data, "size", n)
+					p.log.Trace("Received content response", "id", target.ID(), "data", data, "size", read)
 					return resp[1], data, nil
 				}
 
 				p.log.Error("failed to read from utp connection", "err", err)
 				return 0xff, nil, err
 			}
-			data = append(data, buf[:n]...)
+			data = append(data, buf[:read]...)
 		}
 	case portalwire.ContentEnrsSelector:
 		enrs := &portalwire.Enrs{}
@@ -712,34 +892,56 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		connId := connIdGen.GenCid(id, false)
 		connIdSend := connId.SendId()
 
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
-			var conn *utp.Conn
-			conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
-			defer func(conn *utp.Conn) {
-				err = conn.Close()
-				if err != nil {
-					p.log.Error("failed to close utp connection", "err", err)
-				}
-			}(conn)
-			if err != nil {
-				p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
-				cancel()
-				return
-			}
-			cancel()
+		go func(bctx context.Context) {
+			for {
+				select {
+				case <-bctx.Done():
+					return
+				default:
+					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
+					var conn *utp.Conn
+					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					if err != nil {
+						p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
+						cancel()
+						return
+					}
+					cancel()
 
-			wctx, wcancel := context.WithTimeout(context.Background(), defaultUTPWriteTimeout)
-			var n int
-			n, err = conn.WriteContext(wctx, content)
-			if err != nil {
-				p.log.Error("failed to write content to utp connection", "err", err)
-				wcancel()
-				return
+					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
+					if err != nil {
+						p.log.Error("failed to set write deadline", "err", err)
+						err = conn.Close()
+						if err != nil {
+							p.log.Error("failed to close utp connection", "err", err)
+							return
+						}
+						return
+					}
+
+					var n int
+					n, err = conn.Write(content)
+					if err != nil {
+						p.log.Error("failed to write content to utp connection", "err", err)
+						err = conn.Close()
+						if err != nil {
+							p.log.Error("failed to close utp connection", "err", err)
+							return
+						}
+						return
+					}
+
+					err = conn.Close()
+					if err != nil {
+						p.log.Error("failed to close utp connection", "err", err)
+						return
+					}
+
+					p.log.Trace("wrote content size to utp connection", "n", n)
+					return
+				}
 			}
-			wcancel()
-			p.log.Trace("wrote content size to utp connection", "n", n)
-		}()
+		}(p.closeCtx)
 
 		idBuffer := make([]byte, 2)
 		binary.BigEndian.PutUint16(idBuffer, uint16(connIdSend))
@@ -768,14 +970,34 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *portalwire.Offer) ([]byte, error) {
 	var err error
-	contentKeyBitsets := bitfield.NewBitlist(uint64(len(request.ContentKeys)))
+	contentKeyBitlist := bitfield.NewBitlist(uint64(len(request.ContentKeys)))
+	if len(p.contentQueue) >= cap(p.contentQueue) {
+		acceptMsg := &portalwire.Accept{
+			ConnectionId: []byte{0, 0},
+			ContentKeys:  []byte(contentKeyBitlist),
+		}
+
+		p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
+		var acceptMsgBytes []byte
+		acceptMsgBytes, err = acceptMsg.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+
+		talkRespBytes := make([]byte, 0, len(acceptMsgBytes)+1)
+		talkRespBytes = append(talkRespBytes, portalwire.ACCEPT)
+		talkRespBytes = append(talkRespBytes, acceptMsgBytes...)
+
+		return talkRespBytes, nil
+	}
+
 	contentKeys := make([][]byte, 0)
 	for i, contentKey := range request.ContentKeys {
 		contentId := p.storage.ContentId(contentKey)
 		if contentId != nil {
-			if p.inRange(p.Self().ID(), p.nodeRadius, contentId) {
+			if inRange(p.Self().ID(), p.nodeRadius, contentId) {
 				if _, err = p.storage.Get(contentKey, contentId); err != nil {
-					contentKeyBitsets.SetBitAt(uint64(i), true)
+					contentKeyBitlist.SetBitAt(uint64(i), true)
 					contentKeys = append(contentKeys, contentKey)
 				}
 			}
@@ -785,53 +1007,60 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 	}
 
 	idBuffer := make([]byte, 2)
-	if contentKeyBitsets.Count() != 0 {
+	if contentKeyBitlist.Count() != 0 {
 		connIdGen := utp.NewConnIdGenerator()
 		connId := connIdGen.GenCid(id, false)
 		connIdSend := connId.SendId()
 
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultUTPConnectTimeout)
-			var conn *utp.Conn
-			conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
-			defer func(conn *utp.Conn) {
-				err = conn.Close()
-				if err != nil {
-					p.log.Error("failed to close utp connection", "err", err)
-				}
-			}(conn)
-			if err != nil {
-				p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
-				cancel()
-				return
-			}
-			cancel()
-
-			err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
-			if err != nil {
-				p.log.Error("failed to set read deadline", "err", err)
-				return
-			}
-			// Read ALL the data from the connection until EOF and return it
-			data := make([]byte, 0)
-			buf := make([]byte, 1024)
+		go func(bctx context.Context) {
 			for {
-				var n int
-				n, err = conn.Read(buf)
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						p.log.Trace("Received content response", "id", id, "data", data, "size", n)
-						break
+				select {
+				case <-bctx.Done():
+					return
+				default:
+					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
+					var conn *utp.Conn
+					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					if err != nil {
+						p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
+						cancel()
+						return
+					}
+					cancel()
+
+					err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
+					if err != nil {
+						p.log.Error("failed to set read deadline", "err", err)
+						return
+					}
+					// Read ALL the data from the connection until EOF and return it
+					data := make([]byte, 0)
+					buf := make([]byte, 1024)
+					for {
+						var n int
+						n, err = conn.Read(buf)
+						if err != nil {
+							if errors.Is(err, io.EOF) {
+								p.log.Trace("Received content response", "id", id, "data", data, "size", n)
+								break
+							}
+
+							p.log.Error("failed to read from utp connection", "err", err)
+							return
+						}
+						data = append(data, buf[:n]...)
 					}
 
-					p.log.Error("failed to read from utp connection", "err", err)
+					err = p.handleOfferedContents(id, contentKeys, data)
+					if err != nil {
+						p.log.Error("failed to handle offered Contents", "err", err)
+						return
+					}
+
 					return
 				}
-				data = append(data, buf[:n]...)
 			}
-
-			p.handleOfferedContents(id, contentKeys, data)
-		}()
+		}(p.closeCtx)
 
 		binary.BigEndian.PutUint16(idBuffer, uint16(connIdSend))
 	} else {
@@ -840,7 +1069,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 	acceptMsg := &portalwire.Accept{
 		ConnectionId: idBuffer,
-		ContentKeys:  contentKeyBitsets.BytesNoTrim(),
+		ContentKeys:  []byte(contentKeyBitlist),
 	}
 
 	p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
@@ -857,8 +1086,27 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 	return talkRespBytes, nil
 }
 
-func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, data []byte) {
+func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, payload []byte) error {
+	contents, err := decodeContents(payload)
+	if err != nil {
+		return err
+	}
 
+	keyLen := len(keys)
+	contentLen := len(contents)
+	if keyLen != contentLen {
+		return fmt.Errorf("content keys len %d doesn't match content values len %d", keyLen, contentLen)
+	}
+
+	contentElement := &ContentElement{
+		Node:        id,
+		ContentKeys: keys,
+		Contents:    contents,
+	}
+
+	p.contentQueue <- contentElement
+
+	return nil
 }
 
 func (p *PortalProtocol) Self() *enode.Node {
@@ -990,8 +1238,62 @@ func (p *PortalProtocol) findNodesCloseToContent(contentId []byte) []*enode.Node
 	return allNodes
 }
 
-func (p *PortalProtocol) inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
+func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
 	distance := enode.LogDist(nodeId, enode.ID(contentId))
 	disBig := new(big.Int).SetInt64(int64(distance))
 	return nodeRadius.CmpBig(disBig) > 0
+}
+
+func encodeContents(contents [][]byte) ([]byte, error) {
+	contentsBytes := make([]byte, 0)
+	for _, content := range contents {
+		contentLen := len(content)
+		contentLenBytes := leb128.EncodeUint32(uint32(contentLen))
+		contentsBytes = append(contentsBytes, contentLenBytes...)
+		contentsBytes = append(contentsBytes, content...)
+	}
+
+	return contentsBytes, nil
+}
+
+func decodeContents(payload []byte) ([][]byte, error) {
+	contents := make([][]byte, 0)
+	buffer := bytes.NewBuffer(payload)
+
+	for {
+		contentLen, contentLenLen, err := leb128.DecodeUint32(bytes.NewReader(buffer.Bytes()))
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return contents, nil
+			}
+			return nil, err
+		}
+
+		buffer.Next(int(contentLenLen))
+
+		content := make([]byte, contentLen)
+		_, err = buffer.Read(content)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return contents, nil
+			}
+			return nil, err
+		}
+
+		contents = append(contents, content)
+	}
+}
+
+func getContentKeys(request *OfferRequest) [][]byte {
+	if request.Kind == TransientOfferRequestKind {
+		contentKeys := make([][]byte, 0)
+		contents := request.Request.(*TransientOfferRequest).Contents
+		for _, content := range contents {
+			contentKeys = append(contentKeys, content.ContentKey)
+		}
+
+		return contentKeys
+	} else {
+		return request.Request.(*PersistOfferRequest).ContentKeys
+	}
 }

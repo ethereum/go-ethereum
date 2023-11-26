@@ -56,7 +56,7 @@ func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
-// nodesAtDistance creates n nodes for which enode.LogDist(base, node.ID()) == ld.
+// nodesAtDistance creates n nodes for which enode.LogDist(base, Node.ID()) == ld.
 func nodesAtDistance(base enode.ID, ld int, n int) []*enode.Node {
 	results := make([]*enode.Node, n)
 	for i := range results {

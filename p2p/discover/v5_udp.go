@@ -182,7 +182,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	return t, nil
 }
 
-// Self returns the local node record.
+// Self returns the local Node record.
 func (t *UDPv5) Self() *enode.Node {
 	return t.localNode.Node()
 }
@@ -198,19 +198,19 @@ func (t *UDPv5) Close() {
 	})
 }
 
-// Ping sends a ping message to the given node.
+// Ping sends a ping message to the given Node.
 func (t *UDPv5) Ping(n *enode.Node) error {
 	_, err := t.ping(n)
 	return err
 }
 
-// Resolve searches for a specific node with the given ID and tries to get the most recent
-// version of the node record for it. It returns n if the node could not be resolved.
+// Resolve searches for a specific Node with the given ID and tries to get the most recent
+// version of the Node record for it. It returns n if the Node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 	if intable := t.tab.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
 		n = intable
 	}
-	// Try asking directly. This works if the node is still responding on the endpoint we have.
+	// Try asking directly. This works if the Node is still responding on the endpoint we have.
 	if resp, err := t.RequestENR(n); err == nil {
 		return resp
 	}
@@ -238,7 +238,7 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 	return nodes
 }
 
-// LocalNode returns the current local node running the
+// LocalNode returns the current local Node running the
 // protocol.
 func (t *UDPv5) LocalNode() *enode.LocalNode {
 	return t.localNode
@@ -251,7 +251,7 @@ func (t *UDPv5) RegisterTalkHandler(protocol string, handler TalkRequestHandler)
 	t.talk.register(protocol, handler)
 }
 
-// TalkRequest sends a talk request to a node and waits for a response.
+// TalkRequest sends a talk request to a Node and waits for a response.
 func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
 	resp := t.callToNode(n, v5wire.TalkResponseMsg, req)
@@ -264,7 +264,7 @@ func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]b
 	}
 }
 
-// TalkRequestToID sends a talk request to a node and waits for a response.
+// TalkRequestToID sends a talk request to a Node and waits for a response.
 func (t *UDPv5) TalkRequestToID(id enode.ID, addr *net.UDPAddr, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
 	resp := t.callToID(id, addr, v5wire.TalkResponseMsg, req)
@@ -828,7 +828,7 @@ func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, err
 func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAddr) {
 	remoteIP := fromAddr.IP
 	// Handle IPv4 mapped IPv6 addresses in the
-	// event the local node is binded to an
+	// event the local Node is binded to an
 	// ipv6 interface.
 	if remoteIP.To4() != nil {
 		remoteIP = remoteIP.To4()

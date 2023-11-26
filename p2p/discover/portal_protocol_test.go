@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/optimism-java/utp-go"
+	"github.com/prysmaticlabs/go-bitfield"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
@@ -49,7 +50,9 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	if bootNodes != nil {
 		conf.BootstrapNodes = bootNodes
 	}
-	portalProtocol, err := NewPortalProtocol(conf, portalwire.HistoryNetwork, newkey(), &MockStorage{db: make(map[string][]byte)})
+
+	contentQueue := make(chan *ContentElement, 50)
+	portalProtocol, err := NewPortalProtocol(conf, portalwire.HistoryNetwork, newkey(), &MockStorage{db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -263,4 +266,34 @@ func TestPortalWireProtocol(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, largeTestContent, content)
 	assert.Equal(t, portalwire.ContentConnIdSelector, flag)
+
+	testEntry1 := &ContentEntry{
+		ContentKey: []byte("test_entry1"),
+		Content:    []byte("test_entry1_content"),
+	}
+
+	testEntry2 := &ContentEntry{
+		ContentKey: []byte("test_entry2"),
+		Content:    []byte("test_entry2_content"),
+	}
+
+	testTransientOfferRequest := &TransientOfferRequest{
+		Contents: []*ContentEntry{testEntry1, testEntry2},
+	}
+
+	offerRequest := &OfferRequest{
+		Kind:    TransientOfferRequestKind,
+		Request: testTransientOfferRequest,
+	}
+
+	contentKeys, err := node1.offer(node3.localNode.Node(), offerRequest)
+	assert.Equal(t, uint64(2), bitfield.Bitlist(contentKeys).Count())
+	assert.NoError(t, err)
+
+	contentElement := <-node3.contentQueue
+	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
+	assert.Equal(t, testEntry1.ContentKey, contentElement.ContentKeys[0])
+	assert.Equal(t, testEntry1.Content, contentElement.Contents[0])
+	assert.Equal(t, testEntry2.ContentKey, contentElement.ContentKeys[1])
+	assert.Equal(t, testEntry2.Content, contentElement.Contents[1])
 }

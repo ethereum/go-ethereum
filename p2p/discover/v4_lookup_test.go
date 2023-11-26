@@ -39,7 +39,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
 
-	// Seed table with initial node.
+	// Seed table with initial Node.
 	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))})
 
 	// Start the lookup.
@@ -114,7 +114,7 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 	it := test.udp.RandomNodes()
 	if ok := it.Next(); !ok || it.Node() == nil {
-		t.Fatalf("iterator didn't return any node")
+		t.Fatalf("iterator didn't return any Node")
 	}
 
 	it.Close()
@@ -122,7 +122,7 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	ncalls := 0
 	for ; ncalls < 100 && it.Next(); ncalls++ {
 		if it.Node() == nil {
-			t.Error("iterator returned Node() == nil node after Next() == true")
+			t.Error("iterator returned Node() == nil Node after Next() == true")
 		}
 	}
 	t.Logf("iterator returned %d nodes after close", ncalls)
@@ -130,7 +130,7 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 		t.Errorf("Next() == true after close and %d more calls", ncalls)
 	}
 	if n := it.Node(); n != nil {
-		t.Errorf("iterator returned non-nil node after close and %d more calls", ncalls)
+		t.Errorf("iterator returned non-nil Node after close and %d more calls", ncalls)
 	}
 }
 

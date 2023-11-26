@@ -60,8 +60,8 @@ const (
 	seedMaxAge        = 5 * 24 * time.Hour
 )
 
-// Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
-// itself up-to-date by verifying the liveness of neighbors and requesting their node
+// Table is the 'Node table', a Kademlia-like index of neighbor nodes. The table keeps
+// itself up-to-date by verifying the liveness of neighbors and requesting their Node
 // records when announcements of a new record version are received.
 type Table struct {
 	mutex   sync.Mutex        // protects buckets, bucket content, nursery, rand
@@ -206,10 +206,10 @@ func (tab *Table) setFallbackNodes(nodes []*enode.Node) error {
 	nursery := make([]*node, 0, len(nodes))
 	for _, n := range nodes {
 		if err := n.ValidateComplete(); err != nil {
-			return fmt.Errorf("bad bootstrap node %q: %v", n, err)
+			return fmt.Errorf("bad bootstrap Node %q: %v", n, err)
 		}
 		if tab.cfg.NetRestrict != nil && !tab.cfg.NetRestrict.Contains(n.IP()) {
-			tab.log.Error("Bootstrap node filtered by netrestrict", "id", n.ID(), "ip", n.IP())
+			tab.log.Error("Bootstrap Node filtered by netrestrict", "id", n.ID(), "ip", n.IP())
 			continue
 		}
 		nursery = append(nursery, wrapNode(n))
@@ -331,7 +331,7 @@ func (tab *Table) loadSeedNodes() {
 	for i := range seeds {
 		seed := seeds[i]
 		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
-		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
+		tab.log.Trace("Found seed Node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
 		tab.addSeenNode(seed)
 	}
 }
@@ -347,10 +347,10 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 		return
 	}
 
-	// Ping the selected node and wait for a pong.
+	// Ping the selected Node and wait for a pong.
 	remoteSeq, err := tab.net.ping(unwrapNode(last))
 
-	// Also fetch record if the node replied and returned a higher sequence number.
+	// Also fetch record if the Node replied and returned a higher sequence number.
 	if last.Seq() < remoteSeq {
 		n, err := tab.net.RequestENR(unwrapNode(last))
 		if err != nil {
@@ -364,18 +364,18 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	defer tab.mutex.Unlock()
 	b := tab.buckets[bi]
 	if err == nil {
-		// The node responded, move it to the front.
+		// The Node responded, move it to the front.
 		last.livenessChecks++
-		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
+		tab.log.Debug("Revalidated Node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
 		tab.bumpInBucket(b, last)
 		return
 	}
-	// No reply received, pick a replacement or delete the node if there aren't
+	// No reply received, pick a replacement or delete the Node if there aren't
 	// any replacements.
 	if r := tab.replace(b, last); r != nil {
-		tab.log.Debug("Replaced dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
+		tab.log.Debug("Replaced dead Node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
 	} else {
-		tab.log.Debug("Removed dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
+		tab.log.Debug("Removed dead Node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
 	}
 }
 
@@ -664,8 +664,8 @@ func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 }
 
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
-	// Check if the node is actually in the bucket so the removed hook
-	// isn't called multiple times for the same node.
+	// Check if the Node is actually in the bucket so the removed hook
+	// isn't called multiple times for the same Node.
 	if !contains(b.entries, n.ID()) {
 		return
 	}
