@@ -461,7 +461,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 				common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790"),
 			},
 		},
-	}[7:] {
+	} {
 		tc := tc
 		if err := s.snapGetTrieNodes(t, &tc); err != nil {
 			t.Errorf("test %d \n #hashes %x\n root: %#x\n bytes: %d\nfailed: %v", i, len(tc.expHashes), tc.root, tc.nBytes, err)

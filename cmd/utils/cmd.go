@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -371,6 +372,101 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 		}
 	}
 	log.Info("Exported preimages", "file", fn)
+	return nil
+}
+
+// ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
+// the snapshot for a given root.
+func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	// Enable gzip compressing if file name has gz suffix.
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		gz := gzip.NewWriter(writer)
+		defer gz.Close()
+		writer = gz
+	}
+	buf := bufio.NewWriter(writer)
+	defer buf.Flush()
+	writer = buf
+
+	type hashAndPreimageSize struct {
+		Hash common.Hash
+		Size int
+	}
+	hashCh := make(chan hashAndPreimageSize)
+
+	var (
+		start     = time.Now()
+		logged    = time.Now()
+		preimages int
+	)
+	go func() {
+		defer close(hashCh)
+		accIt, err := snaptree.AccountIterator(root, common.Hash{})
+		if err != nil {
+			log.Error("Failed to create account iterator", "error", err)
+			return
+		}
+		defer accIt.Release()
+
+		for accIt.Next() {
+			acc, err := types.FullAccount(accIt.Account())
+			if err != nil {
+				log.Error("Failed to get full account", "error", err)
+				return
+			}
+			preimages += 1
+			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
+
+			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
+				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+				if err != nil {
+					log.Error("Failed to create storage iterator", "error", err)
+					return
+				}
+				for stIt.Next() {
+					preimages += 1
+					hashCh <- hashAndPreimageSize{Hash: stIt.Hash(), Size: common.HashLength}
+
+					if time.Since(logged) > time.Second*8 {
+						logged = time.Now()
+						log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
+					}
+				}
+				stIt.Release()
+			}
+			if time.Since(logged) > time.Second*8 {
+				logged = time.Now()
+				log.Info("Exporting preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)))
+			}
+		}
+	}()
+
+	for item := range hashCh {
+		preimage := rawdb.ReadPreimage(chaindb, item.Hash)
+		if len(preimage) == 0 {
+			return fmt.Errorf("missing preimage for %v", item.Hash)
+		}
+		if len(preimage) != item.Size {
+			return fmt.Errorf("invalid preimage size, have %d", len(preimage))
+		}
+		rlpenc, err := rlp.EncodeToBytes(preimage)
+		if err != nil {
+			return fmt.Errorf("error encoding preimage: %w", err)
+		}
+		if _, err := writer.Write(rlpenc); err != nil {
+			return fmt.Errorf("failed to write preimage: %w", err)
+		}
+	}
+	log.Info("Exported preimages", "count", preimages, "elapsed", common.PrettyDuration(time.Since(start)), "file", fn)
 	return nil
 }
 

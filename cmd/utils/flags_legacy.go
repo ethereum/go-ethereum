@@ -39,6 +39,12 @@ var DeprecatedFlags = []cli.Flag{
 	CacheTrieRejournalFlag,
 	LegacyDiscoveryV5Flag,
 	TxLookupLimitFlag,
+	LightServeFlag,
+	LightIngressFlag,
+	LightEgressFlag,
+	LightMaxPeersFlag,
+	LightNoPruneFlag,
+	LightNoSyncServeFlag,
 }
 
 var (
@@ -76,6 +82,41 @@ var (
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain) (deprecated, use history.transactions instead)",
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.DeprecatedCategory,
+	}
+	// Light server and client settings, Deprecated November 2023
+	LightServeFlag = &cli.IntFlag{
+		Name:     "light.serve",
+		Usage:    "Maximum percentage of time allowed for serving LES requests (deprecated)",
+		Value:    ethconfig.Defaults.LightServ,
+		Category: flags.LightCategory,
+	}
+	LightIngressFlag = &cli.IntFlag{
+		Name:     "light.ingress",
+		Usage:    "Incoming bandwidth limit for serving light clients (deprecated)",
+		Value:    ethconfig.Defaults.LightIngress,
+		Category: flags.LightCategory,
+	}
+	LightEgressFlag = &cli.IntFlag{
+		Name:     "light.egress",
+		Usage:    "Outgoing bandwidth limit for serving light clients (deprecated)",
+		Value:    ethconfig.Defaults.LightEgress,
+		Category: flags.LightCategory,
+	}
+	LightMaxPeersFlag = &cli.IntFlag{
+		Name:     "light.maxpeers",
+		Usage:    "Maximum number of light clients to serve, or light servers to attach to (deprecated)",
+		Value:    ethconfig.Defaults.LightPeers,
+		Category: flags.LightCategory,
+	}
+	LightNoPruneFlag = &cli.BoolFlag{
+		Name:     "light.nopruning",
+		Usage:    "Disable ancient light chain data pruning (deprecated)",
+		Category: flags.LightCategory,
+	}
+	LightNoSyncServeFlag = &cli.BoolFlag{
+		Name:     "light.nosyncserve",
+		Usage:    "Enables serving light clients before syncing (deprecated)",
+		Category: flags.LightCategory,
 	}
 )
 
