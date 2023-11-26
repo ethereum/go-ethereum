@@ -89,7 +89,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 		// Check if the block already exist, otherwise we try luck with the next vote
 		proposedBlockHeader := chain.GetHeaderByHash(voteMsg.ProposedBlockInfo.Hash)
 		if proposedBlockHeader == nil {
-			log.Warn("[voteHandler] The proposed block from vote message does not exist yet, wait for the next vote to try again", "blockNum", voteMsg.ProposedBlockInfo.Number, "Hash", voteMsg.ProposedBlockInfo.Hash, "Round", voteMsg.ProposedBlockInfo.Round)
+			log.Info("[voteHandler] The proposed block from vote message does not exist yet, wait for the next vote to try again", "blockNum", voteMsg.ProposedBlockInfo.Number, "Hash", voteMsg.ProposedBlockInfo.Hash, "Round", voteMsg.ProposedBlockInfo.Round)
 			return nil
 		}
 
