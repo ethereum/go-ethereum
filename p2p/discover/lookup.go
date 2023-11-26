@@ -149,7 +149,7 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 	} else if len(r) == 0 {
 		fails++
 		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
-		// Remove the node from the local table if it fails to return anything useful too
+		// Remove the Node from the local table if it fails to return anything useful too
 		// many times, but only if there are enough other nodes in the bucket.
 		dropped := false
 		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
@@ -187,7 +187,7 @@ func newLookupIterator(ctx context.Context, next lookupFunc) *lookupIterator {
 	return &lookupIterator{ctx: ctx, cancel: cancel, nextLookup: next}
 }
 
-// Node returns the current node.
+// Node returns the current Node.
 func (it *lookupIterator) Node() *enode.Node {
 	if len(it.buffer) == 0 {
 		return nil
@@ -195,9 +195,9 @@ func (it *lookupIterator) Node() *enode.Node {
 	return unwrapNode(it.buffer[0])
 }
 
-// Next moves to the next node.
+// Next moves to the next Node.
 func (it *lookupIterator) Next() bool {
-	// Consume next node in buffer.
+	// Consume next Node in buffer.
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}

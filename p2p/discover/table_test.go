@@ -61,7 +61,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	pingSender := wrapNode(enode.NewV4(&pingKey.PublicKey, net.IP{127, 0, 0, 1}, 99, 99))
 	last := fillBucket(tab, pingSender)
 
-	// Add the sender as if it just pinged us. Revalidate should replace the last node in
+	// Add the sender as if it just pinged us. Revalidate should replace the last Node in
 	// its bucket if it is unresponsive. Revalidate again to ensure that
 	transport.dead[last.ID()] = !lastInBucketIsResponding
 	transport.dead[pingSender.ID()] = !newNodeIsResponding
@@ -70,8 +70,8 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	tab.doRevalidate(make(chan struct{}, 1))
 
 	if !transport.pinged[last.ID()] {
-		// Oldest node in bucket is pinged to see whether it is still alive.
-		t.Error("table did not ping last node in bucket")
+		// Oldest Node in bucket is pinged to see whether it is still alive.
+		t.Error("table did not ping last Node in bucket")
 	}
 
 	tab.mutex.Lock()
@@ -194,7 +194,7 @@ func TestTable_findnodeByID(t *testing.T) {
 	t.Parallel()
 
 	test := func(test *closeTest) bool {
-		// for any node table, Target and N
+		// for any Node table, Target and N
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport)
 		defer db.Close()
@@ -232,7 +232,7 @@ func TestTable_findnodeByID(t *testing.T) {
 				}
 				farthestResult := result[len(result)-1].ID()
 				if enode.DistCmp(test.Target, n.ID(), farthestResult) < 0 {
-					t.Errorf("table contains node that is closer to target but it's not in result")
+					t.Errorf("table contains Node that is closer to target but it's not in result")
 					t.Logf("  Target:          %v", test.Target)
 					t.Logf("  Farthest Result: %v", farthestResult)
 					t.Logf("  ID:              %v", n.ID())
@@ -333,7 +333,7 @@ func TestTable_addSeenNode(t *testing.T) {
 	checkIPLimitInvariant(t, tab)
 }
 
-// This test checks that ENR updates happen during revalidation. If a node in the table
+// This test checks that ENR updates happen during revalidation. If a Node in the table
 // announces a new sequence number, the new record should be pulled.
 func TestTable_revalidateSyncRecord(t *testing.T) {
 	transport := newPingRecorder()
@@ -342,14 +342,14 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	defer db.Close()
 	defer tab.close()
 
-	// Insert a node.
+	// Insert a Node.
 	var r enr.Record
 	r.Set(enr.IP(net.IP{127, 0, 0, 1}))
 	id := enode.ID{1}
 	n1 := wrapNode(enode.SignNull(&r, id))
 	tab.addSeenNode(n1)
 
-	// Update the node record.
+	// Update the Node record.
 	r.Set(enr.WithEntry("foo", "bar"))
 	n2 := enode.SignNull(&r, id)
 	transport.updateRecord(n2)

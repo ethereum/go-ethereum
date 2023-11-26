@@ -271,7 +271,7 @@ func TestUDPv4_findnode(t *testing.T) {
 	}
 	fillTable(test.table, nodes.entries)
 
-	// ensure there's a bond with the test node,
+	// ensure there's a bond with the test Node,
 	// findnode won't be accepted otherwise.
 	remoteID := v4wire.EncodePubkey(&test.remotekey.PublicKey).ID()
 	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.IP, time.Now())
@@ -290,7 +290,7 @@ func TestUDPv4_findnode(t *testing.T) {
 					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, n, expected.entries[i])
 				}
 				if !live[n.ID.ID()] {
-					t.Errorf("result includes dead node %v", n.ID.ID())
+					t.Errorf("result includes dead Node %v", n.ID.ID())
 				}
 			}
 		})
@@ -434,25 +434,25 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		test.packetIn(nil, &v4wire.Pong{ReplyTok: hash, Expiration: futureExp})
 	})
 
-	// The node should be added to the table shortly after getting the
+	// The Node should be added to the table shortly after getting the
 	// pong packet.
 	select {
 	case n := <-added:
 		rid := encodePubkey(&test.remotekey.PublicKey).id()
 		if n.ID() != rid {
-			t.Errorf("node has wrong ID: got %v, want %v", n.ID(), rid)
+			t.Errorf("Node has wrong ID: got %v, want %v", n.ID(), rid)
 		}
 		if !n.IP().Equal(test.remoteaddr.IP) {
-			t.Errorf("node has wrong IP: got %v, want: %v", n.IP(), test.remoteaddr.IP)
+			t.Errorf("Node has wrong IP: got %v, want: %v", n.IP(), test.remoteaddr.IP)
 		}
 		if n.UDP() != test.remoteaddr.Port {
-			t.Errorf("node has wrong UDP port: got %v, want: %v", n.UDP(), test.remoteaddr.Port)
+			t.Errorf("Node has wrong UDP port: got %v, want: %v", n.UDP(), test.remoteaddr.Port)
 		}
 		if n.TCP() != int(testRemote.TCP) {
-			t.Errorf("node has wrong TCP port: got %v, want: %v", n.TCP(), testRemote.TCP)
+			t.Errorf("Node has wrong TCP port: got %v, want: %v", n.TCP(), testRemote.TCP)
 		}
 	case <-time.After(2 * time.Second):
-		t.Errorf("node was not added within 2 seconds")
+		t.Errorf("Node was not added within 2 seconds")
 	}
 }
 
@@ -489,7 +489,7 @@ func TestUDPv4_EIP868(t *testing.T) {
 			t.Fatalf("invalid record: %v", err)
 		}
 		if !reflect.DeepEqual(n, wantNode) {
-			t.Fatalf("wrong node in ENRResponse: %v", n)
+			t.Fatalf("wrong Node in ENRResponse: %v", n)
 		}
 	})
 }
@@ -525,7 +525,7 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 					return
 				}
 			}
-			status <- fmt.Errorf("node %s didn't find all nodes", node.Self().ID().TerminalString())
+			status <- fmt.Errorf("Node %s didn't find all nodes", node.Self().ID().TerminalString())
 		}()
 	}
 
@@ -555,7 +555,7 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 	db, _ := enode.OpenDB("")
 	ln := enode.NewLocalNode(db, cfg.PrivateKey)
 
-	// Prefix logs with node ID.
+	// Prefix logs with Node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
 	lfmt := log.TerminalFormat(false)
 	cfg.Log = testlog.Logger(t, log.LvlTrace)

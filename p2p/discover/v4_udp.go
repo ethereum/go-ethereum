@@ -40,7 +40,7 @@ import (
 var (
 	errExpired          = errors.New("expired")
 	errUnsolicitedReply = errors.New("unsolicited reply")
-	errUnknownNode      = errors.New("unknown node")
+	errUnknownNode      = errors.New("unknown Node")
 	errTimeout          = errors.New("RPC timeout")
 	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
@@ -155,7 +155,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	return t, nil
 }
 
-// Self returns the local node.
+// Self returns the local Node.
 func (t *UDPv4) Self() *enode.Node {
 	return t.localNode.Node()
 }
@@ -170,10 +170,10 @@ func (t *UDPv4) Close() {
 	})
 }
 
-// Resolve searches for a specific node with the given ID and tries to get the most recent
-// version of the node record for it. It returns n if the node could not be resolved.
+// Resolve searches for a specific Node with the given ID and tries to get the most recent
+// version of the Node record for it. It returns n if the Node could not be resolved.
 func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
-	// Try asking directly. This works if the node is still responding on the endpoint we have.
+	// Try asking directly. This works if the Node is still responding on the endpoint we have.
 	if rn, err := t.RequestENR(n); err == nil {
 		return rn
 	}
@@ -206,7 +206,7 @@ func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
 	return v4wire.NewEndpoint(a, uint16(n.TCP()))
 }
 
-// Ping sends a ping message to the given node.
+// Ping sends a ping message to the given Node.
 func (t *UDPv4) Ping(n *enode.Node) error {
 	_, err := t.ping(n)
 	return err
@@ -311,7 +311,7 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 			nreceived++
 			n, err := t.nodeFromRPC(toaddr, rn)
 			if err != nil {
-				t.log.Trace("Invalid neighbor node received", "ip", rn.IP, "addr", toaddr, "err", err)
+				t.log.Trace("Invalid neighbor Node received", "ip", rn.IP, "addr", toaddr, "err", err)
 				continue
 			}
 			nodes = append(nodes, n)
@@ -322,9 +322,9 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	// Ensure that callers don't see a timeout if the node actually responded. Since
+	// Ensure that callers don't see a timeout if the Node actually responded. Since
 	// findnode can receive more than one neighbors response, the reply matcher will be
-	// active until the remote node sends enough nodes. If the remote end doesn't have
+	// active until the remote Node sends enough nodes. If the remote end doesn't have
 	// enough nodes the reply matcher will time out waiting for the second reply, but
 	// there's no need for an error in that case.
 	err := <-rm.errc
@@ -334,7 +334,7 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 	return nodes, err
 }
 
-// RequestENR sends ENRRequest to the given node and waits for a response.
+// RequestENR sends ENRRequest to the given Node and waits for a response.
 func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 	t.ensureBond(n.ID(), addr)
@@ -675,7 +675,7 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 		t.tab.addVerifiedNode(n)
 	}
 
-	// Update node database and endpoint predictor.
+	// Update Node database and endpoint predictor.
 	t.db.UpdateLastPingReceived(n.ID(), from.IP, time.Now())
 	t.localNode.UDPEndpointStatement(from, &net.UDPAddr{IP: req.To.IP, Port: int(req.To.UDP)})
 }

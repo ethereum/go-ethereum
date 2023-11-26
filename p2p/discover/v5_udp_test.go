@@ -77,7 +77,7 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 	db, _ := enode.OpenDB("")
 	ln := enode.NewLocalNode(db, cfg.PrivateKey)
 
-	// Prefix logs with node ID.
+	// Prefix logs with Node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
 	lfmt := log.TerminalFormat(false)
 	cfg.Log = testlog.Logger(t, log.LvlTrace)
@@ -138,13 +138,13 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 		}
 	}
 
-	// Unknown packet from unknown node.
+	// Unknown packet from unknown Node.
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
 		check(p, 0)
 	})
 
-	// Make node known.
+	// Make Node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
 	test.table.addSeenNode(wrapNode(n))
 
@@ -168,7 +168,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	fillTable(test.table, wrapNodes(nodes249))
 	fillTable(test.table, wrapNodes(nodes248))
 
-	// Requesting with distance zero should return the node's own record.
+	// Requesting with distance zero should return the Node's own record.
 	test.packetIn(&v5wire.Findnode{ReqID: []byte{0}, Distances: []uint{0}})
 	test.expectNodes([]byte{0}, 1, []*enode.Node{test.udp.Self()})
 
@@ -215,7 +215,7 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 				n, _ := enode.New(enode.ValidSchemesForTesting, record)
 				want := nodeSet[n.ID()]
 				if want == nil {
-					test.t.Fatalf("unexpected node in response: %v", n)
+					test.t.Fatalf("unexpected Node in response: %v", n)
 				}
 				if !reflect.DeepEqual(record, want) {
 					test.t.Fatalf("wrong record in response: %v", n)
@@ -592,7 +592,7 @@ func TestUDPv5_lookup(t *testing.T) {
 		}
 	}
 
-	// Seed table with initial node.
+	// Seed table with initial Node.
 	initialNode := lookupTestnet.node(256, 0)
 	fillTable(test.table, []*node{wrapNode(initialNode)})
 
@@ -613,7 +613,7 @@ func TestUDPv5_lookup(t *testing.T) {
 				test.packetInFrom(key, to, &v5wire.Pong{ReqID: p.ReqID})
 			case *v5wire.Findnode:
 				if asked[recipient.ID()] {
-					t.Error("Asked node", recipient.ID(), "twice")
+					t.Error("Asked Node", recipient.ID(), "twice")
 				}
 				asked[recipient.ID()] = true
 				nodes := lookupTestnet.neighborsAtDistances(recipient, p.Distances, 16)
@@ -630,7 +630,7 @@ func TestUDPv5_lookup(t *testing.T) {
 	checkLookupResults(t, lookupTestnet, results)
 }
 
-// This test checks the local node can be utilised to set key-values.
+// This test checks the local Node can be utilised to set key-values.
 func TestUDPv5_LocalNode(t *testing.T) {
 	t.Parallel()
 	var cfg Config
@@ -638,7 +638,7 @@ func TestUDPv5_LocalNode(t *testing.T) {
 	defer node.Close()
 	localNd := node.LocalNode()
 
-	// set value in node's local record
+	// set value in Node's local record
 	testVal := [4]byte{'A', 'B', 'C', 'D'}
 	localNd.Set(enr.WithEntry("testing", &testVal))
 
@@ -831,7 +831,7 @@ func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
 	}
 	ln := test.nodesByIP[string(dgram.to.IP)]
 	if ln == nil {
-		test.t.Fatalf("attempt to send to non-existing node %v", &dgram.to)
+		test.t.Fatalf("attempt to send to non-existing Node %v", &dgram.to)
 		return false
 	}
 	codec := &testCodec{test: test, id: ln.ID()}

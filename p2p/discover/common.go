@@ -49,7 +49,7 @@ type Config struct {
 
 	// Node table configuration:
 	Bootnodes       []*enode.Node // list of bootstrap nodes
-	PingInterval    time.Duration // speed of node liveness check
+	PingInterval    time.Duration // speed of Node liveness check
 	RefreshInterval time.Duration // used in bucket refresh
 
 	// The options below are useful in very specific cases, like in unit tests.
