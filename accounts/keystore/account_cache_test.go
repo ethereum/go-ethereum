@@ -350,7 +350,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
+	time.Sleep(time.Second)
 
 	// Now replace file contents
 	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
@@ -366,7 +366,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	}
 
 	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
+	time.Sleep(time.Second)
 
 	// Now replace file contents again
 	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
@@ -382,7 +382,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	}
 
 	// needed so that modTime of `file` is different to its current value after os.WriteFile
-	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
+	time.Sleep(time.Second)
 
 	// Now replace file contents with crap
 	if err := os.WriteFile(file, []byte("foo"), 0600); err != nil {
