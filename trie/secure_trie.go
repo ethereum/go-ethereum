@@ -216,6 +216,22 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	return t.preimages.preimage(common.BytesToHash(shaKey))
 }
 
+func (t *StateTrie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
+	// Write all the pre-images to the actual disk database
+	if len(t.getSecKeyCache()) > 0 {
+		if t.preimages != nil {
+			preimages := make(map[common.Hash][]byte)
+			for hk, key := range t.secKeyCache {
+				preimages[common.BytesToHash([]byte(hk))] = key
+			}
+			t.preimages.insertPreimage(preimages)
+		}
+		t.secKeyCache = make(map[string][]byte)
+	}
+	// Commit the trie and return its modified nodeset.
+	return t.trie.CommitAndObtainAccessList(collectLeaf)
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.

@@ -177,6 +177,10 @@ func (t *odrTrie) DeleteAccount(address common.Address) error {
 	})
 }
 
+func (t *odrTrie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
+	panic("not implemented")
+}
+
 func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	if t.trie == nil {
 		return t.id.Root, nil, nil

@@ -1169,6 +1169,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
+	w := newWitness(s.originalRoot)
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
@@ -1198,7 +1199,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			obj.dirtyCode = false
 		}
 		// Write any storage changes in the state object to its storage trie
-		set, err := obj.commit()
+		set, accessList, err := obj.commit()
+		w.addAccessList(obj.addrHash, accessList)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -1224,7 +1226,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	root, set, err := s.trie.Commit(true)
+	//root, set, err := s.trie.Commit(true)
+	root, set, accessList, err := s.trie.CommitAndObtainAccessList(true)
+	w.addAccessList(common.Hash{}, accessList)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1298,6 +1302,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 	s.stateObjectsDirty = make(map[common.Address]struct{})
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
+
+	w.Dump()
+
 	return root, nil
 }
 
