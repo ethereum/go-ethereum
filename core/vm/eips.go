@@ -400,7 +400,6 @@ func opAuthCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 	var bigVal = big0
 	if !value.IsZero() {
-		gas += params.CallStipend
 		bigVal = value.ToBig()
 	}
 
