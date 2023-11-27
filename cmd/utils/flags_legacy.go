@@ -119,6 +119,7 @@ var (
 		Name:     "light.nosyncserve",
 		Usage:    "Enables serving light clients before syncing (deprecated)",
 		Category: flags.LightCategory,
+	}
 	// Deprecated November 2023
 	LogBacktraceAtFlag = &cli.StringFlag{
 		Name:     "log.backtrace",
