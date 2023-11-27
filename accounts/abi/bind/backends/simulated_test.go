@@ -1,3 +1,19 @@
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package backends
 
 import (
@@ -20,7 +36,7 @@ var (
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
-func simTestBackend(testAddr common.Address) (*SimulatedBackend, error) {
+func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
@@ -56,10 +72,7 @@ func (sim *SimulatedBackend) newTx(key *ecdsa.PrivateKey) (*types.Transaction, e
 }
 
 func TestNewSim(t *testing.T) {
-	sim, err := NewSimulatedBackend(core.GenesisAlloc{}, 30_000_000)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sim := NewSimulatedBackend(core.GenesisAlloc{}, 30_000_000)
 	num, err := sim.BlockNumber(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +92,7 @@ func TestNewSim(t *testing.T) {
 }
 
 func TestAdjustTime(t *testing.T) {
-	sim, _ := NewSimulatedBackend(core.GenesisAlloc{}, 10_000_000)
+	sim := NewSimulatedBackend(core.GenesisAlloc{}, 10_000_000)
 	defer sim.Close()
 
 	block1, _ := sim.BlockByNumber(context.Background(), nil)
@@ -96,7 +109,7 @@ func TestAdjustTime(t *testing.T) {
 }
 
 func TestSendTransaction(t *testing.T) {
-	sim, _ := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	bgCtx := context.Background()
 
@@ -133,7 +146,7 @@ func TestSendTransaction(t *testing.T) {
 func TestFork(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim, _ := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	// 1.
 	parent := sim.currentBlock()
@@ -170,7 +183,7 @@ func TestFork(t *testing.T) {
 func TestForkResendTx(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim, _ := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 	// 1.
 	parent := sim.currentBlock()
@@ -205,7 +218,7 @@ func TestForkResendTx(t *testing.T) {
 func TestCommitReturnValue(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim, _ := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
 	// Test if Commit returns the correct block hash
@@ -245,7 +258,7 @@ func TestCommitReturnValue(t *testing.T) {
 func TestAdjustTimeAfterFork(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	sim, _ := simTestBackend(testAddr)
+	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
 	sim.Commit() // h1

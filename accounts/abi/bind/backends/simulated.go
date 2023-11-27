@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package backends
 
 import (
@@ -30,14 +46,15 @@ type SimulatedBackend struct {
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) (*SimulatedBackend, error) {
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	// Setup the node object
 	nodeConf := &node.DefaultConfig
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{DiscAddr: "", ListenAddr: ""}
 	stack, err := node.New(nodeConf)
 	if err != nil {
-		return nil, err
+		// This should never happen, if it does, please open an issue
+		panic(err)
 	}
 
 	// Setup ethereum
@@ -49,7 +66,12 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) (*SimulatedBa
 	conf := &ethconfig.Defaults
 	conf.Genesis = &genesis
 	conf.SyncMode = downloader.FullSync
-	return NewSimWithNode(stack, conf, math.MaxUint64)
+	sim, err := NewSimWithNode(stack, conf, math.MaxUint64)
+	if err != nil {
+		// This should never happen, if it does, please open an issue
+		panic(err)
+	}
+	return sim
 }
 
 // NewSimWithNode sets up a simulated backend on an existing node
