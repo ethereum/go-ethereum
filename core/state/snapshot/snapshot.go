@@ -598,8 +598,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 					} else {
 						snapshotStorageBytesGrowthMeter.Mark(int64(len(data) - oldbytes))
 					}
-					snapshotFlushStorageItemMeter.Mark(1)
-					snapshotFlushStorageSizeMeter.Mark(2*common.HashLength + int64(len(data)))
 				}
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
@@ -609,8 +607,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 					snapshotStorageCountGrowthMeter.Mark(-1)
 					snapshotStorageBytesGrowthMeter.Mark(-int64(2*common.HashLength + len(rawdb.ReadStorageSnapshot(base.diskdb, accountHash, storageHash))))
 				}
-				snapshotFlushStorageItemMeter.Mark(1)
 			}
+			snapshotFlushStorageItemMeter.Mark(1)
+			snapshotFlushStorageSizeMeter.Mark(2*common.HashLength + int64(len(data)))
 		}
 	}
 	// Update the snapshot block marker and write any remainder data
