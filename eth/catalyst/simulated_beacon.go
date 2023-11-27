@@ -274,6 +274,7 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 	}
 }
 
+// Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
 	withdrawals := c.withdrawals.gatherPending(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
@@ -282,7 +283,7 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 	return c.eth.BlockChain().CurrentBlock().Hash()
 }
 
-// Rollback un-sends previously added transactions
+// Rollback un-sends previously added transactions.
 func (c *SimulatedBeacon) Rollback() {
 	// Flush all transactions from the transaction pools
 	c.eth.TxPool().SetGasTip(big.NewInt(-1))
@@ -291,6 +292,7 @@ func (c *SimulatedBeacon) Rollback() {
 	c.eth.TxPool().SetGasTip(big.NewInt(params.GWei))
 }
 
+// Fork sets the head to the provided hash.
 func (c *SimulatedBeacon) Fork(ctx context.Context, parentHash common.Hash) error {
 	if len(c.eth.TxPool().Pending(false)) != 0 {
 		return errors.New("pending block dirty")
@@ -302,6 +304,7 @@ func (c *SimulatedBeacon) Fork(ctx context.Context, parentHash common.Hash) erro
 	return c.eth.BlockChain().SetHead(parent.NumberU64())
 }
 
+// AdjustTime creates a new block with an adjusted timestamp.
 func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 	if len(c.eth.TxPool().Pending(false)) != 0 {
 		return errors.New("could not adjust time on non-empty block")
