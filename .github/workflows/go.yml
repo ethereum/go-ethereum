@@ -42,7 +42,5 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: 1.21.1
-      - name: Download precomputed points
-        run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagonv3/precomp -Otrie/utils/precomp
       - name: Test
-        run: go test ./...
+        run: go test ./... -timeout=10h

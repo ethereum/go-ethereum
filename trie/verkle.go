@@ -107,7 +107,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	)
 	switch t.root.(type) {
 	case *verkle.InternalNode:
-		values, err = t.root.(*verkle.InternalNode).GetStem(versionkey[:31], t.FlatdbNodeResolver)
+		values, err = t.root.(*verkle.InternalNode).GetValuesAtStem(versionkey[:31], t.FlatdbNodeResolver)
 	default:
 		return nil, errInvalidRootType
 	}
@@ -176,7 +176,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		err = root.InsertStem(stem, values, t.FlatdbNodeResolver)
+		err = root.InsertValuesAtStem(stem, values, t.FlatdbNodeResolver)
 	default:
 		return errInvalidRootType
 	}
@@ -191,7 +191,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 func (trie *VerkleTrie) UpdateStem(key []byte, values [][]byte) error {
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
-		return root.InsertStem(key, values, trie.FlatdbNodeResolver)
+		return root.InsertValuesAtStem(key, values, trie.FlatdbNodeResolver)
 	default:
 		panic("invalid root type")
 	}
@@ -225,7 +225,7 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		err = root.InsertStem(stem, values, t.FlatdbNodeResolver)
+		err = root.InsertValuesAtStem(stem, values, t.FlatdbNodeResolver)
 	default:
 		return errInvalidRootType
 	}

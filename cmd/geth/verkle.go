@@ -202,7 +202,7 @@ func convertToVerkle(ctx *cli.Context) error {
 
 				// Otherwise, store the previous group in the tree with a
 				// stem insertion.
-				vRoot.InsertStem(chunkkey[:31], values, chaindb.Get)
+				vRoot.InsertValuesAtStem(chunkkey[:31], values, chaindb.Get)
 			}
 
 			// Write the code size in the account header group
@@ -267,7 +267,7 @@ func convertToVerkle(ctx *cli.Context) error {
 						copy(k[:], []byte(s))
 						// reminder that InsertStem will merge leaves
 						// if they exist.
-						vRoot.InsertStem(k[:31], vs, chaindb.Get)
+						vRoot.InsertValuesAtStem(k[:31], vs, chaindb.Get)
 					}
 					translatedStorage = make(map[string][][]byte)
 					vRoot.FlushAtDepth(2, saveverkle)
@@ -276,7 +276,7 @@ func convertToVerkle(ctx *cli.Context) error {
 			for s, vs := range translatedStorage {
 				var k [31]byte
 				copy(k[:], []byte(s))
-				vRoot.InsertStem(k[:31], vs, chaindb.Get)
+				vRoot.InsertValuesAtStem(k[:31], vs, chaindb.Get)
 			}
 			storageIt.Release()
 			if storageIt.Error() != nil {
@@ -285,7 +285,7 @@ func convertToVerkle(ctx *cli.Context) error {
 			}
 		}
 		// Finish with storing the complete account header group inside the tree.
-		vRoot.InsertStem(stem[:31], newValues, chaindb.Get)
+		vRoot.InsertValuesAtStem(stem[:31], newValues, chaindb.Get)
 
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
