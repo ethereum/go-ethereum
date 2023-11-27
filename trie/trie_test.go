@@ -372,6 +372,9 @@ func TestRandomCases(t *testing.T) {
 // Instances of this test are created by Generate.
 type randTest []randTestStep
 
+// compile-time interface check
+var _ quick.Generator = (randTest)(nil)
+
 type randTestStep struct {
 	op    int
 	key   []byte // for opUpdate, opDelete, opGet
@@ -394,7 +397,7 @@ const (
 func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	var finishedFn = func() bool {
 		size--
-		return size > 0
+		return size == 0
 	}
 	return reflect.ValueOf(generateSteps(finishedFn, r))
 }
