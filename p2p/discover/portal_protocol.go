@@ -306,6 +306,7 @@ func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
 
 	if err != nil {
 		p.replaceNode(node)
+		return 0, err
 	}
 	return p.processPong(node, talkResp)
 }
