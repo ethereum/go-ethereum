@@ -218,6 +218,9 @@ const (
 	DELEGATECALL OpCode = 0xf4
 	CREATE2      OpCode = 0xf5
 
+	AUTH     OpCode = 0xf6
+	AUTHCALL OpCode = 0xf7
+
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
@@ -391,6 +394,8 @@ var opCodeToString = [256]string{
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
 	CREATE2:      "CREATE2",
+	AUTH:         "AUTH",
+	AUTHCALL:     "AUTHCALL",
 	STATICCALL:   "STATICCALL",
 	REVERT:       "REVERT",
 	INVALID:      "INVALID",
@@ -548,6 +553,8 @@ var stringToOp = map[string]OpCode{
 	"LOG4":           LOG4,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
+	"AUTH":           AUTH,
+	"AUTHCALL":       AUTHCALL,
 	"CALL":           CALL,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,

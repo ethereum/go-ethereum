@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4219,5 +4220,133 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
+	}
+}
+
+func TestEIP3074(t *testing.T) {
+	var (
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config = *params.AllEthashProtocolChanges
+		gspec  = &Genesis{
+			Config: &config,
+			Alloc: GenesisAlloc{
+				addr: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code:    nil, // added below
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+				// The address 0xBBBB calls 0xAAAA
+				bb: {
+					Code: []byte{
+						byte(vm.CALLER),
+						byte(vm.PUSH0),
+						byte(vm.SSTORE),
+						byte(vm.STOP),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	invoker := []byte{
+		// copy sig to memory
+		byte(vm.CALLDATASIZE),
+		byte(vm.PUSH0),
+		byte(vm.PUSH0),
+		byte(vm.CALLDATACOPY),
+
+		// set up auth
+		byte(vm.CALLDATASIZE),
+		byte(vm.PUSH0),
+	}
+	// push authority to stack
+	invoker = append(invoker, append([]byte{byte(vm.PUSH20)}, addr.Bytes()...)...)
+	invoker = append(invoker, []byte{
+
+		byte(vm.AUTH),
+		byte(vm.POP),
+
+		// execute authcall
+		byte(vm.PUSH0), // out size
+		byte(vm.DUP1),  // out offset
+		byte(vm.DUP1),  // out insize
+		byte(vm.DUP1),  // in offset
+		byte(vm.DUP1),  // valueExt
+		byte(vm.DUP1),  // value
+		byte(vm.PUSH2), // address
+		byte(0xbb),
+		byte(0xbb),
+		byte(vm.GAS), // gas
+		byte(vm.AUTHCALL),
+		byte(vm.STOP),
+	}...,
+	)
+
+	// Set the invoker's code.
+	if entry, _ := gspec.Alloc[aa]; true {
+		entry.Code = invoker
+		gspec.Alloc[aa] = entry
+	}
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	gspec.Config.CancunTime = u64(0)
+	gspec.Config.PragueTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		commit := common.Hash{0x42}
+		msg := []byte{params.AuthMagic}
+		msg = append(msg, common.LeftPadBytes(gspec.Config.ChainID.Bytes(), 32)...)
+		msg = append(msg, common.LeftPadBytes(common.Big1.Bytes(), 32)...)
+		msg = append(msg, common.LeftPadBytes(aa.Bytes(), 32)...)
+		msg = append(msg, commit.Bytes()...)
+		msg = crypto.Keccak256(msg)
+
+		sig, _ := crypto.Sign(msg, key)
+		sig = append([]byte{sig[len(sig)-1]}, sig[0:len(sig)-1]...)
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       append(sig, commit.Bytes()...),
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Verify authcall worked correctly.
+	state, _ := chain.State()
+	got := state.GetState(bb, common.Hash{})
+	if want := common.LeftPadBytes(addr.Bytes(), 32); !bytes.Equal(got.Bytes(), want) {
+		t.Fatalf("incorrect sender in authcall: got %s, want %s", got.Hex(), common.Bytes2Hex(want))
 	}
 }

@@ -420,6 +420,73 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	return ret, gas, err
 }
 
+// AuthCall mimic Call except it sets the caller to the Authorized addres$ in Scope.
+func (evm *EVM) AuthCall(invoker ContractRef, caller, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+	// Capture the tracer start/end events in debug mode
+	if evm.Config.Tracer != nil {
+		evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
+	// Fail if we're trying to execute above the call depth limit
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
+	}
+	// Fail if we're trying to transfer more than the available balance
+	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+		return nil, gas, ErrInsufficientBalance
+	}
+	snapshot := evm.StateDB.Snapshot()
+	p, isPrecompile := evm.precompile(addr)
+
+	if !evm.StateDB.Exist(addr) {
+		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
+			// Calling a non-existing account, don't do anything.
+			return nil, gas, nil
+		}
+		evm.StateDB.CreateAccount(addr)
+	}
+	evm.Context.Transfer(evm.StateDB, caller, addr, value)
+
+	if isPrecompile {
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
+	} else {
+		// Initialise a new contract and set the code that is to be used by the EVM.
+		// The contract is a scoped environment for this execution context only.
+		code := evm.StateDB.GetCode(addr)
+		if len(code) == 0 {
+			ret, err = nil, nil // gas is unchanged
+		} else {
+			addrCopy := addr
+			callerCopy := caller
+			// If the account has no code, we can abort here
+			// The depth-check is already done, and precompiles handled above
+			contract := NewContract(AccountRef(callerCopy), AccountRef(addrCopy), value, gas)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
+			ret, err = evm.interpreter.Run(contract, input, false)
+			gas = contract.Gas
+		}
+	}
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != ErrExecutionReverted {
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
+			}
+
+			gas = 0
+		}
+		// TODO: consider clearing up unused snapshots:
+		//} else {
+		//	evm.StateDB.DiscardSnapshot(snapshot)
+	}
+	return ret, gas, err
+}
+
 type codeAndHash struct {
 	code []byte
 	hash common.Hash

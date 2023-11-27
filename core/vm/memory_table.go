@@ -56,6 +56,10 @@ func memoryMcopy(stack *Stack) (uint64, bool) {
 	return calcMemSize64(mStart, stack.Back(2)) // stack[2]: length
 }
 
+func memoryAuth(stack *Stack) (uint64, bool) {
+	return calcMemSize64(stack.Back(1), stack.Back(2))
+}
+
 func memoryCreate(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(1), stack.Back(2))
 }

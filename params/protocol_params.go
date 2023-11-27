@@ -189,4 +189,7 @@ var (
 	BeaconRootsAddress = common.HexToAddress("0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02")
 	// SystemAddress is where the system-transaction is sent from as per EIP-4788
 	SystemAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+
+	// Magic prefix for EIP-3074 AUTH messages.
+	AuthMagic = byte(0x04)
 )

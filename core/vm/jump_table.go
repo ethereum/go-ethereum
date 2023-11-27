@@ -57,6 +57,7 @@ var (
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
+	pragueInstructionSet           = newPraugeInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
 )
 
@@ -84,6 +85,12 @@ func validate(jt JumpTable) JumpTable {
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
 	enable4762(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newPraugeInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	enable3074(&instructionSet) // EIP-3074 AUTH & AUTHCALL
 	return validate(instructionSet)
 }
 

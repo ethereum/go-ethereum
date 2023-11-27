@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -47,7 +48,8 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 				// Once we're done with YOLOv2 and schedule this for mainnet, might
 				// be good to remove this panic here, which is just really a
 				// canary to have during testing
-				panic("impossible case: address was not present in access list during sstore op")
+
+				panic(fmt.Sprintf("impossible case: address was not present in access list during sstore op %s", contract.Address()))
 			}
 		}
 		value := common.Hash(y.Bytes32())
@@ -205,6 +207,7 @@ var (
 	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
 	// gasSelfdestructEIP3529 implements the changes in EIP-3529 (no refunds)
 	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
+	gasAuthCallEIP2929     = makeCallVariantGasCallEIP2929(gasAuthCall)
 
 	// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 	//
@@ -247,4 +250,23 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 		return gas, nil
 	}
 	return gasFunc
+}
+
+func gasAuthEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	addr := common.Address(stack.peek().Bytes20())
+	// Check slot presence in the access list
+	if !evm.StateDB.AddressInAccessList(addr) {
+		evm.StateDB.AddAddressToAccessList(addr)
+		var overflow bool
+		// We charge (cold-warm), since 'warm' is already charged as constantGas
+		if gas, overflow = math.SafeAdd(gas, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
+			return 0, ErrGasUintOverflow
+		}
+		return gas, nil
+	}
+	return gas, nil
 }
