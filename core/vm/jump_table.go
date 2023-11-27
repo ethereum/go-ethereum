@@ -57,6 +57,7 @@ var (
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
+	pragueInstructionSet           = newPraugeInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,6 +79,12 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newPraugeInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	enable3074(&instructionSet) // EIP-3074 AUTH & AUTHCALL
+	return validate(instructionSet)
 }
 
 func newCancunInstructionSet() JumpTable {
