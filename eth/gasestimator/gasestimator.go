@@ -128,7 +128,25 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// given limit, but we probably don't want to return the lowest possible gas
 	// limit for these cases anyway.
 	lo = result.UsedGas - 1
-	
+
+	// There's a fairly high chance for the transaction to execute successfully
+	// with gasLimit set to the first execution's usedGas + gasRefund. Explicitly
+	// check that gas amount and use as a limit for the binary search.
+	optimisticGasLimit := (result.UsedGas + result.RefundedGas + params.CallStipend) * 64 / 63
+	if optimisticGasLimit < hi {
+		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
+		if err != nil {
+			// This should not happen under normal conditions since if we make it this far the
+			// transaction had run without error at least once before.
+			log.Error("Execution error in estimate gas", "err", err)
+			return 0, nil, err
+		}
+		if failed {
+			lo = optimisticGasLimit
+		} else {
+			hi = optimisticGasLimit
+		}
+	}
 	// Binary search for the smallest gas limit that allows the tx to execute successfully.
 	for lo+1 < hi {
 		if opts.ErrorRatio > 0 {
