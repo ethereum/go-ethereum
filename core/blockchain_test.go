@@ -4716,3 +4716,67 @@ func TestEIP3651(t *testing.T) {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
 }
+
+func TestIncrementSlotAcrossManyBlocks(t *testing.T) {
+	//testDeleteRecreateSlotsAcrossManyBlocks(t, rawdb.HashScheme)
+	testIncrementSlotAcrossManyBlocks(t, rawdb.PathScheme)
+}
+
+func testIncrementSlotAcrossManyBlocks(t *testing.T, scheme string) {
+	var (
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address   = crypto.PubkeyToAddress(key.PublicKey)
+		funds     = big.NewInt(1000000000000000)
+		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
+	)
+	// Populate two slots
+	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
+	aaStorage[common.HexToHash("02")] = common.HexToHash("02")
+
+	code := []byte{
+		byte(vm.PUSH1), 0x1, //
+		byte(vm.NUMBER),     // value = number + 1
+		byte(vm.ADD),        //
+		byte(vm.PUSH1), 0x3, // location
+		byte(vm.SSTORE), // Set slot[3] = number + 1
+	}
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+			// The contract increments a slot (sets to blocknumber)
+			bb: {
+				Code:    code,
+				Balance: big.NewInt(1),
+			},
+		},
+	}
+	var nonce uint64
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 5, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+
+		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
+			big.NewInt(0), 500000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+		nonce++
+		b.AddTx(tx)
+	})
+	// Import the canonical chain
+	cache := DefaultCacheConfigWithScheme(scheme)
+	cache.SnapshotLimit = 0 // disable snapshot
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), cache, gspec, nil, engine, vm.Config{
+		Tracer: logger.NewJSONLogger(nil, os.Stdout),
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	for _, block := range blocks {
+		if n, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+		}
+	}
+}
