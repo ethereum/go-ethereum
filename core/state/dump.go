@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -50,14 +49,14 @@ type DumpCollector interface {
 
 // DumpAccount represents an account in the state.
 type DumpAccount struct {
-	Balance   string                 `json:"balance"`
-	Nonce     uint64                 `json:"nonce"`
-	Root      hexutil.Bytes          `json:"root"`
-	CodeHash  hexutil.Bytes          `json:"codeHash"`
-	Code      hexutil.Bytes          `json:"code,omitempty"`
-	Storage   map[common.Hash]string `json:"storage,omitempty"`
-	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
-	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
+	Balance     string                 `json:"balance"`
+	Nonce       uint64                 `json:"nonce"`
+	Root        hexutil.Bytes          `json:"root"`
+	CodeHash    hexutil.Bytes          `json:"codeHash"`
+	Code        hexutil.Bytes          `json:"code,omitempty"`
+	Storage     map[common.Hash]string `json:"storage,omitempty"`
+	Address     *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
+	AddressHash hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
 
 }
 
@@ -78,7 +77,7 @@ func (d *Dump) OnRoot(root common.Hash) {
 // OnAccount implements DumpCollector interface
 func (d *Dump) OnAccount(addr *common.Address, account DumpAccount) {
 	if addr == nil {
-		d.Accounts[fmt.Sprintf("pre(%s)", account.SecureKey)] = account
+		d.Accounts[fmt.Sprintf("pre(%s)", account.AddressHash)] = account
 	}
 	if addr != nil {
 		d.Accounts[(*addr).String()] = account
@@ -93,14 +92,14 @@ type iterativeDump struct {
 // OnAccount implements DumpCollector interface
 func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 	dumpAccount := &DumpAccount{
-		Balance:   account.Balance,
-		Nonce:     account.Nonce,
-		Root:      account.Root,
-		CodeHash:  account.CodeHash,
-		Code:      account.Code,
-		Storage:   account.Storage,
-		SecureKey: account.SecureKey,
-		Address:   addr,
+		Balance:     account.Balance,
+		Nonce:       account.Nonce,
+		Root:        account.Root,
+		CodeHash:    account.CodeHash,
+		Code:        account.Code,
+		Storage:     account.Storage,
+		AddressHash: account.AddressHash,
+		Address:     addr,
 	}
 	d.Encode(dumpAccount)
 }
@@ -140,19 +139,16 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 		var (
 			account = DumpAccount{
-				Balance:   data.Balance.String(),
-				Nonce:     data.Nonce,
-				Root:      data.Root[:],
-				CodeHash:  data.CodeHash,
-				SecureKey: it.Key,
+				Balance:     data.Balance.String(),
+				Nonce:       data.Nonce,
+				Root:        data.Root[:],
+				CodeHash:    data.CodeHash,
+				AddressHash: it.Key,
 			}
 			address   *common.Address
 			addr      common.Address
 			addrBytes = s.trie.GetKey(it.Key)
 		)
-		if addrBytes == nil { // Preimage not present in memory. Check database.
-			addrBytes = rawdb.ReadPreimage(s.Database().DiskDB(), common.BytesToHash(it.Key))
-		}
 		if addrBytes == nil {
 			missingPreimages++
 			if conf.OnlyWithAddresses {
