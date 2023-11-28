@@ -74,6 +74,7 @@ type stateObject struct {
 	originStorage  Storage // Storage cache of original entries to dedup rewrites
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution, reset for every transaction
+	readStorage []common.Hash
 
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
@@ -111,6 +112,7 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
+		readStorage:    []common.Hash{},
 	}
 }
 
@@ -256,11 +258,22 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
+
+	// prefetch slots that are read so that they will appear in witness
+	for _, value := range s.readStorage {
+		if _, ok := s.dirtyStorage[value]; !ok {
+			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(value[:]))
+		}
+	}
+
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
+	}
+	if len(s.readStorage) > 0 {
+		s.readStorage = []common.Hash{}
 	}
 }
 
@@ -394,6 +407,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, map[string][]byte, error) {
 		return nil, nil, err
 	}
 	s.data.Root = root
+	fmt.Printf("node count %d\n", len(nodes.Leaves))
 
 	// Update original account data after commit
 	s.origin = s.data.Copy()

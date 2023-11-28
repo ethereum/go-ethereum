@@ -1232,6 +1232,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if err != nil {
 		return common.Hash{}, err
 	}
+	if set != nil {
+		fmt.Printf("leaf count: %d\n", len(set.Leaves))
+	}
 	// Merge the dirty nodes of account trie into global set
 	if set != nil {
 		if err := nodes.Merge(set); err != nil {
