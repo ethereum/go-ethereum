@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -85,7 +86,13 @@ func blockTestCmd(ctx *cli.Context) error {
 			continue
 		}
 		test := tests[name]
-		if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
+		if err := test.Run(false, rawdb.HashScheme, tracer, func(res error, chain *core.BlockChain) {
+			if ctx.Bool(DumpFlag.Name) {
+				if state, _ := chain.State(); state != nil {
+					fmt.Println(string(state.Dump(nil)))
+				}
+			}
+		}); err != nil {
 			return fmt.Errorf("test %v: %w", name, err)
 		}
 	}
