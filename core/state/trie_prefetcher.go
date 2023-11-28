@@ -75,7 +75,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 // and reports the stats to the metrics subsystem.
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
-		fetcher.abort() // safe to do multiple times
+		fetcher.wait() // safe to do multiple times
 
 		if metrics.Enabled {
 			if fetcher.root == p.root {
@@ -123,24 +123,16 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		storageSkipMeter:  p.storageSkipMeter,
 		storageWasteMeter: p.storageWasteMeter,
 	}
-	// If the prefetcher is already a copy, duplicate the data
-	if p.fetches != nil {
-		for root, fetch := range p.fetches {
-			if fetch == nil {
-				continue
-			}
-			copy.fetches[root] = p.db.CopyTrie(fetch)
-		}
-		return copy
-	}
-	// Otherwise we're copying an active fetcher, retrieve the current states
-	for id, fetcher := range p.fetchers {
-		copy.fetches[id] = fetcher.peek()
-	}
 	return copy
 }
 
 // prefetch schedules a batch of trie items to prefetch.
+// prefetch is called from two locations:
+//  1. Finalize of the state-objects storage roots. This happens at the end
+//     of every transaction, meaning that if several transactions touches
+//     upon the same contract, the parameters invoking this method may be
+//     repeated.
+//  2. Finalize of the main account trie. This happens only once per block.
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
@@ -175,15 +167,13 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
-	// Interrupt the prefetcher if it's by any chance still running and return
-	// a copy of any pre-loaded trie.
-	fetcher.abort() // safe to do multiple times
-
-	trie := fetcher.peek()
-	if trie == nil {
+	// Wait for the fether to finish
+	fetcher.wait() // safe to do multiple times
+	if fetcher.trie == nil {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
+	trie := fetcher.db.CopyTrie(fetcher.trie)
 	return trie
 }
 
@@ -218,10 +208,9 @@ type subfetcher struct {
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // Channel to request a copy of the current trie
+	wake chan struct{} // Wake channel if a new task is scheduled
+	stop chan struct{} // Channel to interrupt processing
+	term chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -238,9 +227,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		root:  root,
 		addr:  addr,
 		wake:  make(chan struct{}, 1),
-		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
 	go sf.loop()
@@ -253,40 +240,20 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	sf.lock.Lock()
 	sf.tasks = append(sf.tasks, keys...)
 	sf.lock.Unlock()
-
-	// Notify the prefetcher, it's fine if it's already terminated
-	select {
-	case sf.wake <- struct{}{}:
-	default:
-	}
+	// Notify the prefetcher. The wake-chan is buffered, so this is async.
+	sf.wake <- struct{}{}
 }
 
-// peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
-// is currently.
-func (sf *subfetcher) peek() Trie {
-	ch := make(chan Trie)
-	select {
-	case sf.copy <- ch:
-		// Subfetcher still alive, return copy from it
-		return <-ch
-
-	case <-sf.term:
-		// Subfetcher already terminated, return a copy directly
-		if sf.trie == nil {
-			return nil
-		}
-		return sf.db.CopyTrie(sf.trie)
-	}
-}
-
-// abort interrupts the subfetcher immediately. It is safe to call abort multiple
+// wait waits for the subfetcher to finish it's task. It is safe to call wait multiple
 // times but it is not thread safe.
-func (sf *subfetcher) abort() {
-	select {
-	case <-sf.stop:
-	default:
-		close(sf.stop)
-	}
+func (sf *subfetcher) wait() {
+	// Signal termination by nil tasks
+	sf.lock.Lock()
+	sf.tasks = nil
+	sf.lock.Unlock()
+	// Notify the prefetcher. The wake-chan is buffered, so this is async.
+	sf.wake <- struct{}{}
+	// Wait for it to terminate
 	<-sf.term
 }
 
@@ -316,50 +283,28 @@ func (sf *subfetcher) loop() {
 	}
 	// Trie opened successfully, keep prefetching items
 	for {
-		select {
-		case <-sf.wake:
-			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-			sf.lock.Lock()
-			tasks := sf.tasks
-			sf.tasks = nil
-			sf.lock.Unlock()
-
-			// Prefetch any tasks until the loop is interrupted
-			for i, task := range tasks {
-				select {
-				case <-sf.stop:
-					// If termination is requested, add any leftover back and return
-					sf.lock.Lock()
-					sf.tasks = append(sf.tasks, tasks[i:]...)
-					sf.lock.Unlock()
-					return
-
-				case ch := <-sf.copy:
-					// Somebody wants a copy of the current trie, grant them
-					ch <- sf.db.CopyTrie(sf.trie)
-
-				default:
-					// No termination request yet, prefetch the next entry
-					if _, ok := sf.seen[string(task)]; ok {
-						sf.dups++
-					} else {
-						if len(task) == common.AddressLength {
-							sf.trie.GetAccount(common.BytesToAddress(task))
-						} else {
-							sf.trie.GetStorage(sf.addr, task)
-						}
-						sf.seen[string(task)] = struct{}{}
-					}
-				}
-			}
-
-		case ch := <-sf.copy:
-			// Somebody wants a copy of the current trie, grant them
-			ch <- sf.db.CopyTrie(sf.trie)
-
-		case <-sf.stop:
-			// Termination is requested, abort and leave remaining tasks
+		<-sf.wake
+		// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
+		sf.lock.Lock()
+		tasks := sf.tasks
+		sf.tasks = nil
+		sf.lock.Unlock()
+		if tasks == nil {
+			// No more tasks
 			return
+		}
+		// Prefetch all tasks
+		for _, task := range tasks {
+			if _, ok := sf.seen[string(task)]; ok {
+				sf.dups++
+				continue
+			}
+			if len(task) == common.AddressLength {
+				sf.trie.GetAccount(common.BytesToAddress(task))
+			} else {
+				sf.trie.GetStorage(sf.addr, task)
+			}
+			sf.seen[string(task)] = struct{}{}
 		}
 	}
 }
