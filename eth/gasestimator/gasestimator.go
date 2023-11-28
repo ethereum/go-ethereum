@@ -52,8 +52,8 @@ type Options struct {
 func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64) (uint64, []byte, error) {
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
-		lo = params.TxGas - 1 // lowest-known gas limit where tx execution fails
-		hi uint64             // lowest-known gas limit where tx execution succeeds
+		lo uint64 // lowest-known gas limit where tx execution fails
+		hi uint64 // lowest-known gas limit where tx execution succeeds
 	)
 	// Determine the highest gas limit can be used during the estimation.
 	hi = opts.Header.GasLimit
