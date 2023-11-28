@@ -42,6 +42,8 @@ type Options struct {
 	Chain  core.ChainContext   // Chain context to access past block hashes
 	Header *types.Header       // Header defining the block context to execute in
 	State  *state.StateDB      // Pre-state on top of which to estimate the gas
+
+	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
 
 // Estimate returns the lowest possible gas limit that allows the transaction to
@@ -50,8 +52,8 @@ type Options struct {
 func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64) (uint64, []byte, error) {
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
-		lo uint64 // lowest-known gas limit where tx execution fails
-		hi uint64 // lowest-known gas limit where tx execution succeeds
+		lo = params.TxGas - 1 // lowest-known gas limit where tx execution fails
+		hi uint64             // lowest-known gas limit where tx execution succeeds
 	)
 	// Determine the highest gas limit can be used during the estimation.
 	hi = opts.Header.GasLimit
@@ -86,15 +88,27 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			if transfer == nil {
 				transfer = new(big.Int)
 			}
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+			log.Debug("Gas estimation capped by limited funds", "original", hi, "balance", balance,
 				"sent", transfer, "maxFeePerGas", feeCap, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
-		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
+		log.Debug("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
 		hi = gasCap
+	}
+	// If the transaction is a plain value transfer, short circuit estimation and
+	// directly try 21000. Returning 21000 without any execution is dangerous as
+	// some tx field combos might bump the price up even for plain transfers (e.g.
+	// unused access list items). Ever so slightly wasteful, but safer overall.
+	if len(call.Data) == 0 {
+		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
+			failed, _, err := execute(ctx, call, opts, params.TxGas)
+			if !failed && err == nil {
+				return params.TxGas, nil, nil
+			}
+		}
 	}
 	// We first execute the transaction at the highest allowable gas limit, since if this fails we
 	// can return error immediately.
@@ -114,9 +128,18 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// given limit, but we probably don't want to return the lowest possible gas
 	// limit for these cases anyway.
 	lo = result.UsedGas - 1
-
+	
 	// Binary search for the smallest gas limit that allows the tx to execute successfully.
 	for lo+1 < hi {
+		if opts.ErrorRatio > 0 {
+			// It is a bit pointless to return a perfect estimation, as changing
+			// network conditions require the caller to bump it up anyway. Since
+			// wallets tend to use 20-25% bump, allowing a small approximation
+			// error is fine (as long as it's upwards).
+			if float64(hi-lo)/float64(hi) < opts.ErrorRatio {
+				break
+			}
+		}
 		mid := (hi + lo) / 2
 		if mid > lo*2 {
 			// Most txs don't need much higher gas limit than their gas used, and most txs don't
