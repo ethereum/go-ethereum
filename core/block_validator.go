@@ -55,6 +55,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
+	// Check if block tx count is is smaller than the max count
+	if !v.config.Scroll.IsValidTxCount(len(block.Transactions())) {
+		return consensus.ErrInvalidTxCount
+	}
+	// Check if block payload size is smaller than the max size
+	if !v.config.Scroll.IsValidBlockSize(block.PayloadSize()) {
+		return ErrInvalidBlockPayloadSize
+	}
 
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.

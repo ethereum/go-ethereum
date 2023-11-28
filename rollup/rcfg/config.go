@@ -10,6 +10,11 @@ import (
 // verify in consensus layer when decentralizing sequencer
 
 var (
+	ScrollMaxTxPerBlock             = 100
+	ScrollMaxTxPayloadBytesPerBlock = 120 * 1024
+)
+
+var (
 	// L2MessageQueueAddress is the address of the L2MessageQueue
 	// predeploy
 	// see contracts/src/L2/predeploys/L2MessageQueue.sol

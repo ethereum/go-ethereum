@@ -85,6 +85,7 @@ type environment struct {
 	signer   types.Signer
 	state    *state.StateDB // apply state changes here
 	tcount   int            // tx count in cycle
+	blockSize uint64 // approximate size of tx payload in bytes
 	gasPool  *core.GasPool  // available gas used to pack transactions
 	coinbase common.Address
 
@@ -722,6 +723,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+	env.blockSize = 0
 	return env, nil
 }
 
@@ -834,6 +836,18 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 			txs.Pop()
 			continue
 		}
+		// If we have collected enough transactions then we're done
+		// Originally we only limit l2txs count, but now strictly limit total txs number.
+		// log.Info("w.chainConfig", "w.chainConfig.Scroll", w.chainConfig.Scroll)
+		if !w.chainConfig.Scroll.IsValidTxCount(env.tcount + 1) {
+			log.Trace("Transaction count limit reached", "have", env.tcount, "want", w.chainConfig.Scroll.MaxTxPerBlock)
+			break
+		}
+		if !tx.IsL1MessageTx() && !w.chainConfig.Scroll.IsValidBlockSize(env.blockSize+tx.Size()) {
+			log.Trace("Block size limit reached", "have", env.blockSize, "want", w.chainConfig.Scroll.MaxTxPayloadBytesPerBlock, "tx", tx.Size())
+			txs.Pop() // skip transactions from this account
+			continue
+		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -860,6 +874,12 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 			txs.Shift()
+
+			if tx.IsL1MessageTx() {
+			} else {
+				// only consider block size limit for L2 transactions
+				env.blockSize += tx.Size()
+			}
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from

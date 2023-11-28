@@ -38,4 +38,7 @@ var (
 	// ErrInvalidTerminalBlock is returned if a block is invalid wrt. the terminal
 	// total difficulty.
 	ErrInvalidTerminalBlock = errors.New("invalid terminal block")
+
+	// ErrInvalidTxCount is returned if a block contains too many transactions.
+	ErrInvalidTxCount = errors.New("invalid transaction count")
 )
