@@ -185,7 +185,7 @@ func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
 			if logfmt {
 				return slog.String("t", attr.Value.Time().Format(timeFormat))
 			} else {
-				return slog.Attr{"t", attr.Value}
+				return slog.Attr{Key: "t", Value: attr.Value}
 			}
 		}
 	case slog.LevelKey:
