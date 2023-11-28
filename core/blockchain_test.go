@@ -4766,7 +4766,8 @@ func testIncrementSlotAcrossManyBlocks(t *testing.T, scheme string) {
 	})
 	// Import the canonical chain
 	cache := DefaultCacheConfigWithScheme(scheme)
-	cache.SnapshotLimit = 0 // disable snapshot
+	cache.SnapshotLimit = 0   // disable snapshot
+	cache.SnapshotLimit = 500 // enable snapshot
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), cache, gspec, nil, engine, vm.Config{
 		Tracer: logger.NewJSONLogger(nil, os.Stdout),
 	}, nil, nil)

@@ -167,14 +167,13 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
-	// Wait for the fether to finish
+	// Wait for the fetcher to finish
 	fetcher.wait() // safe to do multiple times
 	if fetcher.trie == nil {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
-	trie := fetcher.db.CopyTrie(fetcher.trie)
-	return trie
+	return fetcher.db.CopyTrie(fetcher.trie)
 }
 
 // used marks a batch of state items used to allow creating statistics as to
@@ -205,11 +204,11 @@ type subfetcher struct {
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
 
-	tasks [][]byte   // Items queued up for retrieval
-	lock  sync.Mutex // Lock protecting the task queue
+	tasks   [][]byte   // Items queued up for retrieval
+	lock    sync.Mutex // Lock protecting the task queue
+	closing bool       // set to true if the subfetcher is closing
 
 	wake chan struct{} // Wake channel if a new task is scheduled
-	stop chan struct{} // Channel to interrupt processing
 	term chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
@@ -249,6 +248,10 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 func (sf *subfetcher) wait() {
 	// Signal termination by nil tasks
 	sf.lock.Lock()
+	if sf.closing {
+		return // already exiting
+	}
+	sf.closing = true
 	sf.tasks = nil
 	sf.lock.Unlock()
 	// Notify the prefetcher. The wake-chan is buffered, so this is async.
