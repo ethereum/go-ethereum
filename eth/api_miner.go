@@ -18,7 +18,6 @@ package eth
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -32,21 +31,6 @@ type MinerAPI struct {
 // NewMinerAPI creates a new MinerAPI instance.
 func NewMinerAPI(e *Ethereum) *MinerAPI {
 	return &MinerAPI{e}
-}
-
-// Start starts the miner with the given number of threads. If threads is nil,
-// the number of workers started is equal to the number of logical CPUs that are
-// usable by this process. If mining is already running, this method adjust the
-// number of threads allowed to use and updates the minimum price required by the
-// transaction pool.
-func (api *MinerAPI) Start() error {
-	return api.e.StartMining()
-}
-
-// Stop terminates the miner, both at the consensus engine level as well as at
-// the block creation level.
-func (api *MinerAPI) Stop() {
-	api.e.StopMining()
 }
 
 // SetExtra sets the extra data string that is included when this miner mines a block.
@@ -78,9 +62,4 @@ func (api *MinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
 func (api *MinerAPI) SetEtherbase(etherbase common.Address) bool {
 	api.e.SetEtherbase(etherbase)
 	return true
-}
-
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *MinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }

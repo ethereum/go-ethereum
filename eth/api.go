@@ -18,7 +18,6 @@ package eth
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // EthereumAPI provides an API to access Ethereum full node-related information.
@@ -39,11 +38,6 @@ func (api *EthereumAPI) Etherbase() (common.Address, error) {
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (api *EthereumAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
-}
-
-// Hashrate returns the POW hashrate.
-func (api *EthereumAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
 
 // Mining returns an indication if this node is currently mining.

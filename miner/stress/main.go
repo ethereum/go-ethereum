@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
@@ -53,7 +54,7 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	sealers := make([]*ecdsa.PrivateKey, 4)
+	sealers := make([]*ecdsa.PrivateKey, 1)
 	for i := 0; i < len(sealers); i++ {
 		sealers[i], _ = crypto.GenerateKey()
 	}
@@ -99,15 +100,15 @@ func main() {
 			panic(err)
 		}
 		stack.AccountManager().AddBackend(ks)
+
+		beacon, err := catalyst.NewSimulatedBeacon(3, ethBackend)
+		if err != nil {
+			panic(err)
+		}
+		beacon.Start()
 	}
 
 	// Iterate over all the nodes and start signing on them
-	time.Sleep(3 * time.Second)
-	for _, node := range nodes {
-		if err := node.StartMining(); err != nil {
-			panic(err)
-		}
-	}
 	time.Sleep(3 * time.Second)
 
 	// Start injecting transactions from the faucet like crazy
@@ -132,8 +133,11 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().Add([]*types.Transaction{tx}, true, false); err != nil {
-			panic(err)
+		errs := backend.TxPool().Add([]*types.Transaction{tx}, true, false)
+		for _, err := range errs {
+			if err != nil {
+				panic(err)
+			}
 		}
 		nonces[index]++
 
@@ -148,12 +152,7 @@ func main() {
 // signer and faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core.Genesis {
 	// Create a Clique network based off of the Sepolia config
-	genesis := core.DefaultSepoliaGenesisBlock()
-	genesis.GasLimit = 25000000
-
-	genesis.Config.ChainID = big.NewInt(18)
-	genesis.Config.Clique.Period = 1
-
+	genesis := core.DeveloperGenesisBlock(25000000, nil)
 	genesis.Alloc = types.GenesisAlloc{}
 	for _, faucet := range faucets {
 		genesis.Alloc[crypto.PubkeyToAddress(faucet.PublicKey)] = types.Account{
@@ -217,7 +216,6 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	err = stack.Start()
 	return stack, ethBackend, err
 }

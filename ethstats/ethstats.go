@@ -39,7 +39,6 @@ import (
 	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -78,13 +77,6 @@ type fullNodeBackend interface {
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Header
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-}
-
-// miningNodeBackend encompasses the functionality necessary for a mining node
-// reporting to ethstats
-type miningNodeBackend interface {
-	fullNodeBackend
-	Miner() *miner.Miner
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -796,11 +788,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	)
 	// check if backend is a full node
 	if fullBackend, ok := s.backend.(fullNodeBackend); ok {
-		if miningBackend, ok := s.backend.(miningNodeBackend); ok {
-			mining = miningBackend.Miner().Mining()
-			hashrate = int(miningBackend.Miner().Hashrate())
-		}
-
 		sync := fullBackend.SyncProgress()
 		syncing = !sync.Done()
 

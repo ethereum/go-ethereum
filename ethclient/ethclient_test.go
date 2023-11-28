@@ -602,8 +602,9 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 
 	// send a transaction for some interesting pending status
+	// and wait for the transaction to be included in the pending block
 	sendTransaction(ec)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 
 	// Check pending transaction count
 	pending, err := ec.PendingTransactionCount(context.Background())
