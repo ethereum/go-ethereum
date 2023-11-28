@@ -910,18 +910,18 @@ func TestCall(t *testing.T) {
 	}
 }
 
-type Account struct {
+type account struct {
 	key  *ecdsa.PrivateKey
 	addr common.Address
 }
 
-func newAccounts(n int) (accounts []Account) {
+func newAccounts(n int) (accounts []account) {
 	for i := 0; i < n; i++ {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
-		accounts = append(accounts, Account{key: key, addr: addr})
+		accounts = append(accounts, account{key: key, addr: addr})
 	}
-	slices.SortFunc(accounts, func(a, b Account) int { return a.addr.Cmp(b.addr) })
+	slices.SortFunc(accounts, func(a, b account) int { return a.addr.Cmp(b.addr) })
 	return accounts
 }
 
