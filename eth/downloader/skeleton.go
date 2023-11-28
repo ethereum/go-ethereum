@@ -471,7 +471,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 				// non-force reorg.
 				if event.force {
 					event.errc <- nil // forced head reorg accepted
-					log.Info("Restart sync cycle", "reason", err)
+					log.Info("Restarting sync cycle", "reason", err)
 					return event.header, errSyncReorged
 				}
 				event.errc <- err
