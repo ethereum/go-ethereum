@@ -206,7 +206,7 @@ func TestForkResendTx(t *testing.T) {
 	// 5.
 	sim.Commit()
 	if err := sim.SendTransaction(context.Background(), tx); err != nil {
-		t.Errorf("sending transaction: %v", err)
+		t.Fatalf("sending transaction: %v", err)
 	}
 	sim.Commit()
 	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
