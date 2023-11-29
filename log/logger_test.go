@@ -57,11 +57,21 @@ func BenchmarkTraceLogging(b *testing.B) {
 	}
 }
 
-func BenchmarkGloggerTerminal(b *testing.B) {
-	glogHandler := NewGlogHandler(NewTerminalHandler(io.Discard, false))
-	glogHandler.Verbosity(LevelInfo)
-	l := NewLogger(glogHandler)
+func BenchmarkTerminalHandler(b *testing.B) {
+	l := NewLogger(NewTerminalHandler(io.Discard, false))
+	benchmarkLogger(b, l)
+}
+func BenchmarkLogfmtHandler(b *testing.B) {
+	l := NewLogger(LogfmtHandler(io.Discard))
+	benchmarkLogger(b, l)
+}
 
+func BenchmarkJSONHandler(b *testing.B) {
+	l := NewLogger(JSONHandler(io.Discard))
+	benchmarkLogger(b, l)
+}
+
+func benchmarkLogger(b *testing.B, l Logger) {
 	type custom struct {
 		A string
 		B int8
@@ -73,7 +83,6 @@ func BenchmarkGloggerTerminal(b *testing.B) {
 		nilbig *big.Int
 		err    = fmt.Errorf("Oh nooes it's crap")
 	)
-
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
