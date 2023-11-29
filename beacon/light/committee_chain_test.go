@@ -259,14 +259,14 @@ func (c *committeeChainTest) setClockPeriod(period float64) {
 }
 
 func (c *committeeChainTest) addFixedCommitteeRoot(tc *testCommitteeChain, period uint64, expErr error) {
-	if err := c.chain.AddFixedCommitteeRoot(period, tc.periods[period].committee.Root()); err != expErr {
-		c.t.Errorf("Incorrect error output from AddFixedCommitteeRoot at period %d (expected %v, got %v)", period, expErr, err)
+	if err := c.chain.addFixedCommitteeRoot(period, tc.periods[period].committee.Root()); err != expErr {
+		c.t.Errorf("Incorrect error output from addFixedCommitteeRoot at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
 
 func (c *committeeChainTest) addCommittee(tc *testCommitteeChain, period uint64, expErr error) {
-	if err := c.chain.AddCommittee(period, tc.periods[period].committee); err != expErr {
-		c.t.Errorf("Incorrect error output from AddCommittee at period %d (expected %v, got %v)", period, expErr, err)
+	if err := c.chain.addCommittee(period, tc.periods[period].committee); err != expErr {
+		c.t.Errorf("Incorrect error output from addCommittee at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
 

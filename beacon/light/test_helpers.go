@@ -62,9 +62,9 @@ func GenerateTestSignedHeader(header types.Header, config *types.ChainConfig, co
 	}
 }
 
-func GenerateTestCheckpoint(period uint64, committee *types.SerializedSyncCommittee) *CheckpointData {
+func GenerateTestCheckpoint(period uint64, committee *types.SerializedSyncCommittee) *types.BootstrapData {
 	header, branch := makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexSyncCommittee, merkle.Value(committee.Root()))
-	return &CheckpointData{
+	return &types.BootstrapData{
 		Header:          header,
 		Committee:       committee,
 		CommitteeRoot:   committee.Root(),

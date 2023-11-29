@@ -25,6 +25,24 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// BootstrapData contains a sync committee where light sync can be started,
+// together with a proof through a beacon header and corresponding state.
+// Note: BootstrapData is fetched from a server based on a known checkpoint hash.
+type BootstrapData struct {
+	Header          Header
+	CommitteeRoot   common.Hash
+	Committee       *SerializedSyncCommittee `rlp:"-"`
+	CommitteeBranch merkle.Values
+}
+
+// Validate verifies the proof included in BootstrapData.
+func (c *BootstrapData) Validate() error {
+	if c.CommitteeRoot != c.Committee.Root() {
+		return errors.New("wrong committee root")
+	}
+	return merkle.VerifyProof(c.Header.StateRoot, params.StateIndexSyncCommittee, c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
+}
+
 // LightClientUpdate is a proof of the next sync committee root based on a header
 // signed by the sync committee of the given period. Optionally, the update can
 // prove quasi-finality by the signed header referring to a previous, finalized

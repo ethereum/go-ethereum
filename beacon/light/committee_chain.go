@@ -45,7 +45,7 @@ var (
 // CommitteeChain is a passive data structure that can validate, hold and update
 // a chain of beacon light sync committees and updates. It requires at least one
 // externally set fixed committee root at the beginning of the chain which can
-// be set either based on a CheckpointData or a trusted source (a local beacon
+// be set either based on a BootstrapData or a trusted source (a local beacon
 // full node). This makes the structure useful for both light client and light
 // server setups.
 //
@@ -209,10 +209,45 @@ func (s *CommitteeChain) Reset() {
 	}
 }
 
-// AddFixedCommitteeRoot sets a fixed committee root at the given period.
+// CheckpointInit initializes a CommitteeChain based on the checkpoint.
+// Note: if the chain is already initialized and the committees proven by the
+// checkpoint do match the existing chain then the chain is retained and the
+// new checkpoint becomes fixed.
+func (s *CommitteeChain) CheckpointInit(bootstrap *types.BootstrapData) error {
+	s.chainmu.Lock()
+	defer s.chainmu.Unlock()
+
+	if err := bootstrap.Validate(); err != nil {
+		return err
+	}
+
+	period := bootstrap.Header.SyncPeriod()
+	if err := s.deleteFixedCommitteeRootsFrom(period + 2); err != nil {
+		s.Reset()
+		return err
+	}
+	if s.addFixedCommitteeRoot(period, bootstrap.CommitteeRoot) != nil {
+		s.Reset()
+		if err := s.addFixedCommitteeRoot(period, bootstrap.CommitteeRoot); err != nil {
+			s.Reset()
+			return err
+		}
+	}
+	if err := s.addFixedCommitteeRoot(period+1, common.Hash(bootstrap.CommitteeBranch[0])); err != nil {
+		s.Reset()
+		return err
+	}
+	if err := s.addCommittee(period, bootstrap.Committee); err != nil {
+		s.Reset()
+		return err
+	}
+	return nil
+}
+
+// addFixedCommitteeRoot sets a fixed committee root at the given period.
 // Note that the period where the first committee is added has to have a fixed
-// root which can either come from a CheckpointData or a trusted source.
-func (s *CommitteeChain) AddFixedCommitteeRoot(period uint64, root common.Hash) error {
+// root which can either come from a BootstrapData or a trusted source.
+func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
@@ -260,10 +295,10 @@ func (s *CommitteeChain) AddFixedCommitteeRoot(period uint64, root common.Hash) 
 	return nil
 }
 
-// DeleteFixedCommitteeRootsFrom deletes fixed roots starting from the given period.
+// deleteFixedCommitteeRootsFrom deletes fixed roots starting from the given period.
 // It also maintains chain consistency, meaning that it also deletes updates and
 // committees if they are no longer supported by a valid update chain.
-func (s *CommitteeChain) DeleteFixedCommitteeRootsFrom(period uint64) error {
+func (s *CommitteeChain) deleteFixedCommitteeRootsFrom(period uint64) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
@@ -305,15 +340,8 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 	}
 }
 
-// GetCommittee returns the committee at the given period.
-// Note: GetCommittee can be called either with locked or unlocked chain mutex.
-func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedSyncCommittee {
-	committee, _ := s.committees.get(period)
-	return committee
-}
-
-// AddCommittee adds a committee at the given period if possible.
-func (s *CommitteeChain) AddCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
+// addCommittee adds a committee at the given period if possible.
+func (s *CommitteeChain) addCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
@@ -334,13 +362,6 @@ func (s *CommitteeChain) AddCommittee(period uint64, committee *types.Serialized
 		s.committeeCache.Remove(period)
 	}
 	return nil
-}
-
-// GetUpdate returns the update at the given period.
-// Note: GetUpdate can be called either with locked or unlocked chain mutex.
-func (s *CommitteeChain) GetUpdate(period uint64) *types.LightClientUpdate {
-	update, _ := s.updates.get(period)
-	return update
 }
 
 // InsertUpdate adds a new update if possible.
