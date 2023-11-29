@@ -895,6 +895,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
+	// If no transaction index is specified, the trace will be conducted on the state
+	// after executing the specified block. However, if a transaction index is provided,
+	// the trace will be conducted on the state after executing the specified transaction
+	// within the specified block.
+	// When "latest" is used without a transaction index, it means that the simulation is
+	// done on the state after the latest block execution. Conversely, when "latest" is used
+	// with a transaction index, it indicates simulating on the intermediate state after a
+	// specific transaction within the most recent block.
 	if config != nil && config.TxIndex != nil {
 		_, _, statedb, release, err = api.backend.StateAtTransaction(ctx, block, int(*config.TxIndex), reexec)
 	} else {
