@@ -102,9 +102,6 @@ func logTest(ctx *cli.Context) error {
 		var c customQuotedStringer
 		log.Info("a custom stringer that emits quoted text", "output", c)
 	}
-	{ // Lazy eval
-		log.Info("Lazy evaluation of value", "key", log.Lazy{Fn: func() interface{} { return "lazy value" }})
-	}
 	{ // Multi-line message
 		log.Info("A message with wonky \U0001F4A9 characters")
 		log.Info("A multiline message \nINFO [10-18|14:11:31.106] with wonky characters \U0001F4A9")

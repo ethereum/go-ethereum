@@ -134,6 +134,9 @@ type Logger interface {
 
 	// Write logs a message at the specified level
 	Write(level slog.Level, msg string, attrs ...any)
+
+	// Enabled reports whether l emits log records at the given context and level.
+	Enabled(ctx context.Context, level slog.Level) bool
 }
 
 type logger struct {
@@ -159,26 +162,6 @@ func (l *logger) Write(level slog.Level, msg string, attrs ...any) {
 	if len(attrs)%2 != 0 {
 		attrs = append(attrs, nil, errorKey, "Normalized odd number of arguments by adding nil")
 	}
-
-	// evaluate lazy values
-	var hadErr bool
-	for i := 1; i < len(attrs); i += 2 {
-		lz, ok := attrs[i].(Lazy)
-		if ok {
-			v, err := evaluateLazy(lz)
-			if err != nil {
-				hadErr = true
-				attrs[i] = err
-			} else {
-				attrs[i] = v
-			}
-		}
-	}
-
-	if hadErr {
-		attrs = append(attrs, errorKey, "bad lazy")
-	}
-
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	r.Add(attrs...)
 	l.inner.Handler().Handle(context.Background(), r)
@@ -194,6 +177,11 @@ func (l *logger) With(ctx ...interface{}) Logger {
 
 func (l *logger) New(ctx ...interface{}) Logger {
 	return l.With(ctx...)
+}
+
+// Enabled reports whether l emits log records at the given context and level.
+func (l *logger) Enabled(ctx context.Context, level slog.Level) bool {
+	return l.inner.Enabled(ctx, level)
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
