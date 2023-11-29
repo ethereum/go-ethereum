@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
+	"golang.org/x/exp/slog"
 )
 
 func init() {
@@ -375,9 +376,11 @@ type execNodeConfig struct {
 
 func initLogging() {
 	// Initialize the logging by default first.
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	var innerHandler slog.Handler
+	innerHandler = slog.NewTextHandler(os.Stderr, nil)
+	glogger := log.NewGlogHandler(innerHandler)
+	glogger.Verbosity(log.LevelInfo)
+	log.SetDefault(log.NewLogger(glogger))
 
 	confEnv := os.Getenv(envNodeConfig)
 	if confEnv == "" {
@@ -395,14 +398,15 @@ func initLogging() {
 		}
 		writer = logWriter
 	}
-	var verbosity = log.LvlInfo
-	if conf.Node.LogVerbosity <= log.LvlTrace && conf.Node.LogVerbosity >= log.LvlCrit {
-		verbosity = conf.Node.LogVerbosity
+	var verbosity = log.LevelInfo
+	if conf.Node.LogVerbosity <= log.LevelTrace && conf.Node.LogVerbosity >= log.LevelCrit {
+		verbosity = log.FromLegacyLevel(int(conf.Node.LogVerbosity))
 	}
 	// Reinitialize the logger
-	glogger = log.NewGlogHandler(log.StreamHandler(writer, log.TerminalFormat(true)))
+	innerHandler = log.NewTerminalHandler(writer, true)
+	glogger = log.NewGlogHandler(innerHandler)
 	glogger.Verbosity(verbosity)
-	log.Root().SetHandler(glogger)
+	log.SetDefault(log.NewLogger(glogger))
 }
 
 // execP2PNode starts a simulation node when the current binary is executed with

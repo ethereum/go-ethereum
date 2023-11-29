@@ -45,6 +45,8 @@ var DeprecatedFlags = []cli.Flag{
 	LightMaxPeersFlag,
 	LightNoPruneFlag,
 	LightNoSyncServeFlag,
+	LogBacktraceAtFlag,
+	LogDebugFlag,
 }
 
 var (
@@ -117,6 +119,18 @@ var (
 		Name:     "light.nosyncserve",
 		Usage:    "Enables serving light clients before syncing (deprecated)",
 		Category: flags.LightCategory,
+	}
+	// Deprecated November 2023
+	LogBacktraceAtFlag = &cli.StringFlag{
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (deprecated)",
+		Value:    "",
+		Category: flags.DeprecatedCategory,
+	}
+	LogDebugFlag = &cli.BoolFlag{
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (deprecated)",
+		Category: flags.DeprecatedCategory,
 	}
 )
 

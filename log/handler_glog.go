@@ -17,6 +17,7 @@
 package log
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -25,54 +26,47 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"golang.org/x/exp/slog"
 )
 
 // errVmoduleSyntax is returned when a user vmodule pattern is invalid.
 var errVmoduleSyntax = errors.New("expect comma-separated list of filename=N")
 
-// errTraceSyntax is returned when a user backtrace pattern is invalid.
-var errTraceSyntax = errors.New("expect file.go:234")
-
 // GlogHandler is a log handler that mimics the filtering features of Google's
 // glog logger: setting global log levels; overriding with callsite pattern
 // matches; and requesting backtraces at certain positions.
 type GlogHandler struct {
-	origin Handler // The origin handler this wraps
+	origin slog.Handler // The origin handler this wraps
 
-	level     atomic.Uint32 // Current log level, atomically accessible
-	override  atomic.Bool   // Flag whether overrides are used, atomically accessible
-	backtrace atomic.Bool   // Flag whether backtrace location is set
+	level    atomic.Int32 // Current log level, atomically accessible
+	override atomic.Bool  // Flag whether overrides are used, atomically accessible
 
-	patterns  []pattern       // Current list of patterns to override with
-	siteCache map[uintptr]Lvl // Cache of callsite pattern evaluations
-	location  string          // file:line location where to do a stackdump at
-	lock      sync.RWMutex    // Lock protecting the override pattern list
+	patterns  []pattern              // Current list of patterns to override with
+	siteCache map[uintptr]slog.Level // Cache of callsite pattern evaluations
+	location  string                 // file:line location where to do a stackdump at
+	lock      sync.RWMutex           // Lock protecting the override pattern list
 }
 
 // NewGlogHandler creates a new log handler with filtering functionality similar
 // to Google's glog logger. The returned handler implements Handler.
-func NewGlogHandler(h Handler) *GlogHandler {
+func NewGlogHandler(h slog.Handler) *GlogHandler {
 	return &GlogHandler{
 		origin: h,
 	}
-}
-
-// SetHandler updates the handler to write records to the specified sub-handler.
-func (h *GlogHandler) SetHandler(nh Handler) {
-	h.origin = nh
 }
 
 // pattern contains a filter for the Vmodule option, holding a verbosity level
 // and a file pattern to match.
 type pattern struct {
 	pattern *regexp.Regexp
-	level   Lvl
+	level   slog.Level
 }
 
 // Verbosity sets the glog verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
-func (h *GlogHandler) Verbosity(level Lvl) {
-	h.level.Store(uint32(level))
+func (h *GlogHandler) Verbosity(level slog.Level) {
+	h.level.Store(int32(level))
 }
 
 // Vmodule sets the glog verbosity pattern.
@@ -108,11 +102,13 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 			return errVmoduleSyntax
 		}
 		// Parse the level and if correct, assemble the filter rule
-		level, err := strconv.Atoi(parts[1])
+		l, err := strconv.Atoi(parts[1])
 		if err != nil {
 			return errVmoduleSyntax
 		}
-		if level <= 0 {
+		level := FromLegacyLevel(l)
+
+		if level == LevelCrit {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// Compile the rule pattern into a regular expression
@@ -130,107 +126,84 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		matcher = matcher + "$"
 
 		re, _ := regexp.Compile(matcher)
-		filter = append(filter, pattern{re, Lvl(level)})
+		filter = append(filter, pattern{re, level})
 	}
 	// Swap out the vmodule pattern for the new filter system
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	h.patterns = filter
-	h.siteCache = make(map[uintptr]Lvl)
+	h.siteCache = make(map[uintptr]slog.Level)
 	h.override.Store(len(filter) != 0)
-	// Enable location storage (globally)
-	if len(h.patterns) > 0 {
-		stackEnabled.Store(true)
-	}
+
 	return nil
 }
 
-// BacktraceAt sets the glog backtrace location. When set to a file and line
-// number holding a logging statement, a stack trace will be written to the Info
-// log whenever execution hits that statement.
-//
-// Unlike with Vmodule, the ".go" must be present.
-func (h *GlogHandler) BacktraceAt(location string) error {
-	// Ensure the backtrace location contains two non-empty elements
-	parts := strings.Split(location, ":")
-	if len(parts) != 2 {
-		return errTraceSyntax
-	}
-	parts[0] = strings.TrimSpace(parts[0])
-	parts[1] = strings.TrimSpace(parts[1])
-	if len(parts[0]) == 0 || len(parts[1]) == 0 {
-		return errTraceSyntax
-	}
-	// Ensure the .go prefix is present and the line is valid
-	if !strings.HasSuffix(parts[0], ".go") {
-		return errTraceSyntax
-	}
-	if _, err := strconv.Atoi(parts[1]); err != nil {
-		return errTraceSyntax
-	}
-	// All seems valid
-	h.lock.Lock()
-	defer h.lock.Unlock()
+func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
+	// fast-track skipping logging if override not enabled and the provided verbosity is above configured
+	return h.override.Load() || slog.Level(h.level.Load()) <= lvl
+}
 
-	h.location = location
-	h.backtrace.Store(len(location) > 0)
-	// Enable location storage (globally)
-	stackEnabled.Store(true)
-	return nil
+func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h.lock.RLock()
+	siteCache := make(map[uintptr]slog.Level)
+	for k, v := range h.siteCache {
+		siteCache[k] = v
+	}
+	h.lock.RUnlock()
+
+	patterns := []pattern{}
+	patterns = append(patterns, h.patterns...)
+
+	res := GlogHandler{
+		origin:    h.origin.WithAttrs(attrs),
+		patterns:  patterns,
+		siteCache: siteCache,
+		location:  h.location,
+	}
+
+	res.level.Store(h.level.Load())
+	res.override.Store(h.override.Load())
+	return &res
+}
+
+func (h *GlogHandler) WithGroup(name string) slog.Handler {
+	panic("not implemented")
 }
 
 // Log implements Handler.Log, filtering a log record through the global, local
 // and backtrace filters, finally emitting it if either allow it through.
-func (h *GlogHandler) Log(r *Record) error {
-	// If backtracing is requested, check whether this is the callsite
-	if h.backtrace.Load() {
-		// Everything below here is slow. Although we could cache the call sites the
-		// same way as for vmodule, backtracing is so rare it's not worth the extra
-		// complexity.
-		h.lock.RLock()
-		match := h.location == r.Call.String()
-		h.lock.RUnlock()
-
-		if match {
-			// Callsite matched, raise the log level to info and gather the stacks
-			r.Lvl = LvlInfo
-
-			buf := make([]byte, 1024*1024)
-			buf = buf[:runtime.Stack(buf, true)]
-			r.Msg += "\n\n" + string(buf)
-		}
-	}
+func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If the global log level allows, fast track logging
-	if h.level.Load() >= uint32(r.Lvl) {
-		return h.origin.Log(r)
+	if slog.Level(h.level.Load()) <= r.Level {
+		return h.origin.Handle(context.Background(), r)
 	}
-	// If no local overrides are present, fast track skipping
-	if !h.override.Load() {
-		return nil
-	}
+
 	// Check callsite cache for previously calculated log levels
 	h.lock.RLock()
-	lvl, ok := h.siteCache[r.Call.Frame().PC]
+	lvl, ok := h.siteCache[r.PC]
 	h.lock.RUnlock()
 
 	// If we didn't cache the callsite yet, calculate it
 	if !ok {
 		h.lock.Lock()
+
+		fs := runtime.CallersFrames([]uintptr{r.PC})
+		frame, _ := fs.Next()
+
 		for _, rule := range h.patterns {
-			if rule.pattern.MatchString(fmt.Sprintf("%+s", r.Call)) {
-				h.siteCache[r.Call.Frame().PC], lvl, ok = rule.level, rule.level, true
-				break
+			if rule.pattern.MatchString(fmt.Sprintf("%+s", frame.File)) {
+				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
 			}
 		}
 		// If no rule matched, remember to drop log the next time
 		if !ok {
-			h.siteCache[r.Call.Frame().PC] = 0
+			h.siteCache[r.PC] = 0
 		}
 		h.lock.Unlock()
 	}
-	if lvl >= r.Lvl {
-		return h.origin.Log(r)
+	if lvl <= r.Level {
+		return h.origin.Handle(context.Background(), r)
 	}
 	return nil
 }
