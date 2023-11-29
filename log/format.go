@@ -95,22 +95,25 @@ func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor boo
 }
 
 func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string) {
+	// tmp is a temporary buffer we use, until bytes.Buffer.AvailableBuffer() (1.21)
+	// can be used.
+	var tmp = make([]byte, 40)
 	writeAttr := func(attr slog.Attr, first, last bool) {
 		buf.WriteByte(' ')
 
 		if color != "" {
 			buf.WriteString(color)
-			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			buf.Write(appendEscapeString(tmp[:0], attr.Key))
 			buf.WriteString("\x1b[0m=")
 		} else {
-			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+			buf.Write(appendEscapeString(tmp[:0], attr.Key))
 			buf.WriteByte('=')
 		}
-		tmp := buf.AvailableBuffer()
-		val := FormatSlogValue(attr.Value, true, tmp)
+		//val := FormatSlogValue(attr.Value, true, buf.AvailableBuffer())
+		val := FormatSlogValue(attr.Value, true, tmp[:0])
 
-		// XXX: we should probably check that all of your key bytes aren't invalid
-		// TODO (jwasinger) above comment was from log15 code.  what does it mean?  check that key bytes are ascii characters?
 		padding := h.fieldPadding[attr.Key]
 
 		length := utf8.RuneCount(val)
