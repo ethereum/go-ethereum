@@ -20,6 +20,7 @@
 package keystore
 
 import (
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -77,7 +78,9 @@ func (w *watcher) loop() {
 	}
 	defer watcher.Close()
 	if err := watcher.Add(w.ac.keydir); err != nil {
-		logger.Warn("Failed to watch keystore folder", "err", err)
+		if !os.IsNotExist(err) {
+			logger.Warn("Failed to watch keystore folder", "err", err)
+		}
 		return
 	}
 
@@ -122,7 +125,7 @@ func (w *watcher) loop() {
 			if !ok {
 				return
 			}
-			log.Info("Filsystem watcher error", "err", err)
+			log.Info("Filesystem watcher error", "err", err)
 		case <-debounce.C:
 			w.ac.scanAccounts()
 			rescanTriggered = false

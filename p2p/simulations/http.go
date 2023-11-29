@@ -479,12 +479,12 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 func NewMsgFilters(filterParam string) (MsgFilters, error) {
 	filters := make(MsgFilters)
 	for _, filter := range strings.Split(filterParam, "-") {
-		protoCodes := strings.SplitN(filter, ":", 2)
-		if len(protoCodes) != 2 || protoCodes[0] == "" || protoCodes[1] == "" {
+		proto, codes, found := strings.Cut(filter, ":")
+		if !found || proto == "" || codes == "" {
 			return nil, fmt.Errorf("invalid message filter: %s", filter)
 		}
-		proto := protoCodes[0]
-		for _, code := range strings.Split(protoCodes[1], ",") {
+
+		for _, code := range strings.Split(codes, ",") {
 			if code == "*" || code == "-1" {
 				filters[MsgFilter{Proto: proto, Code: -1}] = struct{}{}
 				continue

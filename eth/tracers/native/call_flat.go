@@ -200,8 +200,8 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
-	t.tracer.CaptureTxStart(env, tx)
+func (t *flatCallTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+	t.tracer.CaptureTxStart(env, tx, from)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)

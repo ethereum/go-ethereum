@@ -117,9 +117,9 @@ func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	}
 }
 
-func (t *muxTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *muxTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	for _, t := range t.tracers {
-		t.CaptureTxStart(env, tx)
+		t.CaptureTxStart(env, tx, from)
 	}
 }
 

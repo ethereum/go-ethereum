@@ -17,7 +17,6 @@
 package light
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -126,7 +125,7 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 		return nil, err
 	}
 	body := new(types.Body)
-	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
+	if err := rlp.DecodeBytes(data, body); err != nil {
 		return nil, err
 	}
 	return body, nil
@@ -176,13 +175,13 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
-		var dataGasPrice *big.Int
-		excessDataGas := block.ExcessDataGas()
-		if excessDataGas != nil {
-			dataGasPrice = eip4844.CalcBlobFee(*excessDataGas)
+		var blobGasPrice *big.Int
+		excessBlobGas := block.ExcessBlobGas()
+		if excessBlobGas != nil {
+			blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
 		}
 
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), dataGasPrice, block.Transactions()); err != nil {
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, block.Transactions()); err != nil {
 			return nil, err
 		}
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)

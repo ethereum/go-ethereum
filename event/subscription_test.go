@@ -154,3 +154,27 @@ func TestResubscribeWithErrorHandler(t *testing.T) {
 		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }
+
+func TestResubscribeWithCompletedSubscription(t *testing.T) {
+	t.Parallel()
+
+	quitProducerAck := make(chan struct{})
+	quitProducer := make(chan struct{})
+
+	sub := ResubscribeErr(100*time.Millisecond, func(ctx context.Context, lastErr error) (Subscription, error) {
+		return NewSubscription(func(unsubscribed <-chan struct{}) error {
+			select {
+			case <-quitProducer:
+				quitProducerAck <- struct{}{}
+				return nil
+			case <-unsubscribed:
+				return nil
+			}
+		}), nil
+	})
+
+	// Ensure producer has started and exited before Unsubscribe
+	close(quitProducer)
+	<-quitProducerAck
+	sub.Unsubscribe()
+}

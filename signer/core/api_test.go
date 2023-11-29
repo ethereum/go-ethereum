@@ -169,6 +169,7 @@ func list(ui *headlessUi, api *core.SignerAPI, t *testing.T) ([]common.Address, 
 }
 
 func TestNewAcc(t *testing.T) {
+	t.Parallel()
 	api, control := setup(t)
 	verifyNum := func(num int) {
 		list, err := list(control, api, t)
@@ -235,6 +236,7 @@ func mkTestTx(from common.MixedcaseAddress) apitypes.SendTxArgs {
 }
 
 func TestSignTx(t *testing.T) {
+	t.Parallel()
 	var (
 		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
@@ -282,7 +284,7 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx)
+	rlp.DecodeBytes(res.Raw, parsedTx)
 
 	//The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
@@ -308,7 +310,7 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx2 := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx2)
+	rlp.DecodeBytes(res.Raw, parsedTx2)
 
 	//The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {

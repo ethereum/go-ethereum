@@ -54,28 +54,6 @@ func (s Storage) Copy() Storage {
 	return cpy
 }
 
-// BalanceChangeReason is used to indicate the reason for a balance change, useful
-// for tracing and reporting.
-type BalanceChangeReason byte
-
-const (
-	BalanceChangeUnspecified BalanceChangeReason = iota
-	BalanceChangeRewardMineUncle
-	BalanceChangeRewardMineBlock
-	BalanceChangeDaoRefundContract
-	BalanceChangeDaoAdjustBalance
-	BalanceChangeTransfer
-	BalanceChangeGenesisBalance
-	BalanceChangeGasBuy
-	BalanceChangeRewardTransactionFee
-	BalanceChangeGasRefund
-	BalanceChangeTouchAccount
-	BalanceChangeSuicideRefund
-	BalanceChangeSuicideWithdraw
-	BalanceChangeBurn
-	BalanceChangeWithdrawal
-)
-
 // stateObject represents an Ethereum account which is being modified.
 //
 // The usage pattern is as follows:
@@ -167,7 +145,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
-			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
+			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root, s.db.trie)
 			if err != nil {
 				return nil, err
 			}
@@ -289,12 +267,17 @@ func (s *stateObject) finalise(prefetch bool) {
 	}
 }
 
-// updateTrie writes cached storage modifications into the object's storage trie.
-// It will return nil if the trie has not been loaded and no changes have been
-// made. An error will be returned if the trie can't be loaded/updated correctly.
+// updateTrie is responsible for persisting cached storage changes into the
+// object's storage trie. In case the storage trie is not yet loaded, this
+// function will load the trie automatically. If any issues arise during the
+// loading or updating of the trie, an error will be returned. Furthermore,
+// this function will return the mutated storage trie, or nil if there is no
+// storage change at all.
 func (s *stateObject) updateTrie() (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise(false) // Don't prefetch anymore, pull directly if need be
+	s.finalise(false)
+
+	// Short circuit if nothing changed, don't bother with hashing anything
 	if len(s.pendingStorage) == 0 {
 		return s.trie, nil
 	}
@@ -306,14 +289,13 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	var (
 		storage map[common.Hash][]byte
 		origin  map[common.Hash][]byte
-		hasher  = s.db.hasher
 	)
 	tr, err := s.getTrie()
 	if err != nil {
 		s.db.setError(err)
 		return nil, err
 	}
-	// Insert all the pending updates into the trie
+	// Insert all the pending storage updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
@@ -323,8 +305,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		prev := s.originStorage[key]
 		s.originStorage[key] = value
 
-		// rlp-encoded value to be used by the snapshot
-		var snapshotVal []byte
+		var encoded []byte // rlp-encoded value to be used by the snapshot
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
@@ -332,10 +313,10 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			}
 			s.db.StorageDeleted += 1
 		} else {
-			trimmedVal := common.TrimLeftZeroes(value[:])
 			// Encoding []byte cannot fail, ok to ignore the error.
-			snapshotVal, _ = rlp.EncodeToBytes(trimmedVal)
-			if err := tr.UpdateStorage(s.address, key[:], trimmedVal); err != nil {
+			trimmed := common.TrimLeftZeroes(value[:])
+			encoded, _ = rlp.EncodeToBytes(trimmed)
+			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
 				return nil, err
 			}
@@ -348,14 +329,14 @@ func (s *stateObject) updateTrie() (Trie, error) {
 				s.db.storages[s.addrHash] = storage
 			}
 		}
-		khash := crypto.HashData(hasher, key[:])
-		storage[khash] = snapshotVal // snapshotVal will be nil if it's deleted
+		khash := crypto.HashData(s.db.hasher, key[:])
+		storage[khash] = encoded // encoded will be nil if it's deleted
 
 		// Cache the original value of mutated storage slots
 		if origin == nil {
-			if origin = s.db.storagesOrigin[s.addrHash]; origin == nil {
+			if origin = s.db.storagesOrigin[s.address]; origin == nil {
 				origin = make(map[common.Hash][]byte)
-				s.db.storagesOrigin[s.addrHash] = origin
+				s.db.storagesOrigin[s.address] = origin
 			}
 		}
 		// Track the original value of slot only if it's mutated first time
@@ -374,21 +355,17 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
 	}
-	if len(s.pendingStorage) > 0 {
-		s.pendingStorage = make(Storage)
-	}
+	s.pendingStorage = make(Storage) // reset pending map
 	return tr, nil
 }
 
-// UpdateRoot sets the trie root to the current root hash of. An error
-// will be returned if trie root hash is not computed correctly.
+// updateRoot flushes all cached storage mutations to trie, recalculating the
+// new storage trie root.
 func (s *stateObject) updateRoot() {
+	// Flush cached storage mutations into trie, short circuit if any error
+	// is occurred or there is not change in the trie.
 	tr, err := s.updateTrie()
-	if err != nil {
-		return
-	}
-	// If nothing changed, don't bother with hashing anything
-	if tr == nil {
+	if err != nil || tr == nil {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
@@ -398,14 +375,12 @@ func (s *stateObject) updateRoot() {
 	s.data.Root = tr.Hash()
 }
 
-// commit returns the changes made in storage trie and updates the account data.
+// commit obtains a set of dirty storage trie nodes and updates the account data.
+// The returned set can be nil if nothing to commit. This function assumes all
+// storage mutations have already been flushed into trie by updateRoot.
 func (s *stateObject) commit() (*trienode.NodeSet, error) {
-	tr, err := s.updateTrie()
-	if err != nil {
-		return nil, err
-	}
-	// If nothing changed, don't bother with committing anything
-	if tr == nil {
+	// Short circuit if trie is not even loaded, don't bother with committing anything
+	if s.trie == nil {
 		s.origin = s.data.Copy()
 		return nil, nil
 	}
@@ -413,7 +388,10 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
-	root, nodes, err := tr.Commit(false)
+	// The trie is currently in an open state and could potentially contain
+	// cached mutations. Call commit to acquire a set of nodes that have been
+	// modified, the set can be nil if nothing to commit.
+	root, nodes, err := s.trie.Commit(false)
 	if err != nil {
 		return nil, err
 	}
@@ -569,4 +547,8 @@ func (s *stateObject) Balance() *big.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
+}
+
+func (s *stateObject) Root() common.Hash {
+	return s.data.Root
 }

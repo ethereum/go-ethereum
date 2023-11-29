@@ -2,6 +2,7 @@ package tracers
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -36,8 +37,6 @@ var _ core.BlockchainLogger = (*Firehose)(nil)
 var firehoseTracerLogLevel = strings.ToLower(os.Getenv("GETH_FIREHOSE_TRACER_LOG_LEVEL"))
 var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
 var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
-
-var _ core.BlockchainLogger = (*Firehose)(nil)
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
@@ -154,17 +153,20 @@ func (f *Firehose) OnBlockEnd(err error) {
 	firehoseDebug("block end")
 }
 
-func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction) {
+func (f *Firehose) OnBeaconBlockRootStart(root common.Hash) {
+	// FIXME: This needs to be implemented when hard-fork bringing beacon block root is implemented
+	// We kind-of decided on having `system_calls` on the Block directly.
+}
+
+func (f *Firehose) OnBeaconBlockRootEnd() {
+	// FIXME: This needs to be implemented when hard-fork bringing beacon block root is implemented
+	// We kind-of decided on having `system_calls` on the Block directly.
+}
+
+func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction, from common.Address) {
 	firehoseDebug("trx start hash=%s type=%d gas=%d input=%s", tx.Hash(), tx.Type(), tx.Gas(), inputView(tx.Data()))
 
 	f.ensureInBlockAndNotInTrxAndNotInCall()
-
-	signer := types.MakeSigner(evm.ChainConfig(), evm.Context.BlockNumber, evm.Context.Time)
-
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		panic(fmt.Errorf("could not recover sender address: %w", err))
-	}
 
 	var to common.Address
 	if tx.To() == nil {
@@ -221,8 +223,8 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	firehoseDebug("completing transaction call_count=%d receipt=%s", len(f.transaction.Calls), (*receiptView)(receipt))
 
 	// Sorting needs to happen first, before we populate the state reverted
-	slices.SortFunc(f.transaction.Calls, func(i, j *pbeth.Call) bool {
-		return i.Index < j.Index
+	slices.SortFunc(f.transaction.Calls, func(i, j *pbeth.Call) int {
+		return cmp.Compare(i.Index, j.Index)
 	})
 
 	rootCall := f.transaction.Calls[0]
@@ -304,8 +306,8 @@ func (f *Firehose) assignOrdinalToReceiptLogs() {
 		callLogs = append(callLogs, call.Logs...)
 	}
 
-	slices.SortFunc(callLogs, func(i, j *pbeth.Log) bool {
-		return i.Ordinal < j.Ordinal
+	slices.SortFunc(callLogs, func(i, j *pbeth.Log) int {
+		return cmp.Compare(i.Ordinal, j.Ordinal)
 	})
 
 	if len(callLogs) != len(receiptsLogs) {
@@ -615,8 +617,8 @@ type bytesGetter interface {
 
 func sortedKeys[K bytesGetter, V any](m map[K]V) []K {
 	keys := maps.Keys(m)
-	slices.SortFunc(keys, func(i, j K) bool {
-		return bytes.Compare(i.Bytes(), j.Bytes()) == -1
+	slices.SortFunc(keys, func(i, j K) int {
+		return bytes.Compare(i.Bytes(), j.Bytes())
 	})
 
 	return keys

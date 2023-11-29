@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
+	"github.com/ethereum/go-ethereum/internal/reexec"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -53,6 +53,15 @@ func TestMain(m *testing.M) {
 		return
 	}
 	os.Exit(m.Run())
+}
+
+func initGeth(t *testing.T) string {
+	args := []string{"--networkid=42", "init", "./testdata/clique.json"}
+	t.Logf("Initializing geth: %v ", args)
+	g := runGeth(t, args...)
+	datadir := g.Datadir
+	g.WaitExit()
+	return datadir
 }
 
 // spawns geth with the given command line args. If the args don't set --datadir, the

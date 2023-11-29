@@ -30,7 +30,9 @@ import (
 // if you need to retain them beyond the current call.
 type EVMLogger interface {
 	// Transaction level
-	CaptureTxStart(evm *EVM, tx *types.Transaction)
+	// Call simulations don't come with a valid signature. `from` field
+	// to be used for address of the caller.
+	CaptureTxStart(evm *EVM, tx *types.Transaction, from common.Address)
 	CaptureTxEnd(receipt *types.Receipt, err error)
 	// Top call frame
 	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)

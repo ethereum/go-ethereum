@@ -214,7 +214,7 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (dire
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	t.env = env
 	// Need statedb access for db object
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}

@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 )
@@ -49,7 +48,7 @@ func init() {
 	}
 }
 
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	// Don't generate insanely large test cases, not much value in them
 	if len(input) > 16*1024 {
 		return 0
@@ -80,10 +79,11 @@ func Fuzz(input []byte) int {
 
 	f := fetcher.NewTxFetcherForTests(
 		func(common.Hash) bool { return false },
-		func(txs []*txpool.Transaction) []error {
+		func(txs []*types.Transaction) []error {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
+		nil,
 		clock, rand,
 	)
 	f.Start()
@@ -117,6 +117,8 @@ func Fuzz(input []byte) int {
 			var (
 				announceIdxs = make([]int, announce)
 				announces    = make([]common.Hash, announce)
+				types        = make([]byte, announce)
+				sizes        = make([]uint32, announce)
 			)
 			for i := 0; i < len(announces); i++ {
 				annBuf := make([]byte, 2)
@@ -125,11 +127,13 @@ func Fuzz(input []byte) int {
 				}
 				announceIdxs[i] = (int(annBuf[0])*256 + int(annBuf[1])) % len(txs)
 				announces[i] = txs[announceIdxs[i]].Hash()
+				types[i] = txs[announceIdxs[i]].Type()
+				sizes[i] = uint32(txs[announceIdxs[i]].Size())
 			}
 			if verbose {
 				fmt.Println("Notify", peer, announceIdxs)
 			}
-			if err := f.Notify(peer, announces); err != nil {
+			if err := f.Notify(peer, types, sizes, announces); err != nil {
 				panic(err)
 			}
 

@@ -246,7 +246,7 @@ func (l *StructLogger) Stop(err error) {
 	l.interrupt.Store(true)
 }
 
-func (l *StructLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (l *StructLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
 

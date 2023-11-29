@@ -36,16 +36,6 @@ const (
 	blsMapG2      = byte(18)
 )
 
-func FuzzG1Add(data []byte) int      { return fuzz(blsG1Add, data) }
-func FuzzG1Mul(data []byte) int      { return fuzz(blsG1Mul, data) }
-func FuzzG1MultiExp(data []byte) int { return fuzz(blsG1MultiExp, data) }
-func FuzzG2Add(data []byte) int      { return fuzz(blsG2Add, data) }
-func FuzzG2Mul(data []byte) int      { return fuzz(blsG2Mul, data) }
-func FuzzG2MultiExp(data []byte) int { return fuzz(blsG2MultiExp, data) }
-func FuzzPairing(data []byte) int    { return fuzz(blsPairing, data) }
-func FuzzMapG1(data []byte) int      { return fuzz(blsMapG1, data) }
-func FuzzMapG2(data []byte) int      { return fuzz(blsMapG2, data) }
-
 func checkInput(id byte, inputLen int) bool {
 	switch id {
 	case blsG1Add:

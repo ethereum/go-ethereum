@@ -423,7 +423,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
-	// Nofity any tester listening for startup events
+	// Notify any tester listening for startup events
 	if s.syncStarting != nil {
 		s.syncStarting()
 	}
@@ -648,7 +648,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 	}
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		if force {
-			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+			log.Warn("Beacon chain forked", "ancestor", number-1, "hash", parent.Hash(), "want", head.ParentHash)
 		}
 		return true
 	}
@@ -794,7 +794,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
-		headers := *res.Res.(*eth.BlockHeadersPacket)
+		headers := *res.Res.(*eth.BlockHeadersRequest)
 
 		headerReqTimer.Update(time.Since(start))
 		s.peers.rates.Update(peer.id, eth.BlockHeadersMsg, res.Time, len(headers))

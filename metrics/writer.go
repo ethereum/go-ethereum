@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/slices"
@@ -23,22 +24,24 @@ func WriteOnce(r Registry, w io.Writer) {
 	r.Each(func(name string, i interface{}) {
 		namedMetrics = append(namedMetrics, namedMetric{name, i})
 	})
-
-	slices.SortFunc(namedMetrics, namedMetric.less)
+	slices.SortFunc(namedMetrics, namedMetric.cmp)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
 		case Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  count:       %9d\n", metric.Count())
+			fmt.Fprintf(w, "  count:       %9d\n", metric.Snapshot().Count())
 		case CounterFloat64:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  count:       %f\n", metric.Count())
+			fmt.Fprintf(w, "  count:       %f\n", metric.Snapshot().Count())
 		case Gauge:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  value:       %9d\n", metric.Value())
+			fmt.Fprintf(w, "  value:       %9d\n", metric.Snapshot().Value())
 		case GaugeFloat64:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
-			fmt.Fprintf(w, "  value:       %f\n", metric.Value())
+			fmt.Fprintf(w, "  value:       %f\n", metric.Snapshot().Value())
+		case GaugeInfo:
+			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
+			fmt.Fprintf(w, "  value:       %s\n", metric.Snapshot().Value().String())
 		case Healthcheck:
 			metric.Check()
 			fmt.Fprintf(w, "healthcheck %s\n", namedMetric.name)
@@ -92,6 +95,6 @@ type namedMetric struct {
 	m    interface{}
 }
 
-func (m namedMetric) less(other namedMetric) bool {
-	return m.name < other.name
+func (m namedMetric) cmp(other namedMetric) int {
+	return strings.Compare(m.name, other.name)
 }

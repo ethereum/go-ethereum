@@ -98,7 +98,8 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
-	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
+	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+	defer triedb.Close()
 
 	// Create the tracer, the EVM environment and run it
 	tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
@@ -112,7 +113,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	tracer.CaptureTxStart(evm, tx)
+	tracer.CaptureTxStart(evm, tx, msg.From)
 	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)

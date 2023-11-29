@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/crypto/sha3"
 )
@@ -45,10 +47,15 @@ func hashData(input []byte) common.Hash {
 
 // Tests that snapshot generation from an empty database.
 func TestGeneration(t *testing.T) {
+	testGeneration(t, rawdb.HashScheme)
+	testGeneration(t, rawdb.PathScheme)
+}
+
+func testGeneration(t *testing.T, scheme string) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
-	var helper = newHelper()
+	var helper = newHelper(scheme)
 	stRoot := helper.makeStorageTrie(common.Hash{}, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, false)
 
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
@@ -79,10 +86,15 @@ func TestGeneration(t *testing.T) {
 
 // Tests that snapshot generation with existent flat state.
 func TestGenerateExistentState(t *testing.T) {
+	testGenerateExistentState(t, rawdb.HashScheme)
+	testGenerateExistentState(t, rawdb.PathScheme)
+}
+
+func testGenerateExistentState(t *testing.T, scheme string) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
-	var helper = newHelper()
+	var helper = newHelper(scheme)
 
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
@@ -148,9 +160,15 @@ type testHelper struct {
 	nodes   *trienode.MergedNodeSet
 }
 
-func newHelper() *testHelper {
+func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
-	triedb := trie.NewDatabase(diskdb)
+	config := &trie.Config{}
+	if scheme == rawdb.PathScheme {
+		config.PathDB = &pathdb.Config{} // disable caching
+	} else {
+		config.HashDB = &hashdb.Config{} // disable caching
+	}
+	triedb := trie.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)
 	return &testHelper{
 		diskdb:  diskdb,
@@ -233,7 +251,12 @@ func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 //   - extra slots in the middle
 //   - extra slots in the end
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
-	helper := newHelper()
+	testGenerateExistentStateWithWrongStorage(t, rawdb.HashScheme)
+	testGenerateExistentStateWithWrongStorage(t, rawdb.PathScheme)
+}
+
+func testGenerateExistentStateWithWrongStorage(t *testing.T, scheme string) {
+	helper := newHelper(scheme)
 
 	// Account one, empty root but non-empty database
 	helper.addAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()})
@@ -325,7 +348,12 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 // - wrong accounts
 // - extra accounts
 func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
-	helper := newHelper()
+	testGenerateExistentStateWithWrongAccounts(t, rawdb.HashScheme)
+	testGenerateExistentStateWithWrongAccounts(t, rawdb.PathScheme)
+}
+
+func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
+	helper := newHelper(scheme)
 
 	helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.makeStorageTrie(hashData([]byte("acc-2")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
@@ -380,10 +408,15 @@ func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 // Tests that snapshot generation errors out correctly in case of a missing trie
 // node in the account trie.
 func TestGenerateCorruptAccountTrie(t *testing.T) {
+	testGenerateCorruptAccountTrie(t, rawdb.HashScheme)
+	testGenerateCorruptAccountTrie(t, rawdb.PathScheme)
+}
+
+func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// without any storage slots to keep the test smaller.
-	helper := newHelper()
+	helper := newHelper(scheme)
 
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}) // 0xc7a30f39aff471c95d8a837497ad0e49b65be475cc0953540f80cfcdbdcd9074
 	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
@@ -391,9 +424,11 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 
 	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
-	// Delete an account trie leaf and ensure the generator chokes
-	helper.triedb.Commit(root, false)
-	helper.diskdb.Delete(common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7").Bytes())
+	// Delete an account trie node and ensure the generator chokes
+	targetPath := []byte{0xc}
+	targetHash := common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7")
+
+	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, targetPath, targetHash, scheme)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -414,11 +449,19 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 // trie node for a storage trie. It's similar to internal corruption but it is
 // handled differently inside the generator.
 func TestGenerateMissingStorageTrie(t *testing.T) {
+	testGenerateMissingStorageTrie(t, rawdb.HashScheme)
+	testGenerateMissingStorageTrie(t, rawdb.PathScheme)
+}
+
+func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
-	helper := newHelper()
-
+	var (
+		acc1   = hashData([]byte("acc-1"))
+		acc3   = hashData([]byte("acc-3"))
+		helper = newHelper(scheme)
+	)
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)   // 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})              // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
 	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
@@ -427,8 +470,9 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 
 	root := helper.Commit()
 
-	// Delete a storage trie root and ensure the generator chokes
-	helper.diskdb.Delete(stRoot.Bytes())
+	// Delete storage trie root of account one and three.
+	rawdb.DeleteTrieNode(helper.diskdb, acc1, nil, stRoot, scheme)
+	rawdb.DeleteTrieNode(helper.diskdb, acc3, nil, stRoot, scheme)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -448,10 +492,15 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 // Tests that snapshot generation errors out correctly in case of a missing trie
 // node in a storage trie.
 func TestGenerateCorruptStorageTrie(t *testing.T) {
+	testGenerateCorruptStorageTrie(t, rawdb.HashScheme)
+	testGenerateCorruptStorageTrie(t, rawdb.PathScheme)
+}
+
+func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
 	// We can't use statedb to make a test trie (circular dependency), so make
 	// a fake one manually. We're going with a small account trie of 3 accounts,
 	// two of which also has the same 3-slot storage trie attached.
-	helper := newHelper()
+	helper := newHelper(scheme)
 
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)   // 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})              // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
@@ -461,8 +510,11 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 
 	root := helper.Commit()
 
-	// Delete a storage trie leaf and ensure the generator chokes
-	helper.diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
+	// Delete a node in the storage trie.
+	targetPath := []byte{0x4}
+	targetHash := common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371")
+	rawdb.DeleteTrieNode(helper.diskdb, hashData([]byte("acc-1")), targetPath, targetHash, scheme)
+	rawdb.DeleteTrieNode(helper.diskdb, hashData([]byte("acc-3")), targetPath, targetHash, scheme)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
@@ -481,7 +533,12 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithExtraAccounts(t *testing.T) {
-	helper := newHelper()
+	testGenerateWithExtraAccounts(t, rawdb.HashScheme)
+	testGenerateWithExtraAccounts(t, rawdb.PathScheme)
+}
+
+func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
+	helper := newHelper(scheme)
 	{
 		// Account one in the trie
 		stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")),
@@ -549,10 +606,15 @@ func enableLogging() {
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithManyExtraAccounts(t *testing.T) {
+	testGenerateWithManyExtraAccounts(t, rawdb.HashScheme)
+	testGenerateWithManyExtraAccounts(t, rawdb.PathScheme)
+}
+
+func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 	if false {
 		enableLogging()
 	}
-	helper := newHelper()
+	helper := newHelper(scheme)
 	{
 		// Account one in the trie
 		stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")),
@@ -605,11 +667,16 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 // So in trie, we iterate 2 entries 0x03, 0x07. We create the 0x07 in the database and abort the procedure, because the trie is exhausted.
 // But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
 func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
+	testGenerateWithExtraBeforeAndAfter(t, rawdb.HashScheme)
+	testGenerateWithExtraBeforeAndAfter(t, rawdb.PathScheme)
+}
+
+func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
 	accountCheckRange = 3
 	if false {
 		enableLogging()
 	}
-	helper := newHelper()
+	helper := newHelper(scheme)
 	{
 		acc := &types.StateAccount{Balance: big.NewInt(1), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
@@ -642,11 +709,16 @@ func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 // TestGenerateWithMalformedSnapdata tests what happes if we have some junk
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
+	testGenerateWithMalformedSnapdata(t, rawdb.HashScheme)
+	testGenerateWithMalformedSnapdata(t, rawdb.PathScheme)
+}
+
+func testGenerateWithMalformedSnapdata(t *testing.T, scheme string) {
 	accountCheckRange = 3
 	if false {
 		enableLogging()
 	}
-	helper := newHelper()
+	helper := newHelper(scheme)
 	{
 		acc := &types.StateAccount{Balance: big.NewInt(1), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
@@ -679,10 +751,15 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 }
 
 func TestGenerateFromEmptySnap(t *testing.T) {
+	testGenerateFromEmptySnap(t, rawdb.HashScheme)
+	testGenerateFromEmptySnap(t, rawdb.PathScheme)
+}
+
+func testGenerateFromEmptySnap(t *testing.T, scheme string) {
 	//enableLogging()
 	accountCheckRange = 10
 	storageCheckRange = 20
-	helper := newHelper()
+	helper := newHelper(scheme)
 	// Add 1K accounts to the trie
 	for i := 0; i < 400; i++ {
 		stRoot := helper.makeStorageTrie(hashData([]byte(fmt.Sprintf("acc-%d", i))), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
@@ -714,8 +791,13 @@ func TestGenerateFromEmptySnap(t *testing.T) {
 // This hits a case where the snap verification passes, but there are more elements in the trie
 // which we must also add.
 func TestGenerateWithIncompleteStorage(t *testing.T) {
+	testGenerateWithIncompleteStorage(t, rawdb.HashScheme)
+	testGenerateWithIncompleteStorage(t, rawdb.PathScheme)
+}
+
+func testGenerateWithIncompleteStorage(t *testing.T, scheme string) {
 	storageCheckRange = 4
-	helper := newHelper()
+	helper := newHelper(scheme)
 	stKeys := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
 	stVals := []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}
 	// We add 8 accounts, each one is missing exactly one of the storage slots. This means
@@ -813,7 +895,12 @@ func populateDangling(disk ethdb.KeyValueStore) {
 //
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
-	var helper = newHelper()
+	testGenerateCompleteSnapshotWithDanglingStorage(t, rawdb.HashScheme)
+	testGenerateCompleteSnapshotWithDanglingStorage(t, rawdb.PathScheme)
+}
+
+func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string) {
+	var helper = newHelper(scheme)
 
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
@@ -848,7 +935,12 @@ func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 //
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateBrokenSnapshotWithDanglingStorage(t *testing.T) {
-	var helper = newHelper()
+	testGenerateBrokenSnapshotWithDanglingStorage(t, rawdb.HashScheme)
+	testGenerateBrokenSnapshotWithDanglingStorage(t, rawdb.PathScheme)
+}
+
+func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) {
+	var helper = newHelper(scheme)
 
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})

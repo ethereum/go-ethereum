@@ -40,6 +40,9 @@ type callLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
+	// Position of the log relative to subcalls within the same trace
+	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
+	Position hexutil.Uint `json:"position"`
 }
 
 type callFrame struct {
@@ -196,7 +199,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction) {
+func (t *callTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
 }
 
@@ -225,7 +228,13 @@ func (t *callTracer) OnLog(log *types.Log) {
 	if t.interrupt.Load() {
 		return
 	}
-	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, callLog{Address: log.Address, Topics: log.Topics, Data: log.Data})
+	l := callLog{
+		Address:  log.Address,
+		Topics:   log.Topics,
+		Data:     log.Data,
+		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
+	}
+	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any

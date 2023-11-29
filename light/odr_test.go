@@ -36,6 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -87,14 +89,14 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 			t   state.Trie
 		)
 		if len(req.Id.AccountAddress) > 0 {
-			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToAddress(req.Id.AccountAddress), req.Id.Root)
+			t, err = odr.serverState.OpenStorageTrie(req.Id.StateRoot, common.BytesToAddress(req.Id.AccountAddress), req.Id.Root, nil)
 		} else {
 			t, err = odr.serverState.OpenTrie(req.Id.Root)
 		}
 		if err != nil {
 			panic(err)
 		}
-		nodes := NewNodeSet()
+		nodes := trienode.NewProofSet()
 		t.Prove(req.Key, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
@@ -199,7 +201,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		}
 
 		// Perform read-only call.
-		st.SetBalance(testBankAddress, math.MaxBig256, 0x0)
+		st.SetBalance(testBankAddress, math.MaxBig256, state.BalanceChangeUnspecified)
 		msg := &core.Message{
 			From:              testBankAddress,
 			To:                &testContractAddr,
@@ -282,7 +284,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 		t.Fatal(err)
 	}
 
-	gspec.MustCommit(ldb)
+	gspec.MustCommit(ldb, trie.NewDatabase(ldb, trie.HashDefaults))
 	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker())
 	if err != nil {

@@ -219,7 +219,7 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 func (p *Peer) sendPooledTransactionHashes66(hashes []common.Hash) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
-	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket66(hashes))
+	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket67(hashes))
 }
 
 // sendPooledTransactionHashes68 sends transaction hashes (tagged with their type
@@ -248,15 +248,15 @@ func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
 	}
 }
 
-// ReplyPooledTransactionsRLP is the eth/66 version of SendPooledTransactionsRLP.
+// ReplyPooledTransactionsRLP is the response to RequestTxs.
 func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs []rlp.RawValue) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
 
-	// Not packed into PooledTransactionsPacket to avoid RLP decoding
-	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket66{
-		RequestId:                   id,
-		PooledTransactionsRLPPacket: txs,
+	// Not packed into PooledTransactionsResponse to avoid RLP decoding
+	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
+		RequestId:                     id,
+		PooledTransactionsRLPResponse: txs,
 	})
 }
 
@@ -309,36 +309,28 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	}
 }
 
-// ReplyBlockHeadersRLP is the eth/66 response to GetBlockHeaders.
+// ReplyBlockHeadersRLP is the response to GetBlockHeaders.
 func (p *Peer) ReplyBlockHeadersRLP(id uint64, headers []rlp.RawValue) error {
-	return p2p.Send(p.rw, BlockHeadersMsg, &BlockHeadersRLPPacket66{
-		RequestId:             id,
-		BlockHeadersRLPPacket: headers,
+	return p2p.Send(p.rw, BlockHeadersMsg, &BlockHeadersRLPPacket{
+		RequestId:               id,
+		BlockHeadersRLPResponse: headers,
 	})
 }
 
-// ReplyBlockBodiesRLP is the eth/66 response to GetBlockBodies.
+// ReplyBlockBodiesRLP is the response to GetBlockBodies.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
-	// Not packed into BlockBodiesPacket to avoid RLP decoding
-	return p2p.Send(p.rw, BlockBodiesMsg, &BlockBodiesRLPPacket66{
-		RequestId:            id,
-		BlockBodiesRLPPacket: bodies,
+	// Not packed into BlockBodiesResponse to avoid RLP decoding
+	return p2p.Send(p.rw, BlockBodiesMsg, &BlockBodiesRLPPacket{
+		RequestId:              id,
+		BlockBodiesRLPResponse: bodies,
 	})
 }
 
-// ReplyNodeData is the eth/66 response to GetNodeData.
-func (p *Peer) ReplyNodeData(id uint64, data [][]byte) error {
-	return p2p.Send(p.rw, NodeDataMsg, &NodeDataPacket66{
-		RequestId:      id,
-		NodeDataPacket: data,
-	})
-}
-
-// ReplyReceiptsRLP is the eth/66 response to GetReceipts.
+// ReplyReceiptsRLP is the response to GetReceipts.
 func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket66{
-		RequestId:         id,
-		ReceiptsRLPPacket: receipts,
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket{
+		RequestId:           id,
+		ReceiptsRLPResponse: receipts,
 	})
 }
 
@@ -353,9 +345,9 @@ func (p *Peer) RequestOneHeader(hash common.Hash, sink chan *Response) (*Request
 		sink: sink,
 		code: GetBlockHeadersMsg,
 		want: BlockHeadersMsg,
-		data: &GetBlockHeadersPacket66{
+		data: &GetBlockHeadersPacket{
 			RequestId: id,
-			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+			GetBlockHeadersRequest: &GetBlockHeadersRequest{
 				Origin:  HashOrNumber{Hash: hash},
 				Amount:  uint64(1),
 				Skip:    uint64(0),
@@ -380,9 +372,9 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 		sink: sink,
 		code: GetBlockHeadersMsg,
 		want: BlockHeadersMsg,
-		data: &GetBlockHeadersPacket66{
+		data: &GetBlockHeadersPacket{
 			RequestId: id,
-			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+			GetBlockHeadersRequest: &GetBlockHeadersRequest{
 				Origin:  HashOrNumber{Hash: origin},
 				Amount:  uint64(amount),
 				Skip:    uint64(skip),
@@ -407,9 +399,9 @@ func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, rever
 		sink: sink,
 		code: GetBlockHeadersMsg,
 		want: BlockHeadersMsg,
-		data: &GetBlockHeadersPacket66{
+		data: &GetBlockHeadersPacket{
 			RequestId: id,
-			GetBlockHeadersPacket: &GetBlockHeadersPacket{
+			GetBlockHeadersRequest: &GetBlockHeadersRequest{
 				Origin:  HashOrNumber{Number: origin},
 				Amount:  uint64(amount),
 				Skip:    uint64(skip),
@@ -434,31 +426,9 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 		sink: sink,
 		code: GetBlockBodiesMsg,
 		want: BlockBodiesMsg,
-		data: &GetBlockBodiesPacket66{
-			RequestId:            id,
-			GetBlockBodiesPacket: hashes,
-		},
-	}
-	if err := p.dispatchRequest(req); err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-// RequestNodeData fetches a batch of arbitrary data from a node's known state
-// data, corresponding to the specified hashes.
-func (p *Peer) RequestNodeData(hashes []common.Hash, sink chan *Response) (*Request, error) {
-	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
-	id := rand.Uint64()
-
-	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetNodeDataMsg,
-		want: NodeDataMsg,
-		data: &GetNodeDataPacket66{
-			RequestId:         id,
-			GetNodeDataPacket: hashes,
+		data: &GetBlockBodiesPacket{
+			RequestId:             id,
+			GetBlockBodiesRequest: hashes,
 		},
 	}
 	if err := p.dispatchRequest(req); err != nil {
@@ -477,9 +447,9 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 		sink: sink,
 		code: GetReceiptsMsg,
 		want: ReceiptsMsg,
-		data: &GetReceiptsPacket66{
-			RequestId:         id,
-			GetReceiptsPacket: hashes,
+		data: &GetReceiptsPacket{
+			RequestId:          id,
+			GetReceiptsRequest: hashes,
 		},
 	}
 	if err := p.dispatchRequest(req); err != nil {
@@ -494,9 +464,9 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	id := rand.Uint64()
 
 	requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
-	return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{
-		RequestId:                   id,
-		GetPooledTransactionsPacket: hashes,
+	return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket{
+		RequestId:                    id,
+		GetPooledTransactionsRequest: hashes,
 	})
 }
 
