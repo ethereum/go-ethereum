@@ -49,3 +49,5 @@ t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nil-custom-struct res=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="raw nil" res=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*uint64)(nil) res=<nil>
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Using keys 't', 'lvl', 'time', 'level' and 'msg'" t=t time=time lvl=lvl level=level msg=msg
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Odd pair (1 attr)" key=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Odd pair (3 attr)" key=value key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"

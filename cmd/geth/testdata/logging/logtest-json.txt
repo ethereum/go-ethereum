@@ -49,3 +49,5 @@
 {"t":"2023-11-22T15:42:00.40835+08:00","lvl":"info","msg":"raw nil","res":null}
 {"t":"2023-11-22T15:42:00.408354+08:00","lvl":"info","msg":"(*uint64)(nil)","res":null}
 {"t":"2023-11-22T15:42:00.408361+08:00","lvl":"info","msg":"Using keys 't', 'lvl', 'time', 'level' and 'msg'","t":"t","time":"time","lvl":"lvl","level":"level","msg":"msg"}
+{"t":"2023-11-29T15:13:00.195655931+01:00","lvl":"info","msg":"Odd pair (1 attr)","key":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
+{"t":"2023-11-29T15:13:00.195681832+01:00","lvl":"info","msg":"Odd pair (3 attr)","key":"value","key2":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
