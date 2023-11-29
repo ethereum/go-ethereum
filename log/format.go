@@ -174,7 +174,7 @@ func FormatSlogValue(v slog.Value, term bool, tmp []byte) (result []byte) {
 		value = v.Any()
 	}
 	if value == nil {
-		return []byte("nil")
+		return []byte("<nil>")
 	}
 	switch v := value.(type) {
 	case *big.Int:
