@@ -4717,6 +4717,66 @@ func TestEIP3651(t *testing.T) {
 	}
 }
 
+func TestSingleWitness(t *testing.T) {
+	var (
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _    = crypto.HexToECDSA("b8b7a0e412606eb858a27a913766f16fd03611fd3223218428c350f2bf083f87")
+		address   = crypto.PubkeyToAddress(key.PublicKey)
+		funds     = big.NewInt(1000000000000000)
+		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
+	)
+	// Populate two slots
+	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
+
+	code := []byte{
+		byte(vm.PUSH1), 0x1, //
+		byte(vm.NUMBER),     // value = number + 1
+		byte(vm.ADD),        //
+		byte(vm.PUSH1), 0x3, // location
+		byte(vm.SSTORE), // Set slot[3] = number + 1
+	}
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+			// The contract increments a slot (sets to blocknumber)
+			bb: {
+				Code:    code,
+				Balance: big.NewInt(1),
+			},
+		},
+	}
+	var nonce uint64
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+
+		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
+			big.NewInt(0), 500000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
+		nonce++
+		b.AddTx(tx)
+	})
+	// Import the canonical chain
+	cache := DefaultCacheConfigWithScheme(rawdb.PathScheme)
+	cache.SnapshotLimit = 0   // disable snapshot
+	cache.SnapshotLimit = 500 // enable snapshot
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), cache, gspec, nil, engine, vm.Config{
+		Tracer: logger.NewJSONLogger(nil, os.Stdout),
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	for _, block := range blocks {
+		fmt.Println("insert block")
+		if n, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+		}
+	}
+}
+
 func TestIncrementSlotAcrossManyBlocks(t *testing.T) {
 	//testDeleteRecreateSlotsAcrossManyBlocks(t, rawdb.HashScheme)
 	testIncrementSlotAcrossManyBlocks(t, rawdb.PathScheme)
