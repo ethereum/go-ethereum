@@ -72,10 +72,6 @@ func BenchmarkJSONHandler(b *testing.B) {
 }
 
 func benchmarkLogger(b *testing.B, l Logger) {
-	type custom struct {
-		A string
-		B int8
-	}
 	var (
 		bb     = make([]byte, 10)
 		tt     = time.Now()
@@ -136,12 +132,11 @@ func TestLoggerOutput(t *testing.T) {
 
 	have := out.String()
 	t.Logf("output %v", out.String())
-	want := `INFO [11-07|19:14:33.821] This is a message                       foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" lazy="lazy value" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
+	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" lazy="lazy value" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
 `
 	if !bytes.Equal([]byte(have)[25:], []byte(want)[25:]) {
 		t.Errorf("Error\nhave: %q\nwant: %q", have, want)
 	}
-
 }
 
 const termTimeFormat = "01-02|15:04:05.000"
@@ -151,7 +146,6 @@ func BenchmarkAppendFormat(b *testing.B) {
 	b.Run("fmt time.Format", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
-
 		}
 	})
 	b.Run("time.AppendFormat", func(b *testing.B) {
