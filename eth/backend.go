@@ -237,7 +237,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// check if Parallel EVM is enabled
 	// if enabled, use parallel state processor
 	if config.ParallelEVM.Enable {
-		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
+		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker, config.ParallelEVM.SpeculativeProcesses)
 	} else {
 		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	}
