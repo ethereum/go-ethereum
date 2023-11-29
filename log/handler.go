@@ -112,7 +112,7 @@ func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *T
 func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	buf := h.TerminalFormat(h.buf, r, h.useColor)
+	buf := h.format(h.buf, r, h.useColor)
 	h.wr.Write(buf)
 	h.buf = buf[:0]
 	return nil
@@ -149,17 +149,18 @@ func (l *leveler) Level() slog.Level {
 	return l.minLevel
 }
 
-func JSONHandler(wr io.Writer) slog.Handler {
+// NewJSONHandler returns a handler which prints records in JSON format.
+func NewJSONHandler(wr io.Writer) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceJSON,
 	})
 }
 
-// LogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
+// NewLogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-func LogfmtHandler(wr io.Writer) slog.Handler {
+func NewLogfmtHandler(wr io.Writer) slog.Handler {
 	return slog.NewTextHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceLogfmt,
 	})

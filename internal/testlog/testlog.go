@@ -183,7 +183,7 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 	}
 
 	for _, attr := range attrs {
-		fmt.Fprintf(buf, " %s=%s", attr.Key, string(log.FormatSlogValue(attr.Value, true, nil)))
+		fmt.Fprintf(buf, " %s=%s", attr.Key, string(log.FormatSlogValue(attr.Value, nil)))
 	}
 	buf.WriteByte('\n')
 	return buf.String()
