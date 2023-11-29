@@ -310,10 +310,10 @@ func (XDCx *XDCX) ConvertXDCToToken(chain consensus.ChainContext, statedb *state
 }
 
 // there are 3 tasks need to complete to update data in SDK nodes after matching
-// 1. txMatchData.Order: order has been processed. This order should be put to `orders` collection with status sdktypes.OrderStatusOpen
-// 2. txMatchData.Trades: includes information of matched orders.
-// 		a. PutObject them to `trades` collection
-// 		b. Update status of regrading orders to sdktypes.OrderStatusFilled
+//  1. txMatchData.Order: order has been processed. This order should be put to `orders` collection with status sdktypes.OrderStatusOpen
+//  2. txMatchData.Trades: includes information of matched orders.
+//     a. PutObject them to `trades` collection
+//     b. Update status of regrading orders to sdktypes.OrderStatusFilled
 func (XDCx *XDCX) SyncDataToSDKNode(takerOrderInTx *tradingstate.OrderItem, txHash common.Hash, txMatchTime time.Time, statedb *state.StateDB, trades []map[string]string, rejectedOrders []*tradingstate.OrderItem, dirtyOrderCount *uint64) error {
 	var (
 		// originTakerOrder: order get from db, nil if it doesn't exist

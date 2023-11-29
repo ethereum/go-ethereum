@@ -264,8 +264,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	}
 
 	waitedTime := time.Now().Unix() - parent.Time.Int64()
-	_, parentRound, _, err := x.getExtraFields(parent)
-	minePeriod := x.config.V2.Config(uint64(parentRound) + 1).MinePeriod // plus 1 means current block
+	minePeriod := x.config.V2.Config(uint64(x.currentRound)).MinePeriod
 	if waitedTime < int64(minePeriod) {
 		log.Trace("[YourTurn] wait after mine period", "minePeriod", minePeriod, "waitedTime", waitedTime)
 		return false, nil
@@ -794,7 +793,7 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	certThreshold := x.config.V2.Config(uint64(qcRound)).CertThreshold
 	if (qcRound > 0) && (signatures == nil || float64(len(signatures)) < float64(epochInfo.MasternodesLen)*certThreshold) {
 		//First V2 Block QC, QC Signatures is initial nil
-		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QC", quorumCert, "QCNumber", quorumCert.ProposedBlockInfo.Number, "Signatures len", len(signatures), "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
+		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QCNumber", quorumCert.ProposedBlockInfo.Number, "LenSignatures", len(signatures), "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
 		return utils.ErrInvalidQCSignatures
 	}
 	start := time.Now()
@@ -1000,8 +999,7 @@ func (x *XDPoS_v2) GetStandbynodes(chain consensus.ChainReader, header *types.He
 // Calculate masternodes for a block number and parent hash. In V2, truncating candidates[:MaxMasternodes] is done in this function.
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
 	// using new max masterndoes
-	maxMasternodes := common.MaxMasternodesV2
-
+	maxMasternodes := x.config.V2.Config(uint64(x.currentRound)).MaxMasternodes
 	snap, err := x.getSnapshot(chain, blockNum.Uint64(), false)
 	if err != nil {
 		log.Error("[calcMasternodes] Adaptor v2 getSnapshot has error", "err", err)

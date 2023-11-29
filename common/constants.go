@@ -15,7 +15,7 @@ const (
 	EpocBlockOpening           = 850
 	EpocBlockRandomize         = 900
 	MaxMasternodes             = 18
-	MaxMasternodesV2           = 108
+	MaxMasternodesV2           = 108 // Last v1 masternodes
 	LimitPenaltyEpoch          = 4
 	LimitPenaltyEpochV2        = 0
 	BlocksPerYearTest          = uint64(200000)

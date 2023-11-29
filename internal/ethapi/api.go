@@ -767,7 +767,17 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	}
 
 	var maxMasternodes int
-	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
+		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+			round, err := engine.EngineV2.GetRoundNumber(header)
+			if err != nil {
+				return result, err
+			}
+			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
+		} else {
+			return result, fmt.Errorf("undefined XDPoS consensus engine")
+		}
+	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
 	} else {
 		maxMasternodes = common.MaxMasternodes
@@ -948,7 +958,17 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	}
 
 	var maxMasternodes int
-	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
+		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+			round, err := engine.EngineV2.GetRoundNumber(header)
+			if err != nil {
+				return result, err
+			}
+			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
+		} else {
+			return result, fmt.Errorf("undefined XDPoS consensus engine")
+		}
+	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
 	} else {
 		maxMasternodes = common.MaxMasternodes

@@ -223,6 +223,17 @@ func TestPrepareHappyPath(t *testing.T) {
 	assert.Equal(t, types.Round(0), decodedExtraField.QuorumCert.ProposedBlockInfo.Round)
 }
 
+func TestPrepareDifferentMasternode(t *testing.T) {
+	config := params.TestXDPoSMockChainConfig
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1799, config, nil)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	// trigger initial
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(919), false)
+	myturn, err := adaptor.YourTurn(blockchain, currentBlock.Header(), acc1Addr)
+	assert.Nil(t, err)
+	assert.True(t, myturn)
+}
+
 // test if we have 128 candidates, then snapshot will store all of them, and when preparing (and verifying) candidates is truncated to MaxMasternodes
 func TestUpdateMultipleMasterNodes(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
@@ -279,6 +290,6 @@ func TestUpdateMultipleMasterNodes(t *testing.T) {
 	adaptor.EngineV2.AuthorizeFaker(voterAddr)
 	err = adaptor.Prepare(blockchain, header1800)
 	assert.Nil(t, err)
-	assert.Equal(t, common.MaxMasternodesV2, len(header1800.Validators)/common.AddressLength) // although 128 masternode candidates, we can only pick MaxMasternodes
+	assert.Equal(t, blockchain.Config().XDPoS.V2.Config(900).MaxMasternodes, len(header1800.Validators)/common.AddressLength)
 	assert.Equal(t, 0, len(header1800.Penalties)/common.AddressLength)
 }

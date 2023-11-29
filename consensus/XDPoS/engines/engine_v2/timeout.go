@@ -34,7 +34,7 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 	}
 
 	// Threshold reached
-	certThreshold := x.config.V2.Config(uint64(x.currentRound)).CertThreshold
+	certThreshold := x.config.V2.Config(uint64(timeout.Round)).CertThreshold
 	isThresholdReached := float64(numberOfTimeoutsInPool) >= float64(epochInfo.MasternodesLen)*certThreshold
 	if isThresholdReached {
 		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))

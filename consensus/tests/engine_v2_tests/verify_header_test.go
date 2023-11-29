@@ -212,7 +212,7 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
 	}
 	extraInBytes, _ := extra.EncodeToBytes()
 
-	// after 910 require 5 signs, but we only give 3 signs
+	// after 910 require 4 signs, but we only give 3 signs
 	block912 := blockchain.GetBlockByNumber(912).Header()
 	block912.Extra = extraInBytes
 	err = adaptor.VerifyHeader(blockchain, block912, true)

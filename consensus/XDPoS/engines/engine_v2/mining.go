@@ -40,20 +40,20 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, pare
 		return false, errors.New("masternodes not found")
 	}
 
-	curIndex := utils.Position(masterNodes, signer)
-	if curIndex == -1 {
-		log.Warn("[yourturn] I am not in masternodes list", "Hash", parent.Hash(), "signer", signer)
-		return false, nil
-	}
-
 	for i, s := range masterNodes {
 		log.Debug("[yourturn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
+	}
+
+	curIndex := utils.Position(masterNodes, signer)
+	if curIndex == -1 {
+		log.Warn("[yourturn] I am not in masternodes list", "Hash", parent.Hash().Hex(), "signer", signer.Hex())
+		return false, nil
 	}
 
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 	x.whosTurn = masterNodes[leaderIndex]
 	if x.whosTurn != signer {
-		log.Info("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "whosTurn", x.whosTurn, "myaddr", signer)
+		log.Info("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "whosTurn", x.whosTurn.Hex(), "myaddr", signer.Hex())
 		return false, nil
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
@@ -95,10 +96,11 @@ func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
 	currentBlockHeader := currentBlock.Header()
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(10), false)
 	assert.Nil(t, err)
 	// after first mine period
 	time.Sleep(time.Duration(firstMinePeriod) * time.Second)
-	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
+	isYourTurn, err := adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
 
@@ -108,7 +110,7 @@ func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
 	secondMinePeriod := blockchain.Config().XDPoS.V2.CurrentConfig.MinePeriod
 
 	time.Sleep(time.Duration(secondMinePeriod-firstMinePeriod) * time.Second)
-	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
+	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc703c4b2bD70c169f5717101CaeE543299Fc946C7"))
 	assert.Nil(t, err)
 	assert.True(t, isYourTurn)
 }
