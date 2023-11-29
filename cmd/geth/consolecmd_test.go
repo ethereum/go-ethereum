@@ -118,7 +118,7 @@ func TestAttachWelcome(t *testing.T) {
 		waitForEndpoint(t, endpoint, 3*time.Second)
 		testAttachWelcome(t, geth, endpoint, httpAPIs)
 	})
-	geth.ExpectExit()
+	geth.Kill()
 }
 
 func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {

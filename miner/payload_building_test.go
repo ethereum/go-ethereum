@@ -37,7 +37,7 @@ func TestBuildPayload(t *testing.T) {
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
 
-	w, b, _ := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0, false, 0, 0)
+	w, b, _ := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, false, 0, 0)
 	defer w.close()
 
 	timestamp := uint64(time.Now().Unix())

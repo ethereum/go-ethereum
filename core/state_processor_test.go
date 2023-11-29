@@ -28,16 +28,16 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
-
-func u64(val uint64) *uint64 { return &val }
 
 // TestStateProcessorErrors tests the output from the 'core' errors
 // as defined in core/error.go. These errors are generated when the
@@ -45,38 +45,36 @@ func u64(val uint64) *uint64 { return &val }
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
 	var (
-		cacheConfig = &CacheConfig{
-			TrieCleanLimit:   154,
-			TrieCleanJournal: "triecache",
-			Preimages:        true,
-		}
-
 		config = &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			HomesteadBlock:      big.NewInt(0),
-			EIP150Block:         big.NewInt(0),
-			EIP155Block:         big.NewInt(0),
-			EIP158Block:         big.NewInt(0),
-			ByzantiumBlock:      big.NewInt(0),
-			ConstantinopleBlock: big.NewInt(0),
-			PetersburgBlock:     big.NewInt(0),
-			IstanbulBlock:       big.NewInt(0),
-			MuirGlacierBlock:    big.NewInt(0),
-			BerlinBlock:         big.NewInt(0),
-			LondonBlock:         big.NewInt(0),
-			Ethash:              new(params.EthashConfig),
-			Bor:                 &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
+			ChainID:                       big.NewInt(1),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			TerminalTotalDifficulty:       big.NewInt(0),
+			TerminalTotalDifficultyPassed: true,
+			ShanghaiBlock:                 big.NewInt(0),
+			CancunBlock:                   big.NewInt(0),
+			PragueBlock:                   big.NewInt(0),
+			VerkleBlock:                   big.NewInt(0),
+			Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 		}
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
 	)
-
 	var makeTx = func(key *ecdsa.PrivateKey, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, key)
 		return tx
 	}
-
 	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			Nonce:     nonce,
@@ -88,7 +86,6 @@ func TestStateProcessorErrors(t *testing.T) {
 		}), signer, key1)
 		return tx
 	}
-
 	var mkDynamicCreationTx = func(nonce uint64, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, data []byte) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			Nonce:     nonce,
@@ -100,6 +97,22 @@ func TestStateProcessorErrors(t *testing.T) {
 		}), signer, key1)
 		return tx
 	}
+	var mkBlobTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, hashes []common.Hash) *types.Transaction {
+		tx, err := types.SignTx(types.NewTx(&types.BlobTx{
+			Nonce:      nonce,
+			GasTipCap:  uint256.MustFromBig(gasTipCap),
+			GasFeeCap:  uint256.MustFromBig(gasFeeCap),
+			Gas:        gasLimit,
+			To:         to,
+			BlobHashes: hashes,
+			Value:      new(uint256.Int),
+		}), signer, key1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tx
+	}
+
 	{ // Tests against a 'recent' chain definition
 		var (
 			db    = rawdb.NewMemoryDatabase()
@@ -116,15 +129,14 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
+			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
+			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
 		defer blockchain.Stop()
-
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
-
 		for i, tt := range []struct {
 			txs  []*types.Transaction
 			want string
@@ -223,14 +235,30 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				want: "could not apply tx 0 [0xd82a0c2519acfeac9a948258c47e784acd20651d9d80f9a1c67b4137651c3a24]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 1000000000000000000 want 2431633873983640103894990685182446064918669677978451844828609264166175722438635000",
 			},
+			{ // ErrMaxInitCodeSizeExceeded
+				txs: []*types.Transaction{
+					mkDynamicCreationTx(0, 500000, common.Big0, big.NewInt(params.InitialBaseFee), tooBigInitCode[:]),
+				},
+				want: "could not apply tx 0 [0xd491405f06c92d118dd3208376fcee18a57c54bc52063ee4a26b1cf296857c25]: max initcode size exceeded: code size 49153 limit 49152",
+			},
+			{ // ErrIntrinsicGas: Not enough gas to cover init code
+				txs: []*types.Transaction{
+					mkDynamicCreationTx(0, 54299, common.Big0, big.NewInt(params.InitialBaseFee), make([]byte, 320)),
+				},
+				want: "could not apply tx 0 [0xfd49536a9b323769d8472fcb3ebb3689b707a349379baee3e2ee3fe7baae06a1]: intrinsic gas too low: have 54299, want 54300",
+			},
+			{ // ErrBlobFeeCapTooLow
+				txs: []*types.Transaction{
+					mkBlobTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1), []common.Hash{(common.Hash{1})}),
+				},
+				want: "could not apply tx 0 [0x6c11015985ce82db691d7b2d017acda296db88b811c3c60dc71449c76256c716]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 1 baseFee: 875000000",
+			},
 		} {
-			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
-
+			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
 			}
-
 			if have, want := err.Error(), tt.want; have != want {
 				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
@@ -261,35 +289,27 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		)
-
 		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrTxTypeNotSupported
-					txs: []*types.Transaction{
-						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
-					},
-					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
+		for i, tt := range []struct {
+			txs  []*types.Transaction
+			want string
+		}{
+			{ // ErrTxTypeNotSupported
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-			} {
-				block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
+			},
+		} {
+			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+			_, err := blockchain.InsertChain(types.Blocks{block})
+			if err == nil {
+				t.Fatal("block imported without errors")
+			}
+			if have, want := err.Error(), tt.want; have != want {
+				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
 		}
 	}
@@ -308,110 +328,27 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, ethash.NewFaker(), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 		)
-
 		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrSenderNoEOA
-					txs: []*types.Transaction{
-						mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
-					},
-					want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+		for i, tt := range []struct {
+			txs  []*types.Transaction
+			want string
+		}{
+			{ // ErrSenderNoEOA
+				txs: []*types.Transaction{
+					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-			} {
-				block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+			},
+		} {
+			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
+			_, err := blockchain.InsertChain(types.Blocks{block})
+			if err == nil {
+				t.Fatal("block imported without errors")
 			}
-		}
-	}
-
-	// ErrMaxInitCodeSizeExceeded, for this we need extra Shanghai (EIP-3860) enabled.
-	{
-		var (
-			db    = rawdb.NewMemoryDatabase()
-			gspec = &Genesis{
-				Config: &params.ChainConfig{
-					ChainID:                       big.NewInt(1),
-					HomesteadBlock:                big.NewInt(0),
-					EIP150Block:                   big.NewInt(0),
-					EIP155Block:                   big.NewInt(0),
-					EIP158Block:                   big.NewInt(0),
-					ByzantiumBlock:                big.NewInt(0),
-					ConstantinopleBlock:           big.NewInt(0),
-					PetersburgBlock:               big.NewInt(0),
-					IstanbulBlock:                 big.NewInt(0),
-					MuirGlacierBlock:              big.NewInt(0),
-					BerlinBlock:                   big.NewInt(0),
-					LondonBlock:                   big.NewInt(0),
-					ArrowGlacierBlock:             big.NewInt(0),
-					GrayGlacierBlock:              big.NewInt(0),
-					MergeNetsplitBlock:            big.NewInt(0),
-					TerminalTotalDifficulty:       big.NewInt(0),
-					TerminalTotalDifficultyPassed: true,
-					ShanghaiBlock:                 big.NewInt(0),
-					Bor:                           &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
-				},
-				Alloc: GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
-						Balance: big.NewInt(1000000000000000000), // 1 ether
-						Nonce:   0,
-					},
-				},
-			}
-			genesis               = gspec.MustCommit(db)
-			blockchain, _         = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
-			parallelBlockchain, _ = NewParallelBlockChain(db, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
-			tooBigInitCode        = [params.MaxInitCodeSize + 1]byte{}
-			smallInitCode         = [320]byte{}
-		)
-
-		defer blockchain.Stop()
-		defer parallelBlockchain.Stop()
-
-		for _, bc := range []*BlockChain{blockchain, parallelBlockchain} {
-			for i, tt := range []struct {
-				txs  []*types.Transaction
-				want string
-			}{
-				{ // ErrMaxInitCodeSizeExceeded
-					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 500000, common.Big0, misc.CalcBaseFee(config, genesis.Header()), tooBigInitCode[:]),
-					},
-					want: "could not apply tx 0 [0x832b54a6c3359474a9f504b1003b2cc1b6fcaa18e4ef369eb45b5d40dad6378f]: max initcode size exceeded: code size 49153 limit 49152",
-				},
-				{ // ErrIntrinsicGas: Not enough gas to cover init code
-					txs: []*types.Transaction{
-						mkDynamicCreationTx(0, 54299, common.Big0, misc.CalcBaseFee(config, genesis.Header()), smallInitCode[:]),
-					},
-					want: "could not apply tx 0 [0x39b7436cb432d3662a25626474282c5c4c1a213326fd87e4e18a91477bae98b2]: intrinsic gas too low: have 54299, want 54300",
-				},
-			} {
-				block := GenerateBadBlock(genesis, beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
-
-				_, err := bc.InsertChain(types.Blocks{block})
-				if err == nil {
-					t.Fatal("block imported without errors")
-				}
-
-				if have, want := err.Error(), tt.want; have != want {
-					t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
-				}
+			if have, want := err.Error(), tt.want; have != want {
+				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
 		}
 	}
@@ -443,9 +380,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 
 	if config.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
 	}
-
 	if config.IsShanghai(header.Number) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
@@ -457,7 +393,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	hasher.Write(header.Number.Bytes())
 
 	var cumulativeGas uint64
-
+	var nBlobs int
 	for _, tx := range txs {
 		txh := tx.Hash()
 		hasher.Write(txh[:])
@@ -467,9 +403,21 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		receipt.GasUsed = tx.Gas()
 		receipts = append(receipts, receipt)
 		cumulativeGas += tx.Gas()
+		nBlobs += len(tx.BlobHashes())
 	}
 
 	header.Root = common.BytesToHash(hasher.Sum(nil))
+	if config.IsCancun(header.Number) {
+		var pExcess, pUsed = uint64(0), uint64(0)
+		if parent.ExcessBlobGas() != nil {
+			pExcess = *parent.ExcessBlobGas()
+			pUsed = *parent.BlobGasUsed()
+		}
+		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
+		header.ExcessBlobGas = &excess
+		header.BlobGasUsed = &used
+	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number) {
 		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))

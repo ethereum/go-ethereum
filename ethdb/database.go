@@ -79,9 +79,10 @@ type AncientReaderOp interface {
 
 	// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 	// It will return
-	//  - at most 'count' items,
-	//  - at least 1 item (even if exceeding the maxBytes), but will otherwise
-	//   return as many items as fit into maxBytes.
+	//   - at most 'count' items,
+	//   - if maxBytes is specified: at least 1 item (even if exceeding the maxByteSize),
+	//     but will otherwise return as many items as fit into maxByteSize.
+	//   - if maxBytes is not specified, 'count' items will be returned if they are present
 	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 
 	// Ancients returns the ancient item numbers in the ancient store.
@@ -113,14 +114,14 @@ type AncientWriter interface {
 
 	// TruncateHead discards all but the first n ancient data from the ancient store.
 	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
-	TruncateHead(n uint64) error
+	TruncateHead(n uint64) (uint64, error)
 
 	// TruncateTail discards the first n ancient data from the ancient store. The already
 	// deleted items are ignored. After the truncation, the earliest item can be accessed
 	// is item_n(start from 0). The deleted items may not be removed from the ancient store
 	// immediately, but only when the accumulated deleted data reach the threshold then
 	// will be removed all together.
-	TruncateTail(n uint64) error
+	TruncateTail(n uint64) (uint64, error)
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
@@ -179,6 +180,7 @@ type AncientStore interface {
 
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the chain freezer.
+//
 //go:generate mockgen -destination=../eth/filters/IDatabase.go -package=filters . Database
 type Database interface {
 	Reader

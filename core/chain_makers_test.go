@@ -57,6 +57,9 @@ func TestGenerateWithdrawalChain(t *testing.T) {
 	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiBlock = common.Big0
+	gspec.Config.CancunBlock = common.Big0
+	gspec.Config.PragueBlock = common.Big0
+	gspec.Config.VerkleBlock = common.Big0
 
 	// init 0xaa with some storage elements
 	storage := make(map[common.Hash]common.Hash)

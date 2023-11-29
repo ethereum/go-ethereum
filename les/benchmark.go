@@ -19,7 +19,7 @@ package les
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -58,22 +58,18 @@ func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 	d := int64(b.amount-1) * int64(b.skip+1)
 	b.offset = 0
 	b.randMax = h.blockchain.CurrentHeader().Number.Int64() + 1 - d
-
 	if b.randMax < 0 {
-		return fmt.Errorf("chain is too short")
+		return errors.New("chain is too short")
 	}
-
 	if b.reverse {
 		b.offset = d
 	}
-
 	if b.byHash {
 		b.hashes = make([]common.Hash, count)
 		for i := range b.hashes {
 			b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
 		}
 	}
-
 	return nil
 }
 
@@ -81,7 +77,6 @@ func (b *benchmarkBlockHeaders) request(peer *serverPeer, index int) error {
 	if b.byHash {
 		return peer.requestHeadersByHash(0, b.hashes[index], b.amount, b.skip, b.reverse)
 	}
-
 	return peer.requestHeadersByNumber(0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
 }
 
@@ -94,11 +89,9 @@ type benchmarkBodiesOrReceipts struct {
 func (b *benchmarkBodiesOrReceipts) init(h *serverHandler, count int) error {
 	randMax := h.blockchain.CurrentHeader().Number.Int64() + 1
 	b.hashes = make([]common.Hash, count)
-
 	for i := range b.hashes {
 		b.hashes[i] = rawdb.ReadCanonicalHash(h.chainDb, uint64(rand.Int63n(randMax)))
 	}
-
 	return nil
 }
 
@@ -106,7 +99,6 @@ func (b *benchmarkBodiesOrReceipts) request(peer *serverPeer, index int) error {
 	if b.receipts {
 		return peer.requestReceipts(0, []common.Hash{b.hashes[index]})
 	}
-
 	return peer.requestBodies(0, []common.Hash{b.hashes[index]})
 }
 
@@ -123,12 +115,10 @@ func (b *benchmarkProofsOrCode) init(h *serverHandler, count int) error {
 
 func (b *benchmarkProofsOrCode) request(peer *serverPeer, index int) error {
 	key := make([]byte, 32)
-	_, _ = crand.Read(key)
-
+	crand.Read(key)
 	if b.code {
-		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.requestCode(0, []CodeReq{{BHash: b.headHash, AccountAddress: key}})
 	}
-
 	return peer.requestProofs(0, []ProofReq{{BHash: b.headHash, Key: key}})
 }
 
@@ -146,11 +136,9 @@ func (b *benchmarkHelperTrie) init(h *serverHandler, count int) error {
 		b.sectionCount, _, _ = h.server.chtIndexer.Sections()
 		b.headNum = b.sectionCount*params.CHTFrequency - 1
 	}
-
 	if b.sectionCount == 0 {
-		return fmt.Errorf("no processed sections available")
+		return errors.New("no processed sections available")
 	}
-
 	return nil
 }
 
@@ -159,7 +147,6 @@ func (b *benchmarkHelperTrie) request(peer *serverPeer, index int) error {
 
 	if b.bloom {
 		bitIdx := uint16(rand.Intn(2048))
-
 		for i := range reqs {
 			key := make([]byte, 10)
 			binary.BigEndian.PutUint16(key[:2], bitIdx)
@@ -190,16 +177,13 @@ func (b *benchmarkTxSend) init(h *serverHandler, count int) error {
 
 	for i := range b.txs {
 		data := make([]byte, txSizeCostLimit)
-		_, _ = crand.Read(data)
-
+		crand.Read(data)
 		tx, err := types.SignTx(types.NewTransaction(0, addr, new(big.Int), 0, new(big.Int), data), signer, key)
 		if err != nil {
 			panic(err)
 		}
-
 		b.txs[i] = tx
 	}
-
 	return nil
 }
 
@@ -217,9 +201,7 @@ func (b *benchmarkTxStatus) init(h *serverHandler, count int) error {
 
 func (b *benchmarkTxStatus) request(peer *serverPeer, index int) error {
 	var hash common.Hash
-
-	_, _ = crand.Read(hash[:])
-
+	crand.Read(hash[:])
 	return peer.requestTxStatus(0, []common.Hash{hash})
 }
 
@@ -239,13 +221,10 @@ func (h *serverHandler) runBenchmark(benchmarks []requestBenchmark, passCount in
 	for i, b := range benchmarks {
 		setup[i] = &benchmarkSetup{req: b}
 	}
-
 	for i := 0; i < passCount; i++ {
 		log.Info("Running benchmark", "pass", i+1, "total", passCount)
-
 		todo := make([]*benchmarkSetup, len(benchmarks))
 		copy(todo, setup)
-
 		for len(todo) > 0 {
 			// select a random element
 			index := rand.Intn(len(todo))
@@ -259,7 +238,6 @@ func (h *serverHandler) runBenchmark(benchmarks []requestBenchmark, passCount in
 				if next.totalTime > 0 {
 					count = int(uint64(next.totalCount) * uint64(targetTime) / uint64(next.totalTime))
 				}
-
 				if err := h.measure(next, count); err != nil {
 					next.err = err
 				}
@@ -273,7 +251,6 @@ func (h *serverHandler) runBenchmark(benchmarks []requestBenchmark, passCount in
 			s.avgTime = s.totalTime / time.Duration(s.totalCount)
 		}
 	}
-
 	return setup
 }
 
@@ -292,7 +269,6 @@ func (m *meteredPipe) WriteMsg(msg p2p.Msg) error {
 	if msg.Size > m.maxSize {
 		m.maxSize = msg.Size
 	}
-
 	return m.rw.WriteMsg(msg)
 }
 
@@ -302,24 +278,19 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	clientPipe, serverPipe := p2p.MsgPipe()
 	clientMeteredPipe := &meteredPipe{rw: clientPipe}
 	serverMeteredPipe := &meteredPipe{rw: serverPipe}
-
 	var id enode.ID
-
-	_, _ = crand.Read(id[:])
+	crand.Read(id[:])
 
 	peer1 := newServerPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
 	peer2 := newClientPeer(lpv2, NetworkId, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
 	peer2.announceType = announceTypeNone
 	peer2.fcCosts = make(requestCostTable)
 	c := &requestCosts{}
-
 	for code := range requests {
 		peer2.fcCosts[code] = c
 	}
-
 	peer2.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}
 	peer2.fcClient = flowcontrol.NewClientNode(h.server.fcManager, peer2.fcParams)
-
 	defer peer2.fcClient.Disconnect()
 
 	if err := setup.req.init(h, count); err != nil {
@@ -352,9 +323,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 				errCh <- err
 				return
 			}
-
 			var i interface{}
-
 			msg.Decode(&i)
 		}
 		// at this point we can be sure that the other two
@@ -369,17 +338,14 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	case <-h.closeCh:
 		clientPipe.Close()
 		serverPipe.Close()
-
-		return fmt.Errorf("Benchmark cancelled")
+		return errors.New("Benchmark cancelled")
 	}
 
 	setup.totalTime += time.Duration(mclock.Now() - start)
 	setup.totalCount += count
 	setup.maxInSize = clientMeteredPipe.maxSize
 	setup.maxOutSize = serverMeteredPipe.maxSize
-
 	clientPipe.Close()
 	serverPipe.Close()
-
 	return nil
 }

@@ -8,7 +8,7 @@ verbosity = 3                   # Logging verbosity for the server (5=trace|4=de
 vmdebug = false                 # Record information useful for VM and contract debugging
 datadir = "var/lib/bor"         # Path of the data directory to store information
 ancient = ""                    # Data directory for ancient chain segments (default = inside chaindata)
-db.engine = "leveldb"           # Used to select leveldb or pebble as database (default = leveldb)
+"db.engine" = "leveldb"           # Used to select leveldb or pebble as database (default = leveldb)
 keystore = ""                   # Path of the directory where keystores are located
 "rpc.batchlimit" = 100          # Maximum number of messages in a batch (default=100, use 0 for no limits)
 "rpc.returndatalimit" = 100000  # Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)
@@ -41,6 +41,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   nodekeyhex = ""         # P2P node key as hex
   txarrivalwait = "500ms" # Maximum duration to wait before requesting an announced transaction
   [p2p.discovery]
+    v4disc = true       # Enables the V4 discovery mechanism
     v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
     bootnodesv4 = []    # List of initial v4 bootnodes
@@ -155,12 +156,11 @@ devfakeauthor = false           # Run miner without validator set authorization 
   snapshot = 10            # Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)
   database = 50            # Percentage of cache memory allowance to use for database io
   trie = 15                # Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)
-  journal = "triecache"    # Disk journal directory for trie cache to survive node restarts
-  rejournal = "1h0m0s"     # Time interval to regenerate the trie cache journal
   noprefetch = false       # Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
   preimages = false        # Enable recording the SHA3/keccak preimages of trie keys
   txlookuplimit = 2350000  # Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
   triesinmemory = 128      # Number of block states (tries) to keep in memory
+  blocklogs = 32           # Size (in number of blocks) of the log cache for filtering
   timeout = "1h0m0s"       # Time after which the Merkle Patricia Trie is stored to disc from memory
   fdlimit = 0              # Raise the open file descriptor resource limit (default = system fd limit)
 

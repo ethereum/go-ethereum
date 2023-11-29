@@ -24,11 +24,8 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
-	"sort"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
@@ -36,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 )
 
 // Real sockets, real crypto: this test checks end-to-end connectivity for UDPv5.
@@ -68,9 +67,8 @@ func TestUDPv5_lookupE2E(t *testing.T) {
 	for i := range nodes {
 		expectedResult[i] = nodes[i].Self()
 	}
-
-	sort.Slice(expectedResult, func(i, j int) bool {
-		return enode.DistCmp(target.ID(), expectedResult[i].ID(), expectedResult[j].ID()) < 0
+	slices.SortFunc(expectedResult, func(a, b *enode.Node) int {
+		return enode.DistCmp(target.ID(), a.ID(), b.ID())
 	})
 
 	// Do the lookup.
@@ -204,7 +202,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 
 	// This request gets all the distance-253 nodes.
 	test.packetIn(&v5wire.Findnode{ReqID: []byte{4}, Distances: []uint{253}})
-	test.expectNodes([]byte{4}, 1, nodes253)
+	test.expectNodes([]byte{4}, 2, nodes253)
 
 	// This request gets all the distance-249 nodes and some more at 248 because
 	// the bucket at 249 is not full.
@@ -217,7 +215,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 }
 
 func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes []*enode.Node) {
-	nodeSet := make(map[enode.ID]*enr.Record)
+	nodeSet := make(map[enode.ID]*enr.Record, len(wantNodes))
 	for _, n := range wantNodes {
 		nodeSet[n.ID()] = n.Record()
 	}
@@ -566,6 +564,27 @@ func TestUDPv5_talkRequest(t *testing.T) {
 		})
 	})
 
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	// Also check requesting without ENR.
+	go func() {
+		_, err := test.udp.TalkRequestToID(remote.ID(), test.remoteaddr, "test", []byte("test request 2"))
+		done <- err
+	}()
+	test.waitPacketOut(func(p *v5wire.TalkRequest, addr *net.UDPAddr, _ v5wire.Nonce) {
+		if p.Protocol != "test" {
+			t.Errorf("wrong protocol ID in talk request: %q", p.Protocol)
+		}
+		if string(p.Message) != "test request 2" {
+			t.Errorf("wrong message talk request: %q", p.Message)
+		}
+		test.packetInFrom(test.remotekey, test.remoteaddr, &v5wire.TalkResponse{
+			ReqID:   p.ReqID,
+			Message: []byte("test response 2"),
+		})
+	})
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}

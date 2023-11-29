@@ -80,7 +80,7 @@ func (it *IPTracker) PredictEndpoint() string {
 	it.gcStatements(it.clock.Now())
 
 	// The current strategy is simple: find the endpoint with most statements.
-	counts := make(map[string]int)
+	counts := make(map[string]int, len(it.statements))
 	maxcount, max := 0, ""
 
 	for _, s := range it.statements {

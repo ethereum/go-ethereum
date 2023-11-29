@@ -115,7 +115,11 @@ func TestConfigRules(t *testing.T) {
 	t.Parallel()
 
 	c := &ChainConfig{
+		LondonBlock:   new(big.Int),
 		ShanghaiBlock: big.NewInt(10),
+		CancunBlock:   big.NewInt(20),
+		PragueBlock:   big.NewInt(30),
+		VerkleBlock:   big.NewInt(40),
 	}
 
 	block := new(big.Int)
@@ -127,7 +131,19 @@ func TestConfigRules(t *testing.T) {
 	block.SetInt64(10)
 
 	if r := c.Rules(block, true, 0); !r.IsShanghai {
-		t.Errorf("expected %v to be shanghai", 0)
+		t.Errorf("expected %v to be shanghai", 10)
+	}
+
+	block.SetInt64(20)
+
+	if r := c.Rules(block, true, 0); !r.IsCancun {
+		t.Errorf("expected %v to be cancun", 20)
+	}
+
+	block.SetInt64(30)
+
+	if r := c.Rules(block, true, 0); !r.IsPrague {
+		t.Errorf("expected %v to be prague", 30)
 	}
 
 	block = block.SetInt64(math.MaxInt64)

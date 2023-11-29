@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -275,8 +275,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	if origin == nil {
 		origin = common.Hash{}.Bytes()
 	}
-
-	if err := tr.Prove(origin, 0, proof); err != nil {
+	if err := tr.Prove(origin, proof); err != nil {
 		log.Debug("Failed to prove range", "kind", kind, "origin", origin, "err", err)
 
 		return &proofResult{
@@ -289,7 +288,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	}
 
 	if last != nil {
-		if err := tr.Prove(last, 0, proof); err != nil {
+		if err := tr.Prove(last, proof); err != nil {
 			log.Debug("Failed to prove range", "kind", kind, "last", last, "err", err)
 
 			return &proofResult{
@@ -392,12 +391,13 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-
-		root, nodes := snapTrie.Commit(false)
-
+		root, nodes, err := snapTrie.Commit(false)
+		if err != nil {
+			return false, nil, err
+		}
 		if nodes != nil {
-			_ = tdb.Update(trie.NewWithNodeSet(nodes))
-			_ = tdb.Commit(root, false)
+			tdb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
+			tdb.Commit(root, false)
 		}
 
 		resolver = func(owner common.Hash, path []byte, hash common.Hash) []byte {
@@ -417,8 +417,6 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 
 	var (
 		trieMore       bool
-		nodeIt         = tr.NodeIterator(origin)
-		iter           = trie.NewIterator(nodeIt)
 		kvkeys, kvvals = result.keys, result.vals
 
 		// counters
@@ -432,8 +430,12 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		start    = time.Now()
 		internal time.Duration
 	)
-
+	nodeIt, err := tr.NodeIterator(origin)
+	if err != nil {
+		return false, nil, err
+	}
 	nodeIt.AddResolver(resolver)
+	iter := trie.NewIterator(nodeIt)
 
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
@@ -640,13 +642,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
-		var acc struct {
-			Nonce    uint64
-			Balance  *big.Int
-			Root     common.Hash
-			CodeHash []byte
-		}
-
+		var acc types.StateAccount
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
@@ -665,7 +661,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 
 				snapRecoveredAccountMeter.Mark(1)
 			} else {
-				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
+				data := types.SlimAccountRLP(acc)
 				dataLen = len(data)
 				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
 				snapGeneratedAccountMeter.Mark(1)
@@ -717,8 +713,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 
 	for {
 		id := trie.StateTrieID(dl.root)
-
-		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, types.FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}

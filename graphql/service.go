@@ -42,7 +42,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		OperationName string                 `json:"operationName"`
 		Variables     map[string]interface{} `json:"variables"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -54,7 +53,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timer     *time.Timer
 		cancel    context.CancelFunc
 	)
-
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 
@@ -68,7 +66,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				response := &graphql.Response{
 					Errors: []*gqlErrors.QueryError{{Message: "request timed out"}},
 				}
-
 				responseJSON, err := json.Marshal(response)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -82,8 +79,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// chunked transfer encoding must be disabled by setting content-length.
 				w.Header().Set("content-type", "application/json")
 				w.Header().Set("content-length", strconv.Itoa(len(responseJSON)))
-				_, _ = w.Write(responseJSON)
-
+				w.Write(responseJSON)
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
 				}
@@ -92,7 +88,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
-
 	timer.Stop()
 	responded.Do(func() {
 		responseJSON, err := json.Marshal(response)
@@ -100,13 +95,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		if len(response.Errors) > 0 {
 			w.WriteHeader(http.StatusBadRequest)
 		}
-
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(responseJSON)
+		w.Write(responseJSON)
 	})
 }
 
@@ -125,11 +118,11 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 	if err != nil {
 		return nil, err
 	}
-
 	h := handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
 
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
+	stack.RegisterHandler("GraphQL UI", "/graphql/ui/", GraphiQL{})
 	stack.RegisterHandler("GraphQL", "/graphql", handler)
 	stack.RegisterHandler("GraphQL", "/graphql/", handler)
 

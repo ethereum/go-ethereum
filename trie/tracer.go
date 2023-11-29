@@ -16,7 +16,9 @@
 
 package trie
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // tracer tracks the changes of trie nodes. During the trie operations,
 // some nodes can be deleted from the trie, while these deleted nodes
@@ -117,16 +119,18 @@ func (t *tracer) copy() *tracer {
 	}
 }
 
-// markDeletions puts all tracked deletions into the provided nodeset.
-func (t *tracer) markDeletions(set *NodeSet) {
+// deletedNodes returns a list of node paths which are deleted from the trie.
+func (t *tracer) deletedNodes() []string {
+	var paths []string
 	for path := range t.deletes {
 		// It's possible a few deleted nodes were embedded
 		// in their parent before, the deletions can be no
 		// effect by deleting nothing, filter them out.
-		if _, ok := set.accessList[path]; !ok {
+		_, ok := t.accessList[path]
+		if !ok {
 			continue
 		}
-
-		set.markDeleted([]byte(path))
+		paths = append(paths, path)
 	}
+	return paths
 }

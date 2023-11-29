@@ -273,7 +273,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 
 	// sealing (if enabled) or in dev mode
 	if config.Sealer.Enabled || config.Developer.Enabled {
-		if err := srv.backend.StartMining(1); err != nil {
+		if err := srv.backend.StartMining(); err != nil {
 			return nil, err
 		}
 	}

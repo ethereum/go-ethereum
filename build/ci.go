@@ -139,7 +139,15 @@ var (
 	// This is the version of Go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.20"
+	dlgoVersion = "1.20.7"
+
+	// This is the version of Go that will be used to bootstrap the PPA builder.
+	//
+	// This version is fine to be old and full of security holes, we just use it
+	// to build the latest Go. Don't change it. If it ever becomes insufficient,
+	// we need to switch over to a recursive builder to jumpt across supported
+	// versions.
+	gobootVersion = "1.19.6"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -192,6 +200,7 @@ func doInstall(cmdline []string) {
 		staticlink = flag.Bool("static", false, "Create statically-linked executable")
 	)
 	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
 
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
@@ -203,8 +212,12 @@ func doInstall(cmdline []string) {
 	// Disable CLI markdown doc generation in release builds.
 	buildTags := []string{"urfave_cli_no_docs"}
 
+	// Enable linking the CKZG library since we can make it work with additional flags.
+	if env.UbuntuVersion != "trusty" {
+		buildTags = append(buildTags, "ckzg")
+	}
+
 	// Configure the build.
-	env := build.Env()
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
@@ -213,7 +226,6 @@ func doInstall(cmdline []string) {
 	if env.CI && runtime.GOARCH == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
-
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
@@ -292,6 +304,12 @@ func doTest(cmdline []string) {
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 	gotest := tc.Go("test")
+
+	// CI needs a bit more time for the statetests (default 10m).
+	gotest.Args = append(gotest.Args, "-timeout=20m")
+
+	// Enable CKZG backend in CI.
+	gotest.Args = append(gotest.Args, "-tags=ckzg")
 
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.

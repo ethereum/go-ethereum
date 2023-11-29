@@ -26,7 +26,6 @@ func TestExecQueue(t *testing.T) {
 		execd    = make(chan int)
 		testexit = make(chan struct{})
 	)
-
 	defer q.Quit()
 	defer close(testexit)
 
@@ -39,11 +38,9 @@ func TestExecQueue(t *testing.T) {
 			case <-testexit:
 			}
 		}
-
 		if q.CanQueue() != wantOK {
 			t.Fatalf("CanQueue() == %t for %s", !wantOK, state)
 		}
-
 		if q.Queue(qf) != wantOK {
 			t.Fatalf("Queue() == %t for %s", !wantOK, state)
 		}
@@ -53,7 +50,6 @@ func TestExecQueue(t *testing.T) {
 		check("queue below cap", true)
 	}
 	check("full queue", false)
-
 	for i := 0; i < N; i++ {
 		if c := <-execd; c != i {
 			t.Fatal("execution out of order")

@@ -117,7 +117,7 @@ func TestChain2HeadEvent(t *testing.T) {
 		}})
 
 	// reorg event
-	//In this event the channel recieves an array of Blocks in NewChain and OldChain
+	//In this event the channel receives an array of Blocks in NewChain and OldChain
 	readEvent(&eventTest{
 		Type: Chain2HeadReorgEvent,
 		Added: []common.Hash{

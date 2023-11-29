@@ -71,9 +71,8 @@ type LightChain struct {
 	wg      sync.WaitGroup
 
 	// Atomic boolean switches:
-	running          int32 // whether LightChain is running or stopped
-	procInterrupt    int32 // interrupts chain insert
-	disableCheckFreq int32 // disables header verification
+	stopped       atomic.Bool // whether LightChain is stopped or running
+	procInterrupt atomic.Bool // interrupts chain insert
 
 	// Bor
 	chain2HeadFeed event.Feed
@@ -82,7 +81,7 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint, checker ethereum.ChainValidator) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checker ethereum.ChainValidator) (*LightChain, error) {
 	bc := &LightChain{
 		chainDb:       odr.Database(),
 		indexerConfig: odr.IndexerConfig(),
@@ -94,23 +93,15 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:        engine,
 	}
 	bc.forker = core.NewForkChoice(bc, nil, checker)
-
 	var err error
-
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
-
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-
-	if checkpoint != nil {
-		bc.AddTrustedCheckpoint(checkpoint)
-	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -122,31 +113,11 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 			log.Info("Chain rewind was successful, resuming normal operation")
 		}
 	}
-
 	return bc, nil
 }
 
-// AddTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
-	if lc.odr.ChtIndexer() != nil {
-		StoreChtRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.CHTRoot)
-		lc.odr.ChtIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-
-	if lc.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.BloomRoot)
-		lc.odr.BloomTrieIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-
-	if lc.odr.BloomIndexer() != nil {
-		lc.odr.BloomIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
-	}
-
-	log.Info("Added trusted checkpoint", "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
-}
-
 func (lc *LightChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&lc.procInterrupt) == 1
+	return lc.procInterrupt.Load()
 }
 
 // Odr returns the ODR backend of the chain
@@ -178,7 +149,6 @@ func (lc *LightChain) loadLastState() error {
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-
 	return nil
 }
 
@@ -189,7 +159,6 @@ func (lc *LightChain) SetHead(head uint64) error {
 	defer lc.chainmu.Unlock()
 
 	lc.hc.SetHead(head, nil, nil)
-
 	return lc.loadLastState()
 }
 
@@ -201,7 +170,6 @@ func (lc *LightChain) SetHeadWithTimestamp(timestamp uint64) error {
 	defer lc.chainmu.Unlock()
 
 	lc.hc.SetHeadWithTimestamp(timestamp, nil, nil)
-
 	return lc.loadLastState()
 }
 
@@ -229,11 +197,9 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
 	rawdb.WriteHeadHeaderHash(batch, genesis.Hash())
-
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to reset genesis block", "err", err)
 	}
-
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
@@ -260,19 +226,16 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 	if cached, ok := lc.bodyCache.Get(hash); ok {
 		return cached, nil
 	}
-
 	number := lc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil, errors.New("unknown block")
 	}
-
 	body, err := GetBody(ctx, lc.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}
 	// Cache the found body for next time and return
 	lc.bodyCache.Add(hash, body)
-
 	return body, nil
 }
 
@@ -283,19 +246,16 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 	if cached, ok := lc.bodyRLPCache.Get(hash); ok {
 		return cached, nil
 	}
-
 	number := lc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil, errors.New("unknown block")
 	}
-
 	body, err := GetBodyRLP(ctx, lc.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}
 	// Cache the found body for next time and return
 	lc.bodyRLPCache.Add(hash, body)
-
 	return body, nil
 }
 
@@ -313,14 +273,12 @@ func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uin
 	if block, ok := lc.blockCache.Get(hash); ok {
 		return block, nil
 	}
-
 	block, err := GetBlock(ctx, lc.odr, hash, number)
 	if err != nil {
 		return nil, err
 	}
 	// Cache the found block for next time and return
 	lc.blockCache.Add(block.Hash(), block)
-
 	return block, nil
 }
 
@@ -331,7 +289,6 @@ func (lc *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*ty
 	if number == nil {
 		return nil, errors.New("unknown block")
 	}
-
 	return lc.GetBlock(ctx, hash, *number)
 }
 
@@ -342,17 +299,15 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 	if hash == (common.Hash{}) || err != nil {
 		return nil, err
 	}
-
 	return lc.GetBlock(ctx, hash, number)
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (lc *LightChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&lc.running, 0, 1) {
+	if !lc.stopped.CompareAndSwap(false, true) {
 		return
 	}
-
 	close(lc.quit)
 	lc.StopInsert()
 	lc.wg.Wait()
@@ -363,7 +318,7 @@ func (lc *LightChain) Stop() {
 // errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
 // calling this method.
 func (lc *LightChain) StopInsert() {
-	atomic.StoreInt32(&lc.procInterrupt, 1)
+	lc.procInterrupt.Store(true)
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't
@@ -373,7 +328,6 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 	defer lc.chainmu.Unlock()
 
 	batch := lc.chainDb.NewBatch()
-
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
@@ -386,7 +340,6 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
 		}
 	}
-
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to rollback light chain", "error", err)
 	}
@@ -395,7 +348,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 func (lc *LightChain) InsertHeader(header *types.Header) error {
 	// Verify the header first before obtaining the lock
 	headers := []*types.Header{header}
-	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
+	if _, err := lc.hc.ValidateHeaderChain(headers); err != nil {
 		return err
 	}
 	// Make sure only one thread manipulates the chain at once
@@ -406,9 +359,7 @@ func (lc *LightChain) InsertHeader(header *types.Header) error {
 	defer lc.wg.Done()
 
 	_, err := lc.hc.WriteHeaders(headers)
-
 	log.Info("Inserted header", "number", header.Number, "hash", header.Hash())
-
 	return err
 }
 
@@ -424,56 +375,24 @@ func (lc *LightChain) SetCanonical(header *types.Header) error {
 	}
 	// Emit events
 	block := types.NewBlockWithHeader(header)
-
 	lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
 	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
 	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())
-
-	return nil
-}
-
-func (lc *LightChain) SetChainHead(header *types.Header) error {
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
-	if err := lc.hc.Reorg([]*types.Header{header}); err != nil {
-		return err
-	}
-	// Emit events
-	block := types.NewBlockWithHeader(header)
-	lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
-	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
-	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())
-
 	return nil
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
-//
-// The verify parameter can be used to fine tune whether nonce verification
-// should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verify nonces, as well as
-// because nonces can be verified sparsely, not needing to check each.
-//
+
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (lc *LightChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
-
-	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
-		checkFreq = 0
-	}
-
 	start := time.Now()
-
-	if i, err := lc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := lc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
 
@@ -494,7 +413,6 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		lastHeader = chain[len(chain)-1]
 		block      = types.NewBlockWithHeader(lastHeader)
 	)
-
 	switch status {
 	case core.CanonStatTy:
 		lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
@@ -502,7 +420,6 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	case core.SideStatTy:
 		lc.chainSideFeed.Send(core.ChainSideEvent{Block: block})
 	}
-
 	return 0, err
 }
 
@@ -525,9 +442,7 @@ func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uin
 	if td != nil {
 		return td
 	}
-
 	td, _ = GetTd(ctx, lc.odr, hash, number)
-
 	return td
 }
 
@@ -575,47 +490,11 @@ func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (
 	if header := lc.hc.GetHeaderByNumber(number); header != nil {
 		return header, nil
 	}
-
 	return GetHeaderByNumber(ctx, lc.odr, number)
 }
 
 // Config retrieves the header chain's chain configuration.
 func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
-
-// SyncCheckpoint fetches the checkpoint point block header according to
-// the checkpoint provided by the remote peer.
-//
-// Note if we are running the clique, fetches the last epoch snapshot header
-// which covered by checkpoint.
-func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
-	// Ensure the remote checkpoint head is ahead of us
-	head := lc.CurrentHeader().Number.Uint64()
-
-	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
-	if clique := lc.hc.Config().Clique; clique != nil {
-		latest -= latest % clique.Epoch // epoch snapshot for clique
-	}
-
-	if head >= latest {
-		return true
-	}
-	// Retrieve the latest useful header and update to it
-	if header, err := GetHeaderByNumber(ctx, lc.odr, latest); header != nil && err == nil {
-		lc.chainmu.Lock()
-		defer lc.chainmu.Unlock()
-
-		// Ensure the chain didn't move past the latest block while retrieving it
-		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
-			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-			rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
-			lc.hc.SetCurrentHeader(header)
-		}
-
-		return true
-	}
-
-	return false
-}
 
 // LockChain locks the chain mutex for reading so that multiple canonical hashes can be
 // retrieved while it is guaranteed that they belong to the same version of the chain
@@ -658,16 +537,6 @@ func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 // SubscribeChain2HeadEvent registers a subscription of Reorg/head/fork events.
 func (lc *LightChain) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
 	return lc.scope.Track(lc.chain2HeadFeed.Subscribe(ch))
-}
-
-// DisableCheckFreq disables header validation. This is used for ultralight mode.
-func (lc *LightChain) DisableCheckFreq() {
-	atomic.StoreInt32(&lc.disableCheckFreq, 1)
-}
-
-// EnableCheckFreq enables header validation.
-func (lc *LightChain) EnableCheckFreq() {
-	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
 
 // SubscribeStateSyncEvent implements the interface of filters.Backend

@@ -108,7 +108,7 @@ a data corruption.`,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command performs a database compaction. 
+		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
@@ -130,7 +130,7 @@ corruption if it is aborted during execution'!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command deletes the specified database key from the database. 
+		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = &cli.Command{
@@ -141,7 +141,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: `This command sets a given database key to the given value. 
+		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbGetSlotsCmd = &cli.Command{
@@ -567,10 +567,12 @@ func dbDumpTrie(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
+	trieIt, err := theTrie.NodeIterator(start)
+	if err != nil {
+		return err
+	}
 	var count int64
-
-	it := trie.NewIterator(theTrie.NodeIterator(start))
+	it := trie.NewIterator(trieIt)
 	for it.Next() {
 		if max > 0 && count == max {
 			fmt.Printf("Exiting after %d values\n", count)

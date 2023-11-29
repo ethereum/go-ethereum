@@ -103,27 +103,22 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgBlockBodies {
 		return errInvalidMessageType
 	}
-
 	bodies := msg.Obj.([]*types.Body)
 	if len(bodies) != 1 {
 		return errInvalidEntryCount
 	}
-
 	body := bodies[0]
 
 	// Retrieve our stored header and validate block content against it
 	if r.Header == nil {
 		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
 	}
-
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-
 	if r.Header.TxHash != types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)) {
 		return errTxHashMismatch
 	}
-
 	if r.Header.UncleHash != types.CalcUncleHash(body.Uncles) {
 		return errUncleHashMismatch
 	}
@@ -132,9 +127,7 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if err != nil {
 		return err
 	}
-
 	r.Rlp = data
-
 	return nil
 }
 
@@ -168,36 +161,31 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgReceipts {
 		return errInvalidMessageType
 	}
-
 	receipts := msg.Obj.([]types.Receipts)
 	if len(receipts) != 1 {
 		return errInvalidEntryCount
 	}
-
 	receipt := receipts[0]
 
 	// Retrieve our stored header and validate receipt content against it
 	if r.Header == nil {
 		r.Header = rawdb.ReadHeader(db, r.Hash, r.Number)
 	}
-
 	if r.Header == nil {
 		return errHeaderUnavailable
 	}
-
 	if r.Header.ReceiptHash != types.DeriveSha(receipt, trie.NewStackTrie(nil)) {
 		return errReceiptHashMismatch
 	}
 	// Validations passed, store and return
 	r.Receipts = receipt
-
 	return nil
 }
 
 type ProofReq struct {
-	BHash       common.Hash
-	AccKey, Key []byte
-	FromLevel   uint
+	BHash               common.Hash
+	AccountAddress, Key []byte
+	FromLevel           uint
 }
 
 // ODR request type for state/storage trie entries, see LesOdrRequest interface
@@ -218,11 +206,10 @@ func (r *TrieRequest) CanSend(peer *serverPeer) bool {
 func (r *TrieRequest) Request(reqID uint64, peer *serverPeer) error {
 	peer.Log().Debug("Requesting trie proof", "root", r.Id.Root, "key", r.Key)
 	req := ProofReq{
-		BHash:  r.Id.BlockHash,
-		AccKey: r.Id.AccKey,
-		Key:    r.Key,
+		BHash:          r.Id.BlockHash,
+		AccountAddress: r.Id.AccountAddress,
+		Key:            r.Key,
 	}
-
 	return peer.requestProofs(reqID, []ProofReq{req})
 }
 
@@ -235,11 +222,9 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgProofsV2 {
 		return errInvalidMessageType
 	}
-
 	proofs := msg.Obj.(light.NodeList)
 	// Verify the proof and store if checks out
 	nodeSet := proofs.NodeSet()
-
 	reads := &readTraceDB{db: nodeSet}
 	if _, err := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
@@ -248,15 +233,13 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if len(reads.reads) != nodeSet.KeyCount() {
 		return errUselessNodes
 	}
-
 	r.Proof = nodeSet
-
 	return nil
 }
 
 type CodeReq struct {
-	BHash  common.Hash
-	AccKey []byte
+	BHash          common.Hash
+	AccountAddress []byte
 }
 
 // CodeRequest is the ODR request type for node data (used for retrieving contract code), see LesOdrRequest interface
@@ -277,10 +260,9 @@ func (r *CodeRequest) CanSend(peer *serverPeer) bool {
 func (r *CodeRequest) Request(reqID uint64, peer *serverPeer) error {
 	peer.Log().Debug("Requesting code data", "hash", r.Hash)
 	req := CodeReq{
-		BHash:  r.Id.BlockHash,
-		AccKey: r.Id.AccKey,
+		BHash:          r.Id.BlockHash,
+		AccountAddress: r.Id.AccountAddress,
 	}
-
 	return peer.requestCode(reqID, []CodeReq{req})
 }
 
@@ -294,21 +276,17 @@ func (r *CodeRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgCode {
 		return errInvalidMessageType
 	}
-
 	reply := msg.Obj.([][]byte)
 	if len(reply) != 1 {
 		return errInvalidEntryCount
 	}
-
 	data := reply[0]
 
 	// Verify the data and store if checks out
 	if hash := crypto.Keccak256Hash(data); r.Hash != hash {
 		return errDataHashMismatch
 	}
-
 	r.Data = data
-
 	return nil
 }
 
@@ -354,9 +332,7 @@ func (r *ChtRequest) CanSend(peer *serverPeer) bool {
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *ChtRequest) Request(reqID uint64, peer *serverPeer) error {
 	peer.Log().Debug("Requesting CHT", "cht", r.ChtNum, "block", r.BlockNum)
-
 	var encNum [8]byte
-
 	binary.BigEndian.PutUint64(encNum[:], r.BlockNum)
 	req := HelperTrieReq{
 		Type:    htCanonical,
@@ -364,7 +340,6 @@ func (r *ChtRequest) Request(reqID uint64, peer *serverPeer) error {
 		Key:     encNum[:],
 		AuxReq:  htAuxHeader,
 	}
-
 	return peer.requestHelperTrieProofs(reqID, []HelperTrieReq{req})
 }
 
@@ -377,19 +352,15 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgHelperTrieProofs {
 		return errInvalidMessageType
 	}
-
 	resp := msg.Obj.(HelperTrieResps)
 	if len(resp.AuxData) != 1 {
 		return errInvalidEntryCount
 	}
-
 	nodeSet := resp.Proofs.NodeSet()
-
 	headerEnc := resp.AuxData[0]
 	if len(headerEnc) == 0 {
 		return errHeaderUnavailable
 	}
-
 	header := new(types.Header)
 	if err := rlp.DecodeBytes(headerEnc, header); err != nil {
 		return errHeaderUnavailable
@@ -399,28 +370,22 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		node      light.ChtNode
 		encNumber [8]byte
 	)
-
 	binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
 
 	reads := &readTraceDB{db: nodeSet}
-
 	value, err := trie.VerifyProof(r.ChtRoot, encNumber[:], reads)
 	if err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
 	}
-
 	if len(reads.reads) != nodeSet.KeyCount() {
 		return errUselessNodes
 	}
-
 	if err := rlp.DecodeBytes(value, &node); err != nil {
 		return err
 	}
-
 	if node.Hash != header.Hash() {
 		return errCHTHashMismatch
 	}
-
 	if r.BlockNum != header.Number.Uint64() {
 		return errCHTNumberMismatch
 	}
@@ -428,7 +393,6 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	r.Header = header
 	r.Proof = nodeSet
 	r.Td = node.Td
-
 	return nil
 }
 
@@ -453,7 +417,6 @@ func (r *BloomRequest) CanSend(peer *serverPeer) bool {
 	if peer.version < lpv2 {
 		return false
 	}
-
 	return peer.headInfo.Number >= r.Config.BloomTrieConfirms && r.BloomTrieNum <= (peer.headInfo.Number-r.Config.BloomTrieConfirms)/r.Config.BloomTrieSize
 }
 
@@ -463,7 +426,6 @@ func (r *BloomRequest) Request(reqID uint64, peer *serverPeer) error {
 	reqs := make([]HelperTrieReq, len(r.SectionIndexList))
 
 	var encNumber [10]byte
-
 	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, sectionIdx := range r.SectionIndexList {
@@ -474,7 +436,6 @@ func (r *BloomRequest) Request(reqID uint64, peer *serverPeer) error {
 			Key:     common.CopyBytes(encNumber[:]),
 		}
 	}
-
 	return peer.requestHelperTrieProofs(reqID, reqs)
 }
 
@@ -488,7 +449,6 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgHelperTrieProofs {
 		return errInvalidMessageType
 	}
-
 	resps := msg.Obj.(HelperTrieResps)
 	proofs := resps.Proofs
 	nodeSet := proofs.NodeSet()
@@ -498,26 +458,21 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Verify the proofs
 	var encNumber [10]byte
-
 	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, idx := range r.SectionIndexList {
 		binary.BigEndian.PutUint64(encNumber[2:], idx)
-
 		value, err := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
 			return err
 		}
-
 		r.BloomBits[i] = value
 	}
 
 	if len(reads.reads) != nodeSet.KeyCount() {
 		return errUselessNodes
 	}
-
 	r.Proofs = nodeSet
-
 	return nil
 }
 
@@ -550,14 +505,11 @@ func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgTxStatus {
 		return errInvalidMessageType
 	}
-
 	status := msg.Obj.([]light.TxStatus)
 	if len(status) != len(r.Hashes) {
 		return errInvalidEntryCount
 	}
-
 	r.Status = status
-
 	return nil
 }
 
@@ -573,9 +525,7 @@ func (db *readTraceDB) Get(k []byte) ([]byte, error) {
 	if db.reads == nil {
 		db.reads = make(map[string]struct{})
 	}
-
 	db.reads[string(k)] = struct{}{}
-
 	return db.db.Get(k)
 }
 

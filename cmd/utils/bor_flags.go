@@ -1,15 +1,12 @@
 package utils
 
 import (
-	"encoding/json"
 	"os"
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 )
 
@@ -67,24 +64,6 @@ var (
 	}
 )
 
-func getGenesis(genesisPath string) (*core.Genesis, error) {
-	log.Info("Reading genesis at ", "file", genesisPath)
-
-	file, err := os.Open(genesisPath)
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	genesis := new(core.Genesis)
-	if err := json.NewDecoder(file).Decode(genesis); err != nil {
-		return nil, err
-	}
-
-	return genesis, nil
-}
-
 // SetBorConfig sets bor config
 func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
 	cfg.HeimdallURL = ctx.String(HeimdallURLFlag.Name)
@@ -118,10 +97,7 @@ func CreateBorEthereum(cfg *ethconfig.Config) *eth.Ethereum {
 		Fatalf("Failed to start stack: %v", err)
 	}
 
-	_, err = stack.Attach()
-	if err != nil {
-		Fatalf("Failed to attach to node: %v", err)
-	}
+	stack.Attach()
 
 	return ethereum
 }

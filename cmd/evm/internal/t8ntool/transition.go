@@ -30,7 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -264,7 +264,7 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	// We may have to sign the transactions.
-	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)))
+	signer := types.MakeSigner(chainConfig, big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
 
 	if txs, err = signUnsignedTransactions(txsWithKeys, signer); err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
@@ -280,7 +280,7 @@ func Transition(ctx *cli.Context) error {
 				GasUsed:  prestate.Env.ParentGasUsed,
 				GasLimit: prestate.Env.ParentGasLimit,
 			}
-			prestate.Env.BaseFee = misc.CalcBaseFee(chainConfig, parent)
+			prestate.Env.BaseFee = eip1559.CalcBaseFee(chainConfig, parent)
 		} else {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
@@ -431,7 +431,10 @@ type Alloc map[common.Address]core.GenesisAccount
 
 func (g Alloc) OnRoot(common.Hash) {}
 
-func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
+func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
+	if addr == nil {
+		return
+	}
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
 
 	var storage map[common.Hash]common.Hash
@@ -448,7 +451,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,
 	}
-	g[addr] = genesisAccount
+	g[*addr] = genesisAccount
 }
 
 // saveFile marshals the object to the given file

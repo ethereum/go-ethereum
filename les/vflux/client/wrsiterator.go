@@ -45,9 +45,7 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags n
 		if n == nil {
 			return 0
 		}
-
 		wt, _ := ns.GetField(n, weightField).(uint64)
-
 		return wt
 	}
 
@@ -69,7 +67,6 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags n
 	ns.SubscribeState(requireFlags.Or(disableFlags), func(n *enode.Node, oldState, newState nodestate.Flags) {
 		oldMatch := oldState.HasAll(requireFlags) && oldState.HasNone(disableFlags)
 		newMatch := newState.HasAll(requireFlags) && newState.HasNone(disableFlags)
-
 		if newMatch == oldMatch {
 			return
 		}
@@ -83,7 +80,6 @@ func NewWrsIterator(ns *nodestate.NodeStateMachine, requireFlags, disableFlags n
 		w.lock.Unlock()
 		w.cond.Signal()
 	})
-
 	return w
 }
 
@@ -101,7 +97,6 @@ func (w *WrsIterator) chooseNode() *enode.Node {
 		for !w.closed && w.wrs.IsEmpty() {
 			w.cond.Wait()
 		}
-
 		if w.closed {
 			return nil
 		}
@@ -111,7 +106,6 @@ func (w *WrsIterator) chooseNode() *enode.Node {
 		if c := w.wrs.Choose(); c != nil {
 			id := c.(enode.ID)
 			w.wrs.Remove(id)
-
 			return w.ns.GetNode(id)
 		}
 	}
@@ -129,6 +123,5 @@ func (w *WrsIterator) Close() {
 func (w *WrsIterator) Node() *enode.Node {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-
 	return w.nextNode
 }

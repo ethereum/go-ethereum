@@ -55,6 +55,5 @@ func newServerSetup() *serverSetup {
 	setup.inactiveFlag = setup.setup.NewFlag("inactive")
 	setup.capacityField = setup.setup.NewField("capacity", reflect.TypeOf(uint64(0)))
 	setup.queueField = setup.setup.NewField("queue", reflect.TypeOf(&ppNodeInfo{}))
-
 	return setup
 }

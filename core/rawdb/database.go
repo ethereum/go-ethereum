@@ -127,13 +127,13 @@ func (db *nofreezedb) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, e
 }
 
 // TruncateHead returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateHead(items uint64) error {
-	return errNotSupported
+func (db *nofreezedb) TruncateHead(items uint64) (uint64, error) {
+	return 0, errNotSupported
 }
 
 // TruncateTail returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateTail(items uint64) error {
-	return errNotSupported
+func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
+	return 0, errNotSupported
 }
 
 // Sync returns an error as we don't have a backing chain freezer.
@@ -389,9 +389,15 @@ type ExtraDBConfig struct {
 //
 //	                      type == null          type != null
 //	                   +----------------------------------------
-//	db is non-existent |  leveldb default  |  specified type
-//	db is existent     |  from db          |  specified type (if compatible)
+//	db is non-existent |  pebble default  |  specified type
+//	db is existent     |  from db         |  specified type (if compatible)
 func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
+	// Reject any unsupported database type
+	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
+		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
+	}
+	// Retrieve any pre-existing database's type and use that or the requested one
+	// as long as there's no conflict between the two types
 	existingDb := hasPreexistingDb(o.Directory)
 	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
@@ -405,15 +411,19 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 			return nil, errors.New("db.engine 'pebble' not supported on this platform")
 		}
 	}
-
-	if len(o.Type) != 0 && o.Type != dbLeveldb {
-		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
+	if o.Type == dbLeveldb || existingDb == dbLeveldb {
+		log.Info("Using leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
 	}
-
-	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
-	log.Info("Using leveldb as the backing database")
-
-	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
+	// No pre-existing database, no user-requested one either. Default to Pebble
+	// on supported platforms and LevelDB on anything else.
+	if PebbleEnabled {
+		log.Info("Defaulting to pebble as the backing database")
+		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	} else {
+		log.Info("Defaulting to leveldb as the backing database")
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
+	}
 }
 
 // Open opens both a disk-based key-value database such as leveldb or pebble, but also

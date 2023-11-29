@@ -32,7 +32,7 @@ type Error struct {
 	str    string
 
 	// Sig contains the string signature according to the ABI spec.
-	// e.g.	 error foo(uint32 a, int b) = "foo(uint32,int256)"
+	// e.g. error foo(uint32 a, int b) = "foo(uint32,int256)"
 	// Please note that "int" is substitute for its canonical representation "int256"
 	Sig string
 
@@ -79,7 +79,7 @@ func NewError(name string, inputs Arguments) Error {
 	}
 }
 
-func (e *Error) String() string {
+func (e Error) String() string {
 	return e.str
 }
 

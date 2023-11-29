@@ -174,21 +174,6 @@ func (mr *MockBackendMockRecorder) GetReceipts(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReceipts", reflect.TypeOf((*MockBackend)(nil).GetReceipts), arg0, arg1)
 }
 
-// GetVoteOnHash mocks base method.
-func (m *MockBackend) GetVoteOnHash(arg0 context.Context, arg1, arg2 uint64, arg3, arg4 string) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVoteOnHash", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetVoteOnHash indicates an expected call of GetVoteOnHash.
-func (mr *MockBackendMockRecorder) GetVoteOnHash(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVoteOnHash", reflect.TypeOf((*MockBackend)(nil).GetVoteOnHash), arg0, arg1, arg2, arg3, arg4)
-}
-
 // HeaderByHash mocks base method.
 func (m *MockBackend) HeaderByHash(arg0 context.Context, arg1 common.Hash) (*types.Header, error) {
 	m.ctrl.T.Helper()

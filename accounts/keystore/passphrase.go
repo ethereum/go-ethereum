@@ -241,12 +241,13 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	key := crypto.ToECDSAUnsafe(keyBytes)
-
+	key, err := crypto.ToECDSA(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
+	}
 	id, err := uuid.FromBytes(keyId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
 
 	return &Key{

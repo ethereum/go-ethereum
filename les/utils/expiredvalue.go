@@ -77,17 +77,14 @@ func (e ExpiredValue) Value(logOffset Fixed64) uint64 {
 func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 	integer, frac := logOffset.ToUint64(), logOffset.Fraction()
 	factor := frac.Pow2()
-
 	base := factor * float64(amount)
 	if integer < e.Exp {
 		base /= math.Pow(2, float64(e.Exp-integer))
 	}
-
 	if integer > e.Exp {
 		e.Base >>= (integer - e.Exp)
 		e.Exp = integer
 	}
-
 	if base >= 0 || uint64(-base) <= e.Base {
 		// The conversion from negative float64 to
 		// uint64 is undefined in golang, and doesn't
@@ -98,13 +95,10 @@ func (e *ExpiredValue) Add(amount int64, logOffset Fixed64) int64 {
 		} else {
 			e.Base -= uint64(-base)
 		}
-
 		return amount
 	}
-
 	net := int64(-float64(e.Base) / factor)
 	e.Base = 0
-
 	return net
 }
 
@@ -113,12 +107,10 @@ func (e *ExpiredValue) AddExp(a ExpiredValue) {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
 	}
-
 	if e.Exp < a.Exp {
 		e.Base >>= (a.Exp - e.Exp)
 		e.Exp = a.Exp
 	}
-
 	e.Base += a.Base
 }
 
@@ -127,12 +119,10 @@ func (e *ExpiredValue) SubExp(a ExpiredValue) {
 	if e.Exp > a.Exp {
 		a.Base >>= (e.Exp - a.Exp)
 	}
-
 	if e.Exp < a.Exp {
 		e.Base >>= (a.Exp - e.Exp)
 		e.Exp = a.Exp
 	}
-
 	if e.Base > a.Base {
 		e.Base -= a.Base
 	} else {
@@ -165,7 +155,6 @@ func (e LinearExpiredValue) Value(now mclock.AbsTime) uint64 {
 			e.Val = 0
 		}
 	}
-
 	return e.Val
 }
 
@@ -180,16 +169,13 @@ func (e *LinearExpiredValue) Add(amount int64, now mclock.AbsTime) uint64 {
 		} else {
 			e.Val = 0
 		}
-
 		e.Offset = offset
 	}
-
 	if amount < 0 && uint64(-amount) > e.Val {
 		e.Val = 0
 	} else {
 		e.Val = uint64(int64(e.Val) + amount)
 	}
-
 	return e.Val
 }
 
@@ -222,7 +208,6 @@ func (e *Expirer) SetRate(now mclock.AbsTime, rate float64) {
 	if dt > 0 {
 		e.logOffset += Fixed64(logToFixedFactor * float64(dt) * e.rate)
 	}
-
 	e.lastUpdate = now
 	e.rate = rate
 }
@@ -245,7 +230,6 @@ func (e *Expirer) LogOffset(now mclock.AbsTime) Fixed64 {
 	if dt <= 0 {
 		return e.logOffset
 	}
-
 	return e.logOffset + Fixed64(logToFixedFactor*float64(dt)*e.rate)
 }
 

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -83,7 +83,7 @@ func newRoute53Client(ctx *cli.Context) *route53Client {
 	asec := ctx.String(route53AccessSecretFlag.Name)
 
 	if akey == "" || asec == "" {
-		exit(fmt.Errorf("need Route53 Access Key ID and secret to proceed"))
+		exit(errors.New("need Route53 Access Key ID and secret to proceed"))
 	}
 
 	creds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(akey, asec, ""))
@@ -318,13 +318,17 @@ func makeDeletionChanges(records map[string]recordSet, keep map[string]string) [
 // sortChanges ensures DNS changes are in leaf-added -> root-changed -> leaf-deleted order.
 func sortChanges(changes []types.Change) {
 	score := map[string]int{"CREATE": 1, "UPSERT": 2, "DELETE": 3}
-
-	sort.Slice(changes, func(i, j int) bool {
-		if changes[i].Action == changes[j].Action {
-			return *changes[i].ResourceRecordSet.Name < *changes[j].ResourceRecordSet.Name
+	slices.SortFunc(changes, func(a, b types.Change) int {
+		if a.Action == b.Action {
+			return strings.Compare(*a.ResourceRecordSet.Name, *b.ResourceRecordSet.Name)
 		}
-
-		return score[string(changes[i].Action)] < score[string(changes[j].Action)]
+		if score[string(a.Action)] < score[string(b.Action)] {
+			return -1
+		}
+		if score[string(a.Action)] > score[string(b.Action)] {
+			return 1
+		}
+		return 0
 	})
 }
 

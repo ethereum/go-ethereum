@@ -108,10 +108,11 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-
+	server := rpc.NewServer("inproc", 0, 0)
+	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
 	node := &Node{
 		config:        conf,
-		inprocHandler: rpc.NewServer("inproc", 0, 0),
+		inprocHandler: server,
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
@@ -129,8 +130,7 @@ func New(conf *Config) (*Node, error) {
 	if err := node.openDataDir(); err != nil {
 		return nil, err
 	}
-
-	keyDir, isEphem, err := getKeyStoreDir(conf)
+	keyDir, isEphem, err := conf.GetKeyStoreDir()
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +318,6 @@ func (n *Node) stopServices(running []Lifecycle) error {
 
 	// Stop running lifecycles in reverse order.
 	failure := &StopError{Services: make(map[reflect.Type]error)}
-
 	for i := len(running) - 1; i >= 0; i-- {
 		if err := running[i].Stop(); err != nil {
 			failure.Services[reflect.TypeOf(running[i])] = err
@@ -331,7 +330,6 @@ func (n *Node) stopServices(running []Lifecycle) error {
 	if len(failure.Services) > 0 {
 		return failure
 	}
-
 	return nil
 }
 
@@ -439,6 +437,11 @@ func (n *Node) startRPC() error {
 		openAPIs, allAPIs = n.getAPIs()
 	)
 
+	rpcConfig := rpcEndpointConfig{
+		batchItemLimit:         n.config.BatchRequestLimit,
+		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
+	}
+
 	initHttp := func(server *httpServer, port int) error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
@@ -449,6 +452,7 @@ func (n *Node) startRPC() error {
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
+			rpcEndpointConfig:  rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -465,11 +469,12 @@ func (n *Node) startRPC() error {
 		}
 
 		if err := server.enableWS(openAPIs, wsConfig{
+			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
+			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
 			Modules:                     n.config.WSModules,
 			Origins:                     n.config.WSOrigins,
 			prefix:                      n.config.WSPathPrefix,
-			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
-			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
+			rpcEndpointConfig:           rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -485,18 +490,20 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-
+		sharedConfig := rpcConfig
+		sharedConfig.jwtSecret = secret
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
 			prefix:             DefaultAuthPrefix,
-			jwtSecret:          secret,
+			rpcEndpointConfig:  sharedConfig,
 		}); err != nil {
 			return err
 		}
 
 		servers = append(servers, server)
+
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
@@ -504,10 +511,10 @@ func (n *Node) startRPC() error {
 		}
 
 		if err := server.enableWS(allAPIs, wsConfig{
-			Modules:   DefaultAuthModules,
-			Origins:   DefaultAuthOrigins,
-			prefix:    DefaultAuthPrefix,
-			jwtSecret: secret,
+			Modules:           DefaultAuthModules,
+			Origins:           DefaultAuthOrigins,
+			prefix:            DefaultAuthPrefix,
+			rpcEndpointConfig: sharedConfig,
 		}); err != nil {
 			return err
 		}
@@ -676,8 +683,8 @@ func (n *Node) RegisterHandler(name, path string, handler http.Handler) {
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
-func (n *Node) Attach() (*rpc.Client, error) {
-	return rpc.DialInProc(n.inprocHandler), nil
+func (n *Node) Attach() *rpc.Client {
+	return rpc.DialInProc(n.inprocHandler)
 }
 
 // RPCHandler returns the in-process RPC request handler.
