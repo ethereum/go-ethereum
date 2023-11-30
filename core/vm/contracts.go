@@ -105,13 +105,14 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-// PrecompiledContractsP256Verify contains the precompiled Ethereum
+// PrecompiledContractsNapoli contains the precompiled Ethereum
 // contract specified in EIP-7212. This is exported for testing purposes.
-var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
+var PrecompiledContractsNapoli = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{19}): &p256Verify{},
 }
 
 var (
+	PrecompiledAddressesNapoli    []common.Address
 	PrecompiledAddressesBerlin    []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
@@ -134,11 +135,17 @@ func init() {
 	for k := range PrecompiledContractsBerlin {
 		PrecompiledAddressesBerlin = append(PrecompiledAddressesBerlin, k)
 	}
+
+	for k := range PrecompiledContractsNapoli {
+		PrecompiledAddressesNapoli = append(PrecompiledAddressesNapoli, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsNapoli:
+		return PrecompiledAddressesNapoli
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
 	case rules.IsIstanbul:
