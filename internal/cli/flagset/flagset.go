@@ -39,6 +39,13 @@ type FlagVar struct {
 	Value   Updatable
 }
 
+// ByName implements sort.Interface for []*FlagVar based on the Name field.
+type ByName []*FlagVar
+
+func (a ByName) Len() int           { return len(a) }
+func (a ByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByName) Less(i, j int) bool { return a[i].Name < a[j].Name }
+
 func (f *Flagset) addFlag(fl *FlagVar) {
 	f.flags[fl.Name] = fl
 }
@@ -48,7 +55,14 @@ func (f *Flagset) Help() string {
 
 	items := []string{}
 
+	flags := []*FlagVar{}
 	for _, item := range f.flags {
+		flags = append(flags, item)
+	}
+
+	sort.Sort(ByName(flags))
+
+	for _, item := range flags {
 		if item.Default != nil {
 			items = append(items, fmt.Sprintf("  -%s\n    %s (default: %v)", item.Name, item.Usage, item.Default))
 		} else {
@@ -102,7 +116,11 @@ func (f *Flagset) MarkDown() string {
 			items = append(items, fmt.Sprintf("### %s Options", k))
 		}
 
-		for _, item := range groups[k] {
+		flags := make([]*FlagVar, len(groups[k]))
+		copy(flags, groups[k])
+		sort.Sort(ByName(flags))
+
+		for _, item := range flags {
 			if item.Default != nil {
 				items = append(items, fmt.Sprintf("- ```%s```: %s (default: %v)", item.Name, item.Usage, item.Default))
 			} else {

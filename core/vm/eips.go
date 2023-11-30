@@ -26,6 +26,8 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	5656: enable5656,
+	6780: enable6780,
 	3855: enable3855,
 	3860: enable3860,
 	3529: enable3529,
@@ -247,9 +249,69 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// ebnable3860 enables "EIP-3860: Limit and meter initcode"
+// enable3860 enables "EIP-3860: Limit and meter initcode"
 // https://eips.ethereum.org/EIPS/eip-3860
 func enable3860(jt *JumpTable) {
 	jt[CREATE].dynamicGas = gasCreateEip3860
 	jt[CREATE2].dynamicGas = gasCreate2Eip3860
+}
+
+// enable5656 enables EIP-5656 (MCOPY opcode)
+// https://eips.ethereum.org/EIPS/eip-5656
+func enable5656(jt *JumpTable) {
+	jt[MCOPY] = &operation{
+		execute:     opMcopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasMcopy,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryMcopy,
+	}
+}
+
+// opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
+func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		dst    = scope.Stack.pop()
+		src    = scope.Stack.pop()
+		length = scope.Stack.pop()
+	)
+	// These values are checked for overflow during memory expansion calculation
+	// (the memorySize function on the opcode).
+	scope.Memory.Copy(dst.Uint64(), src.Uint64(), length.Uint64())
+	return nil, nil
+}
+
+// opBlobHash implements the BLOBHASH opcode
+func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	index := scope.Stack.peek()
+	if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
+		blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
+		index.SetBytes32(blobHash[:])
+	} else {
+		index.Clear()
+	}
+	return nil, nil
+}
+
+// // enable4844 applies EIP-4844 (DATAHASH opcode)
+// func enable4844(jt *JumpTable) {
+// 	// New opcode
+// 	jt[BLOBHASH] = &operation{
+// 		execute:     opBlobHash,
+// 		constantGas: GasFastestStep,
+// 		minStack:    minStack(1, 1),
+// 		maxStack:    maxStack(1, 1),
+// 	}
+// }
+
+// enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
+func enable6780(jt *JumpTable) {
+	jt[SELFDESTRUCT] = &operation{
+		execute:     opSelfdestruct6780,
+		dynamicGas:  gasSelfdestructEIP3529,
+		constantGas: params.SelfdestructGasEIP150,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
 }

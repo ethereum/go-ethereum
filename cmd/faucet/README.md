@@ -10,9 +10,11 @@ The `faucet` is a single binary app (everything included) with all configuration
 
 First things first, the `faucet` needs to connect to an Ethereum network, for which it needs the necessary genesis and network infos. Each of the following flags must be set:
 
-- `--genesis` is a path to a file containing the network `genesis.json`
-- `--network` is the devp2p network id used during connection
-- `--bootnodes` is a list of `enode://` ids to join the network through
+- `-genesis` is a path to a file containing the network `genesis.json`. or using:
+  - `-goerli` with the faucet with Görli network config
+  - `-sepolia` with the faucet with Sepolia network config
+- `-network` is the devp2p network id used during connection
+- `-bootnodes` is a list of `enode://` ids to join the network through
 
 The `faucet` will use the `les` protocol to join the configured Ethereum network and will store its data in `$HOME/.faucet` (currently not configurable).
 
@@ -43,7 +45,7 @@ Sybil protection via Twitter requires an API key as of 15th December, 2020. To o
 - `-twitter.token` is the Bearer token for `v2` API access
 - `-twitter.token.v1` is the Bearer token for `v1` API access
 
-Sybil protection via Facebook uses the website to directly download post data thus does not currently require an API configuration. 
+Sybil protection via Facebook uses the website to directly download post data thus does not currently require an API configuration.
 
 ## Miscellaneous
 

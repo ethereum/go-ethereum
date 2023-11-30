@@ -115,7 +115,6 @@ func (mv *MVHashMap) Write(k Key, v Version, data interface{}) {
 			rw: sync.RWMutex{},
 			tm: treemap.NewWithIntComparator(),
 		}
-		cells = n
 		val, _ := mv.m.LoadOrStore(kenc, n)
 		cells = val.(*TxnIndexCells)
 

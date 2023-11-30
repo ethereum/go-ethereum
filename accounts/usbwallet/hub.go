@@ -63,9 +63,9 @@ type Hub struct {
 	stateLock sync.RWMutex // Protects the internals of the hub from racey access
 
 	// TODO(karalabe): remove if hotplug lands on Windows
-	commsPend int        // Number of operations blocking enumeration
-	commsLock sync.Mutex // Lock protecting the pending counter and enumeration
-	enumFails uint32     // Number of times enumeration has failed
+	commsPend int           // Number of operations blocking enumeration
+	commsLock sync.Mutex    // Lock protecting the pending counter and enumeration
+	enumFails atomic.Uint32 // Number of times enumeration has failed
 }
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
@@ -154,7 +154,7 @@ func (hub *Hub) refreshWallets() {
 		return
 	}
 	// If USB enumeration is continually failing, don't keep trying indefinitely
-	if atomic.LoadUint32(&hub.enumFails) > 2 {
+	if hub.enumFails.Load() > 2 {
 		return
 	}
 	// Retrieve the current list of USB wallet devices
@@ -176,8 +176,7 @@ func (hub *Hub) refreshWallets() {
 
 	infos, err := usb.Enumerate(hub.vendorID, 0)
 	if err != nil {
-		failcount := atomic.AddUint32(&hub.enumFails, 1)
-
+		failcount := hub.enumFails.Add(1)
 		if runtime.GOOS == "linux" {
 			// See rationale before the enumeration why this is needed and only on Linux.
 			hub.commsLock.Unlock()
@@ -188,8 +187,7 @@ func (hub *Hub) refreshWallets() {
 
 		return
 	}
-
-	atomic.StoreUint32(&hub.enumFails, 0)
+	hub.enumFails.Store(0)
 
 	for _, info := range infos {
 		for _, id := range hub.productIDs {

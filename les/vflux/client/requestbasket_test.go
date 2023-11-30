@@ -37,11 +37,9 @@ func checkF64(t *testing.T, name string, value, exp, tol float64) {
 
 func TestServerBasket(t *testing.T) {
 	var s serverBasket
-
 	s.init(2)
 	// add some requests with different request value factors
 	s.updateRvFactor(1)
-
 	noexp := utils.ExpirationFactor{Factor: 1}
 	s.add(0, 1000, 10000, noexp)
 	s.add(1, 3000, 60000, noexp)
@@ -85,13 +83,11 @@ func TestConvertMapping(t *testing.T) {
 
 func TestReqValueFactor(t *testing.T) {
 	var ref referenceBasket
-
 	ref.basket = requestBasket{items: make([]basketItem, 4)}
 	for i := range ref.basket.items {
 		ref.basket.items[i].amount = uint64(i+1) * basketFactor
 		ref.basket.items[i].value = uint64(i+1) * basketFactor
 	}
-
 	ref.init(4)
 	rvf := ref.reqValueFactor([]uint64{1000, 2000, 3000, 4000})
 	// expected value is (1000000+2000000+3000000+4000000) / (1*1000+2*2000+3*3000+4*4000) = 10000000/30000 = 333.333
@@ -103,7 +99,6 @@ func TestNormalize(t *testing.T) {
 		// Initialize data for testing
 		valueRange, lower := 1000000, 1000000
 		ref := referenceBasket{basket: requestBasket{items: make([]basketItem, 10)}}
-
 		for i := 0; i < 10; i++ {
 			ref.basket.items[i].amount = uint64(rand.Intn(valueRange) + lower)
 			ref.basket.items[i].value = uint64(rand.Intn(valueRange) + lower)
@@ -116,7 +111,6 @@ func TestNormalize(t *testing.T) {
 			sumAmount += ref.basket.items[i].amount
 			sumValue += ref.basket.items[i].value
 		}
-
 		var epsilon = 0.01
 		if float64(sumAmount)*(1+epsilon) < float64(sumValue) || float64(sumAmount)*(1-epsilon) > float64(sumValue) {
 			t.Fatalf("Failed to normalize sumAmount: %d sumValue: %d", sumAmount, sumValue)
@@ -126,31 +120,24 @@ func TestNormalize(t *testing.T) {
 
 func TestReqValueAdjustment(t *testing.T) {
 	var s1, s2 serverBasket
-
 	s1.init(3)
 	s2.init(3)
-
 	cost1 := []uint64{30000, 60000, 90000}
 	cost2 := []uint64{100000, 200000, 300000}
-
 	var ref referenceBasket
-
 	ref.basket = requestBasket{items: make([]basketItem, 3)}
 	for i := range ref.basket.items {
 		ref.basket.items[i].amount = 123 * basketFactor
 		ref.basket.items[i].value = 123 * basketFactor
 	}
-
 	ref.init(3)
 	// initial reqValues are expected to be {1, 1, 1}
 	checkF64(t, "reqValues[0]", ref.reqValues[0], 1, 0.01)
 	checkF64(t, "reqValues[1]", ref.reqValues[1], 1, 0.01)
 	checkF64(t, "reqValues[2]", ref.reqValues[2], 1, 0.01)
-
 	var logOffset utils.Fixed64
 	for period := 0; period < 1000; period++ {
 		exp := utils.ExpFactor(logOffset)
-
 		s1.updateRvFactor(ref.reqValueFactor(cost1))
 		s2.updateRvFactor(ref.reqValueFactor(cost2))
 		// throw in random requests into each basket using their internal pricing
@@ -166,7 +153,6 @@ func TestReqValueAdjustment(t *testing.T) {
 		ref.add(s2.transfer(0.1))
 		ref.normalize()
 		ref.updateReqValues()
-
 		logOffset += utils.Float64ToFixed64(0.1)
 	}
 	checkF64(t, "reqValues[0]", ref.reqValues[0], 0.5, 0.01)

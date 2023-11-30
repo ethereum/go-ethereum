@@ -40,12 +40,10 @@ func TestWrsIterator(t *testing.T) {
 	ns := nodestate.NewNodeStateMachine(nil, nil, &mclock.Simulated{}, testSetup)
 	w := NewWrsIterator(ns, sfTest2, sfTest3.Or(sfTest4), sfiTestWeight)
 	ns.Start()
-
 	for i := 1; i <= iterTestNodeCount; i++ {
 		ns.SetState(testNode(i), sfTest1, nodestate.Flags{}, 0)
 		ns.SetField(testNode(i), sfiTestWeight, uint64(1))
 	}
-
 	next := func() int {
 		ch := make(chan struct{})
 		go func() {
@@ -57,10 +55,8 @@ func TestWrsIterator(t *testing.T) {
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Iterator.Next() timeout")
 		}
-
 		node := w.Node()
 		ns.SetState(node, sfTest4, nodestate.Flags{}, 0)
-
 		return testNodeIndex(node.ID())
 	}
 	set := make(map[int]bool)
@@ -70,7 +66,6 @@ func TestWrsIterator(t *testing.T) {
 			if !set[n] {
 				t.Errorf("Item returned by iterator not in the expected set (got %d)", n)
 			}
-
 			delete(set, n)
 		}
 	}
@@ -78,39 +73,31 @@ func TestWrsIterator(t *testing.T) {
 	ns.SetState(testNode(1), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(2), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(3), sfTest2, nodestate.Flags{}, 0)
-
 	set[1] = true
 	set[2] = true
 	set[3] = true
-
 	expset()
 	ns.SetState(testNode(4), sfTest2, nodestate.Flags{}, 0)
 	ns.SetState(testNode(5), sfTest2.Or(sfTest3), nodestate.Flags{}, 0)
 	ns.SetState(testNode(6), sfTest2, nodestate.Flags{}, 0)
-
 	set[4] = true
 	set[6] = true
-
 	expset()
 	ns.SetField(testNode(2), sfiTestWeight, uint64(0))
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
-
 	set[1] = true
 	set[3] = true
-
 	expset()
 	ns.SetField(testNode(2), sfiTestWeight, uint64(1))
 	ns.SetState(testNode(2), nodestate.Flags{}, sfTest2, 0)
 	ns.SetState(testNode(1), nodestate.Flags{}, sfTest4, 0)
 	ns.SetState(testNode(2), sfTest2, sfTest4, 0)
 	ns.SetState(testNode(3), nodestate.Flags{}, sfTest4, 0)
-
 	set[1] = true
 	set[2] = true
 	set[3] = true
-
 	expset()
 	ns.Stop()
 }

@@ -19,7 +19,6 @@ package t8ntool
 import (
 	"fmt"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -47,17 +46,19 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot       common.Hash           `json:"stateRoot"`
-	TxRoot          common.Hash           `json:"txRoot"`
-	ReceiptRoot     common.Hash           `json:"receiptsRoot"`
-	LogsHash        common.Hash           `json:"logsHash"`
-	Bloom           types.Bloom           `json:"logsBloom"        gencodec:"required"`
-	Receipts        types.Receipts        `json:"receipts"`
-	Rejected        []*rejectedTx         `json:"rejected,omitempty"`
-	Difficulty      *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
-	GasUsed         math.HexOrDecimal64   `json:"gasUsed"`
-	BaseFee         *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
-	WithdrawalsRoot *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	StateRoot            common.Hash           `json:"stateRoot"`
+	TxRoot               common.Hash           `json:"txRoot"`
+	ReceiptRoot          common.Hash           `json:"receiptsRoot"`
+	LogsHash             common.Hash           `json:"logsHash"`
+	Bloom                types.Bloom           `json:"logsBloom"        gencodec:"required"`
+	Receipts             types.Receipts        `json:"receipts"`
+	Rejected             []*rejectedTx         `json:"rejected,omitempty"`
+	Difficulty           *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
+	GasUsed              math.HexOrDecimal64   `json:"gasUsed"`
+	BaseFee              *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
+	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
+	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
+	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"currentBlobGasUsed,omitempty"`
 }
 
 type ommer struct {
@@ -67,37 +68,43 @@ type ommer struct {
 
 //go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 type stEnv struct {
-	Coinbase         common.Address                      `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty       *big.Int                            `json:"currentDifficulty"`
-	Random           *big.Int                            `json:"currentRandom"`
-	ParentDifficulty *big.Int                            `json:"parentDifficulty"`
-	ParentBaseFee    *big.Int                            `json:"parentBaseFee,omitempty"`
-	ParentGasUsed    uint64                              `json:"parentGasUsed,omitempty"`
-	ParentGasLimit   uint64                              `json:"parentGasLimit,omitempty"`
-	GasLimit         uint64                              `json:"currentGasLimit"   gencodec:"required"`
-	Number           uint64                              `json:"currentNumber"     gencodec:"required"`
-	Timestamp        uint64                              `json:"currentTimestamp"  gencodec:"required"`
-	ParentTimestamp  uint64                              `json:"parentTimestamp,omitempty"`
-	BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
-	Ommers           []ommer                             `json:"ommers,omitempty"`
-	Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
-	BaseFee          *big.Int                            `json:"currentBaseFee,omitempty"`
-	ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
+	Coinbase            common.Address                      `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty          *big.Int                            `json:"currentDifficulty"`
+	Random              *big.Int                            `json:"currentRandom"`
+	ParentDifficulty    *big.Int                            `json:"parentDifficulty"`
+	ParentBaseFee       *big.Int                            `json:"parentBaseFee,omitempty"`
+	ParentGasUsed       uint64                              `json:"parentGasUsed,omitempty"`
+	ParentGasLimit      uint64                              `json:"parentGasLimit,omitempty"`
+	GasLimit            uint64                              `json:"currentGasLimit"   gencodec:"required"`
+	Number              uint64                              `json:"currentNumber"     gencodec:"required"`
+	Timestamp           uint64                              `json:"currentTimestamp"  gencodec:"required"`
+	ParentTimestamp     uint64                              `json:"parentTimestamp,omitempty"`
+	BlockHashes         map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
+	Ommers              []ommer                             `json:"ommers,omitempty"`
+	Withdrawals         []*types.Withdrawal                 `json:"withdrawals,omitempty"`
+	BaseFee             *big.Int                            `json:"currentBaseFee,omitempty"`
+	ParentUncleHash     common.Hash                         `json:"parentUncleHash"`
+	ExcessBlobGas       *uint64                             `json:"excessBlobGas,omitempty"`
+	ParentExcessBlobGas *uint64                             `json:"parentExcessBlobGas,omitempty"`
+	ParentBlobGasUsed   *uint64                             `json:"parentBlobGasUsed,omitempty"`
 }
 
 type stEnvMarshaling struct {
-	Coinbase         common.UnprefixedAddress
-	Difficulty       *math.HexOrDecimal256
-	Random           *math.HexOrDecimal256
-	ParentDifficulty *math.HexOrDecimal256
-	ParentBaseFee    *math.HexOrDecimal256
-	ParentGasUsed    math.HexOrDecimal64
-	ParentGasLimit   math.HexOrDecimal64
-	GasLimit         math.HexOrDecimal64
-	Number           math.HexOrDecimal64
-	Timestamp        math.HexOrDecimal64
-	ParentTimestamp  math.HexOrDecimal64
-	BaseFee          *math.HexOrDecimal256
+	Coinbase            common.UnprefixedAddress
+	Difficulty          *math.HexOrDecimal256
+	Random              *math.HexOrDecimal256
+	ParentDifficulty    *math.HexOrDecimal256
+	ParentBaseFee       *math.HexOrDecimal256
+	ParentGasUsed       math.HexOrDecimal64
+	ParentGasLimit      math.HexOrDecimal64
+	GasLimit            math.HexOrDecimal64
+	Number              math.HexOrDecimal64
+	Timestamp           math.HexOrDecimal64
+	ParentTimestamp     math.HexOrDecimal64
+	BaseFee             *math.HexOrDecimal256
+	ExcessBlobGas       *math.HexOrDecimal64
+	ParentExcessBlobGas *math.HexOrDecimal64
+	ParentBlobGasUsed   *math.HexOrDecimal64
 }
 
 type rejectedTx struct {
@@ -129,7 +136,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 	var (
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number))
+		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
 		rejectedTxs []*rejectedTx
@@ -159,6 +166,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
+
+	vmContext.ExcessBlobGas = nil
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
 	if chainConfig.DAOForkSupport &&
@@ -166,8 +175,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-
+	var blobGasUsed uint64
 	for i, tx := range txs {
+		if tx.Type() == types.BlobTxType && vmContext.ExcessBlobGas == nil {
+			errMsg := "blob tx used but field env.ExcessBlobGas missing"
+			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", errMsg)
+			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
+			continue
+		}
 		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
@@ -204,7 +219,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 			continue
 		}
-
+		if tx.Type() == types.BlobTxType {
+			blobGasUsed += params.BlobTxBlobGasPerBlob
+		}
 		includedTxs = append(includedTxs, tx)
 
 		if hashError != nil {
@@ -258,7 +275,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
 		// where
-		// - the coinbase suicided, or
+		// - the coinbase self-destructed, or
 		// - there are only 'bad' transactions, which aren't executed. In those cases,
 		//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 		var (
@@ -287,9 +304,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.AddBalance(w.Address, amount)
 	}
 	// Commit block
-	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
 
@@ -310,14 +326,22 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
 		execRs.WithdrawalsRoot = &h
 	}
-
+	if vmContext.ExcessBlobGas != nil {
+		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(vmContext.ExcessBlobGas)
+		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
+	}
+	// Re-create statedb instance with new root upon the updated database
+	// for accessing latest states.
+	statedb, err = state.New(root, statedb.Database(), nil)
+	if err != nil {
+		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
+	}
 	return statedb, execRs, nil
 }
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
 	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-
-	statedb, _ := state.New(common.Hash{}, sdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -328,7 +352,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(false)
+	root, _ := statedb.Commit(0, false)
 	statedb, _ = state.New(root, sdb, nil)
 
 	return statedb

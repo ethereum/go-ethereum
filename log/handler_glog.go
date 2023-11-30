@@ -39,9 +39,9 @@ var errTraceSyntax = errors.New("expect file.go:234")
 type GlogHandler struct {
 	origin Handler // The origin handler this wraps
 
-	level     uint32 // Current log level, atomically accessible
-	override  uint32 // Flag whether overrides are used, atomically accessible
-	backtrace uint32 // Flag whether backtrace location is set
+	level     atomic.Uint32 // Current log level, atomically accessible
+	override  atomic.Bool   // Flag whether overrides are used, atomically accessible
+	backtrace atomic.Bool   // Flag whether backtrace location is set
 
 	patterns  []pattern       // Current list of patterns to override with
 	siteCache map[uintptr]Lvl // Cache of callsite pattern evaluations
@@ -72,7 +72,7 @@ type pattern struct {
 // Verbosity sets the glog verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (h *GlogHandler) Verbosity(level Lvl) {
-	atomic.StoreUint32(&h.level, uint32(level))
+	h.level.Store(uint32(level))
 }
 
 // Vmodule sets the glog verbosity pattern.
@@ -92,7 +92,6 @@ func (h *GlogHandler) Verbosity(level Lvl) {
 //	 sets V to 3 in all files of any packages whose import path contains "foo"
 func (h *GlogHandler) Vmodule(ruleset string) error {
 	var filter []pattern
-
 	for _, rule := range strings.Split(ruleset, ",") {
 		// Empty strings such as from a trailing comma can be ignored
 		if len(rule) == 0 {
@@ -103,10 +102,8 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if len(parts) != 2 {
 			return errVmoduleSyntax
 		}
-
 		parts[0] = strings.TrimSpace(parts[0])
 		parts[1] = strings.TrimSpace(parts[1])
-
 		if len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return errVmoduleSyntax
 		}
@@ -115,13 +112,11 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if err != nil {
 			return errVmoduleSyntax
 		}
-
 		if level <= 0 {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// Compile the rule pattern into a regular expression
 		matcher := ".*"
-
 		for _, comp := range strings.Split(parts[0], "/") {
 			if comp == "*" {
 				matcher += "(/.*)?"
@@ -129,11 +124,9 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 				matcher += "/" + regexp.QuoteMeta(comp)
 			}
 		}
-
 		if !strings.HasSuffix(parts[0], ".go") {
 			matcher += "/[^/]+\\.go"
 		}
-
 		matcher = matcher + "$"
 
 		re, _ := regexp.Compile(matcher)
@@ -145,7 +138,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 
 	h.patterns = filter
 	h.siteCache = make(map[uintptr]Lvl)
-	atomic.StoreUint32(&h.override, uint32(len(filter)))
+	h.override.Store(len(filter) != 0)
 
 	return nil
 }
@@ -161,10 +154,8 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	if len(parts) != 2 {
 		return errTraceSyntax
 	}
-
 	parts[0] = strings.TrimSpace(parts[0])
 	parts[1] = strings.TrimSpace(parts[1])
-
 	if len(parts[0]) == 0 || len(parts[1]) == 0 {
 		return errTraceSyntax
 	}
@@ -172,7 +163,6 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	if !strings.HasSuffix(parts[0], ".go") {
 		return errTraceSyntax
 	}
-
 	if _, err := strconv.Atoi(parts[1]); err != nil {
 		return errTraceSyntax
 	}
@@ -181,7 +171,7 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	defer h.lock.Unlock()
 
 	h.location = location
-	atomic.StoreUint32(&h.backtrace, uint32(len(location)))
+	h.backtrace.Store(len(location) > 0)
 
 	return nil
 }
@@ -190,7 +180,7 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 // and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Log(r *Record) error {
 	// If backtracing is requested, check whether this is the callsite
-	if atomic.LoadUint32(&h.backtrace) > 0 {
+	if h.backtrace.Load() {
 		// Everything below here is slow. Although we could cache the call sites the
 		// same way as for vmodule, backtracing is so rare it's not worth the extra
 		// complexity.
@@ -208,11 +198,11 @@ func (h *GlogHandler) Log(r *Record) error {
 		}
 	}
 	// If the global log level allows, fast track logging
-	if atomic.LoadUint32(&h.level) >= uint32(r.Lvl) {
+	if h.level.Load() >= uint32(r.Lvl) {
 		return h.origin.Log(r)
 	}
 	// If no local overrides are present, fast track skipping
-	if atomic.LoadUint32(&h.override) == 0 {
+	if !h.override.Load() {
 		return nil
 	}
 	// Check callsite cache for previously calculated log levels
@@ -235,14 +225,12 @@ func (h *GlogHandler) Log(r *Record) error {
 		}
 		h.lock.Unlock()
 	}
-
 	if lvl >= r.Lvl {
 		return h.origin.Log(r)
 	}
-
 	return nil
 }
 
 func (h *GlogHandler) Level() Lvl {
-	return Lvl(atomic.LoadUint32(&h.level))
+	return Lvl(h.level.Load())
 }

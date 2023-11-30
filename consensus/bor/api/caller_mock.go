@@ -30,7 +30,6 @@ type MockCallerMockRecorder struct {
 func NewMockCaller(ctrl *gomock.Controller) *MockCaller {
 	mock := &MockCaller{ctrl: ctrl}
 	mock.recorder = &MockCallerMockRecorder{mock}
-
 	return mock
 }
 
@@ -40,33 +39,31 @@ func (m *MockCaller) EXPECT() *MockCallerMockRecorder {
 }
 
 // Call mocks base method.
-func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *ethapi.StateOverride) (hexutil.Bytes, error) {
+func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *ethapi.StateOverride, arg4 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Call", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Call", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(hexutil.Bytes)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockCallerMockRecorder) Call(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockCallerMockRecorder) Call(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockCaller)(nil).Call), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockCaller)(nil).Call), arg0, arg1, arg2, arg3, arg4)
 }
 
 // CallWithState mocks base method.
-func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *state.StateDB, arg4 *ethapi.StateOverride) (hexutil.Bytes, error) {
+func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *state.StateDB, arg4 *ethapi.StateOverride, arg5 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CallWithState", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "CallWithState", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(hexutil.Bytes)
 	ret1, _ := ret[1].(error)
-
 	return ret0, ret1
 }
 
 // CallWithState indicates an expected call of CallWithState.
-func (mr *MockCallerMockRecorder) CallWithState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockCallerMockRecorder) CallWithState(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallWithState", reflect.TypeOf((*MockCaller)(nil).CallWithState), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallWithState", reflect.TypeOf((*MockCaller)(nil).CallWithState), arg0, arg1, arg2, arg3, arg4, arg5)
 }

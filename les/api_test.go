@@ -30,11 +30,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth"
-	ethdownloader "github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -98,7 +96,6 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 	if testServerDataDir == "" {
 		return
 	}
-
 	for !testSim(t, 1, clientCount, []string{testServerDataDir}, nil, func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node) bool {
 		if len(servers) != 1 {
 			t.Fatalf("Invalid number of servers: %d", len(servers))
@@ -309,42 +306,32 @@ func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, com
 	if err := client.CallContext(ctx, &res, "eth_getBlockByNumber", "latest", false); err != nil {
 		t.Fatalf("Failed to obtain head block: %v", err)
 	}
-
 	numStr, ok := res["number"].(string)
 	if !ok {
 		t.Fatalf("RPC block number field invalid")
 	}
-
 	num, err := hexutil.DecodeUint64(numStr)
 	if err != nil {
 		t.Fatalf("Failed to decode RPC block number: %v", err)
 	}
-
 	hashStr, ok := res["hash"].(string)
 	if !ok {
 		t.Fatalf("RPC block number field invalid")
 	}
-
 	hash := common.HexToHash(hashStr)
-
 	return num, hash
 }
 
 func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 	var res string
-
 	var addr common.Address
-
-	_, _ = crand.Read(addr[:])
-
+	crand.Read(addr[:])
 	c, cancel := context.WithTimeout(ctx, time.Second*12)
 	defer cancel()
-
 	err := client.CallContext(c, &res, "eth_getBalance", addr, "latest")
 	if err != nil {
 		t.Log("request error:", err)
 	}
-
 	return err == nil
 }
 
@@ -357,7 +344,6 @@ func freezeClient(ctx context.Context, t *testing.T, server *rpc.Client, clientI
 func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {
 	params := make(map[string]interface{})
 	params["capacity"] = cap
-
 	if err := server.CallContext(ctx, nil, "les_setClientParams", []enode.ID{clientID}, []string{}, params); err != nil {
 		t.Fatalf("Failed to set client capacity: %v", err)
 	}
@@ -368,22 +354,18 @@ func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 	if err := server.CallContext(ctx, &res, "les_clientInfo", []enode.ID{clientID}, []string{}); err != nil {
 		t.Fatalf("Failed to get client info: %v", err)
 	}
-
 	info, ok := res[clientID]
 	if !ok {
 		t.Fatalf("Missing client info")
 	}
-
 	v, ok := info["capacity"]
 	if !ok {
 		t.Fatalf("Missing field in client info: capacity")
 	}
-
 	vv, ok := v.(float64)
 	if !ok {
 		t.Fatalf("Failed to decode capacity field")
 	}
-
 	return uint64(vv)
 }
 
@@ -392,23 +374,19 @@ func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (min
 	if err := server.CallContext(ctx, &res, "les_serverInfo"); err != nil {
 		t.Fatalf("Failed to query server info: %v", err)
 	}
-
 	decode := func(s string) uint64 {
 		v, ok := res[s]
 		if !ok {
 			t.Fatalf("Missing field in server info: %s", s)
 		}
-
 		vv, ok := v.(float64)
 		if !ok {
 			t.Fatalf("Failed to decode server info field: %s", s)
 		}
-
 		return uint64(vv)
 	}
 	minCap = decode("minimumCapacity")
 	totalCap = decode("totalCapacity")
-
 	return
 }
 
@@ -422,7 +400,6 @@ func NewNetwork() (*simulations.Network, func(), error) {
 	if err != nil {
 		return nil, adapterTeardown, err
 	}
-
 	defaultService := "streamer"
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -432,13 +409,11 @@ func NewNetwork() (*simulations.Network, func(), error) {
 		adapterTeardown()
 		net.Shutdown()
 	}
-
 	return net, teardown, nil
 }
 
 func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (adapter adapters.NodeAdapter, teardown func(), err error) {
 	teardown = func() {}
-
 	switch adapterType {
 	case "sim":
 		adapter = adapters.NewSimAdapter(services)
@@ -449,7 +424,6 @@ func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (ad
 		if err0 != nil {
 			return nil, teardown, err0
 		}
-
 		teardown = func() { os.RemoveAll(baseDir) }
 		adapter = adapters.NewExecAdapter(baseDir)
 	/*case "docker":
@@ -460,20 +434,16 @@ func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (ad
 	default:
 		return nil, teardown, errors.New("adapter needs to be one of sim, socket, exec, docker")
 	}
-
 	return adapter, teardown, nil
 }
 
 func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []string, test func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node) bool) bool {
 	net, teardown, err := NewNetwork()
 	defer teardown()
-
 	if err != nil {
 		t.Fatalf("Failed to create network: %v", err)
 	}
-
 	timeout := 1800 * time.Second
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -483,32 +453,26 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 	for i := range clients {
 		clientconf := adapters.RandomNodeConfig()
 		clientconf.Lifecycles = []string{"lesclient"}
-
 		if len(clientDir) == clientCount {
 			clientconf.DataDir = clientDir[i]
 		}
-
 		client, err := net.NewNodeWithConfig(clientconf)
 		if err != nil {
 			t.Fatalf("Failed to create client: %v", err)
 		}
-
 		clients[i] = client
 	}
 
 	for i := range servers {
 		serverconf := adapters.RandomNodeConfig()
 		serverconf.Lifecycles = []string{"lesserver"}
-
 		if len(serverDir) == serverCount {
 			serverconf.DataDir = serverDir[i]
 		}
-
 		server, err := net.NewNodeWithConfig(serverconf)
 		if err != nil {
 			t.Fatalf("Failed to create server: %v", err)
 		}
-
 		servers[i] = server
 	}
 
@@ -517,7 +481,6 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 			t.Fatalf("Failed to start client node: %v", err)
 		}
 	}
-
 	for _, server := range servers {
 		if err := net.Start(server.ID()); err != nil {
 			t.Fatalf("Failed to start server node: %v", err)
@@ -529,27 +492,22 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
-	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
-	config.Ethash.PowMode = ethash.ModeFake
-
+	config.SyncMode = downloader.LightSync
 	return New(stack, &config)
 }
 
 func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
-	config.SyncMode = (ethdownloader.SyncMode)(downloader.FullSync)
+	config.SyncMode = downloader.FullSync
 	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
-
 	ethereum, err := eth.New(stack, &config)
 	if err != nil {
 		return nil, err
 	}
-
 	_, err = NewLesServer(stack, ethereum, &config)
 	if err != nil {
 		return nil, err
 	}
-
 	return ethereum, nil
 }

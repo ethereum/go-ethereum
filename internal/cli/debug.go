@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -61,8 +60,8 @@ func (d *DebugCommand) MarkDown() string {
 func (c *DebugCommand) Help() string {
 	return `Usage: bor debug <subcommand>
 
-  This command takes a debug dump of the running client. 
-	
+  This command takes a debug dump of the running client.
+
 	Get the pprof traces:
 
 		$ bor debug pprof <enode>
@@ -107,7 +106,7 @@ func (d *debugEnv) init() error {
 		}
 	} else {
 		// Generate temp directory
-		tmp, err = ioutil.TempDir(os.TempDir(), d.name)
+		tmp, err = os.MkdirTemp(os.TempDir(), d.name)
 		if err != nil {
 			return fmt.Errorf("error creating tmp directory: %s", err.Error())
 		}
@@ -188,7 +187,7 @@ func (d *debugEnv) writeJSON(name string, msg protoreflect.ProtoMessage) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(d.dst, name), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(d.dst, name), data, 0600); err != nil {
 		return fmt.Errorf("failed to write status: %v", err)
 	}
 

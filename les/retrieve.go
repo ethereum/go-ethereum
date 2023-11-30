@@ -18,7 +18,7 @@ package les
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -110,9 +110,8 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	case <-shutdown:
-		sentReq.stop(fmt.Errorf("client is shutting down"))
+		sentReq.stop(errors.New("client is shutting down"))
 	}
-
 	return sentReq.getError()
 }
 
@@ -135,7 +134,6 @@ func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc
 		r.lock.RLock()
 		_, sent := r.sentTo[p]
 		r.lock.RUnlock()
-
 		return !sent && canSend(p)
 	}
 
@@ -145,27 +143,14 @@ func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc
 		r.lock.Lock()
 		r.sentTo[p] = sentReqToPeer{delivered: false, frozen: false, event: make(chan int, 1)}
 		r.lock.Unlock()
-
 		return request(p)
 	}
-
 	rm.lock.Lock()
 	rm.sentReqs[reqID] = r
 	rm.lock.Unlock()
 
 	go r.retrieveLoop()
-
 	return r
-}
-
-// requested reports whether the request with given reqid is sent by the retriever.
-func (rm *retrieveManager) requested(reqId uint64) bool {
-	rm.lock.RLock()
-	defer rm.lock.RUnlock()
-
-	_, ok := rm.sentReqs[reqId]
-
-	return ok
 }
 
 // deliver is called by the LES protocol manager to deliver reply messages to waiting requests
@@ -177,7 +162,6 @@ func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
 	if ok {
 		return req.deliver(peer, msg)
 	}
-
 	return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 }
 
@@ -216,7 +200,6 @@ func (r *sentReq) stateRequesting() reqStateFn {
 	select {
 	case ev := <-r.eventsCh:
 		r.update(ev)
-
 		switch ev.event {
 		case rpSent:
 			if ev.peer == nil {
@@ -234,7 +217,6 @@ func (r *sentReq) stateRequesting() reqStateFn {
 			// last request timed out, try asking a new peer
 			go r.tryRequest()
 			r.lastReqQueued = true
-
 			return r.stateRequesting
 		case rpDeliveredInvalid, rpNotDelivered:
 			// if it was the last sent request (set to nil by update) then start a new one
@@ -242,13 +224,11 @@ func (r *sentReq) stateRequesting() reqStateFn {
 				go r.tryRequest()
 				r.lastReqQueued = true
 			}
-
 			return r.stateRequesting
 		case rpDeliveredValid:
 			r.stop(nil)
 			return r.stateStopped
 		}
-
 		return r.stateRequesting
 	case <-r.stopCh:
 		return r.stateStopped
@@ -263,22 +243,17 @@ func (r *sentReq) stateNoMorePeers() reqStateFn {
 	case <-time.After(retryQueue):
 		go r.tryRequest()
 		r.lastReqQueued = true
-
 		return r.stateRequesting
 	case ev := <-r.eventsCh:
 		r.update(ev)
-
 		if ev.event == rpDeliveredValid {
 			r.stop(nil)
 			return r.stateStopped
 		}
-
 		if r.waiting() {
 			return r.stateNoMorePeers
 		}
-
 		r.stop(light.ErrNoPeers)
-
 		return nil
 	case <-r.stopCh:
 		return r.stateStopped
@@ -291,7 +266,6 @@ func (r *sentReq) stateStopped() reqStateFn {
 	for r.waiting() {
 		r.update(<-r.eventsCh)
 	}
-
 	return nil
 }
 
@@ -326,7 +300,6 @@ func (r *sentReq) waiting() bool {
 // messages to the request's event channel.
 func (r *sentReq) tryRequest() {
 	sent := r.rm.dist.queue(r.req)
-
 	var p distPeer
 	select {
 	case p = <-sent:
@@ -339,7 +312,6 @@ func (r *sentReq) tryRequest() {
 	}
 
 	r.eventsCh <- reqPeerEvent{rpSent, p}
-
 	if p == nil {
 		return
 	}
@@ -349,7 +321,6 @@ func (r *sentReq) tryRequest() {
 	r.lock.RLock()
 	s, ok := r.sentTo[p]
 	r.lock.RUnlock()
-
 	if !ok {
 		panic(nil)
 	}
@@ -358,7 +329,6 @@ func (r *sentReq) tryRequest() {
 		pp, ok := p.(*serverPeer)
 		if hrto && ok {
 			pp.Log().Debug("Request timed out hard")
-
 			if r.rm.peers != nil {
 				r.rm.peers.unregister(pp.id)
 			}
@@ -373,7 +343,6 @@ func (r *sentReq) tryRequest() {
 			r.lock.Unlock()
 		}
 		r.eventsCh <- reqPeerEvent{event, p}
-
 		return
 	case <-time.After(r.rm.softRequestTimeout()):
 		r.eventsCh <- reqPeerEvent{rpSoftTimeout, p}
@@ -402,24 +371,19 @@ func (r *sentReq) deliver(peer distPeer, msg *Msg) error {
 	if !ok || s.delivered {
 		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 	}
-
 	if s.frozen {
 		return nil
 	}
-
 	valid := r.validate(peer, msg) == nil
 	r.sentTo[peer] = sentReqToPeer{delivered: true, frozen: false, event: s.event}
-
 	if valid {
 		s.event <- rpDeliveredValid
 	} else {
 		s.event <- rpDeliveredInvalid
 	}
-
 	if !valid {
 		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
 	}
-
 	return nil
 }
 

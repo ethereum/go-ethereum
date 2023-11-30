@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -853,7 +854,34 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 				return errInvalidBody
 			}
 		}
+		// Blocks must have a number of blobs corresponding to the header gas usage,
+		// and zero before the Cancun hardfork
+		var blobs int
+		for _, tx := range txLists[index] {
+			// Count the number of blobs to validate against the header's blobGasUsed
+			blobs += len(tx.BlobHashes())
 
+			// Validate the data blobs individually too
+			if tx.Type() == types.BlobTxType {
+				if len(tx.BlobHashes()) == 0 {
+					return errInvalidBody
+				}
+				for _, hash := range tx.BlobHashes() {
+					if hash[0] != params.BlobTxHashVersion {
+						return errInvalidBody
+					}
+				}
+			}
+		}
+		if header.BlobGasUsed != nil {
+			if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+				return errInvalidBody
+			}
+		} else {
+			if blobs != 0 {
+				return errInvalidBody
+			}
+		}
 		return nil
 	}
 

@@ -94,7 +94,7 @@ func TestValidatorWentOffline(t *testing.T) {
 	// Iterate over all the nodes and start mining
 	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
+		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
 	}
@@ -297,7 +297,7 @@ func TestForkWithBlockTime(t *testing.T) {
 
 			// Iterate over all the nodes and start mining
 			for _, node := range nodes {
-				if err := node.StartMining(1); err != nil {
+				if err := node.StartMining(); err != nil {
 					t.Fatal("Error occured while starting miner", "node", node, "error", err)
 				}
 			}

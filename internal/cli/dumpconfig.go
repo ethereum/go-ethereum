@@ -64,7 +64,6 @@ func (c *DumpconfigCommand) Run(args []string) int {
 	userConfig.Sealer.RecommitRaw = userConfig.Sealer.Recommit.String()
 	userConfig.Gpo.MaxPriceRaw = userConfig.Gpo.MaxPrice.String()
 	userConfig.Gpo.IgnorePriceRaw = userConfig.Gpo.IgnorePrice.String()
-	userConfig.Cache.RejournalRaw = userConfig.Cache.Rejournal.String()
 	userConfig.Cache.TrieTimeoutRaw = userConfig.Cache.TrieTimeout.String()
 	userConfig.P2P.TxArrivalWaitRaw = userConfig.P2P.TxArrivalWait.String()
 

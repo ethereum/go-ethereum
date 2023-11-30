@@ -50,10 +50,13 @@ type Server struct {
 
 	mutex  sync.Mutex
 	codecs map[ServerCodec]struct{}
-	run    int32
+	run    atomic.Bool
 
 	BatchLimit    uint64
 	executionPool *SafePool
+
+	batchItemLimit     int
+	batchResponseLimit int
 }
 
 // NewServer creates a new server instance with no registered handlers.
@@ -66,9 +69,9 @@ func NewServer(service string, executionPoolSize uint64, executionPoolRequesttim
 	server := &Server{
 		idgen:         randomIDGenerator(),
 		codecs:        make(map[ServerCodec]struct{}),
-		run:           1,
 		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
 	}
+	server.run.Store(true)
 
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
@@ -98,6 +101,17 @@ func (s *Server) GetExecutionPoolSize() int {
 	return s.executionPool.Size()
 }
 
+// SetBatchLimits sets limits applied to batch requests. There are two limits: 'itemLimit'
+// is the maximum number of items in a batch. 'maxResponseSize' is the maximum number of
+// response bytes across all requests in a batch.
+//
+// This method should be called before processing any requests via ServeCodec, ServeHTTP,
+// ServeListener etc.
+func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
+	s.batchItemLimit = itemLimit
+	s.batchResponseLimit = maxResponseSize
+}
+
 // RegisterName creates a service for the given receiver type under the given name. When no
 // methods on the given receiver match the criteria to be either a RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
@@ -119,7 +133,12 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	}
 	defer s.untrackCodec(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
+	cfg := &clientConfig{
+		idgen:              s.idgen,
+		batchItemLimit:     s.batchItemLimit,
+		batchResponseLimit: s.batchResponseLimit,
+	}
+	c := initClient(codec, &s.services, cfg)
 	<-codec.closed()
 	c.Close()
 }
@@ -128,7 +147,7 @@ func (s *Server) trackCodec(codec ServerCodec) bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if atomic.LoadInt32(&s.run) == 0 {
+	if !s.run.Load() {
 		return false // Don't serve if server is stopped.
 	}
 
@@ -149,11 +168,11 @@ func (s *Server) untrackCodec(codec ServerCodec) {
 // this mode.
 func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	// Don't serve if server is stopped.
-	if atomic.LoadInt32(&s.run) == 0 {
+	if !s.run.Load() {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services, s.executionPool)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.executionPool, s.batchItemLimit, s.batchResponseLimit)
 
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
@@ -193,7 +212,7 @@ func (s *Server) Stop() {
 	// Stop the execution pool
 	s.executionPool.Stop()
 
-	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
+	if s.run.CompareAndSwap(true, false) {
 		log.Debug("RPC server shutting down")
 
 		for codec := range s.codecs {

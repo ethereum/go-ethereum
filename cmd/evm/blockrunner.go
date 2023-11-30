@@ -24,6 +24,8 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -43,7 +45,16 @@ func blockTestCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
-
+	var tracer vm.EVMLogger
+	// Configure the EVM logger
+	if ctx.Bool(MachineFlag.Name) {
+		tracer = logger.NewJSONLogger(&logger.Config{
+			EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
+			DisableStack:     ctx.Bool(DisableStackFlag.Name),
+			DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
+			EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
+		}, os.Stderr)
+	}
 	// Load the test content from the input file
 	src, err := os.ReadFile(ctx.Args().First())
 	if err != nil {
@@ -57,7 +68,7 @@ func blockTestCmd(ctx *cli.Context) error {
 	}
 
 	for i, test := range tests {
-		if err := test.Run(false); err != nil {
+		if err := test.Run(false, tracer); err != nil {
 			return fmt.Errorf("test %v: %w", i, err)
 		}
 	}

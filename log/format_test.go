@@ -83,8 +83,6 @@ func TestPrettyBigInt(t *testing.T) {
 }
 
 func TestPrettyUint256(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		int string
 		s   string
@@ -95,8 +93,7 @@ func TestPrettyUint256(t *testing.T) {
 
 	for _, tt := range tests {
 		v := new(uint256.Int)
-		_ = v.SetFromDecimal(tt.int)
-
+		v.SetFromDecimal(tt.int)
 		if have := formatLogfmtUint256(v); have != tt.s {
 			t.Errorf("invalid output %s, want %s", have, tt.s)
 		}
@@ -107,7 +104,6 @@ var sink string
 
 func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 	b.ReportAllocs()
-
 	for i := 0; i < b.N; i++ {
 		sink = FormatLogfmtInt64(rand.Int63())
 	}
@@ -115,15 +111,12 @@ func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 
 func BenchmarkPrettyUint64Logfmt(b *testing.B) {
 	b.ReportAllocs()
-
 	for i := 0; i < b.N; i++ {
 		sink = FormatLogfmtUint64(rand.Uint64())
 	}
 }
 
 func TestSanitation(t *testing.T) {
-	t.Parallel()
-
 	msg := "\u001b[1G\u001b[K\u001b[1A"
 	msg2 := "\u001b  \u0000"
 	msg3 := "NiceMessage"
@@ -159,10 +152,8 @@ func TestSanitation(t *testing.T) {
 			logger = New()
 			out    = new(strings.Builder)
 		)
-
 		logger.SetHandler(LvlFilterHandler(LvlInfo, StreamHandler(out, TerminalFormat(false))))
 		logger.Info(tt.msg, tt.msg, tt.msg)
-
 		if have := out.String()[24:]; tt.want != have {
 			t.Fatalf("test %d: want / have: \n%v\n%v", i, tt.want, have)
 		}

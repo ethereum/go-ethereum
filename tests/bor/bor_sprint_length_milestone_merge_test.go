@@ -374,7 +374,7 @@ func SetupValidatorsAndTest2NodesSprintLengthMilestone(t *testing.T, tt map[stri
 	time.Sleep(3 * time.Second)
 
 	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
+		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
 	}
@@ -516,7 +516,7 @@ func SetupValidatorsAndTestSprintLengthMilestone(t *testing.T, tt map[string]uin
 	time.Sleep(3 * time.Second)
 
 	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
+		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
 	}
@@ -685,7 +685,7 @@ func rewindBackTemp(eth *eth.Ethereum, rewindTo uint64) {
 		eth.Miner().Stop(ch)
 		<-ch
 		rewindTemp(eth, rewindTo)
-		eth.StartMining(1)
+		eth.StartMining()
 	} else {
 
 		rewindTemp(eth, rewindTo)

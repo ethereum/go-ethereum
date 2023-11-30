@@ -17,7 +17,6 @@
 package snapshot
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -322,7 +321,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 			)
 
 			if leafCallback == nil {
-				fullData, err = FullAccountRLP(it.(AccountIterator).Account())
+				fullData, err = types.FullAccountRLP(it.(AccountIterator).Account())
 				if err != nil {
 					return stop(err)
 				}
@@ -334,7 +333,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 					return stop(err)
 				}
 				// Fetch the next account and process it concurrently
-				account, err := FullAccount(it.(AccountIterator).Account())
+				account, err := types.FullAccount(it.(AccountIterator).Account())
 				if err != nil {
 					return stop(err)
 				}
@@ -345,8 +344,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 						results <- err
 						return
 					}
-
-					if !bytes.Equal(account.Root, subroot.Bytes()) {
+					if account.Root != subroot {
 						results <- fmt.Errorf("invalid subroot(path %x), want %x, have %x", hash, account.Root, subroot)
 						return
 					}

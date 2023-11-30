@@ -171,7 +171,6 @@ func (c *PruneStateCommand) Run(args []string) int {
 
 	prunerconfig := pruner.Config{
 		Datadir:   node.ResolvePath(""),
-		Cachedir:  node.ResolvePath(c.cacheTrieJournal),
 		BloomSize: c.bloomfilterSize,
 	}
 

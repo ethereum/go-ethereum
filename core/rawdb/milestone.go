@@ -7,7 +7,7 @@ import (
 	json "github.com/json-iterator/go"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/gererics"
+	"github.com/ethereum/go-ethereum/common/generics"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -104,7 +104,7 @@ type BlockFinality[T any] interface {
 }
 
 func getKey[T BlockFinality[T]]() (T, []byte) {
-	lastT := gererics.Empty[T]().clone()
+	lastT := generics.Empty[T]().clone()
 
 	var key []byte
 

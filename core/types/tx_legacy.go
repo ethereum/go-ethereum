@@ -19,21 +19,18 @@ package types
 import (
 	"math/big"
 
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// LegacyTx is the transaction data of regular Ethereum transactions.
+// LegacyTx is the transaction data of the original Ethereum transactions.
 type LegacyTx struct {
-	Nonce           uint64          // nonce of sender account
-	GasPrice        *big.Int        // wei per gas
-	gasPriceUint256 *uint256.Int    // wei per gas
-	Gas             uint64          // gas limit
-	To              *common.Address `rlp:"nil"` // nil means contract creation
-	Value           *big.Int        // wei amount
-	Data            []byte          // contract invocation input data
-	V, R, S         *big.Int        // signature values
+	Nonce    uint64          // nonce of sender account
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          // gas limit
+	To       *common.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int        // wei amount
+	Data     []byte          // contract invocation input data
+	V, R, S  *big.Int        // signature values
 }
 
 // NewTransaction creates an unsigned legacy transaction.
@@ -78,71 +75,36 @@ func (tx *LegacyTx) copy() TxData {
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
-
-		if cpy.gasPriceUint256 != nil {
-			cpy.gasPriceUint256.Set(tx.gasPriceUint256)
-		} else {
-			cpy.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
-		}
 	}
-
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
-
 	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
-
 	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
-
 	return cpy
 }
 
 // accessors for innerTx.
-func (tx *LegacyTx) txType() byte           { return LegacyTxType }
-func (tx *LegacyTx) chainID() *big.Int      { return deriveChainId(tx.V) }
-func (tx *LegacyTx) accessList() AccessList { return nil }
-func (tx *LegacyTx) data() []byte           { return tx.Data }
-func (tx *LegacyTx) gas() uint64            { return tx.Gas }
-func (tx *LegacyTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *LegacyTx) gasPriceU256() *uint256.Int {
-	if tx.gasPriceUint256 != nil {
-		return tx.gasPriceUint256
-	}
-
-	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
-
-	return tx.gasPriceUint256
-}
-func (tx *LegacyTx) gasTipCap() *big.Int { return tx.GasPrice }
-func (tx *LegacyTx) gasTipCapU256() *uint256.Int {
-	if tx.gasPriceUint256 != nil {
-		return tx.gasPriceUint256
-	}
-
-	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
-
-	return tx.gasPriceUint256
-}
-func (tx *LegacyTx) gasFeeCap() *big.Int { return tx.GasPrice }
-func (tx *LegacyTx) gasFeeCapU256() *uint256.Int {
-	if tx.gasPriceUint256 != nil {
-		return tx.gasPriceUint256
-	}
-
-	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
-
-	return tx.gasPriceUint256
-}
-func (tx *LegacyTx) value() *big.Int     { return tx.Value }
-func (tx *LegacyTx) nonce() uint64       { return tx.Nonce }
-func (tx *LegacyTx) to() *common.Address { return tx.To }
+func (tx *LegacyTx) txType() byte              { return LegacyTxType }
+func (tx *LegacyTx) chainID() *big.Int         { return deriveChainId(tx.V) }
+func (tx *LegacyTx) accessList() AccessList    { return nil }
+func (tx *LegacyTx) data() []byte              { return tx.Data }
+func (tx *LegacyTx) gas() uint64               { return tx.Gas }
+func (tx *LegacyTx) gasPrice() *big.Int        { return tx.GasPrice }
+func (tx *LegacyTx) gasTipCap() *big.Int       { return tx.GasPrice }
+func (tx *LegacyTx) gasFeeCap() *big.Int       { return tx.GasPrice }
+func (tx *LegacyTx) value() *big.Int           { return tx.Value }
+func (tx *LegacyTx) nonce() uint64             { return tx.Nonce }
+func (tx *LegacyTx) to() *common.Address       { return tx.To }
+func (tx *LegacyTx) blobGas() uint64           { return 0 }
+func (tx *LegacyTx) blobGasFeeCap() *big.Int   { return nil }
+func (tx *LegacyTx) blobHashes() []common.Hash { return nil }
 
 func (tx *LegacyTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(tx.GasPrice)

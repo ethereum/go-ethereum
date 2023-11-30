@@ -24,7 +24,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -66,7 +67,6 @@ func New(ethone consensus.Engine) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")
 	}
-
 	return &Beacon{ethone: ethone}
 }
 
@@ -75,20 +75,18 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.Author(header)
 	}
-
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
-func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
 		return err
 	}
-
 	if !reached {
-		return beacon.ethone.VerifyHeader(chain, header, seal)
+		return beacon.ethone.VerifyHeader(chain, header)
 	}
 	// Short circuit if the parent is not known
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -105,7 +103,6 @@ func errOut(n int, err error) chan error {
 	for i := 0; i < n; i++ {
 		errs <- err
 	}
-
 	return errs
 }
 
@@ -120,9 +117,7 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 	if ttd == nil {
 		return headers, nil, nil
 	}
-
 	ptd := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-
 	if ptd == nil {
 		return nil, nil, consensus.ErrUnknownAncestor
 	}
@@ -130,31 +125,25 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 	if ptd.Cmp(ttd) >= 0 {
 		return nil, headers, nil
 	}
-
 	var (
 		preHeaders  = headers
 		postHeaders []*types.Header
 		td          = new(big.Int).Set(ptd)
 		tdPassed    bool
 	)
-
 	for i, header := range headers {
 		if tdPassed {
 			preHeaders = headers[:i]
 			postHeaders = headers[i:]
-
 			break
 		}
-
 		td = td.Add(td, header.Difficulty)
-
 		if td.Cmp(ttd) >= 0 {
 			// This is the last PoW header, it still belongs to
 			// the preHeaders, so we cannot split+break yet.
 			tdPassed = true
 		}
 	}
-
 	return preHeaders, postHeaders, nil
 }
 
@@ -162,16 +151,14 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
-func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
 	preHeaders, postHeaders, err := beacon.splitHeaders(chain, headers)
 	if err != nil {
 		return make(chan struct{}), errOut(len(headers), err)
 	}
-
 	if len(postHeaders) == 0 {
-		return beacon.ethone.VerifyHeaders(chain, headers, seals)
+		return beacon.ethone.VerifyHeaders(chain, headers)
 	}
-
 	if len(preHeaders) == 0 {
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
@@ -181,20 +168,18 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
-
 	go func() {
 		var (
 			old, new, out      = 0, len(preHeaders), 0
 			errors             = make([]error, len(headers))
 			done               = make([]bool, len(headers))
-			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, seals[:len(preHeaders)])
+			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders)
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
 		// Collect the results
 		for {
 			for ; done[out]; out++ {
 				results <- errors[out]
-
 				if out == len(headers)-1 {
 					return
 				}
@@ -204,7 +189,6 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 				if !done[old] { // skip TTD-verified failures
 					errors[old], done[old] = err, true
 				}
-
 				old++
 			case err := <-newResult:
 				errors[new], done[new] = err, true
@@ -212,12 +196,10 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			case <-abort:
 				close(oldDone)
 				close(newDone)
-
 				return
 			}
 		}
 	}()
-
 	return abort, results
 }
 
@@ -231,7 +213,6 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if len(block.Uncles()) > 0 {
 		return errTooManyUncles
 	}
-
 	return nil
 }
 
@@ -254,7 +235,6 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if header.Nonce != beaconNonce {
 		return errInvalidNonce
 	}
-
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
 	}
@@ -279,7 +259,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the header's EIP-1559 attributes.
-	if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
 	// Verify existence / non-existence of withdrawalsHash.
@@ -287,20 +267,22 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
-
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	// Verify the existence / non-existence of excessDataGas
+	// Verify the existence / non-existence of excessBlobGas
 	cancun := chain.Config().IsCancun(header.Number)
-	if cancun && header.ExcessDataGas == nil {
-		return errors.New("missing excessDataGas")
+	if !cancun && header.ExcessBlobGas != nil {
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
 	}
-
-	if !cancun && header.ExcessDataGas != nil {
-		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
+	if !cancun && header.BlobGasUsed != nil {
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
 	}
-
+	if cancun {
+		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -313,11 +295,9 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
-
 	go func() {
 		for i, header := range headers {
 			var parent *types.Header
-
 			if i == 0 {
 				if ancestor != nil {
 					parent = ancestor
@@ -327,17 +307,14 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 			} else if headers[i-1].Hash() == headers[i].ParentHash {
 				parent = headers[i-1]
 			}
-
 			if parent == nil {
 				select {
 				case <-abort:
 					return
 				case results <- consensus.ErrUnknownAncestor:
 				}
-
 				continue
 			}
-
 			err := beacon.verifyHeader(chain, header, parent)
 			select {
 			case <-abort:
@@ -346,7 +323,6 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 			}
 		}
 	}()
-
 	return abort, results
 }
 
@@ -358,13 +334,10 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	if err != nil {
 		return err
 	}
-
 	if !reached {
 		return beacon.ethone.Prepare(chain, header)
 	}
-
 	header.Difficulty = beaconDifficulty
-
 	return nil
 }
 
@@ -441,7 +414,6 @@ func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 	if reached, _ := IsTTDReached(chain, parent.Hash(), parent.Number.Uint64()); !reached {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
-
 	return beaconDifficulty
 }
 
@@ -462,7 +434,6 @@ func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 	if header.Difficulty == nil {
 		panic("IsPoSHeader called with invalid difficulty")
 	}
-
 	return header.Difficulty.Cmp(beaconDifficulty) == 0
 }
 
@@ -477,7 +448,6 @@ func (beacon *Beacon) SetThreads(threads int) {
 	type threaded interface {
 		SetThreads(threads int)
 	}
-
 	if th, ok := beacon.ethone.(threaded); ok {
 		th.SetThreads(threads)
 	}
@@ -490,11 +460,9 @@ func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, par
 	if chain.Config().TerminalTotalDifficulty == nil {
 		return false, nil
 	}
-
 	td := chain.GetTd(parentHash, parentNumber)
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor
 	}
-
 	return td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0, nil
 }

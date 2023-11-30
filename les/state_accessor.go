@@ -17,7 +17,7 @@
 package les
 
 import (
-	"context"
+	contextLib "context"
 	"errors"
 	"fmt"
 
@@ -34,12 +34,12 @@ import (
 var noopReleaser = tracers.StateReleaseFunc(func() {})
 
 // stateAtBlock retrieves the state database associated with a certain block.
-func (leth *LightEthereum) stateAtBlock(ctx context.Context, block *types.Block, _ uint64) (*state.StateDB, tracers.StateReleaseFunc, error) {
+func (leth *LightEthereum) stateAtBlock(ctx contextLib.Context, block *types.Block, reexec uint64) (*state.StateDB, tracers.StateReleaseFunc, error) {
 	return light.NewState(ctx, block.Header(), leth.odr), noopReleaser, nil
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
-func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (leth *LightEthereum) stateAtTransaction(ctx contextLib.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -49,38 +49,32 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
-
 	statedb, release, err := leth.stateAtBlock(ctx, parent, reexec)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
-
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(leth.blockchain.Config(), block.Number())
+	signer := types.MakeSigner(leth.blockchain.Config(), block.Number(), block.Time())
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		blockContext := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
-
+		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
 		statedb.SetTxContext(tx.Hash(), idx)
-
 		if idx == txIndex {
-			return msg, blockContext, statedb, release, nil
+			return msg, context, statedb, release, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(blockContext, txContext, statedb, leth.blockchain.Config(), vm.Config{})
-		// nolint : contextcheck
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
+		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), contextLib.Background()); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
-
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/ryanuber/columnize"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -222,7 +223,7 @@ func (m *Meta2) NewFlagSet(n string) *flagset.Flagset {
 }
 
 func (m *Meta2) Conn() (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(m.addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(m.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)
 	}

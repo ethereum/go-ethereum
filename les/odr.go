@@ -112,11 +112,9 @@ func (h peerByTxHistory) Less(i, j int) bool {
 	if h[i].txHistory == txIndexUnlimited {
 		return false
 	}
-
 	if h[j].txHistory == txIndexUnlimited {
 		return true
 	}
-
 	return h[i].txHistory < h[j].txHistory
 }
 func (h peerByTxHistory) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
@@ -142,17 +140,13 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		result  = make([]light.TxStatus, len(req.Hashes))
 		canSend = make(map[string]bool)
 	)
-
 	for _, peer := range odr.peers.allPeers() {
 		if peer.txHistory == txIndexDisabled {
 			continue
 		}
-
 		peers = append(peers, peer)
 	}
-
 	sort.Sort(sort.Reverse(peerByTxHistory(peers)))
-
 	for i := 0; i < maxTxStatusCandidates && i < len(peers); i++ {
 		canSend[peers[i].id] = true
 	}
@@ -161,7 +155,6 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		if retries >= maxTxStatusRetry || len(canSend) == 0 {
 			break
 		}
-
 		var (
 			// Deep copy the request, so that the partial result won't be mixed.
 			req     = &TxStatusRequest{Hashes: req.Hashes}
@@ -177,7 +170,6 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 				},
 			}
 		)
-
 		if err := odr.retriever.retrieve(ctx, id, distreq, func(p distPeer, msg *Msg) error { return req.Validate(odr.db, msg) }, odr.stop); err != nil {
 			return err
 		}
@@ -188,23 +180,18 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 			if result[index].Status != txpool.TxStatusUnknown {
 				continue
 			}
-
 			if status.Status == txpool.TxStatusUnknown {
 				continue
 			}
-
 			result[index], missing = status, missing-1
 		}
 		// Abort the procedure if all the status are retrieved
 		if missing == 0 {
 			break
 		}
-
 		retries += 1
 	}
-
 	req.Status = result
-
 	return nil
 }
 
@@ -239,15 +226,12 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		if err != nil {
 			return
 		}
-
 		requestRTT.Update(time.Duration(mclock.Now() - sent))
 	}(mclock.Now())
 
 	if err := odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err != nil {
 		return err
 	}
-
 	req.StoreResult(odr.db)
-
 	return nil
 }

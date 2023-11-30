@@ -146,12 +146,6 @@ func fetchMilestoneTest(t *testing.T, heimdall *mockHeimdall, bor *bor.Bor, hand
 	require.Equal(t, milestones[len(milestones)-1].Hash, hash)
 }
 
-func getMockFetchCheckpointFn(number int64, err error) func(ctx context.Context) (int64, error) {
-	return func(_ context.Context) (int64, error) {
-		return number, err
-	}
-}
-
 func createMockCheckpoints(count int) []*checkpoint.Checkpoint {
 	var (
 		checkpoints []*checkpoint.Checkpoint = make([]*checkpoint.Checkpoint, count)

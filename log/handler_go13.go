@@ -25,3 +25,7 @@ func (h *swapHandler) Get() Handler {
 func (h *swapHandler) Swap(newHandler Handler) {
 	atomic.StorePointer(&h.handler, unsafe.Pointer(&newHandler))
 }
+
+func (h *swapHandler) Level() Lvl {
+	return (*h.handler.Load()).Level()
+}
