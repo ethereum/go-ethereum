@@ -1122,6 +1122,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, nil, env.receipts, nil)
+		fmt.Printf("block_size_in_bytes: %v", int64(block.Size()))
 		if err != nil {
 			return err
 		}
