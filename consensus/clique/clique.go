@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/metrics"
 	"io"
 	"math/big"
 	"math/rand"
@@ -68,6 +69,8 @@ var (
 
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
+
+	blockSizeGaugeName = "clique/block_size_in_bytes"
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -584,7 +587,12 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Assemble and return the final block for sealing.
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
+	block := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+
+	if metrics.Enabled {
+		metrics.GetOrRegisterGauge(blockSizeGaugeName, nil).Update(int64(block.Size()))
+	}
+	return block, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
