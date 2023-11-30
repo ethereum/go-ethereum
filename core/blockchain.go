@@ -1870,9 +1870,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			// After merge we expect few side chains. Simply count
 			// all blocks the CL gives us for GC processing time
 			bc.gcproc += res.procTime
-			if bc.logger != nil {
-				bc.logger.OnBlockEnd(nil)
-			}
 			return it.index, nil // Direct block insertion of a single block
 		}
 		switch res.status {
@@ -1900,9 +1897,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
-		}
-		if bc.logger != nil {
-			bc.logger.OnBlockEnd(nil)
 		}
 	}
 
