@@ -444,12 +444,25 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", i+1, pwErr))
 		} else {
-			// No error
-			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
-			log.Info("Your new key was generated", "address", acc.Address)
-			log.Warn("Please backup your key file!", "path", acc.URL.Path)
-			log.Warn("Please remember your password!")
-			return acc.Address, err
+			// Confirm password if no error
+			confirmResp, err := api.UI.OnInputRequired(UserInputRequest{
+				"Confirm account password",
+				"Please confirm your password",
+				true})
+			if err != nil {
+				log.Warn("error obtaining password", "error", err)
+				break
+			}
+			if confirmResp.Text != resp.Text {
+				api.UI.ShowError("Passwords do not match! Please retry again.")
+				break
+			} else {
+				acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
+				log.Info("Your new key was generated", "address", acc.Address)
+				log.Warn("Please backup your key file!", "path", acc.URL.Path)
+				log.Warn("Please remember your password!")
+				return acc.Address, err
+			}
 		}
 	}
 	// Otherwise fail, with generic error message
