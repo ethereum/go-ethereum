@@ -123,10 +123,15 @@ func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.He
 	f.block = &pbeth.Block{
 		Hash:   b.Hash().Bytes(),
 		Number: b.Number().Uint64(),
-		Header: newBlockHeaderFromChainBlock(b, firehoseBigIntFromNative(new(big.Int).Add(td, b.Difficulty()))),
+		Header: newBlockHeaderFromChainHeader(b.Header(), firehoseBigIntFromNative(new(big.Int).Add(td, b.Difficulty()))),
 		Size:   b.Size(),
 		// Known Firehose issue: If you fix all known Firehose issue for a new chain, don't forget to bump `Ver` to `4`!
 		Ver: 3,
+	}
+
+	for _, uncle := range b.Uncles() {
+		// TODO: check if td should be part of uncles
+		f.block.Uncles = append(f.block.Uncles, newBlockHeaderFromChainHeader(uncle, nil))
 	}
 
 	if f.block.Header.BaseFeePerGas != nil {
@@ -197,8 +202,8 @@ func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from,
 		Value:                firehoseBigIntFromNative(tx.Value()),
 		Input:                tx.Data(),
 		V:                    emptyBytesToNil(v.Bytes()),
-		R:                    emptyBytesToNil(r.Bytes()),
-		S:                    emptyBytesToNil(s.Bytes()),
+		R:                    normalizeSignaturePoint(r.Bytes()),
+		S:                    normalizeSignaturePoint(s.Bytes()),
 		Type:                 transactionTypeFromChainTxType(tx.Type()),
 		AccessList:           newAccessListFromChain(tx.AccessList()),
 		MaxFeePerGas:         maxFeePerGas(tx),
@@ -250,7 +255,7 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	// Order is important, we must populate the state reverted before we remove the log block index and re-assign ordinals
 	f.populateStateReverted()
 	f.removeLogBlockIndexOnStateRevertedCalls()
-	f.assignOrdinalToReceiptLogs()
+	f.assignOrdinalAndIndexToReceiptLogs()
 
 	// Known Firehose issue: This field has never been populated in the old Firehose instrumentation, so it's the same thing for now
 	// f.transaction.ReturnData = rootCall.ReturnData
@@ -292,7 +297,7 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 	}
 }
 
-func (f *Firehose) assignOrdinalToReceiptLogs() {
+func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 	trx := f.transaction
 
 	receiptsLogs := trx.Receipt.Logs
@@ -325,7 +330,6 @@ func (f *Firehose) assignOrdinalToReceiptLogs() {
 		result := &validationResult{}
 		// Ordinal must **not** be checked as we are assigning it here below after the validations
 		validateBytesField(result, "Address", callLog.Address, receiptsLog.Address)
-		validateUint32Field(result, "Index", callLog.Index, receiptsLog.Index)
 		validateUint32Field(result, "BlockIndex", callLog.BlockIndex, receiptsLog.BlockIndex)
 		validateBytesField(result, "Data", callLog.Data, receiptsLog.Data)
 		validateArrayOfBytesField(result, "Topics", callLog.Topics, receiptsLog.Topics)
@@ -334,6 +338,7 @@ func (f *Firehose) assignOrdinalToReceiptLogs() {
 			result.panicOnAnyFailures("mismatch between Firehose call log and Ethereum transaction receipt log at index %d", i)
 		}
 
+		receiptsLog.Index = callLog.Index
 		receiptsLog.Ordinal = callLog.Ordinal
 	}
 }
@@ -442,6 +447,12 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		input = nil
 	}
 
+	v := firehoseBigIntFromNative(value)
+	if callType == pbeth.CallType_DELEGATE {
+		// If it's a delegate call, the there should be a call in the stack and value should be parent's value
+		v = f.callStack.Peek().Value
+	}
+
 	call := &pbeth.Call{
 		// Known Firehose issue: Ref 042a2ff03fd623f151d7726314b8aad6 (see below)
 		//
@@ -453,7 +464,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Address:  to.Bytes(),
 		// We need to clone `input` received by the tracer as it's re-used within Geth!
 		Input:    bytes.Clone(input),
-		Value:    firehoseBigIntFromNative(value),
+		Value:    v,
 		GasLimit: gas,
 	}
 
@@ -516,7 +527,7 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	//         call.ExecutedCode = true
 	//     }
 	//
-	// At this point, `call.ExecutedCode`` is tied to `EVMInterpreter#Run` execution (in `core/vm/interpreter.go`)
+	// At this point, `call.ExecutedCode` is tied to `EVMInterpreter#Run` execution (in `core/vm/interpreter.go`)
 	// and is `true` if the run/loop of the interpreter executed.
 	//
 	// This means that if `false` the interpreter did not run at all and we would had emitted a
@@ -954,33 +965,39 @@ func flushToFirehose(in []byte, writer io.Writer) {
 }
 
 // FIXME: Create a unit test that is going to fail as soon as any header is added in
-func newBlockHeaderFromChainBlock(b *types.Block, td *pbeth.BigInt) *pbeth.BlockHeader {
+func newBlockHeaderFromChainHeader(h *types.Header, td *pbeth.BigInt) *pbeth.BlockHeader {
 	var withdrawalsHashBytes []byte
-	if hash := b.Header().WithdrawalsHash; hash != nil {
+	if hash := h.WithdrawalsHash; hash != nil {
 		withdrawalsHashBytes = hash.Bytes()
 	}
 
-	return &pbeth.BlockHeader{
-		Hash:             b.Hash().Bytes(),
-		Number:           b.NumberU64(),
-		ParentHash:       b.ParentHash().Bytes(),
-		UncleHash:        b.UncleHash().Bytes(),
-		Coinbase:         b.Coinbase().Bytes(),
-		StateRoot:        b.Root().Bytes(),
-		TransactionsRoot: b.TxHash().Bytes(),
-		ReceiptRoot:      b.ReceiptHash().Bytes(),
-		LogsBloom:        b.Bloom().Bytes(),
-		Difficulty:       firehoseBigIntFromNative(b.Difficulty()),
+	pbHead := &pbeth.BlockHeader{
+		Hash:             h.Hash().Bytes(),
+		Number:           h.Number.Uint64(),
+		ParentHash:       h.ParentHash.Bytes(),
+		UncleHash:        h.UncleHash.Bytes(),
+		Coinbase:         h.Coinbase.Bytes(),
+		StateRoot:        h.Root.Bytes(),
+		TransactionsRoot: h.TxHash.Bytes(),
+		ReceiptRoot:      h.ReceiptHash.Bytes(),
+		LogsBloom:        h.Bloom.Bytes(),
+		Difficulty:       firehoseBigIntFromNative(h.Difficulty),
 		TotalDifficulty:  td,
-		GasLimit:         b.GasLimit(),
-		GasUsed:          b.GasUsed(),
-		Timestamp:        timestamppb.New(time.Unix(int64(b.Time()), 0)),
-		ExtraData:        b.Extra(),
-		MixHash:          b.MixDigest().Bytes(),
-		Nonce:            b.Nonce(),
-		BaseFeePerGas:    firehoseBigIntFromNative(b.BaseFee()),
+		GasLimit:         h.GasLimit,
+		GasUsed:          h.GasUsed,
+		Timestamp:        timestamppb.New(time.Unix(int64(h.Time), 0)),
+		ExtraData:        h.Extra,
+		MixHash:          h.MixDigest.Bytes(),
+		Nonce:            h.Nonce.Uint64(),
+		BaseFeePerGas:    firehoseBigIntFromNative(h.BaseFee),
 		WithdrawalsRoot:  withdrawalsHashBytes,
 	}
+
+	if pbHead.Difficulty == nil {
+		pbHead.Difficulty = &pbeth.BigInt{Bytes: []byte{0}}
+	}
+
+	return pbHead
 }
 
 // FIXME: Bring back Firehose test that ensures no new tx type are missed
@@ -1441,6 +1458,23 @@ func emptyBytesToNil(in []byte) []byte {
 	}
 
 	return in
+}
+
+func normalizeSignaturePoint(value []byte) []byte {
+	if len(value) == 0 {
+		return nil
+	}
+
+	if len(value) < 32 {
+		offset := 32 - len(value)
+
+		out := make([]byte, 32)
+		copy(out[offset:32], value)
+
+		return out
+	}
+
+	return value[0:32]
 }
 
 func firehoseBigIntFromNative(in *big.Int) *pbeth.BigInt {
