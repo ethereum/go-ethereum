@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
-	"github.com/kylelemons/godebug/diff"
 )
 
 var (
@@ -326,9 +325,8 @@ func TestDeriveFields(t *testing.T) {
 	if err != nil {
 		t.Fatal("error marshaling derived receipts:", err)
 	}
-	d := diff.Diff(string(r1), string(r2))
-	if d != "" {
-		t.Fatal("receipts differ:", d)
+	if string(r1) != string(r2) {
+		t.Fatalf("receipts differ: got %v want %v", string(r1), string(r2))
 	}
 }
 
