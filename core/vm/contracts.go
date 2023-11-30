@@ -108,6 +108,12 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
 }
 
+// PrecompiledContractsP256Verify contains the precompiled Ethereum
+// contract specified in EIP-7212. This is exported for testing purposes.
+var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{0x0b}): &p256Verify{},
+}
+
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
 // contracts specified in EIP-2537. These are exported for testing purposes.
 var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
@@ -120,12 +126,6 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
-}
-
-// PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-7212. This is exported for testing purposes.
-var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{19}): &p256Verify{},
 }
 
 var (
