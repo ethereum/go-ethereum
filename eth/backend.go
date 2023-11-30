@@ -168,8 +168,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
-		log.Debug(" ###########", "Unprotected transactions allowed")
-
 		config.TxPool.AllowUnprotectedTxs = true
 	}
 
