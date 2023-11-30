@@ -454,7 +454,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 				break
 			}
 			if confirmResp.Text != resp.Text {
-				api.UI.ShowError("Passwords do not match! Please retry again.")
+				api.UI.ShowError("Passwords do not match! Please try again.")
 				break
 			} else {
 				acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
