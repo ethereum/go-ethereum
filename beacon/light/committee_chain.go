@@ -248,9 +248,6 @@ func (s *CommitteeChain) CheckpointInit(bootstrap *types.BootstrapData) error {
 // Note that the period where the first committee is added has to have a fixed
 // root which can either come from a BootstrapData or a trusted source.
 func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) error {
-	s.chainmu.Lock()
-	defer s.chainmu.Unlock()
-
 	if root == (common.Hash{}) {
 		return ErrWrongCommitteeRoot
 	}
@@ -299,9 +296,6 @@ func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) 
 // It also maintains chain consistency, meaning that it also deletes updates and
 // committees if they are no longer supported by a valid update chain.
 func (s *CommitteeChain) deleteFixedCommitteeRootsFrom(period uint64) error {
-	s.chainmu.Lock()
-	defer s.chainmu.Unlock()
-
 	if period >= s.fixedCommitteeRoots.periods.End {
 		return nil
 	}
@@ -342,9 +336,6 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 
 // addCommittee adds a committee at the given period if possible.
 func (s *CommitteeChain) addCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
-	s.chainmu.Lock()
-	defer s.chainmu.Unlock()
-
 	if !s.committees.periods.CanExpand(period) {
 		return ErrInvalidPeriod
 	}

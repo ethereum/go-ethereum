@@ -50,8 +50,9 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 		cache:     lru.NewCache[uint64, T](100),
 	}
 	var (
-		iter = db.NewIterator(keyPrefix, nil)
-		kl   = len(keyPrefix)
+		iter  = db.NewIterator(keyPrefix, nil)
+		kl    = len(keyPrefix)
+		first = true
 	)
 	for iter.Next() {
 		if len(iter.Key()) != kl+8 {
@@ -59,12 +60,13 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 			continue
 		}
 		period := binary.BigEndian.Uint64(iter.Key()[kl : kl+8])
-		if cs.periods.Start == 0 {
+		if first {
 			cs.periods.Start = period
 		} else if cs.periods.End != period {
 			log.Warn("Gap in the canonical chain database")
 			break // continuity guaranteed
 		}
+		first = false
 		cs.periods.End = period + 1
 	}
 	iter.Release()
@@ -123,18 +125,22 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 
 // get returns the item at the given period or the null value of the given type
 // if no item is present.
-// Note: get is thread safe in itself and therefore can be called either with
-// locked or unlocked chain mutex.
 func (cs *canonicalStore[T]) get(period uint64) (value T, ok bool) {
+	if !cs.periods.Contains(period) {
+		return
+	}
 	if value, ok = cs.cache.Get(period); ok {
 		return
 	}
 	if enc, err := cs.db.Get(cs.databaseKey(period)); err == nil {
 		if v, err := cs.decode(enc); err == nil {
 			value, ok = v, true
+			cs.cache.Add(period, value)
 		} else {
 			log.Error("Error decoding canonical store value", "error", err)
 		}
+	} else {
+		log.Error("Canonical store value not found", "period", period, "start", cs.periods.Start, "end", cs.periods.End)
 	}
 	return
 }
