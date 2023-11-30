@@ -48,7 +48,7 @@ Geth can be started in a separate terminal. To connect to Clef, ensure the data 
 geth --sepolia --datadir sepolia <other flags> --signer=sepolia-data/clef/clef.ipc
 ```
 
-Remember that it is also necessary to have a consensus client running too, which requires `--http` and several `authrpc` values to be provided to Geth. A complete set of startup commands for the Geth-Lodestar client combinaton plus Clef is provided as an example in this [Gist](https://gist.github.com/jmcook1186/ea5de9215ecedb1b0105bcfa9c30d44c) - adapt it for different client combinations and configurations.
+Remember that it is also necessary to have a consensus client running too, which requires `--http` and several `authrpc` values to be provided to Geth. A complete set of startup commands for the Geth-Lodestar client combination plus Clef is provided as an example in this [Gist](https://gist.github.com/jmcook1186/ea5de9215ecedb1b0105bcfa9c30d44c) - adapt it for different client combinations and configurations.
 
 ## Interacting with Clef {#interacting-with-clef}
 
@@ -78,7 +78,7 @@ The console will hang because Clef is waiting for manual approval. Switch to the
 
 It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
-<Note>If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS!**</Note>
+<Note>If the password provided on account creation is lost or forgotten, there is no way to retreive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS!**</Note>
 
 The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
 
