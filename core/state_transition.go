@@ -506,6 +506,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	}
 
+	// <specular modification>
+	if (st.evm.ChainConfig().L2BaseFeeRecipient != common.Address{}) {
+		st.state.AddBalance(st.evm.ChainConfig().L2BaseFeeRecipient, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee))
+	}
+	// </specular modification>
+
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
