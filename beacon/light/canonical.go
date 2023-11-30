@@ -30,7 +30,6 @@ import (
 // Note: canonicalStore is not thread safe and it is the caller's responsibility
 // to avoid concurrent access.
 type canonicalStore[T any] struct {
-	db        ethdb.KeyValueStore
 	keyPrefix []byte
 	periods   Range
 	cache     *lru.Cache[uint64, T]
@@ -43,7 +42,6 @@ type canonicalStore[T any] struct {
 func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 	encode func(T) ([]byte, error), decode func([]byte) (T, error)) *canonicalStore[T] {
 	cs := &canonicalStore[T]{
-		db:        db,
 		keyPrefix: keyPrefix,
 		encode:    encode,
 		decode:    decode,
@@ -125,14 +123,14 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 
 // get returns the item at the given period or the null value of the given type
 // if no item is present.
-func (cs *canonicalStore[T]) get(period uint64) (value T, ok bool) {
+func (cs *canonicalStore[T]) get(backend ethdb.KeyValueReader, period uint64) (value T, ok bool) {
 	if !cs.periods.Contains(period) {
 		return
 	}
 	if value, ok = cs.cache.Get(period); ok {
 		return
 	}
-	if enc, err := cs.db.Get(cs.databaseKey(period)); err == nil {
+	if enc, err := backend.Get(cs.databaseKey(period)); err == nil {
 		if v, err := cs.decode(enc); err == nil {
 			value, ok = v, true
 			cs.cache.Add(period, value)

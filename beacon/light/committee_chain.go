@@ -146,7 +146,7 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
 	for !s.updates.periods.IsEmpty() {
-		update, ok := s.updates.get(s.updates.periods.End - 1)
+		update, ok := s.updates.get(s.db, s.updates.periods.End-1)
 		if !ok {
 			log.Error("Sync committee update missing", "period", s.updates.periods.End-1)
 			s.Reset()
@@ -369,7 +369,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	}
 	oldRoot := s.getCommitteeRoot(period + 1)
 	reorg := oldRoot != (common.Hash{}) && oldRoot != update.NextSyncCommitteeRoot
-	if oldUpdate, ok := s.updates.get(period); ok && !update.Score().BetterThan(oldUpdate.Score()) {
+	if oldUpdate, ok := s.updates.get(s.db, period); ok && !update.Score().BetterThan(oldUpdate.Score()) {
 		// a better or equal update already exists; no changes, only fail if new one tried to reorg
 		if reorg {
 			return ErrCannotReorg
@@ -461,10 +461,10 @@ func (s *CommitteeChain) rollback(period uint64) error {
 // proven by a previous update or both. It returns an empty hash if the committee
 // root is unknown.
 func (s *CommitteeChain) getCommitteeRoot(period uint64) common.Hash {
-	if root, ok := s.fixedCommitteeRoots.get(period); ok || period == 0 {
+	if root, ok := s.fixedCommitteeRoots.get(s.db, period); ok || period == 0 {
 		return root
 	}
-	if update, ok := s.updates.get(period - 1); ok {
+	if update, ok := s.updates.get(s.db, period-1); ok {
 		return update.NextSyncCommitteeRoot
 	}
 	return common.Hash{}
@@ -475,7 +475,7 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) (syncCommittee, error) 
 	if c, ok := s.committeeCache.Get(period); ok {
 		return c, nil
 	}
-	if sc, ok := s.committees.get(period); ok {
+	if sc, ok := s.committees.get(s.db, period); ok {
 		c, err := s.sigVerifier.deserializeSyncCommittee(sc)
 		if err != nil {
 			return nil, fmt.Errorf("Sync committee #%d deserialization error: %v", period, err)
