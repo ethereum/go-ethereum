@@ -52,3 +52,27 @@ func (a *Range) Expand(period uint64) {
 		a.End++
 	}
 }
+
+// Split splits the range into two ranges. The 'fromPeriod' will be the first
+// element in the second range (if present).
+// The original range is unchanged by this operation
+func (a *Range) Split(fromPeriod uint64) (Range, Range) {
+	if fromPeriod <= a.Start {
+		// First range empty, everything in second range,
+		return Range{}, *a
+	}
+	if fromPeriod >= a.End {
+		// Second range empty, everything in first range,
+		return *a, Range{}
+	}
+	x := Range{a.Start, fromPeriod}
+	y := Range{fromPeriod, a.End}
+	return x, y
+}
+
+// Each invokes the supplied function fn once per period in range
+func (a *Range) Each(fn func(uint64)) {
+	for p := a.Start; p < a.End; p++ {
+		fn(p)
+	}
+}

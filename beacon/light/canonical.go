@@ -102,23 +102,13 @@ func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, va
 
 // deleteFrom removes items starting from the given period.
 func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
-	if fromPeriod >= cs.periods.End {
-		return
-	}
-	if fromPeriod < cs.periods.Start {
-		fromPeriod = cs.periods.Start
-	}
-	deleted = Range{Start: fromPeriod, End: cs.periods.End}
-	for period := fromPeriod; period < cs.periods.End; period++ {
+	keepRange, deleteRange := cs.periods.Split(fromPeriod)
+	deleteRange.Each(func(period uint64) {
 		batch.Delete(cs.databaseKey(period))
 		cs.cache.Remove(period)
-	}
-	if fromPeriod > cs.periods.Start {
-		cs.periods.End = fromPeriod
-	} else {
-		cs.periods = Range{}
-	}
-	return
+	})
+	cs.periods = keepRange
+	return deleteRange
 }
 
 // get returns the item at the given period or the null value of the given type
