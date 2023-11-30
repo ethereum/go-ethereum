@@ -73,12 +73,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// Setting this disables gzip compression in package node.
-				w.Header().Set("transfer-encoding", "identity")
+				w.Header().Set("Transfer-Encoding", "identity")
 
 				// Flush the response. Since we are writing close to the response timeout,
 				// chunked transfer encoding must be disabled by setting content-length.
-				w.Header().Set("content-type", "application/json")
-				w.Header().Set("content-length", strconv.Itoa(len(responseJSON)))
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Length", strconv.Itoa(len(responseJSON)))
 				w.Write(responseJSON)
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
@@ -97,10 +97,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		if len(response.Errors) > 0 {
 			w.WriteHeader(http.StatusBadRequest)
 		}
-		w.Header().Set("Content-Type", "application/json")
 		w.Write(responseJSON)
 	})
 }

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 const (
@@ -36,6 +38,12 @@ const (
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
+
+	// commitmentSize is the size of commitment stored in cache.
+	commitmentSize = banderwagon.UncompressedSize
+
+	// Cache item granted for caching commitment results.
+	commitmentCacheItems = 64 * 1024 * 1024 / (commitmentSize + common.AddressLength)
 )
 
 // Database wraps access to tries and contract code.
@@ -44,7 +52,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -70,11 +78,6 @@ type Trie interface {
 	// TODO(fjl): remove this when StateTrie is removed
 	GetKey([]byte) []byte
 
-	// GetStorage returns the value for key stored in the trie. The value bytes
-	// must not be modified by the caller. If a node was not found in the database,
-	// a trie.MissingNodeError is returned.
-	GetStorage(addr common.Address, key []byte) ([]byte, error)
-
 	// GetAccount abstracts an account read from the trie. It retrieves the
 	// account blob from the trie with provided account address and decodes it
 	// with associated decoding algorithm. If the specified account is not in
@@ -83,27 +86,32 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
-	// UpdateStorage associates key with value in the trie. If value has length zero,
-	// any existing value is deleted from the trie. The value bytes must not be modified
-	// by the caller while they are stored in the trie. If a node was not found in the
-	// database, a trie.MissingNodeError is returned.
-	UpdateStorage(addr common.Address, key, value []byte) error
+	// GetStorage returns the value for key stored in the trie. The value bytes
+	// must not be modified by the caller. If a node was not found in the database,
+	// a trie.MissingNodeError is returned.
+	GetStorage(addr common.Address, key []byte) ([]byte, error)
 
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
 	UpdateAccount(address common.Address, account *types.StateAccount) error
 
-	// UpdateContractCode abstracts code write to the trie. It is expected
-	// to be moved to the stateWriter interface when the latter is ready.
-	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
+	// UpdateStorage associates key with value in the trie. If value has length zero,
+	// any existing value is deleted from the trie. The value bytes must not be modified
+	// by the caller while they are stored in the trie. If a node was not found in the
+	// database, a trie.MissingNodeError is returned.
+	UpdateStorage(addr common.Address, key, value []byte) error
+
+	// DeleteAccount abstracts an account deletion from the trie.
+	DeleteAccount(address common.Address) error
 
 	// DeleteStorage removes any existing value for key from the trie. If a node
 	// was not found in the database, a trie.MissingNodeError is returned.
 	DeleteStorage(addr common.Address, key []byte) error
 
-	// DeleteAccount abstracts an account deletion from the trie.
-	DeleteAccount(address common.Address) error
+	// UpdateContractCode abstracts code write to the trie. It is expected
+	// to be moved to the stateWriter interface when the latter is ready.
+	UpdateContractCode(address common.Address, codeHash common.Hash, code []byte) error
 
 	// Hash returns the root hash of the trie. It does not write to the database and
 	// can be used even if the trie doesn't have one.
@@ -170,6 +178,9 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if db.triedb.IsVerkle() {
+		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -178,7 +189,13 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	// In the verkle case, there is only one tree. But the two-tree structure
+	// is hardcoded in the codebase. So we need to return the same trie in this
+	// case.
+	if db.triedb.IsVerkle() {
+		return self, nil
+	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err

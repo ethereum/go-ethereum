@@ -49,7 +49,7 @@ func NewCompiler(debug bool) *Compiler {
 	}
 }
 
-// Feed feeds tokens in to ch and are interpreted by
+// Feed feeds tokens into ch and are interpreted by
 // the compiler.
 //
 // feed is the first pass in the compile stage as it collects the used labels in the

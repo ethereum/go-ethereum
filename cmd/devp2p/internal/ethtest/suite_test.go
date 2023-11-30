@@ -35,6 +35,7 @@ var (
 )
 
 func TestEthSuite(t *testing.T) {
+	t.Parallel()
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
@@ -56,6 +57,7 @@ func TestEthSuite(t *testing.T) {
 }
 
 func TestSnapSuite(t *testing.T) {
+	t.Parallel()
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
@@ -120,6 +122,7 @@ func setupGeth(stack *node.Node) error {
 	if err != nil {
 		return err
 	}
+	backend.SetSynced()
 
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
 	return err

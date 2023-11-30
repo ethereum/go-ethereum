@@ -57,7 +57,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 }
 
 // LatestSigner returns the 'most permissive' Signer available for the given chain
-// configuration. Specifically, this enables support of all types of transacrions
+// configuration. Specifically, this enables support of all types of transactions
 // when their respective forks are scheduled to occur at any block number (or time)
 // in the chain config.
 //

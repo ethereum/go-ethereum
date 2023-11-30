@@ -143,7 +143,7 @@ func (l *limbo) push(tx *types.Transaction, block uint64) error {
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index liboed blobs", "tx", tx, "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", tx, "err", err)
 		return err
 	}
 	return nil
@@ -191,7 +191,7 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 		log.Trace("Blob transaction unchanged in limbo", "tx", txhash, "block", block)
 		return
 	}
-	// Retrieve the old blobs from the data store and write tehm back with a new
+	// Retrieve the old blobs from the data store and write them back with a new
 	// block number. IF anything fails, there's not much to do, go on.
 	item, err := l.getAndDrop(id)
 	if err != nil {

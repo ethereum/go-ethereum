@@ -200,7 +200,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Step into the future and delete and dangling side chains
+		// Step into the future and delete any dangling side chains
 		if frozen > 0 {
 			tip := frozen
 			for len(dangling) > 0 {

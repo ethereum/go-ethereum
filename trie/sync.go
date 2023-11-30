@@ -51,6 +51,18 @@ var (
 	// lookupGauge is the metric to track how many trie node lookups are
 	// performed to determine if node needs to be deleted.
 	lookupGauge = metrics.NewRegisteredGauge("trie/sync/lookup", nil)
+
+	// accountNodeSyncedGauge is the metric to track how many account trie
+	// node are written during the sync.
+	accountNodeSyncedGauge = metrics.NewRegisteredGauge("trie/sync/nodes/account", nil)
+
+	// storageNodeSyncedGauge is the metric to track how many account trie
+	// node are written during the sync.
+	storageNodeSyncedGauge = metrics.NewRegisteredGauge("trie/sync/nodes/storage", nil)
+
+	// codeSyncedGauge is the metric to track how many contract codes are
+	// written during the sync.
+	codeSyncedGauge = metrics.NewRegisteredGauge("trie/sync/codes", nil)
 )
 
 // SyncPath is a path tuple identifying a particular trie node either in a single
@@ -302,7 +314,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 }
 
 // ProcessCode injects the received data for requested item. Note it can
-// happpen that the single response commits two pending requests(e.g.
+// happen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
 // be treated as "non-requested" item or "already-processed" item but
@@ -362,10 +374,22 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 // storage, returning any occurred error.
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Flush the pending node writes into database batch.
+	var (
+		account int
+		storage int
+	)
 	for path, value := range s.membatch.nodes {
 		owner, inner := ResolvePath([]byte(path))
+		if owner == (common.Hash{}) {
+			account += 1
+		} else {
+			storage += 1
+		}
 		rawdb.WriteTrieNode(dbw, owner, inner, s.membatch.hashes[path], value, s.scheme)
 	}
+	accountNodeSyncedGauge.Inc(int64(account))
+	storageNodeSyncedGauge.Inc(int64(storage))
+
 	// Flush the pending node deletes into the database batch.
 	// Please note that each written and deleted node has a
 	// unique path, ensuring no duplication occurs.
@@ -377,6 +401,8 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	for hash, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, hash, value)
 	}
+	codeSyncedGauge.Inc(int64(len(s.membatch.codes)))
+
 	s.membatch = newSyncMemBatch() // reset the batch
 	return nil
 }
@@ -391,7 +417,7 @@ func (s *Sync) Pending() int {
 	return len(s.nodeReqs) + len(s.codeReqs)
 }
 
-// schedule inserts a new state retrieval request into the fetch queue. If there
+// scheduleNodeRequest inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
@@ -406,7 +432,7 @@ func (s *Sync) scheduleNodeRequest(req *nodeRequest) {
 	s.queue.Push(string(req.path), prio)
 }
 
-// schedule inserts a new state retrieval request into the fetch queue. If there
+// scheduleCodeRequest inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
 func (s *Sync) scheduleCodeRequest(req *codeRequest) {
@@ -556,7 +582,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	return requests, nil
 }
 
-// commit finalizes a retrieval request and stores it into the membatch. If any
+// commitNodeRequest finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitNodeRequest(req *nodeRequest) error {
@@ -591,7 +617,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	return nil
 }
 
-// commit finalizes a retrieval request and stores it into the membatch. If any
+// commitCodeRequest finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *Sync) commitCodeRequest(req *codeRequest) error {

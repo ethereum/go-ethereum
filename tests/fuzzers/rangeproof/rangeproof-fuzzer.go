@@ -128,7 +128,7 @@ func (f *fuzzer) fuzz() int {
 		if len(keys) == 0 {
 			return 0
 		}
-		var first, last = keys[0], keys[len(keys)-1]
+		var first = keys[0]
 		testcase %= 6
 		switch testcase {
 		case 0:
@@ -165,7 +165,7 @@ func (f *fuzzer) fuzz() int {
 		}
 		ok = 1
 		//nodes, subtrie
-		hasMore, err := trie.VerifyRangeProof(tr.Hash(), first, last, keys, vals, proof)
+		hasMore, err := trie.VerifyRangeProof(tr.Hash(), first, keys, vals, proof)
 		if err != nil {
 			if hasMore {
 				panic("err != nil && hasMore == true")
@@ -185,7 +185,7 @@ func (f *fuzzer) fuzz() int {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	if len(input) < 100 {
 		return 0
 	}

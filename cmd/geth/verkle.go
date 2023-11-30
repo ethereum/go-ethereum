@@ -84,7 +84,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 				return fmt.Errorf("could not find child %x in db: %w", childC, err)
 			}
 			// depth is set to 0, the tree isn't rebuilt so it's not a problem
-			childN, err := verkle.ParseNode(childS, 0, childC[:])
+			childN, err := verkle.ParseNode(childS, 0)
 			if err != nil {
 				return fmt.Errorf("decode error child %x in db: %w", child.Commitment().Bytes(), err)
 			}
@@ -115,6 +115,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")
@@ -144,7 +145,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+	root, err := verkle.ParseNode(serializedRoot, 0)
 	if err != nil {
 		return err
 	}
@@ -163,6 +164,7 @@ func expandVerkle(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
 	var (
 		rootC   common.Hash
 		keylist [][]byte
@@ -193,7 +195,7 @@ func expandVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	root, err := verkle.ParseNode(serializedRoot, 0, rootC[:])
+	root, err := verkle.ParseNode(serializedRoot, 0)
 	if err != nil {
 		return err
 	}
