@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -48,10 +47,10 @@ type SimulatedBackend struct {
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	// Setup the node object
-	nodeConf := &node.DefaultConfig
+	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{DiscAddr: "", ListenAddr: ""}
-	stack, err := node.New(nodeConf)
+	stack, err := node.New(&nodeConf)
 	if err != nil {
 		// This should never happen, if it does, please open an issue
 		panic(err)
@@ -63,10 +62,10 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	conf := &ethconfig.Defaults
+	conf := ethconfig.Defaults
 	conf.Genesis = &genesis
 	conf.SyncMode = downloader.FullSync
-	sim, err := NewSimWithNode(stack, conf, math.MaxUint64)
+	sim, err := NewSimWithNode(stack, &conf, math.MaxUint64)
 	if err != nil {
 		// This should never happen, if it does, please open an issue
 		panic(err)
@@ -76,6 +75,7 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 
 // NewSimWithNode sets up a simulated backend on an existing node
 // this allows users to do persistent simulations.
+// The provided node must not be started and will be started by NewSimWithNode
 func NewSimWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*SimulatedBackend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
@@ -113,16 +113,14 @@ func NewSimWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Si
 }
 
 func (n *SimulatedBackend) Close() error {
-	n.Client.Close()
-	return n.SimulatedBeacon.Stop()
-}
-
-// Blockchain is needed for LES-tests
-func (n *SimulatedBackend) Blockchain() *core.BlockChain {
-	return n.eth.BlockChain()
-}
-
-// ChainDB is needed for LES-tests
-func (n *SimulatedBackend) ChainDB() ethdb.Database {
-	return n.eth.ChainDb()
+	if n.Client != nil {
+		n.Client.Close()
+		n.Client = nil
+	}
+	if n.SimulatedBeacon != nil {
+		err := n.SimulatedBeacon.Stop()
+		n.SimulatedBeacon = nil
+		return err
+	}
+	return nil
 }
