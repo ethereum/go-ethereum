@@ -108,7 +108,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -116,7 +116,9 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) er
 	// import pre accounts & construct test genesis block & state root
 	var (
 		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{}
+		tconf = &trie.Config{
+			Preimages: true,
+		}
 	)
 	if scheme == rawdb.PathScheme {
 		tconf.PathDB = pathdb.Defaults
@@ -141,7 +143,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) er
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
@@ -157,6 +159,11 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) er
 	validBlocks, err := t.insertBlocks(chain)
 	if err != nil {
 		return err
+	}
+	// Import succeeded: regardless of whether the _test_ succeeds or not, schedule
+	// the post-check to run
+	if postCheck != nil {
+		defer postCheck(result, chain)
 	}
 	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/exp/slog"
 )
 
 //go:generate go run github.com/fjl/gencodec -type header -field-override headerMarshaling -out gen_header.go
@@ -216,9 +217,9 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 // BuildBlock constructs a block from the given inputs.
 func BuildBlock(ctx *cli.Context) error {
 	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
+	log.SetDefault(log.NewLogger(glogger))
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {

@@ -42,6 +42,8 @@ type Options struct {
 	Chain  core.ChainContext   // Chain context to access past block hashes
 	Header *types.Header       // Header defining the block context to execute in
 	State  *state.StateDB      // Pre-state on top of which to estimate the gas
+
+	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
 
 // Estimate returns the lowest possible gas limit that allows the transaction to
@@ -86,15 +88,27 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			if transfer == nil {
 				transfer = new(big.Int)
 			}
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+			log.Debug("Gas estimation capped by limited funds", "original", hi, "balance", balance,
 				"sent", transfer, "maxFeePerGas", feeCap, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.
 	if gasCap != 0 && hi > gasCap {
-		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
+		log.Debug("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
 		hi = gasCap
+	}
+	// If the transaction is a plain value transfer, short circuit estimation and
+	// directly try 21000. Returning 21000 without any execution is dangerous as
+	// some tx field combos might bump the price up even for plain transfers (e.g.
+	// unused access list items). Ever so slightly wasteful, but safer overall.
+	if len(call.Data) == 0 {
+		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
+			failed, _, err := execute(ctx, call, opts, params.TxGas)
+			if !failed && err == nil {
+				return params.TxGas, nil, nil
+			}
+		}
 	}
 	// We first execute the transaction at the highest allowable gas limit, since if this fails we
 	// can return error immediately.
@@ -115,8 +129,35 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// limit for these cases anyway.
 	lo = result.UsedGas - 1
 
+	// There's a fairly high chance for the transaction to execute successfully
+	// with gasLimit set to the first execution's usedGas + gasRefund. Explicitly
+	// check that gas amount and use as a limit for the binary search.
+	optimisticGasLimit := (result.UsedGas + result.RefundedGas + params.CallStipend) * 64 / 63
+	if optimisticGasLimit < hi {
+		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
+		if err != nil {
+			// This should not happen under normal conditions since if we make it this far the
+			// transaction had run without error at least once before.
+			log.Error("Execution error in estimate gas", "err", err)
+			return 0, nil, err
+		}
+		if failed {
+			lo = optimisticGasLimit
+		} else {
+			hi = optimisticGasLimit
+		}
+	}
 	// Binary search for the smallest gas limit that allows the tx to execute successfully.
 	for lo+1 < hi {
+		if opts.ErrorRatio > 0 {
+			// It is a bit pointless to return a perfect estimation, as changing
+			// network conditions require the caller to bump it up anyway. Since
+			// wallets tend to use 20-25% bump, allowing a small approximation
+			// error is fine (as long as it's upwards).
+			if float64(hi-lo)/float64(hi) < opts.ErrorRatio {
+				break
+			}
+		}
 		mid := (hi + lo) / 2
 		if mid > lo*2 {
 			// Most txs don't need much higher gas limit than their gas used, and most txs don't

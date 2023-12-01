@@ -735,7 +735,7 @@ func TestEstimateGas(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		if uint64(result) != tc.want {
+		if float64(result) > float64(tc.want)*(1+estimateGasErrorRatio) {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, uint64(result), tc.want)
 		}
 	}

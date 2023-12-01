@@ -1,49 +1,51 @@
-{"111,222,333,444,555,678,999":"111222333444555678999","lvl":"info","msg":"big.Int","t":"2023-11-09T08:33:19.464383209+01:00"}
-{"-111,222,333,444,555,678,999":"-111222333444555678999","lvl":"info","msg":"-big.Int","t":"2023-11-09T08:33:19.46455928+01:00"}
-{"11,122,233,344,455,567,899,900":"11122233344455567899900","lvl":"info","msg":"big.Int","t":"2023-11-09T08:33:19.464582073+01:00"}
-{"-11,122,233,344,455,567,899,900":"-11122233344455567899900","lvl":"info","msg":"-big.Int","t":"2023-11-09T08:33:19.464594846+01:00"}
-{"111,222,333,444,555,678,999":"0x607851afc94ca2517","lvl":"info","msg":"uint256","t":"2023-11-09T08:33:19.464607873+01:00"}
-{"11,122,233,344,455,567,899,900":"0x25aeffe8aaa1ef67cfc","lvl":"info","msg":"uint256","t":"2023-11-09T08:33:19.464694639+01:00"}
-{"1,000,000":1000000,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464708835+01:00"}
-{"-1,000,000":-1000000,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464725054+01:00"}
-{"9,223,372,036,854,775,807":9223372036854775807,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464735773+01:00"}
-{"-9,223,372,036,854,775,808":-9223372036854775808,"lvl":"info","msg":"int64","t":"2023-11-09T08:33:19.464744532+01:00"}
-{"1,000,000":1000000,"lvl":"info","msg":"uint64","t":"2023-11-09T08:33:19.464752807+01:00"}
-{"18,446,744,073,709,551,615":18446744073709551615,"lvl":"info","msg":"uint64","t":"2023-11-09T08:33:19.464779296+01:00"}
-{"key":"special \r\n\t chars","lvl":"info","msg":"Special chars in value","t":"2023-11-09T08:33:19.464794181+01:00"}
-{"lvl":"info","msg":"Special chars in key","special \n\t chars":"value","t":"2023-11-09T08:33:19.464827197+01:00"}
-{"lvl":"info","msg":"nospace","nospace":"nospace","t":"2023-11-09T08:33:19.464841118+01:00"}
-{"lvl":"info","msg":"with space","t":"2023-11-09T08:33:19.464862818+01:00","with nospace":"with nospace"}
-{"key":"\u001b[1G\u001b[K\u001b[1A","lvl":"info","msg":"Bash escapes in value","t":"2023-11-09T08:33:19.464876802+01:00"}
-{"\u001b[1G\u001b[K\u001b[1A":"value","lvl":"info","msg":"Bash escapes in key","t":"2023-11-09T08:33:19.464885416+01:00"}
-{"key":"value","lvl":"info","msg":"Bash escapes in message  \u001b[1G\u001b[K\u001b[1A end","t":"2023-11-09T08:33:19.464906946+01:00"}
-{"\u001b[35mColored\u001b[0m[":"\u001b[35mColored\u001b[0m[","lvl":"info","msg":"\u001b[35mColored\u001b[0m[","t":"2023-11-09T08:33:19.464921455+01:00"}
-{"2562047h47m16.854s":"2562047h47m16.854s","lvl":"info","msg":"Custom Stringer value","t":"2023-11-09T08:33:19.464943893+01:00"}
-{"key":"lazy value","lvl":"info","msg":"Lazy evaluation of value","t":"2023-11-09T08:33:19.465013552+01:00"}
-{"lvl":"info","msg":"A message with wonky 💩 characters","t":"2023-11-09T08:33:19.465069437+01:00"}
-{"lvl":"info","msg":"A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩","t":"2023-11-09T08:33:19.465083053+01:00"}
-{"lvl":"info","msg":"A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above","t":"2023-11-09T08:33:19.465104289+01:00"}
-{"false":"false","lvl":"info","msg":"boolean","t":"2023-11-09T08:33:19.465117185+01:00","true":"true"}
-{"foo":"beta","lvl":"info","msg":"repeated-key 1","t":"2023-11-09T08:33:19.465143425+01:00"}
-{"lvl":"info","msg":"repeated-key 2","t":"2023-11-09T08:33:19.465156323+01:00","xx":"longer"}
-{"lvl":"info","msg":"log at level info","t":"2023-11-09T08:33:19.465193158+01:00"}
-{"lvl":"warn","msg":"log at level warn","t":"2023-11-09T08:33:19.465228964+01:00"}
-{"lvl":"eror","msg":"log at level error","t":"2023-11-09T08:33:19.465240352+01:00"}
-{"a":"aligned left","bar":"short","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465247226+01:00"}
-{"a":1,"bar":"a long message","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465269028+01:00"}
-{"a":"aligned right","bar":"short","lvl":"info","msg":"test","t":"2023-11-09T08:33:19.465313611+01:00"}
-{"lvl":"info","msg":"The following logs should align so that the key-fields make 5 columns","t":"2023-11-09T08:33:19.465328188+01:00"}
-{"gas":1123123,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","lvl":"info","msg":"Inserted known block","number":1012,"other":"first","t":"2023-11-09T08:33:19.465350507+01:00","txs":200}
-{"gas":1123,"hash":"0x0000000000000000000000000000000000000000000000000000000000001235","lvl":"info","msg":"Inserted new block","number":1,"other":"second","t":"2023-11-09T08:33:19.465387952+01:00","txs":2}
-{"gas":1,"hash":"0x0000000000000000000000000000000000000000000000000000000000012322","lvl":"info","msg":"Inserted known block","number":99,"other":"third","t":"2023-11-09T08:33:19.465406687+01:00","txs":10}
-{"gas":99,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","lvl":"warn","msg":"Inserted known block","number":1012,"other":"fourth","t":"2023-11-09T08:33:19.465433025+01:00","txs":200}
-{"\u003cnil\u003e":"\u003cnil\u003e","lvl":"info","msg":"(*big.Int)(nil)","t":"2023-11-09T08:33:19.465450283+01:00"}
-{"\u003cnil\u003e":"nil","lvl":"info","msg":"(*uint256.Int)(nil)","t":"2023-11-09T08:33:19.465472953+01:00"}
-{"lvl":"info","msg":"(fmt.Stringer)(nil)","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465538633+01:00"}
-{"lvl":"info","msg":"nil-concrete-stringer","res":"nil","t":"2023-11-09T08:33:19.465552355+01:00"}
-{"lvl":"info","msg":"error(nil) ","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465601029+01:00"}
-{"lvl":"info","msg":"nil-concrete-error","res":"","t":"2023-11-09T08:33:19.46561622+01:00"}
-{"lvl":"info","msg":"nil-custom-struct","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465638888+01:00"}
-{"lvl":"info","msg":"raw nil","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465673664+01:00"}
-{"lvl":"info","msg":"(*uint64)(nil)","res":"\u003cnil\u003e","t":"2023-11-09T08:33:19.465700264+01:00"}
-{"level":"level","lvl":"lvl","msg":"msg","t":"t","time":"time"}
+{"t":"2023-11-22T15:42:00.407963+08:00","lvl":"info","msg":"big.Int","111,222,333,444,555,678,999":"111222333444555678999"}
+{"t":"2023-11-22T15:42:00.408084+08:00","lvl":"info","msg":"-big.Int","-111,222,333,444,555,678,999":"-111222333444555678999"}
+{"t":"2023-11-22T15:42:00.408092+08:00","lvl":"info","msg":"big.Int","11,122,233,344,455,567,899,900":"11122233344455567899900"}
+{"t":"2023-11-22T15:42:00.408097+08:00","lvl":"info","msg":"-big.Int","-11,122,233,344,455,567,899,900":"-11122233344455567899900"}
+{"t":"2023-11-22T15:42:00.408127+08:00","lvl":"info","msg":"uint256","111,222,333,444,555,678,999":"111222333444555678999"}
+{"t":"2023-11-22T15:42:00.408133+08:00","lvl":"info","msg":"uint256","11,122,233,344,455,567,899,900":"11122233344455567899900"}
+{"t":"2023-11-22T15:42:00.408137+08:00","lvl":"info","msg":"int64","1,000,000":1000000}
+{"t":"2023-11-22T15:42:00.408145+08:00","lvl":"info","msg":"int64","-1,000,000":-1000000}
+{"t":"2023-11-22T15:42:00.408149+08:00","lvl":"info","msg":"int64","9,223,372,036,854,775,807":9223372036854775807}
+{"t":"2023-11-22T15:42:00.408153+08:00","lvl":"info","msg":"int64","-9,223,372,036,854,775,808":-9223372036854775808}
+{"t":"2023-11-22T15:42:00.408156+08:00","lvl":"info","msg":"uint64","1,000,000":1000000}
+{"t":"2023-11-22T15:42:00.40816+08:00","lvl":"info","msg":"uint64","18,446,744,073,709,551,615":18446744073709551615}
+{"t":"2023-11-22T15:42:00.408164+08:00","lvl":"info","msg":"Special chars in value","key":"special \r\n\t chars"}
+{"t":"2023-11-22T15:42:00.408167+08:00","lvl":"info","msg":"Special chars in key","special \n\t chars":"value"}
+{"t":"2023-11-22T15:42:00.408171+08:00","lvl":"info","msg":"nospace","nospace":"nospace"}
+{"t":"2023-11-22T15:42:00.408174+08:00","lvl":"info","msg":"with space","with nospace":"with nospace"}
+{"t":"2023-11-22T15:42:00.408178+08:00","lvl":"info","msg":"Bash escapes in value","key":"\u001b[1G\u001b[K\u001b[1A"}
+{"t":"2023-11-22T15:42:00.408182+08:00","lvl":"info","msg":"Bash escapes in key","\u001b[1G\u001b[K\u001b[1A":"value"}
+{"t":"2023-11-22T15:42:00.408186+08:00","lvl":"info","msg":"Bash escapes in message  \u001b[1G\u001b[K\u001b[1A end","key":"value"}
+{"t":"2023-11-22T15:42:00.408194+08:00","lvl":"info","msg":"\u001b[35mColored\u001b[0m[","\u001b[35mColored\u001b[0m[":"\u001b[35mColored\u001b[0m["}
+{"t":"2023-11-22T15:42:00.408197+08:00","lvl":"info","msg":"an error message with quotes","error":"this is an 'error'"}
+{"t":"2023-11-22T15:42:00.408202+08:00","lvl":"info","msg":"Custom Stringer value","2562047h47m16.854s":"2562047h47m16.854s"}
+{"t":"2023-11-22T15:42:00.408208+08:00","lvl":"info","msg":"a custom stringer that emits quoted text","output":"output with 'quotes'"}
+{"t":"2023-11-22T15:42:00.408215+08:00","lvl":"info","msg":"Lazy evaluation of value","key":"lazy value"}
+{"t":"2023-11-22T15:42:00.408219+08:00","lvl":"info","msg":"A message with wonky 💩 characters"}
+{"t":"2023-11-22T15:42:00.408222+08:00","lvl":"info","msg":"A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩"}
+{"t":"2023-11-22T15:42:00.408226+08:00","lvl":"info","msg":"A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above"}
+{"t":"2023-11-22T15:42:00.408229+08:00","lvl":"info","msg":"boolean","true":true,"false":false}
+{"t":"2023-11-22T15:42:00.408234+08:00","lvl":"info","msg":"repeated-key 1","foo":"alpha","foo":"beta"}
+{"t":"2023-11-22T15:42:00.408237+08:00","lvl":"info","msg":"repeated-key 2","xx":"short","xx":"longer"}
+{"t":"2023-11-22T15:42:00.408241+08:00","lvl":"info","msg":"log at level info"}
+{"t":"2023-11-22T15:42:00.408244+08:00","lvl":"warn","msg":"log at level warn"}
+{"t":"2023-11-22T15:42:00.408247+08:00","lvl":"eror","msg":"log at level error"}
+{"t":"2023-11-22T15:42:00.408251+08:00","lvl":"info","msg":"test","bar":"short","a":"aligned left"}
+{"t":"2023-11-22T15:42:00.408254+08:00","lvl":"info","msg":"test","bar":"a long message","a":1}
+{"t":"2023-11-22T15:42:00.408258+08:00","lvl":"info","msg":"test","bar":"short","a":"aligned right"}
+{"t":"2023-11-22T15:42:00.408261+08:00","lvl":"info","msg":"The following logs should align so that the key-fields make 5 columns"}
+{"t":"2023-11-22T15:42:00.408275+08:00","lvl":"info","msg":"Inserted known block","number":1012,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","txs":200,"gas":1123123,"other":"first"}
+{"t":"2023-11-22T15:42:00.408281+08:00","lvl":"info","msg":"Inserted new block","number":1,"hash":"0x0000000000000000000000000000000000000000000000000000000000001235","txs":2,"gas":1123,"other":"second"}
+{"t":"2023-11-22T15:42:00.408287+08:00","lvl":"info","msg":"Inserted known block","number":99,"hash":"0x0000000000000000000000000000000000000000000000000000000000012322","txs":10,"gas":1,"other":"third"}
+{"t":"2023-11-22T15:42:00.408296+08:00","lvl":"warn","msg":"Inserted known block","number":1012,"hash":"0x0000000000000000000000000000000000000000000000000000000000001234","txs":200,"gas":99,"other":"fourth"}
+{"t":"2023-11-22T15:42:00.4083+08:00","lvl":"info","msg":"(*big.Int)(nil)","<nil>":"<nil>"}
+{"t":"2023-11-22T15:42:00.408303+08:00","lvl":"info","msg":"(*uint256.Int)(nil)","<nil>":"<nil>"}
+{"t":"2023-11-22T15:42:00.408311+08:00","lvl":"info","msg":"(fmt.Stringer)(nil)","res":null}
+{"t":"2023-11-22T15:42:00.408318+08:00","lvl":"info","msg":"nil-concrete-stringer","res":"<nil>"}
+{"t":"2023-11-22T15:42:00.408322+08:00","lvl":"info","msg":"error(nil) ","res":null}
+{"t":"2023-11-22T15:42:00.408326+08:00","lvl":"info","msg":"nil-concrete-error","res":""}
+{"t":"2023-11-22T15:42:00.408334+08:00","lvl":"info","msg":"nil-custom-struct","res":null}
+{"t":"2023-11-22T15:42:00.40835+08:00","lvl":"info","msg":"raw nil","res":null}
+{"t":"2023-11-22T15:42:00.408354+08:00","lvl":"info","msg":"(*uint64)(nil)","res":null}
+{"t":"2023-11-22T15:42:00.408361+08:00","lvl":"info","msg":"Using keys 't', 'lvl', 'time', 'level' and 'msg'","t":"t","time":"time","lvl":"lvl","level":"level","msg":"msg"}
