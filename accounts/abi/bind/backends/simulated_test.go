@@ -36,7 +36,7 @@ var (
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
-func simTestBackend(testAddr common.Address) *SimulatedBackend {
+func simTestBackend(testAddr common.Address) SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
@@ -44,12 +44,7 @@ func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	)
 }
 
-func (sim *SimulatedBackend) currentBlock() *types.Block {
-	current, _ := sim.BlockByNumber(context.Background(), nil)
-	return current
-}
-
-func (sim *SimulatedBackend) newTx(key *ecdsa.PrivateKey) (*types.Transaction, error) {
+func newTx(sim SimulatedBackend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
@@ -113,7 +108,7 @@ func TestSendTransaction(t *testing.T) {
 	defer sim.Close()
 	bgCtx := context.Background()
 
-	signedTx, err := sim.newTx(testKey)
+	signedTx, err := newTx(sim, testKey)
 	if err != nil {
 		t.Errorf("could not create transaction: %v", err)
 	}
@@ -148,25 +143,35 @@ func TestFork(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
+
+	ctx := context.Background()
+
 	// 1.
-	parent := sim.currentBlock()
+	parent, _ := sim.HeaderByNumber(ctx, nil)
+
 	// 2.
 	n := int(rand.Int31n(21))
 	for i := 0; i < n; i++ {
 		sim.Commit()
 	}
+
 	// 3.
-	if sim.currentBlock().Number().Uint64() != uint64(n) {
+	b, _ := sim.BlockNumber(ctx)
+	if b != uint64(n) {
 		t.Error("wrong chain length")
 	}
+
 	// 4.
-	sim.Fork(context.Background(), parent.Hash())
+	sim.Fork(ctx, parent.Hash())
+
 	// 5.
 	for i := 0; i < n+1; i++ {
 		sim.Commit()
 	}
+
 	// 6.
-	if sim.currentBlock().Number().Uint64() != uint64(n+1) {
+	b, _ = sim.BlockNumber(ctx)
+	if b != uint64(n+1) {
 		t.Error("wrong chain length")
 	}
 }
@@ -185,24 +190,30 @@ func TestForkResendTx(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
+
 	// 1.
-	parent := sim.currentBlock()
+	ctx := context.Background()
+	parent, _ := sim.HeaderByNumber(ctx, nil)
+
 	// 2.
-	tx, err := sim.newTx(testKey)
+	tx, err := newTx(sim, testKey)
 	if err != nil {
 		t.Fatalf("could not create transaction: %v", err)
 	}
 	sim.SendTransaction(context.Background(), tx)
 	sim.Commit()
+
 	// 3.
 	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 1 {
 		t.Errorf("TX included in wrong block: %d", h)
 	}
+
 	// 4.
 	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
 		t.Errorf("forking: %v", err)
 	}
+
 	// 5.
 	sim.Commit()
 	if err := sim.SendTransaction(context.Background(), tx); err != nil {
@@ -223,7 +234,8 @@ func TestCommitReturnValue(t *testing.T) {
 
 	// Test if Commit returns the correct block hash
 	h1 := sim.Commit()
-	if h1 != sim.currentBlock().Hash() {
+	cur, _ := sim.HeaderByNumber(context.Background(), nil)
+	if h1 != cur.Hash() {
 		t.Error("Commit did not return the hash of the last block.")
 	}
 
@@ -262,14 +274,15 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	defer sim.Close()
 
 	sim.Commit() // h1
-	h1 := sim.currentBlock().Hash()
+	h1, _ := sim.HeaderByNumber(context.Background(), nil)
+
 	sim.Commit() // h2
-	sim.Fork(context.Background(), h1)
+	sim.Fork(context.Background(), h1.Hash())
 	sim.AdjustTime(1 * time.Second)
 	sim.Commit()
 
-	head := sim.currentBlock()
-	if head.Number() == common.Big2 && head.ParentHash() != h1 {
+	head, _ := sim.HeaderByNumber(context.Background(), nil)
+	if head.Number.Uint64() == 2 && head.ParentHash != h1.Hash() {
 		t.Errorf("failed to build block on fork")
 	}
 }

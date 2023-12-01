@@ -19,8 +19,12 @@ package backends
 import (
 	"context"
 	"math"
+	"math/big"
+	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
@@ -34,9 +38,51 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var _ bind.ContractBackend = (*SimulatedBackend)(nil)
+var _ bind.ContractBackend = (*simBackend)(nil)
 
-type SimulatedBackend struct {
+type SimChainManagement interface {
+	// Commit seals a block and moves the chain forward to a new empty block.
+	Commit() common.Hash
+
+	// Rollback un-sends previously added transactions.
+	Rollback()
+
+	// Fork sets the head to a new block, which is based on the provided parentHash.
+	Fork(ctx context.Context, parentHash common.Hash) error
+
+	// AdjustTime changes the block timestamp.
+	AdjustTime(adjustment time.Duration) error
+
+	// Close closes the backend. You need to call this to clean up resources.
+	Close() error
+}
+
+// TODO: these methods should have their own interface in the ethereum package.
+type SimChainExtras interface {
+	BlockNumber(context.Context) (uint64, error)
+	ChainID(context.Context) (*big.Int, error)
+}
+
+// SimulatedBackend all interfaces in the ethereum package, but is based on a
+// simulated blockchain. It is intended for testing purposes.
+type SimulatedBackend interface {
+	SimChainManagement
+
+	// The backend implements all interfaces in the ethereum package.
+	ethereum.ChainReader
+	ethereum.ChainStateReader
+	ethereum.ContractCaller
+	ethereum.GasEstimator
+	ethereum.LogFilterer
+	ethereum.GasPricer
+	ethereum.PendingStateReader
+	ethereum.PendingContractCaller
+	ethereum.TransactionReader
+	ethereum.TransactionSender
+	SimChainExtras
+}
+
+type simBackend struct {
 	eth *eth.Ethereum
 	*catalyst.SimulatedBeacon
 	*ethclient.Client
@@ -45,7 +91,7 @@ type SimulatedBackend struct {
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) SimulatedBackend {
 	// Setup the node object
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
@@ -76,7 +122,7 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 // NewSimWithNode sets up a simulated backend on an existing node
 // this allows users to do persistent simulations.
 // The provided node must not be started and will be started by NewSimWithNode
-func NewSimWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*SimulatedBackend, error) {
+func NewSimWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (SimulatedBackend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
@@ -105,14 +151,14 @@ func NewSimWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Si
 		return nil, err
 	}
 
-	return &SimulatedBackend{
+	return &simBackend{
 		eth:             backend,
 		SimulatedBeacon: beacon,
 		Client:          ethclient.NewClient(stack.Attach()),
 	}, nil
 }
 
-func (n *SimulatedBackend) Close() error {
+func (n *simBackend) Close() error {
 	if n.Client != nil {
 		n.Client.Close()
 		n.Client = nil
