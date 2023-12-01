@@ -465,7 +465,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 		bytes uint64
 	)
 	for _, hash := range req.Hashes {
-		if hash == types.EmptyCodeHash {
+		if hash == types.EmptyKeccakCodeHash {
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})

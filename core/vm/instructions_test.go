@@ -725,7 +725,7 @@ func TestRandom(t *testing.T) {
 	for _, tt := range []testcase{
 		{name: "empty hash", random: common.Hash{}},
 		{name: "1", random: common.Hash{0}},
-		{name: "emptyCodeHash", random: types.EmptyCodeHash},
+		{name: "emptyCodeHash", random: types.EmptyKeccakCodeHash},
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (

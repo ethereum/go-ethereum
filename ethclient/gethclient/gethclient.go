@@ -62,13 +62,14 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 
 // AccountResult is the result of a GetProof operation.
 type AccountResult struct {
-	Address      common.Address  `json:"address"`
-	AccountProof []string        `json:"accountProof"`
-	Balance      *big.Int        `json:"balance"`
-	CodeHash     common.Hash     `json:"codeHash"`
-	Nonce        uint64          `json:"nonce"`
-	StorageHash  common.Hash     `json:"storageHash"`
-	StorageProof []StorageResult `json:"storageProof"`
+	Address          common.Address  `json:"address"`
+	AccountProof     []string        `json:"accountProof"`
+	Balance          *big.Int        `json:"balance"`
+	KeccakCodeHash   common.Hash     `json:"keccakCodeHash"`
+	PoseidonCodeHash common.Hash     `json:"poseidonCodeHash"`
+	Nonce            uint64          `json:"nonce"`
+	StorageHash      common.Hash     `json:"storageHash"`
+	StorageProof     []StorageResult `json:"storageProof"`
 }
 
 // StorageResult provides a proof for a key-value pair.
@@ -88,13 +89,14 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 	}
 
 	type accountResult struct {
-		Address      common.Address  `json:"address"`
-		AccountProof []string        `json:"accountProof"`
-		Balance      *hexutil.Big    `json:"balance"`
-		CodeHash     common.Hash     `json:"codeHash"`
-		Nonce        hexutil.Uint64  `json:"nonce"`
-		StorageHash  common.Hash     `json:"storageHash"`
-		StorageProof []storageResult `json:"storageProof"`
+		Address          common.Address  `json:"address"`
+		AccountProof     []string        `json:"accountProof"`
+		Balance          *hexutil.Big    `json:"balance"`
+		KeccakCodeHash   common.Hash     `json:"keccakCodeHash"`
+		PoseidonCodeHash common.Hash     `json:"poseidonCodeHash"`
+		Nonce            hexutil.Uint64  `json:"nonce"`
+		StorageHash      common.Hash     `json:"storageHash"`
+		StorageProof     []storageResult `json:"storageProof"`
 	}
 
 	// Avoid keys being 'null'.
@@ -114,13 +116,14 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		})
 	}
 	result := AccountResult{
-		Address:      res.Address,
-		AccountProof: res.AccountProof,
-		Balance:      res.Balance.ToInt(),
-		Nonce:        uint64(res.Nonce),
-		CodeHash:     res.CodeHash,
-		StorageHash:  res.StorageHash,
-		StorageProof: storageResults,
+		Address:          res.Address,
+		AccountProof:     res.AccountProof,
+		Balance:          res.Balance.ToInt(),
+		Nonce:            uint64(res.Nonce),
+		KeccakCodeHash:   res.KeccakCodeHash,
+		PoseidonCodeHash: res.PoseidonCodeHash,
+		StorageHash:      res.StorageHash,
+		StorageProof:     storageResults,
 	}
 	return &result, err
 }

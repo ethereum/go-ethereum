@@ -244,7 +244,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 // as is.
 func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, parentPath []byte) {
 	// Short circuit if the entry is empty or already known
-	if hash == types.EmptyCodeHash {
+	if hash == types.EmptyKeccakCodeHash {
 		return
 	}
 	if s.membatch.hasCode(hash) {

@@ -338,9 +338,9 @@ func traverseState(ctx *cli.Context) error {
 				return storageIter.Err
 			}
 		}
-		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
-				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
+		if !bytes.Equal(acc.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes()) {
+			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.KeccakCodeHash)) {
+				log.Error("Code is missing", "hash", common.BytesToHash(acc.KeccakCodeHash))
 				return errors.New("missing code")
 			}
 			codes += 1
@@ -496,8 +496,8 @@ func traverseRawState(ctx *cli.Context) error {
 					return storageIter.Error()
 				}
 			}
-			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
+			if !bytes.Equal(acc.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes()) {
+				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.KeccakCodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
 					return errors.New("missing code")
 				}
@@ -568,14 +568,15 @@ func dumpState(ctx *cli.Context) error {
 			return err
 		}
 		da := &state.DumpAccount{
-			Balance:   account.Balance.String(),
-			Nonce:     account.Nonce,
-			Root:      account.Root.Bytes(),
-			CodeHash:  account.CodeHash,
-			SecureKey: accIt.Hash().Bytes(),
+			Balance:          account.Balance.String(),
+			Nonce:            account.Nonce,
+			Root:             account.Root.Bytes(),
+			KeccakCodeHash:   account.KeccakCodeHash,
+			PoseidonCodeHash: account.PoseidonCodeHash,
+			SecureKey:        accIt.Hash().Bytes(),
 		}
-		if !conf.SkipCode && !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
-			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.CodeHash))
+		if !conf.SkipCode && !bytes.Equal(account.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes()) {
+			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.KeccakCodeHash))
 		}
 		if !conf.SkipStorage {
 			da.Storage = make(map[common.Hash]string)

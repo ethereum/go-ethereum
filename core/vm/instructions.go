@@ -391,7 +391,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 
 // opExtCodeHash returns the code hash of a specified account.
 // There are several cases when the function is called, while we can relay everything
-// to `state.GetCodeHash` function to ensure the correctness.
+// to `state.GetKeccakCodeHash` function to ensure the correctness.
 //
 //  1. Caller tries to get the code hash of a normal contract account, state
 //     should return the relative code hash and set it as the result.
@@ -421,7 +421,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		slot.SetBytes(interpreter.evm.StateDB.GetKeccakCodeHash(address).Bytes())
 	}
 	return nil, nil
 }

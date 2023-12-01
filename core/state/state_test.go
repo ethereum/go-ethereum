@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -51,7 +50,7 @@ func TestDump(t *testing.T) {
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
-	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -105,7 +104,7 @@ func TestIterativeDump(t *testing.T) {
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
-	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 	obj4 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x00}))
@@ -207,7 +206,7 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.getStateObject(stateobjaddr0)
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
-	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
 	so0.selfDestructed = false
 	so0.deleted = false
 	state.setStateObject(so0)
@@ -219,7 +218,7 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.getStateObject(stateobjaddr1)
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
-	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
 	so1.selfDestructed = true
 	so1.deleted = true
 	state.setStateObject(so1)
@@ -259,8 +258,8 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.data.Root != so1.data.Root {
 		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
 	}
-	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
-		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
+	if !bytes.Equal(so0.KeccakCodeHash(), so1.KeccakCodeHash()) {
+		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.KeccakCodeHash(), so1.KeccakCodeHash())
 	}
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)

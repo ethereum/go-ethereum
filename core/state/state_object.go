@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/codehash"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -93,7 +94,8 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
+	// note: if KeccakCodeHash is empty then PoseidonCodeHash and CodeSize will also be empty
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes())
 }
 
 // newObject creates a state object.
@@ -469,12 +471,12 @@ func (s *stateObject) Code() []byte {
 	if s.code != nil {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if bytes.Equal(s.KeccakCodeHash(), types.EmptyKeccakCodeHash.Bytes()) {
 		return nil
 	}
-	code, err := s.db.db.ContractCode(s.address, common.BytesToHash(s.CodeHash()))
+	code, err := s.db.db.ContractCode(s.address, common.BytesToHash(s.KeccakCodeHash()))
 	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.KeccakCodeHash(), err))
 	}
 	s.code = code
 	return code
@@ -487,29 +489,29 @@ func (s *stateObject) CodeSize() int {
 	if s.code != nil {
 		return len(s.code)
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if bytes.Equal(s.KeccakCodeHash(), types.EmptyKeccakCodeHash.Bytes()) {
 		return 0
 	}
-	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
+	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.KeccakCodeHash()))
 	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
+		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.KeccakCodeHash(), err))
 	}
 	return size
 }
 
-func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) SetCode(code []byte) {
 	prevcode := s.Code()
 	s.db.journal.append(codeChange{
 		account:  &s.address,
-		prevhash: s.CodeHash(),
 		prevcode: prevcode,
 	})
-	s.setCode(codeHash, code)
+	s.setCode(code)
 }
 
-func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) setCode(code []byte) {
 	s.code = code
-	s.data.CodeHash = codeHash[:]
+	s.data.KeccakCodeHash = codehash.KeccakCodeHash(code).Bytes()
+	s.data.PoseidonCodeHash = codehash.PoseidonCodeHash(code).Bytes()
 	s.dirtyCode = true
 }
 
@@ -525,8 +527,12 @@ func (s *stateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
 }
 
-func (s *stateObject) CodeHash() []byte {
-	return s.data.CodeHash
+func (s *stateObject) PoseidonCodeHash() []byte {
+	return s.data.PoseidonCodeHash
+}
+
+func (s *stateObject) KeccakCodeHash() []byte {
+	return s.data.KeccakCodeHash
 }
 
 func (s *stateObject) Balance() *big.Int {

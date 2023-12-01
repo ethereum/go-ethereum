@@ -261,11 +261,11 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 			expHashes: 0,
 		},
 		{
-			nBytes: 10000, hashes: []common.Hash{types.EmptyCodeHash},
+			nBytes: 10000, hashes: []common.Hash{types.EmptyKeccakCodeHash},
 			expHashes: 1,
 		},
 		{
-			nBytes: 10000, hashes: []common.Hash{types.EmptyCodeHash, types.EmptyCodeHash, types.EmptyCodeHash},
+			nBytes: 10000, hashes: []common.Hash{types.EmptyKeccakCodeHash, types.EmptyKeccakCodeHash, types.EmptyKeccakCodeHash},
 			expHashes: 3,
 		},
 		// The existing bytecodes
@@ -357,7 +357,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 	for i := 1; i <= 65; i++ {
 		accPaths = append(accPaths, pathTo(i))
 	}
-	empty := types.EmptyCodeHash
+	empty := types.EmptyKeccakCodeHash
 	for i, tc := range []trieNodesTest{
 		{
 			root:      s.chain.RootAt(999),

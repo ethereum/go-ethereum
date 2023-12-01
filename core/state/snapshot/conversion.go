@@ -74,7 +74,7 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 	scheme := snaptree.triedb.Scheme()
 	got, err := generateTrieRoot(dst, scheme, acctIt, common.Hash{}, stackTrieGenerate, func(dst ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 		// Migrate the code first, commit the contract code into the tmp db.
-		if codeHash != types.EmptyCodeHash {
+		if codeHash != types.EmptyKeccakCodeHash {
 			code := rawdb.ReadCode(src, codeHash)
 			if len(code) == 0 {
 				return common.Hash{}, errors.New("failed to read contract code")
@@ -317,7 +317,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 					return stop(err)
 				}
 				go func(hash common.Hash) {
-					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats)
+					subroot, err := leafCallback(db, hash, common.BytesToHash(account.KeccakCodeHash), stats)
 					if err != nil {
 						results <- err
 						return

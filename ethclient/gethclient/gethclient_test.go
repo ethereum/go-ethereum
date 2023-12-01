@@ -239,7 +239,7 @@ func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
 	}
 	// test code
 	code, _ := ethcl.CodeAt(context.Background(), addr, nil)
-	if have, want := result.CodeHash, crypto.Keccak256Hash(code); have != want {
+	if have, want := result.KeccakCodeHash, crypto.Keccak256Hash(code); have != want {
 		t.Fatalf("codehash wrong, have %v want %v ", have, want)
 	}
 }

@@ -311,9 +311,9 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				p.bumpInvalid()
 				continue
 			}
-			code, err := bc.StateCache().ContractCode(address, common.BytesToHash(account.CodeHash))
+			code, err := bc.StateCache().ContractCode(address, common.BytesToHash(account.KeccakCodeHash))
 			if err != nil {
-				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", address, "codehash", common.BytesToHash(account.CodeHash), "err", err)
+				p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", address, "codehash", common.BytesToHash(account.KeccakCodeHash), "err", err)
 				continue
 			}
 			// Accumulate the code and abort if enough data was retrieved

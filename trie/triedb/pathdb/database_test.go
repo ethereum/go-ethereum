@@ -52,10 +52,11 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 
 func generateAccount(storageRoot common.Hash) types.StateAccount {
 	return types.StateAccount{
-		Nonce:    uint64(rand.Intn(100)),
-		Balance:  big.NewInt(rand.Int63()),
-		CodeHash: testutil.RandBytes(32),
-		Root:     storageRoot,
+		Nonce:            uint64(rand.Intn(100)),
+		Balance:          big.NewInt(rand.Int63()),
+		KeccakCodeHash:   testutil.RandBytes(32),
+		PoseidonCodeHash: testutil.RandBytes(32),
+		Root:             storageRoot,
 	}
 }
 

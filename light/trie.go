@@ -32,10 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-var (
-	sha3Nil = crypto.Keccak256Hash(nil)
-)
-
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
 	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), nil)
 	return state
@@ -73,7 +69,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 }
 
 func (db *odrDatabase) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	if codeHash == sha3Nil {
+	if codeHash == types.EmptyKeccakCodeHash {
 		return nil, nil
 	}
 	code := rawdb.ReadCode(db.backend.Database(), codeHash)

@@ -134,11 +134,11 @@ func (it *nodeIterator) step() error {
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
-		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.db.ContractCode(address, common.BytesToHash(account.CodeHash))
+	if !bytes.Equal(account.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes()) {
+		it.codeHash = common.BytesToHash(account.KeccakCodeHash)
+		it.code, err = it.state.db.ContractCode(address, common.BytesToHash(account.KeccakCodeHash))
 		if err != nil {
-			return fmt.Errorf("code %x: %v", account.CodeHash, err)
+			return fmt.Errorf("code %x: %v", account.KeccakCodeHash, err)
 		}
 	}
 	it.accountHash = it.stateIt.Parent()

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/codehash"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -762,9 +763,10 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	accounts = make([][]byte, len(addresses))
 	for i := 0; i < len(accounts); i++ {
 		var (
-			nonce = uint64(random.Int63())
-			root  = types.EmptyRootHash
-			code  = crypto.Keccak256(nil)
+			nonce        = uint64(random.Int63())
+			root         = types.EmptyRootHash
+			codekeccak   = codehash.EmptyKeccakCodeHash
+			codeposeidon = codehash.EmptyPoseidonCodeHash
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
 		// and will consume different amount of data from the rand source.
@@ -774,7 +776,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(big.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
+		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, KeccakCodeHash: codekeccak.Bytes(), PoseidonCodeHash: codeposeidon.Bytes()})
 		accounts[i] = data
 	}
 	return addresses, accounts
