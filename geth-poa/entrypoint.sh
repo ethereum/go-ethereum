@@ -64,6 +64,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--ws.api=debug,eth,txpool,net,engine \
 		--syncmode=full \
 		--gcmode=full \
+		--state.scheme=path \
 		--networkid=$CHAIN_ID \
 		--nousb \
 		--metrics \
@@ -82,6 +83,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--port 30311 \
 		--syncmode=full \
 		--gcmode=full \
+		--state.scheme=path \
 		--http \
 		--http.corsdomain="*" \
 		--http.vhosts="*" \

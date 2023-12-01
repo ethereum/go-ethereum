@@ -63,6 +63,14 @@ services:
             "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
             "namespace": "geth-poa",
             "metrics": [
+              "txpool*",
+              "trie*",
+              "system*",
+              "state*",
+              "rpc*",
+              "p2p*",
+              "eth*",
+              "chain*",
               "clique*"
             ]
           }
@@ -93,6 +101,14 @@ services:
             "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
             "namespace": "geth-poa",
             "metrics": [
+              "txpool*",
+              "trie*",
+              "system*",
+              "state*",
+              "rpc*",
+              "p2p*",
+              "eth*",
+              "chain*",
               "clique*"
             ]
           }
