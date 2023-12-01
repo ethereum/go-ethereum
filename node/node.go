@@ -19,7 +19,6 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"net"
 	"os"
 	"path/filepath"
@@ -28,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/internal/debug"
@@ -341,7 +341,8 @@ func (n *Node) startIPC(apis []rpc.API) error {
 				n.log.Error("IPC accept failed", "err", err)
 				continue
 			}
-			go handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+			log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
+			go handler.ServeCodec(rpc.NewCodec(conn), 0)
 		}
 	}()
 	// All listeners booted successfully
@@ -394,7 +395,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return err
 	}
-	go rpc.NewHTTPServer(cors, vhosts, handler).Serve(listener)
+	go rpc.NewHTTPServer(cors, vhosts, handler, n.config.HTTPWriteTimeout).Serve(listener)
 	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint

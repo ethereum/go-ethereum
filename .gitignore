@@ -52,3 +52,4 @@ coverage.txt
 go.sum
 cicd/devnet/terraform/.terraform*
 cicd/devnet/tmp
+.env

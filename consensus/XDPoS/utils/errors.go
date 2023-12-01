@@ -92,8 +92,8 @@ var (
 	ErrInvalidTCSignatures           = errors.New("Invalid TC Signatures")
 	ErrEmptyBlockInfoHash            = errors.New("BlockInfo hash is empty")
 	ErrInvalidFieldInNonEpochSwitch  = errors.New("Invalid field exist in a non-epoch swtich block")
-	ErrValidatorNotWithinMasternodes = errors.New("Validaotor address is not in the master node list")
-	ErrCoinbaseAndValidatorMismatch  = errors.New("Validaotor and coinbase address in header does not match")
+	ErrValidatorNotWithinMasternodes = errors.New("Validator address is not in the master node list")
+	ErrCoinbaseAndValidatorMismatch  = errors.New("Validator and coinbase address in header does not match")
 	ErrNotItsTurn                    = errors.New("Not validator's turn to mine this block")
 
 	ErrRoundInvalid = errors.New("Invalid Round, it shall be bigger than QC round")

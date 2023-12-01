@@ -406,6 +406,11 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
+	RPCHttpWriteTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcwritetimeout",
+		Usage: "HTTP-RPC server write timeout (default = 10s)",
+		Value: node.DefaultHTTPWriteTimeOut,
+	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
@@ -734,6 +739,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RPCPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCHttpWriteTimeoutFlag.Name) {
+		cfg.HTTPWriteTimeout = ctx.GlobalDuration(RPCHttpWriteTimeoutFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCCORSDomainFlag.Name) {
 		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCCORSDomainFlag.Name))

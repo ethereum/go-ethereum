@@ -81,8 +81,9 @@ func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*big.Int, error) {
-	return s.b.SuggestPrice(ctx)
+func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	price, err := s.b.SuggestPrice(ctx)
+	return (*hexutil.Big)(price), err
 }
 
 // ProtocolVersion returns the current Ethereum protocol version this node supports
@@ -511,9 +512,9 @@ func NewPublicBlockChainAPI(b Backend, chainReader consensus.ChainReader) *Publi
 }
 
 // BlockNumber returns the block number of the chain head.
-func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
+func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
-	return header.Number
+	return hexutil.Uint64(header.Number.Uint64())
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -524,13 +525,12 @@ func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]map[s
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	b := state.GetBalance(address)
-	return b, state.Error()
+	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
@@ -767,7 +767,17 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	}
 
 	var maxMasternodes int
-	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
+		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+			round, err := engine.EngineV2.GetRoundNumber(header)
+			if err != nil {
+				return result, err
+			}
+			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
+		} else {
+			return result, fmt.Errorf("undefined XDPoS consensus engine")
+		}
+	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
 	} else {
 		maxMasternodes = common.MaxMasternodes
@@ -948,7 +958,17 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	}
 
 	var maxMasternodes int
-	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
+		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+			round, err := engine.EngineV2.GetRoundNumber(header)
+			if err != nil {
+				return result, err
+			}
+			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
+		} else {
+			return result, fmt.Errorf("undefined XDPoS consensus engine")
+		}
+	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
 	} else {
 		maxMasternodes = common.MaxMasternodes
@@ -1206,7 +1226,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
-func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
+func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1

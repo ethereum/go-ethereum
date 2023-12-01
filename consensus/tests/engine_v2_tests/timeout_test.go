@@ -140,15 +140,14 @@ func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
 
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
-	params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig = params.UnitTestV2Configs[0]
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfig, nil)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 1
-	engineV2.SetNewRoundFaker(blockchain, types.Round(1), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 	// Create two timeout message which will not reach timeout pool threshold
 	timeoutMsg := &types.Timeout{
-		Round:     types.Round(1),
+		Round:     types.Round(5),
 		Signature: []byte{1},
 		GapNumber: 450,
 	}
@@ -156,32 +155,39 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	err := engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ := engineV2.GetPropertiesFaker()
-	assert.Equal(t, types.Round(1), currentRound)
+	assert.Equal(t, types.Round(5), currentRound)
 	timeoutMsg = &types.Timeout{
-		Round:     types.Round(1),
+		Round:     types.Round(5),
 		Signature: []byte{2},
 		GapNumber: 450,
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(5),
+		Signature: []byte{3},
+		GapNumber: 450,
+	}
+	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
+	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
-	assert.Equal(t, types.Round(1), currentRound)
+	assert.Equal(t, types.Round(5), currentRound)
 
 	// Send a timeout with different gap number, it shall not trigger timeout pool hook
 	timeoutMsg = &types.Timeout{
-		Round:     types.Round(1),
-		Signature: []byte{3},
+		Round:     types.Round(5),
+		Signature: []byte{4},
 		GapNumber: 1350,
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
-	assert.Equal(t, types.Round(1), currentRound)
+	assert.Equal(t, types.Round(5), currentRound)
 
 	// Create a timeout message that should trigger timeout pool hook
 	timeoutMsg = &types.Timeout{
-		Round:     types.Round(1),
-		Signature: []byte{4},
+		Round:     types.Round(5),
+		Signature: []byte{5},
 		GapNumber: 450,
 	}
 
@@ -200,12 +206,12 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 
 	tc := syncInfoMsg.(*types.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)
-	assert.Equal(t, tc.Round, types.Round(1))
+	assert.Equal(t, tc.Round, types.Round(5))
 	assert.Equal(t, uint64(450), tc.GapNumber)
 	// The signatures shall not include the byte{3} from a different gap number
-	sigatures := []types.Signature{[]byte{1}, []byte{2}, []byte{4}}
+	sigatures := []types.Signature{[]byte{1}, []byte{2}, []byte{3}, []byte{5}}
 	assert.ElementsMatch(t, tc.Signatures, sigatures)
-	assert.Equal(t, types.Round(2), currentRound)
+	assert.Equal(t, types.Round(6), currentRound)
 }
 
 func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {

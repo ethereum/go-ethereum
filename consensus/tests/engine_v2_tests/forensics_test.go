@@ -34,7 +34,7 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 
 	// Set round to 5
 	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
-	// Create two vote messages which will not reach vote pool threshold
+	// Create three vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
 	voteMsg := &types.Vote{
@@ -42,10 +42,19 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 		Signature:         signedHash,
 		GapNumber:         450,
 	}
-
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
+
 	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+
+	signedHash = SignHashByPK(acc2Key, voteSigningHash.Bytes())
 	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,

@@ -92,7 +92,7 @@ func TestNotChangeSingerListIfNothingProposedOrVoted(t *testing.T) {
 	}
 }
 
-//Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
+// Should call updateM1 at gap block, and update the snapshot if there are SM transactions involved
 func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 
 	blockchain, backend, parentBlock, signer, signFn := PrepareXDCTestBlockChain(t, GAP-2, params.TestXDPoSMockChainConfig)
@@ -166,7 +166,7 @@ func TestUpdateSignerListIfVotedBeforeGap(t *testing.T) {
 	}
 }
 
-//Should call updateM1 before gap block, and update the snapshot if there are SM transactions involved
+// Should call updateM1 before gap block, and update the snapshot if there are SM transactions involved
 func TestCallUpdateM1WithSmartContractTranscation(t *testing.T) {
 
 	blockchain, backend, currentBlock, signer, signFn := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)

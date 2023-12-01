@@ -3,7 +3,7 @@ data template_file devnet_container_definition {
   template = "${file("${path.module}/container-definition.tpl")}"
 
   vars = {
-    xdc_environment = "devnet"
+    image_environment = "${lookup(each.value, "imageEnvironment", "devnet")}"
     image_tag = "${lookup(each.value, "imageTag", "latest")}"
     node_name = "${each.key}"
     private_keys = "${each.value.pk}"

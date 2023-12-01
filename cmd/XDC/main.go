@@ -138,6 +138,7 @@ var (
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.RPCHttpWriteTimeoutFlag,
 		utils.RPCApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,

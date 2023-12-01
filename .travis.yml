@@ -111,9 +111,13 @@ jobs:
     before_script:
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - docker --version  # document the version travis is using
+      - docker pull xinfinorg/devnet:latest # build the "previous" tag so that our devnet environment can run with both old and new code at the same time.
+      - docker tag xinfinorg/devnet:latest xinfinorg/devnet:previous
+      - docker rmi xinfinorg/devnet:latest
       - docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
     script:
       - docker push xinfinorg/devnet:latest
+      - docker push xinfinorg/devnet:previous
 
   - stage: (Devnet)Terraform plan
     if: branch = dev-upgrade AND type = push AND tag IS blank
@@ -168,3 +172,8 @@ jobs:
           aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
         done
 
+  - stage: (Devnet) Send Deployment Notification
+    if: branch = dev-upgrade AND type = push AND tag IS blank
+    language: bash
+    script:
+        - curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=$TRAVIS_COMMIT"

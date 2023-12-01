@@ -280,7 +280,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 	// Unregister the peer from the downloader and Ethereum peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
-		log.Warn("Peer removal failed", "peer", id, "err", err)
+		log.Debug("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
 	if peer != nil {
@@ -962,7 +962,7 @@ func (pm *ProtocolManager) BroadcastVote(vote *types.Vote) {
 		for _, peer := range peers {
 			err := peer.SendVote(vote)
 			if err != nil {
-				log.Error("[BroadcastVote] Fail to broadcast vote message", "peerId", peer.id, "version", peer.version, "blockNum", vote.ProposedBlockInfo.Number, "err", err)
+				log.Debug("[BroadcastVote] Fail to broadcast vote message", "peerId", peer.id, "version", peer.version, "blockNum", vote.ProposedBlockInfo.Number, "err", err)
 				pm.removePeer(peer.id)
 			}
 		}
@@ -979,7 +979,7 @@ func (pm *ProtocolManager) BroadcastTimeout(timeout *types.Timeout) {
 		for _, peer := range peers {
 			err := peer.SendTimeout(timeout)
 			if err != nil {
-				log.Error("[BroadcastTimeout] Fail to broadcast timeout message, remove peer", "peerId", peer.id, "version", peer.version, "timeout", timeout, "err", err)
+				log.Debug("[BroadcastTimeout] Fail to broadcast timeout message, remove peer", "peerId", peer.id, "version", peer.version, "timeout", timeout, "err", err)
 				pm.removePeer(peer.id)
 			}
 		}
@@ -996,7 +996,7 @@ func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *types.SyncInfo) {
 		for _, peer := range peers {
 			err := peer.SendSyncInfo(syncInfo)
 			if err != nil {
-				log.Error("[BroadcastSyncInfo] Fail to broadcast syncInfo message, remove peer", "peerId", peer.id, "version", peer.version, "syncInfo", syncInfo, "err", err)
+				log.Debug("[BroadcastSyncInfo] Fail to broadcast syncInfo message, remove peer", "peerId", peer.id, "version", peer.version, "syncInfo", syncInfo, "err", err)
 				pm.removePeer(peer.id)
 			}
 		}

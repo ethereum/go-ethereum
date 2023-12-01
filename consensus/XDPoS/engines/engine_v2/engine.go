@@ -264,8 +264,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	}
 
 	waitedTime := time.Now().Unix() - parent.Time.Int64()
-	_, parentRound, _, err := x.getExtraFields(parent)
-	minePeriod := x.config.V2.Config(uint64(parentRound) + 1).MinePeriod // plus 1 means current block
+	minePeriod := x.config.V2.Config(uint64(x.currentRound)).MinePeriod
 	if waitedTime < int64(minePeriod) {
 		log.Trace("[YourTurn] wait after mine period", "minePeriod", minePeriod, "waitedTime", waitedTime)
 		return false, nil
@@ -772,17 +771,6 @@ func (x *XDPoS_v2) VerifyBlockInfo(blockChainReader consensus.ChainReader, block
 }
 
 func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *types.QuorumCert, parentHeader *types.Header) error {
-	/*
-		1. Check if num of QC signatures is >= x.config.v2.CertThreshold
-		2. Get epoch master node list by hash
-		3. Verify signer signatures: (List of signatures)
-					- Use ecRecover to get the public key
-					- Use the above public key to find out the xdc address
-					- Use the above xdc address to check against the master node list from step 1(For the received QC epoch)
-		4. Verify gapNumber = epochSwitchNumber - epochSwitchNumber%Epoch - Gap
-		5. Verify blockInfo
-	*/
-
 	if quorumCert == nil {
 		log.Warn("[verifyQC] QC is Nil")
 		return utils.ErrInvalidQC
@@ -803,9 +791,9 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 
 	qcRound := quorumCert.ProposedBlockInfo.Round
 	certThreshold := x.config.V2.Config(uint64(qcRound)).CertThreshold
-	if (qcRound > 0) && (signatures == nil || (len(signatures) < certThreshold)) {
+	if (qcRound > 0) && (signatures == nil || float64(len(signatures)) < float64(epochInfo.MasternodesLen)*certThreshold) {
 		//First V2 Block QC, QC Signatures is initial nil
-		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QC", quorumCert, "QCNumber", quorumCert.ProposedBlockInfo.Number, "Signatures len", len(signatures), "CertThreshold", certThreshold)
+		log.Warn("[verifyHeader] Invalid QC Signature is nil or less then config", "QCNumber", quorumCert.ProposedBlockInfo.Number, "LenSignatures", len(signatures), "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
 		return utils.ErrInvalidQCSignatures
 	}
 	start := time.Now()
@@ -1011,8 +999,7 @@ func (x *XDPoS_v2) GetStandbynodes(chain consensus.ChainReader, header *types.He
 // Calculate masternodes for a block number and parent hash. In V2, truncating candidates[:MaxMasternodes] is done in this function.
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
 	// using new max masterndoes
-	maxMasternodes := common.MaxMasternodesV2
-
+	maxMasternodes := x.config.V2.Config(uint64(x.currentRound)).MaxMasternodes
 	snap, err := x.getSnapshot(chain, blockNum.Uint64(), false)
 	if err != nil {
 		log.Error("[calcMasternodes] Adaptor v2 getSnapshot has error", "err", err)
@@ -1045,17 +1032,8 @@ func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.In
 	if len(masternodes) > maxMasternodes {
 		masternodes = masternodes[:maxMasternodes]
 	}
-	if len(masternodes) < x.config.V2.CurrentConfig.CertThreshold {
-		log.Warn("[calcMasternodes] Current epoch masternodes less than threshold", "number", blockNum, "masternodes", len(masternodes), "threshold", x.config.V2.CurrentConfig.CertThreshold)
-		for i, a := range masternodes {
-			log.Warn("final masternode", "i", i, "addr", a)
-		}
-		for i, a := range penalties {
-			log.Warn("penalty", "i", i, "addr", a)
-		}
-	}
-	return masternodes, penalties, nil
 
+	return masternodes, penalties, nil
 }
 
 // Given hash, get master node from the epoch switch block of the epoch
