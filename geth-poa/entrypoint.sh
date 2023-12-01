@@ -63,7 +63,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--ws.origins="*" \
 		--ws.api=debug,eth,txpool,net,engine \
 		--syncmode=full \
-		--gcmode=archive \
+		--gcmode=full \
 		--networkid=$CHAIN_ID \
 		--nousb \
 		--metrics \
