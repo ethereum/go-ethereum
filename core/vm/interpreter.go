@@ -98,13 +98,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	return &EVMInterpreter{evm: evm, table: table}
 }
 
-// Run loops and evaluates the contract's code with the given input data and returns
-// the return byte-slice and an error if one occurred.
-//
-// It's important to note that any errors returned by the interpreter should be
-// considered a revert-and-consume-all-gas operation except for
-// ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+// Similar to `Run`, except that it doesn't clear stop token error
+func (in *EVMInterpreter) RunAndKeepStopToken(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -233,6 +228,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		pc++
 	}
+	return res, err
+}
+
+// Run loops and evaluates the contract's code with the given input data and returns
+// the return byte-slice and an error if one occurred.
+//
+// It's important to note that any errors returned by the interpreter should be
+// considered a revert-and-consume-all-gas operation except for
+// ErrExecutionReverted which means revert-and-keep-gas-left.
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	res, err := in.RunAndKeepStopToken(contract, input, readOnly)
 
 	if err == errStopToken {
 		err = nil // clear stop token error
