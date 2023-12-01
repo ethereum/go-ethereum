@@ -589,8 +589,6 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	// Assemble and return the final block for sealing.
 	block := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 
-	fmt.Println("*************CLIQUE*************************************")
-	fmt.Printf("clique.go block_size_in_bytes: %v\n", int64(block.Size()))
 	if metrics.Enabled {
 		metrics.GetOrRegisterGauge(blockSizeGaugeName, nil).Update(int64(block.Size()))
 	}
