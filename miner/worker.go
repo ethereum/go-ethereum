@@ -19,6 +19,7 @@ package miner
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/metrics"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -78,6 +79,8 @@ var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+
+	blockSizeGaugeName = "clique/block_size_in_bytes"
 )
 
 // environment is the worker's current environment and holds all
@@ -1186,10 +1189,9 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, nil, env.receipts, nil)
-		//log.PrintOrigins(true)
-		//log.Info(fmt.Sprintf("block_size_in_bytes: %v", int64(block.Size())))
-		fmt.Println("********************************************************")
-		fmt.Printf("block_size_in_bytes: %v\n", int64(block.Size()))
+		if metrics.Enabled {
+			metrics.GetOrRegisterGauge(blockSizeGaugeName, nil).Update(int64(block.Size()))
+		}
 		if err != nil {
 			return err
 		}
