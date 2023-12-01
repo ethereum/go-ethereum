@@ -2,8 +2,8 @@ version: '3'
 services:
   bootnode:
     build:
-      context: .
-      dockerfile: Dockerfile 
+      context: ..
+      dockerfile: geth-poa/Dockerfile 
     environment:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
@@ -41,8 +41,8 @@ services:
   
   node1:
     build: 
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: geth-poa/Dockerfile
     environment:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
@@ -71,8 +71,8 @@ services:
   
   node2:
     build: 
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: geth-poa/Dockerfile
     environment:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
