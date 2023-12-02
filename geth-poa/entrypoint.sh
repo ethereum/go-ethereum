@@ -65,6 +65,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
+		--db.engine=pebble \
 		--networkid=$CHAIN_ID \
 		--nousb \
 		--metrics \
@@ -84,6 +85,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
+		--db.engine=pebble \
 		--http \
 		--http.corsdomain="*" \
 		--http.vhosts="*" \
