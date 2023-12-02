@@ -123,29 +123,36 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 		}
 	)
 	s := &CommitteeChain{
-		fixedCommitteeRoots: newCanonicalStore[common.Hash](db, rawdb.FixedCommitteeRootKey, fixedCommitteeRootEncoder, fixedCommitteeRootDecoder),
-		committees:          newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, committeeEncoder, committeeDecoder),
-		updates:             newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, updateEncoder, updateDecoder),
-		committeeCache:      lru.NewCache[uint64, syncCommittee](10),
-		db:                  db,
-		sigVerifier:         sigVerifier,
-		clock:               clock,
-		unixNano:            unixNano,
-		config:              config,
-		signerThreshold:     signerThreshold,
-		enforceTime:         enforceTime,
+		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
+		db:              db,
+		sigVerifier:     sigVerifier,
+		clock:           clock,
+		unixNano:        unixNano,
+		config:          config,
+		signerThreshold: signerThreshold,
+		enforceTime:     enforceTime,
 		minimumUpdateScore: types.UpdateScore{
 			SignerCount:    uint32(signerThreshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
 		},
 	}
 
-	if !s.checkConstraints() {
+	var err1, err2, err3 error
+	if s.fixedCommitteeRoots, err1 = newCanonicalStore[common.Hash](db, rawdb.FixedCommitteeRootKey, fixedCommitteeRootEncoder, fixedCommitteeRootDecoder); err1 != nil {
+		log.Error("Error creating fixed committee root store", "error", err1)
+	}
+	if s.committees, err2 = newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, committeeEncoder, committeeDecoder); err2 != nil {
+		log.Error("Error creating committee store", "error", err2)
+	}
+	if s.updates, err3 = newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, updateEncoder, updateDecoder); err3 != nil {
+		log.Error("Error creating update store", "error", err3)
+	}
+	if err1 != nil || err2 != nil || err3 != nil || !s.checkConstraints() {
 		log.Info("Resetting invalid committee chain")
 		s.Reset()
 	}
 	// roll back invalid updates (might be necessary if forks have been changed since last time)
-	for !s.updates.periods.IsEmpty() {
+	for !s.updates.periods.isEmpty() {
 		update, ok := s.updates.get(s.db, s.updates.periods.End-1)
 		if !ok {
 			log.Error("Sync committee update missing", "period", s.updates.periods.End-1)
@@ -161,7 +168,7 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 			log.Error("Error writing batch into chain database", "error", err)
 		}
 	}
-	if !s.committees.periods.IsEmpty() {
+	if !s.committees.periods.isEmpty() {
 		log.Trace("Sync committee chain loaded", "first period", s.committees.periods.Start, "last period", s.committees.periods.End-1)
 	}
 	return s
@@ -169,14 +176,14 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 
 // checkConstraints checks committee chain validity constraints
 func (s *CommitteeChain) checkConstraints() bool {
-	isNotInFixedCommitteeRootRange := func(r Range) bool {
-		return s.fixedCommitteeRoots.periods.IsEmpty() ||
+	isNotInFixedCommitteeRootRange := func(r periodRange) bool {
+		return s.fixedCommitteeRoots.periods.isEmpty() ||
 			r.Start < s.fixedCommitteeRoots.periods.Start ||
 			r.Start >= s.fixedCommitteeRoots.periods.End
 	}
 
 	valid := true
-	if !s.updates.periods.IsEmpty() {
+	if !s.updates.periods.isEmpty() {
 		if isNotInFixedCommitteeRootRange(s.updates.periods) {
 			log.Error("Start update is not in the fixed roots range")
 			valid = false
@@ -186,7 +193,7 @@ func (s *CommitteeChain) checkConstraints() bool {
 			valid = false
 		}
 	}
-	if !s.committees.periods.IsEmpty() {
+	if !s.committees.periods.isEmpty() {
 		if isNotInFixedCommitteeRootRange(s.committees.periods) {
 			log.Error("Start committee is not in the fixed roots range")
 			valid = false
@@ -254,7 +261,7 @@ func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) 
 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)
-	if !s.fixedCommitteeRoots.periods.CanExpand(period) {
+	if !s.fixedCommitteeRoots.periods.canExpand(period) {
 		// Note: the fixed committee root range should always be continuous and
 		// therefore the expected syncing method is to forward sync and optionally
 		// backward sync periods one by one, starting from a checkpoint. The only
@@ -301,7 +308,7 @@ func (s *CommitteeChain) deleteFixedCommitteeRootsFrom(period uint64) error {
 	}
 	batch := s.db.NewBatch()
 	s.fixedCommitteeRoots.deleteFrom(batch, period)
-	if s.updates.periods.IsEmpty() || period <= s.updates.periods.Start {
+	if s.updates.periods.isEmpty() || period <= s.updates.periods.Start {
 		// Note: the first period of the update chain should always be fixed so if
 		// the fixed root at the first update is removed then the entire update chain
 		// and the proven committees have to be removed. Earlier committees in the
@@ -336,7 +343,7 @@ func (s *CommitteeChain) deleteCommitteesFrom(batch ethdb.Batch, period uint64) 
 
 // addCommittee adds a committee at the given period if possible.
 func (s *CommitteeChain) addCommittee(period uint64, committee *types.SerializedSyncCommittee) error {
-	if !s.committees.periods.CanExpand(period) {
+	if !s.committees.periods.canExpand(period) {
 		return ErrInvalidPeriod
 	}
 	root := s.getCommitteeRoot(period)
@@ -346,7 +353,7 @@ func (s *CommitteeChain) addCommittee(period uint64, committee *types.Serialized
 	if root != committee.Root() {
 		return ErrWrongCommitteeRoot
 	}
-	if !s.committees.periods.Contains(period) {
+	if !s.committees.periods.contains(period) {
 		if err := s.committees.add(s.db, period, committee); err != nil {
 			return err
 		}
@@ -361,7 +368,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	defer s.chainmu.Unlock()
 
 	period := update.AttestedHeader.Header.SyncPeriod()
-	if !s.updates.periods.CanExpand(period) || !s.committees.periods.Contains(period) {
+	if !s.updates.periods.canExpand(period) || !s.committees.periods.contains(period) {
 		return ErrInvalidPeriod
 	}
 	if s.minimumUpdateScore.BetterThan(update.Score()) {
@@ -376,7 +383,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		}
 		return nil
 	}
-	if s.fixedCommitteeRoots.periods.Contains(period+1) && reorg {
+	if s.fixedCommitteeRoots.periods.contains(period+1) && reorg {
 		return ErrCannotReorg
 	}
 	if ok, err := s.verifyUpdate(update); err != nil {
@@ -384,7 +391,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 	} else if !ok {
 		return ErrInvalidUpdate
 	}
-	addCommittee := !s.committees.periods.Contains(period+1) || reorg
+	addCommittee := !s.committees.periods.contains(period+1) || reorg
 	if addCommittee {
 		if nextCommittee == nil {
 			return ErrNeedCommittee
@@ -422,10 +429,10 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 	s.chainmu.RLock()
 	defer s.chainmu.RUnlock()
 
-	if s.committees.periods.IsEmpty() {
+	if s.committees.periods.isEmpty() {
 		return 0, false
 	}
-	if !s.updates.periods.IsEmpty() {
+	if !s.updates.periods.isEmpty() {
 		return s.updates.periods.End, true
 	}
 	return s.committees.periods.End - 1, true

@@ -16,32 +16,32 @@
 
 package light
 
-// Range represents a (possibly zero-length) range of integers (sync periods).
-type Range struct {
+// periodRange represents a (possibly zero-length) range of integers (sync periods).
+type periodRange struct {
 	Start, End uint64
 }
 
-// IsEmpty returns true if the length of the range is zero.
-func (a Range) IsEmpty() bool {
+// isEmpty returns true if the length of the range is zero.
+func (a periodRange) isEmpty() bool {
 	return a.End == a.Start
 }
 
-// Contains returns true if the range includes the given period.
-func (a Range) Contains(period uint64) bool {
+// contains returns true if the range includes the given period.
+func (a periodRange) contains(period uint64) bool {
 	return period >= a.Start && period < a.End
 }
 
-// CanExpand returns true if the range includes or can be expanded with the given
+// canExpand returns true if the range includes or can be expanded with the given
 // period (either the range is empty or the given period is inside, right before or
 // right after the range).
-func (a Range) CanExpand(period uint64) bool {
-	return a.IsEmpty() || (period+1 >= a.Start && period <= a.End)
+func (a periodRange) canExpand(period uint64) bool {
+	return a.isEmpty() || (period+1 >= a.Start && period <= a.End)
 }
 
-// Expand expands the range with the given period.
-// This method assumes that CanExpand returned true: otherwise this is a no-op.
-func (a *Range) Expand(period uint64) {
-	if a.IsEmpty() {
+// expand expands the range with the given period.
+// This method assumes that canExpand returned true: otherwise this is a no-op.
+func (a *periodRange) expand(period uint64) {
+	if a.isEmpty() {
 		a.Start, a.End = period, period+1
 		return
 	}
@@ -53,25 +53,25 @@ func (a *Range) Expand(period uint64) {
 	}
 }
 
-// Split splits the range into two ranges. The 'fromPeriod' will be the first
+// split splits the range into two ranges. The 'fromPeriod' will be the first
 // element in the second range (if present).
 // The original range is unchanged by this operation
-func (a *Range) Split(fromPeriod uint64) (Range, Range) {
+func (a *periodRange) split(fromPeriod uint64) (periodRange, periodRange) {
 	if fromPeriod <= a.Start {
 		// First range empty, everything in second range,
-		return Range{}, *a
+		return periodRange{}, *a
 	}
 	if fromPeriod >= a.End {
 		// Second range empty, everything in first range,
-		return *a, Range{}
+		return *a, periodRange{}
 	}
-	x := Range{a.Start, fromPeriod}
-	y := Range{fromPeriod, a.End}
+	x := periodRange{a.Start, fromPeriod}
+	y := periodRange{fromPeriod, a.End}
 	return x, y
 }
 
-// Each invokes the supplied function fn once per period in range
-func (a *Range) Each(fn func(uint64)) {
+// each invokes the supplied function fn once per period in range
+func (a *periodRange) each(fn func(uint64)) {
 	for p := a.Start; p < a.End; p++ {
 		fn(p)
 	}

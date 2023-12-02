@@ -31,7 +31,7 @@ import (
 // to avoid concurrent access.
 type canonicalStore[T any] struct {
 	keyPrefix []byte
-	periods   Range
+	periods   periodRange
 	cache     *lru.Cache[uint64, T]
 	encode    func(T) ([]byte, error)
 	decode    func([]byte) (T, error)
@@ -39,8 +39,8 @@ type canonicalStore[T any] struct {
 
 // newCanonicalStore creates a new canonicalStore and loads all keys associated
 // with the keyPrefix in order to determine the ranges available in the database.
-func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
-	encode func(T) ([]byte, error), decode func([]byte) (T, error)) *canonicalStore[T] {
+func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte,
+	encode func(T) ([]byte, error), decode func([]byte) (T, error)) (*canonicalStore[T], error) {
 	cs := &canonicalStore[T]{
 		keyPrefix: keyPrefix,
 		encode:    encode,
@@ -61,31 +61,24 @@ func newCanonicalStore[T any](db ethdb.KeyValueStore, keyPrefix []byte,
 		if first {
 			cs.periods.Start = period
 		} else if cs.periods.End != period {
-			log.Warn("Gap in the canonical chain database")
-			break // continuity guaranteed
+			return nil, fmt.Errorf("Gap in the canonical chain database between periods %d and %d", cs.periods.End, period-1)
 		}
 		first = false
 		cs.periods.End = period + 1
 	}
 	iter.Release()
-	return cs
+	return cs, nil
 }
 
 // databaseKey returns the database key belonging to the given period.
 func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
-	var (
-		kl  = len(cs.keyPrefix)
-		key = make([]byte, kl+8)
-	)
-	copy(key[:kl], cs.keyPrefix)
-	binary.BigEndian.PutUint64(key[kl:], period)
-	return key
+	return binary.BigEndian.AppendUint64(append([]byte{}, cs.keyPrefix...), period)
 }
 
 // add adds the given item to the database. It also ensures that the range remains
 // continuous. Can be used either with a batch or database backend.
 func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, value T) error {
-	if !cs.periods.CanExpand(period) {
+	if !cs.periods.canExpand(period) {
 		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.Start, cs.periods.End, period)
 	}
 	enc, err := cs.encode(value)
@@ -96,15 +89,15 @@ func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, va
 		return err
 	}
 	cs.cache.Add(period, value)
-	cs.periods.Expand(period)
+	cs.periods.expand(period)
 	return nil
 }
 
 // deleteFrom removes items starting from the given period.
-func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (deleted Range) {
-	keepRange, deleteRange := cs.periods.Split(fromPeriod)
-	deleteRange.Each(func(period uint64) {
-		batch.Delete(cs.databaseKey(period))
+func (cs *canonicalStore[T]) deleteFrom(db ethdb.KeyValueWriter, fromPeriod uint64) (deleted periodRange) {
+	keepRange, deleteRange := cs.periods.split(fromPeriod)
+	deleteRange.each(func(period uint64) {
+		db.Delete(cs.databaseKey(period))
 		cs.cache.Remove(period)
 	})
 	cs.periods = keepRange
@@ -113,22 +106,24 @@ func (cs *canonicalStore[T]) deleteFrom(batch ethdb.Batch, fromPeriod uint64) (d
 
 // get returns the item at the given period or the null value of the given type
 // if no item is present.
-func (cs *canonicalStore[T]) get(backend ethdb.KeyValueReader, period uint64) (value T, ok bool) {
-	if !cs.periods.Contains(period) {
-		return
+func (cs *canonicalStore[T]) get(backend ethdb.KeyValueReader, period uint64) (T, bool) {
+	var null T
+	if !cs.periods.contains(period) {
+		return null, false
 	}
-	if value, ok = cs.cache.Get(period); ok {
-		return
+	if value, ok := cs.cache.Get(period); ok {
+		return value, true
 	}
-	if enc, err := backend.Get(cs.databaseKey(period)); err == nil {
-		if v, err := cs.decode(enc); err == nil {
-			value, ok = v, true
-			cs.cache.Add(period, value)
-		} else {
-			log.Error("Error decoding canonical store value", "error", err)
-		}
-	} else {
+	enc, err := backend.Get(cs.databaseKey(period))
+	if err != nil {
 		log.Error("Canonical store value not found", "period", period, "start", cs.periods.Start, "end", cs.periods.End)
+		return null, false
 	}
-	return
+	value, err := cs.decode(enc)
+	if err != nil {
+		log.Error("Error decoding canonical store value", "error", err)
+		return null, false
+	}
+	cs.cache.Add(period, value)
+	return value, true
 }
