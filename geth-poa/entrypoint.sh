@@ -32,6 +32,8 @@ if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 	echo "Initializing genesis."
 	geth --verbosity="$VERBOSITY" \
 		--nousb \
+		--state.scheme=path \
+		--db.engine=pebble \
 		--datadir="$GETH_DATA_DIR" init \
 		"$GENESIS_L1_PATH"
 else
