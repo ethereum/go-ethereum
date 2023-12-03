@@ -49,12 +49,13 @@ func (w *Witness) EncodeRLP() []byte {
 func (obj *EncodeWitness) encode(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
+	obj.block.EncodeRLP(w)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }
 
 func newWitness(originalRoot common.Hash) *Witness {
-	return &Witness{Root: originalRoot}
+	return &Witness{Root: originalRoot, Lists: make(map[common.Hash]map[string][]byte)}
 }
 
 func (w *Witness) addAccessList(owner common.Hash, list map[string][]byte) {
@@ -82,7 +83,7 @@ func DumpWitnessToFile(w *Witness) {
 	if err != nil {
 		panic("shite")
 	}
-	outputFName := fmt.Sprintf("%d-%x.rlp\n", w.Block.NumberU64(), w.Block.Hash())
+	outputFName := fmt.Sprintf("%d-%x.rlp", w.Block.NumberU64(), w.Block.Hash())
 	err = os.WriteFile(path+"/"+outputFName, enc, 0644)
 	if err != nil {
 		panic("shite 2")

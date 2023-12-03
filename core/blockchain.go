@@ -1489,9 +1489,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		return NonStatTy, err
 	}
 
-	st.Witness.Block = block
-	state.DumpWitnessToFile(st.Witness)
-
 	currentBlock := bc.CurrentBlock()
 	reorg, err := bc.forker.ReorgNeeded(currentBlock, block.Header())
 	if err != nil {
@@ -1855,6 +1852,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
+		fmt.Println("dump block")
+		statedb.Witness.Block = block
+		state.DumpWitnessToFile(statedb.Witness)
+
 		followupInterrupt.Store(true)
 		if err != nil {
 			return it.index, err
