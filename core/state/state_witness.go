@@ -17,7 +17,7 @@ type Witness struct {
 }
 
 type EncodeWitness struct {
-	block  types.Block
+	block  *types.Block
 	root   common.Hash
 	owners []common.Hash
 	paths  [][]string
@@ -26,6 +26,7 @@ type EncodeWitness struct {
 
 func (w *Witness) EncodeRLP() []byte {
 	var e EncodeWitness
+	e.block = w.Block
 	for owner, nodeMap := range w.Lists {
 		e.owners = append(e.owners, owner)
 		var paths []string
@@ -50,6 +51,18 @@ func (obj *EncodeWitness) encode(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
 	obj.block.EncodeRLP(w)
+	if err := rlp.Encode(w, obj.root); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.owners); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.paths); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.nodes); err != nil {
+		panic(err)
+	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }
@@ -83,9 +96,13 @@ func DumpWitnessToFile(w *Witness) {
 	if err != nil {
 		panic("shite")
 	}
-	outputFName := fmt.Sprintf("%d-%x.rlp", w.Block.NumberU64(), w.Block.Hash())
-	err = os.WriteFile(path+"/"+outputFName, enc, 0644)
+	err = os.MkdirAll(fmt.Sprintf("%s/block-dump", path), 0755)
 	if err != nil {
-		panic("shite 2")
+		panic("shite2")
+	}
+	outputFName := fmt.Sprintf("%d-%x.rlp", w.Block.NumberU64(), w.Block.Hash())
+	err = os.WriteFile(path+"/block-dump/"+outputFName, enc, 0644)
+	if err != nil {
+		panic("shite 3")
 	}
 }
