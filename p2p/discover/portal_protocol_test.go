@@ -84,39 +84,40 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	assert.Equal(t, 2, len(node2.table.Nodes()))
 	assert.Equal(t, 2, len(node3.table.Nodes()))
 
-	rAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8777")
-	lAddr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8778")
-
-	var wg sync.WaitGroup
-	wg.Add(4)
+	node1Addr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8777")
+	node2Addr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8778")
+	node3Addr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8779")
 
 	cid := uint32(12)
 	cliSendMsgWithCid := "there are connection id : 12!"
 	cliSendMsgWithRandomCid := "there are connection id: random!"
-
+	//
 	serverEchoWithCid := "accept connection sends back msg: echo"
 	//serverEchoWithRandomCid := "ccept connection with random cid sends msg: echo"
 
 	largeTestContent := make([]byte, 1199)
 	_, err = rand.Read(largeTestContent)
 	assert.NoError(t, err)
+
+	var wg sync.WaitGroup
+	wg.Add(4)
 	go func() {
 		var acceptConn *utp.Conn
 		defer func() {
 			wg.Done()
 			_ = acceptConn.Close()
 		}()
-		acceptConn, err := node1.utp.AcceptUTPWithConnId(cid)
+		acceptConn, err := node3.utp.AcceptUTPWithConnId(cid)
 		if err != nil {
 			panic(err)
 		}
 		buf := make([]byte, 100)
 		n, err := acceptConn.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 		assert.Equal(t, cliSendMsgWithCid, string(buf[:n]))
-		acceptConn.Write([]byte(serverEchoWithCid))
+		_, _ = acceptConn.Write([]byte(serverEchoWithCid))
 	}()
 	go func() {
 		var randomConnIdConn net.Conn
@@ -130,31 +131,33 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		}
 		buf := make([]byte, 100)
 		n, err := randomConnIdConn.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 		assert.Equal(t, cliSendMsgWithRandomCid, string(buf[:n]))
 
-		randomConnIdConn.Write(largeTestContent)
+		_, _ = randomConnIdConn.Write(largeTestContent)
 	}()
 
 	go func() {
 		var connWithConnId net.Conn
 		defer func() {
 			wg.Done()
-			//_ = connWithConnId.Close()
+			if connWithConnId != nil {
+				_ = connWithConnId.Close()
+			}
 		}()
-		connWithConnId, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithConnId(cid), utp.WithSocketManager(node2.utpSm))
+		connWithConnId, err := utp.DialUTPOptions("utp", node2Addr, node3Addr, utp.WithConnId(cid), utp.WithSocketManager(node2.utpSm))
 		if err != nil {
 			panic(err)
 		}
 		_, err = connWithConnId.Write([]byte("there are connection id : 12!"))
-		if err != nil {
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 		buf := make([]byte, 100)
 		n, err := connWithConnId.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 		assert.Equal(t, serverEchoWithCid, string(buf[:n]))
@@ -165,8 +168,8 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 			wg.Done()
 			//_ = randomConnIdConn.Close()
 		}()
-		randomConnIdConn, err := utp.DialUTPOptions("utp", lAddr, rAddr, utp.WithSocketManager(node2.utpSm))
-		if err != nil {
+		randomConnIdConn, err := utp.DialUTPOptions("utp", node2Addr, node1Addr, utp.WithSocketManager(node2.utpSm))
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 		_, err = randomConnIdConn.Write([]byte(cliSendMsgWithRandomCid))
@@ -189,6 +192,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		assert.Equal(t, largeTestContent, data)
 	}()
 	wg.Wait()
+	fmt.Println("done")
 }
 
 func TestPortalWireProtocol(t *testing.T) {

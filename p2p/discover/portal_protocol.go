@@ -201,7 +201,7 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	//	}
 	//}
 
-	p.packetRouter = utp.NewSocketRouter(
+	p.packetRouter = utp.NewPacketRouter(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
 			nodes := p.table.Nodes()
 			var target *enode.Node
@@ -233,7 +233,7 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.utpSm, err = utp.NewSocketManager("utp", laddr, utp.WithLogger(logger.Named(listenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithBlockPacketCount(50), utp.WithMaxPacketSize(1145))
+	p.utpSm, err = utp.NewSocketManagerWithOptions("utp", laddr, utp.WithLogger(logger.Named(listenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithMaxPacketSize(1145))
 	if err != nil {
 		return nil, err
 	}
