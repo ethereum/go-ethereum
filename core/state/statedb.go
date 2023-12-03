@@ -84,6 +84,9 @@ type StateDB struct {
 	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]*types.StateAccount // State objects destructed in the block along with its previous value
 
+	usedBlockHashes map[common.Hash]struct{}
+	codes           map[common.Hash]Code
+
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -138,6 +141,8 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	Witness *Witness
 }
 
 // New creates a new state from a given trie.
@@ -170,6 +175,14 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) MarkUsedBlockHash(hash common.Hash) {
+	s.usedBlockHashes[hash] = struct{}{}
+}
+
+func (s *StateDB) MarkWitnessCode(hash common.Hash, code Code) {
+	s.codes[hash] = code
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -316,8 +329,15 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code()
+		code := stateObject.Code()
+		if code != nil {
+			var codeHash common.Hash
+			copy(codeHash[:], stateObject.CodeHash())
+			s.MarkWitnessCode(codeHash, stateObject.Code())
+		}
+		return code
 	}
+
 	return nil
 }
 
@@ -1156,6 +1176,19 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 	return incomplete, nil
 }
 
+type BlockProof struct {
+	blockHashes []common.Hash
+	codeHashes  []common.Hash
+	codes       []Code
+	witness     Witness
+}
+
+/*
+func (s *StateDB) GetBlockProof() {
+
+}
+*/
+
 // Commit writes the state to the underlying in-memory trie database.
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
@@ -1306,7 +1339,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.stateObjectsDirty = make(map[common.Address]struct{})
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
 
-	w.Dump()
+	//w.Dump()
+	s.Witness = w
 
 	return root, nil
 }

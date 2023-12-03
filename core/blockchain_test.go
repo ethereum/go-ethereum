@@ -17,6 +17,7 @@
 package core
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4717,7 +4718,29 @@ func TestEIP3651(t *testing.T) {
 	}
 }
 
-func TestSingleWitness(t *testing.T) {
+func hashAccount(addr common.Address) (output common.Hash) {
+	hasher := sha256.New()
+	hasher.Write(addr[:])
+	res := hasher.Sum(nil)
+	copy(output[:], res[:])
+	return output
+}
+
+/*
+func debugPrintTrie(db ethdb.Database, account common.Address) {
+	var bc BlockChain
+	latestBlock := bc.GetBlockByNumber(1)
+	storageRoot := bc.StateAt(latestBlock.Root()).GetStorageRoot(account)
+
+	tr, err := trie.New(trie.StorageTrieID(latestBlock.Root(), hashAccount(account), storageRoot), s.Database())
+	if err != nil {
+		panic(err)
+	}
+	trIterator
+}
+*/
+
+func TestWitnessStorageClear(t *testing.T) {
 	var (
 		engine = ethash.NewFaker()
 
@@ -4728,15 +4751,14 @@ func TestSingleWitness(t *testing.T) {
 		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
 		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
 	)
-	// Populate two slots
+	// Populate one slots
 	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
+	aaStorage[common.HexToHash("02")] = common.HexToHash("01")
 
 	code := []byte{
-		byte(vm.PUSH1), 0x1, //
-		byte(vm.NUMBER),     // value = number + 1
-		byte(vm.ADD),        //
-		byte(vm.PUSH1), 0x3, // location
-		byte(vm.SSTORE), // Set slot[3] = number + 1
+		byte(vm.PUSH1), 0x0, // value
+		byte(vm.PUSH1), 0x2, // key
+		byte(vm.SSTORE),
 	}
 	gspec := &Genesis{
 		Config: params.TestChainConfig,
@@ -4746,6 +4768,7 @@ func TestSingleWitness(t *testing.T) {
 			bb: {
 				Code:    code,
 				Balance: big.NewInt(1),
+				Storage: aaStorage,
 			},
 		},
 	}
@@ -4760,9 +4783,10 @@ func TestSingleWitness(t *testing.T) {
 	})
 	// Import the canonical chain
 	cache := DefaultCacheConfigWithScheme(rawdb.PathScheme)
-	cache.SnapshotLimit = 0   // disable snapshot
-	cache.SnapshotLimit = 500 // enable snapshot
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), cache, gspec, nil, engine, vm.Config{
+	cache.SnapshotLimit = 0 // disable snapshot
+	//cache.SnapshotLimit = 500 // enable snapshot
+	db := rawdb.NewMemoryDatabase()
+	chain, err := NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
 		Tracer: logger.NewJSONLogger(nil, os.Stdout),
 	}, nil, nil)
 	if err != nil {

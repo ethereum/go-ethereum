@@ -78,6 +78,8 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
+
+	MarkUsedBlockHash(common.Hash)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
