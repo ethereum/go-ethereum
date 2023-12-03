@@ -273,7 +273,7 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 }
 
 func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
-	enrSeq := p.DiscV5.LocalNode().Seq()
+	enrSeq := p.Self().Seq()
 	radiusBytes, err := p.nodeRadius.MarshalSSZ()
 	if err != nil {
 		return 0, err
@@ -753,7 +753,7 @@ func (p *PortalProtocol) handlePing(id enode.ID, ping *portalwire.Ping) ([]byte,
 
 	p.radiusCache.Set([]byte(id.String()), pingCustomPayload.Radius)
 
-	enrSeq := p.DiscV5.LocalNode().Seq()
+	enrSeq := p.Self().Seq()
 	radiusBytes, err := p.nodeRadius.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -1111,7 +1111,7 @@ func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, paylo
 }
 
 func (p *PortalProtocol) Self() *enode.Node {
-	return p.DiscV5.LocalNode().Node()
+	return p.localNode.Node()
 }
 
 func (p *PortalProtocol) RequestENR(n *enode.Node) (*enode.Node, error) {
@@ -1237,6 +1237,62 @@ func (p *PortalProtocol) findNodesCloseToContent(contentId []byte) []*enode.Node
 	}
 
 	return allNodes
+}
+
+// Lookup performs a recursive lookup for the given target.
+// It returns the closest nodes to target.
+func (p *PortalProtocol) Lookup(target enode.ID) []*enode.Node {
+	return p.newLookup(p.closeCtx, target).run()
+}
+
+// Resolve searches for a specific Node with the given ID and tries to get the most recent
+// version of the Node record for it. It returns n if the Node could not be resolved.
+func (p *PortalProtocol) Resolve(n *enode.Node) *enode.Node {
+	if intable := p.table.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
+		n = intable
+	}
+	// Try asking directly. This works if the Node is still responding on the endpoint we have.
+	if resp, err := p.RequestENR(n); err == nil {
+		return resp
+	}
+	// Otherwise do a network lookup.
+	result := p.Lookup(n.ID())
+	for _, rn := range result {
+		if rn.ID() == n.ID() && rn.Seq() > n.Seq() {
+			return rn
+		}
+	}
+	return n
+}
+
+// ResolveNodeId searches for a specific Node with the given ID.
+// It returns nil if the nodeId could not be resolved.
+func (p *PortalProtocol) ResolveNodeId(id enode.ID) *enode.Node {
+	if id == p.Self().ID() {
+		return p.Self()
+	}
+
+	n := p.table.getNode(id)
+	if n != nil {
+		// Try asking directly. This works if the Node is still responding on the endpoint we have.
+		if resp, err := p.RequestENR(n); err == nil {
+			return resp
+		}
+	}
+
+	// Otherwise do a network lookup.
+	result := p.Lookup(n.ID())
+	for _, rn := range result {
+		if rn.ID() == id {
+			if n != nil && rn.Seq() <= n.Seq() {
+				return n
+			} else {
+				return rn
+			}
+		}
+	}
+
+	return n
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
