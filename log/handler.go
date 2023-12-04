@@ -115,9 +115,7 @@ func (l *leveler) Level() slog.Level {
 
 // JSONHandler returns a handler which prints records in JSON format.
 func JSONHandler(wr io.Writer) slog.Handler {
-	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplaceJSON,
-	})
+	return slog.NewJSONHandler(wr, nil)
 }
 
 // LogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
