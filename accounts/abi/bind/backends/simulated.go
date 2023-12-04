@@ -61,6 +61,7 @@ type SimChainManagement interface {
 type SimChainExtras interface {
 	BlockNumber(context.Context) (uint64, error)
 	ChainID(context.Context) (*big.Int, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
 // SimulatedBackend all interfaces in the ethereum package, but is based on a
