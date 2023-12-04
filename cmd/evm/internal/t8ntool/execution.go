@@ -187,7 +187,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
 		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb, nil)
 	}
 	var blobGasUsed uint64
 
