@@ -84,9 +84,6 @@ type StateDB struct {
 	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]*types.StateAccount // State objects destructed in the block along with its previous value
 
-	usedBlockHashes map[uint64]common.Hash
-	codes           map[common.Hash]Code
-
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -142,7 +139,7 @@ type StateDB struct {
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 
-	Witness *Witness
+	witness *Witness
 }
 
 // New creates a new state from a given trie.
@@ -171,21 +168,12 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 
-		usedBlockHashes: make(map[uint64]common.Hash),
-		codes:           make(map[common.Hash]Code),
+		witness: NewWitness(),
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
-}
-
-func (s *StateDB) MarkUsedBlockHash(hash common.Hash, num uint64) {
-	s.usedBlockHashes[num] = hash
-}
-
-func (s *StateDB) MarkWitnessCode(hash common.Hash, code Code) {
-	s.codes[hash] = code
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -332,15 +320,8 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		code := stateObject.Code()
-		if code != nil {
-			var codeHash common.Hash
-			copy(codeHash[:], stateObject.CodeHash())
-			s.MarkWitnessCode(codeHash, stateObject.Code())
-		}
-		return code
+		return stateObject.Code()
 	}
-
 	return nil
 }
 
@@ -738,14 +719,7 @@ func (s *StateDB) Copy() *StateDB {
 		snaps: s.snaps,
 		snap:  s.snap,
 
-		codes:           make(map[common.Hash]Code),
-		usedBlockHashes: make(map[uint64]common.Hash),
-	}
-	for codeHash, code := range s.codes {
-		state.codes[codeHash] = code
-	}
-	for num, bh := range s.usedBlockHashes {
-		state.usedBlockHashes[num] = bh
+		witness: NewWitness(), // TODO: deep copy witness
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1195,11 +1169,9 @@ type BlockProof struct {
 	witness     Witness
 }
 
-/*
-func (s *StateDB) GetBlockProof() {
-
+func (s *StateDB) GetWitness() *Witness {
+	return s.witness
 }
-*/
 
 // Commit writes the state to the underlying in-memory trie database.
 // Once the state is committed, tries cached in stateDB (including account
@@ -1214,9 +1186,6 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
-	w := newWitness(s.originalRoot)
-	w.Codes = s.codes
-	w.UsedBlockHashes = s.usedBlockHashes
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
@@ -1247,7 +1216,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		}
 		// Write any storage changes in the state object to its storage trie
 		set, accessList, err := obj.commit()
-		w.addAccessList(obj.addrHash, accessList)
+		s.witness.addAccessList(obj.addrHash, accessList)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -1275,7 +1244,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	//root, set, err := s.trie.Commit(true)
 	root, set, accessList, err := s.trie.CommitAndObtainAccessList(true)
-	w.addAccessList(common.Hash{}, accessList)
+	s.witness.addAccessList(common.Hash{}, accessList)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1352,9 +1321,6 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 	s.stateObjectsDirty = make(map[common.Address]struct{})
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
-
-	//w.Dump()
-	s.Witness = w
 
 	return root, nil
 }

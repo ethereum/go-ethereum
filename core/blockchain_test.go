@@ -17,7 +17,6 @@
 package core
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4715,89 +4714,6 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
-	}
-}
-
-func hashAccount(addr common.Address) (output common.Hash) {
-	hasher := sha256.New()
-	hasher.Write(addr[:])
-	res := hasher.Sum(nil)
-	copy(output[:], res[:])
-	return output
-}
-
-/*
-func debugPrintTrie(db ethdb.Database, account common.Address) {
-	var bc BlockChain
-	latestBlock := bc.GetBlockByNumber(1)
-	storageRoot := bc.StateAt(latestBlock.Root()).GetStorageRoot(account)
-
-	tr, err := trie.New(trie.StorageTrieID(latestBlock.Root(), hashAccount(account), storageRoot), s.Database())
-	if err != nil {
-		panic(err)
-	}
-	trIterator
-}
-*/
-
-func TestWitnessStorageClear(t *testing.T) {
-	var (
-		engine = ethash.NewFaker()
-
-		// A sender who makes transactions, has some funds
-		key, _    = crypto.HexToECDSA("b8b7a0e412606eb858a27a913766f16fd03611fd3223218428c350f2bf083f87")
-		address   = crypto.PubkeyToAddress(key.PublicKey)
-		funds     = big.NewInt(1000000000000000)
-		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
-		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
-	)
-	// Populate one slots
-	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
-	aaStorage[common.HexToHash("02")] = common.HexToHash("01")
-
-	code := []byte{
-		byte(vm.PUSH1), 0x0, // value
-		byte(vm.PUSH1), 0x2, // key
-		byte(vm.SSTORE),
-	}
-	gspec := &Genesis{
-		Config: params.TestChainConfig,
-		Alloc: GenesisAlloc{
-			address: {Balance: funds},
-			// The contract increments a slot (sets to blocknumber)
-			bb: {
-				Code:    code,
-				Balance: big.NewInt(1),
-				Storage: aaStorage,
-			},
-		},
-	}
-	var nonce uint64
-	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{1})
-
-		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
-			big.NewInt(0), 500000, b.header.BaseFee, nil), types.HomesteadSigner{}, key)
-		nonce++
-		b.AddTx(tx)
-	})
-	// Import the canonical chain
-	cache := DefaultCacheConfigWithScheme(rawdb.PathScheme)
-	cache.SnapshotLimit = 0 // disable snapshot
-	//cache.SnapshotLimit = 500 // enable snapshot
-	db := rawdb.NewMemoryDatabase()
-	chain, err := NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
-		Tracer: logger.NewJSONLogger(nil, os.Stdout),
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	defer chain.Stop()
-	for _, block := range blocks {
-		fmt.Println("insert block")
-		if n, err := chain.InsertChain([]*types.Block{block}); err != nil {
-			t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-		}
 	}
 }
 
