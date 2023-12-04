@@ -123,9 +123,7 @@ func JSONHandler(wr io.Writer) slog.Handler {
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtHandler(wr io.Writer) slog.Handler {
-	return slog.NewTextHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplaceLogfmt,
-	})
+	return slog.NewTextHandler(wr, nil)
 }
 
 // LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs

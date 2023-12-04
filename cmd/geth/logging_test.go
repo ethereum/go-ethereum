@@ -62,7 +62,7 @@ func censor(input string, start, end int) string {
 func TestLogging(t *testing.T) {
 	t.Parallel()
 	testConsoleLogging(t, "terminal", 6, 24)
-	testConsoleLogging(t, "logfmt", 2, 26)
+	testConsoleLogging(t, "logfmt", 5, 34)
 }
 
 func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
