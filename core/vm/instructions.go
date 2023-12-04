@@ -450,7 +450,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		res := interpreter.evm.Context.GetHash(num64).Bytes()
 		var bh common.Hash
 		copy(bh[:], res[:])
-		interpreter.evm.StateDB.MarkUsedBlockHash(bh)
+		interpreter.evm.StateDB.MarkUsedBlockHash(bh, num64)
 		num.SetBytes(res[:])
 	} else {
 		num.Clear()

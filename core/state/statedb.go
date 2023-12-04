@@ -84,7 +84,7 @@ type StateDB struct {
 	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]*types.StateAccount // State objects destructed in the block along with its previous value
 
-	usedBlockHashes map[common.Hash]struct{}
+	usedBlockHashes map[uint64]common.Hash
 	codes           map[common.Hash]Code
 
 	// DB error.
@@ -170,6 +170,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
+
+		usedBlockHashes: make(map[uint64]common.Hash),
+		codes:           make(map[common.Hash]Code),
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -177,8 +180,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
-func (s *StateDB) MarkUsedBlockHash(hash common.Hash) {
-	s.usedBlockHashes[hash] = struct{}{}
+func (s *StateDB) MarkUsedBlockHash(hash common.Hash, num uint64) {
+	s.usedBlockHashes[num] = hash
 }
 
 func (s *StateDB) MarkWitnessCode(hash common.Hash, code Code) {
@@ -734,6 +737,15 @@ func (s *StateDB) Copy() *StateDB {
 		// miner to operate trie-backed only.
 		snaps: s.snaps,
 		snap:  s.snap,
+
+		codes:           make(map[common.Hash]Code),
+		usedBlockHashes: make(map[uint64]common.Hash),
+	}
+	for codeHash, code := range s.codes {
+		state.codes[codeHash] = code
+	}
+	for num, bh := range s.usedBlockHashes {
+		state.usedBlockHashes[num] = bh
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1203,6 +1215,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	w := newWitness(s.originalRoot)
+	w.Codes = s.codes
+	w.UsedBlockHashes = s.usedBlockHashes
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 

@@ -11,17 +11,23 @@ import (
 )
 
 type Witness struct {
-	Block *types.Block
-	Root  common.Hash
-	Lists map[common.Hash]map[string][]byte
+	Block           *types.Block
+	UsedBlockHashes map[uint64]common.Hash
+	Codes           map[common.Hash]Code
+	Root            common.Hash
+	Lists           map[common.Hash]map[string][]byte
 }
 
 type EncodeWitness struct {
-	block  *types.Block
-	root   common.Hash
-	owners []common.Hash
-	paths  [][]string
-	nodes  [][][]byte
+	block       *types.Block
+	root        common.Hash
+	owners      []common.Hash
+	paths       [][]string
+	nodes       [][][]byte
+	blockNums   []uint64
+	blockHashes []common.Hash
+	codeHashes  []common.Hash
+	codes       []Code
 }
 
 func (w *Witness) EncodeRLP() []byte {
@@ -38,6 +44,16 @@ func (w *Witness) EncodeRLP() []byte {
 		}
 		e.paths = append(e.paths, paths)
 		e.nodes = append(e.nodes, nodes)
+	}
+
+	for codeHash, code := range w.Codes {
+		e.codeHashes = append(e.codeHashes, codeHash)
+		e.codes = append(e.codes, code)
+	}
+
+	for blockNum, blockHash := range w.UsedBlockHashes {
+		e.blockNums = append(e.blockNums, blockNum)
+		e.blockHashes = append(e.blockHashes, blockHash)
 	}
 	res := new(bytes.Buffer)
 	if err := e.encode(res); err != nil {
@@ -61,6 +77,18 @@ func (obj *EncodeWitness) encode(_w io.Writer) error {
 		panic(err)
 	}
 	if err := rlp.Encode(w, obj.nodes); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.blockNums); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.blockHashes); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.codeHashes); err != nil {
+		panic(err)
+	}
+	if err := rlp.Encode(w, obj.codes); err != nil {
 		panic(err)
 	}
 	w.ListEnd(_tmp0)
