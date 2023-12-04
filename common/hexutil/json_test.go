@@ -21,9 +21,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/holiman/uint256"
 	"math/big"
 	"testing"
+
+	"github.com/holiman/uint256"
 )
 
 func checkError(t *testing.T, input string, got, want error) bool {
