@@ -2,14 +2,9 @@ package log
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"math/big"
-	"reflect"
 	"sync"
-	"time"
 
-	"github.com/holiman/uint256"
 	"golang.org/x/exp/slog"
 )
 
@@ -124,65 +119,4 @@ func JSONHandler(wr io.Writer) slog.Handler {
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtHandler(wr io.Writer) slog.Handler {
 	return slog.NewTextHandler(wr, nil)
-}
-
-// LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs
-// records which are less than or equal to the specified verbosity level.
-func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
-	return slog.NewTextHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplaceLogfmt,
-		Level:       &leveler{level},
-	})
-}
-
-func builtinReplaceLogfmt(_ []string, attr slog.Attr) slog.Attr {
-	return builtinReplace(nil, attr, true)
-}
-
-func builtinReplaceJSON(_ []string, attr slog.Attr) slog.Attr {
-	return builtinReplace(nil, attr, false)
-}
-
-func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
-	switch attr.Key {
-	case slog.TimeKey:
-		if attr.Value.Kind() == slog.KindTime {
-			if logfmt {
-				return slog.String("t", attr.Value.Time().Format(timeFormat))
-			} else {
-				return slog.Attr{Key: "t", Value: attr.Value}
-			}
-		}
-	case slog.LevelKey:
-		if l, ok := attr.Value.Any().(slog.Level); ok {
-			attr = slog.Any("lvl", LevelString(l))
-			return attr
-		}
-	}
-
-	switch v := attr.Value.Any().(type) {
-	case time.Time:
-		if logfmt {
-			attr = slog.String(attr.Key, v.Format(timeFormat))
-		}
-	case *big.Int:
-		if v == nil {
-			attr.Value = slog.StringValue("<nil>")
-		} else {
-			attr.Value = slog.StringValue(v.String())
-		}
-	case *uint256.Int:
-		if v == nil {
-			attr.Value = slog.StringValue("<nil>")
-		} else {
-			attr.Value = slog.StringValue(v.Dec())
-		}
-	case fmt.Stringer:
-		if v == nil || (reflect.ValueOf(v).Kind() == reflect.Pointer && reflect.ValueOf(v).IsNil()) {
-			attr.Value = slog.StringValue("<nil>")
-		} else {
-			attr.Value = slog.StringValue(v.String())
-		}
-	}
-	return attr
 }
