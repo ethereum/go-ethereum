@@ -19,7 +19,6 @@ package backends
 import (
 	"context"
 	"math"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -58,30 +57,25 @@ type SimChainManagement interface {
 	Close() error
 }
 
-// TODO: these methods should have their own interface in the ethereum package.
-type SimChainExtras interface {
-	BlockNumber(context.Context) (uint64, error)
-	ChainID(context.Context) (*big.Int, error)
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-}
-
 // SimulatedBackend all interfaces in the ethereum package, but is based on a
 // simulated blockchain. It is intended for testing purposes.
 type SimulatedBackend interface {
 	SimChainManagement
 
 	// The backend implements all interfaces in the ethereum package.
+	ethereum.BlockNumberReader
 	ethereum.ChainReader
 	ethereum.ChainStateReader
 	ethereum.ContractCaller
 	ethereum.GasEstimator
-	ethereum.LogFilterer
 	ethereum.GasPricer
+	ethereum.GasPricer1559
+	ethereum.LogFilterer
 	ethereum.PendingStateReader
 	ethereum.PendingContractCaller
 	ethereum.TransactionReader
 	ethereum.TransactionSender
-	SimChainExtras
+	ethereum.ChainIDReader
 }
 
 type simBackend struct {
