@@ -49,5 +49,5 @@ INFO [xx-xx|xx:xx:xx.xxx] nil-custom-struct                        res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] raw nil                                  res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] (*uint64)(nil)                           res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] Using keys 't', 'lvl', 'time', 'level' and 'msg' t=t time=time lvl=lvl level=level msg=msg
-INFO [xx-xx|xx:xx:xx.xxx] Odd pair (1 attr)                        key=<nil>                  LOG_ERROR="Normalized odd number of arguments by adding nil"
-INFO [xx-xx|xx:xx:xx.xxx] Odd pair (3 attr)                        key=value                  key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (1 attr)                        "!BADKEY"=key
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (3 attr)                        key=value                  "!BADKEY"=key2

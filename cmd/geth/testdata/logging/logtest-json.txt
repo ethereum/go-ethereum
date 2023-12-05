@@ -48,5 +48,5 @@
 {"time":"2023-11-22T15:42:00.40835+08:00","level":"INFO","msg":"raw nil","res":null}
 {"time":"2023-11-22T15:42:00.408354+08:00","level":"INFO","msg":"(*uint64)(nil)","res":null}
 {"time":"2023-11-22T15:42:00.408361+08:00","level":"INFO","msg":"Using keys 't', 'level', 'time', 'level' and 'msg'","time":"time","t":"t","level":"level","lvl":"lvl","msg":"msg"}
-{"time":"2023-11-29T15:13:00.195655931+01:00","level":"INFO","msg":"Odd pair (1 attr)","key":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
-{"time":"2023-11-29T15:13:00.195681832+01:00","level":"INFO","msg":"Odd pair (3 attr)","key":"value","key2":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
+{"time":"2023-11-29T15:13:00.195655931+01:00","level":"INFO","msg":"Odd pair (1 attr)","!BADKEY":"key"}
+{"time":"2023-11-29T15:13:00.195681832+01:00","level":"INFO","msg":"Odd pair (3 attr)","key":"value","!BADKEY":"key2"}

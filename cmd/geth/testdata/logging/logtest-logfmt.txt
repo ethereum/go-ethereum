@@ -48,5 +48,5 @@ time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg=nil-custom-struct res=<nil>
 time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="raw nil" res=<nil>
 time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg=(*uint64)(nil) res=<nil>
 time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="Using keys 't', 'lvl', 'time', 'level' and 'msg'" t=t time=time lvl=lvl level=level msg=msg
-time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="Odd pair (1 attr)" key=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
-time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="Odd pair (3 attr)" key=value key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
+time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="Odd pair (1 attr)" !BADKEY=key
+time=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx level=INFO msg="Odd pair (3 attr)" key=value !BADKEY=key2
