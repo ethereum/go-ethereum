@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/codehash"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -1469,7 +1470,7 @@ func key32(i uint64) []byte {
 }
 
 var (
-	codehashes = []common.Hash{
+	keccakCodehashes = []common.Hash{
 		crypto.Keccak256Hash([]byte{0}),
 		crypto.Keccak256Hash([]byte{1}),
 		crypto.Keccak256Hash([]byte{2}),
@@ -1479,11 +1480,28 @@ var (
 		crypto.Keccak256Hash([]byte{6}),
 		crypto.Keccak256Hash([]byte{7}),
 	}
+
+	poseidonCodehashes = []common.Hash{
+		codehash.PoseidonCodeHash([]byte{0}),
+		codehash.PoseidonCodeHash([]byte{1}),
+		codehash.PoseidonCodeHash([]byte{2}),
+		codehash.PoseidonCodeHash([]byte{3}),
+		codehash.PoseidonCodeHash([]byte{4}),
+		codehash.PoseidonCodeHash([]byte{5}),
+		codehash.PoseidonCodeHash([]byte{6}),
+		codehash.PoseidonCodeHash([]byte{7}),
+	}
 )
 
-// getCodeHash returns a pseudo-random code hash
-func getCodeHash(i uint64) []byte {
-	h := codehashes[int(i)%len(codehashes)]
+// getKeccakCodeHash returns a pseudo-random Keccak code hash
+func getKeccakCodeHash(i uint64) []byte {
+	h := keccakCodehashes[int(i)%len(keccakCodehashes)]
+	return common.CopyBytes(h[:])
+}
+
+// getPoseidonCodeHash returns a pseudo-random Poseidon code hash
+func getPoseidonCodeHash(i uint64) []byte {
+	h := poseidonCodehashes[int(i)%len(poseidonCodehashes)]
 	return common.CopyBytes(h[:])
 }
 
@@ -1492,7 +1510,7 @@ func getCodeByHash(hash common.Hash) []byte {
 	if hash == types.EmptyKeccakCodeHash {
 		return nil
 	}
-	for i, h := range codehashes {
+	for i, h := range keccakCodehashes {
 		if h == hash {
 			return []byte{byte(i)}
 		}
@@ -1509,11 +1527,11 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 	)
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:          i,
-			Balance:        big.NewInt(int64(i)),
-			Root:           types.EmptyRootHash,
-			KeccakCodeHash: getCodeHash(i),
-			// TODO: PoseidonCodeHash
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             types.EmptyRootHash,
+			KeccakCodeHash:   getKeccakCodeHash(i),
+			PoseidonCodeHash: getPoseidonCodeHash(i),
 		})
 		key := key32(i)
 		elem := &kv{key, value}
@@ -1561,11 +1579,11 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	// Fill boundary accounts
 	for i := 0; i < len(boundaries); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:          uint64(0),
-			Balance:        big.NewInt(int64(i)),
-			Root:           types.EmptyRootHash,
-			KeccakCodeHash: getCodeHash(uint64(i)),
-			// TODO: PoseidonCodeHash
+			Nonce:            uint64(0),
+			Balance:          big.NewInt(int64(i)),
+			Root:             types.EmptyRootHash,
+			KeccakCodeHash:   getKeccakCodeHash(i),
+			PoseidonCodeHash: getPoseidonCodeHash(i),
 		})
 		elem := &kv{boundaries[i].Bytes(), value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1574,11 +1592,11 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	// Fill other accounts if required
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:          i,
-			Balance:        big.NewInt(int64(i)),
-			Root:           types.EmptyRootHash,
-			KeccakCodeHash: getCodeHash(i),
-			// TODO: PoseidonCodeHash
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             types.EmptyRootHash,
+			KeccakCodeHash:   getKeccakCodeHash(i),
+			PoseidonCodeHash: getPoseidonCodeHash(i),
 		})
 		elem := &kv{key32(i), value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1610,20 +1628,22 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := types.EmptyKeccakCodeHash.Bytes()
+		keccakCodehash := types.EmptyKeccakCodeHash.Bytes()
+		poseidonCodeHash := types.EmptyPoseidonCodeHash.Bytes()
 		if code {
-			codehash = getCodeHash(i)
+			keccakCodehash = getKeccakCodeHash(i)
+			poseidonCodeHash = getPoseidonCodeHash(i)
 		}
 		// Create a storage trie
 		stRoot, stNodes, stEntries := makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), i, db)
 		nodes.Merge(stNodes)
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:          i,
-			Balance:        big.NewInt(int64(i)),
-			Root:           stRoot,
-			KeccakCodeHash: codehash,
-			// TODO: PoseidonCodeHash
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             stRoot,
+			KeccakCodeHash:   keccakCodeHash,
+			PoseidonCodeHash: poseidonCodeHash,
 		})
 		elem := &kv{key, value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1666,9 +1686,11 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := types.EmptyKeccakCodeHash.Bytes()
+		keccakCodehash := types.EmptyKeccakCodeHash.Bytes()
+		poseidonCodeHash := types.EmptyPoseidonCodeHash.Bytes()
 		if code {
-			codehash = getCodeHash(i)
+			keccakCodehash = getKeccakCodeHash(i)
+			poseidonCodeHash = getPoseidonCodeHash(i)
 		}
 		// Make a storage trie
 		var (
@@ -1686,11 +1708,11 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 		nodes.Merge(stNodes)
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
-			Nonce:          i,
-			Balance:        big.NewInt(int64(i)),
-			Root:           stRoot,
-			KeccakCodeHash: codehash,
-			// TODO: PoseidonCodeHash
+			Nonce:            i,
+			Balance:          big.NewInt(int64(i)),
+			Root:             stRoot,
+			KeccakCodeHash:   keccakCodehash,
+			PoseidonCodeHash: poseidonCodeHash,
 		})
 		elem := &kv{key, value}
 		accTrie.MustUpdate(elem.k, elem.v)
