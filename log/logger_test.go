@@ -62,12 +62,12 @@ func BenchmarkTerminalHandler(b *testing.B) {
 	benchmarkLogger(b, l)
 }
 func BenchmarkLogfmtHandler(b *testing.B) {
-	l := NewLogger(NewLogfmtHandler(io.Discard))
+	l := NewLogger(LogfmtHandler(io.Discard))
 	benchmarkLogger(b, l)
 }
 
 func BenchmarkJSONHandler(b *testing.B) {
-	l := NewLogger(NewJSONHandler(io.Discard))
+	l := NewLogger(JSONHandler(io.Discard))
 	benchmarkLogger(b, l)
 }
 

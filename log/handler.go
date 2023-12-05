@@ -113,18 +113,18 @@ func (l *leveler) Level() slog.Level {
 	return l.minLevel
 }
 
-// NewJSONHandler returns a handler which prints records in JSON format.
-func NewJSONHandler(wr io.Writer) slog.Handler {
+// JSONHandler returns a handler which prints records in JSON format.
+func JSONHandler(wr io.Writer) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceJSON,
 	})
 }
 
-// NewLogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
+// LogfmtHandler returns a handler which prints records in logfmt format, an easy machine-parseable but human-readable
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-func NewLogfmtHandler(wr io.Writer) slog.Handler {
+func LogfmtHandler(wr io.Writer) slog.Handler {
 	return slog.NewTextHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceLogfmt,
 	})

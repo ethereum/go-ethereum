@@ -241,11 +241,11 @@ func Setup(ctx *cli.Context) error {
 	case ctx.Bool(logjsonFlag.Name):
 		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
 		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
-		handler = log.NewJSONHandler(output)
+		handler = log.JSONHandler(output)
 	case logFmtFlag == "json":
-		handler = log.NewJSONHandler(output)
+		handler = log.JSONHandler(output)
 	case logFmtFlag == "logfmt":
-		handler = log.NewLogfmtHandler(output)
+		handler = log.LogfmtHandler(output)
 	case logFmtFlag == "", logFmtFlag == "terminal":
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if useColor {
