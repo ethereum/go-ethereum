@@ -117,11 +117,8 @@ func NewWitness() *Witness {
 }
 func DumpBlockWithWitnessToFile(w *Witness, b *types.Block) {
 	enc := w.EncodeRLP(b)
-	path, err := os.Getwd()
-	if err != nil {
-		panic("shite")
-	}
-	err = os.MkdirAll(fmt.Sprintf("%s/block-dump", path), 0755)
+	path := "/datadrive/"
+	err := os.MkdirAll(fmt.Sprintf("%s/block-dump", path), 0755)
 	if err != nil {
 		panic("shite2")
 	}
