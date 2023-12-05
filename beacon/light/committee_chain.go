@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -90,38 +89,6 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 // newCommitteeChain creates a new CommitteeChain with the option of replacing the
 // clock source and signature verification for testing purposes.
 func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
-	var (
-		fixedCommitteeRootEncoder = func(root common.Hash) ([]byte, error) {
-			return root[:], nil
-		}
-		fixedCommitteeRootDecoder = func(enc []byte) (root common.Hash, err error) {
-			if len(enc) != common.HashLength {
-				return common.Hash{}, errors.New("incorrect length for committee root entry in the database")
-			}
-			return common.BytesToHash(enc), nil
-		}
-		committeeEncoder = func(committee *types.SerializedSyncCommittee) ([]byte, error) {
-			return committee[:], nil
-		}
-		committeeDecoder = func(enc []byte) (*types.SerializedSyncCommittee, error) {
-			if len(enc) == types.SerializedSyncCommitteeSize {
-				committee := new(types.SerializedSyncCommittee)
-				copy(committee[:], enc)
-				return committee, nil
-			}
-			return nil, errors.New("incorrect length for serialized committee entry in the database")
-		}
-		updateEncoder = func(update *types.LightClientUpdate) ([]byte, error) {
-			return rlp.EncodeToBytes(update)
-		}
-		updateDecoder = func(enc []byte) (*types.LightClientUpdate, error) {
-			update := new(types.LightClientUpdate)
-			if err := rlp.DecodeBytes(enc, update); err != nil {
-				return nil, err
-			}
-			return update, nil
-		}
-	)
 	s := &CommitteeChain{
 		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
 		db:              db,
@@ -138,13 +105,13 @@ func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	}
 
 	var err1, err2, err3 error
-	if s.fixedCommitteeRoots, err1 = newCanonicalStore[common.Hash](db, rawdb.FixedCommitteeRootKey, fixedCommitteeRootEncoder, fixedCommitteeRootDecoder); err1 != nil {
+	if s.fixedCommitteeRoots, err1 = newCanonicalStore[common.Hash](db, rawdb.FixedCommitteeRootKey); err1 != nil {
 		log.Error("Error creating fixed committee root store", "error", err1)
 	}
-	if s.committees, err2 = newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey, committeeEncoder, committeeDecoder); err2 != nil {
+	if s.committees, err2 = newCanonicalStore[*types.SerializedSyncCommittee](db, rawdb.SyncCommitteeKey); err2 != nil {
 		log.Error("Error creating committee store", "error", err2)
 	}
-	if s.updates, err3 = newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey, updateEncoder, updateDecoder); err3 != nil {
+	if s.updates, err3 = newCanonicalStore[*types.LightClientUpdate](db, rawdb.BestUpdateKey); err3 != nil {
 		log.Error("Error creating update store", "error", err3)
 	}
 	if err1 != nil || err2 != nil || err3 != nil || !s.checkConstraints() {

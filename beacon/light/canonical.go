@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // canonicalStore stores instances of the given type in a database and caches
@@ -33,18 +34,13 @@ type canonicalStore[T any] struct {
 	keyPrefix []byte
 	periods   periodRange
 	cache     *lru.Cache[uint64, T]
-	encode    func(T) ([]byte, error)
-	decode    func([]byte) (T, error)
 }
 
 // newCanonicalStore creates a new canonicalStore and loads all keys associated
 // with the keyPrefix in order to determine the ranges available in the database.
-func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte,
-	encode func(T) ([]byte, error), decode func([]byte) (T, error)) (*canonicalStore[T], error) {
+func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalStore[T], error) {
 	cs := &canonicalStore[T]{
 		keyPrefix: keyPrefix,
-		encode:    encode,
-		decode:    decode,
 		cache:     lru.NewCache[uint64, T](100),
 	}
 	var (
@@ -81,7 +77,7 @@ func (cs *canonicalStore[T]) add(backend ethdb.KeyValueWriter, period uint64, va
 	if !cs.periods.canExpand(period) {
 		return fmt.Errorf("period expansion is not allowed, first: %d, next: %d, period: %d", cs.periods.Start, cs.periods.End, period)
 	}
-	enc, err := cs.encode(value)
+	enc, err := rlp.EncodeToBytes(value)
 	if err != nil {
 		return err
 	}
@@ -107,7 +103,7 @@ func (cs *canonicalStore[T]) deleteFrom(db ethdb.KeyValueWriter, fromPeriod uint
 // get returns the item at the given period or the null value of the given type
 // if no item is present.
 func (cs *canonicalStore[T]) get(backend ethdb.KeyValueReader, period uint64) (T, bool) {
-	var null T
+	var null, value T
 	if !cs.periods.contains(period) {
 		return null, false
 	}
@@ -119,8 +115,7 @@ func (cs *canonicalStore[T]) get(backend ethdb.KeyValueReader, period uint64) (T
 		log.Error("Canonical store value not found", "period", period, "start", cs.periods.Start, "end", cs.periods.End)
 		return null, false
 	}
-	value, err := cs.decode(enc)
-	if err != nil {
+	if err := rlp.DecodeBytes(enc, &value); err != nil {
 		log.Error("Error decoding canonical store value", "error", err)
 		return null, false
 	}
