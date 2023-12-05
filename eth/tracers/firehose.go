@@ -761,6 +761,11 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 		// transaction active. In that case, we do not track the account creation because
 		// the "old" Firehose didn't but mainly because we don't have `AccountCreation` at
 		// the block level so what can we do...
+
+		// This fix was applied on Erigon branch after chain's comparison. I need to check
+		// with what the old patch was doing to write a meaningful comment here and ensure
+		// they got the logic right
+		f.blockOrdinal.Next()
 		return
 	}
 
@@ -768,11 +773,18 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 		return
 	}
 
-	activeCall := f.callStack.Peek()
-	activeCall.AccountCreations = append(activeCall.AccountCreations, &pbeth.AccountCreation{
+	accountCreation := &pbeth.AccountCreation{
 		Account: a.Bytes(),
 		Ordinal: f.blockOrdinal.Next(),
-	})
+	}
+
+	activeCall := f.callStack.Peek()
+	if activeCall == nil {
+		f.deferredCallState.accountCreations = append(f.deferredCallState.accountCreations, accountCreation)
+		return
+	}
+
+	activeCall.AccountCreations = append(activeCall.AccountCreations, accountCreation)
 }
 
 func (f *Firehose) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
@@ -1347,9 +1359,10 @@ func (s *CallStack) Peek() *pbeth.Call {
 // that is recorded before the Call has been started. This happens on the "starting"
 // portion of the call/created.
 type DeferredCallState struct {
-	balanceChanges []*pbeth.BalanceChange
-	gasChanges     []*pbeth.GasChange
-	nonceChanges   []*pbeth.NonceChange
+	accountCreations []*pbeth.AccountCreation
+	balanceChanges   []*pbeth.BalanceChange
+	gasChanges       []*pbeth.GasChange
+	nonceChanges     []*pbeth.NonceChange
 }
 
 func NewDeferredCallState() *DeferredCallState {
@@ -1366,6 +1379,7 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 	}
 
 	// We must happen because it's populated at beginning of the call as well as at the very end
+	call.AccountCreations = append(call.AccountCreations, d.accountCreations...)
 	call.BalanceChanges = append(call.BalanceChanges, d.balanceChanges...)
 	call.GasChanges = append(call.GasChanges, d.gasChanges...)
 	call.NonceChanges = append(call.NonceChanges, d.nonceChanges...)
@@ -1376,10 +1390,11 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 }
 
 func (d *DeferredCallState) IsEmpty() bool {
-	return len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0
+	return len(d.accountCreations) == 0 && len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0
 }
 
 func (d *DeferredCallState) Reset() {
+	d.accountCreations = nil
 	d.balanceChanges = nil
 	d.gasChanges = nil
 	d.nonceChanges = nil
