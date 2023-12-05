@@ -21,7 +21,6 @@
 {"t":"2023-11-22T15:42:00.408197+08:00","lvl":"info","msg":"an error message with quotes","error":"this is an 'error'"}
 {"t":"2023-11-22T15:42:00.408202+08:00","lvl":"info","msg":"Custom Stringer value","2562047h47m16.854s":"2562047h47m16.854s"}
 {"t":"2023-11-22T15:42:00.408208+08:00","lvl":"info","msg":"a custom stringer that emits quoted text","output":"output with 'quotes'"}
-{"t":"2023-11-22T15:42:00.408215+08:00","lvl":"info","msg":"Lazy evaluation of value","key":"lazy value"}
 {"t":"2023-11-22T15:42:00.408219+08:00","lvl":"info","msg":"A message with wonky 💩 characters"}
 {"t":"2023-11-22T15:42:00.408222+08:00","lvl":"info","msg":"A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩"}
 {"t":"2023-11-22T15:42:00.408226+08:00","lvl":"info","msg":"A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above"}
@@ -49,3 +48,5 @@
 {"t":"2023-11-22T15:42:00.40835+08:00","lvl":"info","msg":"raw nil","res":null}
 {"t":"2023-11-22T15:42:00.408354+08:00","lvl":"info","msg":"(*uint64)(nil)","res":null}
 {"t":"2023-11-22T15:42:00.408361+08:00","lvl":"info","msg":"Using keys 't', 'lvl', 'time', 'level' and 'msg'","t":"t","time":"time","lvl":"lvl","level":"level","msg":"msg"}
+{"t":"2023-11-29T15:13:00.195655931+01:00","lvl":"info","msg":"Odd pair (1 attr)","key":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
+{"t":"2023-11-29T15:13:00.195681832+01:00","lvl":"info","msg":"Odd pair (3 attr)","key":"value","key2":null,"LOG_ERROR":"Normalized odd number of arguments by adding nil"}
