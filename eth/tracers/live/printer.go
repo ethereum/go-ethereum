@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -84,7 +85,7 @@ func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	fmt.Printf("CaptureTxEnd: receipt=%s\n", buf)
 }
 
-func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header) {
+func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
 	if finalized != nil && safe != nil {
 		fmt.Printf("OnBlockStart: b=%v, td=%v, finalized=%v, safe=%v\n", b.NumberU64(), td, finalized.Number.Uint64(), safe.Number.Uint64())
 	} else {
@@ -96,7 +97,7 @@ func (p *Printer) OnBlockEnd(err error) {
 	fmt.Printf("OnBlockEnd: err=%v\n", err)
 }
 
-func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc, _ *params.ChainConfig) {
 	fmt.Printf("OnGenesisBlock: b=%v, allocLength=%d\n", b.NumberU64(), len(alloc))
 }
 

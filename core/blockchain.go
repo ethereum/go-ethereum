@@ -192,9 +192,9 @@ type BlockchainLogger interface {
 	state.StateLogger
 	// OnBlockStart is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
+	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, chainConfig *params.ChainConfig)
 	OnBlockEnd(err error)
-	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
+	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc, chainConfig *params.ChainConfig)
 	OnBeaconBlockRootStart(root common.Hash)
 	OnBeaconBlockRootEnd()
 }
@@ -461,7 +461,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 				return nil, fmt.Errorf("live blockchain tracer requires genesis alloc to be set")
 			}
 
-			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc, bc.chainConfig)
 		}
 	}
 
@@ -1804,7 +1804,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil {
-				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
+				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), bc.chainConfig)
 				bc.logger.OnBlockEnd(nil)
 			}
 
@@ -1932,7 +1932,7 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, followupInterrupt *atomic.Bool, start time.Time, setHead bool) (blockEndErr error, _ bool, _ *blockProcessingResult) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
+		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), bc.chainConfig)
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
