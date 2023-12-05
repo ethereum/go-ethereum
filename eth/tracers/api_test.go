@@ -200,13 +200,51 @@ func TestTraceCall(t *testing.T) {
 	}
 	genBlocks := 10
 	signer := types.HomesteadSigner{}
+	nonce := uint64(0)
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
 		b.AddTx(tx)
+		nonce++
+
+		if i == genBlocks-2 {
+			// Transfer from account[0] to account[2]
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    nonce,
+				To:       &accounts[2].addr,
+				Value:    big.NewInt(1000),
+				Gas:      params.TxGas,
+				GasPrice: b.BaseFee(),
+				Data:     nil}),
+				signer, accounts[0].key)
+			b.AddTx(tx)
+			nonce++
+
+			// Transfer from account[0] to account[1] again
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    nonce,
+				To:       &accounts[1].addr,
+				Value:    big.NewInt(1000),
+				Gas:      params.TxGas,
+				GasPrice: b.BaseFee(),
+				Data:     nil}),
+				signer, accounts[0].key)
+			b.AddTx(tx)
+			nonce++
+		}
 	})
+
+	uintPtr := func(i int) *hexutil.Uint { x := hexutil.Uint(i); return &x }
+
 	defer backend.teardown()
 	api := NewAPI(backend)
 	var testSuite = []struct {
@@ -237,6 +275,51 @@ func TestTraceCall(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
+			expectErr: nil,
+			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
+		},
+		// Upon the last state, default to the post block's state
+		{
+			blockNumber: rpc.BlockNumber(genBlocks - 1),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config: nil,
+			expect: `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
+		},
+		// Before the first transaction, should be failed
+		{
+			blockNumber: rpc.BlockNumber(genBlocks - 1),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config:    &TraceCallConfig{TxIndex: uintPtr(0)},
+			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
+		},
+		// Before the target transaction, should be failed
+		{
+			blockNumber: rpc.BlockNumber(genBlocks - 1),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
+			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
+		},
+		// After the target transaction, should be succeed
+		{
+			blockNumber: rpc.BlockNumber(genBlocks - 1),
+			call: ethapi.TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+			},
+			config:    &TraceCallConfig{TxIndex: uintPtr(2)},
 			expectErr: nil,
 			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
@@ -297,8 +380,8 @@ func TestTraceCall(t *testing.T) {
 				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
 				continue
 			}
-			if !reflect.DeepEqual(err, testspec.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
+			if !reflect.DeepEqual(err.Error(), testspec.expectErr.Error()) {
+				t.Errorf("test %d: error mismatch, want '%v', got '%v'", i, testspec.expectErr, err)
 			}
 		} else {
 			if err != nil {
@@ -338,7 +421,14 @@ func TestTraceTransaction(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
 		b.AddTx(tx)
 		target = tx.Hash()
 	})
@@ -388,7 +478,14 @@ func TestTraceBlock(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
 		b.AddTx(tx)
 		txHash = tx.Hash()
 	})
@@ -478,7 +575,14 @@ func TestTracingWithOverrides(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
 		b.AddTx(tx)
 	})
 	defer backend.chain.Stop()

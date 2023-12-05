@@ -18,26 +18,19 @@
 package testlog
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/exp/slog"
 )
 
-// Handler returns a log handler which logs to the unit test log of t.
-func Handler(t *testing.T, level log.Lvl) log.Handler {
-	return log.LvlFilterHandler(level, &handler{t, log.TerminalFormat(false)})
-}
-
-type handler struct {
-	t   *testing.T
-	fmt log.Format
-}
-
-func (h *handler) Log(r *log.Record) error {
-	h.t.Logf("%s", h.fmt.Format(r))
-	return nil
-}
+const (
+	termTimeFormat = "01-02|15:04:05.000"
+)
 
 // logger implements log.Logger such that all output goes to the unit test log via
 // t.Logf(). All methods in between logger.Trace, logger.Debug, etc. are marked as test
@@ -51,25 +44,64 @@ type logger struct {
 }
 
 type bufHandler struct {
-	buf []*log.Record
-	fmt log.Format
+	buf   []slog.Record
+	attrs []slog.Attr
+	level slog.Level
 }
 
-func (h *bufHandler) Log(r *log.Record) error {
+func (h *bufHandler) Handle(_ context.Context, r slog.Record) error {
 	h.buf = append(h.buf, r)
 	return nil
 }
 
-// Logger returns a logger which logs to the unit test log of t.
-func Logger(t *testing.T, level log.Lvl) log.Logger {
-	l := &logger{
-		t:  t,
-		l:  log.New(),
-		mu: new(sync.Mutex),
-		h:  &bufHandler{fmt: log.TerminalFormat(false)},
+func (h *bufHandler) Enabled(_ context.Context, lvl slog.Level) bool {
+	return lvl <= h.level
+}
+
+func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	records := make([]slog.Record, len(h.buf))
+	copy(records[:], h.buf[:])
+	return &bufHandler{
+		records,
+		append(h.attrs, attrs...),
+		h.level,
 	}
-	l.l.SetHandler(log.LvlFilterHandler(level, l.h))
-	return l
+}
+
+func (h *bufHandler) WithGroup(_ string) slog.Handler {
+	panic("not implemented")
+}
+
+// Logger returns a logger which logs to the unit test log of t.
+func Logger(t *testing.T, level slog.Level) log.Logger {
+	handler := bufHandler{
+		[]slog.Record{},
+		[]slog.Attr{},
+		level,
+	}
+	return &logger{
+		t:  t,
+		l:  log.NewLogger(&handler),
+		mu: new(sync.Mutex),
+		h:  &handler,
+	}
+}
+
+// LoggerWithHandler returns
+func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
+	var bh bufHandler
+	return &logger{
+		t:  t,
+		l:  log.NewLogger(handler),
+		mu: new(sync.Mutex),
+		h:  &bh,
+	}
+}
+
+func (l *logger) Write(level slog.Level, msg string, ctx ...interface{}) {}
+
+func (l *logger) Enabled(ctx context.Context, level slog.Level) bool {
+	return l.l.Enabled(ctx, level)
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
@@ -77,6 +109,14 @@ func (l *logger) Trace(msg string, ctx ...interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.l.Trace(msg, ctx...)
+	l.flush()
+}
+
+func (l *logger) Log(level slog.Level, msg string, ctx ...interface{}) {
+	l.t.Helper()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.l.Log(level, msg, ctx...)
 	l.flush()
 }
 
@@ -120,23 +160,44 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
+func (l *logger) With(ctx ...interface{}) log.Logger {
+	return &logger{l.t, l.l.With(ctx...), l.mu, l.h}
+}
+
 func (l *logger) New(ctx ...interface{}) log.Logger {
-	return &logger{l.t, l.l.New(ctx...), l.mu, l.h}
+	return l.With(ctx...)
 }
 
-func (l *logger) GetHandler() log.Handler {
-	return l.l.GetHandler()
-}
+// terminalFormat formats a message similarly to the NewTerminalHandler in the log package.
+// The difference is that terminalFormat does not escape messages/attributes and does not pad attributes.
+func (h *bufHandler) terminalFormat(r slog.Record) string {
+	buf := &bytes.Buffer{}
+	lvl := log.LevelAlignedString(r.Level)
+	attrs := []slog.Attr{}
+	r.Attrs(func(attr slog.Attr) bool {
+		attrs = append(attrs, attr)
+		return true
+	})
 
-func (l *logger) SetHandler(h log.Handler) {
-	l.l.SetHandler(h)
+	attrs = append(h.attrs, attrs...)
+
+	fmt.Fprintf(buf, "%s[%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Message)
+	if length := len(r.Message); length < 40 {
+		buf.Write(bytes.Repeat([]byte{' '}, 40-length))
+	}
+
+	for _, attr := range attrs {
+		fmt.Fprintf(buf, " %s=%s", attr.Key, string(log.FormatSlogValue(attr.Value, nil)))
+	}
+	buf.WriteByte('\n')
+	return buf.String()
 }
 
 // flush writes all buffered messages and clears the buffer.
 func (l *logger) flush() {
 	l.t.Helper()
 	for _, r := range l.h.buf {
-		l.t.Logf("%s", l.h.fmt.Format(r))
+		l.t.Logf("%s", l.h.terminalFormat(r))
 	}
 	l.h.buf = nil
 }

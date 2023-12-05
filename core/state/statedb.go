@@ -694,9 +694,6 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		delete(s.accountsOrigin, prev.address)
 		delete(s.storagesOrigin, prev.address)
 	}
-
-	newobj.created = true
-
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
 		return newobj, prev

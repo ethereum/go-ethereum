@@ -266,8 +266,21 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if chain.Config().IsShanghai(header.Number, header.Time) {
 		return errors.New("ethash does not support shanghai fork")
 	}
+	// Verify the non-existence of withdrawalsHash.
+	if header.WithdrawalsHash != nil {
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
+	}
 	if chain.Config().IsCancun(header.Number, header.Time) {
 		return errors.New("ethash does not support cancun fork")
+	}
+	// Verify the non-existence of cancun-specific header fields
+	switch {
+	case header.ExcessBlobGas != nil:
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
+	case header.BlobGasUsed != nil:
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+	case header.ParentBeaconRoot != nil:
+		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
 	}
 	// Add some fake checks for tests
 	if ethash.fakeDelay != nil {
@@ -532,6 +545,15 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	}
 	if header.WithdrawalsHash != nil {
 		panic("withdrawal hash set on ethash")
+	}
+	if header.ExcessBlobGas != nil {
+		panic("excess blob gas set on ethash")
+	}
+	if header.BlobGasUsed != nil {
+		panic("blob gas used set on ethash")
+	}
+	if header.ParentBeaconRoot != nil {
+		panic("parent beacon root set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
