@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var _ bind.ContractBackend = (SimulatedBackend)(nil)
 var _ bind.ContractBackend = (*simBackend)(nil)
 
 type SimChainManagement interface {
