@@ -158,12 +158,13 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 // specification will be flushed as well.
 func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhash common.Hash, bcLogger BlockchainLogger) error {
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
-	statedb.SetLogger(bcLogger)
 	if err != nil {
 		return err
 	}
 	for addr, account := range *ga {
 		if account.Balance != nil {
+			// This is not actually logged via tracer because OnGenesisBlock
+			// already captures the allocations.
 			statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
 		}
 		statedb.SetCode(addr, account.Code)
