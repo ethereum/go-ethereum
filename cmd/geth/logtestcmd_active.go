@@ -43,6 +43,7 @@ This command is only meant for testing.
 
 type customQuotedStringer struct {
 }
+
 func (c customQuotedStringer) String() string {
 	return "output with 'quotes'"
 }
@@ -80,8 +81,6 @@ func logTest(ctx *cli.Context) error {
 		log.Info("uint64", "18,446,744,073,709,551,615", uint64(math.MaxUint64))
 	}
 	{ // Special characters
-
-
 		log.Info("Special chars in value", "key", "special \r\n\t chars")
 		log.Info("Special chars in key", "special \n\t chars", "value")
 
@@ -102,9 +101,6 @@ func logTest(ctx *cli.Context) error {
 		log.Info("Custom Stringer value", "2562047h47m16.854s", common.PrettyDuration(time.Duration(9223372036854775807)))
 		var c customQuotedStringer
 		log.Info("a custom stringer that emits quoted text", "output", c)
-	}
-	{ // Lazy eval
-		log.Info("Lazy evaluation of value", "key", log.Lazy{Fn: func() interface{} { return "lazy value" }})
 	}
 	{ // Multi-line message
 		log.Info("A message with wonky \U0001F4A9 characters")
@@ -165,6 +161,10 @@ func logTest(ctx *cli.Context) error {
 	}
 	{ // Logging with 'reserved' keys
 		log.Info("Using keys 't', 'lvl', 'time', 'level' and 'msg'", "t", "t", "time", "time", "lvl", "lvl", "level", "level", "msg", "msg")
+	}
+	{ // Logging with wrong attr-value pairs
+		log.Info("Odd pair (1 attr)", "key")
+		log.Info("Odd pair (3 attr)", "key", "value", "key2")
 	}
 	return nil
 }

@@ -23,22 +23,6 @@ const (
 // 40 spaces
 var spaces = []byte("                                        ")
 
-type Format interface {
-	Format(r slog.Record) []byte
-}
-
-// FormatFunc returns a new Format object which uses
-// the given function to perform record formatting.
-func FormatFunc(f func(slog.Record) []byte) Format {
-	return formatFunc(f)
-}
-
-type formatFunc func(slog.Record) []byte
-
-func (f formatFunc) Format(r slog.Record) []byte {
-	return f(r)
-}
-
 // TerminalStringer is an analogous interface to the stdlib stringer, allowing
 // own types to have custom shortened serialization formats when printed to the
 // screen.
@@ -46,7 +30,7 @@ type TerminalStringer interface {
 	TerminalString() string
 }
 
-func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor bool) []byte {
+func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
 	var color = ""
 	if usecolor {
@@ -88,13 +72,13 @@ func (h *TerminalHandler) TerminalFormat(buf []byte, r slog.Record, usecolor boo
 	if (r.NumAttrs()+len(h.attrs)) > 0 && length < termMsgJust {
 		b.Write(spaces[:termMsgJust-length])
 	}
-	// print the keys logfmt style
-	h.logfmt(b, r, color)
+	// print the attributes
+	h.formatAttributes(b, r, color)
 
 	return b.Bytes()
 }
 
-func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string) {
+func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
 	// tmp is a temporary buffer we use, until bytes.Buffer.AvailableBuffer() (1.21)
 	// can be used.
 	var tmp = make([]byte, 40)
@@ -112,7 +96,7 @@ func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string)
 			buf.WriteByte('=')
 		}
 		//val := FormatSlogValue(attr.Value, true, buf.AvailableBuffer())
-		val := FormatSlogValue(attr.Value, true, tmp[:0])
+		val := FormatSlogValue(attr.Value, tmp[:0])
 
 		padding := h.fieldPadding[attr.Key]
 
@@ -140,8 +124,8 @@ func (h *TerminalHandler) logfmt(buf *bytes.Buffer, r slog.Record, color string)
 	buf.WriteByte('\n')
 }
 
-// FormatSlogValue formats a slog.Value for serialization
-func FormatSlogValue(v slog.Value, term bool, tmp []byte) (result []byte) {
+// FormatSlogValue formats a slog.Value for serialization to terminal.
+func FormatSlogValue(v slog.Value, tmp []byte) (result []byte) {
 	var value any
 	defer func() {
 		if err := recover(); err != nil {
@@ -156,11 +140,9 @@ func FormatSlogValue(v slog.Value, term bool, tmp []byte) (result []byte) {
 	switch v.Kind() {
 	case slog.KindString:
 		return appendEscapeString(tmp, v.String())
-	case slog.KindAny:
-		value = v.Any()
-	case slog.KindInt64: // All int-types (int8 ,int16 etc) wind up here
+	case slog.KindInt64: // All int-types (int8, int16 etc) wind up here
 		return appendInt64(tmp, v.Int64())
-	case slog.KindUint64: // All uint-types (int8 ,int16 etc) wind up here
+	case slog.KindUint64: // All uint-types (uint8, uint16 etc) wind up here
 		return appendUint64(tmp, v.Uint64(), false)
 	case slog.KindFloat64:
 		return strconv.AppendFloat(tmp, v.Float64(), floatFormat, 3, 64)
@@ -180,27 +162,14 @@ func FormatSlogValue(v slog.Value, term bool, tmp []byte) (result []byte) {
 		return []byte("<nil>")
 	}
 	switch v := value.(type) {
-	case *big.Int:
-		// Big ints get consumed by the Stringer clause, so we need to handle
-		// them earlier on.
-		if v == nil {
-			return append(tmp, []byte("<nil>")...)
-		}
+	case *big.Int: // Need to be before fmt.Stringer-clause
 		return appendBigInt(tmp, v)
-
-	case *uint256.Int:
-		// Uint256s get consumed by the Stringer clause, so we need to handle
-		// them earlier on.
-		if v == nil {
-			return append(tmp, []byte("<nil>")...)
-		}
+	case *uint256.Int: // Need to be before fmt.Stringer-clause
 		return appendU256(tmp, v)
 	case error:
 		return appendEscapeString(tmp, v.Error())
 	case TerminalStringer:
-		if term {
-			return appendEscapeString(tmp, v.TerminalString()) // Custom terminal stringer provided, use that
-		}
+		return appendEscapeString(tmp, v.TerminalString())
 	case fmt.Stringer:
 		return appendEscapeString(tmp, v.String())
 	}

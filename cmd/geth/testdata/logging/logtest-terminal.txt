@@ -21,8 +21,7 @@ INFO [xx-xx|xx:xx:xx.xxx] "\x1b[35mColored\x1b[0m["                "\x1b[35mColo
 INFO [xx-xx|xx:xx:xx.xxx] an error message with quotes             error="this is an 'error'"
 INFO [xx-xx|xx:xx:xx.xxx] Custom Stringer value                    2562047h47m16.854s=2562047h47m16.854s
 INFO [xx-xx|xx:xx:xx.xxx] a custom stringer that emits quoted text output="output with 'quotes'"
-INFO [xx-xx|xx:xx:xx.xxx] Lazy evaluation of value                 key="lazy value"
-INFO [xx-xx|xx:xx:xx.xxx] "A message with wonky 💩 characters" 
+INFO [xx-xx|xx:xx:xx.xxx] "A message with wonky 💩 characters"
 INFO [xx-xx|xx:xx:xx.xxx] "A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩" 
 INFO [xx-xx|xx:xx:xx.xxx] A multiline message 
 LALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above 
@@ -50,3 +49,5 @@ INFO [xx-xx|xx:xx:xx.xxx] nil-custom-struct                        res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] raw nil                                  res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] (*uint64)(nil)                           res=<nil>
 INFO [xx-xx|xx:xx:xx.xxx] Using keys 't', 'lvl', 'time', 'level' and 'msg' t=t time=time lvl=lvl level=level msg=msg
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (1 attr)                        key=<nil>                  LOG_ERROR="Normalized odd number of arguments by adding nil"
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (3 attr)                        key=value                  key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
