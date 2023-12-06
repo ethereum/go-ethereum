@@ -43,3 +43,7 @@ Address:     `0x0DCaa27B9E4Db92F820189345792f8eC5Ef148F6`
 
 1. To run the local setup, set the .env file with the keys specified in .env.example.
 2. Run `$ make up-dev-build` to run the whole stack including bridge, or `$ make up-dev-settlement` to bring up only the settlement layer.
+
+
+## Starter .env file
+To get a standard starter .env file from primev internal development, [click here.](https://www.notion.so/Private-keys-and-env-for-settlement-layer-245a4f3f4fe040a7b72a6be91131d9c2?pvs=4)
