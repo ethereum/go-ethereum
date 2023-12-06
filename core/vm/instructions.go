@@ -422,6 +422,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
+		_ = interpreter.evm.StateDB.GetCode(address) // ensure the account leaf is fetched and included in the witnessgi
 		interpreter.evm.StateDB.GetWitness().AddCodeHash(interpreter.evm.StateDB.GetCodeHash(address))
 		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
 	}
