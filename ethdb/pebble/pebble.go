@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
@@ -131,7 +130,7 @@ func (l panicLogger) Errorf(format string, args ...interface{}) {
 }
 
 func (l panicLogger) Fatalf(format string, args ...interface{}) {
-	panic(errors.Errorf("fatal: "+format, args...))
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
