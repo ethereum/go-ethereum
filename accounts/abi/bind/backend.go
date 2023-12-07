@@ -113,24 +113,16 @@ type ContractTransactor interface {
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }
 
-// ContractFilterer defines the methods needed to access log events using one-off
-// queries or continuous event subscriptions.
-type ContractFilterer interface {
-	// FilterLogs executes a log filter operation, blocking during execution and
-	// returning all the results in one batch.
-	//
-	// TODO(karalabe): Deprecate when the subscription one can return past data too.
-	FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error)
-
-	// SubscribeFilterLogs creates a background log filtering operation, returning
-	// a subscription immediately, which can be used to stream the found events.
-	SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error)
-}
-
 // DeployBackend wraps the operations needed by WaitMined and WaitDeployed.
 type DeployBackend interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
+}
+
+// ContractFilterer defines the methods needed to access log events using one-off
+// queries or continuous event subscriptions.
+type ContractFilterer interface {
+	ethereum.LogFilterer
 }
 
 // ContractBackend defines the methods needed to work with contracts on a read-write basis.
