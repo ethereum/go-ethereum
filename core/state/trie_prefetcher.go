@@ -208,7 +208,7 @@ type subfetcher struct {
 	lock    sync.Mutex // Lock protecting the task queue
 	closing bool       // set to true if the subfetcher is closing
 
-	wake chan struct{} // Wake channel if a new task is scheduled
+	wake chan bool     // Wake channel if a new task is scheduled, true if the subfetcher should continue running when there are no pending tasks
 	term chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
@@ -225,7 +225,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		owner: owner,
 		root:  root,
 		addr:  addr,
-		wake:  make(chan struct{}, 1),
+		wake:  make(chan bool, 1),
 		term:  make(chan struct{}),
 		seen:  make(map[string]struct{}),
 	}
@@ -240,7 +240,7 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	sf.tasks = append(sf.tasks, keys...)
 	sf.lock.Unlock()
 	// Notify the prefetcher. The wake-chan is buffered, so this is async.
-	sf.wake <- struct{}{}
+	sf.wake <- true
 }
 
 // wait waits for the subfetcher to finish it's task. It is safe to call wait multiple
@@ -255,7 +255,7 @@ func (sf *subfetcher) wait() {
 	sf.tasks = nil
 	sf.lock.Unlock()
 	// Notify the prefetcher. The wake-chan is buffered, so this is async.
-	sf.wake <- struct{}{}
+	sf.wake <- false
 	// Wait for it to terminate
 	<-sf.term
 }
@@ -286,13 +286,13 @@ func (sf *subfetcher) loop() {
 	}
 	// Trie opened successfully, keep prefetching items
 	for {
-		<-sf.wake
+		keepRunning := <-sf.wake
 		// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
 		sf.lock.Lock()
 		tasks := sf.tasks
 		sf.tasks = nil
 		sf.lock.Unlock()
-		if tasks == nil {
+		if tasks == nil && !keepRunning {
 			// No more tasks
 			return
 		}

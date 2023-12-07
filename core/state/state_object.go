@@ -204,6 +204,10 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			value.SetBytes(content)
 		}
 	}
+	if s.db.prefetcher != nil {
+		// always prefetch to ensure that read accounts will end up in the witness
+		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, [][]byte{key[:]})
+	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
 		start := time.Now()
@@ -395,7 +399,6 @@ func (s *stateObject) commit() (*trienode.NodeSet, map[string][]byte, error) {
 		return nil, nil, err
 	}
 	s.data.Root = root
-	fmt.Printf("node count %d\n", len(nodes.Leaves))
 
 	// Update original account data after commit
 	s.origin = s.data.Copy()
