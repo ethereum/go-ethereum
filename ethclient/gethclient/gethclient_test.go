@@ -242,6 +242,9 @@ func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
 	if have, want := result.KeccakCodeHash, crypto.Keccak256Hash(code); have != want {
 		t.Fatalf("codehash wrong, have %v want %v ", have, want)
 	}
+	if have, want := result.CodeSize, uint64(len(code)); have != want {
+		t.Fatalf("codesize wrong, have %v want %v ", have, want)
+	}
 }
 
 func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {

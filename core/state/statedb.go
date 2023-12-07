@@ -321,7 +321,7 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 	return nil
 }
 
-func (s *StateDB) GetCodeSize(addr common.Address) int {
+func (s *StateDB) GetCodeSize(addr common.Address) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CodeSize()
@@ -587,11 +587,13 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				Balance:          acc.Balance,
 				KeccakCodeHash:   acc.KeccakCodeHash,
 				PoseidonCodeHash: acc.PoseidonCodeHash,
+				CodeSize:         acc.CodeSize,
 				Root:             common.BytesToHash(acc.Root),
 			}
 			if len(data.KeccakCodeHash) == 0 {
 				data.KeccakCodeHash = types.EmptyKeccakCodeHash.Bytes()
 				data.PoseidonCodeHash = types.EmptyPoseidonCodeHash.Bytes()
+				data.CodeSize = 0
 			}
 			if data.Root == (common.Hash{}) {
 				data.Root = types.EmptyRootHash

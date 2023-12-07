@@ -54,6 +54,7 @@ type DumpAccount struct {
 	Root             hexutil.Bytes          `json:"root"`
 	KeccakCodeHash   hexutil.Bytes          `json:"keccakCodeHash"`
 	PoseidonCodeHash hexutil.Bytes          `json:"poseidonCodeHash"`
+	CodeSize         uint64                 `json:"codeSize"`
 	Code             hexutil.Bytes          `json:"code,omitempty"`
 	Storage          map[common.Hash]string `json:"storage,omitempty"`
 	Address          *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
@@ -111,6 +112,7 @@ func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 		Root:             account.Root,
 		KeccakCodeHash:   account.KeccakCodeHash,
 		PoseidonCodeHash: account.PoseidonCodeHash,
+		CodeSize:         account.CodeSize,
 		Code:             account.Code,
 		Storage:          account.Storage,
 		SecureKey:        account.SecureKey,
@@ -158,6 +160,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			Root:             data.Root[:],
 			KeccakCodeHash:   data.KeccakCodeHash,
 			PoseidonCodeHash: data.PoseidonCodeHash,
+			CodeSize:         data.CodeSize,
 			SecureKey:        it.Key,
 		}
 		var (

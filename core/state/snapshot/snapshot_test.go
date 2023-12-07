@@ -49,6 +49,7 @@ func randomAccount() []byte {
 		Root:             randomHash(),
 		KeccakCodeHash:   types.EmptyKeccakCodeHash[:],
 		PoseidonCodeHash: types.EmptyPoseidonCodeHash[:],
+		CodeSize:         0,
 	}
 	data, _ := rlp.EncodeToBytes(a)
 	return data

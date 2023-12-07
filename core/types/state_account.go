@@ -34,6 +34,7 @@ type StateAccount struct {
 	Root             common.Hash // merkle root of the storage trie
 	KeccakCodeHash   []byte
 	PoseidonCodeHash []byte
+	CodeSize         uint64
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -43,6 +44,7 @@ func NewEmptyStateAccount() *StateAccount {
 		Root:             EmptyRootHash,
 		KeccakCodeHash:   EmptyKeccakCodeHash.Bytes(),
 		PoseidonCodeHash: EmptyPoseidonCodeHash.Bytes(),
+		CodeSize:         0,
 	}
 }
 
@@ -58,6 +60,7 @@ func (acct *StateAccount) Copy() *StateAccount {
 		Root:             acct.Root,
 		KeccakCodeHash:   common.CopyBytes(acct.KeccakCodeHash),
 		PoseidonCodeHash: common.CopyBytes(acct.PoseidonCodeHash),
+		CodeSize:         acct.CodeSize,
 	}
 }
 
@@ -70,6 +73,7 @@ type SlimAccount struct {
 	Root             []byte // Nil if root equals to types.EmptyRootHash
 	KeccakCodeHash   []byte // Nil if hash equals to types.EmptyKeccakCodeHash
 	PoseidonCodeHash []byte // Nil if hash equals to types.EmptyPoseidonCodeHash
+	CodeSize         uint64
 }
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
@@ -84,6 +88,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	if !bytes.Equal(account.KeccakCodeHash, EmptyKeccakCodeHash[:]) {
 		slim.KeccakCodeHash = account.KeccakCodeHash
 		slim.PoseidonCodeHash = account.PoseidonCodeHash
+		slim.CodeSize = account.CodeSize
 	}
 	data, err := rlp.EncodeToBytes(slim)
 	if err != nil {
@@ -111,9 +116,11 @@ func FullAccount(data []byte) (*StateAccount, error) {
 	if len(slim.KeccakCodeHash) == 0 {
 		account.KeccakCodeHash = EmptyKeccakCodeHash[:]
 		account.PoseidonCodeHash = EmptyPoseidonCodeHash[:]
+		account.CodeSize = 0
 	} else {
 		account.KeccakCodeHash = slim.KeccakCodeHash
 		account.PoseidonCodeHash = slim.PoseidonCodeHash
+		account.CodeSize = slim.CodeSize
 	}
 	return &account, nil
 }

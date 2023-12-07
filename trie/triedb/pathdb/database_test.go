@@ -56,6 +56,7 @@ func generateAccount(storageRoot common.Hash) types.StateAccount {
 		Balance:          big.NewInt(rand.Int63()),
 		KeccakCodeHash:   testutil.RandBytes(32),
 		PoseidonCodeHash: testutil.RandBytes(32),
+		CodeSize:         1,
 		Root:             storageRoot,
 	}
 }

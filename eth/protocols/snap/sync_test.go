@@ -1532,6 +1532,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 			Root:             types.EmptyRootHash,
 			KeccakCodeHash:   getKeccakCodeHash(i),
 			PoseidonCodeHash: getPoseidonCodeHash(i),
+			CodeSize:         1,
 		})
 		key := key32(i)
 		elem := &kv{key, value}
@@ -1584,6 +1585,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 			Root:             types.EmptyRootHash,
 			KeccakCodeHash:   getKeccakCodeHash(uint64(i)),
 			PoseidonCodeHash: getPoseidonCodeHash(uint64(i)),
+			CodeSize:         1,
 		})
 		elem := &kv{boundaries[i].Bytes(), value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1597,6 +1599,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 			Root:             types.EmptyRootHash,
 			KeccakCodeHash:   getKeccakCodeHash(i),
 			PoseidonCodeHash: getPoseidonCodeHash(i),
+			CodeSize:         1,
 		})
 		elem := &kv{key32(i), value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1630,9 +1633,11 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 		key := key32(i)
 		keccakCodeHash := types.EmptyKeccakCodeHash.Bytes()
 		poseidonCodeHash := types.EmptyPoseidonCodeHash.Bytes()
+		codeSize := uint64(0)
 		if code {
 			keccakCodeHash = getKeccakCodeHash(i)
 			poseidonCodeHash = getPoseidonCodeHash(i)
+			codeSize = 1
 		}
 		// Create a storage trie
 		stRoot, stNodes, stEntries := makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), i, db)
@@ -1644,6 +1649,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 			Root:             stRoot,
 			KeccakCodeHash:   keccakCodeHash,
 			PoseidonCodeHash: poseidonCodeHash,
+			CodeSize:         codeSize,
 		})
 		elem := &kv{key, value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1688,9 +1694,11 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 		key := key32(i)
 		keccakCodehash := types.EmptyKeccakCodeHash.Bytes()
 		poseidonCodeHash := types.EmptyPoseidonCodeHash.Bytes()
+		codeSize := uint64(0)
 		if code {
 			keccakCodehash = getKeccakCodeHash(i)
 			poseidonCodeHash = getPoseidonCodeHash(i)
+			codeSize = 1
 		}
 		// Make a storage trie
 		var (
@@ -1713,6 +1721,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 			Root:             stRoot,
 			KeccakCodeHash:   keccakCodehash,
 			PoseidonCodeHash: poseidonCodeHash,
+			CodeSize:         codeSize,
 		})
 		elem := &kv{key, value}
 		accTrie.MustUpdate(elem.k, elem.v)
@@ -1870,6 +1879,7 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 			Root             common.Hash
 			KeccakCodeHash   []byte
 			PoseidonCodeHash []byte
+			CodeSize         uint64
 		}
 		if err := rlp.DecodeBytes(accIt.Value, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)

@@ -573,6 +573,7 @@ func dumpState(ctx *cli.Context) error {
 			Root:             account.Root.Bytes(),
 			KeccakCodeHash:   account.KeccakCodeHash,
 			PoseidonCodeHash: account.PoseidonCodeHash,
+			CodeSize:         account.CodeSize,
 			SecureKey:        accIt.Hash().Bytes(),
 		}
 		if !conf.SkipCode && !bytes.Equal(account.KeccakCodeHash, types.EmptyKeccakCodeHash.Bytes()) {
