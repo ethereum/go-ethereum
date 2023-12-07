@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package backends
+package simulated
 
 import (
 	"context"
@@ -36,15 +36,15 @@ var (
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
-func simTestBackend(testAddr common.Address) SimulatedBackend {
-	return NewSimulatedBackend(
+func simTestBackend(testAddr common.Address) Backend {
+	return New(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
 	)
 }
 
-func newTx(sim SimulatedBackend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+func newTx(sim Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	// create a signed transaction to send
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
@@ -67,7 +67,7 @@ func newTx(sim SimulatedBackend, key *ecdsa.PrivateKey) (*types.Transaction, err
 }
 
 func TestNewSim(t *testing.T) {
-	sim := NewSimulatedBackend(core.GenesisAlloc{}, 30_000_000)
+	sim := New(core.GenesisAlloc{}, 30_000_000)
 	num, err := sim.BlockNumber(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func TestNewSim(t *testing.T) {
 }
 
 func TestAdjustTime(t *testing.T) {
-	sim := NewSimulatedBackend(core.GenesisAlloc{}, 10_000_000)
+	sim := New(core.GenesisAlloc{}, 10_000_000)
 	defer sim.Close()
 
 	block1, _ := sim.BlockByNumber(context.Background(), nil)
