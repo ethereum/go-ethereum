@@ -205,7 +205,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 	}
 	if s.db.prefetcher != nil {
-		// always prefetch to ensure that read accounts will end up in the witness
+		// always prefetch to ensure that read storage slots will end up in the witness
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, [][]byte{key[:]})
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
