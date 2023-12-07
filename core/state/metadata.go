@@ -33,11 +33,19 @@ const (
 	BalanceChangeGasRefund                                = 9
 	BalanceChangeTouchAccount                             = 10
 	// TODO: rename (debit, credit)
-	BalanceChangeSuicideRefund   = 11
+	// BalanceChangeSuicideRefund is added to the recipient as indicated by a selfdestructing account.
+	BalanceChangeSuicideRefund = 11
+	// BalanceChangeSuicideWithdraw is deducted from a contract due to self-destruct.
+	// This can happen either at the point of self-destruction, or at the end of the tx
+	// if ether was sent to contract post-selfdestruct.
 	BalanceChangeSuicideWithdraw = 12
-	// TODO: add method on statedb to track burn without Add/Sub balance
-	// Or: Track via OnBurn
-	// 1559 burn, blob burn, withdraw to self via selfdestruct burn, receive ether after selfdestruct (at end of tx)
-	BalanceChangeBurn       = 13
-	BalanceChangeWithdrawal = 14
+	// BalanceChangeBurn accounts for:
+	// - EIP-1559 burnt fees
+	// - ether that is sent to a self-destructed contract within the same tx (captured at end of tx)
+	// Note it doesn't account for a self-destruct which appoints same contract as recipient.
+	BalanceChangeBurn = 13
+	// BalanceChangeBurnRefund is refunded to an account at the end of transaction based on
+	// gas usage from the estimated burn amount.
+	BalanceChangeBurnRefund = 14
+	BalanceChangeWithdrawal = 15
 )
