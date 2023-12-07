@@ -21,19 +21,23 @@ package state
 type BalanceChangeReason byte
 
 const (
-	BalanceChangeUnspecified BalanceChangeReason = iota
-	BalanceChangeRewardMineUncle
-	BalanceChangeRewardMineBlock
-	BalanceChangeDaoRefundContract
-	BalanceChangeDaoAdjustBalance
-	BalanceChangeTransfer
-	BalanceChangeGenesisBalance
-	BalanceChangeGasBuy
-	BalanceChangeRewardTransactionFee
-	BalanceChangeGasRefund
-	BalanceChangeTouchAccount
-	BalanceChangeSuicideRefund
-	BalanceChangeSuicideWithdraw
-	BalanceChangeBurn
-	BalanceChangeWithdrawal
+	BalanceChangeUnspecified          BalanceChangeReason = 0
+	BalanceChangeRewardMineUncle                          = 1
+	BalanceChangeRewardMineBlock                          = 2
+	BalanceChangeDaoRefundContract                        = 3
+	BalanceChangeDaoAdjustBalance                         = 4
+	BalanceChangeTransfer                                 = 5
+	BalanceChangeGenesisBalance                           = 6
+	BalanceChangeGasBuy                                   = 7
+	BalanceChangeRewardTransactionFee                     = 8
+	BalanceChangeGasRefund                                = 9
+	BalanceChangeTouchAccount                             = 10
+	// TODO: rename (debit, credit)
+	BalanceChangeSuicideRefund   = 11
+	BalanceChangeSuicideWithdraw = 12
+	// TODO: add method on statedb to track burn without Add/Sub balance
+	// Or: Track via OnBurn
+	// 1559 burn, blob burn, withdraw to self via selfdestruct burn, receive ether after selfdestruct (at end of tx)
+	BalanceChangeBurn       = 13
+	BalanceChangeWithdrawal = 14
 )
