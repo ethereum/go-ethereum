@@ -256,7 +256,6 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 // parent for completion tracking. The given path is a unique node path in
 // hex format and contain all the parent path if it's layered trie node.
 func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
-	// Short circuit if the trie is empty.
 	if root == types.EmptyRootHash {
 		return
 	}	
