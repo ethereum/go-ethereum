@@ -129,6 +129,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 	trieIt, err := s.trie.NodeIterator(conf.Start)
 	if err != nil {
+		log.Error("Trie dumping error", "err", err)
 		return nil
 	}
 	it := trie.NewIterator(trieIt)
