@@ -428,7 +428,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	)
 	for _, op := range s.membatch.nodes {
 		if op.isDelete() {
-			// node deletion is not supported in path mode.
+			// node deletion is only supported in path mode.
 			if op.owner == (common.Hash{}) {
 				rawdb.DeleteAccountTrieNode(dbw, op.path)
 			} else {
