@@ -17,7 +17,6 @@
 package catalyst
 
 import (
-	"context"
 	"crypto/rand"
 	"errors"
 	"math"
@@ -293,7 +292,7 @@ func (c *SimulatedBeacon) Rollback() {
 }
 
 // Fork sets the head to the provided hash.
-func (c *SimulatedBeacon) Fork(ctx context.Context, parentHash common.Hash) error {
+func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 	if len(c.eth.TxPool().Pending(false)) != 0 {
 		return errors.New("pending block dirty")
 	}

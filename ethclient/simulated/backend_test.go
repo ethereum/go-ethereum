@@ -36,7 +36,7 @@ var (
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
-func simTestBackend(testAddr common.Address) Backend {
+func simTestBackend(testAddr common.Address) *Backend {
 	return New(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
@@ -44,13 +44,15 @@ func simTestBackend(testAddr common.Address) Backend {
 	)
 }
 
-func newTx(sim Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+	client := sim.Client()
+
 	// create a signed transaction to send
-	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 	addr := crypto.PubkeyToAddress(key.PublicKey)
-	chainid, _ := sim.ChainID(context.Background())
-	nonce, err := sim.PendingNonceAt(context.Background(), addr)
+	chainid, _ := client.ChainID(context.Background())
+	nonce, err := client.PendingNonceAt(context.Background(), addr)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,10 @@ func newTx(sim Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 
 func TestNewSim(t *testing.T) {
 	sim := New(core.GenesisAlloc{}, 30_000_000)
-	num, err := sim.BlockNumber(context.Background())
+	defer sim.Close()
+
+	client := sim.Client()
+	num, err := client.BlockNumber(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +82,7 @@ func TestNewSim(t *testing.T) {
 	}
 	// Create a block
 	sim.Commit()
-	num, err = sim.BlockNumber(context.Background())
+	num, err = client.BlockNumber(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,12 +95,14 @@ func TestAdjustTime(t *testing.T) {
 	sim := New(core.GenesisAlloc{}, 10_000_000)
 	defer sim.Close()
 
-	block1, _ := sim.BlockByNumber(context.Background(), nil)
+	client := sim.Client()
+	block1, _ := client.BlockByNumber(context.Background(), nil)
+
 	// Create a block
 	if err := sim.AdjustTime(time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	block2, _ := sim.BlockByNumber(context.Background(), nil)
+	block2, _ := client.BlockByNumber(context.Background(), nil)
 	prevTime := block1.Time()
 	newTime := block2.Time()
 	if newTime-prevTime != uint64(time.Minute) {
@@ -106,19 +113,21 @@ func TestAdjustTime(t *testing.T) {
 func TestSendTransaction(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
-	bgCtx := context.Background()
+
+	client := sim.Client()
+	ctx := context.Background()
 
 	signedTx, err := newTx(sim, testKey)
 	if err != nil {
 		t.Errorf("could not create transaction: %v", err)
 	}
 	// send tx to simulated backend
-	err = sim.SendTransaction(bgCtx, signedTx)
+	err = client.SendTransaction(ctx, signedTx)
 	if err != nil {
 		t.Errorf("could not add tx to pending block: %v", err)
 	}
 	sim.Commit()
-	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	block, err := client.BlockByNumber(ctx, big.NewInt(1))
 	if err != nil {
 		t.Errorf("could not get block at height 1: %v", err)
 	}
@@ -144,10 +153,11 @@ func TestFork(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
+	client := sim.Client()
 	ctx := context.Background()
 
 	// 1.
-	parent, _ := sim.HeaderByNumber(ctx, nil)
+	parent, _ := client.HeaderByNumber(ctx, nil)
 
 	// 2.
 	n := int(rand.Int31n(21))
@@ -156,13 +166,13 @@ func TestFork(t *testing.T) {
 	}
 
 	// 3.
-	b, _ := sim.BlockNumber(ctx)
+	b, _ := client.BlockNumber(ctx)
 	if b != uint64(n) {
 		t.Error("wrong chain length")
 	}
 
 	// 4.
-	sim.Fork(ctx, parent.Hash())
+	sim.Fork(parent.Hash())
 
 	// 5.
 	for i := 0; i < n+1; i++ {
@@ -170,7 +180,7 @@ func TestFork(t *testing.T) {
 	}
 
 	// 6.
-	b, _ = sim.BlockNumber(ctx)
+	b, _ = client.BlockNumber(ctx)
 	if b != uint64(n+1) {
 		t.Error("wrong chain length")
 	}
@@ -191,36 +201,38 @@ func TestForkResendTx(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
-	// 1.
+	client := sim.Client()
 	ctx := context.Background()
-	parent, _ := sim.HeaderByNumber(ctx, nil)
+
+	// 1.
+	parent, _ := client.HeaderByNumber(ctx, nil)
 
 	// 2.
 	tx, err := newTx(sim, testKey)
 	if err != nil {
 		t.Fatalf("could not create transaction: %v", err)
 	}
-	sim.SendTransaction(context.Background(), tx)
+	client.SendTransaction(ctx, tx)
 	sim.Commit()
 
 	// 3.
-	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
+	receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 1 {
 		t.Errorf("TX included in wrong block: %d", h)
 	}
 
 	// 4.
-	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
+	if err := sim.Fork(parent.Hash()); err != nil {
 		t.Errorf("forking: %v", err)
 	}
 
 	// 5.
 	sim.Commit()
-	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+	if err := client.SendTransaction(ctx, tx); err != nil {
 		t.Fatalf("sending transaction: %v", err)
 	}
 	sim.Commit()
-	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
+	receipt, _ = client.TransactionReceipt(ctx, tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 2 {
 		t.Errorf("TX included in wrong block: %d", h)
 	}
@@ -232,26 +244,30 @@ func TestCommitReturnValue(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
+	client := sim.Client()
+	ctx := context.Background()
+
 	// Test if Commit returns the correct block hash
 	h1 := sim.Commit()
-	cur, _ := sim.HeaderByNumber(context.Background(), nil)
+	cur, _ := client.HeaderByNumber(ctx, nil)
 	if h1 != cur.Hash() {
 		t.Error("Commit did not return the hash of the last block.")
 	}
 
 	// Create a block in the original chain (containing a transaction to force different block hashes)
-	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	head, _ := client.HeaderByNumber(ctx, nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
-	sim.SendTransaction(context.Background(), tx)
+	client.SendTransaction(ctx, tx)
+
 	h2 := sim.Commit()
 
 	// Create another block in the original chain
 	sim.Commit()
 
 	// Fork at the first bock
-	if err := sim.Fork(context.Background(), h1); err != nil {
+	if err := sim.Fork(h1); err != nil {
 		t.Errorf("forking: %v", err)
 	}
 
@@ -260,7 +276,7 @@ func TestCommitReturnValue(t *testing.T) {
 	if h2 == h2fork {
 		t.Error("The block in the fork and the original block are the same block!")
 	}
-	if header, err := sim.HeaderByHash(context.Background(), h2fork); err != nil || header == nil {
+	if header, err := client.HeaderByHash(ctx, h2fork); err != nil || header == nil {
 		t.Error("Could not retrieve the just created block (side-chain)")
 	}
 }
@@ -273,15 +289,18 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
+	client := sim.Client()
+	ctx := context.Background()
+
 	sim.Commit() // h1
-	h1, _ := sim.HeaderByNumber(context.Background(), nil)
+	h1, _ := client.HeaderByNumber(ctx, nil)
 
 	sim.Commit() // h2
-	sim.Fork(context.Background(), h1.Hash())
+	sim.Fork(h1.Hash())
 	sim.AdjustTime(1 * time.Second)
 	sim.Commit()
 
-	head, _ := sim.HeaderByNumber(context.Background(), nil)
+	head, _ := client.HeaderByNumber(ctx, nil)
 	if head.Number.Uint64() == 2 && head.ParentHash != h1.Hash() {
 		t.Errorf("failed to build block on fork")
 	}

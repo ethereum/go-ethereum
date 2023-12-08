@@ -17,7 +17,6 @@
 package simulated
 
 import (
-	"context"
 	"math"
 	"time"
 
@@ -37,32 +36,24 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var _ bind.ContractBackend = (Backend)(nil)
-var _ bind.ContractBackend = (*simBackend)(nil)
+var _ bind.ContractBackend = (Client)(nil)
 
-type SimChainManagement interface {
-	// Commit seals a block and moves the chain forward to a new empty block.
-	Commit() common.Hash
-
-	// Rollback un-sends previously added transactions.
-	Rollback()
-
-	// Fork sets the head to a new block, which is based on the provided parentHash.
-	Fork(ctx context.Context, parentHash common.Hash) error
-
-	// AdjustTime changes the block timestamp.
-	AdjustTime(adjustment time.Duration) error
-
-	// Close closes the backend. You need to call this to clean up resources.
-	Close() error
+// Backend is a simulated blockchain. You can use it to test your contracts or
+// other code that interacts with the Ethereum chain.
+type Backend struct {
+	eth    *eth.Ethereum
+	beacon *catalyst.SimulatedBeacon
+	client simClient
 }
 
-// Backend all interfaces in the ethereum package, but is based on a
-// simulated blockchain. It is intended for testing purposes.
-type Backend interface {
-	SimChainManagement
+// simClient wraps ethclient. This exists to prevent extracting ethclient.Client from the
+// Client interface returned by Backend.
+type simClient struct {
+	*ethclient.Client
+}
 
-	// The backend implements all interfaces in the ethereum package.
+// Client exposes the methods provided by the Ethereum RPC client.
+type Client interface {
 	ethereum.BlockNumberReader
 	ethereum.ChainReader
 	ethereum.ChainStateReader
@@ -78,16 +69,10 @@ type Backend interface {
 	ethereum.ChainIDReader
 }
 
-type simBackend struct {
-	eth *eth.Ethereum
-	*catalyst.SimulatedBeacon
-	*ethclient.Client
-}
-
 // New creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func New(alloc core.GenesisAlloc, gasLimit uint64) Backend {
+func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
 	// Setup the node object
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
@@ -118,7 +103,7 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) Backend {
 // NewWithNode sets up a simulated backend on an existing node
 // this allows users to do persistent simulations.
 // The provided node must not be started and will be started by NewWithNode
-func NewWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (Backend, error) {
+func NewWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
@@ -143,26 +128,63 @@ func NewWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (Backen
 	}
 
 	// Reorg our chain back to genesis
-	if err := beacon.Fork(context.Background(), backend.BlockChain().GetCanonicalHash(0)); err != nil {
+	if err := beacon.Fork(backend.BlockChain().GetCanonicalHash(0)); err != nil {
 		return nil, err
 	}
 
-	return &simBackend{
-		eth:             backend,
-		SimulatedBeacon: beacon,
-		Client:          ethclient.NewClient(stack.Attach()),
+	return &Backend{
+		eth:    backend,
+		beacon: beacon,
+		client: simClient{ethclient.NewClient(stack.Attach())},
 	}, nil
 }
 
-func (n *simBackend) Close() error {
-	if n.Client != nil {
-		n.Client.Close()
-		n.Client = nil
+func (n *Backend) Close() error {
+	if n.client.Client != nil {
+		n.client.Close()
+		n.client = simClient{}
 	}
-	if n.SimulatedBeacon != nil {
-		err := n.SimulatedBeacon.Stop()
-		n.SimulatedBeacon = nil
+	if n.beacon != nil {
+		err := n.beacon.Stop()
+		n.beacon = nil
 		return err
 	}
 	return nil
+}
+
+// Commit seals a block and moves the chain forward to a new empty block.
+func (n *Backend) Commit() common.Hash {
+	return n.beacon.Commit()
+}
+
+// Rollback removes all pending transactions, reverting to the last committed state.
+func (n *Backend) Rollback() {
+	n.beacon.Rollback()
+}
+
+// Fork creates a side-chain that can be used to simulate reorgs.
+//
+// This function should be called with the ancestor block where the new side
+// chain should be started. Transactions (old and new) can then be applied on
+// top and Commit-ed.
+//
+// Note, the side-chain will only become canonical (and trigger the events) when
+// it becomes longer. Until then CallContract will still operate on the current
+// canonical chain.
+//
+// There is a % chance that the side chain becomes canonical at the same length
+// to simulate live network behavior.
+func (n *Backend) Fork(parentHash common.Hash) error {
+	return n.beacon.Fork(parentHash)
+}
+
+// AdjustTime changes the block timestamp.
+// It can only be called on empty blocks.
+func (n *Backend) AdjustTime(adjustment time.Duration) error {
+	return n.beacon.AdjustTime(adjustment)
+}
+
+// Client returns a client that accesses the simulated chain.
+func (n *Backend) Client() Client {
+	return n.client
 }
