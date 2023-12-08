@@ -27,9 +27,11 @@ type SimulatedBackend struct {
 
 // New creates a new binding backend using a simulated blockchain
 // for testing purposes.
+//
 // A simulated backend always uses chainID 1337.
 //
-// Deprecated: please use simulated.Backend instead
+// Deprecated: please use simulated.Backend from package
+// github.com/ethereum/go-ethereum/ethclient/simulated instead.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) SimulatedBackend {
 	return SimulatedBackend{simulated.New(alloc, gasLimit)}
 }
