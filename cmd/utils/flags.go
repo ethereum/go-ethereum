@@ -1677,10 +1677,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
-	if !ctx.Bool(SnapshotFlag.Name) {
+	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
 		if cfg.SyncMode == downloader.SnapSync {
-			log.Info("Snap sync requested, enabling --snapshot")
+			if !ctx.Bool(SnapshotFlag.Name) {
+				log.Warn("Snap sync requested, enabling --snapshot")
+			}
+			if cfg.SnapshotCache == 0 {
+				log.Warn("Snap sync requested, resetting --cache.snapshot")
+				cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * CacheSnapshotFlag.Value / 100
+			}
 		} else {
 			cfg.TrieCleanCache += cfg.SnapshotCache
 			cfg.SnapshotCache = 0 // Disabled
