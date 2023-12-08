@@ -74,8 +74,8 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
-// setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+// SetDefaults fills in default values for unspecified tx fields.
+func (args *TransactionArgs) SetDefaults(ctx context.Context, b Backend) error {
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 }
 
 // toTransaction converts the arguments to a transaction.
-// This assumes that setDefaults has been called.
+// This assumes that SetDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
@@ -325,7 +325,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 }
 
 // ToTransaction converts the arguments to a transaction.
-// This assumes that setDefaults has been called.
+// This assumes that SetDefaults has been called.
 func (args *TransactionArgs) ToTransaction() *types.Transaction {
 	return args.toTransaction()
 }

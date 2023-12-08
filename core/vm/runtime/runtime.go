@@ -54,7 +54,7 @@ type Config struct {
 }
 
 // sets defaults on the config
-func setDefaults(cfg *Config) {
+func SetDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -111,7 +111,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
-	setDefaults(cfg)
+	SetDefaults(cfg)
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -145,7 +145,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
-	setDefaults(cfg)
+	SetDefaults(cfg)
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
@@ -175,7 +175,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
-	setDefaults(cfg)
+	SetDefaults(cfg)
 
 	var (
 		vmenv   = NewEnv(cfg)

@@ -42,7 +42,7 @@ import (
 
 func TestDefaults(t *testing.T) {
 	cfg := new(Config)
-	setDefaults(cfg)
+	SetDefaults(cfg)
 
 	if cfg.Difficulty == nil {
 		t.Error("expected difficulty to be non nil")
@@ -326,7 +326,7 @@ func TestBlockhash(t *testing.T) {
 // state, this should not be used, since it does not reset the state between runs.
 func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode string, b *testing.B) {
 	cfg := new(Config)
-	setDefaults(cfg)
+	SetDefaults(cfg)
 	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
