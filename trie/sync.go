@@ -262,10 +262,13 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	}
 	// Short circuit if the trie is already known.
 	owner, inner := ResolvePath(path)
-	if exist, mismatch := s.hasNode(owner, inner, root); exist {
+	exist, mismatch := s.hasNode(owner, inner, root)
+	if exist {
 		return
-	} else if mismatch {
-		s.membatch.delNode(owner, inner) // remove the inconsistent node.
+	}
+	if mismatch {
+		// The node is inconsistent with and needs to be removed.
+		s.membatch.delNode(owner, inner)
 	}
 	// Assemble the new sub-trie sync request
 	req := &nodeRequest{
@@ -599,9 +602,11 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 
 				// Short circuit if the child node is already known.
 				owner, inner := ResolvePath(path)
-				if exist, mismatch := s.hasNode(owner, inner, hash); exist {
+				exist, mismatch := s.hasNode(owner, inner, hash)
+				if exist {
 					return
-				} else if mismatch {
+				}
+				if mismatch {
 					batchMu.Lock()
 					s.membatch.delNode(owner, inner) // remove the inconsistent node
 					batchMu.Unlock()
@@ -677,27 +682,26 @@ func (s *Sync) commitCodeRequest(req *codeRequest) error {
 	return nil
 }
 
-// hasNode reports whether the specified trie node is already present in the
-// database. Additionally, it returns a flag in the path-based scheme if
-// there is an inconsistent node existing at the specified path.
-func (s *Sync) hasNode(owner common.Hash, path []byte, root common.Hash) (bool, bool) {
+// hasNode reports whether the specified trie node is present in the database.
+// 'exists' is true when the node exists in the database and matches the given root
+// hash. The 'inconsistent' return value is true when the node exists but does not
+// match the expected hash.
+func (s *Sync) hasNode(owner common.Hash, path []byte, hash common.Hash) (exists bool, inconsistent bool) {
 	// If node is running with hash scheme, check the presence with node hash.
 	if s.scheme == rawdb.HashScheme {
-		return rawdb.HasLegacyTrieNode(s.database, root), false
+		return rawdb.HasLegacyTrieNode(s.database, hash), false
 	}
 	// If node is running with path scheme, check the presence with node path.
+	var blob []byte
+	var dbHash common.Hash
 	if owner == (common.Hash{}) {
-		blob, hash := rawdb.ReadAccountTrieNode(s.database, path)
-		if hash == root {
-			return true, false
-		}
-		return false, len(blob) != 0 // flag if the inconsistent node is present
+		blob, dbHash = rawdb.ReadAccountTrieNode(s.database, path)
+	} else {
+		blob, dbHash = rawdb.ReadStorageTrieNode(s.database, owner, path)
 	}
-	blob, hash := rawdb.ReadStorageTrieNode(s.database, owner, path)
-	if hash == root {
-		return true, false
-	}
-	return false, len(blob) != 0 // flag if the inconsistent node is present
+	exists = hash == dbHash
+	inconsistent = !exists && len(blob) != 0
+	return exists, inconsistent
 }
 
 // ResolvePath resolves the provided composite node path by separating the
