@@ -31,20 +31,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type Code []byte
-
-func (c Code) String() string {
-	return string(c) //strings.Join(Disassemble(c), " ")
-}
-
 type Storage map[common.Hash]common.Hash
-
-func (s Storage) String() (str string) {
-	for key, value := range s {
-		str += fmt.Sprintf("%X : %X\n", key, value)
-	}
-	return
-}
 
 func (s Storage) Copy() Storage {
 	cpy := make(Storage, len(s))
@@ -68,8 +55,8 @@ type stateObject struct {
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
 	// Write caches.
-	trie Trie // storage trie, which becomes non-nil on first access
-	code Code // contract bytecode, which gets set when code is loaded
+	trie Trie   // storage trie, which becomes non-nil on first access
+	code []byte // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
@@ -78,14 +65,9 @@ type stateObject struct {
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
 
-	// Flag whether the account was marked as self-destructed. The self-destructed account
-	// is still accessible in the scope of same transaction.
+	// Flag whether the account was marked as self-destructed. The self-destructed
+	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
-
-	// Flag whether the account was marked as deleted. A self-destructed account
-	// or an account that is considered as empty will be marked as deleted at
-	// the end of transaction and no longer accessible anymore.
-	deleted bool
 
 	// Flag whether the object was created in the current transaction
 	created bool
@@ -450,12 +432,12 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		obj.trie = db.db.CopyTrie(s.trie)
 	}
 	obj.code = s.code
-	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.originStorage = s.originStorage.Copy()
 	obj.pendingStorage = s.pendingStorage.Copy()
-	obj.selfDestructed = s.selfDestructed
+	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.dirtyCode = s.dirtyCode
-	obj.deleted = s.deleted
+	obj.selfDestructed = s.selfDestructed
+	obj.created = s.created
 	return obj
 }
 
@@ -470,7 +452,7 @@ func (s *stateObject) Address() common.Address {
 
 // Code returns the contract code associated with this object, if any.
 func (s *stateObject) Code() []byte {
-	if s.code != nil {
+	if len(s.code) != 0 {
 		return s.code
 	}
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
@@ -488,7 +470,7 @@ func (s *stateObject) Code() []byte {
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
 func (s *stateObject) CodeSize() int {
-	if s.code != nil {
+	if len(s.code) != 0 {
 		return len(s.code)
 	}
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
