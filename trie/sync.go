@@ -259,15 +259,14 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 	// Short circuit if the trie is empty.
 	if root == types.EmptyRootHash {
 		return
-	}
-	// Short circuit if the trie is already known.
+	}	
 	owner, inner := ResolvePath(path)
-	exist, mismatch := s.hasNode(owner, inner, root)
+	exist, inconsistent := s.hasNode(owner, inner, root)
 	if exist {
+		// The entire subtrie is already present in the database.
 		return
-	}
-	if mismatch {
-		// The node is inconsistent with and needs to be removed.
+	} else if inconsistent {
+		// There is a pre-existing node with the wrong hash in DB, remove it.
 		s.membatch.delNode(owner, inner)
 	}
 	// Assemble the new sub-trie sync request
@@ -593,22 +592,22 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				}
 			}
 		}
-		// If the child references another node, resolve or schedule
+		// If the child references another node, resolve or schedule.
+		// We check all children concurrently.
 		if node, ok := (child.node).(hashNode); ok {
-			// Check the presence of children concurrently
+			path := child.path
+			hash := common.BytesToHash(node)
 			pending.Add(1)
-			go func(path []byte, hash common.Hash) {
+			go func() {
 				defer pending.Done()
-
-				// Short circuit if the child node is already known.
 				owner, inner := ResolvePath(path)
-				exist, mismatch := s.hasNode(owner, inner, hash)
-				if exist {
+				exist, inconsistent := s.hasNode(owner, inner, hash)
+				if exist {					
 					return
-				}
-				if mismatch {
+				} else if inconsistent {
+					// There is a pre-existing node with the wrong hash in DB, remove it.
 					batchMu.Lock()
-					s.membatch.delNode(owner, inner) // remove the inconsistent node
+					s.membatch.delNode(owner, inner)
 					batchMu.Unlock()
 				}
 				// Locally unknown node, schedule for retrieval
@@ -618,7 +617,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 					parent:   req,
 					callback: req.callback,
 				}
-			}(child.path, common.BytesToHash(node))
+			}()
 		}
 	}
 	pending.Wait()
