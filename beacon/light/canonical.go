@@ -48,6 +48,8 @@ func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalSt
 		kl    = len(keyPrefix)
 		first = true
 	)
+	defer iter.Release()
+
 	for iter.Next() {
 		if len(iter.Key()) != kl+8 {
 			log.Warn("Invalid key length in the canonical chain database", "key", fmt.Sprintf("%#x", iter.Key()))
@@ -57,12 +59,11 @@ func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalSt
 		if first {
 			cs.periods.Start = period
 		} else if cs.periods.End != period {
-			return nil, fmt.Errorf("Gap in the canonical chain database between periods %d and %d", cs.periods.End, period-1)
+			return nil, fmt.Errorf("gap in the canonical chain database between periods %d and %d", cs.periods.End, period-1)
 		}
 		first = false
 		cs.periods.End = period + 1
 	}
-	iter.Release()
 	return cs, nil
 }
 
