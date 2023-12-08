@@ -95,7 +95,7 @@ func LevelString(l slog.Level) string {
 	case slog.LevelWarn:
 		return "warn"
 	case slog.LevelError:
-		return "error"
+		return "eror"
 	case LevelCrit:
 		return "crit"
 	default:
