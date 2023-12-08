@@ -258,7 +258,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
 	if root == types.EmptyRootHash {
 		return
-	}	
+	}
 	owner, inner := ResolvePath(path)
 	exist, inconsistent := s.hasNode(owner, inner, root)
 	if exist {
@@ -601,7 +601,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				defer pending.Done()
 				owner, inner := ResolvePath(path)
 				exist, inconsistent := s.hasNode(owner, inner, hash)
-				if exist {					
+				if exist {
 					return
 				} else if inconsistent {
 					// There is a pre-existing node with the wrong hash in DB, remove it.
