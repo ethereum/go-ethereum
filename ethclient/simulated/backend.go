@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
@@ -35,8 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-var _ bind.ContractBackend = (Client)(nil)
 
 // Backend is a simulated blockchain. You can use it to test your contracts or
 // other code that interacts with the Ethereum chain.
