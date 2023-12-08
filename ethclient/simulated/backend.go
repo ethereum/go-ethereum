@@ -91,7 +91,7 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) Backend {
 	// Setup the node object
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
-	nodeConf.P2P = p2p.Config{DiscAddr: "", ListenAddr: ""}
+	nodeConf.P2P = p2p.Config{NoDiscovery: true}
 	stack, err := node.New(&nodeConf)
 	if err != nil {
 		// This should never happen, if it does, please open an issue
