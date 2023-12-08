@@ -21,16 +21,13 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-)
-
-var (
-	treasury = common.HexToAddress("0xdf09A0afD09a63fb04ab3573922437e1e637dE8b")
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -451,7 +448,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// CHANGE(taiko): basefee is not burnt, but sent to a treasury instead.
 		if st.evm.ChainConfig().Taiko && st.evm.Context.BaseFee != nil && !st.msg.IsAnchor {
 			st.state.AddBalance(
-				treasury,
+				st.getTreasuryAddress(),
 				new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(st.gasUsed())),
 			)
 		}
@@ -489,4 +486,18 @@ func (st *StateTransition) gasUsed() uint64 {
 // blobGasUsed returns the amount of blob gas used by the message.
 func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
+}
+
+// CHANGE(taiko): returns the treasury address based on chain ID.
+func (st *StateTransition) getTreasuryAddress() common.Address {
+	var (
+		prefix = st.evm.ChainConfig().ChainID.String()
+		suffix = "10001"
+	)
+	return common.HexToAddress(
+		"0x" +
+			prefix +
+			strings.Repeat("0", common.AddressLength*2-len(prefix)-len(suffix)) +
+			suffix,
+	)
 }

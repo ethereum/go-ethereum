@@ -4,11 +4,11 @@ import (
 	_ "embed"
 )
 
-//go:embed internal.json
-var InternalGenesisAllocJSON []byte
+//go:embed internal_l2a.json
+var InternalL2AGenesisAllocJSON []byte
 
-//go:embed internal_l3.json
-var InternalL3GenesisAllocJSON []byte
+//go:embed internal_l2b.json
+var InternalL2BGenesisAllocJSON []byte
 
 //go:embed snaefellsjokull.json
 var SnaefellsjokullGenesisAllocJSON []byte

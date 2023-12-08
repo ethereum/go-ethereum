@@ -15,12 +15,12 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 
 	var allocJSON []byte
 	switch networkID {
-	case params.TaikoInternalNetworkID.Uint64():
-		chainConfig.ChainID = params.TaikoInternalNetworkID
-		allocJSON = taikoGenesis.InternalGenesisAllocJSON
-	case params.TaikoInternalL3NetworkID.Uint64():
-		chainConfig.ChainID = params.TaikoInternalL3NetworkID
-		allocJSON = taikoGenesis.InternalL3GenesisAllocJSON
+	case params.TaikoInternalL2ANetworkID.Uint64():
+		chainConfig.ChainID = params.TaikoInternalL2ANetworkID
+		allocJSON = taikoGenesis.InternalL2AGenesisAllocJSON
+	case params.TaikoInternalL2BNetworkID.Uint64():
+		chainConfig.ChainID = params.TaikoInternalL2BNetworkID
+		allocJSON = taikoGenesis.InternalL2BGenesisAllocJSON
 	case params.SnaefellsjokullNetworkID.Uint64():
 		chainConfig.ChainID = params.SnaefellsjokullNetworkID
 		allocJSON = taikoGenesis.SnaefellsjokullGenesisAllocJSON
@@ -37,8 +37,8 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 		chainConfig.ChainID = params.JolnirNetworkID
 		allocJSON = taikoGenesis.JolnirGenesisAllocJSON
 	default:
-		chainConfig.ChainID = params.TaikoInternalNetworkID
-		allocJSON = taikoGenesis.InternalGenesisAllocJSON
+		chainConfig.ChainID = params.TaikoInternalL2ANetworkID
+		allocJSON = taikoGenesis.InternalL2AGenesisAllocJSON
 	}
 
 	var alloc GenesisAlloc

@@ -10,18 +10,18 @@ func u64(val uint64) *uint64 { return &val }
 
 // Network IDs
 var (
-	TaikoInternalNetworkID   = big.NewInt(167001)
-	TaikoInternalL3NetworkID = big.NewInt(167002)
-	SnaefellsjokullNetworkID = big.NewInt(167003)
-	AskjaNetworkID           = big.NewInt(167004)
-	GrimsvotnNetworkID       = big.NewInt(167005)
-	EldfellNetworkID         = big.NewInt(167006)
-	JolnirNetworkID          = big.NewInt(167007)
+	TaikoInternalL2ANetworkID = big.NewInt(167001)
+	TaikoInternalL2BNetworkID = big.NewInt(167002)
+	SnaefellsjokullNetworkID  = big.NewInt(167003)
+	AskjaNetworkID            = big.NewInt(167004)
+	GrimsvotnNetworkID        = big.NewInt(167005)
+	EldfellNetworkID          = big.NewInt(167006)
+	JolnirNetworkID           = big.NewInt(167007)
 )
 
 var networkIDToChainConfig = map[*big.Int]*ChainConfig{
-	TaikoInternalNetworkID:     TaikoChainConfig,
-	TaikoInternalL3NetworkID:   TaikoChainConfig,
+	TaikoInternalL2ANetworkID:  TaikoChainConfig,
+	TaikoInternalL2BNetworkID:  TaikoChainConfig,
 	SnaefellsjokullNetworkID:   TaikoChainConfig,
 	AskjaNetworkID:             TaikoChainConfig,
 	GrimsvotnNetworkID:         TaikoChainConfig,
@@ -43,7 +43,7 @@ func NetworkIDToChainConfigOrDefault(networkID *big.Int) *ChainConfig {
 }
 
 var TaikoChainConfig = &ChainConfig{
-	ChainID:                       TaikoInternalNetworkID, // Use Internal Devnet network ID by default.
+	ChainID:                       TaikoInternalL2ANetworkID, // Use Internal Devnet network ID by default.
 	HomesteadBlock:                common.Big0,
 	EIP150Block:                   common.Big0,
 	EIP155Block:                   common.Big0,

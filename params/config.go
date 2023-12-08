@@ -282,12 +282,13 @@ var NetworkNames = map[string]string{
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 	// CHANGE(taiko): add Taiko network name.
-	TaikoInternalNetworkID.String():   "Taiko Internal Devnet",
-	SnaefellsjokullNetworkID.String(): "Taiko Alpha-1 (Snæfellsjökull)",
-	AskjaNetworkID.String():           "Taiko Alpha-2 (Askja)",
-	GrimsvotnNetworkID.String():       "Taiko Alpha-3 L2 (Grimsvotn)",
-	EldfellNetworkID.String():         "Taiko Alpha-4 L3 (Eldfell)",
-	JolnirNetworkID.String():          "Taiko Alpha-5 L2 (Jolnir)",
+	TaikoInternalL2ANetworkID.String(): "Taiko Internal L2A Devnet",
+	TaikoInternalL2BNetworkID.String(): "Taiko Internal L2B Devnet",
+	SnaefellsjokullNetworkID.String():  "Taiko Alpha-1 (Snæfellsjökull)",
+	AskjaNetworkID.String():            "Taiko Alpha-2 (Askja)",
+	GrimsvotnNetworkID.String():        "Taiko Alpha-3 L2 (Grimsvotn)",
+	EldfellNetworkID.String():          "Taiko Alpha-4 L3 (Eldfell)",
+	JolnirNetworkID.String():           "Taiko Alpha-5 L2 (Jolnir)",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
