@@ -150,7 +150,7 @@ type CodeSyncResult struct {
 type nodeOp struct {
 	owner common.Hash // identifier of the trie (empty for account trie)
 	path  []byte      // path from the root to the specified node.
-	blob  []byte      // the content of the node, nil means it's deletion
+	blob  []byte      // the content of the node (nil for deletion)
 	hash  common.Hash // hash of the node content (empty for node deletion)
 }
 
@@ -256,13 +256,16 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 // parent for completion tracking. The given path is a unique node path in
 // hex format and contain all the parent path if it's layered trie node.
 func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
-	// Short circuit if the trie is empty or already known
+	// Short circuit if the trie is empty.
 	if root == types.EmptyRootHash {
 		return
 	}
+	// Short circuit if the trie is already known.
 	owner, inner := ResolvePath(path)
-	if s.hasNode(owner, inner, root) {
+	if exist, mismatch := s.hasNode(owner, inner, root); exist {
 		return
+	} else if mismatch {
+		s.membatch.delNode(owner, inner) // remove the inconsistent node.
 	}
 	// Assemble the new sub-trie sync request
 	req := &nodeRequest{
@@ -424,9 +427,12 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	)
 	for _, op := range s.membatch.nodes {
 		if op.isDelete() {
-			// node deletion is only supported in path mode for which
-			// node hash is not required.
-			rawdb.DeleteTrieNode(dbw, op.owner, op.path, common.Hash{} /* unused */, s.scheme)
+			// node deletion is not supported in path mode.
+			if op.owner == (common.Hash{}) {
+				rawdb.DeleteAccountTrieNode(dbw, op.path)
+			} else {
+				rawdb.DeleteStorageTrieNode(dbw, op.owner, op.path)
+			}
 			deletionGauge.Inc(1)
 		} else {
 			if op.owner == (common.Hash{}) {
@@ -566,6 +572,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	var (
 		missing = make(chan *nodeRequest, len(children))
 		pending sync.WaitGroup
+		batchMu sync.Mutex
 	)
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
@@ -590,11 +597,14 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			go func(path []byte, hash common.Hash) {
 				defer pending.Done()
 
-				// If database says duplicate, then at least the trie node is present
-				// and we hold the assumption that it's NOT legacy contract code.
+				// Short circuit if the child node is already known.
 				owner, inner := ResolvePath(path)
-				if s.hasNode(owner, inner, hash) {
+				if exist, mismatch := s.hasNode(owner, inner, hash); exist {
 					return
+				} else if mismatch {
+					batchMu.Lock()
+					s.membatch.delNode(owner, inner) // remove the inconsistent node
+					batchMu.Unlock()
 				}
 				// Locally unknown node, schedule for retrieval
 				missing <- &nodeRequest{
@@ -667,38 +677,27 @@ func (s *Sync) commitCodeRequest(req *codeRequest) error {
 	return nil
 }
 
-// hasNode reports if the specified trie node is present in database or not.
-//
-// Notably, the existent node should be wiped in path scheme if it's not matched
-// with the requested one, otherwise the persistent state will end up with a
-// weird situation that parent node is inconsistent with children while they
-// are all present in database.
-func (s *Sync) hasNode(owner common.Hash, path []byte, root common.Hash) bool {
-	// If node is run with hash scheme, check the presence with node hash.
+// hasNode reports whether the specified trie node is already present in the
+// database. Additionally, it returns a flag in the path-based scheme if
+// there is an inconsistent node existing at the specified path.
+func (s *Sync) hasNode(owner common.Hash, path []byte, root common.Hash) (bool, bool) {
+	// If node is running with hash scheme, check the presence with node hash.
 	if s.scheme == rawdb.HashScheme {
-		return rawdb.HasLegacyTrieNode(s.database, root)
+		return rawdb.HasLegacyTrieNode(s.database, root), false
 	}
-	// If node is run with path scheme, check the presence with node path.
+	// If node is running with path scheme, check the presence with node path.
 	if owner == (common.Hash{}) {
 		blob, hash := rawdb.ReadAccountTrieNode(s.database, path)
 		if hash == root {
-			return true
+			return true, false
 		}
-		// Remove the inconsistent node before expanding the path.
-		if len(blob) != 0 {
-			s.membatch.delNode(common.Hash{}, path)
-		}
-		return false
+		return false, len(blob) != 0 // flag if the inconsistent node is present
 	}
 	blob, hash := rawdb.ReadStorageTrieNode(s.database, owner, path)
 	if hash == root {
-		return true
+		return true, false
 	}
-	// Remove the inconsistent node before expanding the path.
-	if len(blob) != 0 {
-		s.membatch.delNode(owner, path)
-	}
-	return false
+	return false, len(blob) != 0 // flag if the inconsistent node is present
 }
 
 // ResolvePath resolves the provided composite node path by separating the
