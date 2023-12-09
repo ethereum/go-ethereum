@@ -424,13 +424,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
 	}
-
-	if !rules.IsLondon {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
-		st.refundGas(params.RefundQuotient)
-	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
-		st.refundGas(params.RefundQuotientEIP3529)
+	if !st.msg.IsAnchor {
+		if !rules.IsLondon {
+			// Before EIP-3529: refunds were capped to gasUsed / 2
+			st.refundGas(params.RefundQuotient)
+		} else {
+			// After EIP-3529: refunds are capped to gasUsed / 5
+			st.refundGas(params.RefundQuotientEIP3529)
+		}
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
