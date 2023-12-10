@@ -273,10 +273,19 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 }
 
 func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
+	pong, err := p.pingInner(node)
+	if err != nil {
+		return 0, err
+	}
+
+	return pong.EnrSeq, nil
+}
+
+func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	enrSeq := p.Self().Seq()
 	radiusBytes, err := p.nodeRadius.MarshalSSZ()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	customPayload := &portalwire.PingPongCustomData{
 		Radius: radiusBytes,
@@ -284,7 +293,7 @@ func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
 
 	customPayloadBytes, err := customPayload.MarshalSSZ()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	pingRequest := &portalwire.Ping{
@@ -295,7 +304,7 @@ func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
 	p.log.Trace("Sending ping request", "protocol", p.protocolId, "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
 	pingRequestBytes, err := pingRequest.MarshalSSZ()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	talkRequestBytes := make([]byte, 0, len(pingRequestBytes)+1)
@@ -306,8 +315,9 @@ func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
 
 	if err != nil {
 		p.replaceNode(node)
-		return 0, err
+		return nil, err
 	}
+
 	return p.processPong(node, talkResp)
 }
 
@@ -630,15 +640,15 @@ func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distance
 	return nodes
 }
 
-func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (uint64, error) {
+func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwire.Pong, error) {
 	if resp[0] != portalwire.PONG {
-		return 0, fmt.Errorf("invalid pong response")
+		return nil, fmt.Errorf("invalid pong response")
 	}
 	pong := &portalwire.Pong{}
 	err := pong.UnmarshalSSZ(resp[1:])
 	if err != nil {
 		p.replaceNode(target)
-		return 0, err
+		return nil, err
 	}
 
 	p.log.Trace("Received pong response", "id", target.ID(), "pong", pong)
@@ -647,14 +657,14 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (uint64, e
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
 	if err != nil {
 		p.replaceNode(target)
-		return 0, err
+		return nil, err
 	}
 
 	p.log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	p.table.addVerifiedNode(wrapNode(target))
-	return pong.EnrSeq, nil
+	return pong, nil
 }
 
 func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {

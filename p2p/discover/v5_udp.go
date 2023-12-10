@@ -224,6 +224,36 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
+// ResolveNodeId searches for a specific Node with the given ID.
+// It returns nil if the nodeId could not be resolved.
+func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
+	if id == t.Self().ID() {
+		return t.Self()
+	}
+
+	n := t.tab.getNode(id)
+	if n != nil {
+		// Try asking directly. This works if the Node is still responding on the endpoint we have.
+		if resp, err := t.RequestENR(n); err == nil {
+			return resp
+		}
+	}
+
+	// Otherwise do a network lookup.
+	result := t.Lookup(n.ID())
+	for _, rn := range result {
+		if rn.ID() == id {
+			if n != nil && rn.Seq() <= n.Seq() {
+				return n
+			} else {
+				return rn
+			}
+		}
+	}
+
+	return n
+}
+
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
 	t.tab.mutex.Lock()
@@ -357,15 +387,25 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
+	pong, err := t.pingInner(n)
+	if err != nil {
+		return 0, err
+	}
+
+	return pong.ENRSeq, nil
+}
+
+// pingInner calls PING on a node and waits for a PONG response.
+func (t *UDPv5) pingInner(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
 	resp := t.callToNode(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
 
 	select {
 	case pong := <-resp.ch:
-		return pong.(*v5wire.Pong).ENRSeq, nil
+		return pong.(*v5wire.Pong), nil
 	case err := <-resp.err:
-		return 0, err
+		return nil, err
 	}
 }
 
