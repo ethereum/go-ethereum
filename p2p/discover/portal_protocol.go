@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -86,6 +87,8 @@ type OfferRequest struct {
 	Request interface{}
 }
 
+type PortalProtocolOption func(p *PortalProtocol)
+
 type PortalProtocolConfig struct {
 	BootstrapNodes []*enode.Node
 
@@ -131,11 +134,17 @@ type PortalProtocol struct {
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
 	storage        Storage
+	toContentId    func(contentKey []byte) []byte
 
 	contentQueue chan *ContentElement
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage, contentQueue chan *ContentElement) (*PortalProtocol, error) {
+func defaultContentIdFunc(contentKey []byte) []byte {
+	digest := sha256.Sum256(contentKey)
+	return digest[:]
+}
+
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	nodeDB, err := enode.OpenDB(config.NodeDBPath)
 	if err != nil {
 		return nil, err
@@ -159,7 +168,12 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		localNode:      localNode,
 		validSchemes:   enode.ValidSchemes,
 		storage:        storage,
+		toContentId:    defaultContentIdFunc,
 		contentQueue:   contentQueue,
+	}
+
+	for _, opt := range opts {
+		opt(protocol)
 	}
 
 	return protocol, nil
@@ -451,9 +465,9 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				} else {
 					for _, index := range contentKeyBitlist.BitIndices() {
 						contentKey := request.Request.(*PersistOfferRequest).ContentKeys[index]
-						contentId := p.storage.ContentId(contentKey)
+						contentId := p.toContentId(contentKey)
 						if contentId != nil {
-							content, err = p.storage.Get(contentKey, contentId)
+							content, err = p.storage.Get(contentId)
 							if err != nil {
 								p.log.Error("failed to get content from storage", "err", err)
 								contents = append(contents, []byte{})
@@ -834,13 +848,13 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 	enrOverhead := 4 //per added ENR, 4 bytes offset overhead
 	var err error
 
-	contentId := p.storage.ContentId(request.ContentKey)
+	contentId := p.toContentId(request.ContentKey)
 	if contentId == nil {
 		return nil, ContentNotFound
 	}
 
 	var content []byte
-	content, err = p.storage.Get(request.ContentKey, contentId)
+	content, err = p.storage.Get(contentId)
 	if err != nil && !errors.Is(err, ContentNotFound) {
 		return nil, err
 	}
@@ -1004,10 +1018,10 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 	contentKeys := make([][]byte, 0)
 	for i, contentKey := range request.ContentKeys {
-		contentId := p.storage.ContentId(contentKey)
+		contentId := p.toContentId(contentKey)
 		if contentId != nil {
 			if inRange(p.Self().ID(), p.nodeRadius, contentId) {
-				if _, err = p.storage.Get(contentKey, contentId); err != nil {
+				if _, err = p.storage.Get(contentId); err != nil {
 					contentKeyBitlist.SetBitAt(uint64(i), true)
 					contentKeys = append(contentKeys, contentKey)
 				}

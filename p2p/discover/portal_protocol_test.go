@@ -13,7 +13,6 @@ import (
 	"github.com/optimism-java/utp-go"
 	"github.com/prysmaticlabs/go-bitfield"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
@@ -26,19 +25,15 @@ type MockStorage struct {
 	db map[string][]byte
 }
 
-func (m *MockStorage) ContentId(contentKey []byte) []byte {
-	return crypto.Keccak256(contentKey)
-}
-
-func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+func (m *MockStorage) Get(contentId []byte) ([]byte, error) {
 	if content, ok := m.db[string(contentId)]; ok {
 		return content, nil
 	}
 	return nil, ContentNotFound
 }
 
-func (m *MockStorage) Put(contentKey []byte, content []byte) error {
-	m.db[string(m.ContentId(contentKey))] = content
+func (m *MockStorage) Put(contentId []byte, content []byte) error {
+	m.db[string(contentId)] = content
 	return nil
 }
 
@@ -243,7 +238,7 @@ func TestPortalWireProtocol(t *testing.T) {
 		return n.ID() == node2.localNode.Node().ID()
 	})
 
-	err = node1.storage.Put([]byte("test_key"), []byte("test_value"))
+	err = node1.storage.Put(node1.toContentId([]byte("test_key")), []byte("test_value"))
 	assert.NoError(t, err)
 
 	flag, content, err := node2.findContent(node1.localNode.Node(), []byte("test_key"))
@@ -263,7 +258,7 @@ func TestPortalWireProtocol(t *testing.T) {
 	_, err = rand.Read(largeTestContent)
 	assert.NoError(t, err)
 
-	err = node1.storage.Put([]byte("large_test_key"), largeTestContent)
+	err = node1.storage.Put(node1.toContentId([]byte("large_test_key")), largeTestContent)
 	assert.NoError(t, err)
 
 	flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
