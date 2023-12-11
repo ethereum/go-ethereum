@@ -69,7 +69,6 @@ func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common
 		return
 	}
 	fmt.Printf("CaptureTxStart: tx=%s\n", buf)
-
 }
 
 func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {

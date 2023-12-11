@@ -61,7 +61,6 @@ type prestateTracer struct {
 	env       *vm.EVM
 	pre       stateMap
 	post      stateMap
-	create    bool
 	to        common.Address
 	config    prestateTracerConfig
 	interrupt atomic.Bool // Atomic flag to signal execution interruption

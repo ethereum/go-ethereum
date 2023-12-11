@@ -22,30 +22,30 @@ type BalanceChangeReason byte
 
 const (
 	BalanceChangeUnspecified          BalanceChangeReason = 0
-	BalanceChangeRewardMineUncle                          = 1
-	BalanceChangeRewardMineBlock                          = 2
-	BalanceChangeDaoRefundContract                        = 3
-	BalanceChangeDaoAdjustBalance                         = 4
-	BalanceChangeTransfer                                 = 5
-	BalanceChangeGenesisBalance                           = 6
-	BalanceChangeGasBuy                                   = 7
-	BalanceChangeRewardTransactionFee                     = 8
-	BalanceChangeGasRefund                                = 9
-	BalanceChangeTouchAccount                             = 10
+	BalanceChangeRewardMineUncle      BalanceChangeReason = 1
+	BalanceChangeRewardMineBlock      BalanceChangeReason = 2
+	BalanceChangeDaoRefundContract    BalanceChangeReason = 3
+	BalanceChangeDaoAdjustBalance     BalanceChangeReason = 4
+	BalanceChangeTransfer             BalanceChangeReason = 5
+	BalanceChangeGenesisBalance       BalanceChangeReason = 6
+	BalanceChangeGasBuy               BalanceChangeReason = 7
+	BalanceChangeRewardTransactionFee BalanceChangeReason = 8
+	BalanceChangeGasRefund            BalanceChangeReason = 9
+	BalanceChangeTouchAccount         BalanceChangeReason = 10
 	// TODO: rename (debit, credit)
 	// BalanceChangeSuicideRefund is added to the recipient as indicated by a selfdestructing account.
-	BalanceChangeSuicideRefund = 11
+	BalanceChangeSuicideRefund BalanceChangeReason = 11
 	// BalanceChangeSuicideWithdraw is deducted from a contract due to self-destruct.
 	// This can happen either at the point of self-destruction, or at the end of the tx
 	// if ether was sent to contract post-selfdestruct.
-	BalanceChangeSuicideWithdraw = 12
+	BalanceChangeSuicideWithdraw BalanceChangeReason = 12
 	// BalanceChangeBurn accounts for:
 	// - EIP-1559 burnt fees
 	// - ether that is sent to a self-destructed contract within the same tx (captured at end of tx)
 	// Note it doesn't account for a self-destruct which appoints same contract as recipient.
-	BalanceChangeBurn = 13
+	BalanceChangeBurn BalanceChangeReason = 13
 	// BalanceChangeBurnRefund is refunded to an account at the end of transaction based on
 	// gas usage from the estimated burn amount.
-	BalanceChangeBurnRefund = 14
-	BalanceChangeWithdrawal = 15
+	BalanceChangeBurnRefund BalanceChangeReason = 14
+	BalanceChangeWithdrawal BalanceChangeReason = 15
 )
