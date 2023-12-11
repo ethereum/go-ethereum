@@ -43,8 +43,8 @@ type Backend struct {
 	client simClient
 }
 
-// simClient wraps ethclient. This exists to prevent extracting ethclient.Client from the
-// Client interface returned by Backend.
+// simClient wraps ethclient. This exists to prevent extracting ethclient.Client
+// from the Client interface returned by Backend.
 type simClient struct {
 	*ethclient.Client
 }

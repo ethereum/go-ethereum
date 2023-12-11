@@ -67,7 +67,6 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 		Gas:       21000,
 		To:        &addr,
 	})
-
 	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }
 

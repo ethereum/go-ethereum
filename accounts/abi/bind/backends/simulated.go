@@ -36,7 +36,7 @@ func (b *SimulatedBackend) Fork(ctx context.Context, parentHash common.Hash) err
 	return b.Backend.Fork(parentHash)
 }
 
-// New creates a new binding backend using a simulated blockchain
+// NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 //
 // A simulated backend always uses chainID 1337.

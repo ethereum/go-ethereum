@@ -86,9 +86,10 @@ type SimulatedBeacon struct {
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
 // Period sets the period in which blocks should be produced.
-// If period is set to 0, a block is produced on every transaction.
-// If period is set to math.MaxUint64, blocks can only be produced
-// via Commit, Fork and AdjustTime.
+//
+//   - If period is set to 0, a block is produced on every transaction.
+//   - If period is set to math.MaxUint64, blocks can only be produced
+//     via Commit, Fork and AdjustTime.
 func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
@@ -127,9 +128,8 @@ func (c *SimulatedBeacon) Start() error {
 		go c.loopOnDemand()
 	} else if c.period == math.MaxUint64 {
 		// if period is set to MaxUint, do not mine at all
-		// this is used in the simulated backend
-		// where blocks are explicitly mined via
-		// Commit, AdjustTime and Fork
+		// this is used in the simulated backend where blocks
+		// are explicitly mined via Commit, AdjustTime and Fork
 	} else {
 		go c.loop()
 	}
@@ -195,6 +195,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, tstamp uint
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
+
 	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
 		return err
@@ -247,8 +248,8 @@ func (c *SimulatedBeacon) loop() {
 	}
 }
 
-// finalizedBlockHash returns the block hash of the finalized block corresponding to the given number
-// or nil if doesn't exist in the chain.
+// finalizedBlockHash returns the block hash of the finalized block corresponding
+// to the given number or nil if doesn't exist in the chain.
 func (c *SimulatedBeacon) finalizedBlockHash(number uint64) *common.Hash {
 	var finalizedNumber uint64
 	if number%devEpochLength == 0 {
@@ -256,7 +257,6 @@ func (c *SimulatedBeacon) finalizedBlockHash(number uint64) *common.Hash {
 	} else {
 		finalizedNumber = (number - 1) / devEpochLength * devEpochLength
 	}
-
 	if finalizedBlock := c.eth.BlockChain().GetBlockByNumber(finalizedNumber); finalizedBlock != nil {
 		fh := finalizedBlock.Hash()
 		return &fh
