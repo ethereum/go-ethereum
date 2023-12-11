@@ -140,6 +140,8 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
+	// Distinguishes type-2 txes
+	DynamicFee bool
 
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
@@ -162,6 +164,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipAccountChecks: false,
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
+		DynamicFee:        tx.Type() == 2 || tx.Type() == 3,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -233,7 +236,7 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	if st.msg.GasFeeCap != nil {
+	if st.msg.DynamicFee {
 		if err := st.buy1559Gas(); err != nil {
 			return err
 		}
@@ -246,6 +249,10 @@ func (st *StateTransition) buyGas() error {
 		if err := st.buyBlobGas(); err != nil {
 			return err
 		}
+	}
+	valueCheck := new(big.Int).Set(st.msg.Value)
+	if have, want := st.state.GetBalance(st.msg.From), valueCheck; have.Cmp(want) < 0 {
+		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
 
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
@@ -508,16 +515,16 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	gasRemaining := new(big.Int).SetUint64(st.gasRemaining)
-	if st.msg.GasFeeCap.Sign() == 0 {
-		remaining := new(big.Int).Mul(gasRemaining, st.msg.GasPrice)
-		st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
-	} else {
+	if st.msg.DynamicFee {
 		// Split into burnt gas and tip gas to refund.
 		burnt := new(big.Int).Mul(gasRemaining, st.evm.Context.BaseFee)
 		st.state.AddBalance(st.msg.From, burnt, state.BalanceChangeBurnRefund)
 		effectiveTip := cmath.BigMin(st.msg.GasTipCap, new(big.Int).Sub(st.msg.GasFeeCap, st.evm.Context.BaseFee))
 		tip := new(big.Int).Mul(gasRemaining, effectiveTip)
 		st.state.AddBalance(st.msg.From, tip, state.BalanceChangeGasRefund)
+	} else {
+		remaining := new(big.Int).Mul(gasRemaining, st.msg.GasPrice)
+		st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
 	}
 
 	if st.evm.Config.Tracer != nil && st.gasRemaining > 0 {
