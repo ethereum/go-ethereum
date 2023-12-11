@@ -3,6 +3,7 @@ package discover
 import (
 	"errors"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
@@ -36,6 +37,15 @@ type DiscV5PongResp struct {
 type PortalPongResp struct {
 	EnrSeq     uint64 `json:"enrSeq"`
 	DataRadius string `json:"dataRadius"`
+}
+
+type ContentInfo struct {
+	Content     string `json:"content"`
+	UtpTransfer bool   `json:"utpTransfer"`
+}
+
+type Enrs struct {
+	Enrs []string `json:"enrs"`
 }
 
 func (d *DiscV5API) NodeInfo() *NodeInfo {
@@ -132,6 +142,53 @@ func (d *DiscV5API) Ping(enr string) (*DiscV5PongResp, error) {
 		RecipientIP:   pong.ToIP.String(),
 		RecipientPort: pong.ToPort,
 	}, nil
+}
+
+func (d *DiscV5API) FindNodes(enr string, distances []uint) ([]string, error) {
+	n, err := enode.Parse(enode.ValidSchemes, enr)
+	if err != nil {
+		return nil, err
+	}
+	findNodes, err := d.DiscV5.findnode(n, distances)
+	if err != nil {
+		return nil, err
+	}
+
+	enrs := make([]string, 0, len(findNodes))
+	for _, r := range findNodes {
+		enrs = append(enrs, r.String())
+	}
+
+	return enrs, nil
+}
+
+func (d *DiscV5API) TalkReq(enr string, protocol string, payload string) (string, error) {
+	n, err := enode.Parse(enode.ValidSchemes, enr)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := hexutil.Decode(payload)
+	if err != nil {
+		return "", err
+	}
+
+	talkResp, err := d.DiscV5.TalkRequest(n, protocol, req)
+	if err != nil {
+		return "", err
+	}
+	return hexutil.Encode(talkResp), nil
+}
+
+func (d *DiscV5API) RecursiveFindNodes(nodeId string) ([]string, error) {
+	findNodes := d.DiscV5.Lookup(enode.HexID(nodeId))
+
+	enrs := make([]string, 0, len(findNodes))
+	for _, r := range findNodes {
+		enrs = append(enrs, r.String())
+	}
+
+	return enrs, nil
 }
 
 type PortalAPI struct {
@@ -270,4 +327,108 @@ func (p *PortalAPI) Ping(enr string) (*PortalPongResp, error) {
 		EnrSeq:     pong.EnrSeq,
 		DataRadius: nodeRadius.Hex(),
 	}, nil
+}
+
+func (p *PortalAPI) FindNodes(enr string, distances []uint) ([]string, error) {
+	n, err := enode.Parse(enode.ValidSchemes, enr)
+	if err != nil {
+		return nil, err
+	}
+	findNodes, err := p.portalProtocol.findNodes(n, distances)
+	if err != nil {
+		return nil, err
+	}
+
+	enrs := make([]string, 0, len(findNodes))
+	for _, r := range findNodes {
+		enrs = append(enrs, r.String())
+	}
+
+	return enrs, nil
+}
+
+func (p *PortalAPI) FindContent(enr string, contentKey string) (interface{}, error) {
+	n, err := enode.Parse(enode.ValidSchemes, enr)
+	if err != nil {
+		return nil, err
+	}
+
+	contentKeyBytes, err := hexutil.Decode(contentKey)
+	if err != nil {
+		return nil, err
+	}
+
+	flag, findContent, err := p.portalProtocol.findContent(n, contentKeyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	switch flag {
+	case portalwire.ContentRawSelector:
+		return &ContentInfo{
+			Content:     hexutil.Encode(findContent.([]byte)),
+			UtpTransfer: false,
+		}, nil
+	case portalwire.ContentConnIdSelector:
+		return &ContentInfo{
+			Content:     hexutil.Encode(findContent.([]byte)),
+			UtpTransfer: true,
+		}, nil
+	default:
+		enrs := make([]string, 0)
+		for _, r := range findContent.([]*enode.Node) {
+			enrs = append(enrs, r.String())
+		}
+
+		return &Enrs{
+			Enrs: enrs,
+		}, nil
+	}
+}
+
+func (p *PortalAPI) Offer(enr string, contentKey string, contentValue string) (string, error) {
+	n, err := enode.Parse(enode.ValidSchemes, enr)
+	if err != nil {
+		return "", err
+	}
+
+	contentKeyBytes, err := hexutil.Decode(contentKey)
+	if err != nil {
+		return "", err
+	}
+	contentValueBytes, err := hexutil.Decode(contentValue)
+	if err != nil {
+		return "", err
+	}
+
+	contentEntry := &ContentEntry{
+		ContentKey: contentKeyBytes,
+		Content:    contentValueBytes,
+	}
+
+	transientOfferRequest := &TransientOfferRequest{
+		Contents: []*ContentEntry{contentEntry},
+	}
+
+	offerReq := &OfferRequest{
+		Kind:    portalwire.OfferRequestDirect,
+		Request: transientOfferRequest,
+	}
+	accept, err := p.portalProtocol.offer(n, offerReq)
+	if err != nil {
+		return "", err
+	}
+
+	return hexutil.Encode(accept), nil
+}
+
+func (p *PortalAPI) RecursiveFindNodes(nodeId string) ([]string, error) {
+	findNodes := p.portalProtocol.Lookup(enode.HexID(nodeId))
+
+	enrs := make([]string, 0, len(findNodes))
+	for _, r := range findNodes {
+		enrs = append(enrs, r.String())
+	}
+
+	return enrs, nil
 }
