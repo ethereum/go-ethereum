@@ -24,7 +24,6 @@ up-dev-settlement:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
 	AGENT_BASE_IMAGE=shaspitz/hyperlane-agent-mac:6985064 L2_NODE_URL=http://localhost:8545 docker compose --profile settlement up -d --build
 
-## TODO: change to bring up bridge too
 up-dev-local-l1:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
 	AGENT_BASE_IMAGE=shaspitz/hyperlane-agent-mac:6985064 L2_NODE_URL=http://localhost:8545 docker compose --profile settlement --profile local_l1 up -d
