@@ -8,8 +8,8 @@ services:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.100'
+      primev_net:
+        ipv4_address: '172.29.0.98'
     ports:
       - 8545:8545
       - 8546:8546
@@ -49,8 +49,8 @@ services:
       - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE1_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.2'
+      primev_net:
+        ipv4_address: '172.29.0.99'
     volumes:
       - geth-data-node1:/data
     profiles:
@@ -87,8 +87,8 @@ services:
       - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.3'
+      primev_net:
+        ipv4_address: '172.29.0.100'
     volumes:
       - geth-data-node2:/data
     profiles:
@@ -115,19 +115,6 @@ services:
           }
         ]
 
-  contract-deployer:
-    image: ghcr.io/foundry-rs/foundry
-    environment:
-      RPC_URL: "http://geth-bootnode:8545"  # Pointing to the Geth bootnode
-    command: >
-      sh -c "git clone git@github.com:primevprotocol/contracts.git && 
-             cd contracts && 
-             forge compile && 
-             forge script scripts/DeployScripts.s.sol:DeployScript --rpc-url '$RPC_URL' --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast --chain-id 17864 -vvvv || echo 'Script execution failed'"
-    depends_on:
-      - geth-bootnode
-
-  
   hyperlane-deployer:
     build:
       context: ./hyperlane-deployer
@@ -139,8 +126,8 @@ services:
     environment:
       - CONTRACT_DEPLOYER_PRIVATE_KEY=${CONTRACT_DEPLOYER_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.50'
+      primev_net:
+        ipv4_address: '172.29.0.50'
     volumes:
       - hyperlane-deploy-artifacts:/hyperlane-monorepo/artifacts
     profiles:
@@ -161,8 +148,8 @@ services:
       hyperlane-deployer:
         condition: service_healthy
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.75'
+      primev_net:
+        ipv4_address: '172.29.0.75'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator1-sigs:/val1-sigs
@@ -184,8 +171,8 @@ services:
       hyperlane-deployer:
         condition: service_healthy
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.76'
+      primev_net:
+        ipv4_address: '172.29.0.76'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator2-sigs:/val2-sigs
@@ -206,8 +193,8 @@ services:
     environment:
       - RELAYER_PRIVATE_KEY=${RELAYER_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.77'
+      primev_net:
+        ipv4_address: '172.29.0.77'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator1-sigs:/val1-sigs
@@ -229,8 +216,8 @@ services:
       - NEXT_PUBLIC_WALLET_CONNECT_ID=${NEXT_PUBLIC_WALLET_CONNECT_ID}
       - L2_NODE_URL=${L2_NODE_URL}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.90'
+      primev_net:
+        ipv4_address: '172.29.0.90'
     ports:
       - 80:3000
     volumes:
@@ -255,18 +242,14 @@ services:
     ports:
       - "5000:5000"
     networks:
-      poa_net:
-        ipv4_address: 172.13.4.24
+      primev_net:
+        ipv4_address: 172.29.4.24
     profiles:
       - prod_agents
 
 networks:
-  poa_net:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.13.0.0/16
+  primev_net:
+    external: true
 
 volumes:
   geth-data-bootnode:
