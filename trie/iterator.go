@@ -145,7 +145,7 @@ type nodeIterator struct {
 	err   error                // Failure set in case of an internal error in the iterator
 
 	resolver NodeResolver         // optional node resolver for avoiding disk hits
-	pool     []*nodeIteratorState // local pool for iteratorstates
+	pool     []*nodeIteratorState // local pool for iterator states
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -550,13 +550,14 @@ func (it *nodeIterator) pop() {
 	it.path = it.path[:last.pathlen]
 	it.stack[len(it.stack)-1] = nil
 	it.stack = it.stack[:len(it.stack)-1]
-	// last is now unused
-	it.putInPool(last)
+
+	it.putInPool(last) // last is now unused
 }
 
-// reachedPath normalizes a path by truncating a terminator if present, and returns true if it is
-// greater than or equal to the target. Using this, the path of a value node embedded a full node
-// will compare less than the full node's children.
+// reachedPath normalizes a path by truncating a terminator if present, and
+// returns true if it is greater than or equal to the target. Using this,
+// the path of a value node embedded a full node will compare less than the
+// full node's children.
 func reachedPath(path, target []byte) bool {
 	if hasTerm(path) {
 		path = path[:len(path)-1]
@@ -564,12 +565,13 @@ func reachedPath(path, target []byte) bool {
 	return bytes.Compare(path, target) >= 0
 }
 
-// A value embedded in a full node occupies the last slot (16) of the array of children. In order to
-// produce a pre-order traversal when iterating children, we jump to this last slot first, then go
-// back iterate the child nodes (and skip the last slot at the end):
+// A value embedded in a full node occupies the last slot (16) of the array of
+// children. In order to produce a pre-order traversal when iterating children,
+// we jump to this last slot first, then go back iterate the child nodes (and
+// skip the last slot at the end):
 
-// prevChildIndex returns the index of a child in a full node which precedes the given index when
-// performing a pre-order traversal.
+// prevChildIndex returns the index of a child in a full node which precedes
+// the given index when performing a pre-order traversal.
 func prevChildIndex(index int) int {
 	switch index {
 	case 0: // We jumped back to iterate the children, from the value slot
@@ -583,8 +585,8 @@ func prevChildIndex(index int) int {
 	}
 }
 
-// nextChildIndex returns the index of a child in a full node which follows the given index when
-// performing a pre-order traversal.
+// nextChildIndex returns the index of a child in a full node which follows
+// the given index when performing a pre-order traversal.
 func nextChildIndex(index int) int {
 	switch index {
 	case -1: // Jump from the placeholder index to the embedded value slot
