@@ -161,13 +161,9 @@ func (w Witness) Copy() Witness {
 	panic("not implemented")
 }
 
-func (w *Witness) Dump() {
-	for owner, al := range w.lists {
-		fmt.Printf("owner %x:\n", owner)
-		for path, node := range al {
-			fmt.Printf("%x: %x\n", []byte(path), node)
-		}
-	}
+func (w *Witness) LogSizeWithBlock(b *types.Block) {
+	enc := w.EncodeRLP()
+	fmt.Printf("block %d witness+block size: %d\n", b.Number(), len(enc))
 }
 
 func (w *Witness) Summary() string {
