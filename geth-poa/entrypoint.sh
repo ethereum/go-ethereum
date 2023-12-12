@@ -74,7 +74,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics.addr=0.0.0.0 \
 		--metrics.port=6060 \
 		--nodekey $GETH_DATA_DIR/boot.key \
-		--netrestrict 172.13.0.0/24 \
+		--netrestrict $NET_RESTRICT \
 		--nat extip:$NODE_IP
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
@@ -94,7 +94,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--http.addr=0.0.0.0 \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
-		--bootnodes enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301 \
+		--bootnodes $BOOTNODE_ENDPOINT \
 		--networkid=$CHAIN_ID \
 		--unlock=$BLOCK_SIGNER_ADDRESS \
 		--password="$GETH_DATA_DIR"/password \
@@ -102,7 +102,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--miner.etherbase=$BLOCK_SIGNER_ADDRESS \
 		--allow-insecure-unlock \
 		--nousb \
-		--netrestrict 172.13.0.0/24 \
+		--netrestrict $NET_RESTRICT \
 		--metrics \
                 --metrics.addr=0.0.0.0 \
                 --metrics.port=6060 \

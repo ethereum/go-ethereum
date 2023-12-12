@@ -7,6 +7,7 @@ services:
     environment:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
+      - NET_RESTRICT=172.13.0.0/24
     networks:
       poa_net:
         ipv4_address: '172.13.0.100'
@@ -47,6 +48,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE1_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301
+      - NET_RESTRICT=172.13.0.0/24
     networks:
       poa_net:
         ipv4_address: '172.13.0.2'
@@ -76,7 +79,6 @@ services:
           }
         ]
 
-  
   node2:
     build: 
       context: ..
@@ -85,6 +87,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301
+      - NET_RESTRICT=172.13.0.0/24
     networks:
       poa_net:
         ipv4_address: '172.13.0.3'
@@ -122,6 +126,7 @@ services:
     environment:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
+      - NET_RESTRICT=172.14.0.0/24
     networks:
       l1_net:
         ipv4_address: '172.14.0.2'
@@ -137,6 +142,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE1_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.14.0.2:30301
+      - NET_RESTRICT=172.14.0.0/24
     networks:
       l1_net:
         ipv4_address: '172.14.0.3'
@@ -144,6 +151,7 @@ services:
       - geth-data-l1-first-signer:/data
     profiles:
       - local_l1
+    
   l1-second-signer:
     build:
       context: .
@@ -152,6 +160,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.14.0.2:30301
+      - NET_RESTRICT=172.14.0.0/24
     networks:
       l1_net:
         ipv4_address: '172.14.0.4'
