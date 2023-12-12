@@ -74,7 +74,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics.addr=0.0.0.0 \
 		--metrics.port=6060 \
 		--nodekey $GETH_DATA_DIR/boot.key \
-		--netrestrict 172.13.0.0/24 \
+		--netrestrict 172.29.0.0/16 \
 		--nat extip:$NODE_IP
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
@@ -102,7 +102,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--miner.etherbase=$BLOCK_SIGNER_ADDRESS \
 		--allow-insecure-unlock \
 		--nousb \
-		--netrestrict 172.13.0.0/24 \
+		--netrestrict 172.29.0.0/16 \
 		--metrics \
                 --metrics.addr=0.0.0.0 \
                 --metrics.port=6060 \
