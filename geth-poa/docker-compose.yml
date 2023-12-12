@@ -1,6 +1,6 @@
 version: '3'
 services:
-  bootnode:
+  geth-bootnode:
     build:
       context: ..
       dockerfile: geth-poa/Dockerfile 
@@ -118,12 +118,15 @@ services:
   contract-deployer:
     image: ghcr.io/foundry-rs/foundry
     environment:
-      RPC_URL: "http://bootnode:8545"  # Pointing to the Geth bootnode
+      RPC_URL: "http://geth-bootnode:8545"  # Pointing to the Geth bootnode
     command: >
-      sh -c "forge compile && 
+      sh -c "git clone git@github.com:primevprotocol/contracts.git && 
+             cd contracts && 
+             forge compile && 
              forge script scripts/DeployScripts.s.sol:DeployScript --rpc-url '$RPC_URL' --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast --chain-id 17864 -vvvv || echo 'Script execution failed'"
     depends_on:
-      - bootnode
+      - geth-bootnode
+
   
   hyperlane-deployer:
     build:
