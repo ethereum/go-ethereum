@@ -80,6 +80,7 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 // TODO
 const whitelistCreate2Addr = "0x000000"
 
+// TODO: confirm new abi schema works with contract
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
@@ -108,6 +109,7 @@ func (c *burn) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
+// TODO: confirm new abi schema works with contract
 func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
