@@ -431,7 +431,7 @@ func (test *snapshotTest) run() bool {
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
 			snapshotRevs[sindex] = state.Snapshot()
-			checkstates[sindex] = state.Copy()
+			checkstates[sindex] = state.Copy().(*StateDB)
 			sindex++
 		}
 		action.fn(action, state)

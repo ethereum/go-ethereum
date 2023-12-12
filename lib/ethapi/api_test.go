@@ -536,7 +536,6 @@ func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return big.NewInt(1)
 }
 func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state vm.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
-	vmError := func() error { return nil }
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
 	}

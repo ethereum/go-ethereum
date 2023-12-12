@@ -305,7 +305,7 @@ func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number
 }
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
 func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state vm.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
-	return nil, nil
+	return nil
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
 func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {

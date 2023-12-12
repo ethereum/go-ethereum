@@ -194,7 +194,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	if maxResults > AccountRangeMaxResults || maxResults <= 0 {
 		opts.Max = AccountRangeMaxResults
 	}
-	return stateDb.RawDump(opts), nil
+	return stateDb.(*state.StateDB).RawDump(opts), nil
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.

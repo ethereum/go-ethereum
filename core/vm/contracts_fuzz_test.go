@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package vm_test
 
 import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func FuzzPrecompiledContracts(f *testing.F) {
@@ -36,7 +37,7 @@ func FuzzPrecompiledContracts(f *testing.F) {
 			return
 		}
 		inWant := string(input)
-		RunPrecompiledContract(p, input, gas)
+		vm.RunPrecompiledContract(p, nil, common.Address{}, input, gas)
 		if inHave := string(input); inWant != inHave {
 			t.Errorf("Precompiled %v modified input data", a)
 		}

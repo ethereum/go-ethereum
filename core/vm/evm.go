@@ -153,6 +153,10 @@ func (evm *EVM) GetInterpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
+func (evm *EVM) SetInterpreter(i *EVMInterpreter) {
+	evm.interpreter = i
+}
+
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {

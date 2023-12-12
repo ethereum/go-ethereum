@@ -190,7 +190,7 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 }
 
 // Run executes a specific subtest and verifies the post-state and logs
-func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, snaps *snapshot.Tree, state *state.StateDB)) (result error) {
+func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, snaps *snapshot.Tree, state vm.StateDB)) (result error) {
 	triedb, snaps, statedb, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
 
 	// Invoke the callback at the end of function for further analysis.
@@ -220,15 +220,15 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if root != common.Hash(post.Root) {
 		return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
 	}
-	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
+	if logs := rlpHash(statedb.(*state.StateDB).Logs()); logs != common.Hash(post.Logs) {
 		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	statedb, _ = state.New(root, statedb.Database(), snaps)
+	statedb, _ = state.New(root, statedb.(*state.StateDB).Database(), snaps)
 	return nil
 }
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (*trie.Database, *snapshot.Tree, *state.StateDB, common.Hash, error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (*trie.Database, *snapshot.Tree, vm.StateDB, common.Hash, error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
 		return nil, nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}

@@ -873,7 +873,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	var (
 		err     error
 		block   *types.Block
-		statedb *state.StateDB
+		statedb vm.StateDB
 		release StateReleaseFunc
 	)
 	if hash, ok := blockNrOrHash.Hash(); ok {

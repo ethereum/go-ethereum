@@ -292,8 +292,15 @@ func writeAuthors(files []string) {
 		}
 	}
 	// Write sorted list of authors back to the file.
-	slices.SortFunc(list, func(a, b string) bool {
-		return strings.ToLower(a) < strings.ToLower(b)
+	slices.SortFunc(list, func(a, b string) int {
+		al := strings.ToLower(a)
+		bl := strings.ToLower(b)
+		if al < bl {
+			return -1
+		} else if al == bl {
+			return 0
+		}
+		return 1
 	})
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)

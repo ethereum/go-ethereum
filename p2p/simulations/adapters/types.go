@@ -26,7 +26,7 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/ethereum/go-ethereum/lib/reexec"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
