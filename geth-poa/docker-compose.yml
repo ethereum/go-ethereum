@@ -9,8 +9,8 @@ services:
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
       - NET_RESTRICT=172.13.0.0/24
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.100'
+      primev_net:
+        ipv4_address: '172.29.0.98'
     ports:
       - 8545:8545
       - 8546:8546
@@ -52,8 +52,8 @@ services:
       - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301
       - NET_RESTRICT=172.13.0.0/24
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.2'
+      primev_net:
+        ipv4_address: '172.29.0.99'
     volumes:
       - geth-data-node1:/data
     profiles:
@@ -91,8 +91,8 @@ services:
       - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301
       - NET_RESTRICT=172.13.0.0/24
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.3'
+      primev_net:
+        ipv4_address: '172.29.0.100'
     volumes:
       - geth-data-node2:/data
     profiles:
@@ -195,8 +195,8 @@ services:
     environment:
       - CONTRACT_DEPLOYER_PRIVATE_KEY=${CONTRACT_DEPLOYER_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.50'
+      primev_net:
+        ipv4_address: '172.29.0.50'
     volumes:
       - hyperlane-deploy-artifacts:/hyperlane-monorepo/artifacts
     profiles:
@@ -217,8 +217,8 @@ services:
       hyperlane-deployer:
         condition: service_healthy
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.75'
+      primev_net:
+        ipv4_address: '172.29.0.75'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator1-sigs:/val1-sigs
@@ -240,8 +240,8 @@ services:
       hyperlane-deployer:
         condition: service_healthy
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.76'
+      primev_net:
+        ipv4_address: '172.29.0.76'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator2-sigs:/val2-sigs
@@ -262,8 +262,8 @@ services:
     environment:
       - RELAYER_PRIVATE_KEY=${RELAYER_PRIVATE_KEY}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.77'
+      primev_net:
+        ipv4_address: '172.29.0.77'
     volumes:
       - hyperlane-deploy-artifacts:/deploy-artifacts
       - hyperlane-validator1-sigs:/val1-sigs
@@ -285,8 +285,8 @@ services:
       - NEXT_PUBLIC_WALLET_CONNECT_ID=${NEXT_PUBLIC_WALLET_CONNECT_ID}
       - L2_NODE_URL=${L2_NODE_URL}
     networks:
-      poa_net:
-        ipv4_address: '172.13.0.90'
+      primev_net:
+        ipv4_address: '172.29.0.90'
     ports:
       - 80:3000
     volumes:
@@ -311,18 +311,14 @@ services:
     ports:
       - "5000:5000"
     networks:
-      poa_net:
-        ipv4_address: 172.13.4.24
+      primev_net:
+        ipv4_address: 172.29.4.24
     profiles:
       - prod_agents
 
 networks:
-  poa_net:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.13.0.0/16
+  primev_net:
+    external: true
   l1_net:
     driver: bridge
     ipam:
