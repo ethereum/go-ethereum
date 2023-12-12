@@ -94,7 +94,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--http.addr=0.0.0.0 \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
-		--bootnodes enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301 \
+		--bootnodes enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301 \
 		--networkid=$CHAIN_ID \
 		--unlock=$BLOCK_SIGNER_ADDRESS \
 		--password="$GETH_DATA_DIR"/password \
