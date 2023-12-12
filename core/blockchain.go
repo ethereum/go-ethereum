@@ -1852,6 +1852,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
+		statedb.GetWitness().Dump()
 		state.DumpBlockWithWitnessToFile(statedb.GetWitness(), block)
 
 		followupInterrupt.Store(true)

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +35,42 @@ type ChainContext interface {
 
 	// GetHeader returns the header corresponding to the hash/number argument pair.
 	GetHeader(common.Hash, uint64) *types.Header
+}
+
+func NewStatelessEVMBlockContext(witness *state.Witness, header *types.Header, engine consensus.Engine) vm.BlockContext {
+	getBlockHash := func(num uint64) common.Hash {
+		return witness.GetBlockHash(num)
+	}
+	var (
+		baseFee     *big.Int
+		blobBaseFee *big.Int
+		random      *common.Hash
+	)
+
+	beneficiary, _ := engine.Author(header) // Ignore error, we're past header validation
+
+	if header.BaseFee != nil {
+		baseFee = new(big.Int).Set(header.BaseFee)
+	}
+	if header.ExcessBlobGas != nil {
+		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
+	}
+	if header.Difficulty.Cmp(common.Big0) == 0 {
+		random = &header.MixDigest
+	}
+	return vm.BlockContext{
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     getBlockHash,
+		Coinbase:    beneficiary,
+		BlockNumber: new(big.Int).Set(header.Number),
+		Time:        header.Time,
+		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
+		BlobBaseFee: blobBaseFee,
+		GasLimit:    header.GasLimit,
+		Random:      random,
+	}
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
