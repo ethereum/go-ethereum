@@ -723,6 +723,11 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 			"logs":              receipt.Logs,
 			"logsBloom":         receipt.Bloom,
 			"type":              hexutil.Uint(tx.Type()),
+			"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+		}
+
+		if receipt.EffectiveGasPrice == nil {
+			fields["effectiveGasPrice"] = new(hexutil.Big)
 		}
 
 		// Assign receipt status or post state.
@@ -733,7 +738,7 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 		}
 
 		if receipt.Logs == nil {
-			fields["logs"] = [][]*types.Log{}
+			fields["logs"] = []*types.Log{}
 		}
 
 		if borReceipt != nil && idx == len(receipts)-1 {
