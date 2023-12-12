@@ -1,6 +1,7 @@
-package discover
+package storage
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"os"
@@ -25,6 +26,11 @@ func genBytes(length int) []byte {
 	return res
 }
 
+func defaultContentIdFunc(contentKey []byte) []byte {
+	digest := sha256.Sum256(contentKey)
+	return digest[:]
+}
+
 func TestBasicStorage(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
@@ -37,7 +43,7 @@ func TestBasicStorage(t *testing.T) {
 	content := []byte("value")
 
 	_, err = storage.Get(contentId)
-	assert.Equal(t, ContentNotFound, err)
+	assert.Equal(t, ErrContentNotFound, err)
 
 	pt := storage.Put(contentId, content)
 	assert.NoError(t, pt.Err())
@@ -178,10 +184,10 @@ func TestDBPruning(t *testing.T) {
 	assert.True(t, usedSize < storage.storageCapacityInBytes)
 
 	_, err = storage.Get(furthestElement.Bytes())
-	assert.Equal(t, ContentNotFound, err)
+	assert.Equal(t, ErrContentNotFound, err)
 
 	_, err = storage.Get(secondFurthest.Bytes())
-	assert.Equal(t, ContentNotFound, err)
+	assert.Equal(t, ErrContentNotFound, err)
 
 	val, err := storage.Get(thirdFurthest.Bytes())
 	assert.NoError(t, err)
@@ -242,10 +248,10 @@ func TestSimpleForcePruning(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = storage.Get(furthestElement.Bytes())
-	assert.Equal(t, ContentNotFound, err)
+	assert.Equal(t, ErrContentNotFound, err)
 
 	_, err = storage.Get(secondFurthest.Bytes())
-	assert.Equal(t, ContentNotFound, err)
+	assert.Equal(t, ErrContentNotFound, err)
 
 	_, err = storage.Get(third.Bytes())
 	assert.NoError(t, err)

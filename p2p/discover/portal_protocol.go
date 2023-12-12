@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/rlp"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
@@ -62,6 +63,16 @@ const (
 	TransientOfferRequestKind byte = 0x01
 	PersistOfferRequestKind   byte = 0x02
 )
+
+var ErrNilContentKey = errors.New("content key cannot be nil")
+
+var ContentNotFound = storage.ErrContentNotFound
+
+type ContentStorage interface {
+	Get(contentId []byte) ([]byte, error)
+
+	Put(contentId []byte, content []byte) error
+}
 
 type ContentElement struct {
 	Node        enode.ID
@@ -133,7 +144,7 @@ type PortalProtocol struct {
 	radiusCache    *fastcache.Cache
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
-	storage        Storage
+	storage        ContentStorage
 	toContentId    func(contentKey []byte) []byte
 
 	contentQueue chan *ContentElement
@@ -144,7 +155,7 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 	return digest[:]
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage Storage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	nodeDB, err := enode.OpenDB(config.NodeDBPath)
 	if err != nil {
 		return nil, err
@@ -850,7 +861,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 	contentId := p.toContentId(request.ContentKey)
 	if contentId == nil {
-		return nil, ContentNotFound
+		return nil, ErrNilContentKey
 	}
 
 	var content []byte
@@ -1027,7 +1038,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 				}
 			}
 		} else {
-			return nil, nil
+			return nil, ErrNilContentKey
 		}
 	}
 

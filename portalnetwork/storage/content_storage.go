@@ -1,4 +1,4 @@
-package discover
+package storage
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ContentNotFound = fmt.Errorf("content not found")
+	ErrContentNotFound = fmt.Errorf("content not found")
 
 	maxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
@@ -40,12 +40,6 @@ const (
 		FROM kvstore
 		ORDER BY distance DESC`
 )
-
-type Storage interface {
-	Get(contentId []byte) ([]byte, error)
-
-	Put(contentId []byte, content []byte) error
-}
 
 type ContentStorage struct {
 	nodeId                 enode.ID
@@ -133,7 +127,7 @@ func (p *ContentStorage) Get(contentId []byte) ([]byte, error) {
 	var res []byte
 	err := p.getStmt.QueryRow(contentId).Scan(&res)
 	if err == sql.ErrNoRows {
-		return nil, ContentNotFound
+		return nil, ErrContentNotFound
 	}
 	return res, err
 }
