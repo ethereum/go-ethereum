@@ -135,7 +135,7 @@ type nodeIteratorState struct {
 	node    node        // Trie node being iterated
 	parent  common.Hash // Hash of the first full ancestor node (nil if current is the root)
 	index   int         // Child to be processed next
-	pathlen int         // Length of the path to this node
+	pathlen int         // Length of the path to the parent node
 }
 
 type nodeIterator struct {
@@ -304,6 +304,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	// The path we're looking for is the hex encoded key without terminator.
 	key := keybytesToHex(prefix)
 	key = key[:len(key)-1]
+
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peekSeek(key)
@@ -339,7 +340,6 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		// If we're skipping children, pop the current node first
 		it.pop()
 	}
-
 	// Continue iteration to the next child
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
@@ -372,7 +372,6 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 		// If we're skipping children, pop the current node first
 		it.pop()
 	}
-
 	// Continue iteration to the next child
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
@@ -453,12 +452,14 @@ func (it *nodeIterator) findChild(n *fullNode, index int, ancestor common.Hash) 
 		if n.Children[index] != nil {
 			child = n.Children[index]
 			hash, _ := child.cache()
+
 			state = it.getFromPool()
 			state.hash = common.BytesToHash(hash)
 			state.node = child
 			state.parent = ancestor
 			state.index = -1
 			state.pathlen = len(path)
+
 			childPath = append(childPath, path...)
 			childPath = append(childPath, byte(index))
 			return child, state, childPath, index
@@ -504,7 +505,7 @@ func (it *nodeIterator) nextChildAt(parent *nodeIteratorState, ancestor common.H
 			return parent, it.path, false
 		}
 		// If the child we found is already past the seek position, just return it.
-		if bytes.Compare(path, key) >= 0 {
+		if reachedPath(path, key) {
 			parent.index = prevChildIndex(index)
 			return state, path, true
 		}
@@ -513,7 +514,7 @@ func (it *nodeIterator) nextChildAt(parent *nodeIteratorState, ancestor common.H
 			nextChild, nextState, nextPath, nextIndex := it.findChild(n, nextChildIndex(index), ancestor)
 			// If we run out of children, or skipped past the target, return the
 			// previous one
-			if nextChild == nil || bytes.Compare(nextPath, key) >= 0 {
+			if nextChild == nil || reachedPath(nextPath, key) {
 				parent.index = prevChildIndex(index)
 				return state, path, true
 			}
