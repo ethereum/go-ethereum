@@ -1,6 +1,6 @@
 version: '3'
 services:
-  geth-bootnode:
+  sl-bootnode:
     build:
       context: ..
       dockerfile: geth-poa/Dockerfile 
@@ -41,7 +41,7 @@ services:
           }
         ]
   
-  node1:
+  sl-node1:
     build: 
       context: ..
       dockerfile: geth-poa/Dockerfile
@@ -80,7 +80,8 @@ services:
           }
         ]
 
-  node2:
+  
+  sl-node2:
     build: 
       context: ..
       dockerfile: geth-poa/Dockerfile
