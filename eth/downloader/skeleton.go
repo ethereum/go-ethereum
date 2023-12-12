@@ -1125,6 +1125,10 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if number+1 < s.progress.Subchains[0].Tail {
 		return fmt.Errorf("filled header below beacon header tail: %d < %d", number, s.progress.Subchains[0].Tail)
 	}
+	// If nothing is filled, don't bother to do cleanup.
+	if number+1 == s.progress.Subchains[0].Tail {
+		return nil
+	}
 	// Determine the new tail based on the given filled header. If it's still
 	// in the range of skeleton chain, use the next header adjacent to the
 	// filled one (it's expected to link with the filled one, otherwise
