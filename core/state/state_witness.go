@@ -12,6 +12,7 @@ import (
 )
 
 type Witness struct {
+	block       *types.Block
 	blockHashes map[uint64]common.Hash
 	codes       map[common.Hash]Code
 	root        common.Hash
@@ -169,6 +170,40 @@ func (w *Witness) Dump() {
 	}
 }
 
+func (w *Witness) Summary() string {
+	b := new(bytes.Buffer)
+	xx, _ := rlp.EncodeToBytes(w.block)
+	totBlock := len(xx)
+
+	yy, _ := rlp.EncodeToBytes(w)
+	totWit := len(yy)
+
+	totCode := 0
+	for _, c := range w.codes {
+		totCode += len(c)
+	}
+	totNodes := 0
+	totPaths := 0
+	nodePathCount := 0
+	for _, ownerPaths := range w.lists {
+		for path, node := range ownerPaths {
+			nodePathCount++
+			totNodes += len(node)
+			totPaths += len(path)
+		}
+	}
+
+	fmt.Fprintf(b, "%4d hashes: %v\n", len(w.blockHashes), common.StorageSize(len(w.blockHashes)*32))
+	fmt.Fprintf(b, "%4d owners: %v\n", len(w.lists), common.StorageSize(len(w.lists)*32))
+	fmt.Fprintf(b, "%4d nodes:  %v\n", nodePathCount, common.StorageSize(totNodes))
+	fmt.Fprintf(b, "%4d paths:  %v\n", nodePathCount, common.StorageSize(totPaths))
+	fmt.Fprintf(b, "%4d codes:  %v\n", len(w.codes), common.StorageSize(totCode))
+	fmt.Fprintf(b, "%4d codeHashes: %v\n", len(w.codes), common.StorageSize(len(w.codes)*32))
+	fmt.Fprintf(b, "block (%4d txs): %v\n", len(w.block.Transactions()), common.StorageSize(totBlock))
+	fmt.Fprintf(b, "Total size: %v\n ", common.StorageSize(totWit))
+	return b.String()
+}
+
 func (w *Witness) PopulateMemoryDB() ethdb.Database {
 	db := rawdb.NewMemoryDatabase()
 	for codeHash, code := range w.codes {
@@ -184,14 +219,20 @@ func (w *Witness) PopulateMemoryDB() ethdb.Database {
 	return db
 }
 
+func (w *Witness) SetBlock(b *types.Block) {
+	w.block = b
+}
+
 func NewWitness() *Witness {
 	return &Witness{
-		make(map[uint64]common.Hash),
-		make(map[common.Hash]Code),
-		common.Hash{},
-		make(map[common.Hash]map[string][]byte),
+		block:       nil,
+		blockHashes: make(map[uint64]common.Hash),
+		codes:       make(map[common.Hash]Code),
+		root:        common.Hash{},
+		lists:       make(map[common.Hash]map[string][]byte),
 	}
 }
+
 func DumpBlockWithWitnessToFile(w *Witness, b *types.Block) {
 	enc := w.EncodeRLP(b)
 	path, _ := os.Getwd() //"/datadrive/"
