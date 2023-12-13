@@ -1030,7 +1030,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 }
 
 // Tests that if huge transactions are announced, only a small number of them will
-// be requested at a time, to keep the responses below a resonable level.
+// be requested at a time, to keep the responses below a reasonable level.
 func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
