@@ -177,12 +177,10 @@ func (w *Witness) Summary() string {
 		panic(err)
 	}
 	totBlock := len(xx)
-	fmt.Printf("total block size is %d\n", totBlock)
 
 	yy := w.EncodeRLP()
 
 	totWit := len(yy)
-	fmt.Printf("yy len is %d\n", totWit)
 	totCode := 0
 	for _, c := range w.codes {
 		totCode += len(c)
