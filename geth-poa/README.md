@@ -41,13 +41,12 @@ Address:     `0x0DCaa27B9E4Db92F820189345792f8eC5Ef148F6`
 
 ## Create2 Deployment Proxy
 
-A Create2 deployment proxy is meant to be deployed to this chain. The signer address for such proxy is funded on genesis, `0x3fab184622dc19b6109349b94811493bf2a45362`. see more [here](https://github.com/Arachnid/deterministic-deployment-proxy).
+A Create2 deployment proxy is can be deployed to this chain at `0x4e59b44847b379578588920ca78fbf26c0b4956c`. see more [here](https://github.com/primevprotocol/deterministic-deployment-proxy). Note this proxy is required to deploy the whitelist bridge contract, and is consistent to foundry's suggested process for create2 deployment. The deployment signer, `0x3fab184622dc19b6109349b94811493bf2a45362` is funded on genesis.
 
 ## Local Run
 
 1. To run the local setup, set the .env file with the keys specified in .env.example.
 2. Run `$ make up-dev-build` to run the whole stack including bridge, or `$ make up-dev-settlement` to bring up only the settlement layer.
-
 
 ## Starter .env file
 To get a standard starter .env file from primev internal development, [click here.](https://www.notion.so/Private-keys-and-env-for-settlement-layer-245a4f3f4fe040a7b72a6be91131d9c2?pvs=4)
