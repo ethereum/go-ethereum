@@ -39,6 +39,10 @@ Address:     `0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4`
 
 Address:     `0x0DCaa27B9E4Db92F820189345792f8eC5Ef148F6`
 
+## Create2 Deployment Proxy
+
+A Create2 deployment proxy is meant to be deployed to this chain. The signer address for such proxy is funded on genesis, `0x3fab184622dc19b6109349b94811493bf2a45362`. see more [here](https://github.com/Arachnid/deterministic-deployment-proxy).
+
 ## Local Run
 
 1. To run the local setup, set the .env file with the keys specified in .env.example.
