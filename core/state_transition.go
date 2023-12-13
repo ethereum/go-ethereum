@@ -470,20 +470,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	st.gasRemaining += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	gasRemaining := new(big.Int).SetUint64(st.gasRemaining)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		// Split into burnt gas and tip gas to refund.
-		burnt := new(big.Int).Mul(gasRemaining, st.evm.Context.BaseFee)
-		// TODO: rename to unburnt
-		st.state.AddBalance(st.msg.From, burnt, state.BalanceChangeBurnRefund)
-		effectiveTip := cmath.BigMin(st.msg.GasTipCap, new(big.Int).Sub(st.msg.GasFeeCap, st.evm.Context.BaseFee))
-		tip := new(big.Int).Mul(gasRemaining, effectiveTip)
-		st.state.AddBalance(st.msg.From, tip, state.BalanceChangeGasRefund)
-	} else {
-		remaining := new(big.Int).Mul(gasRemaining, st.msg.GasPrice)
-		// TODO: rename to unusedTip
-		st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
-	}
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
+	st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
 
 	if st.evm.Config.Tracer != nil && st.gasRemaining > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasChangeTxLeftOverReturned)
