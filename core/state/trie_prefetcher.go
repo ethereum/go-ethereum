@@ -292,10 +292,6 @@ func (sf *subfetcher) loop() {
 		tasks := sf.tasks
 		sf.tasks = nil
 		sf.lock.Unlock()
-		if tasks == nil && !keepRunning {
-			// No more tasks
-			return
-		}
 		// Prefetch all tasks
 		for _, task := range tasks {
 			if _, ok := sf.seen[string(task)]; ok {
@@ -308,6 +304,10 @@ func (sf *subfetcher) loop() {
 				sf.trie.GetStorage(sf.addr, task)
 			}
 			sf.seen[string(task)] = struct{}{}
+		}
+
+		if !keepRunning {
+			return
 		}
 	}
 }
