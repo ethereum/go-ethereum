@@ -1492,6 +1492,50 @@ func TestRepricing(t *testing.T) {
 	}
 }
 
+func TestMinGasPriceEnforced(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, 10000000, statedb, new(event.Feed))
+
+	txPoolConfig := DefaultConfig
+	txPoolConfig.NoLocals = true
+	pool := New(txPoolConfig, blockchain)
+	pool.Init(new(big.Int).SetUint64(txPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000))
+
+	tx := pricedTransaction(0, 100000, big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasPrice().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasTipCap().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+	// Make sure the tx is accepted if locals are enabled
+	pool.config.NoLocals = false
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; err != nil {
+		t.Fatalf("Min tip enforced with locals enabled, error: %v", err)
+	}
+}
+
 // Tests that setting the transaction pool gas price to a higher value correctly
 // discards everything cheaper (legacy & dynamic fee) than that and moves any
 // gapped transactions back from the pending pool to the queue.

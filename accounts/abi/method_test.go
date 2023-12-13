@@ -35,6 +35,7 @@ const methoddata = `
 ]`
 
 func TestMethodString(t *testing.T) {
+	t.Parallel()
 	var table = []struct {
 		method      string
 		expectation string
@@ -99,6 +100,7 @@ func TestMethodString(t *testing.T) {
 }
 
 func TestMethodSig(t *testing.T) {
+	t.Parallel()
 	var cases = []struct {
 		method string
 		expect string
