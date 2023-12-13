@@ -66,7 +66,7 @@ func DecodeWitnessRLP(b []byte) (*types.Block, *Witness, error) {
 	return &res.block, res.ToWitness(), nil
 }
 
-func (w *Witness) EncodeRLP(b *types.Block) []byte {
+func (w *Witness) EncodeRLP() []byte {
 	buf := new(bytes.Buffer)
 	eb := rlp.NewEncoderBuffer(buf)
 
@@ -102,7 +102,7 @@ func (w *Witness) EncodeRLP(b *types.Block) []byte {
 		blockHashes = append(blockHashes, blockHash)
 	}
 	l := eb.List()
-	b.EncodeRLP(eb)
+	w.block.EncodeRLP(eb)
 	if err := rlp.Encode(eb, root); err != nil {
 		panic(err)
 	}
@@ -172,12 +172,17 @@ func (w *Witness) Dump() {
 
 func (w *Witness) Summary() string {
 	b := new(bytes.Buffer)
-	xx, _ := rlp.EncodeToBytes(w.block)
+	xx, err := rlp.EncodeToBytes(w.block)
+	if err != nil {
+		panic(err)
+	}
 	totBlock := len(xx)
+	fmt.Printf("total block size is %d\n", totBlock)
 
-	yy, _ := rlp.EncodeToBytes(w)
+	yy := w.EncodeRLP()
+
 	totWit := len(yy)
-
+	fmt.Printf("yy len is %d\n", totWit)
 	totCode := 0
 	for _, c := range w.codes {
 		totCode += len(c)
@@ -234,7 +239,7 @@ func NewWitness() *Witness {
 }
 
 func DumpBlockWithWitnessToFile(w *Witness, b *types.Block) {
-	enc := w.EncodeRLP(b)
+	enc := w.EncodeRLP()
 	path, _ := os.Getwd() //"/datadrive/"
 	err := os.MkdirAll(fmt.Sprintf("%s/block-dump", path), 0755)
 	if err != nil {
