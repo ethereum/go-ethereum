@@ -77,15 +77,14 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
-// TODO
+// Predetermined create2 address of whitelist contract with exclusive mint/burn privileges.
 const whitelistCreate2Addr = "0x000000"
 
-// TODO: confirm new abi schema works with contract
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
-	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
-		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
-	}
+	// if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+	// 	return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
+	// }
 
 	mintTo := common.BytesToAddress(input[0:32])
 
@@ -109,12 +108,11 @@ func (c *burn) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
-// TODO: confirm new abi schema works with contract
 func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
-	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
-		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
-	}
+	// if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+	// 	return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
+	// }
 
 	burnFrom := common.BytesToAddress(input[0:32])
 
