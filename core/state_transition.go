@@ -236,77 +236,41 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	if err := st.balanceCheck(); err != nil {
-		return err
-	}
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		st.buyDynamicFee()
-	} else {
-		fee := new(big.Int).SetUint64(st.msg.GasLimit)
-		fee = fee.Mul(fee, st.msg.GasPrice)
-		// TODO: rename change reason to indicate tip.
-		st.state.SubBalance(st.msg.From, fee, state.BalanceChangeGasBuy)
+	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
+	mgval = mgval.Mul(mgval, st.msg.GasPrice)
+	balanceCheck := new(big.Int).Set(mgval)
+	if st.msg.GasFeeCap != nil {
+		balanceCheck.SetUint64(st.msg.GasLimit)
+		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
+		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if err := st.buyBlobGas(); err != nil {
-			return err
+		if blobGas := st.blobGasUsed(); blobGas > 0 {
+			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
+			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
+			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
+			balanceCheck.Add(balanceCheck, blobBalanceCheck)
+			// Pay for blobGasUsed * actual blob fee
+			blobFee := new(big.Int).SetUint64(blobGas)
+			blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
+			mgval.Add(mgval, blobFee)
 		}
-	}
-
-	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
-		return err
-	}
-	if st.evm.Config.Tracer != nil {
-		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, vm.GasChangeTxInitialBalance)
-	}
-	st.gasRemaining += st.msg.GasLimit
-	st.initialGas = st.msg.GasLimit
-
-	return nil
-}
-
-// balanceCheck checks the account can pay all they claimed
-// they can pay.
-func (st *StateTransition) balanceCheck() error {
-	balanceCheck := new(big.Int).SetUint64(st.msg.GasLimit)
-	// GasFeeCap defaults to gas price for legacy txes.
-	balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
-	balanceCheck = balanceCheck.Add(balanceCheck, st.msg.Value)
-	if st.msg.BlobGasFeeCap != nil {
-		blobFee := new(big.Int).SetUint64(st.blobGasUsed())
-		blobFee = blobFee.Mul(blobFee, st.msg.BlobGasFeeCap)
-		balanceCheck = balanceCheck.Add(balanceCheck, blobFee)
 	}
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
-	return nil
-}
-
-// buyDynamicFee purchases gas according to EIP-1559 rules. See:
-// https://eips.ethereum.org/EIPS/eip-1559
-func (st *StateTransition) buyDynamicFee() {
-	burnt := new(big.Int).SetUint64(st.msg.GasLimit)
-	burnt = burnt.Mul(burnt, st.evm.Context.BaseFee)
-	// TODO: rename and create new change reason type so it's possible to calculate total fee paid.
-	st.state.SubBalance(st.msg.From, burnt, state.BalanceChangeBurn)
-
-	effectiveTip := cmath.BigMin(st.msg.GasTipCap, new(big.Int).Sub(st.msg.GasFeeCap, st.evm.Context.BaseFee))
-	tipVal := new(big.Int).SetUint64(st.msg.GasLimit)
-	tipVal = tipVal.Mul(tipVal, effectiveTip)
-	// TODO: rename to indicate tip.
-	st.state.SubBalance(st.msg.From, tipVal, state.BalanceChangeGasBuy)
-}
-
-// buyBlobGas purchases blob gas as per:
-// https://eips.ethereum.org/EIPS/eip-4844
-func (st *StateTransition) buyBlobGas() error {
-	if blobGas := st.blobGasUsed(); blobGas > 0 {
-		// Pay for blobGasUsed * effective blob fee
-		blobFee := new(big.Int).SetUint64(blobGas)
-		blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
-		st.state.SubBalance(st.msg.From, blobFee, state.BalanceChangeBurn)
+	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
+		return err
 	}
+
+	if st.evm.Config.Tracer != nil {
+		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, vm.GasChangeTxInitialBalance)
+	}
+
+	st.gasRemaining += st.msg.GasLimit
+
+	st.initialGas = st.msg.GasLimit
+	st.state.SubBalance(st.msg.From, mgval, state.BalanceChangeGasBuy)
 	return nil
 }
 
