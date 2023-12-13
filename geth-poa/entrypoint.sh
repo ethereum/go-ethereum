@@ -75,7 +75,8 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics.port=6060 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
-		--nat extip:$NODE_IP
+		--nat extip:$NODE_IP \
+		--rpc.allow-unprotected-txs
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
