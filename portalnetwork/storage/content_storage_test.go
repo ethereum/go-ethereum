@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"math"
 	"os"
@@ -26,11 +25,6 @@ func genBytes(length int) []byte {
 	return res
 }
 
-func defaultContentIdFunc(contentKey []byte) []byte {
-	digest := sha256.Sum256(contentKey)
-	return digest[:]
-}
-
 func TestBasicStorage(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
@@ -38,8 +32,7 @@ func TestBasicStorage(t *testing.T) {
 	defer clear()
 	defer storage.Close()
 
-	contentKey := []byte("test")
-	contentId := defaultContentIdFunc(contentKey)
+	contentId := []byte("test")
 	content := []byte("value")
 
 	_, err = storage.Get(contentId)

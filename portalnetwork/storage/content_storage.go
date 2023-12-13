@@ -15,12 +15,6 @@ import (
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
-var (
-	ErrContentNotFound = fmt.Errorf("content not found")
-
-	maxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-)
-
 const (
 	sqliteName              = "shisui.sqlite"
 	contentDeletionFraction = 0.05 // 5% of the content will be deleted when the storage capacity is hit and radius gets adjusted.
@@ -39,6 +33,11 @@ const (
 		xor(key, (?1)) as distance
 		FROM kvstore
 		ORDER BY distance DESC`
+)
+
+var (
+	ErrContentNotFound = fmt.Errorf("content not found")
+	maxDistance        = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
 type ContentStorage struct {
@@ -69,7 +68,7 @@ func xor(contentId, nodeId []byte) []byte {
 	return res
 }
 
-// a > b return 1; else return 0
+// a > b return 1; a = b return 0; else return -1
 func greater(a, b []byte) int {
 	return bytes.Compare(a, b)
 }
@@ -123,6 +122,7 @@ func NewContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataD
 	return portalStorage, err
 }
 
+// Get the content according to the contentId
 func (p *ContentStorage) Get(contentId []byte) ([]byte, error) {
 	var res []byte
 	err := p.getStmt.QueryRow(contentId).Scan(&res)
@@ -156,6 +156,7 @@ func newPutResultWithErr(err error) PutResult {
 	}
 }
 
+// Put saves the contentId and content
 func (p *ContentStorage) Put(contentId []byte, content []byte) PutResult {
 	_, err := p.putStmt.Exec(contentId, content)
 	if err != nil {
@@ -219,7 +220,7 @@ func (p *ContentStorage) initStmts() error {
 	return nil
 }
 
-// get database size, content size and similar
+// Size get database size, content size and similar
 func (p *ContentStorage) Size() (uint64, error) {
 	sql := "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();"
 	stmt, err := p.sqliteDB.Prepare(sql)
@@ -236,6 +237,7 @@ func (p *ContentStorage) UnusedSize() (uint64, error) {
 	return p.queryRowUint64(sql)
 }
 
+// UsedSize = Size - UnusedSize
 func (p *ContentStorage) UsedSize() (uint64, error) {
 	size, err := p.Size()
 	if err != nil {
@@ -248,6 +250,7 @@ func (p *ContentStorage) UsedSize() (uint64, error) {
 	return size - unusedSize, err
 }
 
+// ContentCount return the total content count
 func (p *ContentStorage) ContentCount() (uint64, error) {
 	sql := "SELECT COUNT(key) FROM kvstore;"
 	return p.queryRowUint64(sql)
@@ -269,6 +272,7 @@ func (p *ContentStorage) queryRowUint64(sql string) (uint64, error) {
 	return res, err
 }
 
+// GetLargestDistance find the largest distance
 func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 	stmt, err := p.sqliteDB.Prepare(XOR_FIND_FARTHEST_QUERY)
 	if err != nil {
@@ -287,6 +291,11 @@ func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 	return res, nil
 }
 
+// EstimateNewRadius calculates an estimated new radius based on the current radius, used size, and storage capacity.
+// The method takes the currentRadius as input and returns the estimated new radius and an error (if any).
+// It calculates the size ratio of usedSize to storageCapacityInBytes and adjusts the currentRadius accordingly.
+// If the size ratio is greater than 0, it performs the adjustment; otherwise, it returns the currentRadius unchanged.
+// The method returns an error if there is any issue in determining the used size.
 func (p *ContentStorage) EstimateNewRadius(currentRadius *uint256.Int) (*uint256.Int, error) {
 	currrentSize, err := p.UsedSize()
 	if err != nil {
@@ -353,11 +362,13 @@ func (p *ContentStorage) batchDel(ids [][]byte) error {
 		args[i] = id
 	}
 
-	// 执行删除操作
+	// delete items
 	_, err := p.sqliteDB.Exec(query, args...)
 	return err
 }
 
+// ReclaimSpace reclaims space in the ContentStorage's SQLite database by performing a VACUUM operation.
+// It returns an error if the VACUUM operation encounters any issues.
 func (p *ContentStorage) ReclaimSpace() error {
 	_, err := p.sqliteDB.Exec("VACUUM;")
 	return err
@@ -370,6 +381,7 @@ func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 	return err
 }
 
+// ForcePrune delete the content which distance is further than the given radius
 func (p *ContentStorage) ForcePrune(radius *uint256.Int) error {
 	return p.deleteContentOutOfRadius(radius)
 }
