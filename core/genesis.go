@@ -142,7 +142,7 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 	}
 	for addr, account := range *ga {
 		if account.Balance != nil {
-			statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+			statedb.AddBalance(addr, account.Balance, state.BalanceIncreaseGenesisBalance)
 		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
@@ -165,7 +165,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 		if account.Balance != nil {
 			// This is not actually logged via tracer because OnGenesisBlock
 			// already captures the allocations.
-			statedb.AddBalance(addr, account.Balance, state.BalanceChangeGenesisBalance)
+			statedb.AddBalance(addr, account.Balance, state.BalanceIncreaseGenesisBalance)
 		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)

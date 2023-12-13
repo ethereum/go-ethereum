@@ -270,7 +270,7 @@ func (st *StateTransition) buyGas() error {
 	st.gasRemaining += st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
-	st.state.SubBalance(st.msg.From, mgval, state.BalanceChangeGasBuy)
+	st.state.SubBalance(st.msg.From, mgval, state.BalanceDecreaseGasBuy)
 	return nil
 }
 
@@ -445,7 +445,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, state.BalanceChangeRewardTransactionFee)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee, state.BalanceIncreaseRewardTransactionFee)
 	}
 
 	return &ExecutionResult{
@@ -471,7 +471,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
-	st.state.AddBalance(st.msg.From, remaining, state.BalanceChangeGasRefund)
+	st.state.AddBalance(st.msg.From, remaining, state.BalanceIncreaseGasReturn)
 
 	if st.evm.Config.Tracer != nil && st.gasRemaining > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasChangeTxLeftOverReturned)

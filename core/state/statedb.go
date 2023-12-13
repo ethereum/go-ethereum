@@ -486,7 +486,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prevbalance: prev,
 	})
 	if s.logger != nil {
-		s.logger.OnBalanceChange(addr, prev, n, BalanceChangeSuicideWithdraw)
+		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()
 	stateObject.data.Balance = n
@@ -879,7 +879,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 			// If ether was sent to account post-selfdestruct it is burnt.
 			if bal := obj.Balance(); bal.Sign() != 0 && s.logger != nil {
-				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceChangeBurn)
+				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct

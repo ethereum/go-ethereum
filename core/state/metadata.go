@@ -21,31 +21,48 @@ package state
 type BalanceChangeReason byte
 
 const (
-	BalanceChangeUnspecified          BalanceChangeReason = 0
-	BalanceChangeRewardMineUncle      BalanceChangeReason = 1
-	BalanceChangeRewardMineBlock      BalanceChangeReason = 2
-	BalanceChangeDaoRefundContract    BalanceChangeReason = 3
-	BalanceChangeDaoAdjustBalance     BalanceChangeReason = 4
-	BalanceChangeTransfer             BalanceChangeReason = 5
-	BalanceChangeGenesisBalance       BalanceChangeReason = 6
-	BalanceChangeGasBuy               BalanceChangeReason = 7
-	BalanceChangeRewardTransactionFee BalanceChangeReason = 8
-	BalanceChangeGasRefund            BalanceChangeReason = 9
-	BalanceChangeTouchAccount         BalanceChangeReason = 10
-	// TODO: rename (debit, credit)
-	// BalanceChangeSuicideRefund is added to the recipient as indicated by a selfdestructing account.
-	BalanceChangeSuicideRefund BalanceChangeReason = 11
-	// BalanceChangeSuicideWithdraw is deducted from a contract due to self-destruct.
+	BalanceChangeUnspecified BalanceChangeReason = 0
+
+	// Issuance
+	// BalanceIncreaseRewardMineUncle is a reward for mining an uncle block.
+	BalanceIncreaseRewardMineUncle BalanceChangeReason = 1
+	// BalanceIncreaseRewardMineBlock is a reward for mining a block.
+	BalanceIncreaseRewardMineBlock BalanceChangeReason = 2
+	// BalanceIncreaseWithdrawal is ether withdrawn from the beacon chain.
+	BalanceChangeWithdrawal BalanceChangeReason = 3
+	// BalanceIncreaseGenesisBalance is ether allocated at the genesis block.
+	BalanceIncreaseGenesisBalance BalanceChangeReason = 4
+
+	// Transaction fees
+	// BalanceIncreaseRewardTransactionFee is the transaction tip increasing block builder's balance.
+	BalanceIncreaseRewardTransactionFee BalanceChangeReason = 5
+	// BalanceDecreaseGasBuy is spent to purchase gas for execution a transaction.
+	// Part of this gas will be burnt as per EIP-1559 rules.
+	BalanceDecreaseGasBuy BalanceChangeReason = 6
+	// BalanceIncreaseGasReturn is ether returned for unused gas at the end of execution.
+	BalanceIncreaseGasReturn BalanceChangeReason = 7
+
+	// DAO fork
+	// BalanceIncreaseDaoContract is ether sent to the DAO refund contract.
+	BalanceIncreaseDaoContract BalanceChangeReason = 8
+	// BalanceDecreaseDaoAccount is ether taken from a DAO account to be moved to the refund contract.
+	BalanceDecreaseDaoAccount BalanceChangeReason = 9
+
+	// BalanceChangeTransfer is ether transfered via a call.
+	// it is a decrease for the sender and an increase for the recipient.
+	BalanceChangeTransfer BalanceChangeReason = 10
+	// BalanceChangeTouchAccount is a transfer of zero value. It is only there to
+	// touch-create an account.
+	BalanceChangeTouchAccount BalanceChangeReason = 11
+
+	// BalanceIncreaseSelfdestruct is added to the recipient as indicated by a selfdestructing account.
+	BalanceIncreaseSelfdestruct BalanceChangeReason = 12
+	// BalanceDecreaseSelfdestruct is deducted from a contract due to self-destruct.
 	// This can happen either at the point of self-destruction, or at the end of the tx
 	// if ether was sent to contract post-selfdestruct.
-	BalanceChangeSuicideWithdraw BalanceChangeReason = 12
-	// BalanceChangeBurn accounts for:
-	// - EIP-1559 burnt fees
-	// - ether that is sent to a self-destructed contract within the same tx (captured at end of tx)
-	// Note it doesn't account for a self-destruct which appoints same contract as recipient.
-	BalanceChangeBurn BalanceChangeReason = 13
-	// BalanceChangeBurnRefund is refunded to an account at the end of transaction based on
-	// gas usage from the estimated burn amount.
-	BalanceChangeBurnRefund BalanceChangeReason = 14
-	BalanceChangeWithdrawal BalanceChangeReason = 15
+	BalanceDecreaseSelfdestruct BalanceChangeReason = 13
+	// BalanceDecreaseSelfdestructBurn is ether that is sent to an already self-destructed
+	// account within the same tx (captured at end of tx).
+	// Note it doesn't account for a self-destruct which appoints itself as recipient.
+	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )

@@ -316,9 +316,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, new(big.Int).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward, state.BalanceChangeRewardMineUncle)
+			statedb.AddBalance(ommer.Address, reward, state.BalanceIncreaseRewardMineUncle)
 		}
-		statedb.AddBalance(pre.Env.Coinbase, minerReward, state.BalanceChangeRewardMineBlock)
+		statedb.AddBalance(pre.Env.Coinbase, minerReward, state.BalanceIncreaseRewardMineBlock)
 	}
 	// Apply withdrawals
 	for _, w := range pre.Env.Withdrawals {
@@ -367,7 +367,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance, state.BalanceChangeGenesisBalance)
+		statedb.SetBalance(addr, a.Balance, state.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
