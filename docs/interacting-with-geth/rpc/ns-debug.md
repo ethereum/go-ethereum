@@ -351,7 +351,7 @@ Sets the rate of mutex profiling.
 Configures how often in-memory state tries are persisted to disk. The interval needs to be in a format parsable by a [time.Duration](https://pkg.go.dev/time#ParseDuration). Note that the interval is not wall-clock time. Rather it is accumulated block processing time after which the state should be flushed.
 For example the value `0s` will essentially turn on archive mode. If set to `1h`, it means that after one hour of effective block processing time, the trie would be flushed. If one block takes 200ms, a flush would occur every `5*3600=18000` blocks. The default interval for mainnet is `1h`.
 
-**Note:** this configuration will not be presisted through restarts.
+**Note:** this configuration will not be persisted through restarts.
 
 | Client  | Method invocation                                                |
 | :------ | ---------------------------------------------------------------- |
@@ -374,7 +374,7 @@ When JS-based tracing (see below) was first implemented, the intended usecase wa
 - It streams output to disk during the execution, to not blow up the memory usage on the node
 - It uses `jsonl` as output format (to allow streaming)
 - Uses a cross-client standardized output, so called 'standard json'
-  - Uses `op` for string-representation of opcode, instead of `op`/`opName` for numeric/string, and other simlar small differences.
+  - Uses `op` for string-representation of opcode, instead of `op`/`opName` for numeric/string, and other similar small differences.
   - has `refund`
   - Represents memory as a contiguous chunk of data, as opposed to a list of `32`-byte segments like `debug_traceTransaction`
 
@@ -397,7 +397,7 @@ Or all txs from a block:
 
 Files are created in a temp-location, with the naming standard `block_<blockhash:4>-<txindex>-<txhash:4>-<random suffix>`. Each opcode immediately streams to file, with no in-geth buffering aside from whatever buffering the os normally does.
 
-On the server side, it also adds some more info when regenerating historical state, namely, the reexec-number if `required historical state is not avaiable` is encountered, so a user can experiment with increasing that setting. It also prints out the remaining block until it reaches target:
+On the server side, it also adds some more info when regenerating historical state, namely, the reexec-number if `required historical state is not available` is encountered, so a user can experiment with increasing that setting. It also prints out the remaining block until it reaches target:
 
 ```terminal
 INFO [10-15|13:48:25.263] Regenerating historical state            block=2385959 target=2386012 remaining=53   elapsed=3m30.990537767s
