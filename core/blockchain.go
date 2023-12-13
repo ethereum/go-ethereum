@@ -1854,7 +1854,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 
 		statedb.GetWitness().SetBlock(block)
-		fmt.Printf("block %d summary:\n%s", block.NumberU64(), statedb.GetWitness().Summary())
+		log.Info(fmt.Sprintf("block %d summary:\n%s", block.NumberU64(), statedb.GetWitness().Summary()))
 		//state.DumpBlockWithWitnessToFile(statedb.GetWitness(), block)
 
 		followupInterrupt.Store(true)
