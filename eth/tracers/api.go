@@ -940,6 +940,60 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
 }
 
+// TraceCall lets you trace a given eth_call. It collects the structured logs
+// created during the execution of EVM if the given transaction was added on
+// top of the provided block and returns them as a JSON object.
+func (api *API) TraceTransactionOverrides(ctx context.Context, hash common.Hash, config *TraceCallConfig) (interface{}, error) {
+	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	// Only mined txes are supported
+	if tx == nil {
+		return nil, errTxNotFound
+	}
+	// It shouldn't happen in practice.
+	if blockNumber == 0 {
+		return nil, errors.New("genesis is not traceable")
+	}
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
+	if err != nil {
+		return nil, err
+	}
+	msg, vmctx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, int(index), reexec)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	txctx := &Context{
+		BlockHash: blockHash,
+		TxIndex:   int(index),
+		TxHash:    hash,
+	}
+
+	// vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	// Apply the customization rules if required.
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+		config.BlockOverrides.Apply(&vmctx)
+	}
+
+	var traceConfig *TraceConfig
+	if config != nil {
+		traceConfig = &config.TraceConfig
+	}
+
+	return api.traceTx(ctx, msg, txctx, vmctx, statedb, traceConfig) // tracetransaction
+	// return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig) // tracecall
+}
+
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
