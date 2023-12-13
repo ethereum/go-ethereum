@@ -317,7 +317,9 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 
 	if len(callLogs) != len(receiptsLogs) {
 		panic(fmt.Errorf(
-			"mismatch between Firehose call logs and Ethereum transaction receipt logs, transaction receipt has %d logs but there is %d Firehose call logs",
+			"mismatch between Firehose call logs and Ethereum transaction %s receipt logs at block #%d, transaction receipt has %d logs but there is %d Firehose call logs",
+			hex.EncodeToString(trx.Hash),
+			f.block.Number,
 			len(receiptsLogs),
 			len(callLogs),
 		))
