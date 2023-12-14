@@ -117,7 +117,7 @@ func (t *tracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *
 func (t *tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.logs = append(t.logs, make([]*types.Log, 0))
 	toCopy := to
-	if value != nil && value.Cmp(common.Big0) > 0 {
+	if typ != vm.DELEGATECALL && value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, toCopy, value)
 	}
 }
