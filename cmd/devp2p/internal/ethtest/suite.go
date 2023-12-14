@@ -86,11 +86,11 @@ func (s *Suite) EthTests() []utesting.Test {
 
 func (s *Suite) SnapTests() []utesting.Test {
 	return []utesting.Test{
-		{Name: "TestSnapStatus", Fn: s.TestSnapStatus},
-		{Name: "TestSnapAccountRange", Fn: s.TestSnapGetAccountRange},
-		{Name: "TestSnapGetByteCodes", Fn: s.TestSnapGetByteCodes},
-		{Name: "TestSnapGetTrieNodes", Fn: s.TestSnapTrieNodes},
-		{Name: "TestSnapGetStorageRanges", Fn: s.TestSnapGetStorageRanges},
+		{Name: "Status", Fn: s.TestSnapStatus},
+		{Name: "AccountRange", Fn: s.TestSnapGetAccountRange},
+		{Name: "GetByteCodes", Fn: s.TestSnapGetByteCodes},
+		{Name: "GetTrieNodes", Fn: s.TestSnapTrieNodes},
+		{Name: "GetStorageRanges", Fn: s.TestSnapGetStorageRanges},
 	}
 }
 
