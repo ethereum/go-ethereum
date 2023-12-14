@@ -76,6 +76,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict 172.29.0.0/16 \
 		--nat extip:$NODE_IP \
+		--txpool.accountqueue=512 \
 		--rpc.allow-unprotected-txs
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
@@ -105,8 +106,8 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--nousb \
 		--netrestrict 172.29.0.0/16 \
 		--metrics \
-                --metrics.addr=0.0.0.0 \
-                --metrics.port=6060 \
+		--metrics.addr=0.0.0.0 \
+		--metrics.port=6060 \
 		--ws \
 		--ws.addr=0.0.0.0 \
 		--ws.port="$WS_PORT" \
@@ -116,6 +117,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.addr="0.0.0.0" \
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
+		--txpool.accountqueue=512 \
 		--nat extip:$NODE_IP
 else
 	echo "Invalid GETH_NODE_TYPE specified"
