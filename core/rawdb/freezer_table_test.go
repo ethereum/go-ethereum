@@ -660,8 +660,8 @@ func TestFreezerOffset(t *testing.T) {
 
 func assertTableSize(t *testing.T, f *freezerTable, size int) {
 	t.Helper()
-	if size_, err := f.size(); size_ != uint64(size) {
-		t.Fatalf("expected size of %d bytes, got %d, err: %v", size, size_, err)
+	if got, err := f.size(); got != uint64(size) {
+		t.Fatalf("expected size of %d bytes, got %d, err: %v", size, got, err)
 	}
 }
 
@@ -700,7 +700,7 @@ func TestTruncateTail(t *testing.T) {
 		6: getChunk(20, 0x11),
 	})
 	// maxFileSize*fileCount + headBytes + indexFileSize - hiddenBytes
-	expected := 40*3 + 20 + 48 - 0
+	expected := 20*7 + 48 - 0
 	assertTableSize(t, f, expected)
 
 	// truncate single element( item 0 ), deletion is only supported at file level
@@ -717,7 +717,7 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
-	expected = 40*3 + 20 + 48 - 20
+	expected = 20*7 + 48 - 20
 	assertTableSize(t, f, expected)
 
 	// Reopen the table, the deletion information should be persisted as well
@@ -751,7 +751,7 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
-	expected = 40*2 + 20 + 36 - 0
+	expected = 20*5 + 36 - 0
 	assertTableSize(t, f, expected)
 
 	// Reopen the table, the above testing should still pass
@@ -788,7 +788,7 @@ func TestTruncateTail(t *testing.T) {
 		5: getChunk(20, 0xaa),
 		6: getChunk(20, 0x11),
 	})
-	expected = 40*1 + 20 + 24 - 20
+	expected = 20*3 + 24 - 20
 	assertTableSize(t, f, expected)
 
 	// truncate all, the entire freezer should be deleted
@@ -802,6 +802,8 @@ func TestTruncateTail(t *testing.T) {
 		5: errOutOfBounds,
 		6: errOutOfBounds,
 	})
+	expected = 12
+	assertTableSize(t, f, expected)
 }
 
 func TestTruncateHead(t *testing.T) {
