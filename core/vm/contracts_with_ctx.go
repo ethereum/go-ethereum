@@ -79,7 +79,7 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 
 // Predetermined create2 address of whitelist contract with exclusive mint/burn privileges.
 // See: https://github.com/primevprotocol/contracts/blob/ecfd53d43770201da9c7a697be1fb03e5e554e4e/scripts/DeployScripts.s.sol
-const whitelistCreate2Addr = "0xe57ee51bcb0914EC666703F923e0433d8c4d70b1"
+const whitelistCreate2Addr = "0xc5bB85F941fb8dbbed6416A8aC84A06226E0f138"
 
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
