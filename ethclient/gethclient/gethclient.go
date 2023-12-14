@@ -95,7 +95,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		Balance          *hexutil.Big    `json:"balance"`
 		KeccakCodeHash   common.Hash     `json:"keccakCodeHash"`
 		PoseidonCodeHash common.Hash     `json:"poseidonCodeHash"`
-		CodeSize         uint64          `json:"codeSize"`
+		CodeSize         hexutil.Uint64  `json:"codeSize"`
 		Nonce            hexutil.Uint64  `json:"nonce"`
 		StorageHash      common.Hash     `json:"storageHash"`
 		StorageProof     []storageResult `json:"storageProof"`
@@ -124,7 +124,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		Nonce:            uint64(res.Nonce),
 		KeccakCodeHash:   res.KeccakCodeHash,
 		PoseidonCodeHash: res.PoseidonCodeHash,
-		CodeSize:         res.CodeSize,
+		CodeSize:         uint64(res.CodeSize),
 		StorageHash:      res.StorageHash,
 		StorageProof:     storageResults,
 	}
