@@ -47,8 +47,6 @@ func makeJWTSecret() (string, [32]byte, error) {
 }
 
 func TestEthSuite(t *testing.T) {
-	t.Parallel()
-
 	jwtPath, secret, err := makeJWTSecret()
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
@@ -74,8 +72,6 @@ func TestEthSuite(t *testing.T) {
 }
 
 func TestSnapSuite(t *testing.T) {
-	t.Parallel()
-
 	jwtPath, secret, err := makeJWTSecret()
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
@@ -104,7 +100,7 @@ func TestSnapSuite(t *testing.T) {
 func runGeth(dir string, jwtPath string) (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		AuthAddr: "127.0.0.1",
-		AuthPort: 18551,
+		AuthPort: 0,
 		P2P: p2p.Config{
 			ListenAddr:  "127.0.0.1:0",
 			NoDiscovery: true,
