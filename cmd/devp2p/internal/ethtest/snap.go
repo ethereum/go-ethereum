@@ -607,9 +607,6 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		accPaths = append(accPaths, makeSnapPath(key, i))
 	}
 
-	thepath := keybytesToHex(common.FromHex("0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb"))
-	fmt.Printf("COMPACT: %x\n", hexToCompact(thepath))
-
 	tests := []trieNodesTest{
 		{
 			desc:      `In this test, we send an empty request to the node.`,
