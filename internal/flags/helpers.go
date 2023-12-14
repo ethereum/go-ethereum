@@ -18,12 +18,21 @@ package flags
 
 import (
 	"fmt"
+	"os"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
+
+// usecolor defines whether the CLI help should use colored output or normal dumb
+// colorless terminal formatting.
+var usecolor = (isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())) && os.Getenv("TERM") != "dumb"
 
 // NewApp creates an app with sane defaults.
 func NewApp(usage string) *cli.App {
@@ -129,6 +138,14 @@ func doMigrateFlags(ctx *cli.Context) {
 }
 
 func init() {
+	if usecolor {
+		// Annotate all help categories with colors
+		cli.AppHelpTemplate = regexp.MustCompile("[A-Z ]+:").ReplaceAllString(cli.AppHelpTemplate, "\u001B[33m$0\u001B[0m")
+
+		// Annotate flag categories with colors (private template, so need to
+		// copy-paste the entire thing here...)
+		cli.AppHelpTemplate = strings.ReplaceAll(cli.AppHelpTemplate, "{{template \"visibleFlagCategoryTemplate\" .}}", "{{range .VisibleFlagCategories}}\n   {{if .Name}}\u001B[33m{{.Name}}\u001B[0m\n\n   {{end}}{{$flglen := len .Flags}}{{range $i, $e := .Flags}}{{if eq (subtract $flglen $i) 1}}{{$e}}\n{{else}}{{$e}}\n   {{end}}{{end}}{{end}}")
+	}
 	cli.FlagStringer = FlagString
 }
 
@@ -138,37 +155,31 @@ func FlagString(f cli.Flag) string {
 	if !ok {
 		return ""
 	}
-
 	needsPlaceholder := df.TakesValue()
 	placeholder := ""
 	if needsPlaceholder {
 		placeholder = "value"
 	}
 
-	namesText := pad(cli.FlagNamePrefixer(df.Names(), placeholder), 30)
+	namesText := cli.FlagNamePrefixer(df.Names(), placeholder)
 
 	defaultValueString := ""
 	if s := df.GetDefaultText(); s != "" {
 		defaultValueString = " (default: " + s + ")"
 	}
-
-	usage := strings.TrimSpace(df.GetUsage())
 	envHint := strings.TrimSpace(cli.FlagEnvHinter(df.GetEnvVars(), ""))
-	if len(envHint) > 0 {
-		usage += " " + envHint
+	if envHint != "" {
+		envHint = " (" + envHint[1:len(envHint)-1] + ")"
 	}
-
+	usage := strings.TrimSpace(df.GetUsage())
 	usage = wordWrap(usage, 80)
 	usage = indent(usage, 10)
 
-	return fmt.Sprintf("\n    %s%s\n%s", namesText, defaultValueString, usage)
-}
-
-func pad(s string, length int) string {
-	if len(s) < length {
-		s += strings.Repeat(" ", length-len(s))
+	if usecolor {
+		return fmt.Sprintf("\n    \u001B[32m%-35s%-35s\u001B[0m%s\n%s", namesText, defaultValueString, envHint, usage)
+	} else {
+		return fmt.Sprintf("\n    %-35s%-35s%s\n%s", namesText, defaultValueString, envHint, usage)
 	}
-	return s
 }
 
 func indent(s string, nspace int) string {
@@ -212,4 +223,79 @@ func wordWrap(s string, width int) string {
 	}
 
 	return output.String()
+}
+
+// AutoEnvVars extends all the specific CLI flags with automatically generated
+// env vars by capitalizing the flag, replacing . with _ and prefixing it with
+// the specified string.
+//
+// Note, the prefix should *not* contain the separator underscore, that will be
+// added automatically.
+func AutoEnvVars(flags []cli.Flag, prefix string) {
+	for _, flag := range flags {
+		envvar := strings.ToUpper(prefix + "_" + strings.ReplaceAll(strings.ReplaceAll(flag.Names()[0], ".", "_"), "-", "_"))
+
+		switch flag := flag.(type) {
+		case *cli.StringFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *cli.BoolFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *cli.IntFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *cli.Uint64Flag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *cli.DurationFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *cli.PathFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *BigFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *TextMarshalerFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+
+		case *DirectoryFlag:
+			flag.EnvVars = append(flag.EnvVars, envvar)
+		}
+	}
+}
+
+// CheckEnvVars iterates over all the environment variables and checks if any of
+// them look like a CLI flag but is not consumed. This can be used to detect old
+// or mistyped names.
+func CheckEnvVars(ctx *cli.Context, flags []cli.Flag, prefix string) {
+	known := make(map[string]string)
+	for _, flag := range flags {
+		docflag, ok := flag.(cli.DocGenerationFlag)
+		if !ok {
+			continue
+		}
+		for _, envvar := range docflag.GetEnvVars() {
+			known[envvar] = flag.Names()[0]
+		}
+	}
+	keyvals := os.Environ()
+	sort.Strings(keyvals)
+
+	for _, keyval := range keyvals {
+		key := strings.Split(keyval, "=")[0]
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		if flag, ok := known[key]; ok {
+			if ctx.Count(flag) > 0 {
+				log.Info("Config environment variable found", "envvar", key, "shadowedby", "--"+flag)
+			} else {
+				log.Info("Config environment variable found", "envvar", key)
+			}
+		} else {
+			log.Warn("Unknown config environment variable", "envvar", key)
+		}
+	}
 }

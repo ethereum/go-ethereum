@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -49,6 +50,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 )
+
+// estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
+// allowed to produce in order to speed up calculations.
+const estimateGasErrorRatio = 0.015
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
@@ -675,10 +680,6 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		keys         = make([]common.Hash, len(storageKeys))
 		keyLengths   = make([]int, len(storageKeys))
 		storageProof = make([]StorageResult, len(storageKeys))
-
-		storageTrie state.Trie
-		storageHash = types.EmptyRootHash
-		codeHash    = types.EmptyCodeHash
 	)
 	// Deserialize all keys. This prevents state access on invalid input.
 	for i, hexKey := range storageKeys {
@@ -688,51 +689,49 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 			return nil, err
 		}
 	}
-	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
+	statedb, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if statedb == nil || err != nil {
 		return nil, err
 	}
-	if storageRoot := state.GetStorageRoot(address); storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
-		id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-		tr, err := trie.NewStateTrie(id, state.Database().TrieDB())
-		if err != nil {
-			return nil, err
-		}
-		storageTrie = tr
-	}
-	// If we have a storageTrie, the account exists and we must update
-	// the storage root hash and the code hash.
-	if storageTrie != nil {
-		storageHash = storageTrie.Hash()
-		codeHash = state.GetCodeHash(address)
-	}
-	// Create the proofs for the storageKeys.
-	for i, key := range keys {
-		// Output key encoding is a bit special: if the input was a 32-byte hash, it is
-		// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
-		// JSON-RPC spec for getProof. This behavior exists to preserve backwards
-		// compatibility with older client versions.
-		var outputKey string
-		if keyLengths[i] != 32 {
-			outputKey = hexutil.EncodeBig(key.Big())
-		} else {
-			outputKey = hexutil.Encode(key[:])
-		}
+	codeHash := statedb.GetCodeHash(address)
+	storageRoot := statedb.GetStorageRoot(address)
 
-		if storageTrie == nil {
-			storageProof[i] = StorageResult{outputKey, &hexutil.Big{}, []string{}}
-			continue
+	if len(keys) > 0 {
+		var storageTrie state.Trie
+		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
+			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
+			st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
+			if err != nil {
+				return nil, err
+			}
+			storageTrie = st
 		}
-		var proof proofList
-		if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
-			return nil, err
+		// Create the proofs for the storageKeys.
+		for i, key := range keys {
+			// Output key encoding is a bit special: if the input was a 32-byte hash, it is
+			// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
+			// JSON-RPC spec for getProof. This behavior exists to preserve backwards
+			// compatibility with older client versions.
+			var outputKey string
+			if keyLengths[i] != 32 {
+				outputKey = hexutil.EncodeBig(key.Big())
+			} else {
+				outputKey = hexutil.Encode(key[:])
+			}
+			if storageTrie == nil {
+				storageProof[i] = StorageResult{outputKey, &hexutil.Big{}, []string{}}
+				continue
+			}
+			var proof proofList
+			if err := storageTrie.Prove(crypto.Keccak256(key.Bytes()), &proof); err != nil {
+				return nil, err
+			}
+			value := (*hexutil.Big)(statedb.GetState(address, key).Big())
+			storageProof[i] = StorageResult{outputKey, value, proof}
 		}
-		value := (*hexutil.Big)(state.GetState(address, key).Big())
-		storageProof[i] = StorageResult{outputKey, value, proof}
 	}
-
 	// Create the accountProof.
-	tr, err := trie.NewStateTrie(trie.StateTrieID(header.Root), state.Database().TrieDB())
+	tr, err := trie.NewStateTrie(trie.StateTrieID(header.Root), statedb.Database().TrieDB())
 	if err != nil {
 		return nil, err
 	}
@@ -743,12 +742,12 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	return &AccountResult{
 		Address:      address,
 		AccountProof: accountProof,
-		Balance:      (*hexutil.Big)(state.GetBalance(address)),
+		Balance:      (*hexutil.Big)(statedb.GetBalance(address)),
 		CodeHash:     codeHash,
-		Nonce:        hexutil.Uint64(state.GetNonce(address)),
-		StorageHash:  storageHash,
+		Nonce:        hexutil.Uint64(statedb.GetNonce(address)),
+		StorageHash:  storageRoot,
 		StorageProof: storageProof,
-	}, state.Error()
+	}, statedb.Error()
 }
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally
@@ -1013,6 +1012,9 @@ type BlockOverrides struct {
 	FeeRecipient  *common.Address
 	PrevRandao    *common.Hash
 	BaseFeePerGas *hexutil.Big
+	// TODO: is this right? should we override this since it doesn't exist
+	// in header or excessBlobGas which is used to calculate the base fee?
+	BlobBaseFee *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1040,6 +1042,9 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.BaseFeePerGas != nil {
 		blockCtx.BaseFee = diff.BaseFeePerGas.ToInt()
+	}
+	if diff.BlobBaseFee != nil {
+		blockCtx.BlobBaseFee = diff.BlobBaseFee.ToInt()
 	}
 }
 
@@ -1103,17 +1108,6 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
-
-	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-
-	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
-}
-
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
@@ -1145,7 +1139,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
+	evm := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
@@ -1159,7 +1153,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 
 	// Execute the message.
 	result, err := core.ApplyMessage(evm, msg, gp)
-	if err := vmError(); err != nil {
+	if err := state.Error(); err != nil {
 		return nil, err
 	}
 
@@ -1173,15 +1167,27 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	return result, nil
 }
 
-func newRevertError(result *core.ExecutionResult) *revertError {
-	reason, errUnpack := abi.UnpackRevert(result.Revert())
-	err := errors.New("execution reverted")
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
+
+	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
+}
+
+func newRevertError(revert []byte) *revertError {
+	err := vm.ErrExecutionReverted
+
+	reason, errUnpack := abi.UnpackRevert(revert)
 	if errUnpack == nil {
-		err = fmt.Errorf("execution reverted: %v", reason)
+		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
 	}
 	return &revertError{
 		error:  err,
-		reason: hexutil.Encode(result.Revert()),
+		reason: hexutil.Encode(revert),
 	}
 }
 
@@ -1209,14 +1215,18 @@ func (e *revertError) ErrorData() interface{} {
 //
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
+	if blockNrOrHash == nil {
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNrOrHash = &latest
+	}
+	result, err := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
 	if len(result.Revert()) > 0 {
-		return nil, newRevertError(result)
+		return nil, newRevertError(result.Revert())
 	}
 	return result.Return(), result.Err
 }
@@ -1242,61 +1252,12 @@ func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts mcOpts, blockNrOrH
 	return mc.execute(ctx, opts)
 }
 
-// executeEstimate is a helper that executes the transaction under a given gas limit and returns
-// true if the transaction fails for a reason that might be related to not enough gas. A non-nil
-// error means execution failed due to reasons unrelated to the gas limit.
-func executeEstimate(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, gasCap uint64, gasLimit uint64) (bool, *core.ExecutionResult, error) {
-	args.Gas = (*hexutil.Uint64)(&gasLimit)
-	result, err := doCall(ctx, b, args, state, header, nil, nil, 0, gasCap)
-	if err != nil {
-		if errors.Is(err, core.ErrIntrinsicGas) {
-			return true, nil, nil // Special case, raise gas limit
-		}
-		return true, nil, err // Bail out
-	}
-	return result.Failed(), result, nil
-}
-
 // DoEstimateGas returns the lowest possible gas limit that allows the transaction to run
 // successfully at block `blockNrOrHash`. It returns error if the transaction would revert, or if
 // there are unexpected failures. The gas limit is capped by both `args.Gas` (if non-nil &
 // non-zero) and `gasCap` (if non-zero).
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
-	// Binary search the gas limit, as it may need to be higher than the amount used
-	var (
-		lo uint64 // lowest-known gas limit where tx execution fails
-		hi uint64 // lowest-known gas limit where tx execution succeeds
-	)
-	// Use zero address if sender unspecified.
-	if args.From == nil {
-		args.From = new(common.Address)
-	}
-	// Determine the highest gas limit can be used during the estimation.
-	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
-		hi = uint64(*args.Gas)
-	} else {
-		// Retrieve the block to act as the gas ceiling
-		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
-		if err != nil {
-			return 0, err
-		}
-		if block == nil {
-			return 0, errors.New("block not found")
-		}
-		hi = block.GasLimit()
-	}
-	// Normalize the max fee per gas the call is willing to spend.
-	var feeCap *big.Int
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	} else if args.GasPrice != nil {
-		feeCap = args.GasPrice.ToInt()
-	} else if args.MaxFeePerGas != nil {
-		feeCap = args.MaxFeePerGas.ToInt()
-	} else {
-		feeCap = common.Big0
-	}
-
+	// Retrieve the base state and mutate it with any overrides
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return 0, err
@@ -1304,80 +1265,27 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := overrides.Apply(state, nil); err != nil {
 		return 0, err
 	}
-
-	// Recap the highest gas limit with account's available balance.
-	if feeCap.BitLen() != 0 {
-		balance := state.GetBalance(*args.From) // from can't be nil
-		available := new(big.Int).Set(balance)
-		if args.Value != nil {
-			if args.Value.ToInt().Cmp(available) >= 0 {
-				return 0, core.ErrInsufficientFundsForTransfer
-			}
-			available.Sub(available, args.Value.ToInt())
-		}
-		allowance := new(big.Int).Div(available, feeCap)
-
-		// If the allowance is larger than maximum uint64, skip checking
-		if allowance.IsUint64() && hi > allowance.Uint64() {
-			transfer := args.Value
-			if transfer == nil {
-				transfer = new(hexutil.Big)
-			}
-			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", transfer.ToInt(), "maxFeePerGas", feeCap, "fundable", allowance)
-			hi = allowance.Uint64()
-		}
+	// Construct the gas estimator option from the user input
+	opts := &gasestimator.Options{
+		Config:     b.ChainConfig(),
+		Chain:      NewChainContext(ctx, b),
+		Header:     header,
+		State:      state,
+		ErrorRatio: estimateGasErrorRatio,
 	}
-	// Recap the highest gas allowance with specified gascap.
-	if gasCap != 0 && hi > gasCap {
-		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
-		hi = gasCap
-	}
-
-	// We first execute the transaction at the highest allowable gas limit, since if this fails we
-	// can return error immediately.
-	failed, result, err := executeEstimate(ctx, b, args, state.Copy(), header, gasCap, hi)
+	// Run the gas estimation andwrap any revertals into a custom return
+	call, err := args.ToMessage(gasCap, header.BaseFee, true)
 	if err != nil {
 		return 0, err
 	}
-	if failed {
-		if result != nil && result.Err != vm.ErrOutOfGas {
-			if len(result.Revert()) > 0 {
-				return 0, newRevertError(result)
-			}
-			return 0, result.Err
+	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
+	if err != nil {
+		if len(revert) > 0 {
+			return 0, newRevertError(revert)
 		}
-		return 0, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+		return 0, err
 	}
-	// For almost any transaction, the gas consumed by the unconstrained execution above
-	// lower-bounds the gas limit required for it to succeed. One exception is those txs that
-	// explicitly check gas remaining in order to successfully execute within a given limit, but we
-	// probably don't want to return a lowest possible gas limit for these cases anyway.
-	lo = result.UsedGas - 1
-
-	// Binary search for the smallest gas limit that allows the tx to execute successfully.
-	for lo+1 < hi {
-		mid := (hi + lo) / 2
-		if mid > lo*2 {
-			// Most txs don't need much higher gas limit than their gas used, and most txs don't
-			// require near the full block limit of gas, so the selection of where to bisect the
-			// range here is skewed to favor the low side.
-			mid = lo * 2
-		}
-		failed, _, err = executeEstimate(ctx, b, args, state.Copy(), header, gasCap, mid)
-		if err != nil {
-			// This should not happen under normal conditions since if we make it this far the
-			// transaction had run without error at least once before.
-			log.Error("execution error in estimate gas", "err", err)
-			return 0, err
-		}
-		if failed {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return hexutil.Uint64(hi), nil
+	return hexutil.Uint64(estimate), nil
 }
 
 // EstimateGas returns the lowest possible gas limit that allows the transaction to run
@@ -1592,8 +1500,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 func effectiveGasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
 	fee := tx.GasTipCap()
 	fee = fee.Add(fee, baseFee)
-	if tx.GasTipCapIntCmp(fee) < 0 {
-		return tx.GasTipCap()
+	if tx.GasFeeCapIntCmp(fee) < 0 {
+		return tx.GasFeeCap()
 	}
 	return fee
 }
@@ -1710,7 +1618,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, NoBaseFee: true}
-		vmenv, _ := b.GetEVM(ctx, msg, statedb, header, &config, nil)
+		vmenv := b.GetEVM(ctx, msg, statedb, header, &config, nil)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction(false).Hash(), err)
@@ -2259,20 +2167,23 @@ func (api *DebugAPI) PrintBlock(ctx context.Context, number uint64) (string, err
 
 // ChaindbProperty returns leveldb properties of the key-value database.
 func (api *DebugAPI) ChaindbProperty(property string) (string, error) {
-	if property == "" {
-		property = "leveldb.stats"
-	} else if !strings.HasPrefix(property, "leveldb.") {
-		property = "leveldb." + property
-	}
 	return api.b.ChainDb().Stat(property)
 }
 
 // ChaindbCompact flattens the entire key-value database into a single level,
 // removing all unused slots and merging all keys.
 func (api *DebugAPI) ChaindbCompact() error {
-	for b := byte(0); b < 255; b++ {
-		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
+	cstart := time.Now()
+	for b := 0; b <= 255; b++ {
+		var (
+			start = []byte{byte(b)}
+			end   = []byte{byte(b + 1)}
+		)
+		if b == 255 {
+			end = nil
+		}
+		log.Info("Compacting database", "range", fmt.Sprintf("%#X-%#X", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
+		if err := api.b.ChainDb().Compact(start, end); err != nil {
 			log.Error("Database compaction failed", "err", err)
 			return err
 		}

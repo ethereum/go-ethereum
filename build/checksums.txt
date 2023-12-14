@@ -1,25 +1,30 @@
 # This file contains sha256 checksums of optional build dependencies.
 
+# version:spec-tests 1.0.6
 # https://github.com/ethereum/execution-spec-tests/releases
-24bac679f3a2d8240d8e08e7f6a70b70c2dabf673317d924cf1d1887b9fe1f81  fixtures.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/v1.0.6/
+485af7b66cf41eb3a8c1bd46632913b8eb95995df867cf665617bbc9b4beedd1  fixtures_develop.tar.gz
 
+# version:golang 1.21.5
 # https://go.dev/dl/
-818d46ede85682dd551ad378ef37a4d247006f12ec59b5b755601d2ce114369a  go1.21.0.src.tar.gz
-b314de9f704ab122c077d2ec8e67e3670affe8865479d1f01991e7ac55d65e70  go1.21.0.darwin-amd64.tar.gz
-3aca44de55c5e098de2f406e98aba328898b05d509a2e2a356416faacf2c4566  go1.21.0.darwin-arm64.tar.gz
-312a0065714a50862af714e7a5b3fbbd70fe68f905ffb9bcc56d42eadf6bffab  go1.21.0.freebsd-386.tar.gz
-b8eaa36654625df799654f77f4af0ea7bd9e5e760ebe86e68fe7c484748ae995  go1.21.0.freebsd-amd64.tar.gz
-0e6f378d9b072fab0a3d9ff4d5e990d98487d47252dba8160015a61e6bd0bcba  go1.21.0.linux-386.tar.gz
-d0398903a16ba2232b389fb31032ddf57cac34efda306a0eebac34f0965a0742  go1.21.0.linux-amd64.tar.gz
-f3d4548edf9b22f26bbd49720350bbfe59d75b7090a1a2bff1afad8214febaf3  go1.21.0.linux-arm64.tar.gz
-e377a0004957c8c560a3ff99601bce612330a3d95ba3b0a2ae144165fc87deb1  go1.21.0.linux-armv6l.tar.gz
-e938ffc81d8ebe5efc179240960ba22da6a841ff05d5cab7ce2547112b14a47f  go1.21.0.linux-ppc64le.tar.gz
-be7338df8e5d5472dfa307b0df2b446d85d001b0a2a3cdb1a14048d751b70481  go1.21.0.linux-s390x.tar.gz
-af920fbb74fc3d173118dc3cc35f02a709c1de642700e92a91a7d16981df3fec  go1.21.0.windows-386.zip
-732121e64e0ecb07c77fdf6cc1bc5ce7b242c2d40d4ac29021ad4c64a08731f6  go1.21.0.windows-amd64.zip
-41342f5a0f8c083b14c68bde738ddcd313a4f53a5854bfdfab47f0e88247de12  go1.21.0.windows-arm64.zip
+285cbbdf4b6e6e62ed58f370f3f6d8c30825d6e56c5853c66d3c23bcdb09db19  go1.21.5.src.tar.gz
+a2e1d5743e896e5fe1e7d96479c0a769254aed18cf216cf8f4c3a2300a9b3923  go1.21.5.darwin-amd64.tar.gz
+d0f8ac0c4fb3efc223a833010901d02954e3923cfe2c9a2ff0e4254a777cc9cc  go1.21.5.darwin-arm64.tar.gz
+2c05bbe0dc62456b90b7ddd354a54f373b7c377a98f8b22f52ab694b4f6cca58  go1.21.5.freebsd-386.tar.gz
+30b6c64e9a77129605bc12f836422bf09eec577a8c899ee46130aeff81567003  go1.21.5.freebsd-amd64.tar.gz
+8f4dba9cf5c61757bbd7e9ebdb93b6a30a1b03f4a636a1ba0cc2f27b907ab8e1  go1.21.5.linux-386.tar.gz
+e2bc0b3e4b64111ec117295c088bde5f00eeed1567999ff77bc859d7df70078e  go1.21.5.linux-amd64.tar.gz
+841cced7ecda9b2014f139f5bab5ae31785f35399f236b8b3e75dff2a2978d96  go1.21.5.linux-arm64.tar.gz
+837f4bf4e22fcdf920ffeaa4abf3d02d1314e03725431065f4d44c46a01b42fe  go1.21.5.linux-armv6l.tar.gz
+907b8c6ec4be9b184952e5d3493be66b1746442394a8bc78556c56834cd7c38b  go1.21.5.linux-ppc64le.tar.gz
+9c4a81b72ebe44368813cd03684e1080a818bf915d84163abae2ed325a1b2dc0  go1.21.5.linux-s390x.tar.gz
+6da2418889dfb37763d0eb149c4a8d728c029e12f0cd54fbca0a31ae547e2d34  go1.21.5.windows-386.zip
+bbe603cde7c9dee658f45164b4d06de1eff6e6e6b800100824e7c00d56a9a92f  go1.21.5.windows-amd64.zip
+9b7acca50e674294e43202df4fbc26d5af4d8bc3170a3342a1514f09a2dab5e9  go1.21.5.windows-arm64.zip
 
-# https://github.com/golangci/golangci-lint/releases
+# version:golangci 1.51.1
+# https://github.com/golangci/golangci-lint/releases/
+# https://github.com/golangci/golangci-lint/releases/download/v1.51.1/
 fba08acc4027f69f07cef48fbff70b8a7ecdfaa1c2aba9ad3fb31d60d9f5d4bc  golangci-lint-1.51.1-darwin-amd64.tar.gz
 75b8f0ff3a4e68147156be4161a49d4576f1be37a0b506473f8c482140c1e7f2  golangci-lint-1.51.1-darwin-arm64.tar.gz
 e06b3459aaed356e1667580be00b05f41f3b2e29685d12cdee571c23e1edb414  golangci-lint-1.51.1-freebsd-386.tar.gz
@@ -48,4 +53,12 @@ bce02f7232723cb727755ee11f168a700a00896a25d37f87c4b173bce55596b4  golangci-lint-
 cf6403f84707ce8c98664736772271bc8874f2e760c2fd0f00cf3e85963507e9  golangci-lint-1.51.1-windows-armv7.zip
 
 # This is the builder on PPA that will build Go itself (inception-y), don't modify!
+#
+# This version is fine to be old and full of security holes, we just use it
+# to build the latest Go. Don't change it. If it ever becomes insufficient,
+# we need to switch over to a recursive builder to jump across supported
+# versions.
+#
+# version:ppa-builder 1.19.6
+# https://go.dev/dl/
 d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz

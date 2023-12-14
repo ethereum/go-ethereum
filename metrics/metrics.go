@@ -9,7 +9,9 @@ import (
 	"os"
 	"runtime/metrics"
 	"runtime/pprof"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -30,13 +32,35 @@ var EnabledExpensive = false
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 
+// enablerEnvVars is the env var names to use to enable metrics collections.
+var enablerEnvVars = []string{"GETH_METRICS"}
+
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}
+
+// expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
+var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
+	for _, enabler := range enablerEnvVars {
+		if val, found := syscall.Getenv(enabler); found && !Enabled {
+			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
+				log.Info("Enabling metrics collection")
+				Enabled = true
+			}
+		}
+	}
+	for _, enabler := range expensiveEnablerEnvVars {
+		if val, found := syscall.Getenv(enabler); found && !EnabledExpensive {
+			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
+				log.Info("Enabling expensive metrics collection")
+				EnabledExpensive = true
+			}
+		}
+	}
 	for _, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
 
@@ -83,6 +107,12 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/memory/classes/heap/unused:bytes"},
 	{Name: "/sched/goroutines:goroutines"},
 	{Name: "/sched/latencies:seconds"}, // histogram
+}
+
+func ReadRuntimeStats() *runtimeStats {
+	r := new(runtimeStats)
+	readRuntimeStats(r)
+	return r
 }
 
 func readRuntimeStats(v *runtimeStats) {

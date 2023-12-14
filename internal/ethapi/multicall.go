@@ -141,6 +141,9 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 	for bi, block := range blocks {
 		header := headers[bi]
 		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
+		if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
+			blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
+		}
 		// Respond to BLOCKHASH requests.
 		blockContext.GetHash = func(n uint64) common.Hash {
 			h, err := mc.getBlockHash(ctx, n, base, headers)
@@ -199,7 +202,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			}
 			// If the result contains a revert reason, try to unpack it.
 			if len(result.Revert()) > 0 {
-				result.Err = newRevertError(result)
+				result.Err = newRevertError(result.Revert())
 			}
 			logs := vmConfig.Tracer.(*tracer).Logs()
 			callRes := mcCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}

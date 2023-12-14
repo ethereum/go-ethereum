@@ -207,21 +207,21 @@ func (api *ConsensusAPI) verifyPayloadAttributes(attr *engine.PayloadAttributes)
 	c := api.eth.BlockChain().Config()
 
 	// Verify withdrawals attribute for Shanghai.
-	if err := checkAttribute(c.IsShanghai, attr.Withdrawals != nil, attr.Timestamp); err != nil {
+	if err := checkAttribute(c.IsShanghai, attr.Withdrawals != nil, c.LondonBlock, attr.Timestamp); err != nil {
 		return fmt.Errorf("invalid withdrawals: %w", err)
 	}
 	// Verify beacon root attribute for Cancun.
-	if err := checkAttribute(c.IsCancun, attr.BeaconRoot != nil, attr.Timestamp); err != nil {
+	if err := checkAttribute(c.IsCancun, attr.BeaconRoot != nil, c.LondonBlock, attr.Timestamp); err != nil {
 		return fmt.Errorf("invalid parent beacon block root: %w", err)
 	}
 	return nil
 }
 
-func checkAttribute(active func(*big.Int, uint64) bool, exists bool, time uint64) error {
-	if active(common.Big0, time) && !exists {
+func checkAttribute(active func(*big.Int, uint64) bool, exists bool, block *big.Int, time uint64) error {
+	if active(block, time) && !exists {
 		return errors.New("fork active, missing expected attribute")
 	}
-	if !active(common.Big0, time) && exists {
+	if !active(block, time) && exists {
 		return errors.New("fork inactive, unexpected attribute set")
 	}
 	return nil
@@ -513,7 +513,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
 	if err != nil {
 		log.Warn("Invalid NewPayload params", "params", params, "error", err)
-		return engine.PayloadStatusV1{Status: engine.INVALID}, nil
+		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadLock.Lock()
@@ -560,7 +560,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
-	// Another cornercase: if the node is in snap sync mode, but the CL client
+	// Another corner case: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
@@ -611,7 +611,8 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (engine.PayloadS
 	// Although we don't want to trigger a sync, if there is one already in
 	// progress, try to extend if with the current payload request to relieve
 	// some strain from the forkchoice update.
-	if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
+	err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header())
+	if err == nil {
 		log.Debug("Payload accepted for sync extension", "number", block.NumberU64(), "hash", block.Hash())
 		return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 	}
@@ -623,12 +624,12 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (engine.PayloadS
 		// In full sync mode, failure to import a well-formed block can only mean
 		// that the parent state is missing and the syncer rejected extending the
 		// current cycle with the new payload.
-		log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash())
+		log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash(), "reason", err)
 	} else {
 		// In non-full sync mode (i.e. snap sync) all payloads are rejected until
 		// snap sync terminates as snap sync relies on direct database injections
 		// and cannot afford concurrent out-if-band modifications via imports.
-		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash())
+		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash(), "reason", err)
 	}
 	return engine.PayloadStatusV1{Status: engine.SYNCING}, nil
 }
@@ -694,20 +695,21 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	}
 }
 
-// invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
-// if no latestValid block was provided.
+// invalid returns a response "INVALID" with the latest valid hash supplied by latest.
 func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.PayloadStatusV1 {
-	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
+	var currentHash *common.Hash
 	if latestValid != nil {
-		// Set latest valid hash to 0x0 if parent is PoW block
-		currentHash = common.Hash{}
-		if latestValid.Difficulty.BitLen() == 0 {
+		if latestValid.Difficulty.BitLen() != 0 {
+			// Set latest valid hash to 0x0 if parent is PoW block
+			currentHash = &common.Hash{}
+		} else {
 			// Otherwise set latest valid hash to parent hash
-			currentHash = latestValid.Hash()
+			h := latestValid.Hash()
+			currentHash = &h
 		}
 	}
 	errorMsg := err.Error()
-	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
+	return engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: currentHash, ValidationError: &errorMsg}
 }
 
 // heartbeat loops indefinitely, and checks if there have been beacon client updates
@@ -776,7 +778,7 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBodyV1 {
-	var bodies = make([]*engine.ExecutionPayloadBodyV1, len(hashes))
+	bodies := make([]*engine.ExecutionPayloadBodyV1, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		bodies[i] = getBody(block)

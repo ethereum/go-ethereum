@@ -656,6 +656,13 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	return res
 }
 
+// Release releases resources
+func (t *Tree) Release() {
+	if dl := t.disklayer(); dl != nil {
+		dl.Release()
+	}
+}
+
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs).

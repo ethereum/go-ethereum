@@ -30,10 +30,12 @@ import (
 )
 
 func TestTransactionPriceNonceSortLegacy(t *testing.T) {
+	t.Parallel()
 	testTransactionPriceNonceSort(t, nil)
 }
 
 func TestTransactionPriceNonceSort1559(t *testing.T) {
+	t.Parallel()
 	testTransactionPriceNonceSort(t, big.NewInt(0))
 	testTransactionPriceNonceSort(t, big.NewInt(5))
 	testTransactionPriceNonceSort(t, big.NewInt(50))
@@ -92,6 +94,8 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
+				Gas:       tx.Gas(),
+				BlobGas:   tx.BlobGas(),
 			})
 		}
 		expectedCount += count
@@ -136,6 +140,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 // Tests that if multiple transactions have the same price, the ones seen earlier
 // are prioritized to avoid network spam attacks aiming for a specific ordering.
 func TestTransactionTimeSort(t *testing.T) {
+	t.Parallel()
 	// Generate a batch of accounts to start with
 	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
@@ -157,6 +162,8 @@ func TestTransactionTimeSort(t *testing.T) {
 			Time:      tx.Time(),
 			GasFeeCap: tx.GasFeeCap(),
 			GasTipCap: tx.GasTipCap(),
+			Gas:       tx.Gas(),
+			BlobGas:   tx.BlobGas(),
 		})
 	}
 	// Sort the transactions and cross check the nonce ordering

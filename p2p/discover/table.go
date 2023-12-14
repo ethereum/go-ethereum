@@ -23,6 +23,7 @@
 package discover
 
 import (
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -330,8 +331,10 @@ func (tab *Table) loadSeedNodes() {
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
 		seed := seeds[i]
-		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
-		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
+		if tab.log.Enabled(context.Background(), log.LevelTrace) {
+			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
+			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
+		}
 		tab.addSeenNode(seed)
 	}
 }

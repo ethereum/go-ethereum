@@ -22,6 +22,7 @@ package leveldb
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -245,6 +246,11 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 
 // Stat returns a particular internal stat of the database.
 func (db *Database) Stat(property string) (string, error) {
+	if property == "" {
+		property = "leveldb.stats"
+	} else if !strings.HasPrefix(property, "leveldb.") {
+		property = "leveldb." + property
+	}
 	return db.db.GetProperty(property)
 }
 

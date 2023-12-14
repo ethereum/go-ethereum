@@ -114,7 +114,7 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 			if n.Hash != hash {
 				dirtyFalseMeter.Mark(1)
 				log.Error("Unexpected trie node in diff layer", "owner", owner, "path", path, "expect", hash, "got", n.Hash)
-				return nil, newUnexpectedNodeError("diff", hash, n.Hash, owner, path)
+				return nil, newUnexpectedNodeError("diff", hash, n.Hash, owner, path, n.Blob)
 			}
 			dirtyHitMeter.Mark(1)
 			dirtyNodeHitDepthHist.Update(int64(depth))

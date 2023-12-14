@@ -164,6 +164,7 @@ type TraceCallConfig struct {
 	TraceConfig
 	StateOverrides *ethapi.StateOverride
 	BlockOverrides *ethapi.BlockOverrides
+	TxIndex        *hexutil.Uint
 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
@@ -863,11 +864,17 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 // TraceCall lets you trace a given eth_call. It collects the structured logs
 // created during the execution of EVM if the given transaction was added on
 // top of the provided block and returns them as a JSON object.
+// If no transaction index is specified, the trace will be conducted on the state
+// after executing the specified block. However, if a transaction index is provided,
+// the trace will be conducted on the state after executing the specified transaction
+// within the specified block.
 func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
 	// Try to retrieve the specified block
 	var (
-		err   error
-		block *types.Block
+		err     error
+		block   *types.Block
+		statedb *state.StateDB
+		release StateReleaseFunc
 	)
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err = api.blockByHash(ctx, hash)
@@ -892,7 +899,12 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+
+	if config != nil && config.TxIndex != nil {
+		_, _, statedb, release, err = api.backend.StateAtTransaction(ctx, block, int(*config.TxIndex), reexec)
+	} else {
+		statedb, release, err = api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+	}
 	if err != nil {
 		return nil, err
 	}

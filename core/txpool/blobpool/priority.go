@@ -27,7 +27,7 @@ import (
 var log2_1_125 = math.Log2(1.125)
 
 // evictionPriority calculates the eviction priority based on the algorithm
-// described in the BlobPool docs for a both fee components.
+// described in the BlobPool docs for both fee components.
 //
 // This method takes about 8ns on a very recent laptop CPU, recalculating about
 // 125 million transaction priority values per second.

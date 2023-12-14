@@ -538,8 +538,7 @@ func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	}
 	return big.NewInt(1)
 }
-func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) (*vm.EVM, func() error) {
-	vmError := func() error { return nil }
+func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
 	}
@@ -548,7 +547,7 @@ func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state
 	if blockContext != nil {
 		context = *blockContext
 	}
-	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig), vmError
+	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig)
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")
@@ -680,6 +679,47 @@ func TestEstimateGas(t *testing.T) {
 			},
 			expectErr: core.ErrInsufficientFunds,
 		},
+		// Test for a bug where the gas price was set to zero but the basefee non-zero
+		//
+		// contract BasefeeChecker {
+		//    constructor() {
+		//        require(tx.gasprice >= block.basefee);
+		//        if (tx.gasprice > 0) {
+		//            require(block.basefee > 0);
+		//        }
+		//    }
+		//}
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:     &accounts[0].addr,
+				Input:    hex2Bytes("6080604052348015600f57600080fd5b50483a1015601c57600080fd5b60003a111560315760004811603057600080fd5b5b603f80603e6000396000f3fe6080604052600080fdfea264697066735822122060729c2cee02b10748fae5200f1c9da4661963354973d9154c13a8e9ce9dee1564736f6c63430008130033"),
+				GasPrice: (*hexutil.Big)(big.NewInt(1_000_000_000)), // Legacy as pricing
+			},
+			expectErr: nil,
+			want:      67617,
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:         &accounts[0].addr,
+				Input:        hex2Bytes("6080604052348015600f57600080fd5b50483a1015601c57600080fd5b60003a111560315760004811603057600080fd5b5b603f80603e6000396000f3fe6080604052600080fdfea264697066735822122060729c2cee02b10748fae5200f1c9da4661963354973d9154c13a8e9ce9dee1564736f6c63430008130033"),
+				MaxFeePerGas: (*hexutil.Big)(big.NewInt(1_000_000_000)), // 1559 gas pricing
+			},
+			expectErr: nil,
+			want:      67617,
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:         &accounts[0].addr,
+				Input:        hex2Bytes("6080604052348015600f57600080fd5b50483a1015601c57600080fd5b60003a111560315760004811603057600080fd5b5b603f80603e6000396000f3fe6080604052600080fdfea264697066735822122060729c2cee02b10748fae5200f1c9da4661963354973d9154c13a8e9ce9dee1564736f6c63430008130033"),
+				GasPrice:     nil, // No legacy gas pricing
+				MaxFeePerGas: nil, // No 1559 gas pricing
+			},
+			expectErr: nil,
+			want:      67595,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
@@ -697,7 +737,7 @@ func TestEstimateGas(t *testing.T) {
 			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
-		if uint64(result) != tc.want {
+		if float64(result) > float64(tc.want)*(1+estimateGasErrorRatio) {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, uint64(result), tc.want)
 		}
 	}
@@ -882,7 +922,7 @@ func TestCall(t *testing.T) {
 		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.Call(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
+		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
@@ -1492,8 +1532,8 @@ func TestMulticallV1(t *testing.T) {
 						Address: transferAddress,
 						Topics: []common.Hash{
 							transferTopic,
-							accounts[0].addr.Hash(),
-							randomAccounts[0].addr.Hash(),
+							addressToHash(accounts[0].addr),
+							addressToHash(randomAccounts[0].addr),
 						},
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(50)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
@@ -1501,8 +1541,8 @@ func TestMulticallV1(t *testing.T) {
 						Address: transferAddress,
 						Topics: []common.Hash{
 							transferTopic,
-							randomAccounts[0].addr.Hash(),
-							randomAccounts[1].addr.Hash(),
+							addressToHash(randomAccounts[0].addr),
+							addressToHash(randomAccounts[1].addr),
 						},
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(100)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
@@ -1783,18 +1823,18 @@ func TestMulticallV1(t *testing.T) {
 	}
 }
 
-type Account struct {
+type account struct {
 	key  *ecdsa.PrivateKey
 	addr common.Address
 }
 
-func newAccounts(n int) (accounts []Account) {
+func newAccounts(n int) (accounts []account) {
 	for i := 0; i < n; i++ {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
-		accounts = append(accounts, Account{key: key, addr: addr})
+		accounts = append(accounts, account{key: key, addr: addr})
 	}
-	slices.SortFunc(accounts, func(a, b Account) int { return a.addr.Cmp(b.addr) })
+	slices.SortFunc(accounts, func(a, b account) int { return a.addr.Cmp(b.addr) })
 	return accounts
 }
 
@@ -2377,9 +2417,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
 		}
-		if i == 5 {
-			b.SetBlobGas(params.BlobTxBlobGasPerBlob)
-		}
 		b.SetPoS()
 	})
 	return backend, txHashes
@@ -2566,4 +2603,8 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 		t.Fatalf("error reading expected test file: %s output: %v", outputFile, err)
 	}
 	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
+}
+
+func addressToHash(a common.Address) common.Hash {
+	return common.BytesToHash(a.Bytes())
 }

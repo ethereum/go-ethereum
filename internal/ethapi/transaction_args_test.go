@@ -19,7 +19,6 @@ package ethapi
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -196,7 +195,6 @@ func TestSetFeeDefaults(t *testing.T) {
 		}
 		got := test.in
 		err := got.setFeeDefaults(ctx, b)
-		fmt.Printf("err: %v\n", err)
 		if err != nil {
 			if test.err == nil {
 				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
@@ -311,8 +309,8 @@ func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number
 	return nil, nil
 }
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
-func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) (*vm.EVM, func() error) {
-	return nil, nil
+func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+	return nil
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
 func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {

@@ -34,7 +34,7 @@ type instructionIterator struct {
 	started bool
 }
 
-// NewInstructionIterator create a new instruction iterator.
+// NewInstructionIterator creates a new instruction iterator.
 func NewInstructionIterator(code []byte) *instructionIterator {
 	it := new(instructionIterator)
 	it.code = code

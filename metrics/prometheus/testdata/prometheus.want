@@ -1,3 +1,25 @@
+# TYPE system_cpu_schedlatency_count counter
+system_cpu_schedlatency_count 5645
+
+# TYPE system_cpu_schedlatency summary
+system_cpu_schedlatency {quantile="0.5"} 0
+system_cpu_schedlatency {quantile="0.75"} 7168
+system_cpu_schedlatency {quantile="0.95"} 1.6777216e+07
+system_cpu_schedlatency {quantile="0.99"} 2.9360128e+07
+system_cpu_schedlatency {quantile="0.999"} 3.3554432e+07
+system_cpu_schedlatency {quantile="0.9999"} 3.3554432e+07
+
+# TYPE system_memory_pauses_count counter
+system_memory_pauses_count 14
+
+# TYPE system_memory_pauses summary
+system_memory_pauses {quantile="0.5"} 32768
+system_memory_pauses {quantile="0.75"} 57344
+system_memory_pauses {quantile="0.95"} 196608
+system_memory_pauses {quantile="0.99"} 196608
+system_memory_pauses {quantile="0.999"} 196608
+system_memory_pauses {quantile="0.9999"} 196608
+
 # TYPE test_counter gauge
 test_counter 12345
 
@@ -31,9 +53,9 @@ test_meter 0
 test_resetting_timer_count 6
 
 # TYPE test_resetting_timer summary
-test_resetting_timer {quantile="0.50"} 12000000
-test_resetting_timer {quantile="0.95"} 120000000
-test_resetting_timer {quantile="0.99"} 120000000
+test_resetting_timer {quantile="0.50"} 1.25e+07
+test_resetting_timer {quantile="0.95"} 1.2e+08
+test_resetting_timer {quantile="0.99"} 1.2e+08
 
 # TYPE test_timer_count counter
 test_timer_count 6

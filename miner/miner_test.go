@@ -64,6 +64,7 @@ func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *stat
 }
 
 type testBlockChain struct {
+	root          common.Hash
 	config        *params.ChainConfig
 	statedb       *state.StateDB
 	gasLimit      uint64
@@ -89,11 +90,16 @@ func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
+func (bc *testBlockChain) HasState(root common.Hash) bool {
+	return bc.root == root
+}
+
 func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return bc.chainHeadFeed.Subscribe(ch)
 }
 
 func TestMiner(t *testing.T) {
+	t.Parallel()
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 
@@ -123,6 +129,7 @@ func TestMiner(t *testing.T) {
 // An initial FailedEvent should allow mining to stop on a subsequent
 // downloader StartEvent.
 func TestMinerDownloaderFirstFails(t *testing.T) {
+	t.Parallel()
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 
@@ -156,6 +163,7 @@ func TestMinerDownloaderFirstFails(t *testing.T) {
 }
 
 func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
+	t.Parallel()
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 
@@ -180,6 +188,7 @@ func TestMinerStartStopAfterDownloaderEvents(t *testing.T) {
 }
 
 func TestStartWhileDownload(t *testing.T) {
+	t.Parallel()
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 	waitForMiningState(t, miner, false)
@@ -194,6 +203,7 @@ func TestStartWhileDownload(t *testing.T) {
 }
 
 func TestStartStopMiner(t *testing.T) {
+	t.Parallel()
 	miner, _, cleanup := createMiner(t)
 	defer cleanup(false)
 	waitForMiningState(t, miner, false)
@@ -204,6 +214,7 @@ func TestStartStopMiner(t *testing.T) {
 }
 
 func TestCloseMiner(t *testing.T) {
+	t.Parallel()
 	miner, _, cleanup := createMiner(t)
 	defer cleanup(true)
 	waitForMiningState(t, miner, false)
@@ -217,6 +228,7 @@ func TestCloseMiner(t *testing.T) {
 // TestMinerSetEtherbase checks that etherbase becomes set even if mining isn't
 // possible at the moment
 func TestMinerSetEtherbase(t *testing.T) {
+	t.Parallel()
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
 	miner.Start()
@@ -302,7 +314,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 		t.Fatalf("can't create new chain %v", err)
 	}
 	statedb, _ := state.New(bc.Genesis().Root(), bc.StateCache(), nil)
-	blockchain := &testBlockChain{chainConfig, statedb, 10000000, new(event.Feed)}
+	blockchain := &testBlockChain{bc.Genesis().Root(), chainConfig, statedb, 10000000, new(event.Feed)}
 
 	pool := legacypool.New(testTxPoolConfig, blockchain)
 	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain, []txpool.SubPool{pool})

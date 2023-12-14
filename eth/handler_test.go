@@ -113,15 +113,17 @@ func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.Lazy
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
+				Gas:       tx.Gas(),
+				BlobGas:   tx.BlobGas(),
 			})
 		}
 	}
 	return pending
 }
 
-// SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
+// SubscribeTransactions should return an event subscription of NewTxsEvent and
 // send events to the given channel.
-func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
 

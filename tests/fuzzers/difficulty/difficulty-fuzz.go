@@ -75,7 +75,7 @@ func (f *fuzzer) readBool() bool {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func Fuzz(data []byte) int {
+func fuzz(data []byte) int {
 	f := fuzzer{
 		input:     bytes.NewReader(data),
 		exhausted: false,

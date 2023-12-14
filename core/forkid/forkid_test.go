@@ -107,6 +107,16 @@ func TestCreation(t *testing.T) {
 				{1735372, 1677557088, ID{Hash: checksumToBytes(0xf7f9bc08), Next: 0}},          // First Shanghai block
 			},
 		},
+		// Holesky test cases
+		{
+			params.HoleskyChainConfig,
+			core.DefaultHoleskyGenesisBlock().ToBlock(),
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}},   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin, London, Paris block
+				{123, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}}, // First MergeNetsplit block
+				{123, 1696000704, ID{Hash: checksumToBytes(0xfd4f016b), Next: 0}}, // Last MergeNetsplit block
+			},
+		},
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
@@ -356,8 +366,9 @@ func TestValidation(t *testing.T) {
 		// TODO(karalabe): Enable this when Cancun is specced
 		//{params.MainnetChainConfig, 20999999, 1677999999, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, ErrLocalIncompatibleOrStale},
 	}
+	genesis := core.DefaultGenesisBlock().ToBlock()
 	for i, tt := range tests {
-		filter := newFilter(tt.config, core.DefaultGenesisBlock().ToBlock(), func() (uint64, uint64) { return tt.head, tt.time })
+		filter := newFilter(tt.config, genesis, func() (uint64, uint64) { return tt.head, tt.time })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}

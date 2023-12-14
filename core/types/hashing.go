@@ -95,7 +95,7 @@ type DerivableList interface {
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
 	list.EncodeIndex(i, buf)
-	// It's really unfortunate that we need to do perform this copy.
+	// It's really unfortunate that we need to perform this copy.
 	// StackTrie holds onto the values until Hash is called, so the values
 	// written to it must not alias.
 	return common.CopyBytes(buf.Bytes())
