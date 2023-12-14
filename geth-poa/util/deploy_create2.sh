@@ -26,12 +26,7 @@ else
     echo "No contract deployed at 0x4e59b44847b379578588920ca78fbf26c0b4956c. Deploying..."
 fi
 
-# Check deployment signer has balance of 10000000000000000 wei allocated from genesis
-RESPONSE=$(curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_getBalance","params":["0x3fab184622dc19b6109349b94811493bf2a45362", "latest"],"id":1}' -H "Content-Type: application/json" $JSON_RPC)
-if [ $(echo $RESPONSE | jq -r '.result') != "0x2386f26fc10000" ]; then
-    echo "Deployment signer (0x3fab184622dc19b6109349b94811493bf2a45362) must have balance of 10000000000000000 wei"
-    exit 1
-fi
+# Note deployement signer account needs at least 10000000000000000 wei allocated on genesis to send tx
 
 # Set presigned transaction 
 TRANSACTION="0xf8a58085174876e800830186a08080b853604580600e600039806000f350fe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222"
