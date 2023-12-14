@@ -44,3 +44,7 @@ create-docker-network:
 	else \
 		echo "Network $(DOCKER_NETWORK_NAME) already exists."; \
 	fi
+
+deploy-create2:
+	@echo "Deploying create2 deployment proxy..."
+	./util/deploy_create2.sh "http://localhost:8545"	
