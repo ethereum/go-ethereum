@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -51,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
 	"github.com/ethereum/go-ethereum/ethstats"
@@ -945,6 +947,20 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.MetricsCategory,
 	}
 
+	// L1Settings
+	L1EndpointFlag = &cli.StringFlag{
+		Name:  "l1.endpoint",
+		Usage: "Endpoint of L1 HTTP-RPC server",
+	}
+	L1ConfirmationsFlag = &cli.StringFlag{
+		Name:  "l1.confirmations",
+		Usage: "Number of confirmations on L1 needed for finalization, or \"safe\" or \"finalized\"",
+	}
+	L1DeploymentBlockFlag = &cli.Int64Flag{
+		Name:  "l1.sync.startblock",
+		Usage: "L1 block height to start syncing from. Should be set to the L1 message queue deployment block number.",
+	}
+
 	// Max block range for `eth_getLogs` method
 	MaxBlockRangeFlag = &cli.Int64Flag{
 		Name:  "rpc.getlogs.maxrange",
@@ -1426,6 +1442,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	SetDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
+	setL1(ctx, cfg)
 
 	if ctx.IsSet(JWTSecretFlag.Name) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
@@ -1464,6 +1481,42 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		}
 		log.Info(fmt.Sprintf("Using %s as db engine", dbEngine))
 		cfg.DBEngine = dbEngine
+	}
+}
+
+func unmarshalBlockNumber(input string) (rpc.BlockNumber, error) {
+	switch input {
+	case "finalized":
+		return rpc.FinalizedBlockNumber, nil
+	case "safe":
+		return rpc.SafeBlockNumber, nil
+	}
+	blockNum, err := hexutil.DecodeUint64(input)
+	if err == nil && blockNum <= math.MaxInt64 {
+		return rpc.BlockNumber(blockNum), nil
+	}
+	blockNum, err = strconv.ParseUint(input, 10, 64)
+	if err == nil && blockNum <= math.MaxInt64 {
+		return rpc.BlockNumber(blockNum), nil
+	}
+	return 0, errors.New("incorrect value")
+}
+
+func setL1(ctx *cli.Context, cfg *node.Config) {
+	var err error
+	if ctx.IsSet(L1EndpointFlag.Name) {
+		cfg.L1Endpoint = ctx.String(L1EndpointFlag.Name)
+	}
+	if ctx.IsSet(L1ConfirmationsFlag.Name) {
+		cfg.L1Confirmations, err = unmarshalBlockNumber(ctx.String(L1ConfirmationsFlag.Name))
+		if err != nil {
+			panic(fmt.Sprintf("invalid value for flag %s: %s", L1ConfirmationsFlag.Name, ctx.String(L1ConfirmationsFlag.Name)))
+		}
+	} else {
+		cfg.L1Confirmations = rpc.FinalizedBlockNumber
+	}
+	if ctx.IsSet(L1DeploymentBlockFlag.Name) {
+		cfg.L1DeploymentBlock = ctx.Uint64(L1DeploymentBlockFlag.Name)
 	}
 }
 
@@ -1904,6 +1957,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
 		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
 	}
+
+	// set db prefix for backward-compatibility
+	if cfg.NetworkId == 534351 {
+		log.Warn("Using legacy db prefix for L1 messages")
+		rawdb.SetL1MessageLegacyPrefix()
+	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -1934,7 +1993,23 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
-	backend, err := eth.New(stack, cfg)
+
+	// initialize L1 client for sync service
+	// note: we need to do this here to avoid circular dependency
+	l1EndpointUrl := stack.Config().L1Endpoint
+	var l1Client *ethclient.Client
+
+	if l1EndpointUrl != "" {
+		var err error
+		l1Client, err = ethclient.Dial(l1EndpointUrl)
+		if err != nil {
+			Fatalf("Unable to connect to L1 endpoint at %v: %v", l1EndpointUrl, err)
+		}
+
+		log.Info("Initialized L1 client", "endpoint", l1EndpointUrl)
+	}
+
+	backend, err := eth.New(stack, cfg, l1Client)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}

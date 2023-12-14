@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -56,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/sync_service"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -68,7 +70,8 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool *txpool.TxPool
+	txPool      *txpool.TxPool
+	syncService *sync_service.SyncService
 
 	blockchain         *core.BlockChain
 	handler            *handler
@@ -105,7 +108,7 @@ type Ethereum struct {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
+func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthClient) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -229,6 +232,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// initialize and start L1 message sync service
+	eth.syncService, err = sync_service.NewSyncService(context.Background(), chainConfig, stack.Config(), eth.chainDb, l1Client)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize L1 sync service: %w", err)
+	}
+	eth.syncService.Start()
+
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -487,6 +498,7 @@ func (s *Ethereum) SyncMode() downloader.SyncMode {
 	mode, _ := s.handler.chainSync.modeAndLocalHead()
 	return mode
 }
+func (s *Ethereum) SyncService() *sync_service.SyncService { return s.syncService }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -534,6 +546,7 @@ func (s *Ethereum) Stop() error {
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
 	s.txPool.Close()
+	s.syncService.Stop()
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()

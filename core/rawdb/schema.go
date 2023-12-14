@@ -20,9 +20,13 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+
+	leveldb "github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -134,7 +138,21 @@ var (
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	// Scroll L1 message store
+	syncedL1BlockNumberKey            = []byte("LastSyncedL1BlockNumber")
+	l1MessageLegacyPrefix             = []byte("l1")
+	l1MessagePrefix                   = []byte("L1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
+	firstQueueIndexNotInL2BlockPrefix = []byte("q")  // firstQueueIndexNotInL2BlockPrefix + L2 block hash -> enqueue index
+	highestSyncedQueueIndexKey        = []byte("HighestSyncedQueueIndex")
 )
+
+// Use the updated "L1" prefix on all new networks
+// to avoid overlap with txLookupPrefix.
+// Use the legacy "l1" prefix on Scroll Sepolia.
+func SetL1MessageLegacyPrefix() {
+	l1MessagePrefix = l1MessageLegacyPrefix
+}
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
@@ -149,6 +167,17 @@ func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
+}
+
+// encodeBigEndian encodes an index as big endian uint64
+func encodeBigEndian(index uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, index)
+	return enc
+}
+
+func isNotFoundErr(err error) bool {
+	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
 }
 
 // headerKeyPrefix = headerPrefix + num (uint64 big endian)
@@ -332,4 +361,14 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// L1MessageKey = l1MessagePrefix + queueIndex (uint64 big endian)
+func L1MessageKey(queueIndex uint64) []byte {
+	return append(l1MessagePrefix, encodeBigEndian(queueIndex)...)
+}
+
+// FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
+func FirstQueueIndexNotInL2BlockKey(l2BlockHash common.Hash) []byte {
+	return append(firstQueueIndexNotInL2BlockPrefix, l2BlockHash.Bytes()...)
 }

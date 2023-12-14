@@ -479,6 +479,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		bloomBits       stat
 		beaconHeaders   stat
 		cliqueSnaps     stat
+		l1Messages      stat
+		l1MessagesOld   stat
+		lastL1Message   stat
 
 		// Les statistic
 		chtTrieNodes   stat
@@ -541,6 +544,12 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
+		case bytes.HasPrefix(key, l1MessagePrefix) && len(key) == len(l1MessagePrefix)+8:
+			l1Messages.Add(size)
+		case bytes.HasPrefix(key, l1MessageLegacyPrefix) && len(key) == len(l1MessageLegacyPrefix)+8:
+			l1MessagesOld.Add(size)
+		case bytes.HasPrefix(key, firstQueueIndexNotInL2BlockPrefix) && len(key) == len(firstQueueIndexNotInL2BlockPrefix)+common.HashLength:
+			lastL1Message.Add(size)
 		case bytes.HasPrefix(key, ChtTablePrefix) ||
 			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
 			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
@@ -557,6 +566,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
 				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+				syncedL1BlockNumberKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -595,6 +605,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
+		{"Key-Value store", "L1 messages", l1Messages.Size(), l1Messages.Count()},
+		{"Key-Value store", "L1 messages (legacy prefix)", l1MessagesOld.Size(), l1MessagesOld.Count()},
+		{"Key-Value store", "Last L1 message", lastL1Message.Size(), lastL1Message.Count()},
 		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
 		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}

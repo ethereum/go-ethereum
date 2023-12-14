@@ -41,3 +41,6 @@ type ChainSideEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
+
+// NewL1MsgsEvent is posted when we receive some new messages from L1.
+type NewL1MsgsEvent struct{ Count int }
