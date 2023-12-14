@@ -450,7 +450,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func TestOverrideAccountMarshal(t *testing.T) {
 	om := map[common.Address]OverrideAccount{
 		{0x11}: {
-			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+			// Zero-valued nonce is not overridden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
 		{0xaa}: {
