@@ -1489,7 +1489,7 @@ func TestMulticallV1(t *testing.T) {
 					ReturnValue: "0x",
 					GasUsed:     "0xd984",
 					Logs: []log{{
-						Address: common.Address{},
+						Address: transferAddress,
 						Topics: []common.Hash{
 							transferTopic,
 							accounts[0].addr.Hash(),
@@ -1498,7 +1498,7 @@ func TestMulticallV1(t *testing.T) {
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(50)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
 					}, {
-						Address: common.Address{},
+						Address: transferAddress,
 						Topics: []common.Hash{
 							transferTopic,
 							randomAccounts[0].addr.Hash(),

@@ -25,8 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// keccak256("Transfer(address,address,uint256)")
-var transferTopic = common.HexToHash("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+var (
+	// keccak256("Transfer(address,address,uint256)")
+	transferTopic = common.HexToHash("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	// ERC-7528
+	transferAddress = common.HexToAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
+)
 
 // tracer is a simple tracer that records all logs and
 // ether transfers. Transfers are recorded as if they
@@ -168,7 +172,7 @@ func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
 		common.BytesToHash(from.Bytes()),
 		common.BytesToHash(to.Bytes()),
 	}
-	t.captureLog(common.Address{}, topics, common.BigToHash(value).Bytes())
+	t.captureLog(transferAddress, topics, common.BigToHash(value).Bytes())
 }
 
 func (t *tracer) Logs() []*types.Log {
