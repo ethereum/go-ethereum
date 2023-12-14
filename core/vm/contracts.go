@@ -159,8 +159,7 @@ func (p PrecompiledContracts) Copy() PrecompiledContracts {
 	return c
 }
 
-// ActivePrecompiledContracts returns precompiled contracts enabled with the current configuration.
-func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
 	case rules.IsCancun:
 		return PrecompiledContractsCancun
@@ -173,6 +172,11 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	default:
 		return PrecompiledContractsHomestead
 	}
+}
+
+// ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
+func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+	return activePrecompiledContracts(rules).Copy()
 }
 
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
