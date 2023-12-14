@@ -162,6 +162,8 @@ func (p PrecompiledContracts) Copy() PrecompiledContracts {
 // ActivePrecompiledContracts returns precompiled contracts enabled with the current configuration.
 func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
+	case rules.IsCancun:
+		return PrecompiledContractsCancun
 	case rules.IsBerlin:
 		return PrecompiledContractsBerlin
 	case rules.IsIstanbul:
