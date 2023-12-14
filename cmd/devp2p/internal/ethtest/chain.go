@@ -103,13 +103,13 @@ func (c *Chain) AccountsInHashOrder() []state.DumpAccount {
 		addr := addr
 		list[i] = acc
 		list[i].Address = &addr
-		if len(acc.SecureKey) != 32 {
+		if len(acc.AddressHash) != 32 {
 			panic(fmt.Errorf("missing/invalid SecureKey in dump account %v", addr))
 		}
 		i++
 	}
 	slices.SortFunc(list, func(x, y state.DumpAccount) int {
-		return bytes.Compare(x.SecureKey, y.SecureKey)
+		return bytes.Compare(x.AddressHash, y.AddressHash)
 	})
 	return list
 }
@@ -317,7 +317,16 @@ func readState(file string) (map[common.Address]state.DumpAccount, error) {
 	if err := json.Unmarshal(f, &dump); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal state: %v", err)
 	}
-	return dump.Accounts, nil
+
+	state := make(map[common.Address]state.DumpAccount)
+	for key, acct := range dump.Accounts {
+		var addr common.Address
+		if err := addr.UnmarshalText([]byte(key)); err != nil {
+			return nil, fmt.Errorf("invalid address %q", key)
+		}
+		state[addr] = acct
+	}
+	return state, nil
 }
 
 func readAccounts(file string) (map[common.Address]*senderInfo, error) {

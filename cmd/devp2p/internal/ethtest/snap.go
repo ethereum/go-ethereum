@@ -75,8 +75,8 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		// test values derived from chain/ account dump
 		root        = s.chain.Head().Root()
 		headstate   = s.chain.AccountsInHashOrder()
-		firstKey    = common.BytesToHash(headstate[0].SecureKey)
-		secondKey   = common.BytesToHash(headstate[1].SecureKey)
+		firstKey    = common.BytesToHash(headstate[0].AddressHash)
+		secondKey   = common.BytesToHash(headstate[1].AddressHash)
 		storageRoot = findNonEmptyStorageRoot(headstate)
 	)
 
@@ -333,7 +333,7 @@ type stRangesTest struct {
 func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 	var (
 		acct      = common.HexToAddress("0x8bebc8ba651aee624937e7d897853ac30c95a067")
-		acctHash  = common.BytesToHash(s.chain.state[acct].SecureKey)
+		acctHash  = common.BytesToHash(s.chain.state[acct].AddressHash)
 		ffHash    = common.MaxHash
 		zero      = common.Hash{}
 		blockroot = s.chain.Head().Root()
@@ -597,7 +597,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 	var (
 		// This is the known address of the snap storage testing contract.
 		storageAcct     = common.HexToAddress("0x8bebc8ba651aee624937e7d897853ac30c95a067")
-		storageAcctHash = common.BytesToHash(s.chain.state[storageAcct].SecureKey)
+		storageAcctHash = common.BytesToHash(s.chain.state[storageAcct].AddressHash)
 		// This is the known address of an existing account.
 		key      = common.FromHex("0xa87387b50b481431c6ccdb9ae99a54d4dcdd4a3eff75d7b17b4818f7bbfc21e9")
 		empty    = types.EmptyCodeHash
