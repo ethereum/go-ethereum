@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -50,7 +50,11 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags:     flags.Merge([]cli.Flag{utils.CachePreimagesFlag}, utils.DatabasePathFlags),
+		Flags: flags.Merge([]cli.Flag{
+			utils.CachePreimagesFlag,
+			utils.OverrideCancun,
+			utils.OverrideVerkle,
+		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -95,7 +99,9 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
 			utils.TxLookupLimitFlag,
-		}, utils.DatabasePathFlags),
+			utils.TransactionHistoryFlag,
+			utils.StateHistoryFlag,
+		}, utils.DatabaseFlags),
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
@@ -111,7 +117,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags),
+		}, utils.DatabaseFlags),
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
@@ -127,7 +133,7 @@ be gzipped.`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags),
+		}, utils.DatabaseFlags),
 		Description: `
 The import-preimages command imports hash preimages from an RLP encoded stream.
 It's deprecated, please use "geth db import" instead.
@@ -141,7 +147,7 @@ It's deprecated, please use "geth db import" instead.
 		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		}, utils.DatabasePathFlags),
+		}, utils.DatabaseFlags),
 		Description: `
 The export-preimages command exports hash preimages to an RLP encoded stream.
 It's deprecated, please use "geth db export" instead.
@@ -160,7 +166,7 @@ It's deprecated, please use "geth db export" instead.
 			utils.IncludeIncompletesFlag,
 			utils.StartKeyFlag,
 			utils.DumpLimitFlag,
-		}, utils.DatabasePathFlags),
+		}, utils.DatabaseFlags),
 		Description: `
 This command dumps out the state for a given block (or latest, if none provided).
 `,
@@ -194,22 +200,29 @@ func initGenesis(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
+	var overrides core.ChainOverrides
+	if ctx.IsSet(utils.OverrideCancun.Name) {
+		v := ctx.Uint64(utils.OverrideCancun.Name)
+		overrides.OverrideCancun = &v
+	}
+	if ctx.IsSet(utils.OverrideVerkle.Name) {
+		v := ctx.Uint64(utils.OverrideVerkle.Name)
+		overrides.OverrideVerkle = &v
+	}
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, rawdb.ExtraDBConfig{})
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
+		defer chaindb.Close()
 
-		triedb := trie.NewDatabaseWithConfig(chaindb, &trie.Config{
-			Preimages: ctx.Bool(utils.CachePreimagesFlag.Name),
-		})
+		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false)
+		defer triedb.Close()
 
-		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
+		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
-
-		chaindb.Close()
 		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
 
@@ -257,9 +270,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	if ctx.IsSet(utils.DataDirFlag.Name) {
 		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
 	}
-
-	utils.Fatalf("no network preset provided.  no exisiting genesis in the default datadir")
-
+	utils.Fatalf("no network preset provided, no existing genesis in the default datadir")
 	return nil
 }
 
@@ -357,7 +368,8 @@ func exportChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack, true)
+	chain, db := utils.MakeChain(ctx, stack, true)
+	defer db.Close()
 	start := time.Now()
 
 	var err error
@@ -405,6 +417,7 @@ func importPreimages(ctx *cli.Context) error {
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
 	start := time.Now()
 
 	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
@@ -426,6 +439,7 @@ func exportPreimages(ctx *cli.Context) error {
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
 	start := time.Now()
 
 	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
@@ -439,6 +453,7 @@ func exportPreimages(ctx *cli.Context) error {
 
 func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
 	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
 
 	var header *types.Header
 
@@ -514,12 +529,10 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	triedb := utils.MakeTrieDatabase(ctx, db, true, true) // always enable preimage lookup
+	defer triedb.Close()
 
-	config := &trie.Config{
-		Preimages: true, // always enable preimage lookup
-	}
-
-	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
+	state, err := state.New(root, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		return err
 	}

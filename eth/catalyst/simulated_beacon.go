@@ -17,8 +17,8 @@
 package catalyst
 
 import (
+	"crypto/rand"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+const devEpochLength = 32
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
@@ -90,7 +92,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		SafeBlockHash:      block.Hash(),
 		FinalizedBlockHash: block.Hash(),
 	}
-	engineAPI := NewConsensusAPI(eth)
+	engineAPI := newConsensusAPIWithoutHeartbeat(eth)
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
@@ -142,33 +144,52 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 	feeRecipient := c.feeRecipient
 	c.feeRecipientLock.Unlock()
 
+	// Reset to CurrentBlock in case of the chain was rewound
+	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
+		c.setCurrentState(header.Hash(), *finalizedHash)
+	}
+
+	var random [32]byte
+	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             tstamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
+		Random:                random,
 	})
 	if err != nil {
-		return fmt.Errorf("error calling forkchoice update: %v", err)
+		return err
+	}
+	if fcResponse == engine.STATUS_SYNCING {
+		return errors.New("chain rewind prevented invocation of payload creation")
 	}
 
-	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID)
+	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
-		return fmt.Errorf("error retrieving payload: %v", err)
+		return err
 	}
 	payload := envelope.ExecutionPayload
 
-	// mark the payload as canon
+	var finalizedHash common.Hash
+	if payload.Number%devEpochLength == 0 {
+		finalizedHash = payload.BlockHash
+	} else {
+		if fh := c.finalizedBlockHash(payload.Number); fh == nil {
+			return errors.New("chain rewind interrupted calculation of finalized block hash")
+		} else {
+			finalizedHash = *fh
+		}
+	}
+
+	// Mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
-		return fmt.Errorf("failed to mark payload as canonical: %v", err)
+		return err
 	}
-	c.curForkchoiceState = engine.ForkchoiceStateV1{
-		HeadBlockHash:      payload.BlockHash,
-		SafeBlockHash:      payload.BlockHash,
-		FinalizedBlockHash: payload.BlockHash,
-	}
-	// mark the block containing the payload as canonical
+	c.setCurrentState(payload.BlockHash, finalizedHash)
+	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
-		return fmt.Errorf("failed to mark block as canonical: %v", err)
+		return err
 	}
 	c.lastBlockTime = payload.Timestamp
 	return nil
@@ -178,7 +199,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal) error {
 func (c *SimulatedBeacon) loopOnDemand() {
 	var (
 		newTxs = make(chan core.NewTxsEvent)
-		sub    = c.eth.TxPool().SubscribeNewTxsEvent(newTxs)
+		sub    = c.eth.TxPool().SubscribeTransactions(newTxs, true)
 	)
 	defer sub.Unsubscribe()
 
@@ -189,20 +210,18 @@ func (c *SimulatedBeacon) loopOnDemand() {
 		case w := <-c.withdrawals.pending:
 			withdrawals := append(c.withdrawals.gatherPending(9), w)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("Error performing sealing work", "err", err)
 			}
 		case <-newTxs:
 			withdrawals := c.withdrawals.gatherPending(10)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("Error performing sealing work", "err", err)
 			}
 		}
 	}
 }
 
-// loopOnDemand runs the block production loop for non-zero period configuration
+// loop runs the block production loop for non-zero period configuration
 func (c *SimulatedBeacon) loop() {
 	timer := time.NewTimer(0)
 	for {
@@ -212,11 +231,37 @@ func (c *SimulatedBeacon) loop() {
 		case <-timer.C:
 			withdrawals := c.withdrawals.gatherPending(10)
 			if err := c.sealBlock(withdrawals); err != nil {
-				log.Error("Error performing sealing-work", "err", err)
-				return
+				log.Warn("Error performing sealing work", "err", err)
+			} else {
+				timer.Reset(time.Second * time.Duration(c.period))
 			}
-			timer.Reset(time.Second * time.Duration(c.period))
 		}
+	}
+}
+
+// finalizedBlockHash returns the block hash of the finalized block corresponding to the given number
+// or nil if doesn't exist in the chain.
+func (c *SimulatedBeacon) finalizedBlockHash(number uint64) *common.Hash {
+	var finalizedNumber uint64
+	if number%devEpochLength == 0 {
+		finalizedNumber = number
+	} else {
+		finalizedNumber = (number - 1) / devEpochLength * devEpochLength
+	}
+
+	if finalizedBlock := c.eth.BlockChain().GetBlockByNumber(finalizedNumber); finalizedBlock != nil {
+		fh := finalizedBlock.Hash()
+		return &fh
+	}
+	return nil
+}
+
+// setCurrentState sets the current forkchoice state
+func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
+	c.curForkchoiceState = engine.ForkchoiceStateV1{
+		HeadBlockHash:      headHash,
+		SafeBlockHash:      headHash,
+		FinalizedBlockHash: finalizedHash,
 	}
 }
 

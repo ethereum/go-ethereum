@@ -63,6 +63,6 @@ func currentENREntry(chain *core.BlockChain) *enrEntry {
 	head := chain.CurrentHeader()
 
 	return &enrEntry{
-		ForkID: forkid.NewID(chain.Config(), chain.Genesis().Hash(), head.Number.Uint64(), head.Time),
+		ForkID: forkid.NewID(chain.Config(), chain.Genesis(), head.Number.Uint64(), head.Time),
 	}
 }

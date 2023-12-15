@@ -89,7 +89,7 @@ docs:
 	$(GORUN) cmd/clidoc/main.go -d ./docs/cli
 
 clean:
-	env GO111MODULE=on go clean -cache
+	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # The devtools target installs tools required for 'go generate'.

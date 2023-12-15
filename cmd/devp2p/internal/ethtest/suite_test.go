@@ -127,6 +127,7 @@ func setupGeth(stack *node.Node) error {
 	if err != nil {
 		return err
 	}
+	backend.SetSynced()
 
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
 

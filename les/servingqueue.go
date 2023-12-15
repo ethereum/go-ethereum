@@ -28,10 +28,11 @@ import (
 // servingQueue allows running tasks in a limited number of threads and puts the
 // waiting tasks in a priority queue
 type servingQueue struct {
-	recentTime, queuedTime, servingTimeDiff uint64
-	burstLimit, burstDropLimit              uint64
-	burstDecRate                            float64
-	lastUpdate                              mclock.AbsTime
+	recentTime, queuedTime     uint64
+	servingTimeDiff            atomic.Uint64
+	burstLimit, burstDropLimit uint64
+	burstDecRate               float64
+	lastUpdate                 mclock.AbsTime
 
 	queueAddCh, queueBestCh chan *servingTask
 	stopThreadCh, quit      chan struct{}
@@ -100,7 +101,7 @@ func (t *servingTask) done() uint64 {
 	t.timeAdded = t.servingTime
 	if t.expTime > diff {
 		t.expTime -= diff
-		atomic.AddUint64(&t.sq.servingTimeDiff, t.expTime)
+		t.sq.servingTimeDiff.Add(t.expTime)
 	} else {
 		t.expTime = 0
 	}
@@ -249,7 +250,7 @@ func (sq *servingQueue) freezePeers() {
 
 // updateRecentTime recalculates the recent serving time value
 func (sq *servingQueue) updateRecentTime() {
-	subTime := atomic.SwapUint64(&sq.servingTimeDiff, 0)
+	subTime := sq.servingTimeDiff.Swap(0)
 	now := mclock.Now()
 	dt := now - sq.lastUpdate
 	sq.lastUpdate = now

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // Reader wraps the Node method of a backing trie store.
@@ -85,4 +86,19 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 	}
 
 	return blob, nil
+}
+
+// trieLoader implements triestate.TrieLoader for constructing tries.
+type trieLoader struct {
+	db *Database
+}
+
+// OpenTrie opens the main account trie.
+func (l *trieLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
+	return New(TrieID(root), l.db)
+}
+
+// OpenStorageTrie opens the storage trie of an account.
+func (l *trieLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
+	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }

@@ -226,9 +226,53 @@ func TestTruncateTailHistories(t *testing.T) {
 	}
 }
 
+func TestTruncateOutOfRange(t *testing.T) {
+	var (
+		hs         = makeHistories(10)
+		db         = rawdb.NewMemoryDatabase()
+		freezer, _ = openFreezer(t.TempDir(), false)
+	)
+	defer freezer.Close()
+
+	for i := 0; i < len(hs); i++ {
+		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
+		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
+		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
+	}
+	truncateFromTail(db, freezer, uint64(len(hs)/2))
+
+	// Ensure of-out-range truncations are rejected correctly.
+	head, _ := freezer.Ancients()
+	tail, _ := freezer.Tail()
+
+	cases := []struct {
+		mode   int
+		target uint64
+		expErr error
+	}{
+		{0, head, nil}, // nothing to delete
+		{0, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
+		{0, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+		{1, tail, nil}, // nothing to delete
+		{1, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
+		{1, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+	}
+	for _, c := range cases {
+		var gotErr error
+		if c.mode == 0 {
+			_, gotErr = truncateFromHead(db, freezer, c.target)
+		} else {
+			_, gotErr = truncateFromTail(db, freezer, c.target)
+		}
+		if !reflect.DeepEqual(gotErr, c.expErr) {
+			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
+		}
+	}
+}
+
 // openFreezer initializes the freezer instance for storing state histories.
 func openFreezer(datadir string, readOnly bool) (*rawdb.ResettableFreezer, error) {
-	return rawdb.NewStateHistoryFreezer(datadir, readOnly)
+	return rawdb.NewStateFreezer(datadir, readOnly)
 }
 
 func compareSet[k comparable](a, b map[k][]byte) bool {
