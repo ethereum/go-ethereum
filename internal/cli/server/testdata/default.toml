@@ -1,0 +1,193 @@
+chain = "mainnet"
+identity = "Polygon-Devs"
+verbosity = 3
+log-level = ""
+vmdebug = false
+datadir = "/var/lib/bor"
+ancient = ""
+"db.engine" = "leveldb"
+keystore = ""
+"rpc.batchlimit" = 100
+"rpc.returndatalimit" = 100000
+syncmode = "full"
+gcmode = "full"
+snapshot = true
+"bor.logs" = false
+ethstats = ""
+devfakeauthor = false
+
+["eth.requiredblocks"]
+
+[log]
+  vmodule = ""
+  json = false
+  backtrace = ""
+  debug = false
+
+[p2p]
+  maxpeers = 50
+  maxpendpeers = 50
+  bind = "0.0.0.0"
+  port = 30303
+  nodiscover = false
+  nat = "any"
+  netrestrict = ""
+  nodekey = ""
+  nodekeyhex = ""
+  txarrivalwait = "500ms"
+  [p2p.discovery]
+    v4disc = true
+    v5disc = false
+    bootnodes = []
+    bootnodesv4 = []
+    bootnodesv5 = []
+    static-nodes = []
+    trusted-nodes = []
+    dns = []
+
+[heimdall]
+  url = "http://localhost:1317"
+  "bor.without" = false
+  grpc-address = ""
+  "bor.runheimdall" = false
+  "bor.runheimdallargs" = ""
+  "bor.useheimdallapp" = false
+
+[txpool]
+  locals = []
+  nolocals = false
+  journal = "transactions.rlp"
+  rejournal = "1h0m0s"
+  pricelimit = 1
+  pricebump = 10
+  accountslots = 16
+  globalslots = 32768
+  accountqueue = 16
+  globalqueue = 32768
+  lifetime = "3h0m0s"
+
+[miner]
+  mine = false
+  etherbase = ""
+  extradata = ""
+  gaslimit = 30000000
+  gasprice = "1000000000"
+  recommit = "2m5s"
+  commitinterrupt = true
+
+[jsonrpc]
+  ipcdisable = false
+  ipcpath = ""
+  gascap = 50000000
+  evmtimeout = "5s"
+  txfeecap = 1.0
+  allow-unprotected-txs = false
+  enabledeprecatedpersonal = false
+  [jsonrpc.http]
+    enabled = false
+    port = 8545
+    prefix = ""
+    host = "localhost"
+    api = ["eth", "net", "web3", "txpool", "bor"]
+    vhosts = ["localhost"]
+    corsdomain = ["localhost"]
+    ep-size = 40
+    ep-requesttimeout = "0s"
+  [jsonrpc.ws]
+    enabled = false
+    port = 8546
+    prefix = ""
+    host = "localhost"
+    api = ["net", "web3"]
+    origins = ["localhost"]
+    ep-size = 40
+    ep-requesttimeout = "0s"
+  [jsonrpc.graphql]
+    enabled = false
+    port = 0
+    prefix = ""
+    host = ""
+    vhosts = ["localhost"]
+    corsdomain = ["localhost"]
+    ep-size = 0
+    ep-requesttimeout = ""
+  [jsonrpc.auth]
+    jwtsecret = ""
+    addr = "localhost"
+    port = 8551
+    vhosts = ["localhost"]
+  [jsonrpc.timeouts]
+    read = "10s"
+    write = "30s"
+    idle = "2m0s"
+
+[gpo]
+  blocks = 20
+  percentile = 60
+  maxheaderhistory = 1024
+  maxblockhistory = 1024
+  maxprice = "500000000000"
+  ignoreprice = "2"
+
+[telemetry]
+  metrics = false
+  expensive = false
+  prometheus-addr = "127.0.0.1:7071"
+  opencollector-endpoint = ""
+  [telemetry.influx]
+    influxdb = false
+    endpoint = ""
+    database = ""
+    username = ""
+    password = ""
+    influxdbv2 = false
+    token = ""
+    bucket = ""
+    organization = ""
+    [telemetry.influx.tags]
+
+[cache]
+  cache = 1024
+  gc = 25
+  snapshot = 10
+  database = 50
+  trie = 15
+  noprefetch = false
+  preimages = false
+  txlookuplimit = 2350000
+  triesinmemory = 128
+  blocklogs = 32
+  timeout = "1h0m0s"
+  fdlimit = 0
+
+[leveldb]
+  compactiontablesize = 2
+  compactiontablesizemultiplier = 1.0
+  compactiontotalsize = 10
+  compactiontotalsizemultiplier = 10.0
+
+[accounts]
+  unlock = []
+  password = ""
+  allow-insecure-unlock = false
+  lightkdf = false
+  disable-bor-wallet = true
+
+[grpc]
+  addr = ":3131"
+
+[developer]
+  dev = false
+  period = 0
+  gaslimit = 11500000
+
+[parallelevm]
+  enable = true
+  procs = 8
+
+[pprof]
+  pprof = false
+  port = 6060
+  addr = "127.0.0.1"
+  memprofilerate = 524288
+  blockprofilerate = 0
