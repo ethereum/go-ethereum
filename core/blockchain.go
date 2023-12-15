@@ -2446,14 +2446,7 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 	// The tail flag is existent, but the whole chain is required to be indexed.
 	if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
 		if *tail > 0 {
-			// It can happen when chain is rewound to a historical point which
-			// is even lower than the indexes tail, recap the indexing target
-			// to new head to avoid reading non-existent block bodies.
-			end := *tail
-			if end > head+1 {
-				end = head + 1
-			}
-			rawdb.IndexTransactions(bc.db, 0, end, bc.quit)
+			rawdb.IndexTransactions(bc.db, 0, head+1, bc.quit) // Adjust indexing target to head+1
 		}
 		return
 	}
