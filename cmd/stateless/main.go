@@ -55,13 +55,11 @@ func stateless(ctx *cli.Context) error {
 		panic("block witness required")
 	}
 
-	f, err := os.Open(blockWitnessPath)
+	b, err := os.ReadFile(blockWitnessPath)
 	if err != nil {
 		panic(err)
 	}
 
-	var b []byte
-	f.Read(b)
 	block, witness, err := state.DecodeWitnessRLP(b)
 	if err != nil {
 		panic(err)

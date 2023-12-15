@@ -40,7 +40,7 @@ type encodedWitness struct {
 }
 
 func (e *encodedWitness) ToWitness() *Witness {
-	var res Witness
+	res := NewWitness()
 	res.root = e.root
 	for i := 0; i < len(e.codes); i++ {
 		res.codes[e.codeHashes[i]] = e.codes[i]
@@ -55,13 +55,43 @@ func (e *encodedWitness) ToWitness() *Witness {
 	for i, blockNum := range e.blockNums {
 		res.blockHashes[blockNum] = e.blockHashes[i]
 	}
-	return &res
+	return res
 }
 
 func DecodeWitnessRLP(b []byte) (*types.Block, *Witness, error) {
 	var res encodedWitness
-	if err := rlp.DecodeBytes(b, &res); err != nil {
-		return nil, nil, err
+	stream := rlp.NewStream(bytes.NewBuffer(b), 1_000_000)
+	_, err := stream.List()
+	if err != nil {
+		panic(err)
+	}
+	err = res.block.DecodeRLP(stream)
+	if err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.root); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.owners); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.allPaths); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.allNodes); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.blockNums); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.blockHashes); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.codeHashes); err != nil {
+		panic(err)
+	}
+	if err = stream.Decode(&res.codes); err != nil {
+		panic(err)
 	}
 	return &res.block, res.ToWitness(), nil
 }
@@ -103,9 +133,7 @@ func (w *Witness) EncodeRLP() []byte {
 	}
 	l := eb.List()
 	w.block.EncodeRLP(eb)
-	if err := rlp.Encode(eb, root); err != nil {
-		panic(err)
-	}
+	eb.WriteBytes(root[:])
 	if err := rlp.Encode(eb, owners); err != nil {
 		panic(err)
 	}
