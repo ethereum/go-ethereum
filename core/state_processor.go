@@ -119,7 +119,7 @@ func (p *StateProcessor) ProcessStateless(witness *state.Witness, block *types.B
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
-		context = NewStatelessEVMBlockContext(witness, header, p.bc.Engine())
+		context = NewStatelessEVMBlockContext(witness, header, p.engine)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)

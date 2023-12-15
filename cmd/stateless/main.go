@@ -70,7 +70,9 @@ func stateless(ctx *cli.Context) error {
 	if err != nil {
 		panic(err)
 	}
-	chainConfig := params.MainnetChainConfig
+
+	// TODO: we will want to parameterize the chain config.  hard-coding here for testing in the mean-time.
+	chainConfig := params.AllDevChainProtocolChanges //params.MainnetChainConfig
 	engine, err := ethconfig.CreateConsensusEngine(chainConfig, memoryDb)
 	if err != nil {
 		panic(err)
