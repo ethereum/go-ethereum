@@ -1,0 +1,43 @@
+name: Continuous Integration (Default Checks)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  TEST_PACKAGES: ./...
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21.4'
+      - name: run linter
+        run: go run build/ci.go lint
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21.4'
+      - name: build all binaries from cmd
+        run: go run build/ci.go install
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21.4'
+      - name: run tests
+        run: go run build/ci.go test $TEST_PACKAGES
