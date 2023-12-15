@@ -104,7 +104,7 @@ func Transition(ctx *cli.Context) error {
 				return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}
 			getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 				if err != nil {
 					return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 				}

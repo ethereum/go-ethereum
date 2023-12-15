@@ -28,7 +28,7 @@ import (
 var (
 	TraceFlag = &cli.BoolFlag{
 		Name:  "trace",
-		Usage: "Output full trace logs to a file named: trace-<txIndex>-<txhash>.jsonl",
+		Usage: "Output full trace logs to a file named: trace-<txIndex>-<txHash>.json or trace-<txIndex>-<txHash>.jsonl",
 	}
 	TraceTracerFlag = &cli.StringFlag{
 		Name:  "trace.tracer",
