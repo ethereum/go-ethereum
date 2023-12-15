@@ -17,6 +17,7 @@
 package state
 
 import (
+	"runtime"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -229,6 +230,10 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		term:  make(chan struct{}),
 		seen:  make(map[string]struct{}),
 	}
+        b := make([]byte, 2048) // adjust buffer size to be larger than expected stack
+        n := runtime.Stack(b, false)
+        s := string(b[:n])
+        log.Trace("stack", "trace", s)
 	go sf.loop()
 	return sf
 }
