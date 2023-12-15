@@ -28,14 +28,14 @@ import (
 var (
 	TraceFlag = &cli.BoolFlag{
 		Name:  "trace",
-		Usage: "Output full trace logs to files <txhash>.jsonl",
+		Usage: "Output full trace logs to files trace-<txIndex>-<txhash>.jsonl",
 	}
 	TraceTracerFlag = &cli.StringFlag{
 		Name:  "trace.tracer",
-		Usage: "The type of tracer. It could be callTracer or prestateTracer",
+		Usage: "The type of tracer. It could be native or js tracers, eg: callTracer,4byteTracer",
 	}
 	TraceTracerConfigFlag = &cli.StringFlag{
-		Name:  "trace.tracer.config",
+		Name:  "trace.jsonconfig",
 		Usage: "The configurations of --trace.tracer, in JSON encoded format",
 	}
 	TraceEnableMemoryFlag = &cli.BoolFlag{
