@@ -133,7 +133,6 @@ func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
 	c.writeSummaryCounter(name, m.Count())
 	c.buff.WriteRune('\n')
 }
-
 func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnapshot) {
 	if m.Count() <= 0 {
 		return
@@ -144,15 +143,6 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnaps
 	c.writeSummaryPercentile(name, "0.50", ps[0])
 	c.writeSummaryPercentile(name, "0.95", ps[1])
 	c.writeSummaryPercentile(name, "0.99", ps[2])
-
-	var sum int64 = 0
-
-	for _, v := range val {
-		sum += v
-	}
-
-	c.writeSummarySum(name, fmt.Sprintf("%d", sum))
-	c.writeSummaryCounter(name, len(val))
 	c.buff.WriteRune('\n')
 }
 

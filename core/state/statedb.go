@@ -695,6 +695,25 @@ func (s *StateDB) Database() Database {
 	return s.db
 }
 
+// StorageTrie returns the storage trie of an account. The return value is a copy
+// and is nil for non-existent accounts. An error will be returned if storage trie
+// is existent but can't be loaded correctly.
+func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		//nolint:nilnil
+		return nil, nil
+	}
+
+	cpy := stateObject.deepCopy(s)
+
+	if _, err := cpy.updateTrie(); err != nil {
+		return nil, err
+	}
+
+	return cpy.getTrie()
+}
+
 func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 	return MVRead(s, blockstm.NewSubpathKey(addr, SuicidePath), false, func(s *StateDB) bool {
 		stateObject := s.getStateObject(addr)

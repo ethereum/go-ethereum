@@ -63,6 +63,7 @@ func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *stat
 	return nil, errors.New("not supported")
 }
 
+// nolint : unused
 type testBlockChain struct {
 	root          common.Hash
 	config        *params.ChainConfig
@@ -71,10 +72,12 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
+// nolint : unused
 func (bc *testBlockChain) Config() *params.ChainConfig {
 	return bc.config
 }
 
+// nolint : unused
 func (bc *testBlockChain) CurrentBlock() *types.Header {
 	return &types.Header{
 		Number:   new(big.Int),
@@ -82,18 +85,22 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	}
 }
 
+// nolint : unused
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
 }
 
+// nolint : unused
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
+// nolint : unused
 func (bc *testBlockChain) HasState(root common.Hash) bool {
 	return bc.root == root
 }
 
+// nolint : unused
 func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return bc.chainHeadFeed.Subscribe(ch)
 }

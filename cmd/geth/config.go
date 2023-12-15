@@ -17,12 +17,16 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -63,6 +67,28 @@ var (
 	}
 )
 
+// These settings ensure that TOML keys use the same names as Go struct fields.
+var tomlSettings = toml.Config{
+	NormFieldName: func(rt reflect.Type, key string) string {
+		return key
+	},
+	FieldToKey: func(rt reflect.Type, field string) string {
+		return field
+	},
+	MissingField: func(rt reflect.Type, field string) error {
+		id := fmt.Sprintf("%s.%s", rt.String(), field)
+		if deprecated(id) {
+			log.Warn("Config field is deprecated and won't have an effect", "name", id)
+			return nil
+		}
+		var link string
+		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
+			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
+		}
+		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
+	},
+}
+
 type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
@@ -75,17 +101,18 @@ type gethConfig struct {
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
-	data, err := os.ReadFile(file)
+	f, err := os.Open(file)
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	tomlData := string(data)
-	if _, err = toml.Decode(tomlData, &cfg); err != nil {
-		return err
+	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
+	// Add file name to errors that have a line number.
+	if _, ok := err.(*toml.LineError); ok {
+		err = errors.New(file + ", " + err.Error())
 	}
-
-	return nil
+	return err
 }
 
 func defaultNodeConfig() node.Config {
@@ -291,6 +318,21 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
+	}
+}
+
+func deprecated(field string) bool {
+	switch field {
+	case "ethconfig.Config.EVMInterpreter":
+		return true
+	case "ethconfig.Config.EWASMInterpreter":
+		return true
+	case "ethconfig.Config.TrieCleanCacheJournal":
+		return true
+	case "ethconfig.Config.TrieCleanCacheRejournal":
+		return true
+	default:
+		return false
 	}
 }
 

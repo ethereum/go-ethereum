@@ -121,11 +121,11 @@ func (gc *GenesisContractsClient) LastStateId(state *state.StateDB, number uint6
 
 	// Do a call with state so that we can fetch the last state ID from a given (incoming)
 	// state instead of local(canonical) chain.
-	result, err := gc.ethAPI.CallWithState(context.Background(), ethapi.TransactionArgs{
+	result, err := gc.ethAPI.Call(context.Background(), ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, state, nil, nil)
+	}, &rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, nil, nil)
 	if err != nil {
 		return nil, err
 	}

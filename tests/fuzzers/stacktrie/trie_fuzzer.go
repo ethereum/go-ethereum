@@ -211,7 +211,7 @@ func (f *fuzzer) fuzz() int {
 	}
 
 	rootB := trieB.Hash()
-	_, _ = trieB.Commit()
+	trieB.Commit()
 
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))

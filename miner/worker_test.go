@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/golang/mock/gomock"
 	"gotest.tools/assert"
 )
@@ -106,10 +107,10 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	var (
 		err error
 	)
-
+	// []*types.Transaction{tx}
 	var i uint64
 	for i = 0; i < 5; i++ {
-		err = b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTxWithNonce(true, i)}}, true, false)[0]
+		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(true, i)}, true, false)[0]
 		if err != nil {
 			t.Fatal("while adding a local transaction", err)
 		}
@@ -126,7 +127,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	}
 
 	for i = 5; i < 10; i++ {
-		err = b.txPool.Add([]*txpool.Transaction{{Tx: b.newRandomTxWithNonce(false, i)}}, true, false)[0]
+		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(false, i)}, true, false)[0]
 		if err != nil {
 			t.Fatal("while adding a remote transaction", err)
 		}
@@ -750,7 +751,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	// nonce 0 tx
 	tx, addr := b.newStorageCreateContractTx()
-	if err := b.txPool.Add([]*txpool.Transaction{{Tx: tx}}, false, false)[0]; err != nil {
+	if err := b.txPool.Add([]*types.Transaction{tx}, false, false)[0]; err != nil {
 		t.Fatal(err)
 	}
 
@@ -764,9 +765,9 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 		txs = append(txs, tx)
 	}
 
-	wrapped := make([]*txpool.Transaction, len(txs))
+	wrapped := make([]*types.Transaction, len(txs))
 	for i, tx := range txs {
-		wrapped[i] = &txpool.Transaction{Tx: tx}
+		wrapped[i] = tx
 	}
 
 	b.TxPool().Add(wrapped, false, false)
@@ -815,9 +816,9 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 		txs = append(txs, tx)
 	}
 
-	wrapped := make([]*txpool.Transaction, len(txs))
+	wrapped := make([]*types.Transaction, len(txs))
 	for i, tx := range txs {
-		wrapped[i] = &txpool.Transaction{Tx: tx}
+		wrapped[i] = tx
 	}
 
 	b.TxPool().Add(wrapped, false, false)
@@ -881,12 +882,12 @@ func BenchmarkBorMining(b *testing.B) {
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(true)}}, true, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, true, false)[0]
 		if err != nil {
 			b.Fatal("while adding a local transaction", err)
 		}
 
-		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(false)}}, false, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false, false)[0]
 		if err != nil {
 			b.Fatal("while adding a remote transaction", err)
 		}
@@ -965,7 +966,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 	// This test chain imports the mined blocks.
 	db2 := rawdb.NewMemoryDatabase()
-	back.genesis.MustCommit(db2)
+	back.genesis.MustCommit(db2, trie.NewDatabase(db2, trie.HashDefaults))
 
 	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{ParallelEnable: true, ParallelSpeculativeProcesses: 8}, nil, nil, nil)
 	defer chain.Stop()
@@ -987,12 +988,12 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(true)}}, true, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, true, false)[0]
 		if err != nil {
 			b.Fatal("while adding a local transaction", err)
 		}
 
-		err = back.txPool.Add([]*txpool.Transaction{{Tx: back.newRandomTx(false)}}, false, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false, false)[0]
 		if err != nil {
 			b.Fatal("while adding a remote transaction", err)
 		}

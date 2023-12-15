@@ -495,7 +495,7 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.WithdrawalsHash = nil
 			withdrawals = nil
 		}
-		if conf.IsCancun(num, g.Timestamp) {
+		if conf.IsCancun(num) {
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
 			// the zero hash. This is because the genesis block does not have a parent
 			// by definition.
@@ -566,7 +566,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 		Alloc:   GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	return g.MustCommit(db)
+	return g.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

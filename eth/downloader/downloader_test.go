@@ -1573,12 +1573,12 @@ func (w *whitelistFake) GetMilestoneIDsList() []string {
 	return nil
 }
 
-// TestFakedSyncProgress66WhitelistMismatch tests if in case of whitelisted
+// TestFakedSyncProgress67WhitelistMismatch tests if in case of whitelisted
 // checkpoint mismatch with opposite peer, the sync should fail.
-func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
+func TestFakedSyncProgress67WhitelistMismatch(t *testing.T) {
 	t.Parallel()
 
-	protocol := uint(eth.ETH66)
+	protocol := uint(eth.ETH67)
 	mode := FullSync
 
 	tester := newTester(t)
@@ -1598,12 +1598,12 @@ func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
 	}
 }
 
-// TestFakedSyncProgress66WhitelistMatch tests if in case of whitelisted
+// TestFakedSyncProgress67WhitelistMatch tests if in case of whitelisted
 // checkpoint match with opposite peer, the sync should succeed.
-func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
+func TestFakedSyncProgress67WhitelistMatch(t *testing.T) {
 	t.Parallel()
 
-	protocol := uint(eth.ETH66)
+	protocol := uint(eth.ETH67)
 	mode := FullSync
 
 	tester := newTester(t)
@@ -1623,13 +1623,13 @@ func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
 	}
 }
 
-// TestFakedSyncProgress66NoRemoteCheckpoint tests if in case of missing/invalid
+// TestFakedSyncProgress67NoRemoteCheckpoint tests if in case of missing/invalid
 // checkpointed blocks with opposite peer, the sync should fail initially but
 // with the retry mechanism, it should succeed eventually.
-func TestFakedSyncProgress66NoRemoteCheckpoint(t *testing.T) {
+func TestFakedSyncProgress67NoRemoteCheckpoint(t *testing.T) {
 	t.Parallel()
 
-	protocol := uint(eth.ETH66)
+	protocol := uint(eth.ETH67)
 	mode := FullSync
 
 	tester := newTester(t)

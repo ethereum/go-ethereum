@@ -294,6 +294,7 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
+// nolint : unused
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	blobBaseFee, _ := uint256.FromBig(interpreter.evm.Context.BlobBaseFee)
@@ -301,6 +302,7 @@ func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	return nil, nil
 }
 
+// nolint : unused
 // enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
 	jt[BLOBHASH] = &operation{

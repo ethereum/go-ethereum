@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/tests"
+
+	"github.com/urfave/cli/v2"
 )
 
 var RunFlag = &cli.StringFlag{

@@ -322,8 +322,8 @@ func NewMemoryDatabaseWithCap(size int) ethdb.Database {
 
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool, extraDBConfig ExtraDBConfig) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace, readonly, resolveLevelDBConfig(extraDBConfig))
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+	db, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +406,7 @@ func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
 	}
 	if o.Type == dbLeveldb || existingDb == dbLeveldb {
 		log.Info("Using leveldb as the backing database")
-		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.ExtraDBConfig)
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 	}
 	// No pre-existing database, no user-requested one either. Default to Pebble.
 	log.Info("Defaulting to pebble as the backing database")

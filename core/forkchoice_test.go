@@ -94,7 +94,7 @@ func TestPastChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db))
+	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
@@ -166,7 +166,7 @@ func TestFutureChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db))
+	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
@@ -226,7 +226,7 @@ func TestOverlappingChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db))
+	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {

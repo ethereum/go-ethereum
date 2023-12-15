@@ -357,8 +357,6 @@ var Forks = map[string]*params.ChainConfig{
 		ArrowGlacierBlock:       big.NewInt(0),
 		MergeNetsplitBlock:      big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
-		ShanghaiTime:            u64(0),
-		CancunTime:              u64(15_000),
 	},
 }
 

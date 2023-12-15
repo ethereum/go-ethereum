@@ -68,31 +68,22 @@ func init() {
 	for _, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
 
-		// check for existence of `config` flag
-		if flag == configFlag && i < len(os.Args)-1 {
-			configFile = strings.TrimLeft(os.Args[i+1], "-") // find the value of flag
-		} else if len(flag) > 6 && flag[:6] == configFlag {
-			// Checks for `=` separated flag (e.g. config=path)
-			configFile = strings.TrimLeft(flag[6:], "=")
-		}
-
 		for _, enabler := range enablerFlags {
 			if !Enabled && flag == enabler {
+				log.Info("Enabling metrics collection")
 				Enabled = true
 			}
 		}
-
 		for _, enabler := range expensiveEnablerFlags {
 			if !EnabledExpensive && flag == enabler {
+				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
 			}
 		}
 	}
-
-	// Update the global metrics value, if they're provided in the config file
-	updateMetricsFromConfig(configFile)
 }
 
+// nolint : unused
 func updateMetricsFromConfig(path string) {
 	// Don't act upon any errors here. They're already taken into
 	// consideration when the toml config file will be parsed in the cli.

@@ -79,9 +79,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
 	enc.TxLookupLimit = c.TxLookupLimit
-	enc.TransactionHistory = c.TransactionHistory
-	enc.StateHistory = c.StateHistory
-	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.LightServ = c.LightServ
 	enc.LightIngress = c.LightIngress
@@ -210,15 +207,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
-	}
-	if dec.TransactionHistory != nil {
-		c.TransactionHistory = *dec.TransactionHistory
-	}
-	if dec.StateHistory != nil {
-		c.StateHistory = *dec.StateHistory
-	}
-	if dec.StateScheme != nil {
-		c.StateScheme = *dec.StateScheme
 	}
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks

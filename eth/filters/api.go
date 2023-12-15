@@ -355,6 +355,9 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
+
+	borConfig := api.chainConfig.Bor
+
 	var filter *Filter
 
 	var borLogsFilter *BorBlockLogsFilter

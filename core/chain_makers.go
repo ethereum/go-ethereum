@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -118,7 +119,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.cm.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	receipt, err := ApplyTransaction(b.cm.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -357,7 +358,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+		block, err := b.engine.FinalizeAndAssemble(context.Background(), cm, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
 		if err != nil {
 			panic(err)
 		}
@@ -450,7 +451,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
-	if cm.config.IsCancun(header.Number, header.Time) {
+	if cm.config.IsCancun(header.Number) {
 		var (
 			parentExcessBlobGas uint64
 			parentBlobGasUsed   uint64
@@ -507,6 +508,20 @@ func makeBlockChainWithGenesis(genesis *Genesis, n int, engine consensus.Engine,
 	})
 
 	return db, blocks
+}
+
+// makeBlockChain creates a deterministic chain of blocks rooted at parent with fake invalid transactions.
+func makeFakeNonEmptyBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int, numTx int) []*types.Block {
+	blocks, _ := GenerateChain(params.TestChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
+		addr := common.Address{0: byte(seed), 19: byte(i)}
+		b.SetCoinbase(addr)
+
+		for j := 0; j < numTx; j++ {
+			b.txs = append(b.txs, types.NewTransaction(0, addr, big.NewInt(1000), params.TxGas, nil, nil))
+		}
+	})
+
+	return blocks
 }
 
 // chainMaker contains the state of chain generation.

@@ -128,8 +128,6 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "bor-mainnet"
 	case SepoliaGenesisHash:
 		net = "sepolia"
-	case HoleskyGenesisHash:
-		net = "holesky"
 	default:
 		return ""
 	}

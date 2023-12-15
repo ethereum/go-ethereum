@@ -97,16 +97,6 @@ func TestCreation(t *testing.T) {
 				{1735370, 0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}}, // Last London block
 			},
 		},
-		// Holesky test cases
-		{
-			params.HoleskyChainConfig,
-			core.DefaultHoleskyGenesisBlock().ToBlock(),
-			[]testcase{
-				{0, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}},   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin, London, Paris block
-				{123, 0, ID{Hash: checksumToBytes(0xc61a6098), Next: 1696000704}}, // First MergeNetsplit block
-				{123, 1696000704, ID{Hash: checksumToBytes(0xfd4f016b), Next: 0}}, // Last MergeNetsplit block
-			},
-		},
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
@@ -395,8 +385,6 @@ func TestTimeBasedForkInGenesis(t *testing.T) {
 				TerminalTotalDifficulty:       big.NewInt(0),
 				TerminalTotalDifficultyPassed: true,
 				MergeNetsplitBlock:            big.NewInt(0),
-				ShanghaiTime:                  &shanghai,
-				CancunTime:                    &cancun,
 				Ethash:                        new(params.EthashConfig),
 			}
 		}

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"strconv"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -202,15 +202,15 @@ func initGenesis(ctx *cli.Context) error {
 
 	var overrides core.ChainOverrides
 	if ctx.IsSet(utils.OverrideCancun.Name) {
-		v := ctx.Uint64(utils.OverrideCancun.Name)
-		overrides.OverrideCancun = &v
+		v := ctx.Int64(utils.OverrideCancun.Name)
+		overrides.OverrideCancun = new(big.Int).SetInt64(v)
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
-		v := ctx.Uint64(utils.OverrideVerkle.Name)
-		overrides.OverrideVerkle = &v
+		v := ctx.Int64(utils.OverrideVerkle.Name)
+		overrides.OverrideVerkle = new(big.Int).SetInt64(v)
 	}
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false, rawdb.ExtraDBConfig{})
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -242,7 +242,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		db, err := stack.OpenDatabase(name, 0, 0, "", true, rawdb.ExtraDBConfig{})
+		db, err := stack.OpenDatabase(name, 0, 0, "", true)
 
 		if err != nil {
 			if !os.IsNotExist(err) {

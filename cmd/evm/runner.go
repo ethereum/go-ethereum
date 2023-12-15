@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/urfave/cli/v2"
 )
 
 var runCommand = &cli.Command{

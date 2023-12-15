@@ -525,7 +525,7 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys, false)
+		api    = NewFilterAPI(sys, false, true)
 	)
 
 	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
