@@ -851,8 +851,8 @@ func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr *ne
 
 // collectTableNodes creates a FINDNODE result set for the given distances.
 func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*enode.Node {
-	var nodes []*enode.Node
 	var bn []*enode.Node
+	var nodes []*enode.Node
 	var processed = make(map[uint]struct{})
 	for _, dist := range distances {
 		// Reject duplicate / invalid distances.
@@ -861,7 +861,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 			continue
 		}
 
-		bn = t.tab.appendBucketNodes(dist, limit, bn[:0])
+		bn = t.tab.appendBucketNodes(dist, bn[:0])
 		for _, n := range bn {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendBucketNodes.
