@@ -17,15 +17,14 @@
 package rawdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -43,8 +42,6 @@ const (
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
 type chainFreezer struct {
-	threshold atomic.Uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
-
 	*Freezer
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -57,13 +54,11 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if err != nil {
 		return nil, err
 	}
-	cf := chainFreezer{
+	return &chainFreezer{
 		Freezer: freezer,
 		quit:    make(chan struct{}),
 		trigger: make(chan chan struct{}),
-	}
-	cf.threshold.Store(params.FullImmutabilityThreshold)
-	return &cf, nil
+	}, nil
 }
 
 // Close closes the chain freezer instance and terminates the background thread.
@@ -75,6 +70,19 @@ func (f *chainFreezer) Close() error {
 	}
 	f.wg.Wait()
 	return f.Freezer.Close()
+}
+
+// readFinalized loads the finalized block from database.
+func (f *chainFreezer) readFinalized(db ethdb.KeyValueReader) (uint64, common.Hash, error) {
+	hash := ReadFinalizedBlockHash(db)
+	if hash == (common.Hash{}) {
+		return 0, common.Hash{}, errors.New("finalized block is not available")
+	}
+	number := ReadHeaderNumber(db, hash)
+	if number == nil {
+		return 0, common.Hash{}, errors.New("finalized block number is not available")
+	}
+	return *number, hash, nil
 }
 
 // freeze is a background thread that periodically checks the blockchain for any
@@ -114,47 +122,28 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				return
 			}
 		}
-		// Retrieve the freezing threshold.
-		hash := ReadHeadBlockHash(nfdb)
-		if hash == (common.Hash{}) {
-			log.Debug("Current full block hash unavailable") // new chain, empty database
-			backoff = true
+		finalNumber, finalHash, err := f.readFinalized(nfdb)
+		if err != nil {
+			backoff = true // chain is not finalized yet
+			log.Debug("Finalized block is not available yet")
 			continue
 		}
-		number := ReadHeaderNumber(nfdb, hash)
-		threshold := f.threshold.Load()
 		frozen := f.frozen.Load()
-		switch {
-		case number == nil:
-			log.Error("Current full block number unavailable", "hash", hash)
-			backoff = true
-			continue
 
-		case *number < threshold:
-			log.Debug("Current full block not old enough to freeze", "number", *number, "hash", hash, "delay", threshold)
+		// Short circuit if finalized blocks are already frozen.
+		if frozen != 0 && frozen-1 >= finalNumber {
 			backoff = true
-			continue
-
-		case *number-threshold <= frozen:
-			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", frozen)
-			backoff = true
+			log.Debug("Ancient blocks frozen already", "number", finalNumber, "hash", finalHash, "frozen", frozen)
 			continue
 		}
-		head := ReadHeader(nfdb, hash, *number)
-		if head == nil {
-			log.Error("Current full block unavailable", "number", *number, "hash", hash)
-			backoff = true
-			continue
-		}
-
 		// Seems we have data ready to be frozen, process in usable batches
 		var (
-			start    = time.Now()
-			first, _ = f.Ancients()
-			limit    = *number - threshold
+			start = time.Now()
+			first = frozen
+			limit = finalNumber
 		)
-		if limit-first > freezerBatchLimit {
-			limit = first + freezerBatchLimit
+		if limit-first+1 > freezerBatchLimit {
+			limit = freezerBatchLimit + first - 1
 		}
 		ancients, err := f.freezeRange(nfdb, first, limit)
 		if err != nil {
@@ -162,12 +151,10 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
-
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
-
 		// Wipe out all data from the active database
 		batch := db.NewBatch()
 		for i := 0; i < len(ancients); i++ {
@@ -251,7 +238,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 }
 
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
-	hashes = make([]common.Hash, 0, limit-number)
+	hashes = make([]common.Hash, 0, limit-number+1)
 
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
@@ -293,11 +280,9 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
-
 			hashes = append(hashes, hash)
 		}
 		return nil
 	})
-
 	return hashes, err
 }
