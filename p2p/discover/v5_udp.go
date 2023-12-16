@@ -860,6 +860,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 		if seen || dist > 256 {
 			continue
 		}
+		processed[dist] = struct{}{}
 
 		bn = t.tab.appendLiveNodes(dist, bn[:0])
 		for _, n := range bn {
