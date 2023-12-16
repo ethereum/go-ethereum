@@ -861,7 +861,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 			continue
 		}
 
-		bn = t.tab.appendBucketNodes(dist, bn[:0])
+		bn = t.tab.appendLiveNodes(dist, bn[:0])
 		for _, n := range bn {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendBucketNodes.

@@ -459,7 +459,8 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	return nodes
 }
 
-func (tab *Table) appendBucketNodes(dist uint, result []*enode.Node) []*enode.Node {
+// appendLiveNodes adds nodes at the given distance to the result slice.
+func (tab *Table) appendLiveNodes(dist uint, result []*enode.Node) []*enode.Node {
 	if dist > 256 {
 		return result
 	}
