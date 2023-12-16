@@ -471,7 +471,7 @@ func (tab *Table) appendLiveNodes(dist uint, result []*enode.Node) []*enode.Node
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 	for _, n := range tab.bucketAtDistance(int(dist)).entries {
-		if n.livenessChecks > 1 {
+		if n.livenessChecks >= 1 {
 			node := n.Node // avoid handing out pointer to struct field
 			result = append(result, &node)
 		}
