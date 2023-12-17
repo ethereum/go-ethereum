@@ -51,6 +51,8 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 
 	exec geth \
 		--verbosity="$VERBOSITY" \
+		--cache=0 \
+		--cache.trie=0 \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
 		--http \
@@ -67,6 +69,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
+		--snapshot \
 		--db.engine=pebble \
 		--networkid=$CHAIN_ID \
 		--nousb \
@@ -84,11 +87,14 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 
 	exec geth \
 		--verbosity="$VERBOSITY" \
+		--cache=0 \
+		--cache.trie=0 \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30311 \
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
+		--snapshot \
 		--db.engine=pebble \
 		--http \
 		--http.corsdomain="*" \
