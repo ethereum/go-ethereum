@@ -71,6 +71,7 @@ var (
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
 
 	blockSizeGaugeName = "clique/block_size_in_bytes"
+	gasUsedInBlock     = "clique/gas_used_in_block"
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -604,6 +605,7 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 
 	if metrics.Enabled {
 		metrics.GetOrRegisterGauge(blockSizeGaugeName, nil).Update(int64(block.Size()))
+		metrics.GetOrRegisterGauge(gasUsedInBlock, nil).Update(int64(block.GasUsed()))
 	}
 	return block, nil
 }
