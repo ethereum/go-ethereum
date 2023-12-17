@@ -144,7 +144,7 @@ func runCmd(ctx *cli.Context) error {
 			initialGas = genesisConfig.GasLimit
 		}
 	} else {
-		genesisConfig.Config = params.AllEthashProtocolChanges
+		genesisConfig.Config = params.AllDevChainProtocolChanges
 	}
 
 	db := rawdb.NewMemoryDatabase()
