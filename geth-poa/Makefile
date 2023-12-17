@@ -35,3 +35,20 @@ clean-dbs:
 
 pull-image:
 	docker pull shaspitz/geth-poa:v0
+
+DOCKER_NETWORK_NAME="primev_net"
+create-docker-network: 
+	@echo "Creating Docker network: $(DOCKER_NETWORK_NAME)..."
+	@if ! docker network inspect $(DOCKER_NETWORK_NAME) >/dev/null 2>&1; then \
+		docker network create --driver bridge --subnet 172.29.0.0/16 $(DOCKER_NETWORK_NAME); \
+	else \
+		echo "Network $(DOCKER_NETWORK_NAME) already exists."; \
+	fi
+
+deploy-create2:
+	@echo "Deploying create2 deployment proxy..."
+	./util/deploy_create2.sh "http://localhost:8545"	
+
+print-warp-deploy:
+	@echo "Printing hyperlane warp deployment artifact"
+	docker run --rm -v geth-poa_hyperlane-deploy-artifacts:/data alpine cat /data/warp-deployment.json

@@ -46,7 +46,7 @@ import (
 var runCommand = &cli.Command{
 	Action:      runCmd,
 	Name:        "run",
-	Usage:       "run arbitrary evm binary",
+	Usage:       "Run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
 	Flags:       flags.Merge(vmFlags, traceFlags),

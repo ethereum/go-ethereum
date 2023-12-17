@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -147,6 +148,17 @@ as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
+`,
+			},
+			{
+				Action:    snapshotExportPreimages,
+				Name:      "export-preimages",
+				Usage:     "Export the preimage in snapshot enumeration order",
+				ArgsUsage: "<dumpfile> [<root>]",
+				Flags:     utils.DatabaseFlags,
+				Description: `
+The export-preimages command exports hash preimages to a flat file, in exactly
+the expected order for the overlay tree migration.
 `,
 			},
 		},
@@ -568,11 +580,11 @@ func dumpState(ctx *cli.Context) error {
 			return err
 		}
 		da := &state.DumpAccount{
-			Balance:   account.Balance.String(),
-			Nonce:     account.Nonce,
-			Root:      account.Root.Bytes(),
-			CodeHash:  account.CodeHash,
-			SecureKey: accIt.Hash().Bytes(),
+			Balance:     account.Balance.String(),
+			Nonce:       account.Nonce,
+			Root:        account.Root.Bytes(),
+			CodeHash:    account.CodeHash,
+			AddressHash: accIt.Hash().Bytes(),
 		}
 		if !conf.SkipCode && !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.CodeHash))
@@ -602,6 +614,48 @@ func dumpState(ctx *cli.Context) error {
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
+}
+
+// snapshotExportPreimages dumps the preimage data to a flat file.
+func snapshotExportPreimages(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	defer triedb.Close()
+
+	var root common.Hash
+	if ctx.NArg() > 1 {
+		rootBytes := common.FromHex(ctx.Args().Get(1))
+		if len(rootBytes) != common.HashLength {
+			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
+		}
+		root = common.BytesToHash(rootBytes)
+	} else {
+		headBlock := rawdb.ReadHeadBlock(chaindb)
+		if headBlock == nil {
+			log.Error("Failed to load head block")
+			return errors.New("no head block")
+		}
+		root = headBlock.Root()
+	}
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapConfig, chaindb, triedb, root)
+	if err != nil {
+		return err
+	}
+	return utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root)
 }
 
 // checkAccount iterates the snap data layers, and looks up the given account

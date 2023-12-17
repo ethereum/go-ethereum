@@ -77,21 +77,26 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
+// Predetermined create2 address of whitelist contract with exclusive mint/burn privileges.
+// See: https://github.com/primevprotocol/contracts/blob/ecfd53d43770201da9c7a697be1fb03e5e554e4e/scripts/DeployScripts.s.sol
+const whitelistCreate2Addr = "0xc5bB85F941fb8dbbed6416A8aC84A06226E0f138"
+
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
-	// TODO: filter out non-allowed callers
-	_ = common.BytesToAddress(input[0:32]) // From
+	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
+	}
 
-	to := common.BytesToAddress(input[32:64])
+	mintTo := common.BytesToAddress(input[0:32])
 
 	var parsed bool
-	value, parsed := math.ParseBig256(hexutil.Encode(input[64:96]))
+	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
 	if !parsed {
 		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[64:96]))
 	}
 
-	// Mint case: Create native token out of thin air
-	ctx.evm.StateDB.AddBalance(to, value)
+	// Create native token out of thin air
+	ctx.evm.StateDB.AddBalance(mintTo, value)
 
 	return input, nil
 }
@@ -106,22 +111,22 @@ func (c *burn) RequiredGas(input []byte) uint64 {
 
 func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
-	// TODO: filter out non-allowed callers
-	_ = common.BytesToAddress(input[0:32]) // From
+	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
+	}
 
-	// Address to get their tokens burned
-	addrReqTokenBurn := common.BytesToAddress(input[32:64])
+	burnFrom := common.BytesToAddress(input[0:32])
 
 	var parsed bool
-	value, parsed := math.ParseBig256(hexutil.Encode(input[64:96]))
+	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
 	if !parsed {
 		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[64:96]))
 	}
 
-	if !ctx.CanTransfer(ctx.evm.StateDB, addrReqTokenBurn, value) {
+	if !ctx.CanTransfer(ctx.evm.StateDB, burnFrom, value) {
 		return nil, ErrInsufficientBalance
 	}
-	ctx.evm.StateDB.SubBalance(addrReqTokenBurn, value)
+	ctx.evm.StateDB.SubBalance(burnFrom, value)
 
 	return input, nil
 }

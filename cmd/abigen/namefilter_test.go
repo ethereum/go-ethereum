@@ -8,6 +8,7 @@ import (
 )
 
 func TestNameFilter(t *testing.T) {
+	t.Parallel()
 	_, err := newNameFilter("Foo")
 	require.Error(t, err)
 	_, err = newNameFilter("too/many:colons:Foo")

@@ -21,6 +21,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -58,6 +59,7 @@ func censor(input string, start, end int) string {
 }
 
 func TestLogging(t *testing.T) {
+	t.Parallel()
 	testConsoleLogging(t, "terminal", 6, 24)
 	testConsoleLogging(t, "logfmt", 2, 26)
 }
@@ -97,7 +99,55 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 	}
 }
 
+func TestJsonLogging(t *testing.T) {
+	t.Parallel()
+	haveB, err := runSelf("--log.format", "json", "logtest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readFile, err := os.Open("testdata/logging/logtest-json.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLines := split(readFile)
+	haveLines := split(bytes.NewBuffer(haveB))
+	for i, wantLine := range wantLines {
+		if i > len(haveLines)-1 {
+			t.Fatalf("format %v, line %d missing, want:%v", "json", i, wantLine)
+		}
+		haveLine := haveLines[i]
+		for strings.Contains(haveLine, "Unknown config environment variable") {
+			// This can happen on CI runs. Drop it.
+			haveLines = append(haveLines[:i], haveLines[i+1:]...)
+			haveLine = haveLines[i]
+		}
+		var have, want []byte
+		{
+			var h map[string]any
+			if err := json.Unmarshal([]byte(haveLine), &h); err != nil {
+				t.Fatal(err)
+			}
+			h["t"] = "xxx"
+			have, _ = json.Marshal(h)
+		}
+		{
+			var w map[string]any
+			if err := json.Unmarshal([]byte(wantLine), &w); err != nil {
+				t.Fatal(err)
+			}
+			w["t"] = "xxx"
+			want, _ = json.Marshal(w)
+		}
+		if !bytes.Equal(have, want) {
+			// show an intelligent diff
+			t.Logf(nicediff(have, want))
+			t.Errorf("file content wrong")
+		}
+	}
+}
+
 func TestVmodule(t *testing.T) {
+	t.Parallel()
 	checkOutput := func(level int, want, wantNot string) {
 		t.Helper()
 		output, err := runSelf("--log.format", "terminal", "--verbosity=0", "--log.vmodule", fmt.Sprintf("logtestcmd_active.go=%d", level), "logtest")
@@ -145,6 +195,7 @@ func nicediff(have, want []byte) string {
 }
 
 func TestFileOut(t *testing.T) {
+	t.Parallel()
 	var (
 		have, want []byte
 		err        error
@@ -165,6 +216,7 @@ func TestFileOut(t *testing.T) {
 }
 
 func TestRotatingFileOut(t *testing.T) {
+	t.Parallel()
 	var (
 		have, want []byte
 		err        error

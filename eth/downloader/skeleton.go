@@ -69,9 +69,17 @@ var errSyncReorged = errors.New("sync reorged")
 // might still be propagating.
 var errTerminated = errors.New("terminated")
 
-// errReorgDenied is returned if an attempt is made to extend the beacon chain
-// with a new header, but it does not link up to the existing sync.
-var errReorgDenied = errors.New("non-forced head reorg denied")
+// errChainReorged is an internal helper error to signal that the header chain
+// of the current sync cycle was (partially) reorged.
+var errChainReorged = errors.New("chain reorged")
+
+// errChainGapped is an internal helper error to signal that the header chain
+// of the current sync cycle is gaped with the one advertised by consensus client.
+var errChainGapped = errors.New("chain gapped")
+
+// errChainForked is an internal helper error to signal that the header chain
+// of the current sync cycle is forked with the one advertised by consensus client.
+var errChainForked = errors.New("chain forked")
 
 func init() {
 	// Tuning parameters is nice, but the scratch space must be assignable in
@@ -271,9 +279,9 @@ func (s *skeleton) startup() {
 				newhead, err := s.sync(head)
 				switch {
 				case err == errSyncLinked:
-					// Sync cycle linked up to the genesis block. Tear down the loop
-					// and restart it so, it can properly notify the backfiller. Don't
-					// account a new head.
+					// Sync cycle linked up to the genesis block, or the existent chain
+					// segment. Tear down the loop and restart it so, it can properly
+					// notify the backfiller. Don't account a new head.
 					head = nil
 
 				case err == errSyncMerged:
@@ -457,15 +465,16 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// we don't seamlessly integrate reorgs to keep things simple. If the
 			// network starts doing many mini reorgs, it might be worthwhile handling
 			// a limited depth without an error.
-			if reorged := s.processNewHead(event.header, event.final, event.force); reorged {
+			if err := s.processNewHead(event.header, event.final); err != nil {
 				// If a reorg is needed, and we're forcing the new head, signal
 				// the syncer to tear down and start over. Otherwise, drop the
 				// non-force reorg.
 				if event.force {
 					event.errc <- nil // forced head reorg accepted
+					log.Info("Restarting sync cycle", "reason", err)
 					return event.header, errSyncReorged
 				}
-				event.errc <- errReorgDenied
+				event.errc <- err
 				continue
 			}
 			event.errc <- nil // head extension accepted
@@ -610,7 +619,7 @@ func (s *skeleton) saveSyncStatus(db ethdb.KeyValueWriter) {
 // accepts and integrates it into the skeleton or requests a reorg. Upon reorg,
 // the syncer will tear itself down and restart with a fresh head. It is simpler
 // to reconstruct the sync state than to mutate it and hope for the best.
-func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force bool) bool {
+func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error {
 	// If a new finalized block was announced, update the sync process independent
 	// of what happens with the sync head below
 	if final != nil {
@@ -631,26 +640,17 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 		// once more, ignore it instead of tearing down sync for a noop.
 		if lastchain.Head == lastchain.Tail {
 			if current := rawdb.ReadSkeletonHeader(s.db, number); current.Hash() == head.Hash() {
-				return false
+				return nil
 			}
 		}
 		// Not a noop / double head announce, abort with a reorg
-		if force {
-			log.Warn("Beacon chain reorged", "tail", lastchain.Tail, "head", lastchain.Head, "newHead", number)
-		}
-		return true
+		return fmt.Errorf("%w, tail: %d, head: %d, newHead: %d", errChainReorged, lastchain.Tail, lastchain.Head, number)
 	}
 	if lastchain.Head+1 < number {
-		if force {
-			log.Warn("Beacon chain gapped", "head", lastchain.Head, "newHead", number)
-		}
-		return true
+		return fmt.Errorf("%w, head: %d, newHead: %d", errChainGapped, lastchain.Head, number)
 	}
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
-		if force {
-			log.Warn("Beacon chain forked", "ancestor", number-1, "hash", parent.Hash(), "want", head.ParentHash)
-		}
-		return true
+		return fmt.Errorf("%w, ancestor: %d, hash: %s, want: %s", errChainForked, number-1, parent.Hash(), head.ParentHash)
 	}
 	// New header seems to be in the last subchain range. Unwind any extra headers
 	// from the chain tip and insert the new head. We won't delete any trimmed
@@ -666,7 +666,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton sync status", "err", err)
 	}
-	return false
+	return nil
 }
 
 // assignTasks attempts to match idle peers to pending header retrievals.

@@ -74,8 +74,10 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics.addr=0.0.0.0 \
 		--metrics.port=6060 \
 		--nodekey $GETH_DATA_DIR/boot.key \
-		--netrestrict 172.13.0.0/24 \
-		--nat extip:$NODE_IP
+		--netrestrict 172.29.0.0/16 \
+		--nat extip:$NODE_IP \
+		--txpool.accountqueue=512 \
+		--rpc.allow-unprotected-txs
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
@@ -94,7 +96,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--http.addr=0.0.0.0 \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
-		--bootnodes enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.13.0.100:30301 \
+		--bootnodes enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301 \
 		--networkid=$CHAIN_ID \
 		--unlock=$BLOCK_SIGNER_ADDRESS \
 		--password="$GETH_DATA_DIR"/password \
@@ -102,10 +104,10 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--miner.etherbase=$BLOCK_SIGNER_ADDRESS \
 		--allow-insecure-unlock \
 		--nousb \
-		--netrestrict 172.13.0.0/24 \
+		--netrestrict 172.29.0.0/16 \
 		--metrics \
-                --metrics.addr=0.0.0.0 \
-                --metrics.port=6060 \
+		--metrics.addr=0.0.0.0 \
+		--metrics.port=6060 \
 		--ws \
 		--ws.addr=0.0.0.0 \
 		--ws.port="$WS_PORT" \
@@ -115,6 +117,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.addr="0.0.0.0" \
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
+		--txpool.accountqueue=512 \
 		--nat extip:$NODE_IP
 else
 	echo "Invalid GETH_NODE_TYPE specified"

@@ -2,51 +2,26 @@ package log
 
 import (
 	"bytes"
+	"fmt"
+	"io"
+	"math/big"
 	"os"
 	"strings"
 	"testing"
-)
+	"time"
 
-// TestLoggingWithTrace checks that if BackTraceAt is set, then the
-// gloghandler is capable of spitting out a stacktrace
-func TestLoggingWithTrace(t *testing.T) {
-	defer stackEnabled.Store(stackEnabled.Load())
-	out := new(bytes.Buffer)
-	logger := New()
-	{
-		glog := NewGlogHandler(StreamHandler(out, TerminalFormat(false)))
-		glog.Verbosity(LvlTrace)
-		if err := glog.BacktraceAt("logger_test.go:24"); err != nil {
-			t.Fatal(err)
-		}
-		logger.SetHandler(glog)
-	}
-	logger.Trace("a message", "foo", "bar") // Will be bumped to INFO
-	have := out.String()
-	if !strings.HasPrefix(have, "INFO") {
-		t.Fatalf("backtraceat should bump level to info: %s", have)
-	}
-	// The timestamp is locale-dependent, so we want to trim that off
-	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
-	have = strings.Split(have, "]")[1]
-	wantPrefix := " a message\n\ngoroutine"
-	if !strings.HasPrefix(have, wantPrefix) {
-		t.Errorf("\nhave: %q\nwant: %q\n", have, wantPrefix)
-	}
-}
+	"github.com/holiman/uint256"
+	"golang.org/x/exp/slog"
+)
 
 // TestLoggingWithVmodule checks that vmodule works.
 func TestLoggingWithVmodule(t *testing.T) {
-	defer stackEnabled.Store(stackEnabled.Load())
 	out := new(bytes.Buffer)
-	logger := New()
-	{
-		glog := NewGlogHandler(StreamHandler(out, TerminalFormat(false)))
-		glog.Verbosity(LvlCrit)
-		logger.SetHandler(glog)
-		logger.Warn("This should not be seen", "ignored", "true")
-		glog.Vmodule("logger_test.go=5")
-	}
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelCrit)
+	logger := NewLogger(glog)
+	logger.Warn("This should not be seen", "ignored", "true")
+	glog.Vmodule("logger_test.go=5")
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
 	// The timestamp is locale-dependent, so we want to trim that off
@@ -58,10 +33,140 @@ func TestLoggingWithVmodule(t *testing.T) {
 	}
 }
 
+func TestTerminalHandlerWithAttrs(t *testing.T) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")}))
+	glog.Verbosity(LevelTrace)
+	logger := NewLogger(glog)
+	logger.Trace("a message", "foo", "bar")
+	have := out.String()
+	// The timestamp is locale-dependent, so we want to trim that off
+	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
+	have = strings.Split(have, "]")[1]
+	want := " a message                                baz=bat foo=bar\n"
+	if have != want {
+		t.Errorf("\nhave: %q\nwant: %q\n", have, want)
+	}
+}
+
 func BenchmarkTraceLogging(b *testing.B) {
-	Root().SetHandler(LvlFilterHandler(LvlInfo, StreamHandler(os.Stderr, TerminalFormat(true))))
+	SetDefault(NewLogger(NewTerminalHandler(os.Stderr, true)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		Trace("a message", "v", i)
+	}
+}
+
+func BenchmarkTerminalHandler(b *testing.B) {
+	l := NewLogger(NewTerminalHandler(io.Discard, false))
+	benchmarkLogger(b, l)
+}
+func BenchmarkLogfmtHandler(b *testing.B) {
+	l := NewLogger(LogfmtHandler(io.Discard))
+	benchmarkLogger(b, l)
+}
+
+func BenchmarkJSONHandler(b *testing.B) {
+	l := NewLogger(JSONHandler(io.Discard))
+	benchmarkLogger(b, l)
+}
+
+func benchmarkLogger(b *testing.B, l Logger) {
+	var (
+		bb     = make([]byte, 10)
+		tt     = time.Now()
+		bigint = big.NewInt(100)
+		nilbig *big.Int
+		err    = fmt.Errorf("Oh nooes it's crap")
+	)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		l.Info("This is a message",
+			"foo", int16(i),
+			"bytes", bb,
+			"bonk", "a string with text",
+			"time", tt,
+			"bigint", bigint,
+			"nilbig", nilbig,
+			"err", err)
+	}
+	b.StopTimer()
+}
+
+func TestLoggerOutput(t *testing.T) {
+	type custom struct {
+		A string
+		B int8
+	}
+	var (
+		customA   = custom{"Foo", 12}
+		customB   = custom{"Foo\nLinebreak", 122}
+		bb        = make([]byte, 10)
+		tt        = time.Time{}
+		bigint    = big.NewInt(100)
+		nilbig    *big.Int
+		err       = fmt.Errorf("Oh nooes it's crap")
+		smallUint = uint256.NewInt(500_000)
+		bigUint   = &uint256.Int{0xff, 0xff, 0xff, 0xff}
+	)
+
+	out := new(bytes.Buffer)
+	glogHandler := NewGlogHandler(NewTerminalHandler(out, false))
+	glogHandler.Verbosity(LevelInfo)
+	NewLogger(glogHandler).Info("This is a message",
+		"foo", int16(123),
+		"bytes", bb,
+		"bonk", "a string with text",
+		"time", tt,
+		"bigint", bigint,
+		"nilbig", nilbig,
+		"err", err,
+		"struct", customA,
+		"struct", customB,
+		"ptrstruct", &customA,
+		"smalluint", smallUint,
+		"bigUint", bigUint)
+
+	have := out.String()
+	t.Logf("output %v", out.String())
+	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
+`
+	if !bytes.Equal([]byte(have)[25:], []byte(want)[25:]) {
+		t.Errorf("Error\nhave: %q\nwant: %q", have, want)
+	}
+}
+
+const termTimeFormat = "01-02|15:04:05.000"
+
+func BenchmarkAppendFormat(b *testing.B) {
+	var now = time.Now()
+	b.Run("fmt time.Format", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			fmt.Fprintf(io.Discard, "%s", now.Format(termTimeFormat))
+		}
+	})
+	b.Run("time.AppendFormat", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			now.AppendFormat(nil, termTimeFormat)
+		}
+	})
+	var buf = new(bytes.Buffer)
+	b.Run("time.Custom", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			writeTimeTermFormat(buf, now)
+			buf.Reset()
+		}
+	})
+}
+
+func TestTermTimeFormat(t *testing.T) {
+	var now = time.Now()
+	want := now.AppendFormat(nil, termTimeFormat)
+	var b = new(bytes.Buffer)
+	writeTimeTermFormat(b, now)
+	have := b.Bytes()
+	if !bytes.Equal(have, want) {
+		t.Errorf("have != want\nhave: %q\nwant: %q\n", have, want)
 	}
 }

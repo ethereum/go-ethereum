@@ -6,7 +6,7 @@ mevcommitsettlement:
   protocol: ethereum 
   rpcUrls: 
     # Only http field is required
-    - http: http://172.13.0.100:8545 
+    - http: http://172.29.0.98:8545
       pagination:
         maxBlockRange: 1000 
         maxBlockAge: 1000 
