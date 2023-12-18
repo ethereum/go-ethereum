@@ -576,7 +576,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		// For non-merged networks, if there is a checkpoint available, then calculate
 		// the ancientLimit through that. Otherwise calculate the ancient limit through
 		// the advertised height of the remote peer. This most is mostly a fallback for
-		// legacy networks, but should eventually be droppped. TODO(karalabe).
+		// legacy networks, but should eventually be dropped. TODO(karalabe).
 		if beaconMode {
 			// Beacon sync, use the latest finalized block as the ancient limit
 			// or a reasonable height if no finalized block is yet announced.
