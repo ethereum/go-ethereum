@@ -105,7 +105,7 @@ type Notifier struct {
 
 	mu           sync.Mutex
 	sub          *Subscription
-	buffer       []json.RawMessage
+	buffer       []any
 	callReturned bool
 	activated    bool
 }
@@ -129,12 +129,7 @@ func (n *Notifier) CreateSubscription() *Subscription {
 
 // Notify sends a notification to the client with the given data as payload.
 // If an error occurs the RPC connection is closed and the error is returned.
-func (n *Notifier) Notify(id ID, data interface{}) error {
-	enc, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
+func (n *Notifier) Notify(id ID, data any) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -144,9 +139,9 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 		panic("Notify with wrong ID")
 	}
 	if n.activated {
-		return n.send(n.sub, enc)
+		return n.send(n.sub, data)
 	}
-	n.buffer = append(n.buffer, enc)
+	n.buffer = append(n.buffer, data)
 	return nil
 }
 
@@ -181,16 +176,16 @@ func (n *Notifier) activate() error {
 	return nil
 }
 
-func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
-	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
-	ctx := context.Background()
-
-	msg := &jsonrpcMessage{
+func (n *Notifier) send(sub *Subscription, data any) error {
+	msg := jsonrpcSubscriptionNotification{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
-		Params:  params,
+		Params: subscriptionResultEnc{
+			ID:     string(sub.ID),
+			Result: data,
+		},
 	}
-	return n.h.conn.writeJSON(ctx, msg, false)
+	return n.h.conn.writeJSON(context.Background(), &msg, false)
 }
 
 // A Subscription is created by a notifier and tied to that notifier. The client can use

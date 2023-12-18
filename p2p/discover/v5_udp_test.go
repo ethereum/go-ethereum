@@ -79,12 +79,7 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 
 	// Prefix logs with node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
-	lfmt := log.TerminalFormat(false)
-	cfg.Log = testlog.Logger(t, log.LvlTrace)
-	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
-		t.Logf("%s %s", lprefix, lfmt.Format(r))
-		return nil
-	}))
+	cfg.Log = testlog.Logger(t, log.LevelTrace).With("node-id", lprefix)
 
 	// Listen.
 	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})
@@ -164,9 +159,9 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	nodes253 := nodesAtDistance(test.table.self().ID(), 253, 16)
 	nodes249 := nodesAtDistance(test.table.self().ID(), 249, 4)
 	nodes248 := nodesAtDistance(test.table.self().ID(), 248, 10)
-	fillTable(test.table, wrapNodes(nodes253))
-	fillTable(test.table, wrapNodes(nodes249))
-	fillTable(test.table, wrapNodes(nodes248))
+	fillTable(test.table, wrapNodes(nodes253), true)
+	fillTable(test.table, wrapNodes(nodes249), true)
+	fillTable(test.table, wrapNodes(nodes248), true)
 
 	// Requesting with distance zero should return the node's own record.
 	test.packetIn(&v5wire.Findnode{ReqID: []byte{0}, Distances: []uint{0}})
@@ -594,7 +589,7 @@ func TestUDPv5_lookup(t *testing.T) {
 
 	// Seed table with initial node.
 	initialNode := lookupTestnet.node(256, 0)
-	fillTable(test.table, []*node{wrapNode(initialNode)})
+	fillTable(test.table, []*node{wrapNode(initialNode)}, true)
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)

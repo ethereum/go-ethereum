@@ -123,7 +123,7 @@ func (it *nodeIterator) step() error {
 	address := common.BytesToAddress(preimage)
 
 	// Traverse the storage slots belong to the account
-	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, address, account.Root)
+	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, address, account.Root, it.state.trie)
 	if err != nil {
 		return err
 	}

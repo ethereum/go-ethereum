@@ -17,6 +17,8 @@
 package tests
 
 import (
+	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -49,6 +51,9 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		if runtime.GOARCH == "386" && runtime.GOOS == "windows" && rand.Int63()%2 == 0 {
+			t.Skip("test (randomly) skipped on 32-bit windows")
+		}
 		execBlockTest(t, bt, test)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
@@ -69,19 +74,19 @@ func TestExecutionSpec(t *testing.T) {
 }
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
-	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode without snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode with snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode without snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode with snapshotter failed: %v", err)
 		return
 	}

@@ -35,6 +35,7 @@ var (
 )
 
 func TestEthSuite(t *testing.T) {
+	t.Parallel()
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
@@ -56,6 +57,7 @@ func TestEthSuite(t *testing.T) {
 }
 
 func TestSnapSuite(t *testing.T) {
+	t.Parallel()
 	geth, err := runGeth()
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)

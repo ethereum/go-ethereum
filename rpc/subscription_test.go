@@ -17,12 +17,19 @@
 package rpc
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestNewID(t *testing.T) {
@@ -216,5 +223,58 @@ func readAndValidateMessage(in *json.Decoder) (*subConfirmation, *subscriptionRe
 		}
 	default:
 		return nil, nil, fmt.Errorf("unrecognized message: %v", msg)
+	}
+}
+
+type mockConn struct {
+	enc *json.Encoder
+}
+
+// writeJSON writes a message to the connection.
+func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool) error {
+	return c.enc.Encode(msg)
+}
+
+// Closed returns a channel which is closed when the connection is closed.
+func (c *mockConn) closed() <-chan interface{} { return nil }
+
+// RemoteAddr returns the peer address of the connection.
+func (c *mockConn) remoteAddr() string { return "" }
+
+// BenchmarkNotify benchmarks the performance of notifying a subscription.
+func BenchmarkNotify(b *testing.B) {
+	id := ID("test")
+	notifier := &Notifier{
+		h:         &handler{conn: &mockConn{json.NewEncoder(io.Discard)}},
+		sub:       &Subscription{ID: id},
+		activated: true,
+	}
+	msg := &types.Header{
+		ParentHash: common.HexToHash("0x01"),
+		Number:     big.NewInt(100),
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		notifier.Notify(id, msg)
+	}
+}
+
+func TestNotify(t *testing.T) {
+	out := new(bytes.Buffer)
+	id := ID("test")
+	notifier := &Notifier{
+		h:         &handler{conn: &mockConn{json.NewEncoder(out)}},
+		sub:       &Subscription{ID: id},
+		activated: true,
+	}
+	msg := &types.Header{
+		ParentHash: common.HexToHash("0x01"),
+		Number:     big.NewInt(100),
+	}
+	notifier.Notify(id, msg)
+	have := strings.TrimSpace(out.String())
+	want := `{"jsonrpc":"2.0","method":"_subscription","params":{"subscription":"test","result":{"parentHash":"0x0000000000000000000000000000000000000000000000000000000000000001","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","difficulty":null,"number":"0x64","gasLimit":"0x0","gasUsed":"0x0","timestamp":"0x0","extraData":"0x","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0000000000000000","baseFeePerGas":null,"withdrawalsRoot":null,"blobGasUsed":null,"excessBlobGas":null,"parentBeaconBlockRoot":null,"hash":"0xe5fb877dde471b45b9742bb4bb4b3d74a761e2fb7cb849a3d2b687eed90fb604"}}}`
+	if have != want {
+		t.Errorf("have:\n%v\nwant:\n%v\n", have, want)
 	}
 }
