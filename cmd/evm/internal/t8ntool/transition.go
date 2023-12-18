@@ -124,7 +124,6 @@ func Transition(ctx *cli.Context) error {
 			}
 			return &traceWriter{tracer, traceFile}, nil
 		}
-
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
