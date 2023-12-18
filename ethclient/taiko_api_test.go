@@ -112,16 +112,16 @@ func TestGetL2ParentHashes(t *testing.T) {
 
 	log.Info("hashes", "a", hashes)
 	require.Equal(t, 3, len(hashes))
-	require.Equal(t, blocks[0].Hash(), hashes[0])
+	require.Equal(t, blocks[2].Hash(), hashes[0])
 	require.Equal(t, blocks[1].Hash(), hashes[1])
-	require.Equal(t, blocks[2].Hash(), hashes[2])
+	require.Equal(t, blocks[0].Hash(), hashes[2])
 
 	hashes, err = ec.GetL2ParentHashes(context.Background(), common.Big2.Uint64())
 	require.Nil(t, err)
 
 	require.Equal(t, 2, len(hashes))
-	require.Equal(t, blocks[0].Hash(), hashes[0])
-	require.Equal(t, blocks[1].Hash(), hashes[1])
+	require.Equal(t, blocks[1].Hash(), hashes[0])
+	require.Equal(t, blocks[0].Hash(), hashes[1])
 
 	hashes, err = ec.GetL2ParentHashes(context.Background(), common.Big0.Uint64())
 	require.Nil(t, err)
@@ -136,16 +136,16 @@ func TestGetL2ParentBlocks(t *testing.T) {
 	require.Nil(t, err)
 
 	require.Equal(t, 3, len(res))
-	require.Equal(t, res[0]["hash"], blocks[0].Hash().String())
+	require.Equal(t, res[2]["hash"], blocks[0].Hash().String())
 	require.Equal(t, res[1]["hash"], blocks[1].Hash().String())
-	require.Equal(t, res[2]["hash"], blocks[2].Hash().String())
+	require.Equal(t, res[0]["hash"], blocks[2].Hash().String())
 
 	res, err = ec.GetL2ParentHeaders(context.Background(), common.Big2.Uint64())
 	require.Nil(t, err)
 
 	require.Equal(t, 2, len(res))
-	require.Equal(t, res[0]["hash"], blocks[0].Hash().String())
-	require.Equal(t, res[1]["hash"], blocks[1].Hash().String())
+	require.Equal(t, res[1]["hash"], blocks[0].Hash().String())
+	require.Equal(t, res[0]["hash"], blocks[1].Hash().String())
 
 	res, err = ec.GetL2ParentHeaders(context.Background(), common.Big0.Uint64())
 	require.Nil(t, err)

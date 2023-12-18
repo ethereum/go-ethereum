@@ -107,8 +107,8 @@ func (s *TaikoAPIBackend) GetL2ParentHashes(blockID uint64) ([]common.Hash, erro
 // Get L2ParentBlocks retrieves the preceding 256 parent blocks given a block number.
 func (s *TaikoAPIBackend) GetL2ParentHeaders(blockID uint64) ([]*types.Header, error) {
 	var headers []*types.Header
-	for i := blockID; i != 0 && (blockID-i) < 256; i-- {
-		headers = append(headers, s.eth.blockchain.GetHeaderByNumber(blockID-i))
+	for i := 1; i < 256 && blockID >= uint64(i); i++ {
+		headers = append(headers, s.eth.blockchain.GetHeaderByNumber(blockID-uint64(i)))
 	}
 	return headers, nil
 }
