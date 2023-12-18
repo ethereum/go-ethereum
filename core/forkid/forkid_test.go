@@ -366,8 +366,9 @@ func TestValidation(t *testing.T) {
 		// TODO(karalabe): Enable this when Cancun is specced
 		//{params.MainnetChainConfig, 20999999, 1677999999, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, ErrLocalIncompatibleOrStale},
 	}
+	genesis := core.DefaultGenesisBlock().ToBlock()
 	for i, tt := range tests {
-		filter := newFilter(tt.config, core.DefaultGenesisBlock().ToBlock(), func() (uint64, uint64) { return tt.head, tt.time })
+		filter := newFilter(tt.config, genesis, func() (uint64, uint64) { return tt.head, tt.time })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}

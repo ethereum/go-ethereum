@@ -114,7 +114,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 
 	// special case for pending logs
 	if beginPending && !endPending {
-		return nil, errors.New("invalid block range")
+		return nil, errInvalidBlockRange
 	}
 
 	// Short-cut if all we care about is pending logs
