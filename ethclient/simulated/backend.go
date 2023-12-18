@@ -89,7 +89,7 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
 	conf := ethconfig.Defaults
 	conf.Genesis = &genesis
 	conf.SyncMode = downloader.FullSync
-	sim, err := NewWithNode(stack, &conf, math.MaxUint64)
+	sim, err := newWithNode(stack, &conf, math.MaxUint64)
 	if err != nil {
 		// This should never happen, if it does, please open an issue
 		panic(err)
@@ -97,10 +97,10 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
 	return sim
 }
 
-// NewWithNode sets up a simulated backend on an existing node
+// newWithNode sets up a simulated backend on an existing node
 // this allows users to do persistent simulations.
-// The provided node must not be started and will be started by NewWithNode
-func NewWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
+// The provided node must not be started and will be started by newWithNode
+func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
@@ -136,6 +136,8 @@ func NewWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backe
 	}, nil
 }
 
+// Close shuts down the simBackend.
+// The simulated backend can't be used afterwards.
 func (n *Backend) Close() error {
 	if n.client.Client != nil {
 		n.client.Close()
