@@ -236,40 +236,18 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 		envvar := strings.ToUpper(prefix + "_" + strings.ReplaceAll(strings.ReplaceAll(flag.Names()[0], ".", "_"), "-", "_"))
 
 		switch flag := flag.(type) {
-		case *cli.StringFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.StringSliceFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.BoolFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.IntFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.Int64Flag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.Uint64Flag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.Float64Flag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.DurationFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.PathFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *BigFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *TextMarshalerFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *DirectoryFlag:
+		case *cli.StringFlag,
+			*cli.StringSliceFlag,
+			*cli.BoolFlag,
+			*cli.IntFlag,
+			*cli.Int64Flag,
+			*cli.Uint64Flag,
+			*cli.Float64Flag,
+			*cli.DurationFlag,
+			*cli.PathFlag,
+			*BigFlag,
+			*TextMarshalerFlag,
+			*DirectoryFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 		}
 	}
