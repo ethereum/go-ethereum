@@ -64,7 +64,6 @@ func (r *result) MarshalJSON() ([]byte, error) {
 }
 
 func Transaction(ctx *cli.Context) error {
-
 	var (
 		err error
 	)
