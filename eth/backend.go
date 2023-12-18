@@ -143,7 +143,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb); err != nil {
+	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, ""); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
 
