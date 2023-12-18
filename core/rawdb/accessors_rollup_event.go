@@ -28,7 +28,7 @@ type FinalizedBatchMeta struct {
 func WriteRollupEventSyncedL1BlockNumber(db ethdb.KeyValueWriter, l1BlockNumber uint64) {
 	value := big.NewInt(0).SetUint64(l1BlockNumber).Bytes()
 	if err := db.Put(rollupEventSyncedL1BlockNumberKey, value); err != nil {
-		log.Crit("failed to store rollup event synced L1 block number for rollup event", "err", err)
+		log.Crit("failed to store rollup event synced L1 block number for rollup event", "L1 block number", l1BlockNumber, "value", value, "err", err)
 	}
 }
 
@@ -44,7 +44,7 @@ func ReadRollupEventSyncedL1BlockNumber(db ethdb.Reader) *uint64 {
 
 	number := new(big.Int).SetBytes(data)
 	if !number.IsUint64() {
-		log.Crit("unexpected rollup event synced L1 block number in database", "number", number)
+		log.Crit("unexpected rollup event synced L1 block number in database", "data", data, "number", number)
 	}
 
 	rollupEventSyncedL1BlockNumber := number.Uint64()
@@ -54,12 +54,12 @@ func ReadRollupEventSyncedL1BlockNumber(db ethdb.Reader) *uint64 {
 // WriteBatchChunkRanges writes the block ranges for each chunk within a batch to the database.
 // It serializes the chunk ranges using RLP and stores them under a key derived from the batch index.
 func WriteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64, chunkBlockRanges []*ChunkBlockRange) {
-	bytes, err := rlp.EncodeToBytes(chunkBlockRanges)
+	value, err := rlp.EncodeToBytes(chunkBlockRanges)
 	if err != nil {
 		log.Crit("failed to RLP encode batch chunk ranges", "batch index", batchIndex, "err", err)
 	}
-	if err := db.Put(batchChunkRangesKey(batchIndex), bytes); err != nil {
-		log.Crit("failed to store batch chunk ranges", "batch index", batchIndex, "err", err)
+	if err := db.Put(batchChunkRangesKey(batchIndex), value); err != nil {
+		log.Crit("failed to store batch chunk ranges", "batch index", batchIndex, "value", value, "err", err)
 	}
 }
 
@@ -92,12 +92,12 @@ func ReadBatchChunkRanges(db ethdb.Reader, batchIndex uint64) []*ChunkBlockRange
 // WriteFinalizedBatchMeta stores the metadata of a finalized batch in the database.
 func WriteFinalizedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, finalizedBatchMeta *FinalizedBatchMeta) {
 	var err error
-	bytes, err := rlp.EncodeToBytes(finalizedBatchMeta)
+	value, err := rlp.EncodeToBytes(finalizedBatchMeta)
 	if err != nil {
-		log.Crit("failed to RLP encode batch metadata", "batch index", batchIndex, "err", err)
+		log.Crit("failed to RLP encode batch metadata", "batch index", batchIndex, "finalized batch meta", finalizedBatchMeta, "err", err)
 	}
-	if err := db.Put(batchMetaKey(batchIndex), bytes); err != nil {
-		log.Crit("failed to store batch metadata", "batch index", batchIndex, "err", err)
+	if err := db.Put(batchMetaKey(batchIndex), value); err != nil {
+		log.Crit("failed to store batch metadata", "batch index", batchIndex, "value", value, "err", err)
 	}
 }
 
@@ -108,7 +108,7 @@ func ReadFinalizedBatchMeta(db ethdb.Reader, batchIndex uint64) *FinalizedBatchM
 		return nil
 	}
 	if err != nil {
-		log.Crit("failed to read finalized batch metadata from database", "err", err)
+		log.Crit("failed to read finalized batch metadata from database", "batch index", batchIndex, "err", err)
 	}
 
 	fbm := new(FinalizedBatchMeta)
@@ -122,7 +122,7 @@ func ReadFinalizedBatchMeta(db ethdb.Reader, batchIndex uint64) *FinalizedBatchM
 func WriteFinalizedL2BlockNumber(db ethdb.KeyValueWriter, l2BlockNumber uint64) {
 	value := big.NewInt(0).SetUint64(l2BlockNumber).Bytes()
 	if err := db.Put(finalizedL2BlockNumberKey, value); err != nil {
-		log.Crit("failed to store finalized L2 block number for rollup event", "err", err)
+		log.Crit("failed to store finalized L2 block number for rollup event", "L2 block number", l2BlockNumber, "value", value, "err", err)
 	}
 }
 
@@ -133,12 +133,12 @@ func ReadFinalizedL2BlockNumber(db ethdb.Reader) *uint64 {
 		return nil
 	}
 	if err != nil {
-		log.Crit("failed to read finalized L2 block number from database", "err", err)
+		log.Crit("failed to read finalized L2 block number from database", "key", finalizedL2BlockNumberKey, "err", err)
 	}
 
 	number := new(big.Int).SetBytes(data)
 	if !number.IsUint64() {
-		log.Crit("unexpected finalized L2 block number in database", "number", number)
+		log.Crit("unexpected finalized L2 block number in database", "data", data, "number", number)
 	}
 
 	finalizedL2BlockNumber := number.Uint64()

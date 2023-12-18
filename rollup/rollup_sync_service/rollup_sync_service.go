@@ -196,7 +196,7 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 
 			chunkBlockRanges, err := s.getChunkRanges(batchIndex, &vLog)
 			if err != nil {
-				return fmt.Errorf("failed to get chunk ranges, err: %w", err)
+				return fmt.Errorf("failed to get chunk ranges, batch index: %v, err: %w", batchIndex, err)
 			}
 			rawdb.WriteBatchChunkRanges(s.db, batchIndex, chunkBlockRanges)
 
@@ -311,9 +311,26 @@ func (s *RollupSyncService) getChunkRanges(batchIndex uint64, vLog *types.Log) (
 		return []*rawdb.ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 0}}, nil
 	}
 
-	tx, _, err := s.client.client.TransactionByHash(context.Background(), vLog.TxHash)
+	tx, _, err := s.client.client.TransactionByHash(s.ctx, vLog.TxHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transaction, err: %w", err)
+		log.Debug("failed to get transaction by hash, probably an unindexed transaction, fetching the whole block to get the transaction",
+			"tx hash", vLog.TxHash.Hex(), "block number", vLog.BlockNumber, "block hash", vLog.BlockHash.Hex(), "err", err)
+		block, err := s.client.client.BlockByHash(s.ctx, vLog.BlockHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
+		}
+
+		found := false
+		for _, txInBlock := range block.Transactions() {
+			if txInBlock.Hash() == vLog.TxHash {
+				tx = txInBlock
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("transaction not found in the block, tx hash: %v, block number: %v, block hash: %v", vLog.TxHash.Hex(), vLog.BlockNumber, vLog.BlockHash.Hex())
+		}
 	}
 
 	return s.decodeChunkBlockRanges(tx.Data())
@@ -323,17 +340,17 @@ func (s *RollupSyncService) getChunkRanges(batchIndex uint64, vLog *types.Log) (
 func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.ChunkBlockRange, error) {
 	const methodIDLength = 4
 	if len(txData) < methodIDLength {
-		return nil, fmt.Errorf("transaction data is too short")
+		return nil, fmt.Errorf("transaction data is too short, length of tx data: %v, minimum length required: %v", len(txData), methodIDLength)
 	}
 
 	method, err := s.scrollChainABI.MethodById(txData[:methodIDLength])
 	if err != nil {
-		return nil, fmt.Errorf("failed to get method by ID, ID: %v, err: %w", txData[:4], err)
+		return nil, fmt.Errorf("failed to get method by ID, ID: %v, err: %w", txData[:methodIDLength], err)
 	}
 
 	values, err := method.Inputs.Unpack(txData[methodIDLength:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to unpack transaction data using ABI: %v", err)
+		return nil, fmt.Errorf("failed to unpack transaction data using ABI, tx data: %v, err: %w", txData, err)
 	}
 
 	type commitBatchArgs struct {
@@ -345,11 +362,11 @@ func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.Chun
 	var args commitBatchArgs
 	err = method.Inputs.Copy(&args, values)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode calldata into commitBatch args, err: %w", err)
+		return nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
 	}
 
 	if args.Version != batchHeaderVersion {
-		return nil, fmt.Errorf("unexpected batch version, expected: %d, got: %v", batchHeaderVersion, args.Version)
+		return nil, fmt.Errorf("unexpected batch version, expected: %v, got: %v", batchHeaderVersion, args.Version)
 	}
 
 	return DecodeChunkBlockRanges(args.Chunks)
@@ -360,18 +377,18 @@ func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.Chun
 // It returns the number of the end block, a finalized batch meta data, and an error if any.
 func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.FinalizedBatchMeta, chunks []*Chunk) (uint64, *rawdb.FinalizedBatchMeta, error) {
 	if len(chunks) == 0 {
-		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0")
+		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0, batch index: %v", event.BatchIndex.Uint64())
 	}
 
 	startChunk := chunks[0]
 	if len(startChunk.Blocks) == 0 {
-		return 0, nil, fmt.Errorf("invalid argument: block count of start chunk is 0")
+		return 0, nil, fmt.Errorf("invalid argument: block count of start chunk is 0, batch index: %v", event.BatchIndex.Uint64())
 	}
 	startBlock := startChunk.Blocks[0]
 
 	endChunk := chunks[len(chunks)-1]
 	if len(endChunk.Blocks) == 0 {
-		return 0, nil, fmt.Errorf("invalid argument: block count of end chunk is 0")
+		return 0, nil, fmt.Errorf("invalid argument: block count of end chunk is 0, batch index: %v", event.BatchIndex.Uint64())
 	}
 	endBlock := endChunk.Blocks[len(endChunk.Blocks)-1]
 
@@ -392,7 +409,7 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 	// Note: All params for NewBatchHeader are calculated locally based on the block data.
 	batchHeader, err := NewBatchHeader(batchHeaderVersion, event.BatchIndex.Uint64(), parentBatchMeta.TotalL1MessagePopped, parentBatchMeta.BatchHash, chunks)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to construct batch header, err: %w", err)
+		return 0, nil, fmt.Errorf("failed to construct batch header, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 	}
 
 	// Note: If the batch headers match, this ensures the consistency of blocks and transactions
@@ -400,7 +417,10 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 	localBatchHash := batchHeader.Hash()
 	if localBatchHash != event.BatchHash {
 		log.Error("Batch hash mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentBatchMeta.BatchHash.Hex(), "parent TotalL1MessagePopped", parentBatchMeta.TotalL1MessagePopped, "l1 finalized batch hash", event.BatchHash.Hex(), "l2 batch hash", localBatchHash.Hex())
-		chunksJson, _ := json.Marshal(chunks)
+		chunksJson, err := json.Marshal(chunks)
+		if err != nil {
+			log.Error("marshal chunks failed", "err", err)
+		}
 		log.Error("Chunks", "chunks", string(chunksJson))
 		syscall.Kill(os.Getpid(), syscall.SIGTERM)
 		return 0, nil, fmt.Errorf("batch hash mismatch")
