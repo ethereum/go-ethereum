@@ -93,39 +93,38 @@ func Transition(ctx *cli.Context) error {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
 
-	if ctx.Bool(TraceFlag.Name) {
-		if ctx.IsSet(TraceTracerFlag.Name) {
-			var config json.RawMessage
-			if ctx.IsSet(TraceTracerConfigFlag.Name) {
-				config = []byte(ctx.String(TraceTracerConfigFlag.Name))
-			}
-			getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
-				if err != nil {
-					return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-				}
-				tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
-				if err != nil {
-					return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
-				}
-				return &traceWriter{tracer, traceFile}, nil
-			}
-		} else {
-			// Configure the EVM logger
-			logConfig := &logger.Config{
-				DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-				EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
-				EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
-				Debug:            true,
-			}
-			getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-				traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
-				if err != nil {
-					return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-				}
-				return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), traceFile}, nil
-			}
+	if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
+		// Configure the EVM logger
+		logConfig := &logger.Config{
+			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
+			Debug:            true,
 		}
+		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+			if err != nil {
+				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), traceFile}, nil
+		}
+	} else if ctx.IsSet(TraceTracerFlag.Name) {
+		var config json.RawMessage
+		if ctx.IsSet(TraceTracerConfigFlag.Name) {
+			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
+		}
+		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			if err != nil {
+				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			if err != nil {
+				return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+			}
+			return &traceWriter{tracer, traceFile}, nil
+		}
+
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
