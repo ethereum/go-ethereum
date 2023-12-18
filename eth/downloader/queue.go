@@ -146,6 +146,9 @@ func (q *queue) Reset() {
 // Close marks the end of the sync, unblocking WaitResults.
 // It may be called even if the queue is already closed.
 func (q *queue) Close() {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
 	q.closed = true
 	q.active.Broadcast()
 }
