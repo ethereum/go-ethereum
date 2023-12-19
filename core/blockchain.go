@@ -1606,6 +1606,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
 		lastCanon *types.Block
+		statedb   *state.StateDB
+		err       error
 	)
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
@@ -1782,8 +1784,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 
-		var statedb *state.StateDB
-		var err error
 		recordBlockwitness := bc.witnessRecordingPath.Load() != nil
 		if recordBlockwitness {
 			statedb, err = state.NewWithWitnessRecording(parent.Root, bc.stateCache, bc.snaps)
