@@ -258,6 +258,8 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+
+	witnessRecordingPath atomic.Pointer[string]
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1779,7 +1781,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+
+		var statedb *state.StateDB
+		var err error
+		recordBlockwitness := bc.witnessRecordingPath.Load() != nil
+		if recordBlockwitness {
+			statedb, err = state.NewWithWitnessRecording(parent.Root, bc.stateCache, bc.snaps)
+		} else {
+			statedb, err = state.New(parent.Root, bc.stateCache, bc.snaps)
+		}
 		if err != nil {
 			return it.index, err
 		}
@@ -1852,8 +1862,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
-		statedb.GetWitness().SetBlock(block)
-		log.Info(fmt.Sprintf("block %d summary:\n%s", block.NumberU64(), statedb.GetWitness().Summary()))
+
+		if witnessRecordingPath := bc.witnessRecordingPath.Load(); witnessRecordingPath != nil {
+			witness := statedb.GetWitness()
+			witness.SetBlock(block)
+			if err := state.DumpBlockWitnessToFile(witness, *witnessRecordingPath); err != nil {
+				log.Error("could not dump block witness to file", "err", err)
+			} else {
+				log.Info(fmt.Sprintf("block %d summary:\n%s", block.NumberU64(), statedb.GetWitness().Summary()))
+			}
+		}
 		//state.DumpBlockWithWitnessToFile(statedb.GetWitness(), block)
 
 		followupInterrupt.Store(true)
@@ -2593,4 +2611,12 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flush interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+func (bc *BlockChain) SetWitnessRecording(path string, enabled bool) {
+	if enabled {
+		bc.witnessRecordingPath.Store(&path)
+	} else {
+		bc.witnessRecordingPath.Store(nil)
+	}
 }

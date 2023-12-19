@@ -501,6 +501,11 @@ web3._extend({
 			call: 'debug_getTrieFlushInterval',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'setWitnessRecording',
+			call: 'debug_setWitnessRecording',
+			params: 2
+		}),
 	],
 	properties: []
 });

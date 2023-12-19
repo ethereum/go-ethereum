@@ -443,3 +443,8 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
+
+func (api *DebugAPI) SetWitnessRecording(path string, enabled bool) error {
+	api.eth.blockchain.SetWitnessRecording(path, enabled)
+	return nil
+}

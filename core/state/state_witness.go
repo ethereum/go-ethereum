@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"os"
+	"path/filepath"
 )
 
 type Witness struct {
@@ -260,16 +261,15 @@ func NewWitness() *Witness {
 	}
 }
 
-func DumpBlockWithWitnessToFile(w *Witness, b *types.Block) {
+func DumpBlockWitnessToFile(w *Witness, path string) error {
 	enc := w.EncodeRLP()
-	path, _ := os.Getwd() //"/datadrive/"
-	err := os.MkdirAll(fmt.Sprintf("%s/block-dump", path), 0755)
+
+	blockHash := w.block.Hash()
+	outputFName := fmt.Sprintf("%d-%x.rlp", w.block.NumberU64(), blockHash[0:8])
+	path = filepath.Join(path, outputFName)
+	err := os.WriteFile(path, enc, 0644)
 	if err != nil {
-		panic("shite2")
+		return err
 	}
-	outputFName := fmt.Sprintf("%d-%x.rlp", b.NumberU64(), b.Hash())
-	err = os.WriteFile(path+"/block-dump/"+outputFName, enc, 0644)
-	if err != nil {
-		panic("shite 3")
-	}
+	return nil
 }

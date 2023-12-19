@@ -139,7 +139,17 @@ type StateDB struct {
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 
-	witness *Witness
+	recordWitness bool
+	witness       *Witness
+}
+
+func NewWithWitnessRecording(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+	sdb, err := New(root, db, snaps)
+	if err != nil {
+		return nil, err
+	}
+	sdb.recordWitness = true
+	return sdb, nil
 }
 
 // New creates a new state from a given trie.
@@ -1202,6 +1212,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		storageTrieNodesDeleted int
 		nodes                   = trienode.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
+		root                    common.Hash
+		set                     *trienode.NodeSet
 	)
 	// Handle all state deletions first
 	incomplete, err := s.handleDestruction(nodes)
@@ -1247,9 +1259,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	//root, set, err := s.trie.Commit(true)
-	root, set, accessList, err := s.trie.CommitAndObtainAccessList(true)
-	s.witness.addAccessList(common.Hash{}, accessList)
+
+	if s.recordWitness {
+		var accessList map[string][]byte
+		root, set, accessList, err = s.trie.CommitAndObtainAccessList(true)
+		s.witness.addAccessList(common.Hash{}, accessList)
+	} else {
+		root, set, err = s.trie.Commit(true)
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
