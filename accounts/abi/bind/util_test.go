@@ -53,6 +53,7 @@ var waitDeployedTests = map[string]struct {
 	},
 }
 
+//nolint:staticcheck
 func TestWaitDeployed(t *testing.T) {
 	t.Parallel()
 	for name, test := range waitDeployedTests {
@@ -101,6 +102,7 @@ func TestWaitDeployed(t *testing.T) {
 	}
 }
 
+//nolint:staticcheck
 func TestWaitDeployedCornerCases(t *testing.T) {
 	backend := backends.NewSimulatedBackend(
 		core.GenesisAlloc{
