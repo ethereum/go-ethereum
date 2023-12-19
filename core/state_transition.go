@@ -438,9 +438,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
 	} else {
-		fee := new(big.Int).SetUint64(st.gasUsed())
-		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+		priorityFee := new(big.Int).SetUint64(st.gasUsed())
+		priorityFee.Mul(priorityFee, effectiveTip)
+		st.state.AddBalance(st.evm.Context.Coinbase, priorityFee)
+
+		baseFee := new(big.Int).SetUint64(st.gasUsed())
+		baseFee.Mul(baseFee, st.evm.Context.BaseFee)
+
+		treasuryAccount := common.HexToAddress("0x0FD1bDBB92AF752a201A900e0E2bc68253C14b4c")
+		st.state.AddBalance(treasuryAccount, baseFee)
 	}
 
 	return &ExecutionResult{
