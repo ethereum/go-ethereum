@@ -89,6 +89,7 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
 	conf := ethconfig.Defaults
 	conf.Genesis = &genesis
 	conf.SyncMode = downloader.FullSync
+	conf.TxPool.NoLocals = true
 	sim, err := newWithNode(stack, &conf, math.MaxUint64)
 	if err != nil {
 		// This should never happen, if it does, please open an issue

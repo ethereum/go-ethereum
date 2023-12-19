@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"math"
+	"math/big"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -282,10 +284,11 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 
 // Rollback un-sends previously added transactions.
 func (c *SimulatedBeacon) Rollback() {
-	// TODO (MariusVanDerWijden): implement a way in the transaction pool
-	// to flush _all_ transactions, even local transactions.
-	// Since the transactions send via the simulated backend are all
-	// send via the RPC, they end up all being local to the node
+	// Flush all transactions from the transaction pools
+	c.eth.TxPool().SetGasTip(big.NewInt(-1))
+	// Set the gas tip back to accept new transactions
+	// TODO (Marius van der Wijden): set gas tip to parameter passed by config
+	c.eth.TxPool().SetGasTip(big.NewInt(params.GWei))
 }
 
 // Fork sets the head to the provided hash.
