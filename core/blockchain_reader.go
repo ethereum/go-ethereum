@@ -254,20 +254,34 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
-// GetTransactionLookup retrieves the lookup associate with the given transaction
-// hash from the cache or database.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLookupEntry {
+// GetTransactionLookup retrieves the lookup along with the transaction itself
+// associate with the given transaction hash. A non-nil error will be returned
+// if the transaction is not found.
+func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
-	if lookup, exist := bc.txLookupCache.Get(hash); exist {
-		return lookup
+	if item, exist := bc.txLookupCache.Get(hash); exist {
+		return item.lookup, item.transaction, nil
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
-		return nil
+		// The transaction can either be non-existent, or just not indexed
+		// yet. Return the tx indexing progress as well for better UX.
+		progress, err := bc.askTxIndexProgress()
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, progress
 	}
-	lookup := &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
-	bc.txLookupCache.Add(hash, lookup)
-	return lookup
+	lookup := &rawdb.LegacyTxLookupEntry{
+		BlockHash:  blockHash,
+		BlockIndex: blockNumber,
+		Index:      txIndex,
+	}
+	bc.txLookupCache.Add(hash, txLookup{
+		lookup:      lookup,
+		transaction: tx,
+	})
+	return lookup, tx, nil
 }
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the

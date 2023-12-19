@@ -185,6 +185,29 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	return &config
 }
 
+// txLookup is wrapper over transaction lookup along with the corresponding
+// transaction itself.
+type txLookup struct {
+	lookup      *rawdb.LegacyTxLookupEntry
+	transaction *types.Transaction
+}
+
+// txIndexProgress is the struct describing the progress for transaction indexing.
+type txIndexProgress struct {
+	tail  uint64 // the oldest block indexed for transactions
+	head  uint64 // the latest block indexed for transactions
+	limit uint64 // the number of blocks required for transaction indexing(0 means the whole chain)
+}
+
+// Error implements Error returning the progress in string format.
+func (prog txIndexProgress) Error() string {
+	limit := "entire chain"
+	if prog.limit != 0 {
+		limit = fmt.Sprintf("last %d blocks", prog.limit)
+	}
+	return fmt.Sprintf("index-tail: %d, index-head: %d, limit: %s", prog.tail, prog.head, limit)
+}
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -242,15 +265,16 @@ type BlockChain struct {
 	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
 	blockCache    *lru.Cache[common.Hash, *types.Block]
-	txLookupCache *lru.Cache[common.Hash, *rawdb.LegacyTxLookupEntry]
+	txLookupCache *lru.Cache[common.Hash, txLookup]
 
 	// future blocks are blocks added for later processing
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 
-	wg            sync.WaitGroup //
-	quit          chan struct{}  // shutdown signal, closed in Stop.
-	stopping      atomic.Bool    // false if chain is running, true when stopped
-	procInterrupt atomic.Bool    // interrupt signaler for block processing
+	wg            sync.WaitGroup
+	quit          chan struct{}             // shutdown signal, closed in Stop.
+	stopping      atomic.Bool               // false if chain is running, true when stopped
+	procInterrupt atomic.Bool               // interrupt signaler for block processing
+	txIndexProgCh chan chan txIndexProgress // chan for querying the progress of transaction indexing
 
 	engine     consensus.Engine
 	validator  Validator // Block and state validator interface
@@ -297,8 +321,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
 		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache: lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
+		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
+		txIndexProgCh: make(chan chan txIndexProgress),
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
@@ -2425,6 +2450,34 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 	}
 }
 
+// reportTxIndexProgress returns the tx indexing progress.
+func (bc *BlockChain) reportTxIndexProgress(head uint64) txIndexProgress {
+	tail := rawdb.ReadTxIndexTail(bc.db)
+	if tail == nil {
+		return txIndexProgress{
+			tail:  0, // not indexed yet
+			head:  0, // not indexed yet
+			limit: bc.txLookupLimit,
+		}
+	}
+	return txIndexProgress{
+		tail:  *tail,
+		head:  head,
+		limit: bc.txLookupLimit,
+	}
+}
+
+// askTxIndexProgress retrieves the tx indexing progress.
+func (bc *BlockChain) askTxIndexProgress() (txIndexProgress, error) {
+	ch := make(chan txIndexProgress, 1)
+	select {
+	case bc.txIndexProgCh <- ch:
+		return <-ch, nil
+	case <-bc.quit:
+		return txIndexProgress{}, errors.New("blockchain is closed")
+	}
+}
+
 // maintainTxIndex is responsible for the construction and deletion of the
 // transaction index.
 //
@@ -2440,8 +2493,9 @@ func (bc *BlockChain) maintainTxIndex() {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		done   chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
-		headCh = make(chan ChainHeadEvent, 1) // Buffered to avoid locking up the event feed
+		done     chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
+		lastHead uint64                         // The latest announced chain head (whose tx indexes are assumed created)
+		headCh   = make(chan ChainHeadEvent, 1) // Buffered to avoid locking up the event feed
 	)
 	sub := bc.SubscribeChainHeadEvent(headCh)
 	if sub == nil {
@@ -2464,8 +2518,11 @@ func (bc *BlockChain) maintainTxIndex() {
 				done = make(chan struct{})
 				go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), done)
 			}
+			lastHead = head.Block.NumberU64()
 		case <-done:
 			done = nil
+		case ch := <-bc.txIndexProgCh:
+			ch <- bc.reportTxIndexProgress(lastHead)
 		case <-bc.quit:
 			if done != nil {
 				log.Info("Waiting background transaction indexer to exit")
