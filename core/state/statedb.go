@@ -572,7 +572,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
-	if s.prefetcher != nil {
+	if s.recordWitness && s.prefetcher != nil {
 		// always prefetch to ensure written/read accounts appear in the witness
 		// regardless of whether snapshot is enabled
 		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]})
@@ -733,8 +733,10 @@ func (s *StateDB) Copy() *StateDB {
 		// miner to operate trie-backed only.
 		snaps: s.snaps,
 		snap:  s.snap,
-
-		witness: NewWitness(), // TODO: deep copy witness
+	}
+	if s.recordWitness {
+		state.recordWitness = true
+		state.witness = s.witness.Copy()
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {

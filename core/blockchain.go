@@ -259,6 +259,7 @@ type BlockChain struct {
 	forker     *ForkChoice
 	vmConfig   vm.Config
 
+	// If this is non-nil, block witnesses are recorded during execution and dumped into the filepath it contains
 	witnessRecordingPath atomic.Pointer[string]
 }
 
@@ -1490,7 +1491,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	if err := bc.writeBlockWithState(block, receipts, st); err != nil {
 		return NonStatTy, err
 	}
-
 	currentBlock := bc.CurrentBlock()
 	reorg, err := bc.forker.ReorgNeeded(currentBlock, block.Header())
 	if err != nil {
@@ -1872,7 +1872,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				log.Info(fmt.Sprintf("block %d summary:\n%s", block.NumberU64(), statedb.GetWitness().Summary()))
 			}
 		}
-		//state.DumpBlockWithWitnessToFile(statedb.GetWitness(), block)
 
 		followupInterrupt.Store(true)
 		if err != nil {

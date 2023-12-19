@@ -204,7 +204,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			value.SetBytes(content)
 		}
 	}
-	if s.db.prefetcher != nil {
+	if s.db.recordWitness && s.db.prefetcher != nil {
 		// always prefetch to ensure that read storage slots will end up in the witness
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, [][]byte{key[:]})
 	}
@@ -260,7 +260,6 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
-
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}

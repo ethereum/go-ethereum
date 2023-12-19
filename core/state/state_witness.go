@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"os"
 	"path/filepath"
@@ -125,10 +123,6 @@ func (w *Witness) AddCodeHash(hash common.Hash) {
 	w.codes[hash] = []byte{}
 }
 
-func (w Witness) Copy() Witness {
-	panic("not implemented")
-}
-
 func (w *Witness) LogSizeWithBlock(b *types.Block) {
 	enc, _ := w.EncodeRLP()
 	fmt.Printf("block %d witness+block size: %d\n", b.Number(), len(enc))
@@ -171,25 +165,33 @@ func (w *Witness) Summary() string {
 	return b.String()
 }
 
-func (w *Witness) PopulateMemoryDB() ethdb.Database {
-	db := rawdb.NewMemoryDatabase()
-	for codeHash, code := range w.codes {
-		rawdb.WriteCode(db, codeHash, code)
-	}
-
-	for owner, owned := range w.lists {
-		for path, node := range owned {
-			rawdb.WriteTrieNode(db, owner, []byte(path), common.Hash{}, node, rawdb.PathScheme)
-		}
-	}
-
-	return db
-}
-
 func (w *Witness) SetBlock(b *types.Block) {
 	w.block = b
 }
 
+func (w *Witness) Copy() *Witness {
+	var res Witness
+	res.block = w.block // we don't actually mutate the block in the witness so don't deep copy
+
+	for blockNr, blockHash := range w.blockHashes {
+		res.blockHashes[blockNr] = blockHash
+	}
+	for codeHash, code := range w.codes {
+		cpy := make([]byte, len(code))
+		copy(cpy, code)
+		res.codes[codeHash] = cpy
+	}
+	res.root = w.root
+	for owner, owned := range w.lists {
+		res.lists[owner] = make(map[string][]byte)
+		for path, node := range owned {
+			cpy := make([]byte, len(node))
+			copy(cpy, node)
+			res.lists[owner][path] = cpy
+		}
+	}
+	return &res
+}
 func NewWitness() *Witness {
 	return &Witness{
 		block:       nil,
