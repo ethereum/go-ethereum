@@ -5,3 +5,11 @@ mevcommitsettlement:
   validators: 
     - '0xd9cd8E5DE6d55f796D980B818D350C0746C25b97'
     - '0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4'
+
+# See https://github.com/primevprotocol/hyperlane-monorepo/blob/7b2ffc2fa6b5e179f8e870089b5e635b7e49acf8/typescript/sdk/src/consts/multisigIsm.ts#L267
+sepolia:
+  threshold: 2
+  validators:
+    - '0xb22b65f202558adf86a8bb2847b76ae1036686a5'
+    - '0x469f0940684d147defc44f3647146cb90dd0bc8e'
+    - '0xd3c75dcf15056012a4d74c483a0c6ea11d8c2b83'

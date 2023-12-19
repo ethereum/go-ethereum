@@ -19,12 +19,8 @@ else
     --out "/hyperlane-monorepo/artifacts" \
     --key $CONTRACT_DEPLOYER_PRIVATE_KEY
   expect {
-    "? Do you want use some existing contract addresses? (Y/n)" {
-      send -- "n\r"
-      exp_continue
-    }
     "*low balance on*" { 
-      send -- "y\r"
+      send -- "Y\r"
       exp_continue
     }
     eof
