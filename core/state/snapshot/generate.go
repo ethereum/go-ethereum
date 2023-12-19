@@ -446,7 +446,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		// Trie errors should never happen. Still, in case of a bug, expose the
 		// error here, as the outer code will presume errors are interrupts, not
 		// some deeper issues.
-		log.Error("State snapshotter failed to iterate trie", "err", err)
+		log.Error("State snapshotter failed to iterate trie", "err", iter.Err)
 		return false, nil, iter.Err
 	}
 	// Delete all stale snapshot states remaining

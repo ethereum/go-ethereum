@@ -25,6 +25,7 @@ import (
 // Tests that HD derivation paths can be correctly parsed into our internal binary
 // representation.
 func TestHDPathParsing(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input  string
 		output DerivationPath
@@ -89,6 +90,7 @@ func testDerive(t *testing.T, next func() DerivationPath, expected []string) {
 }
 
 func TestHdPathIteration(t *testing.T) {
+	t.Parallel()
 	testDerive(t, DefaultIterator(DefaultBaseDerivationPath),
 		[]string{
 			"m/44'/60'/0'/0/0", "m/44'/60'/0'/0/1",

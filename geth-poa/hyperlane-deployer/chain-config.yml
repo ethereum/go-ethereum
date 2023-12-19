@@ -35,25 +35,7 @@ mevcommitsettlement:
     reorgPeriod: 100 # Number: Blocks before a transaction has a near-zero chance of reverting
     estimateBlockTime: 1 
 
+# Partial override sepolia config for custom rpc
 sepolia:
-  chainId: 11155111
-  domainId: 11155111
-  name: sepolia
-  protocol: ethereum
-  displayName: Sepolia
-  nativeToken:
-    name: Ether
-    symbol: ETH
-    decimals: 18
   rpcUrls:
-    - http: https://eth-sepolia.g.alchemy.com/v2/a0wg_g1X-Wz4IeVA-0SS3PsQhbyQNjc_
-  blockExplorers:
-    - name: Etherscan
-      url: https://sepolia.etherscan.io
-      apiUrl: https://api-sepolia.etherscan.io/api
-      family: etherscan
-  blocks:
-    confirmations: 1
-    reorgPeriod: 2
-    estimateBlockTime: 13
-  isTestnet: true
+    - http: https://1rpc.io/sepolia

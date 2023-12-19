@@ -29,7 +29,7 @@ import (
 var compileCommand = &cli.Command{
 	Action:    compileCmd,
 	Name:      "compile",
-	Usage:     "compiles easm source to evm binary",
+	Usage:     "Compiles easm source to evm binary",
 	ArgsUsage: "<file>",
 }
 

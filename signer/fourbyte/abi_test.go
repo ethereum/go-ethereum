@@ -52,6 +52,7 @@ func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
 }
 
 func TestNewUnpacker(t *testing.T) {
+	t.Parallel()
 	type unpackTest struct {
 		jsondata string
 		calldata string
@@ -97,6 +98,7 @@ func TestNewUnpacker(t *testing.T) {
 }
 
 func TestCalldataDecoding(t *testing.T) {
+	t.Parallel()
 	// send(uint256)                              : a52c101e
 	// compareAndApprove(address,uint256,uint256) : 751e1079
 	// issue(address[],uint256)                   : 42958b54
@@ -159,6 +161,7 @@ func TestCalldataDecoding(t *testing.T) {
 }
 
 func TestMaliciousABIStrings(t *testing.T) {
+	t.Parallel()
 	tests := []string{
 		"func(uint256,uint256,[]uint256)",
 		"func(uint256,uint256,uint256,)",

@@ -353,7 +353,7 @@ func TestFilters(t *testing.T) {
 		},
 		{
 			f:   sys.NewRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
-			err: "invalid block range",
+			err: errInvalidBlockRange.Error(),
 		},
 	} {
 		logs, err := tc.f.Logs(context.Background())
