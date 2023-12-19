@@ -19,7 +19,7 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
-        - go run build/ci.go lint
+        - GOGC=10 go run build/ci.go lint
 
     # These builders create the Docker sub-images for multi-arch push and each
     # will attempt to push the multi-arch image if they are the last builder
