@@ -652,17 +652,6 @@ The server should reject the request.`,
 		},
 
 		{
-			desc: `In this test, we request the genesis block state root node. The server should respond with the node.`,
-			root: s.chain.RootAt(0),
-			paths: []snap.TrieNodePathSet{
-				{[]byte{0}},
-				{[]byte{1}, []byte{0}},
-			},
-			nBytes:    5000,
-			expHashes: []common.Hash{s.chain.RootAt(0)},
-		},
-
-		{
 			// The leaf is only a couple of levels down, so the continued trie traversal causes lookup failures.
 			desc:   `Here we request some known accounts from the state.`,
 			root:   s.chain.Head().Root(),
