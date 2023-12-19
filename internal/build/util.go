@@ -68,6 +68,25 @@ func MustRunCommand(cmd string, args ...string) {
 	MustRun(exec.Command(cmd, args...))
 }
 
+func MustRunCommandWithOutput(cmd string, args ...string) {
+	var done chan bool
+	// This is a little loop to generate some output, so CI does not tear down the
+	// process after 300 seconds.
+	go func() {
+		for i := 0; i < 15; i++ {
+			fmt.Printf("Waiting for command %q\n", cmd)
+			select {
+			case <-time.After(time.Minute):
+				break
+			case <-done:
+				return
+			}
+		}
+	}()
+	MustRun(exec.Command(cmd, args...))
+	close(done)
+}
+
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.
