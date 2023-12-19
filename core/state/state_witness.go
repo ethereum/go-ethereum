@@ -28,90 +28,51 @@ func (w *Witness) Root() common.Hash {
 	return w.root
 }
 
-type encodedWitness struct {
-	block       types.Block
-	root        common.Hash
-	owners      []common.Hash
-	allPaths    [][]string
-	allNodes    [][][]byte
-	blockNums   []uint64
-	blockHashes []common.Hash
-	codes       []Code
-	codeHashes  []common.Hash
+type rlpWitness struct {
+	Block       *types.Block
+	Root        common.Hash
+	Owners      []common.Hash
+	AllPaths    [][]string
+	AllNodes    [][][]byte
+	BlockNums   []uint64
+	BlockHashes []common.Hash
+	Codes       []Code
+	CodeHashes  []common.Hash
 }
 
-func (e *encodedWitness) ToWitness() *Witness {
+func (e *rlpWitness) ToWitness() *Witness {
 	res := NewWitness()
-	res.root = e.root
-	for i := 0; i < len(e.codes); i++ {
-		res.codes[e.codeHashes[i]] = e.codes[i]
+	res.root = e.Root
+	for i := 0; i < len(e.Codes); i++ {
+		res.codes[e.CodeHashes[i]] = e.Codes[i]
 	}
-	for i, owner := range e.owners {
+	for i, owner := range e.Owners {
 		pathMap := make(map[string][]byte)
-		for j := 0; j < len(e.allPaths[i]); j++ {
-			pathMap[e.allPaths[i][j]] = e.allNodes[i][j]
+		for j := 0; j < len(e.AllPaths[i]); j++ {
+			pathMap[e.AllPaths[i][j]] = e.AllNodes[i][j]
 		}
 		res.lists[owner] = pathMap
 	}
-	for i, blockNum := range e.blockNums {
-		res.blockHashes[blockNum] = e.blockHashes[i]
+	for i, blockNum := range e.BlockNums {
+		res.blockHashes[blockNum] = e.BlockHashes[i]
 	}
 	return res
 }
 
-func DecodeWitnessRLP(b []byte) (*types.Block, *Witness, error) {
-	var res encodedWitness
-	stream := rlp.NewStream(bytes.NewBuffer(b), 1_000_000)
-	_, err := stream.List()
-	if err != nil {
-		panic(err)
+func DecodeWitnessRLP(b []byte) (*Witness, error) {
+	var res Witness
+	if err := rlp.DecodeBytes(b, &res); err != nil {
+		return nil, err
 	}
-	err = res.block.DecodeRLP(stream)
-	if err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.root); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.owners); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.allPaths); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.allNodes); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.blockNums); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.blockHashes); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.codeHashes); err != nil {
-		panic(err)
-	}
-	if err = stream.Decode(&res.codes); err != nil {
-		panic(err)
-	}
-	return &res.block, res.ToWitness(), nil
+	return &res, nil
 }
 
-func (w *Witness) EncodeRLP() []byte {
-	buf := new(bytes.Buffer)
-	eb := rlp.NewEncoderBuffer(buf)
-
-	var root common.Hash
-	var owners []common.Hash
-	var allPaths [][]string
-	var allNodes [][][]byte
-	var blockNums []uint64
-	var blockHashes []common.Hash
-	var codes []Code
-	var codeHashes []common.Hash
+func (w *Witness) EncodeRLP() ([]byte, error) {
+	var encWit rlpWitness
+	encWit.Block = w.block
 
 	for owner, nodeMap := range w.lists {
-		owners = append(owners, owner)
+		encWit.Owners = append(encWit.Owners, owner)
 		var ownerPaths []string
 		var ownerNodes [][]byte
 
@@ -119,46 +80,24 @@ func (w *Witness) EncodeRLP() []byte {
 			ownerPaths = append(ownerPaths, path)
 			ownerNodes = append(ownerNodes, node)
 		}
-		allPaths = append(allPaths, ownerPaths)
-		allNodes = append(allNodes, ownerNodes)
+		encWit.AllPaths = append(encWit.AllPaths, ownerPaths)
+		encWit.AllNodes = append(encWit.AllNodes, ownerNodes)
 	}
 
 	for codeHash, code := range w.codes {
-		codeHashes = append(codeHashes, codeHash)
-		codes = append(codes, code)
+		encWit.CodeHashes = append(encWit.CodeHashes, codeHash)
+		encWit.Codes = append(encWit.Codes, code)
 	}
 
 	for blockNum, blockHash := range w.blockHashes {
-		blockNums = append(blockNums, blockNum)
-		blockHashes = append(blockHashes, blockHash)
+		encWit.BlockNums = append(encWit.BlockNums, blockNum)
+		encWit.BlockHashes = append(encWit.BlockHashes, blockHash)
 	}
-	l := eb.List()
-	w.block.EncodeRLP(eb)
-	eb.WriteBytes(root[:])
-	if err := rlp.Encode(eb, owners); err != nil {
-		panic(err)
+	res, err := rlp.EncodeToBytes(&encWit)
+	if err != nil {
+		return nil, err
 	}
-	if err := rlp.Encode(eb, allPaths); err != nil {
-		panic(err)
-	}
-	if err := rlp.Encode(eb, allNodes); err != nil {
-		panic(err)
-	}
-	if err := rlp.Encode(eb, blockNums); err != nil {
-		panic(err)
-	}
-	if err := rlp.Encode(eb, blockHashes); err != nil {
-		panic(err)
-	}
-	if err := rlp.Encode(eb, codeHashes); err != nil {
-		panic(err)
-	}
-	if err := rlp.Encode(eb, codes); err != nil {
-		panic(err)
-	}
-	eb.ListEnd(l)
-	eb.Flush()
-	return buf.Bytes()
+	return res, nil
 }
 
 func (w *Witness) addAccessList(owner common.Hash, list map[string][]byte) {
@@ -191,7 +130,7 @@ func (w Witness) Copy() Witness {
 }
 
 func (w *Witness) LogSizeWithBlock(b *types.Block) {
-	enc := w.EncodeRLP()
+	enc, _ := w.EncodeRLP()
 	fmt.Printf("block %d witness+block size: %d\n", b.Number(), len(enc))
 }
 
@@ -203,7 +142,7 @@ func (w *Witness) Summary() string {
 	}
 	totBlock := len(xx)
 
-	yy := w.EncodeRLP()
+	yy, _ := w.EncodeRLP()
 
 	totWit := len(yy)
 	totCode := 0
@@ -262,7 +201,7 @@ func NewWitness() *Witness {
 }
 
 func DumpBlockWitnessToFile(w *Witness, path string) error {
-	enc := w.EncodeRLP()
+	enc, _ := w.EncodeRLP()
 
 	blockHash := w.block.Hash()
 	outputFName := fmt.Sprintf("%d-%x.rlp", w.block.NumberU64(), blockHash[0:8])
