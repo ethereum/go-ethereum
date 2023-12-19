@@ -7,6 +7,7 @@ services:
     environment:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
+      - NET_RESTRICT=172.29.0.0/16
     networks:
       primev_net:
         ipv4_address: '172.29.0.98'
@@ -48,6 +49,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE1_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
+      - NET_RESTRICT=172.29.0.0/16
     networks:
       primev_net:
         ipv4_address: '172.29.0.99'
@@ -77,7 +80,6 @@ services:
           }
         ]
 
-  
   sl-node2:
     build: 
       context: ..
@@ -86,6 +88,8 @@ services:
       - GETH_NODE_TYPE=signer
       - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
       - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
+      - NET_RESTRICT=172.29.0.0/16
     networks:
       primev_net:
         ipv4_address: '172.29.0.100'
@@ -114,6 +118,59 @@ services:
             ]
           }
         ]
+
+  # L1 geth services only used for local dev
+  l1-bootnode:
+    build:
+      context: .
+      dockerfile: ./local-l1/Dockerfile
+    environment:
+      - GETH_NODE_TYPE=bootnode
+      - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
+      - NET_RESTRICT=172.14.0.0/24
+    networks:
+      l1_net:
+        ipv4_address: '172.14.0.2'
+    volumes:
+      - geth-data-l1-bootnode:/data
+    profiles:
+      - local_l1
+
+  l1-node1:
+    build:
+      context: .
+      dockerfile: ./local-l1/Dockerfile
+    environment:
+      - GETH_NODE_TYPE=signer
+      - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
+      - BLOCK_SIGNER_PRIVATE_KEY=${NODE1_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.14.0.2:30301
+      - NET_RESTRICT=172.14.0.0/24
+    networks:
+      l1_net:
+        ipv4_address: '172.14.0.3'
+    volumes:
+      - geth-data-l1-first-signer:/data
+    profiles:
+      - local_l1
+    
+  l1-node2:
+    build:
+      context: .
+      dockerfile: ./local-l1/Dockerfile
+    environment:
+      - GETH_NODE_TYPE=signer
+      - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
+      - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.14.0.2:30301
+      - NET_RESTRICT=172.14.0.0/24
+    networks:
+      l1_net:
+        ipv4_address: '172.14.0.4'
+    volumes:
+      - geth-data-l1-second-signer:/data
+    profiles:
+      - local_l1
 
   hyperlane-deployer:
     build:
@@ -250,11 +307,20 @@ services:
 networks:
   primev_net:
     external: true
+  l1_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.14.0.0/16
 
 volumes:
   geth-data-bootnode:
   geth-data-node1:
   geth-data-node2:
+  geth-data-l1-bootnode:
+  geth-data-l1-first-signer:
+  geth-data-l1-second-signer:
   hyperlane-deploy-artifacts:
   hyperlane-validator1-sigs:
   hyperlane-validator2-sigs:
