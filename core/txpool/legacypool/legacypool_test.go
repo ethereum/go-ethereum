@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -65,12 +66,17 @@ type testBlockChain struct {
 	gasLimit      atomic.Uint64
 	statedb       *state.StateDB
 	chainHeadFeed *event.Feed
+	vmConfig      vm.Config
 }
 
 func newTestBlockChain(config *params.ChainConfig, gasLimit uint64, statedb *state.StateDB, chainHeadFeed *event.Feed) *testBlockChain {
-	bc := testBlockChain{config: config, statedb: statedb, chainHeadFeed: new(event.Feed)}
+	bc := testBlockChain{config: config, statedb: statedb, chainHeadFeed: new(event.Feed), vmConfig: vm.Config{}}
 	bc.gasLimit.Store(gasLimit)
 	return &bc
+}
+
+func (bc *testBlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -160,6 +166,27 @@ func setupPool() (*LegacyPool, *ecdsa.PrivateKey) {
 func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	blockchain := newTestBlockChain(config, 10000000, statedb, new(event.Feed))
+
+	key, _ := crypto.GenerateKey()
+	pool := New(testTxPoolConfig, blockchain)
+	if err := pool.Init(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver()); err != nil {
+		panic(err)
+	}
+	// wait for the pool to initialize
+	<-pool.initDoneCh
+	return pool, key
+}
+
+// returns a tx pool with an injected L1 Fee function
+// L1 fee is hardcoded to 100 wei
+func setupTxPoolWithL1Fee() (*LegacyPool, *ecdsa.PrivateKey) {
+	config := params.TestChainConfig
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(config, 10000000, statedb, new(event.Feed))
+	blockchain.vmConfig.SpecularL1FeeReader =
+		func(tx *types.Transaction, db vm.StateDB) (*big.Int, error) {
+			return big.NewInt(100), nil
+		}
 
 	key, _ := crypto.GenerateKey()
 	pool := New(testTxPoolConfig, blockchain)

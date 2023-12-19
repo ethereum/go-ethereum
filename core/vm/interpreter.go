@@ -43,8 +43,8 @@ type MessageInterface interface {
 	GetSkipAccountChecks() bool
 }
 
-type EVMHook func(msg MessageInterface, evm *EVM) error
-
+type EVMHook func(msg MessageInterface, db StateDB) error
+type EVMReader func(tx *types.Transaction, db StateDB) (*big.Int, error) //
 // <specular modification/>
 
 // Config are the configuration options for the Interpreter
@@ -56,6 +56,7 @@ type Config struct {
 
 	// <specular modification>
 	SpecularEVMPreTransferHook EVMHook
+	SpecularL1FeeReader        EVMReader
 	// <specular modification/>
 }
 

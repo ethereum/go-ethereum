@@ -30,6 +30,22 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// <specular modification>
+// L1Oracle Update Overhead is the amount of gas consumed by updating the L1Oracle every epoch
+const l1OracleUpdateOverhead = uint64(70_000)
+
+func EffectiveGasLimit(gasLimit uint64, config *params.ChainConfig) uint64 {
+	if (config.L1FeeRecipient != common.Address{}) {
+		if l1OracleUpdateOverhead < gasLimit {
+			gasLimit -= l1OracleUpdateOverhead
+		} else {
+			gasLimit = 0
+		}
+	}
+	return gasLimit
+}
+// <specular modification />
+
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
 type ValidationOptions struct {
@@ -76,7 +92,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas
-	if head.GasLimit < tx.Gas() {
+	if EffectiveGasLimit(head.GasLimit, opts.Config) < tx.Gas() {
 		return ErrGasLimit
 	}
 	// Sanity check for extremely large numbers (supported by RLP or RPC)

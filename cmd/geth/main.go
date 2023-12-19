@@ -71,6 +71,9 @@ var (
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
+		// <specular modification>
+		utils.TxPoolJournalRemotesFlag,
+		// <specular modification />
 		utils.TxPoolRejournalFlag,
 		utils.TxPoolPriceLimitFlag,
 		utils.TxPoolPriceBumpFlag,

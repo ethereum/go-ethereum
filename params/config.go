@@ -335,8 +335,10 @@ type ChainConfig struct {
 	IsDevMode bool          `json:"isDev,omitempty"`
 
 	// <specular modification>
-	EnableL2EngineApi  bool           `json:"enableL2EngineApi,omitempty"`
-	L2BaseFeeRecipient common.Address `json:"l2BaseFeeRecipient,omitempty"`
+	EnableL2EngineApi   bool           `json:"enableL2EngineApi,omitempty"`
+	EnableL2GasLimitApi bool           `json:"enableL2GasLimitApi,omitempty"`
+	L2BaseFeeRecipient  common.Address `json:"l2BaseFeeRecipient,omitempty"`
+	L1FeeRecipient      common.Address `json:"l1FeeRecipient,omitempty"`
 	// <specular modification/>
 }
 
@@ -374,6 +376,9 @@ func (c *ChainConfig) Description() string {
 	case c.EnableL2EngineApi:
 		banner += "Consensus: L2 gas limit API enabled\n"
 		banner += fmt.Sprintf(" - L2 Base fee recipient: %s\n", c.L2BaseFeeRecipient)
+	case c.L1FeeRecipient != common.Address{}:
+		banner += "Consensus: L1 Fee is enabled\n"
+		banner += fmt.Sprintf("Consensus: L1 Fee Recipient: %s\n", c.L1FeeRecipient)
 	// <specular modification/>
 	case c.Ethash != nil:
 		if c.TerminalTotalDifficulty == nil {
@@ -395,6 +400,14 @@ func (c *ChainConfig) Description() string {
 		banner += "Consensus: unknown\n"
 	}
 	banner += "\n"
+
+	// <specular modification>
+	if (c.L1FeeRecipient != common.Address{}) {
+		banner += "Rollup: L1 Fee is enabled\n"
+		banner += fmt.Sprintf("Rollup: L1 Fee Recipient: %s\n", c.L1FeeRecipient)
+		banner += "\n"
+	}
+	// <specular modification />
 
 	// Create a list of forks with a short description of them. Forks that only
 	// makes sense for mainnet should be optional at printing to avoid bloating

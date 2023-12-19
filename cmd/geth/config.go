@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
+	"github.com/specularL2/specular/lib/el_golang_lib/hook"
 	"github.com/urfave/cli/v2"
 )
 
@@ -177,6 +179,17 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideVerkle = &v
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+
+	// <specular modification>
+	log.Info("initializing specular hooks")
+	l2ChainId := ctx.Uint64(utils.NetworkIdFlag.Name)
+	l1FeeRecipient := backend.ChainConfig().L1FeeRecipient
+	if (l1FeeRecipient != common.Address{}) {
+		vm := eth.BlockChain().GetVMConfig()
+		vm.SpecularEVMPreTransferHook = hook.MakeSpecularEVMPreTransferHook(l2ChainId, l1FeeRecipient)
+		vm.SpecularL1FeeReader = hook.MakeSpecularL1FeeReader(l2ChainId)
+	}
+	// <specular modification/>
 
 	// Create gauge with geth system and build information
 	if eth != nil { // The 'eth' backend may be nil in light mode
