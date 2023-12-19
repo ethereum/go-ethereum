@@ -1,3 +1,4 @@
+# Local L1 nodes are NOT built from source
 FROM ethereum/client-go:v1.13.4 as builder
 
 RUN apk add --no-cache jq

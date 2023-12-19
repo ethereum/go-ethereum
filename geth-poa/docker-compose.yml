@@ -80,7 +80,6 @@ services:
           }
         ]
 
-  
   sl-node2:
     build: 
       context: ..
@@ -120,7 +119,7 @@ services:
           }
         ]
 
-  # L1 geth service only used for local dev
+  # L1 geth services only used for local dev
   l1-bootnode:
     build:
       context: .
@@ -136,7 +135,8 @@ services:
       - geth-data-l1-bootnode:/data
     profiles:
       - local_l1
-  l1-first-signer:
+
+  l1-node1:
     build:
       context: .
       dockerfile: ./local-l1/Dockerfile
@@ -154,7 +154,7 @@ services:
     profiles:
       - local_l1
     
-  l1-second-signer:
+  l1-node2:
     build:
       context: .
       dockerfile: ./local-l1/Dockerfile
