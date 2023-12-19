@@ -1,11 +1,6 @@
 # geth-poa
 
-Tool for spinning up a POA ethereum sidechain bridged to goerli via [hyperlane](https://www.hyperlane.xyz/) token warp route.
-
-## TODOs
-
-* add container which stress tests network with txs
-* merge branch with local anvil l1 once hyperlane v3 is released -> useful for mev-commit docker testing 
+Tool for spinning up a POA ethereum sidechain bridged to sepolia via [hyperlane](https://www.hyperlane.xyz/) token warp route.
 
 ## Metrics
 
