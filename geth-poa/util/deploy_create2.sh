@@ -19,6 +19,10 @@ fi
 DATA='{"jsonrpc":"2.0","method":"eth_getCode","params":["0x4e59b44847b379578588920ca78fbf26c0b4956c", "latest"],"id":1}'
 RESPONSE=$(curl -s -X POST --data "$DATA" -H "Content-Type: application/json" $JSON_RPC)
 CODE=$(echo $RESPONSE | jq -r '.result')
+if [ -z "$RESPONSE" ] || [ "$RESPONSE" == "null" ]; then
+    echo "Error: No response from JSON RPC at $JSON_RPC"
+    exit 1
+fi
 if [ "$CODE" != "0x" ]; then
     echo "Contract already deployed at 0x4e59b44847b379578588920ca78fbf26c0b4956c"
     exit 0
