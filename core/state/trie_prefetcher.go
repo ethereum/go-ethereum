@@ -245,7 +245,10 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	sf.tasks = append(sf.tasks, keys...)
 	sf.lock.Unlock()
 	// Notify the prefetcher. The wake-chan is buffered, so this is async.
-	sf.wake <- true
+	select {
+	case sf.wake <- true:
+	default:
+	}
 }
 
 // wait waits for the subfetcher to finish it's task. It is safe to call wait multiple
