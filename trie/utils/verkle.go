@@ -37,9 +37,9 @@ var (
 	zero                                = uint256.NewInt(0)
 	VerkleNodeWidthLog2                 = 8
 	HeaderStorageOffset                 = uint256.NewInt(64)
-	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(256), 31-uint(VerkleNodeWidthLog2))
+	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(1), 248-uint(VerkleNodeWidthLog2))
 	CodeOffset                          = uint256.NewInt(128)
-	MainStorageOffset                   = new(uint256.Int).Lsh(uint256.NewInt(256), 31)
+	MainStorageOffset                   = new(uint256.Int).Lsh(uint256.NewInt(1), 248 /* 8 * 31*/)
 	VerkleNodeWidth                     = uint256.NewInt(256)
 	codeStorageDelta                    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 
