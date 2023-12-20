@@ -9,18 +9,6 @@ jobs:
         - azure-osx
 
   include:
-    # This builder only tests code linters on latest version of Go
-    - stage: lint
-      os: linux
-      dist: bionic
-      go: 1.21.x
-      env:
-        - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go lint
-
     # These builders create the Docker sub-images for multi-arch push and each
     # will attempt to push the multi-arch image if they are the last builder
     - stage: build

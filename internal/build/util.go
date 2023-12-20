@@ -68,6 +68,20 @@ func MustRunCommand(cmd string, args ...string) {
 	MustRun(exec.Command(cmd, args...))
 }
 
+// MustRunCommandWithOutput runs the given command, and ensures that some output will be
+// printed while it runs. This is useful for CI builds where the process will be stopped
+// when there is no output.
+func MustRunCommandWithOutput(cmd string, args ...string) {
+	interval := time.NewTicker(time.Minute)
+	defer interval.Stop()
+	go func() {
+		for range interval.C {
+			fmt.Printf("Waiting for command %q\n", cmd)
+		}
+	}()
+	MustRun(exec.Command(cmd, args...))
+}
+
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.

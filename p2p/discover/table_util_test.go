@@ -109,8 +109,11 @@ func fillBucket(tab *Table, n *node) (last *node) {
 
 // fillTable adds nodes the table to the end of their corresponding bucket
 // if the bucket is not full. The caller must not hold tab.mutex.
-func fillTable(tab *Table, nodes []*node) {
+func fillTable(tab *Table, nodes []*node, setLive bool) {
 	for _, n := range nodes {
+		if setLive {
+			n.livenessChecks = 1
+		}
 		tab.addSeenNode(n)
 	}
 }
