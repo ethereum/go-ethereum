@@ -4,6 +4,8 @@ go 1.20
 
 replace github.com/specularL2/specular/lib/el_golang_lib => ../../../lib/el_golang_lib
 
+replace github.com/specularL2/specular/ops => ../../../ops
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/Microsoft/go-winio v0.6.1
