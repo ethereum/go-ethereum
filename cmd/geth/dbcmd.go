@@ -44,10 +44,11 @@ import (
 
 var (
 	removedbCommand = &cli.Command{
-		Action:    removeDB,
-		Name:      "removedb",
-		Usage:     "Remove blockchain and state databases",
-		ArgsUsage: "",
+		Action: removeDB,
+		Name:   "removedb",
+		Usage: "Remove blockchain and state databases. If arguments are provided, " +
+			"they are interpreted as comma-separated answers to questions.",
+		ArgsUsage: " <? comma-separated answers>",
 		Flags:     utils.DatabaseFlags,
 		Description: `
 Remove blockchain and state databases`,
@@ -202,6 +203,7 @@ func removeDB(ctx *cli.Context) error {
 	var (
 		rootDir    = stack.ResolvePath("chaindata")
 		ancientDir = config.Eth.DatabaseFreezer
+		answers    = strings.Split(ctx.Args().Get(0), ",")
 	)
 	switch {
 	case ancientDir == "":
@@ -209,13 +211,21 @@ func removeDB(ctx *cli.Context) error {
 	case !filepath.IsAbs(ancientDir):
 		ancientDir = config.Node.ResolvePath(ancientDir)
 	}
+	var oracle = func() string {
+		var ret string
+		if len(answers) > 0 {
+			ret = answers[0]
+			answers = answers[1:]
+		}
+		return ret
+	}
 	// Delete state data
 	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
-	confirmAndRemoveDB(statePaths, "state data")
+	confirmAndRemoveDB(statePaths, "state data", oracle)
 
 	// Delete ancient chain
 	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
-	confirmAndRemoveDB(chainPaths, "ancient chain")
+	confirmAndRemoveDB(chainPaths, "ancient chain", oracle)
 	return nil
 }
 
@@ -238,14 +248,23 @@ func removeFolder(dir string) {
 
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
 // list of folders if accepted.
-func confirmAndRemoveDB(paths []string, kind string) {
+func confirmAndRemoveDB(paths []string, kind string, oracle func() string) {
+	var (
+		confirm bool
+		err     error
+	)
 	msg := fmt.Sprintf("Location(s) of '%s': \n", kind)
 	for _, path := range paths {
 		msg += fmt.Sprintf("\t- %s\n", path)
 	}
 	fmt.Println(msg)
 
-	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	if answer := oracle(); answer != "" {
+		fmt.Printf("Remove '%s'? [y/n] %s\n", kind, answer)
+		confirm = (answer == "y")
+	} else {
+		confirm, err = prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	}
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
