@@ -14,11 +14,11 @@ All relevant accounts are funded on sidechain genesis, you may need to fund thes
 
 ## Contract deployer
 
-Address:    `0xBe3dEF3973584FdcC1326634aF188f0d9772D57D`
+Address:    `0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2`
 
 Note if the relayer is emitting errors related to unexpected contract routing, try using a new deployer key pair. It's likely that the current bridge contract deployments are clashing with previous deployments.   
 
-You'd need to replace `Address` above, the allocs field of `genesis.json`, the `CONTRACT_DEPLOYER_PRIVATE_KEY` in `.env`, and the hardcoded whitelist contract addr in HypERC20.sol.
+You'd need to replace `Address` above, the allocs field of `genesis.json`, the `CONTRACT_DEPLOYER_PRIVATE_KEY` in `.env`, the hardcoded whitelist contract addr in HypERC20.sol, and the hardcoded whitelist contract addr in contracts_with_ctx.go.
 
 ## Validator Accounts (also POA signers)
 
