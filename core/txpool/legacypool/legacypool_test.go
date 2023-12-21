@@ -1536,6 +1536,52 @@ func TestMinGasPriceEnforced(t *testing.T) {
 	}
 }
 
+func TestCustomTxValidationEnforced(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, 10000000, statedb, new(event.Feed))
+
+	txPoolConfig := DefaultConfig
+	if txPoolConfig.CustomValidationEnabled {
+		t.Fatalf("Custom validation should be disabled by default")
+	}
+
+	txPoolConfig.NoLocals = true
+	pool := New(txPoolConfig, blockchain)
+	pool.Init(new(big.Int).SetUint64(txPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000))
+
+	tx := pricedTransaction(0, 100000, big.NewInt(3), key)
+	pool.SetGasTip(big.NewInt(tx.GasPrice().Int64()))
+
+	// yo := pool.Add([]*types.Transaction{tx}, true, false)[0]
+	// t.Fatal(yo)
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; err != nil {
+		t.Fatalf("TxValidation enforced in default config despite being disabled by default")
+	}
+
+	// Modifying local config to enable custom validation
+	poolWithCustomValidationConfig := DefaultConfig
+	poolWithCustomValidationConfig.CustomValidationEnabled = true
+	poolWithCustomValidationConfig.NoLocals = true
+
+	poolWithCustomValidation := New(poolWithCustomValidationConfig, blockchain)
+	poolWithCustomValidation.Init(new(big.Int).SetUint64(poolWithCustomValidationConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+	defer poolWithCustomValidation.Close()
+
+	testAddBalance(poolWithCustomValidation, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000))
+	poolWithCustomValidation.SetGasTip(big.NewInt(tx.GasPrice().Int64()))
+
+	if err := poolWithCustomValidation.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrCustomValidationFailed) {
+		t.Fatalf("Custom TxValidation not enforced")
+	}
+}
+
 // Tests that setting the transaction pool gas price to a higher value correctly
 // discards everything cheaper (legacy & dynamic fee) than that and moves any
 // gapped transactions back from the pending pool to the queue.

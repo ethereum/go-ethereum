@@ -54,4 +54,7 @@ var (
 	// ErrFutureReplacePending is returned if a future transaction replaces a pending
 	// one. Future transactions should only be able to replace other future transactions.
 	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
+
+	// FIXME add proper explanation (Kirill)
+	ErrCustomValidationFailed = errors.New("tranaction failed custom validation")
 )

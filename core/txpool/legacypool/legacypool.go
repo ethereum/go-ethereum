@@ -134,6 +134,8 @@ type Config struct {
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+
+	CustomValidationEnabled bool
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
@@ -150,6 +152,8 @@ var DefaultConfig = Config{
 	GlobalQueue:  1024,
 
 	Lifetime: 3 * time.Hour,
+
+	CustomValidationEnabled: false,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -605,6 +609,17 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 	return nil
 }
 
+// FIXME add proper explanation (Kirill)
+func (pool *LegacyPool) validateTxWithCustomValidator(tx *types.Transaction, local bool) error {
+	if pool.config.CustomValidationEnabled {
+		opts := &txpool.CustomValidationOptions{}
+		if err := txpool.ValidateTransactionWithCustomValidator(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
@@ -976,6 +991,14 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error 
 		// insufficient intrinsic gas as soon as possible and cache senders
 		// in transactions before obtaining lock
 		if err := pool.validateTxBasics(tx, local); err != nil {
+			errs[i] = err
+			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
+			invalidTxMeter.Mark(1)
+			continue
+		}
+
+		// FIXME kirill
+		if err := pool.validateTxWithCustomValidator(tx, local); err != nil {
 			errs[i] = err
 			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
 			invalidTxMeter.Mark(1)

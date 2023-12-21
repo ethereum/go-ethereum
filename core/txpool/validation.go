@@ -40,6 +40,9 @@ type ValidationOptions struct {
 	MinTip  *big.Int // Minimum gas tip needed to allow a transaction into the caller pool
 }
 
+type CustomValidationOptions struct {
+}
+
 // ValidateTransaction is a helper method to check whether a transaction is valid
 // according to the consensus rules, but does not check state-dependent validation
 // (balance, nonce, etc).
@@ -244,4 +247,11 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		}
 	}
 	return nil
+}
+
+// FIXME add proper explanation (Kirill)
+func ValidateTransactionWithCustomValidator(tx *types.Transaction, head *types.Header, signer types.Signer, opts *CustomValidationOptions) error {
+	// Ensure transactions not implemented by the calling pool are rejected
+	return ErrCustomValidationFailed
+	// return nil
 }
