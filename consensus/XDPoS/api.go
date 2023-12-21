@@ -224,16 +224,7 @@ func (api *API) GetV2BlockByHeader(header *types.Header, uncle bool) *V2BlockInf
 }
 
 func (api *API) GetV2BlockByNumber(number *rpc.BlockNumber) *V2BlockInfo {
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
-	} else if *number == rpc.CommittedBlockNumber {
-		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
-		header = api.chain.GetHeaderByHash(hash)
-	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
-	}
-
+	header := api.getHeaderFromApiBlockNum(number)
 	if header == nil {
 		return &V2BlockInfo{
 			Number: big.NewInt(number.Int64()),
@@ -288,8 +279,21 @@ func (api *API) NetworkInformation() NetworkInformation {
 /*
 An API exclusively for V2 consensus, designed to assist in troubleshooting miners by identifying who mined during their allocated term.
 */
-func (api *API) GetMissiedRoundsInEpochByBlockHash(hash common.Hash) (*utils.PublicApiMissedRoundsMetadata, error) {
-	return api.XDPoS.CalculateMissingRounds(api.chain, hash)
+func (api *API) GetMissiedRoundsInEpochByBlockNum(number *rpc.BlockNumber) (*utils.PublicApiMissedRoundsMetadata, error) {
+	return api.XDPoS.CalculateMissingRounds(api.chain, api.getHeaderFromApiBlockNum(number))
+}
+
+func (api *API) getHeaderFromApiBlockNum(number *rpc.BlockNumber) *types.Header {
+	var header *types.Header
+	if number == nil || *number == rpc.LatestBlockNumber {
+		header = api.chain.CurrentHeader()
+	} else if *number == rpc.CommittedBlockNumber {
+		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
+		header = api.chain.GetHeaderByHash(hash)
+	} else {
+		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+	return header
 }
 
 func calculateSigners(message map[string]SignerTypes, pool map[string]map[common.Hash]utils.PoolObj, masternodes []common.Address) {

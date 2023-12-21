@@ -433,8 +433,7 @@ func (x *XDPoS) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, blockNum
 	}
 }
 
-func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, hash common.Hash) (*utils.PublicApiMissedRoundsMetadata, error) {
-	header := chain.GetHeaderByHash(hash)
+func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, header *types.Header) (*utils.PublicApiMissedRoundsMetadata, error) {
 	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.CalculateMissingRounds(chain, header)

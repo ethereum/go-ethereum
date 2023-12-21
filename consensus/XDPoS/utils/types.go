@@ -62,7 +62,9 @@ type MissedRoundInfo struct {
 	Round            types.Round
 	Miner            common.Address
 	CurrentBlockHash common.Hash
+	CurrentBlockNum  *big.Int
 	ParentBlockHash  common.Hash
+	ParentBlockNum   *big.Int
 }
 type PublicApiMissedRoundsMetadata struct {
 	EpochRound       types.Round

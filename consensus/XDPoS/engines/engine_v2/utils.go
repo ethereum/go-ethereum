@@ -184,19 +184,21 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 		if err != nil {
 			return nil, err
 		}
-		// This means there is a missing round incrementation when producing blocks
+		// This indicates that an increment in the round number is missing during the block production process.
 		if parentRound+1 != currRound {
-			// We need to loop through between parentRound and the currRound to assess which miner did not mine
-			for i := parentRound; i < currRound; i++ {
+			// We need to iterate from the parentRound to the currRound to determine which miner did not perform mining.
+			for i := parentRound + 1; i < currRound; i++ {
 				leaderIndex := uint64(i) % x.config.Epoch % uint64(len(masternodes))
-				whosTerm := masternodes[leaderIndex]
+				whosTurn := masternodes[leaderIndex]
 				missedRounds = append(
 					missedRounds,
 					utils.MissedRoundInfo{
 						Round:            i,
-						Miner:            whosTerm,
+						Miner:            whosTurn,
 						CurrentBlockHash: nextHeader.Hash(),
+						CurrentBlockNum:  nextHeader.Number,
 						ParentBlockHash:  parentHeader.Hash(),
+						ParentBlockNum:   parentHeader.Number,
 					},
 				)
 			}
