@@ -58,7 +58,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}):    &blake2F{},
 	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
 
-	common.BytesToAddress([]byte{0x0b}): &p256Verify{},
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 
 	common.BytesToAddress([]byte{0x0f, 0x0a}): &bls12381G1Add{},
 	common.BytesToAddress([]byte{0x0f, 0x0b}): &bls12381G1Mul{},
@@ -405,7 +405,7 @@ func BenchmarkPrecompiledP256Verify(bench *testing.B) {
 		Expected: "0000000000000000000000000000000000000000000000000000000000000001",
 		Name:     "p256Verify",
 	}
-	benchmarkPrecompiled("0b", t, bench)
+	benchmarkPrecompiled("100", t, bench)
 }
 
-func TestPrecompiledP256Verify(t *testing.T) { testJson("p256Verify", "0b", t) }
+func TestPrecompiledP256Verify(t *testing.T) { testJson("p256Verify", "100", t) }
