@@ -112,6 +112,9 @@ func (c *burn) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
+// Note ctx.CanTransfer method obtains an incorrect balance w.r.t "burnFrom" address,
+// specifically during estimateGas. The CanTransfer check was therefore removed,
+// and the calling contract is responsible for checking balance.
 func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
@@ -128,11 +131,6 @@ func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 	}
 
-	if !ctx.CanTransfer(ctx.evm.StateDB, burnFrom, value) {
-		log.Error("Error parsing transfer, address: " + burnFrom.Hex() + " has insufficient balance. " +
-			value.String() + " needed " + ctx.evm.StateDB.GetBalance(burnFrom).String() + " available")
-		return nil, ErrInsufficientBalance
-	}
 	ctx.evm.StateDB.SubBalance(burnFrom, value)
 
 	return input, nil
