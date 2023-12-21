@@ -433,6 +433,16 @@ func (x *XDPoS) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, blockNum
 	}
 }
 
+func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, hash common.Hash) (*utils.PublicApiMissedRoundsMetadata, error) {
+	header := chain.GetHeaderByHash(hash)
+	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
+	case params.ConsensusEngineVersion2:
+		return x.EngineV2.CalculateMissingRounds(chain, header)
+	default: // Default "v1"
+		return nil, fmt.Errorf("Not supported in the v1 consensus")
+	}
+}
+
 // Same DB across all consensus engines
 func (x *XDPoS) GetDb() ethdb.Database {
 	return x.db

@@ -163,3 +163,52 @@ func (x *XDPoS_v2) GetSignersFromSnapshot(chain consensus.ChainReader, header *t
 	snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
 	return snap.NextEpochMasterNodes, err
 }
+
+func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *types.Header) (*utils.PublicApiMissedRoundsMetadata, error) {
+	var missedRounds []utils.MissedRoundInfo
+	switchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
+	if err != nil {
+		return nil, err
+	}
+	masternodes := switchInfo.Masternodes
+
+	// Loop through from the epoch switch block to the current "header" block
+	nextHeader := header
+	for nextHeader.Number.Cmp(switchInfo.EpochSwitchBlockInfo.Number) > 0 {
+		parentHeader := chain.GetHeaderByHash(nextHeader.ParentHash)
+		parentRound, err := x.GetRoundNumber(parentHeader)
+		if err != nil {
+			return nil, err
+		}
+		currRound, err := x.GetRoundNumber(nextHeader)
+		if err != nil {
+			return nil, err
+		}
+		// This means there is a missing round incrementation when producing blocks
+		if parentRound+1 != currRound {
+			// We need to loop through between parentRound and the currRound to assess which miner did not mine
+			for i := parentRound; i < currRound; i++ {
+				leaderIndex := uint64(i) % x.config.Epoch % uint64(len(masternodes))
+				whosTerm := masternodes[leaderIndex]
+				missedRounds = append(
+					missedRounds,
+					utils.MissedRoundInfo{
+						Round:            i,
+						Miner:            whosTerm,
+						CurrentBlockHash: nextHeader.Hash(),
+						ParentBlockHash:  parentHeader.Hash(),
+					},
+				)
+			}
+		}
+		// Assign the pointer to the next one
+		nextHeader = parentHeader
+	}
+	missedRoundsMetadata := &utils.PublicApiMissedRoundsMetadata{
+		EpochRound:       switchInfo.EpochSwitchBlockInfo.Round,
+		EpochBlockNumber: switchInfo.EpochSwitchBlockInfo.Number,
+		MissedRounds:     missedRounds,
+	}
+
+	return missedRoundsMetadata, nil
+}

@@ -57,3 +57,15 @@ type PublicApiSnapshot struct {
 	Votes   []*clique.Vote                  `json:"votes"`   // List of votes cast in chronological order
 	Tally   map[common.Address]clique.Tally `json:"tally"`   // Current vote tally to avoid recalculating
 }
+
+type MissedRoundInfo struct {
+	Round            types.Round
+	Miner            common.Address
+	CurrentBlockHash common.Hash
+	ParentBlockHash  common.Hash
+}
+type PublicApiMissedRoundsMetadata struct {
+	EpochRound       types.Round
+	EpochBlockNumber *big.Int
+	MissedRounds     []MissedRoundInfo
+}

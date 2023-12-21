@@ -156,6 +156,11 @@ web3._extend({
 			name: 'getLatestPoolStatus',
 			call: 'XDPoS_getLatestPoolStatus'
 		}),
+		new web3._extend.Method({
+			name: 'GetMissiedRoundsInEpochByBlockHash',
+			call: 'XDPoS_GetMissiedRoundsInEpochByBlockHash',
+			params: 1
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

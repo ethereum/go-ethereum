@@ -50,6 +50,7 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, pare
 		return false, nil
 	}
 
+	// TODO: USE BELOW FOR THE NEW API
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 	x.whosTurn = masterNodes[leaderIndex]
 	if x.whosTurn != signer {

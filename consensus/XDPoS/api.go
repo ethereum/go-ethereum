@@ -285,6 +285,13 @@ func (api *API) NetworkInformation() NetworkInformation {
 	return info
 }
 
+/*
+An API exclusively for V2 consensus, designed to assist in troubleshooting miners by identifying who mined during their allocated term.
+*/
+func (api *API) GetMissiedRoundsInEpochByBlockHash(hash common.Hash) (*utils.PublicApiMissedRoundsMetadata, error) {
+	return api.XDPoS.CalculateMissingRounds(api.chain, hash)
+}
+
 func calculateSigners(message map[string]SignerTypes, pool map[string]map[common.Hash]utils.PoolObj, masternodes []common.Address) {
 	for name, objs := range pool {
 		var currentSigners []common.Address
