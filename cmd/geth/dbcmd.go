@@ -238,22 +238,30 @@ func removeFolder(dir string) {
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
 // list of folders if accepted.
 func confirmAndRemoveDB(paths []string, kind string) {
-	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, paths))
+	msg := fmt.Sprintf("Remove %s?\n", kind)
+	for _, path := range paths {
+		msg += fmt.Sprintf("\t- %s\n", path)
+	}
+	confirm, err := prompt.Stdin.PromptConfirm(msg)
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
 	case !confirm:
 		log.Info("Database deletion skipped", "kind", kind, "paths", paths)
 	default:
-		start := time.Now()
+		var (
+			deleted []string
+			start   = time.Now()
+		)
 		for _, path := range paths {
 			if common.FileExist(path) {
 				removeFolder(path)
+				deleted = append(deleted, path)
 			} else {
 				log.Info("Folder is not existent", "path", path)
 			}
 		}
-		log.Info("Database successfully deleted", "kind", kind, "paths", paths, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.Info("Database successfully deleted", "kind", kind, "paths", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 
