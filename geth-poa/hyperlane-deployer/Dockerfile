@@ -4,11 +4,10 @@ RUN apk update && apk add --no-cache git yarn expect
 
 WORKDIR /
 
-# Hyperlane 3.3 release w/ https://github.com/hyperlane-xyz/hyperlane-monorepo/pull/3063 cherry-picked in.
-# See https://github.com/hyperlane-xyz/hyperlane-monorepo/compare/%40hyperlane-xyz/sdk%403.3.0...primevprotocol:hyperlane-monorepo:v3.3
+# Hyperlane 3.5 release w/ current primev changes in main
 RUN git clone https://github.com/primevprotocol/hyperlane-monorepo.git 
 WORKDIR /hyperlane-monorepo
-RUN git checkout b1c4064272af7f3382391e9f7c4ce67ac1b84976
+RUN git checkout 4f73750291e9afa249ffa4d2fe34227cc9f275a8
 
 RUN yarn install
 RUN yarn build
