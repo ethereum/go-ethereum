@@ -211,7 +211,7 @@ func removeDB(ctx *cli.Context) error {
 	}
 	// Delete state data
 	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
-	confirmAndRemoveDB(statePaths, "state database")
+	confirmAndRemoveDB(statePaths, "state data")
 
 	// Delete ancient chain
 	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
@@ -219,7 +219,8 @@ func removeDB(ctx *cli.Context) error {
 	return nil
 }
 
-// removeFolder deletes all files (not folders) inside the directory 'dir' (but not files in subfolders).
+// removeFolder deletes all files (not folders) inside the directory 'dir' (but
+// not files in subfolders).
 func removeFolder(dir string) {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		// If we're at the top level folder, recurse into
@@ -238,11 +239,13 @@ func removeFolder(dir string) {
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
 // list of folders if accepted.
 func confirmAndRemoveDB(paths []string, kind string) {
-	msg := fmt.Sprintf("Remove %s? ", kind)
+	msg := fmt.Sprintf("Location(s) of '%s': \n", kind)
 	for _, path := range paths {
-		msg += fmt.Sprintf("(%s) ", path)
+		msg += fmt.Sprintf("\t- %s\n", path)
 	}
-	confirm, err := prompt.Stdin.PromptConfirm(msg)
+	fmt.Println(msg)
+
+	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
