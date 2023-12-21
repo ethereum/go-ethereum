@@ -3,6 +3,7 @@ set -x
 set -e
 
 # TODO: Stress test bridge back to sepolia, including not having enough balance on sidechain.
+# TODO: redeploy with new contract that checks balance at non-precompile level.
 
 read -p "Has the whitelist contract been deployed, updated with hypERC20 addr, and have router addresss been pasted into this file? (y/n): " answer
 if [ "$answer" = "y" ]; then
