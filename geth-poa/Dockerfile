@@ -21,6 +21,6 @@ COPY geth-poa/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8545 6060
+EXPOSE 8545 6060 60601
 
 ENTRYPOINT ["/entrypoint.sh"] 
