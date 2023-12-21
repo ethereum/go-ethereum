@@ -109,6 +109,7 @@ func TestCreation(t *testing.T) {
 				{1735372, 1677557088, ID{Hash: checksumToBytes(0xf7f9bc08), Next: 1706655072}}, // First Shanghai block
 				{1735372, 1706655071, ID{Hash: checksumToBytes(0xf7f9bc08), Next: 1706655072}}, // Last Shanghai block
 				{1735372, 1706655072, ID{Hash: checksumToBytes(0x88cf81d9), Next: 0}},          // First Cancun block
+				{1735372, 2706655072, ID{Hash: checksumToBytes(0x88cf81d9), Next: 0}},          // Future Cancun block
 			},
 		},
 		// Holesky test cases
@@ -121,6 +122,7 @@ func TestCreation(t *testing.T) {
 				{123, 1696000704, ID{Hash: checksumToBytes(0xfd4f016b), Next: 1707305664}}, // First Shanghai block
 				{123, 1707305663, ID{Hash: checksumToBytes(0xfd4f016b), Next: 1707305664}}, // Last Shanghai block
 				{123, 1707305664, ID{Hash: checksumToBytes(0x9b192ad0), Next: 0}},          // First Cancun block
+				{123, 2707305664, ID{Hash: checksumToBytes(0x9b192ad0), Next: 0}},          // Future Cancun block
 			},
 		},
 	}
