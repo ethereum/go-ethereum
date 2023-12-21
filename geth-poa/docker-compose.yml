@@ -16,6 +16,7 @@ services:
       - 8546:8546
       - 6060:6060 # metrics server @ /debug/metrics
       - 6068:6068
+      - 60601:60601
     volumes:
       - geth-data-bootnode:/data
     profiles:
@@ -54,6 +55,8 @@ services:
     networks:
       primev_net:
         ipv4_address: '172.29.0.99'
+    ports:
+      - 60602:60601
     volumes:
       - geth-data-node1:/data
     profiles:
@@ -93,6 +96,8 @@ services:
     networks:
       primev_net:
         ipv4_address: '172.29.0.100'
+    ports:
+      - 60603:60601
     volumes:
       - geth-data-node2:/data
     profiles:
