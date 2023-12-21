@@ -57,7 +57,6 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slog"
 )
 
 const legalWarning = `
@@ -493,7 +492,8 @@ func initialize(c *cli.Context) error {
 	if usecolor {
 		output = colorable.NewColorable(logOutput)
 	}
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, slog.Level(c.Int(logLevelFlag.Name)), usecolor)))
+	verbosity := log.FromLegacyLevel(c.Int(logLevelFlag.Name))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
 	return nil
 }
@@ -704,6 +704,7 @@ func signer(c *cli.Context) error {
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
 	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+	defer am.Close()
 	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering

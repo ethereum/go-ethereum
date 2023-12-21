@@ -977,6 +977,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error 
 		// in transactions before obtaining lock
 		if err := pool.validateTxBasics(tx, local); err != nil {
 			errs[i] = err
+			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
 			invalidTxMeter.Mark(1)
 			continue
 		}
