@@ -702,12 +702,8 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 	for idx, receipt := range receipts {
 		tx := txs[idx]
 
-		var signer types.Signer = types.FrontierSigner{}
-
-		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainId())
-		}
-
+		// Derive the sender.
+		signer := types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
 		from, _ := types.Sender(signer, tx)
 
 		fields := map[string]interface{}{
