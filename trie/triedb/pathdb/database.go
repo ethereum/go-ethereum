@@ -183,7 +183,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 				if err != nil {
 					log.Crit("Failed to reset state histories", "err", err)
 				}
-				log.Info("Truncated the unexpected state history")
+				log.Info("Truncated extraneous state history")
 			}
 		} else {
 			// Truncate the extra state histories above in freezer in case
