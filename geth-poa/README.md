@@ -8,8 +8,6 @@ Metrics recorded by bootnode are exposed to host at http://127.0.0.1:6060/debug/
 
 ## Key Summary
 
-Testnet private keys are in notion, and need to be copied into an .env.
-
 All relevant accounts are funded on sidechain genesis, you may need to fund these accounts on L1 with faucets. See [hyperlane docs](https://docs.hyperlane.xyz/docs/deploy/deploy-hyperlane#1.-setup-keys).
 
 ## Contract deployer
