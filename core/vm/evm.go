@@ -35,24 +35,30 @@ type (
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
+	// HasPrecompileFunc checks if an address has a precompile contract associated with it.
+	// if yes, it returns the precompiled contract and a boolean
+	HasPrecompileFunc func(addr common.Address) (PrecompiledContract, bool)
 )
 
-func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
-	var precompiles map[common.Address]PrecompiledContract
-	switch {
-	case evm.chainRules.IsCancun:
-		precompiles = PrecompiledContractsCancun
-	case evm.chainRules.IsBerlin:
-		precompiles = PrecompiledContractsBerlin
-	case evm.chainRules.IsIstanbul:
-		precompiles = PrecompiledContractsIstanbul
-	case evm.chainRules.IsByzantium:
-		precompiles = PrecompiledContractsByzantium
-	default:
-		precompiles = PrecompiledContractsHomestead
+// getDefaultPrecompileFunc returns the default precompile function
+func getDefaultPrecompileFunc(chainRules params.Rules) HasPrecompileFunc {
+	return func(addr common.Address) (PrecompiledContract, bool) {
+		var precompiles map[common.Address]PrecompiledContract
+		switch {
+		case chainRules.IsCancun:
+			precompiles = PrecompiledContractsCancun
+		case chainRules.IsBerlin:
+			precompiles = PrecompiledContractsBerlin
+		case chainRules.IsIstanbul:
+			precompiles = PrecompiledContractsIstanbul
+		case chainRules.IsByzantium:
+			precompiles = PrecompiledContractsByzantium
+		default:
+			precompiles = PrecompiledContractsHomestead
+		}
+		p, ok := precompiles[addr]
+		return p, ok
 	}
-	p, ok := precompiles[addr]
-	return p, ok
 }
 
 // BlockContext provides the EVM with auxiliary information. Once provided
@@ -65,6 +71,8 @@ type BlockContext struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// HasPrecompile returns the precompile for an address
+	HasPrecompile HasPrecompileFunc
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
@@ -137,15 +145,23 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 			blockCtx.BlobBaseFee = new(big.Int)
 		}
 	}
+	chainRules := chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+
+	// set default precompile if is not set
+	if blockCtx.HasPrecompile == nil {
+		blockCtx.HasPrecompile = getDefaultPrecompileFunc(chainRules)
+	}
+
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
+		chainRules:  chainRules,
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
+
 	return evm
 }
 
@@ -186,7 +202,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	p, isPrecompile := evm.precompile(addr)
+	p, isPrecompile := evm.Context.HasPrecompile(addr)
 	debug := evm.Config.Tracer != nil
 
 	if !evm.StateDB.Exist(addr) {
@@ -286,7 +302,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+	if p, isPrecompile := evm.Context.HasPrecompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
@@ -331,7 +347,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+	if p, isPrecompile := evm.Context.HasPrecompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
@@ -380,7 +396,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		}(gas)
 	}
 
-	if p, isPrecompile := evm.precompile(addr); isPrecompile {
+	if p, isPrecompile := evm.Context.HasPrecompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
