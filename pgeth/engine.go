@@ -3,24 +3,18 @@ package pgeth
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"plugin"
 	"runtime/debug"
+
+	"github.com/mattn/go-colorable"
+	"gopkg.in/yaml.v2"
 
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/mattn/go-colorable"
-	"gopkg.in/yaml.v2"
+	"github.com/ethereum/go-ethereum/pgeth/toolkit"
+	pgeth_monitoring "github.com/ethereum/go-ethereum/plugins/pgeth-monitoring"
 )
-
-type PluginToolkit struct {
-	Node    *node.Node
-	Backend ethapi.Backend
-	Logger  log.Logger
-}
 
 type PluginDetails struct {
 	Name   string                 `yaml:"name"`
@@ -29,7 +23,7 @@ type PluginDetails struct {
 
 type Plugin struct {
 	Details PluginDetails
-	Start   func(*PluginToolkit, map[string]interface{}, context.Context, chan (error))
+	Start   func(*toolkit.PluginToolkit, map[string]interface{}, context.Context, chan (error))
 	Version func()
 }
 
@@ -59,30 +53,19 @@ func NewEngine(cfg *PluginEngineConfig) *PluginEngine {
 }
 
 func (p *PluginEngine) Version(ctx context.Context) error {
-	pluginDirectory := os.Getenv("PGETH_DIRECTORY")
+	var plugins []*Plugin
 
-	if len(pluginDirectory) == 0 {
-		p.logger.Warn("Skipping plugin engine startup: PGETH_DIRECTORY is empty")
-		return nil
-	}
-
-	p.logger.Info("Starting plugin engine")
-
-	files, err := ioutil.ReadDir(pluginDirectory)
-	if err != nil {
-		return err
-	}
-
-	plugins := []*Plugin{}
-
-	for _, file := range files {
-		if file.IsDir() {
-			newPlugin, err := p.loadPluginDetailsFromDirectory(filepath.Join(pluginDirectory, file.Name()))
-			if err != nil {
-				return err
-			}
-			plugins = append(plugins, newPlugin)
+	// load monitoring plugin
+	if pluginMonitoringDirectory := os.Getenv("PGETH_MONITORING_CONFIG"); len(pluginMonitoringDirectory) != 0 {
+		monitoringDetails, err := p.loadPluginDetails(pluginMonitoringDirectory)
+		if err != nil {
+			return err
 		}
+		plugins = append(plugins, &Plugin{
+			Details: monitoringDetails,
+			Version: pgeth_monitoring.Version,
+			Start:   pgeth_monitoring.Start,
+		})
 	}
 
 	errChan := make(chan error)
@@ -106,33 +89,22 @@ func (p *PluginEngine) Version(ctx context.Context) error {
 }
 
 func (p *PluginEngine) Start(ctx context.Context) error {
-	pluginDirectory := os.Getenv("PGETH_DIRECTORY")
+	var plugins []*Plugin
 
-	if len(pluginDirectory) == 0 {
-		p.logger.Warn("Skipping plugin engine startup: PGETH_DIRECTORY is empty")
-		return nil
-	}
-
-	p.logger.Info("Starting plugin engine")
-
-	files, err := ioutil.ReadDir(pluginDirectory)
-	if err != nil {
-		return err
-	}
-
-	plugins := []*Plugin{}
-
-	for _, file := range files {
-		if file.IsDir() {
-			newPlugin, err := p.loadPluginDetailsFromDirectory(filepath.Join(pluginDirectory, file.Name()))
-			if err != nil {
-				return err
-			}
-			plugins = append(plugins, newPlugin)
+	// load monitoring plugin
+	if pluginConfigFile := os.Getenv("PGETH_MONITORING_CONFIG"); len(pluginConfigFile) != 0 {
+		monitoringDetails, err := p.loadPluginDetails(pluginConfigFile)
+		if err != nil {
+			return err
 		}
+		plugins = append(plugins, &Plugin{
+			Details: monitoringDetails,
+			Version: pgeth_monitoring.Version,
+			Start:   pgeth_monitoring.Start,
+		})
 	}
 
-	var toolkit *PluginToolkit = &PluginToolkit{
+	var toolkit = &toolkit.PluginToolkit{
 		Node:    p.node,
 		Backend: p.backend,
 		Logger:  p.logger,
@@ -168,39 +140,19 @@ func (p *PluginEngine) Start(ctx context.Context) error {
 	return nil
 }
 
-func (p *PluginEngine) loadPluginDetailsFromDirectory(pluginDirectoryPath string) (*Plugin, error) {
-	p.logger.Info(fmt.Sprintf("Loading plugin from %s", pluginDirectoryPath))
+func (p *PluginEngine) loadPluginDetails(pluginConfigPath string) (PluginDetails, error) {
+	var pluginDetails PluginDetails
 
-	var plug Plugin
-
-	yamlFile, err := ioutil.ReadFile(filepath.Join(pluginDirectoryPath, "config.yaml"))
+	yamlFile, err := os.ReadFile(pluginConfigPath)
 	if err != nil {
-		return nil, err
+		return PluginDetails{}, err
 	}
-	err = yaml.Unmarshal(yamlFile, &plug.Details)
+	err = yaml.Unmarshal(yamlFile, &pluginDetails)
 	if err != nil {
-		return nil, err
+		return PluginDetails{}, err
 	}
 
-	p.logger.Info(fmt.Sprintf("Loading config for \"%s\" = %+v", plug.Details.Name, plug.Details.Config))
+	p.logger.Info(fmt.Sprintf("Loading config for \"%s\" = %+v", pluginDetails.Name, pluginDetails.Config))
 
-	pluginSo, err := plugin.Open(filepath.Join(pluginDirectoryPath, "plugin.so"))
-	if err != nil {
-		panic(err)
-	}
-
-	startFunc, err := pluginSo.Lookup("Start")
-	if err != nil {
-		panic(err)
-	}
-
-	versionFunc, err := pluginSo.Lookup("Version")
-	if err != nil {
-		panic(err)
-	}
-
-	plug.Start = startFunc.(func(*PluginToolkit, map[string]interface{}, context.Context, chan (error)))
-	plug.Version = versionFunc.(func())
-
-	return &plug, nil
+	return pluginDetails, nil
 }
