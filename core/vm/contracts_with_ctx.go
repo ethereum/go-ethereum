@@ -80,7 +80,7 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 
 // Predetermined create2 address of whitelist contract with exclusive mint/burn privileges.
 // This address assumes deployer is 0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2.
-const whitelistCreate2Addr = "0xaE476470bfc00B8a0e8531133bE621e87a981ec8"
+const whitelistCreate2Addr = "0xF06aC11D2151Dd56b3766Cfc350F42234a2D17f4"
 
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
