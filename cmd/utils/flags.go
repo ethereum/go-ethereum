@@ -961,6 +961,12 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Usage: "L1 block height to start syncing from. Should be set to the L1 message queue deployment block number.",
 	}
 
+	// Rollup verify service settings
+	RollupVerifyEnabledFlag = &cli.BoolFlag{
+		Name:  "rollup.verify",
+		Usage: "Enable verification of batch consistency between L1 and L2 in rollup",
+	}
+
 	// Max block range for `eth_getLogs` method
 	MaxBlockRangeFlag = &cli.Int64Flag{
 		Name:  "rpc.getlogs.maxrange",
@@ -1664,6 +1670,12 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.IsSet(RollupVerifyEnabledFlag.Name) {
+		cfg.EnableRollupVerify = ctx.Bool(RollupVerifyEnabledFlag.Name)
+	}
+}
+
 func setMaxBlockRange(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(MaxBlockRangeFlag.Name) {
 		cfg.MaxBlockRange = ctx.Int64(MaxBlockRangeFlag.Name)
@@ -1727,6 +1739,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
+	setEnableRollupVerify(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector

@@ -170,6 +170,9 @@ type Config struct {
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
 
+	// Enable verification of batch consistency between L1 and L2 in rollup
+	EnableRollupVerify bool
+
 	// Max block range for eth_getLogs api method
 	MaxBlockRange int64
 }

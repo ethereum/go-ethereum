@@ -147,6 +147,7 @@ var (
 		utils.L1EndpointFlag,
 		utils.L1ConfirmationsFlag,
 		utils.L1DeploymentBlockFlag,
+		utils.RollupVerifyEnabledFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{

@@ -57,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/rollup_sync_service"
 	"github.com/ethereum/go-ethereum/rollup/sync_service"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -70,8 +71,9 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool      *txpool.TxPool
-	syncService *sync_service.SyncService
+	txPool            *txpool.TxPool
+	syncService       *sync_service.SyncService
+	rollupSyncService *rollup_sync_service.RollupSyncService
 
 	blockchain         *core.BlockChain
 	handler            *handler
@@ -239,6 +241,14 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 		return nil, fmt.Errorf("cannot initialize L1 sync service: %w", err)
 	}
 	eth.syncService.Start()
+	if config.EnableRollupVerify {
+		// initialize and start rollup event sync service
+		eth.rollupSyncService, err = rollup_sync_service.NewRollupSyncService(context.Background(), chainConfig, eth.chainDb, l1Client, eth.blockchain, stack.Config().L1DeploymentBlock)
+		if err != nil {
+			return nil, fmt.Errorf("cannot initialize rollup event sync service: %w", err)
+		}
+		eth.rollupSyncService.Start()
+	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
@@ -547,6 +557,9 @@ func (s *Ethereum) Stop() error {
 	close(s.closeBloomHandler)
 	s.txPool.Close()
 	s.syncService.Stop()
+	if s.config.EnableRollupVerify {
+		s.rollupSyncService.Stop()
+	}
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()

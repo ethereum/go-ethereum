@@ -145,6 +145,12 @@ var (
 	l1MessagePrefix                   = []byte("L1") // l1MessagePrefix + queueIndex (uint64 big endian) -> L1MessageTx
 	firstQueueIndexNotInL2BlockPrefix = []byte("q")  // firstQueueIndexNotInL2BlockPrefix + L2 block hash -> enqueue index
 	highestSyncedQueueIndexKey        = []byte("HighestSyncedQueueIndex")
+
+	// Scroll rollup event store
+	rollupEventSyncedL1BlockNumberKey = []byte("R-LastRollupEventSyncedL1BlockNumber")
+	batchChunkRangesPrefix            = []byte("R-bcr")
+	batchMetaPrefix                   = []byte("R-bm")
+	finalizedL2BlockNumberKey         = []byte("R-finalized")
 )
 
 // Use the updated "L1" prefix on all new networks
@@ -371,4 +377,14 @@ func L1MessageKey(queueIndex uint64) []byte {
 // FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
 func FirstQueueIndexNotInL2BlockKey(l2BlockHash common.Hash) []byte {
 	return append(firstQueueIndexNotInL2BlockPrefix, l2BlockHash.Bytes()...)
+}
+
+// batchChunkRangesKey = batchChunkRangesPrefix + batch index (uint64 big endian)
+func batchChunkRangesKey(batchIndex uint64) []byte {
+	return append(batchChunkRangesPrefix, encodeBigEndian(batchIndex)...)
+}
+
+// batchMetaKey = batchMetaPrefix + batch index (uint64 big endian)
+func batchMetaKey(batchIndex uint64) []byte {
+	return append(batchMetaPrefix, encodeBigEndian(batchIndex)...)
 }

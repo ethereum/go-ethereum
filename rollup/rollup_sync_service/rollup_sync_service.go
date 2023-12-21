@@ -260,7 +260,7 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 			return nil, nil, s.ctx.Err()
 		}
 
-		localSyncedBlockHeight := s.bc.CurrentBlock().Number().Uint64()
+		localSyncedBlockHeight := s.bc.CurrentBlock().Number.Uint64()
 		if localSyncedBlockHeight >= endBlockNumber {
 			break // ready to proceed, exit retry loop
 		}
@@ -270,7 +270,7 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 		time.Sleep(defaultGetBlockInRangeRetryDelay)
 	}
 
-	localSyncedBlockHeight := s.bc.CurrentBlock().Number().Uint64()
+	localSyncedBlockHeight := s.bc.CurrentBlock().Number.Uint64()
 	if localSyncedBlockHeight < endBlockNumber {
 		return nil, nil, fmt.Errorf("local node is not synced up to the required block height: %v, local synced block height: %v", endBlockNumber, localSyncedBlockHeight)
 	}
