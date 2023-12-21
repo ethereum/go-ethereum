@@ -219,7 +219,7 @@ func removeDB(ctx *cli.Context) error {
 	return nil
 }
 
-// removeFolder deletes all the files inside the folder unexcept the subfolders.
+// removeFolder deletes all files (not folders) inside the directory 'dir' (but not files in subfolders).
 func removeFolder(dir string) {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		// If we're at the top level folder, recurse into
