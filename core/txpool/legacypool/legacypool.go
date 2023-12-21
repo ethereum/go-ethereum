@@ -136,6 +136,7 @@ type Config struct {
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
 
 	CustomValidationEnabled bool
+	CustomValidator         txpool.CustomValidator
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
@@ -191,6 +192,9 @@ func (config *Config) sanitize() Config {
 	if conf.Lifetime < 1 {
 		log.Warn("Sanitizing invalid txpool lifetime", "provided", conf.Lifetime, "updated", DefaultConfig.Lifetime)
 		conf.Lifetime = DefaultConfig.Lifetime
+	}
+	if config.CustomValidationEnabled && conf.CustomValidator == nil {
+		log.Warn("Custom transaction validator is enabled but not configured")
 	}
 	return conf
 }
@@ -613,7 +617,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 func (pool *LegacyPool) validateTxWithCustomValidator(tx *types.Transaction, local bool) error {
 	if pool.config.CustomValidationEnabled {
 		opts := &txpool.CustomValidationOptions{}
-		if err := txpool.ValidateTransactionWithCustomValidator(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
+		if err := pool.config.CustomValidator.Validate(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
 			return err
 		}
 	}
