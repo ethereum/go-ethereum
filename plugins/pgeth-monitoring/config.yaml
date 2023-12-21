@@ -1,0 +1,4 @@
+name: "monitoring"
+config:
+  REDIS_ENDPOINT: "localhost:6379"
+  BEACON_ENDPOINT: "localhost:5052"
