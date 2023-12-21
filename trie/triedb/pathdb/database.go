@@ -431,6 +431,9 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 			inited = true
 		}
 	})
+	if !inited {
+		inited = rawdb.ReadSnapSyncStatusFlag(db.diskdb) != rawdb.StateSyncUnknown
+	}
 	return inited
 }
 
