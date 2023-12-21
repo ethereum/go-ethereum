@@ -211,11 +211,11 @@ func removeDB(ctx *cli.Context) error {
 	}
 	// Delete state data
 	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
-	confirmAndRemoveDB(statePaths, "full node state database")
+	confirmAndRemoveDB(statePaths, "state database")
 
 	// Delete ancient chain
 	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
-	confirmAndRemoveDB(chainPaths, "full node ancient chain")
+	confirmAndRemoveDB(chainPaths, "ancient chain")
 	return nil
 }
 
@@ -238,9 +238,9 @@ func removeFolder(dir string) {
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
 // list of folders if accepted.
 func confirmAndRemoveDB(paths []string, kind string) {
-	msg := fmt.Sprintf("Remove %s?\n", kind)
+	msg := fmt.Sprintf("Remove %s? ", kind)
 	for _, path := range paths {
-		msg += fmt.Sprintf("\t- %s\n", path)
+		msg += fmt.Sprintf("(%s) ", path)
 	}
 	confirm, err := prompt.Stdin.PromptConfirm(msg)
 	switch {
