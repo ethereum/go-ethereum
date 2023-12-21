@@ -73,6 +73,9 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics \
 		--metrics.addr=0.0.0.0 \
 		--metrics.port=6060 \
+  		--pprof \
+    		--pprof.addr=0.0.0.0 \
+        	--pprof.port=61601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
 		--nat extip:$NODE_IP \
@@ -108,6 +111,9 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--metrics \
 		--metrics.addr=0.0.0.0 \
 		--metrics.port=6060 \
+    		--pprof \
+    		--pprof.addr=0.0.0.0 \
+        	--pprof.port=61601 \
 		--ws \
 		--ws.addr=0.0.0.0 \
 		--ws.port="$WS_PORT" \
