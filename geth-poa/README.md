@@ -18,6 +18,7 @@ Note if the relayer is emitting errors related to unexpected contract routing, t
 
 To properly set a new hyperlane deployer:
 * Generate a new key pair (ex: `cast wallet new`)
+* Send or [mine](https://sepolia-faucet.pk910.de/) some Sepolia ETH to `Address`
 * replace `Address` above for book keeping
 * replace `CONTRACT_DEPLOYER_PRIVATE_KEY` in `.env`
 * allocate funds to `Address` in the allocs field of `genesis.json`
