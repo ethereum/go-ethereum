@@ -51,5 +51,3 @@ logs/
 
 tests/spec-tests/
 #pgeth
-
-!plugin/.gitkeep
