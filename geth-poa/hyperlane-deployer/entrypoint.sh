@@ -17,7 +17,7 @@ else
     --chains /chain-config.yml \
     --ism /multisig-ism.yml \
     --out "/hyperlane-monorepo/artifacts" \
-    --key $CONTRACT_DEPLOYER_PRIVATE_KEY
+    --key $HYPERLANE_DEPLOYER_PRIVATE_KEY
   expect {
     "*low balance on*" { 
       send -- "Y\r"
@@ -48,7 +48,7 @@ else
   set timeout -1
   spawn hyperlane deploy warp \
     --yes \
-    --key $CONTRACT_DEPLOYER_PRIVATE_KEY \
+    --key $HYPERLANE_DEPLOYER_PRIVATE_KEY \
     --chains /chain-config.yml \
     --config /warp-tokens.yml \
     --core /hyperlane-monorepo/artifacts/core-deployment.json

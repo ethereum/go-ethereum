@@ -186,7 +186,7 @@ services:
       interval: 5s
       retries: 100
     environment:
-      - CONTRACT_DEPLOYER_PRIVATE_KEY=${CONTRACT_DEPLOYER_PRIVATE_KEY}
+      - HYPERLANE_DEPLOYER_PRIVATE_KEY=${HYPERLANE_DEPLOYER_PRIVATE_KEY}
     networks:
       primev_net:
         ipv4_address: '172.29.0.50'
