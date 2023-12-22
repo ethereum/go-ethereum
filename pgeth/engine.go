@@ -6,11 +6,11 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/mattn/go-colorable"
 	"gopkg.in/yaml.v2"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/pgeth/toolkit"
 	pgeth_monitoring "github.com/ethereum/go-ethereum/plugins/pgeth-monitoring"
@@ -35,16 +35,12 @@ type PluginEngineConfig struct {
 type PluginEngine struct {
 	node    *node.Node
 	backend ethapi.Backend
-	logger  log.Logger
+	logger  *log.Logger
 }
 
 func NewEngine(cfg *PluginEngineConfig) *PluginEngine {
 	logger := log.New()
 
-	var ostream log.Handler
-	output := colorable.NewColorableStdout()
-	ostream = log.StreamHandler(output, log.PgethFormat(true))
-	logger.SetHandler(ostream)
 	return &PluginEngine{
 		node:    cfg.Node,
 		backend: cfg.Backend,
