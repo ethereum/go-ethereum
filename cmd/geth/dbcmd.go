@@ -53,10 +53,9 @@ var (
 	}
 
 	removedbCommand = &cli.Command{
-		Action: removeDB,
-		Name:   "removedb",
-		Usage: "Remove blockchain and state databases. If arguments are provided, " +
-			"they are interpreted as comma-separated answers to questions.",
+		Action:    removeDB,
+		Name:      "removedb",
+		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: "",
 		Flags: flags.Merge(utils.DatabaseFlags,
 			[]cli.Flag{removeStateDataFlag, removeChainDataFlag}),
