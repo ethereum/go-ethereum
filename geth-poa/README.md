@@ -10,13 +10,19 @@ Metrics recorded by bootnode are exposed to host at http://127.0.0.1:6060/debug/
 
 All relevant accounts are funded on sidechain genesis, you may need to fund these accounts on L1 with faucets. See [hyperlane docs](https://docs.hyperlane.xyz/docs/deploy/deploy-hyperlane#1.-setup-keys).
 
-## Contract deployer
+## Hyperlane Contract deployer
 
 Address:    `0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2`
 
-Note if the relayer is emitting errors related to unexpected contract routing, try using a new deployer key pair. It's likely that the current bridge contract deployments are clashing with previous deployments.   
+Note if the relayer is emitting errors related to unexpected contract routing, try redeploying the hyperlane contracts using a new key pair. It's likely the current deployments are clashing with previous deployments on Sepolia.
 
-You'd need to replace `Address` above, the allocs field of `genesis.json`, the `CONTRACT_DEPLOYER_PRIVATE_KEY` in `.env`, the hardcoded whitelist contract addr in HypERC20.sol, and the hardcoded whitelist contract addr in contracts_with_ctx.go.
+To properly set a new hyperlane deployer:
+* Generate a new key pair (ex: `cast wallet new`)
+* replace `Address` above for book keeping
+* replace `CONTRACT_DEPLOYER_PRIVATE_KEY` in `.env`
+* allocate funds to `Address` in the allocs field of `genesis.json`
+
+Note the deployer of [primev contracts](https://github.com/primevprotocol/contracts) can be a separate account.
 
 ## Validator Accounts (also POA signers)
 
