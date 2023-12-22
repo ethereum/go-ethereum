@@ -56,8 +56,8 @@ func (p *PluginEngine) Version(ctx context.Context) error {
 	var plugins []*Plugin
 
 	// load monitoring plugin
-	if pluginMonitoringDirectory := os.Getenv("PGETH_MONITORING_CONFIG"); len(pluginMonitoringDirectory) != 0 {
-		monitoringDetails, err := p.loadPluginDetails(pluginMonitoringDirectory)
+	if pluginConfigFile := os.Getenv("PGETH_MONITORING_CONFIG"); len(pluginConfigFile) != 0 {
+		monitoringDetails, err := p.loadPluginDetails(pluginConfigFile)
 		if err != nil {
 			return err
 		}
@@ -68,12 +68,11 @@ func (p *PluginEngine) Version(ctx context.Context) error {
 		})
 	}
 
-	errChan := make(chan error)
-
 	for _, plug := range plugins {
 		plug.Version()
 	}
 
+	errChan := make(chan error)
 	go func() {
 		for {
 			select {
@@ -111,7 +110,6 @@ func (p *PluginEngine) Start(ctx context.Context) error {
 	}
 
 	errChan := make(chan error)
-
 	for _, plug := range plugins {
 		go func(_plug *Plugin) {
 			defer func() {
