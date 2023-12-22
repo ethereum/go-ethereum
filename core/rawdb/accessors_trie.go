@@ -292,6 +292,11 @@ func ReadStateScheme(db ethdb.Reader) string {
 	if len(blob) != 0 {
 		return PathScheme
 	}
+	// The root node might be deleted during the initial snap sync, check
+	// the persistent state id then.
+	if id := ReadPersistentStateID(db); id != 0 {
+		return PathScheme
+	}
 	// In a hash-based scheme, the genesis state is consistently stored
 	// on the disk. To assess the scheme of the persistent state, it
 	// suffices to inspect the scheme of the genesis state.
