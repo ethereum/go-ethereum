@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/ethereum/go-ethereum/rlp"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
@@ -43,11 +44,15 @@ func newEpoch() *epoch {
 
 func (e *epoch) add(header types.Header) error {
 	blockHash := header.Hash().Bytes()
-	difficulty := uint256.MustFromBig(header.Number)
+	difficulty := uint256.MustFromBig(header.Difficulty)
 	e.difficulty = uint256.NewInt(0).Add(e.difficulty, difficulty)
+	// big-endian
+	difficultyBytes := e.difficulty.Bytes32()
+	utils.ReverseBytesInPlace(difficultyBytes[:])
+
 	record := HeaderRecord{
 		BlockHash:       blockHash,
-		TotalDifficulty: e.difficulty.Bytes(),
+		TotalDifficulty: difficultyBytes[:],
 	}
 	sszBytes, err := record.MarshalSSZ()
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/holiman/uint256"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
@@ -285,7 +286,7 @@ func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 		return nil, err
 	}
 	// reverse the distance, because big.SetBytes is big-endian
-	reverseBytes(distance)
+	utils.ReverseBytesInPlace(distance)
 	bigNum := new(big.Int).SetBytes(distance)
 	res := uint256.MustFromBig(bigNum)
 	return res, nil
@@ -384,10 +385,4 @@ func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 // ForcePrune delete the content which distance is further than the given radius
 func (p *ContentStorage) ForcePrune(radius *uint256.Int) error {
 	return p.deleteContentOutOfRadius(radius)
-}
-
-func reverseBytes(src []byte) {
-	for i := 0; i < len(src)/2; i++ {
-		src[i], src[len(src)-i-1] = src[len(src)-i-1], src[i]
-	}
 }
