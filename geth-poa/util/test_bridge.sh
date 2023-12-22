@@ -3,7 +3,6 @@ set -x
 set -e
 
 # TODO: Stress test bridge back to sepolia, including not having enough balance on sidechain.
-# TODO: redeploy with new contract that checks balance at non-precompile level.
 
 read -p "Has the whitelist contract been deployed, updated with hypERC20 addr, and have router addresss been pasted into this file? (y/n): " answer
 if [ "$answer" = "y" ]; then
@@ -20,8 +19,8 @@ ADDRESS=0xa43b806D2f09AE94dfa38bc00d6F75426D274540
 PRIVATE_KEY=0x8b21e3bc5c26d3327109d341d121fbfb7cb79c95fba5eb2f8c064f87332df7dd
 
 # "make print-warp-deploy" prints these contract addrs
-SEPOLIA_ROUTER=0xdFB826f7F5E8d4843f54792369F64eF633E5c4cF
-SIDECHAIN_ROUTER=0x79Df08515c2b88daa9C407271844afFD31A4c979
+SEPOLIA_ROUTER=0x2a3840332456e1C27ddd493f89fF33402450C537
+SIDECHAIN_ROUTER=0x707719517b112c9A3F571709e59Cfbaa28fCf873
 
 SEPOLIA_URL=https://ethereum-sepolia.publicnode.com
 SIDECHAIN_URL=http://localhost:8545
@@ -37,7 +36,7 @@ cast send --rpc-url $SEPOLIA_URL --private-key $PRIVATE_KEY $SEPOLIA_ROUTER "tra
 # Block until native balance is incremented
 MAX_RETRIES=20
 RETRY_COUNT=0
-while [ $(printf '%d' $(cast balance --rpc-url $SIDECHAIN_URL $ADDRESS)) -eq $(printf '%d' $SIDECHAIN_ERC20_BALANCE) ]
+while [ $(printf '%d' $(cast balance --rpc-url $SIDECHAIN_URL $ADDRESS)) -eq $(printf '%d' $SIDECHAIN_BALANCE) ]
 do
     echo "Waiting for native balance to increment..."
     sleep 5
