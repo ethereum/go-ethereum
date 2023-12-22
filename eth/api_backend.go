@@ -77,19 +77,27 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
+	// if number == rpc.FinalizedBlockNumber {
+	// 	block := b.eth.blockchain.CurrentFinalBlock()
+	// 	if block == nil {
+	// 		return nil, errors.New("finalized block not found")
+	// 	}
+	// 	return block, nil
+	// }
+	// if number == rpc.SafeBlockNumber {
+	// 	block := b.eth.blockchain.CurrentSafeBlock()
+	// 	if block == nil {
+	// 		return nil, errors.New("safe block not found")
+	// 	}
+	// 	return block, nil
+	// }
 	if number == rpc.FinalizedBlockNumber {
-		block := b.eth.blockchain.CurrentFinalBlock()
-		if block == nil {
-			return nil, errors.New("finalized block not found")
+		finalizedBlockHeightPtr := rawdb.ReadFinalizedL2BlockNumber(b.eth.ChainDb())
+		if finalizedBlockHeightPtr == nil {
+			return nil, errors.New("L2 finalized block height not found in database")
 		}
-		return block, nil
-	}
-	if number == rpc.SafeBlockNumber {
-		block := b.eth.blockchain.CurrentSafeBlock()
-		if block == nil {
-			return nil, errors.New("safe block not found")
-		}
-		return block, nil
+		number = rpc.BlockNumber(*finalizedBlockHeightPtr)
+		return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 }
@@ -129,19 +137,27 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		header := b.eth.blockchain.CurrentBlock()
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
+	// if number == rpc.FinalizedBlockNumber {
+	// 	header := b.eth.blockchain.CurrentFinalBlock()
+	// 	if header == nil {
+	// 		return nil, errors.New("finalized block not found")
+	// 	}
+	// 	return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+	// }
+	// if number == rpc.SafeBlockNumber {
+	// 	header := b.eth.blockchain.CurrentSafeBlock()
+	// 	if header == nil {
+	// 		return nil, errors.New("safe block not found")
+	// 	}
+	// 	return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+	// }
 	if number == rpc.FinalizedBlockNumber {
-		header := b.eth.blockchain.CurrentFinalBlock()
-		if header == nil {
-			return nil, errors.New("finalized block not found")
+		finalizedBlockHeightPtr := rawdb.ReadFinalizedL2BlockNumber(b.eth.ChainDb())
+		if finalizedBlockHeightPtr == nil {
+			return nil, errors.New("L2 finalized block height not found in database")
 		}
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
-	}
-	if number == rpc.SafeBlockNumber {
-		header := b.eth.blockchain.CurrentSafeBlock()
-		if header == nil {
-			return nil, errors.New("safe block not found")
-		}
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		number = rpc.BlockNumber(*finalizedBlockHeightPtr)
+		return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }

@@ -1490,7 +1490,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-func unmarshalBlockNumber(input string) (rpc.BlockNumber, error) {
+func unmarshalL1BlockNumber(input string) (rpc.BlockNumber, error) {
 	switch input {
 	case "finalized":
 		return rpc.FinalizedBlockNumber, nil
@@ -1514,7 +1514,7 @@ func setL1(ctx *cli.Context, cfg *node.Config) {
 		cfg.L1Endpoint = ctx.String(L1EndpointFlag.Name)
 	}
 	if ctx.IsSet(L1ConfirmationsFlag.Name) {
-		cfg.L1Confirmations, err = unmarshalBlockNumber(ctx.String(L1ConfirmationsFlag.Name))
+		cfg.L1Confirmations, err = unmarshalL1BlockNumber(ctx.String(L1ConfirmationsFlag.Name))
 		if err != nil {
 			panic(fmt.Sprintf("invalid value for flag %s: %s", L1ConfirmationsFlag.Name, ctx.String(L1ConfirmationsFlag.Name)))
 		}
