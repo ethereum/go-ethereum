@@ -2,11 +2,13 @@ name: Continuous Integration (Default Checks)
 
 on:
   push:
+    branches: [ master ]
   pull_request:
   workflow_dispatch:
 
 env:
   TEST_PACKAGES: ./...
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
   lint:
@@ -41,3 +43,45 @@ jobs:
           go-version: '1.21.4'
       - name: run tests
         run: go run build/ci.go test $TEST_PACKAGES
+
+  hive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21.4'
+      - name: clone hive repository
+        run: git clone https://github.com/ethereum/hive
+      - name: install hive
+        working-directory: ./hive
+        run: go install .
+
+      - name: create hive-clients.yml configuration file based on $BRANCH_NAME
+        working-directory: .github/workflows
+        run: |
+          echo "
+          - client: go-ethereum
+            dockerfile: git
+            build_args:
+              github: Kava-Labs/go-ethereum
+              tag: $BRANCH_NAME" > hive-clients.yml
+
+      - name: print hive-clients.yml configuration file for debug purposes
+        working-directory: .github/workflows
+        run: cat hive-clients.yml
+
+      - name: run devp2p/discv4 simulation
+        working-directory: ./hive
+        run: hive --sim devp2p --sim.limit discv4 --client go-ethereum --client-file $GITHUB_WORKSPACE/.github/workflows/hive-clients.yml
+
+      - name: run ethereum/sync simulation
+        working-directory: ./hive
+        run: hive --sim ethereum/sync --client go-ethereum --client-file $GITHUB_WORKSPACE/.github/workflows/hive-clients.yml
+
+      - name: install simulation result parser
+        run: go install ./cmd/result_parser
+      - name: run simulation result parser
+        working-directory: ./hive
+        run: result_parser -path_to_results ./workspace/logs
