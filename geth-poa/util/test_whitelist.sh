@@ -6,8 +6,8 @@ if [ -z "$1" ]; then
 fi
 HYP_ERC20_ADDR="$1"  
 
-# Make sure whitelist deployer is 0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2 to produce this addr
-WHITELIST_ADDR=0xF06aC11D2151Dd56b3766Cfc350F42234a2D17f4
+WHITELIST_ADDR=0x5D1415C0973034d162F5FEcF19B50dA057057e29
+EXPECTED_OWNER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 RPC_URL=http://localhost:8545
 
 # Checks that contract deployed to expected address
@@ -37,8 +37,8 @@ echo "HYP_ERC20_ADDR $HYP_ERC20_ADDR is whitelisted"
 OWNER=$(cast call $WHITELIST_ADDR \
     "owner()(address)" \
     --rpc-url $RPC_URL)
-if [ "$OWNER" != "0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2" ]; then
-    echo "Error: Whitelist owner is not 0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2"
+if [ "$OWNER" != "$EXPECTED_OWNER" ]; then
+    echo "Error: Whitelist owner is not $EXPECTED_OWNER"
     exit 1
 fi
-echo "Whitelist owner is 0xBcA333b67fb805aB18B4Eb7aa5a0B09aB25E5ce2"
+echo "Whitelist owner is $EXPECTED_OWNER"
