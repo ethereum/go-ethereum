@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -34,7 +35,10 @@ import (
 	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -83,6 +87,14 @@ func main() {
 }
 
 func blsync(ctx *cli.Context) error {
+	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+	output := io.Writer(os.Stderr)
+	if usecolor {
+		output = colorable.NewColorable(os.Stderr)
+	}
+	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
+
 	if !ctx.IsSet(utils.BeaconApiFlag.Name) {
 		utils.Fatalf("Beacon node light client API URL not specified")
 	}
@@ -119,11 +131,11 @@ func blsync(ctx *cli.Context) error {
 		blockSync: beaconBlockSync,
 	}
 
-	scheduler.RegisterModule(checkpointInit)
-	scheduler.RegisterModule(forwardSync)
-	scheduler.RegisterModule(headSync)
-	scheduler.RegisterModule(beaconBlockSync)
-	scheduler.RegisterModule(engineApiUpdater)
+	scheduler.RegisterModule(checkpointInit, "checkpointInit")
+	scheduler.RegisterModule(forwardSync, "forwardSync")
+	scheduler.RegisterModule(headSync, "headSync")
+	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
+	scheduler.RegisterModule(engineApiUpdater, "engineApiUpdater")
 	// start
 	scheduler.Start()
 	// register server(s)

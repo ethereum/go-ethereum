@@ -26,16 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
+var (
 	// request events
-	EvResponse = iota // data: IdAndResponse; sent by RequestServer
-	EvFail            // data: ID; sent by RequestServer
-	EvTimeout         // data: ID; sent by serverWithTimeout
+	EvResponse = "response" // data: IdAndResponse; sent by RequestServer
+	EvFail     = "fail"     // data: ID; sent by RequestServer
+	EvTimeout  = "timeout"  // data: ID; sent by serverWithTimeout
 	// server events
-	EvRegistered      // data: nil; sent by Scheduler
-	EvUnregistered    // data: nil; sent by Scheduler
-	EvCanRequestAgain // data: nil; sent by serverWithLimits
-	EvAppSpecific     // application specific events (sent by RequestServer) start at this index
+	EvRegistered      = "registered"      // data: nil; sent by Scheduler
+	EvUnregistered    = "unregistered"    // data: nil; sent by Scheduler
+	EvCanRequestAgain = "canRequestAgain" // data: nil; sent by serverWithLimits
 )
 
 const (
@@ -79,7 +78,7 @@ func NewServer(rs RequestServer, clock mclock.Clock) Server {
 type serverSet map[Server]struct{}
 
 type Event struct {
-	Type int
+	Type string
 	Data any
 }
 

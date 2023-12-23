@@ -40,8 +40,10 @@ func NewApiServer(api *BeaconLightApi) *ApiServer {
 func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 	s.eventCallback = eventCallback
 	s.unsubscribe = s.api.StartHeadListener(func(slot uint64, blockRoot common.Hash) {
+		log.Debug("New head received", "slot", slot, "blockRoot", blockRoot)
 		eventCallback(request.Event{Type: sync.EvNewHead, Data: types.HeadInfo{Slot: slot, BlockRoot: blockRoot}})
 	}, func(head types.SignedHeader) {
+		log.Debug("New signed head received", "slot", head.Header.Slot, "blockRoot", head.Header.Hash(), "signerCount", head.Signature.SignerCount())
 		eventCallback(request.Event{Type: sync.EvNewSignedHead, Data: head})
 	}, func(err error) {
 		log.Warn("Head event stream error", "err", err)
