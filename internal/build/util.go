@@ -73,10 +73,17 @@ func MustRunCommand(cmd string, args ...string) {
 // when there is no output.
 func MustRunCommandWithOutput(cmd string, args ...string) {
 	interval := time.NewTicker(time.Minute)
+	done := make(chan struct{})
 	defer interval.Stop()
+	defer close(done)
 	go func() {
-		for range interval.C {
-			fmt.Printf("Waiting for command %q\n", cmd)
+		for {
+			select {
+			case <-interval.C:
+				fmt.Printf("Waiting for command %q\n", cmd)
+			case <-done:
+				return
+			}
 		}
 	}()
 	MustRun(exec.Command(cmd, args...))

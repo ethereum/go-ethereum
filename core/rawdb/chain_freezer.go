@@ -131,7 +131,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 
 		case *number < threshold:
-			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", threshold)
+			log.Debug("Current full block not old enough to freeze", "number", *number, "hash", hash, "delay", threshold)
 			backoff = true
 			continue
 
