@@ -16,6 +16,12 @@
 
 package request
 
+import (
+	"math"
+
+	"github.com/ethereum/go-ethereum/log"
+)
+
 type (
 	Request     any
 	Response    any
@@ -40,14 +46,20 @@ func (p *RequestTracker) TryRequest(requestFn func(server Server) (Request, floa
 		bestServer                            Server
 		bestRequest                           Request
 	)
-	maxServerPriority, maxRequestPriority = -1000, -1000
+	maxServerPriority, maxRequestPriority = -math.MaxFloat32, -math.MaxFloat32
+	serverCount := len(p.servers)
+	var removed, candidates int
 	for server, _ := range p.servers {
 		canRequest, serverPriority := server.CanRequestNow()
 		if !canRequest {
 			delete(p.servers, server)
+			removed++
 			continue
 		}
 		request, requestPriority := requestFn(server)
+		if request != nil {
+			candidates++
+		}
 		if request == nil || requestPriority < maxRequestPriority ||
 			(requestPriority == maxRequestPriority && serverPriority <= maxServerPriority) {
 			continue
@@ -55,6 +67,7 @@ func (p *RequestTracker) TryRequest(requestFn func(server Server) (Request, floa
 		maxServerPriority, maxRequestPriority = serverPriority, requestPriority
 		bestServer, bestRequest = server, request
 	}
+	log.Debug("Request attempt", "serverCount", serverCount, "removedServers", removed, "requestCandidates", candidates)
 	if bestServer == nil {
 		return ServerAndId{}, nil
 	}

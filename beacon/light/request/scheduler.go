@@ -48,6 +48,7 @@ type Scheduler struct {
 	lock         sync.Mutex
 	clock        mclock.Clock
 	modules      []Module // first has highest priority
+	names        map[Module]string
 	trackers     map[Module]*RequestTracker
 	servers      map[Server]struct{}
 	pending      map[ServerAndId]pendingRequest
@@ -61,7 +62,7 @@ type Scheduler struct {
 
 type ServerEvent struct {
 	Server Server
-	Type   int
+	Type   string
 	Data   any
 }
 
@@ -83,6 +84,7 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 	s := &Scheduler{
 		clock:    clock,
 		servers:  make(map[Server]struct{}),
+		names:    make(map[Module]string),
 		trackers: make(map[Module]*RequestTracker),
 		pending:  make(map[ServerAndId]pendingRequest),
 		stopCh:   make(chan chan struct{}),
@@ -98,7 +100,7 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 // RegisterModule registers a module. Should be called before starting the scheduler.
 // In each processing round the order of module processing depends on the order of
 // registration.
-func (s *Scheduler) RegisterModule(m Module) {
+func (s *Scheduler) RegisterModule(m Module, name string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -107,6 +109,7 @@ func (s *Scheduler) RegisterModule(m Module) {
 		scheduler: s,
 		module:    m,
 	}
+	s.names[m] = name
 }
 
 // RegisterServer registers a new server.
@@ -191,6 +194,12 @@ func (s *Scheduler) processModules() {
 	s.serverEvents = nil
 	s.lock.Unlock()
 
+	eventTypes := make([]string, len(serverEvents))
+	for i, ev := range serverEvents {
+		eventTypes[i] = ev.Type
+	}
+	log.Debug("Processing modules", "servers", len(servers), "server events", eventTypes)
+
 	for _, module := range s.modules {
 		s.lock.Lock()
 		tracker := s.trackers[module]
@@ -198,6 +207,19 @@ func (s *Scheduler) processModules() {
 		requestEvents := tracker.requestEvents
 		tracker.requestEvents = nil
 		s.lock.Unlock()
+
+		var respCount, failCount, timeoutCount int
+		for _, ev := range requestEvents {
+			if ev.Response != nil {
+				respCount++
+			} else if ev.Finalized {
+				failCount++
+			} else {
+				timeoutCount++
+			}
+		}
+		log.Debug("Processing module", "name", s.names[module], "responses", respCount, "fails", failCount, "timeouts", timeoutCount)
+
 		if module.Process(tracker, requestEvents, serverEvents) {
 			s.Trigger()
 		}
