@@ -147,9 +147,8 @@ func (s *serverWithTimeout) SendRequest(request Request) (reqId ID) {
 			s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
 		}*/
 		s.lock.Lock()
-		defer s.lock.Unlock()
-
 		if _, ok := s.timeouts[reqId]; !ok {
+			s.lock.Unlock()
 			return
 		}
 		s.timeouts[reqId] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
@@ -157,15 +156,18 @@ func (s *serverWithTimeout) SendRequest(request Request) (reqId ID) {
 				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
 			}*/
 			s.lock.Lock()
-			defer s.lock.Unlock()
-
 			if _, ok := s.timeouts[reqId]; !ok {
+				s.lock.Unlock()
 				return
 			}
 			delete(s.timeouts, reqId)
-			s.childEventCb(Event{Type: EvFail, Data: reqId})
+			childEventCb := s.childEventCb
+			s.lock.Unlock()
+			childEventCb(Event{Type: EvFail, Data: reqId})
 		})
-		s.childEventCb(Event{Type: EvTimeout, Data: reqId})
+		childEventCb := s.childEventCb
+		s.lock.Unlock()
+		childEventCb(Event{Type: EvTimeout, Data: reqId})
 	})
 	return reqId
 }
@@ -227,8 +229,7 @@ func (s *serverWithLimits) Subscribe(eventCallback func(event Event)) {
 
 func (s *serverWithLimits) eventCallback(event Event) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
+	var sendCanRequestAgain bool
 	switch event.Type {
 	case EvTimeout:
 		s.softTimeouts[event.Data.(ID)] = struct{}{}
@@ -252,9 +253,20 @@ func (s *serverWithLimits) eventCallback(event Event) {
 			s.parallelLimit -= parallelAdjustUp
 		}
 		s.pendingCount--
-		s.canRequestNow() // send event if needed
+		if canRequest, _ := s.canRequestNow(); canRequest {
+			sendCanRequestAgain = s.sendEvent
+			s.sendEvent = false
+		}
+		if event.Type == EvFail {
+			s.fail("failed request")
+		}
 	}
-	s.childEventCb(event)
+	childEventCb := s.childEventCb
+	s.lock.Unlock()
+	childEventCb(event)
+	if sendCanRequestAgain {
+		childEventCb(Event{Type: EvCanRequestAgain})
+	}
 }
 
 func (s *serverWithLimits) SendRequest(request Request) (reqId ID) {
@@ -283,10 +295,6 @@ func (s *serverWithLimits) canRequestNow() (bool, float32) {
 	if s.delayTimer != nil || s.pendingCount >= int(s.parallelLimit) {
 		return false, 0
 	}
-	if s.sendEvent {
-		s.childEventCb(Event{Type: EvCanRequestAgain})
-		s.sendEvent = false
-	}
 	if s.parallelLimit < minParallelLimit {
 		s.parallelLimit = minParallelLimit
 	}
@@ -295,14 +303,19 @@ func (s *serverWithLimits) canRequestNow() (bool, float32) {
 
 // EvCanRequestAgain guaranteed if it returns false
 func (s *serverWithLimits) CanRequestNow() (bool, float32) {
+	var sendCanRequestAgain bool
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	canSend, priority := s.canRequestNow()
-	if !canSend {
-		s.sendEvent = true
+	canRequest, priority := s.canRequestNow()
+	if canRequest {
+		sendCanRequestAgain = s.sendEvent
+		s.sendEvent = false
 	}
-	return canSend, priority
+	childEventCb := s.childEventCb
+	s.lock.Unlock()
+	if sendCanRequestAgain {
+		childEventCb(Event{Type: EvCanRequestAgain})
+	}
+	return canRequest, priority
 }
 
 func (s *serverWithLimits) delay(delay time.Duration) {
@@ -319,12 +332,20 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 		/*if s.scheduler.testTimerResults != nil {
 			s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, true) // simulated timer finished
 		}*/
+		var sendCanRequestAgain bool
 		s.lock.Lock()
 		if s.delayTimer != nil && s.delayCounter == delayCounter { // do nothing if there is a new timer now
 			s.delayTimer = nil
-			s.canRequestNow() // send event if necessary
+			if canRequest, _ := s.canRequestNow(); canRequest {
+				sendCanRequestAgain = s.sendEvent
+				s.sendEvent = false
+			}
 		}
+		childEventCb := s.childEventCb
 		s.lock.Unlock()
+		if sendCanRequestAgain {
+			childEventCb(Event{Type: EvCanRequestAgain})
+		}
 	})
 }
 
@@ -332,6 +353,10 @@ func (s *serverWithLimits) Fail(desc string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	s.fail(desc)
+}
+
+func (s *serverWithLimits) fail(desc string) {
 	log.Debug("Server error", "description", desc)
 	s.failureDelay *= 2
 	now := s.clock.Now()

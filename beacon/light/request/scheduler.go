@@ -266,7 +266,6 @@ func (s *Scheduler) handleEvent(server Server, event Event) {
 		s.addRequestEvent(server, idr.ID, idr.Response, false, true)
 	case EvFail:
 		s.addRequestEvent(server, event.Data.(ID), nil, false, true)
-		server.Fail("failed request")
 	case EvTimeout:
 		s.addRequestEvent(server, event.Data.(ID), nil, true, false)
 	case EvUnregistered:
