@@ -51,7 +51,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 }
 
-// GetSnapshotAtHash retrieves the state snapshot at a given block.
+// GetSnapshotAtHash retrieves the state snapshot at a given block hash.
 func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
