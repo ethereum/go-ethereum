@@ -238,6 +238,7 @@ func (s *serverWithLimits) eventCallback(event Event) {
 		if s.parallelLimit < minParallelLimit {
 			s.parallelLimit = minParallelLimit
 		}
+		log.Debug("Server timeout", "count", s.timeoutCount, "parallelLimit", s.parallelLimit)
 	case EvResponse, EvFail:
 		var id ID
 		if event.Type == EvResponse {
@@ -248,9 +249,10 @@ func (s *serverWithLimits) eventCallback(event Event) {
 		if _, ok := s.softTimeouts[id]; ok {
 			delete(s.softTimeouts, id)
 			s.timeoutCount--
+			log.Debug("Server timeout finalized", "count", s.timeoutCount, "parallelLimit", s.parallelLimit)
 		}
 		if event.Type == EvResponse && s.pendingCount >= int(s.parallelLimit) {
-			s.parallelLimit -= parallelAdjustUp
+			s.parallelLimit += parallelAdjustUp
 		}
 		s.pendingCount--
 		if canRequest, _ := s.canRequestNow(); canRequest {
@@ -328,7 +330,9 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 
 	s.delayCounter++
 	delayCounter := s.delayCounter
+	log.Debug("Server delay started", "length", delay)
 	s.delayTimer = s.clock.AfterFunc(delay, func() {
+		log.Debug("Server delay ended", "length", delay)
 		/*if s.scheduler.testTimerResults != nil {
 			s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, true) // simulated timer finished
 		}*/
