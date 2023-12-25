@@ -494,6 +494,8 @@ github.com/opentracing/opentracing-go v1.1.0 h1:pWlfV3Bxv7k65HYwkikxat0+s3pV4bsq
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/optimism-java/utp-go v0.0.0-20231203033001-5a531e1e11a0 h1:fSjUuzS7gI3IXz5mo8opUlK+9UktElRy1MH5EweLg2k=
 github.com/optimism-java/utp-go v0.0.0-20231203033001-5a531e1e11a0/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
+github.com/optimism-java/utp-go v0.0.0-20231225095152-5a9690d82b58 h1:EZfd3NpJV+CL5vORquJ2O6eAUjkpI7+ge9a9n9HMyYE=
+github.com/optimism-java/utp-go v0.0.0-20231225095152-5a9690d82b58/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
 github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7 h1:oYW+YCJ1pachXTQmzR3rNLYGGz4g/UgFcjb28p/viDM=
 github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7/go.mod h1:CRroGNssyjTd/qIG2FyxByd2S8JEAZXBl4qUrZf8GS0=
