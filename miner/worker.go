@@ -1233,6 +1233,10 @@ loop:
 			w.checkCurrentTxNumWithCCC(w.current.tcount)
 			break loop
 
+		case (errors.Is(err, core.ErrInsufficientFunds) || errors.Is(errors.Unwrap(err), core.ErrInsufficientFunds)):
+			log.Trace("Skipping account with insufficient funds", "sender", from)
+			txs.Pop()
+
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).

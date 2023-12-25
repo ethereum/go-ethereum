@@ -202,16 +202,17 @@ func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error 
 	}
 
 	balance := state.GetBalance(from)
-	l2Fee := calculateL2Fee(tx)
-	l1DataFee, err := CalculateL1DataFee(tx, state)
-	if err != nil {
-		return fmt.Errorf("invalid transaction: %w", err)
-	}
-
 	cost := tx.Value()
+
+	l2Fee := calculateL2Fee(tx)
 	cost = cost.Add(cost, l2Fee)
 	if balance.Cmp(cost) < 0 {
 		return errors.New("invalid transaction: insufficient funds for gas * price + value")
+	}
+
+	l1DataFee, err := CalculateL1DataFee(tx, state)
+	if err != nil {
+		return fmt.Errorf("invalid transaction: %w", err)
 	}
 
 	cost = cost.Add(cost, l1DataFee)
