@@ -13,7 +13,7 @@ import (
 
 const nodeDataDir = "./"
 
-func clear() {
+func clearNodeData() {
 	os.Remove(fmt.Sprintf("%s%s", nodeDataDir, sqliteName))
 }
 
@@ -29,7 +29,7 @@ func TestBasicStorage(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	contentId := []byte("test")
@@ -65,7 +65,7 @@ func TestDBSize(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	numBytes := 10000
@@ -126,7 +126,7 @@ func TestDBPruning(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	furthestElement := uint256.NewInt(40)
@@ -193,7 +193,7 @@ func TestGetLargestDistance(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	furthestElement := uint256.NewInt(40)
@@ -218,7 +218,7 @@ func TestSimpleForcePruning(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
 	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	furthestElement := uint256.NewInt(40)
@@ -262,7 +262,7 @@ func TestForcePruning(t *testing.T) {
 
 	storage, err := NewContentStorage(startCap, enode.ID(nodeId), nodeDataDir)
 	assert.NoError(t, err)
-	defer clear()
+	defer clearNodeData()
 	defer storage.Close()
 
 	increment := uint256.NewInt(0).Div(maxUint256, uint256.NewInt(amountOfItems))

@@ -827,7 +827,7 @@ func (p *PortalProtocol) handleFindNodes(fromAddr *net.UDPAddr, request *portalw
 		distances[i] = uint(ssz.UnmarshallUint16(distance[:]))
 	}
 
-	nodes := p.DiscV5.collectTableNodes(fromAddr.IP, distances, portalFindnodesResultLimit)
+	nodes := p.collectTableNodes(fromAddr.IP, distances, portalFindnodesResultLimit)
 
 	nodesOverhead := 1 + 1 + 4 // msg id + total + container offset
 	maxPayloadSize := maxPacketSize - talkRespOverhead - nodesOverhead
@@ -1328,6 +1328,33 @@ func (p *PortalProtocol) ResolveNodeId(id enode.ID) *enode.Node {
 	}
 
 	return n
+}
+
+func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit int) []*enode.Node {
+	var bn []*enode.Node
+	var nodes []*enode.Node
+	var processed = make(map[uint]struct{})
+	for _, dist := range distances {
+		// Reject duplicate / invalid distances.
+		_, seen := processed[dist]
+		if seen || dist > 256 {
+			continue
+		}
+		processed[dist] = struct{}{}
+
+		for _, n := range p.table.appendLiveNodes(dist, bn[:0]) {
+			// Apply some pre-checks to avoid sending invalid nodes.
+			// Note liveness is checked by appendLiveNodes.
+			if netutil.CheckRelayIP(rip, n.IP()) != nil {
+				continue
+			}
+			nodes = append(nodes, n)
+			if len(nodes) >= limit {
+				return nodes
+			}
+		}
+	}
+	return nodes
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
