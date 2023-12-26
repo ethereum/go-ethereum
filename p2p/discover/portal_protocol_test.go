@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -298,4 +299,78 @@ func TestPortalWireProtocol(t *testing.T) {
 	assert.Equal(t, testEntry1.Content, contentElement.Contents[0])
 	assert.Equal(t, testEntry2.ContentKey, contentElement.ContentKeys[1])
 	assert.Equal(t, testEntry2.Content, contentElement.Contents[1])
+}
+
+func TestCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func(ctx context.Context) {
+		defer func() {
+			t.Log("goroutine cancel")
+		}()
+
+		time.Sleep(time.Second * 5)
+	}(ctx)
+
+	cancel()
+	t.Log("after main cancel")
+
+	time.Sleep(time.Second * 3)
+}
+
+// func TestInsertWithDistance(t *testing.T) {
+// 	targetId := uint256.NewInt(0).Bytes32()
+// 	nodes := make([]*node, 0, 10)
+// 	for i := 0; i < 10; i++ {
+// 		enode := &node{
+// 			Node: enode.Node{
+// 				id: enode.ID(uint256.NewInt(uint64(i)).Bytes32()),
+// 			},
+// 		}
+// 		nodes = append(nodes, enode)
+// 	}
+// 	newNode := &node{
+// 		Node: &enode.Node{
+// 			id: uint256.NewInt(20).Bytes32(),
+// 		},
+// 	}
+// }
+
+func TestContentLookup(t *testing.T) {
+	node1, err := setupLocalPortalNode(":7777", nil)
+	assert.NoError(t, err)
+	node1.log = testlog.Logger(t, log.LvlTrace)
+	err = node1.Start()
+	assert.NoError(t, err)
+	fmt.Println(node1.localNode.Node().String())
+
+	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
+	assert.NoError(t, err)
+	node2.log = testlog.Logger(t, log.LvlTrace)
+	err = node2.Start()
+	assert.NoError(t, err)
+	fmt.Println(node2.localNode.Node().String())
+
+	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
+	assert.NoError(t, err)
+	node3.log = testlog.Logger(t, log.LvlTrace)
+	err = node3.Start()
+	assert.NoError(t, err)
+	fmt.Println(node3.localNode.Node().String())
+	time.Sleep(10 * time.Second)
+
+	contentKey := []byte{0x3, 0x4}
+	content := []byte{0x1, 0x2}
+	contentId := node1.toContentId(contentKey)
+
+	err = node3.storage.Put(contentId, content)
+	assert.NoError(t, err)
+
+	lookupResult, err := node1.ContentLookup(contentKey)
+	assert.NoError(t, err)
+	assert.Equal(t, lookupResult.Content, content)
+
+	lookupResult, err = node1.ContentLookup([]byte{0x2, 0x4})
+	assert.Equal(t, ContentNotFound, err)
+	assert.Nil(t, lookupResult)
 }
