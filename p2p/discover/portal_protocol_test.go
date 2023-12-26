@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/optimism-java/utp-go"
 	"io"
 	"net"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/optimism-java/utp-go"
 	"github.com/stretchr/testify/assert"
 )
 
