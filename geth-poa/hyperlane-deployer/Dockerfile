@@ -7,8 +7,8 @@ WORKDIR /
 RUN git clone https://github.com/primevprotocol/hyperlane-monorepo.git 
 WORKDIR /hyperlane-monorepo
 # Hyperlane 3.5 release w/ merged primev changes
-# https://github.com/primevprotocol/hyperlane-monorepo/commit/ce1fe3f05e915823ecc355e8d764f010b4b38fa9
-RUN git checkout ce1fe3f05e915823ecc355e8d764f010b4b38fa9
+# https://github.com/primevprotocol/hyperlane-monorepo/commit/1c8cdc9e57389024274242d28e032a2de535c2c7
+RUN git checkout 1c8cdc9e57389024274242d28e032a2de535c2c7
 
 RUN yarn install
 RUN yarn build

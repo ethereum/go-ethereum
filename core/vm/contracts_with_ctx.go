@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -79,11 +80,12 @@ func (c *mint) RequiredGas(input []byte) uint64 {
 
 // Predetermined create2 address of whitelist contract with exclusive mint/burn privileges.
 // This address assumes deployer is 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266.
-const whitelistCreate2Addr = "0x07e77fdc3DF92E58c9230eEFaABdBd92a8D0c2Af"
+const whitelistCreate2Addr = "0x5D1415C0973034d162F5FEcF19B50dA057057e29"
 
 func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+		log.Error("Error parsing transfer: caller not whitelisted")
 		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
 	}
 
@@ -92,7 +94,8 @@ func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 	var parsed bool
 	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
 	if !parsed {
-		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[64:96]))
+		log.Error("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
+		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 	}
 
 	// Create native token out of thin air
@@ -109,9 +112,13 @@ func (c *burn) RequiredGas(input []byte) uint64 {
 	return 100
 }
 
+// Note ctx.CanTransfer method obtains an incorrect balance w.r.t "burnFrom" address,
+// specifically during estimateGas. The CanTransfer check was therefore removed,
+// and the calling contract is responsible for checking balance.
 func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	if ctx.caller != common.HexToAddress(whitelistCreate2Addr) {
+		log.Error("Error parsing transfer: caller not whitelisted")
 		return nil, fmt.Errorf("Error parsing transfer: caller not whitelisted")
 	}
 
@@ -120,12 +127,10 @@ func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 	var parsed bool
 	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
 	if !parsed {
-		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[64:96]))
+		log.Error("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
+		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 	}
 
-	if !ctx.CanTransfer(ctx.evm.StateDB, burnFrom, value) {
-		return nil, ErrInsufficientBalance
-	}
 	ctx.evm.StateDB.SubBalance(burnFrom, value)
 
 	return input, nil
