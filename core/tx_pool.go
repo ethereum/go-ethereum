@@ -658,9 +658,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
+	// Get L1 data fee in current state
+	l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState)
+	if err != nil {
+		return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
+	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	if pool.currentState.GetBalance(from).Cmp(new(big.Int).Add(tx.Cost(), l1DataFee)) < 0 {
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
