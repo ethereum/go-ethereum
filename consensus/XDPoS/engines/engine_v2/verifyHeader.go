@@ -115,7 +115,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 			return utils.ErrInvalidCheckpointSigners
 		}
 
-		localMasterNodes, localPenalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash)
+		localMasterNodes, localPenalties, err := x.calcMasternodes(chain, header.Number, header.ParentHash, round)
 		masterNodes = localMasterNodes
 		if err != nil {
 			log.Error("[verifyHeader] Fail to calculate master nodes list with penalty", "Number", header.Number, "Hash", header.Hash())

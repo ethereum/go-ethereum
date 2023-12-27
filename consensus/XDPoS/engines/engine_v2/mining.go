@@ -25,7 +25,7 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, pare
 	}
 	var masterNodes []common.Address
 	if isEpochSwitch {
-		masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash())
+		masterNodes, _, err = x.calcMasternodes(chain, big.NewInt(0).Add(parent.Number, big.NewInt(1)), parent.Hash(), round)
 		if err != nil {
 			log.Error("[yourturn] Cannot calcMasternodes at gap num ", "err", err, "parent number", parent.Number)
 			return false, err

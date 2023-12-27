@@ -260,6 +260,50 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
 	assert.Equal(t, utils.ErrValidatorNotWithinMasternodes, err)
 }
 
+/*
+ 1. Insert 20 masternode before gap block
+ 2. Prepare 20 masternode block header with round 9000
+ 3. verify this header while node is on round 899,
+    This is to simulate node is syncing from remote during config switch
+*/
+func TestConfigSwitchOnDifferentMasternodeCount(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+	// Enable verify
+	config.XDPoS.V2.SkipV2Validation = false
+	// Block 901 is the first v2 block with round of 1
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*2, &config, nil)
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+	x := adaptor.EngineV2
+
+	// Generate round 900 header, num 1800
+	header1800 := blockchain.GetBlockByNumber(1800).Header()
+
+	snap, err := x.GetSnapshot(blockchain, currentBlock.Header())
+	assert.Nil(t, err)
+	assert.Equal(t, len(snap.NextEpochMasterNodes), 20)
+	header1800.Validators = []byte{}
+	for i := 0; i < 20; i++ {
+		header1800.Validators = append(header1800.Validators, snap.NextEpochMasterNodes[i].Bytes()...)
+	}
+
+	round, err := x.GetRoundNumber(header1800)
+	assert.Nil(t, err)
+	assert.Equal(t, round, types.Round(900))
+
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, 899, false)
+
+	err = adaptor.VerifyHeader(blockchain, header1800, true)
+
+	// error ErrValidatorNotWithinMasternodes means verifyQC is passed and move to next verification process
+	assert.Equal(t, utils.ErrValidatorNotWithinMasternodes, err)
+}
+
 func TestConfigSwitchOnDifferentMindPeriod(t *testing.T) {
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
