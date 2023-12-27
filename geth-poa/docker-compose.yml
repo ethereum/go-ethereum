@@ -215,6 +215,7 @@ services:
       args:
         # Image can be built for arm64 with https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/main/rust/build.sh
         - AGENT_BASE_IMAGE=${AGENT_BASE_IMAGE}
+        - SETTLEMENT_RPC_URL=${SETTLEMENT_RPC_URL}
     # Reuse geth private key for validator
     command: ./validator --validator.key ${NODE1_PRIVATE_KEY} --chains.mevcommitsettlement.signer.key ${NODE1_PRIVATE_KEY} --checkpointSyncer.path /val1-sigs
     # TODO: evaluate why container needs to run as root
@@ -238,6 +239,7 @@ services:
       dockerfile: Dockerfile
       args:
         - AGENT_BASE_IMAGE=${AGENT_BASE_IMAGE}
+        - SETTLEMENT_RPC_URL=${SETTLEMENT_RPC_URL}
     # Reuse geth private key for validator
     command: ./validator --validator.key ${NODE2_PRIVATE_KEY} --chains.mevcommitsettlement.signer.key ${NODE2_PRIVATE_KEY} --checkpointSyncer.path /val2-sigs
     # TODO: evaluate why container needs to run as root

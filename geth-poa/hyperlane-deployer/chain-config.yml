@@ -5,7 +5,7 @@ mevcommitsettlement:
   name: mevcommitsettlement 
   protocol: ethereum 
   rpcUrls: 
-    # Only http field is required
+    # This RPC URL is specific to a local geth POA setup
     - http: http://172.29.0.98:8545
       pagination:
         maxBlockRange: 1000 
