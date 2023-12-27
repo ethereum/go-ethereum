@@ -157,7 +157,7 @@ var (
 		PragueTime:                    nil,
 		VerkleTime:                    nil,
 		TerminalTotalDifficulty:       nil,
-		TerminalTotalDifficultyPassed: true,
+		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 	}

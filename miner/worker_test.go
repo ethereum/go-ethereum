@@ -166,8 +166,16 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	return w, backend
 }
 
-func TestGenerateAndImportBlock(t *testing.T) {
-	t.Parallel()
+
+func TestGenerateBlockAndImportEthash(t *testing.T) {
+	testGenerateBlockAndImport(t, false)
+}
+
+func TestGenerateBlockAndImportClique(t *testing.T) {
+	testGenerateBlockAndImport(t, true)
+}
+
+func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		config = *params.AllCliqueProtocolChanges

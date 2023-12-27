@@ -300,7 +300,7 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 	return result, nil
 }
 
-func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
+func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 {
@@ -322,8 +322,23 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 			return i, ErrBannedHash
 		}
 	}
-	// Start the parallel verifier
-	abort, results := hc.engine.VerifyHeaders(hc, chain)
+
+	// Generate the list of seal verification requests, and start the parallel verifier
+	seals := make([]bool, len(chain))
+	if checkFreq != 0 {
+		// In case of checkFreq == 0 all seals are left false.
+		for i := 0; i <= len(seals)/checkFreq; i++ {
+			index := i*checkFreq + hc.rand.Intn(checkFreq)
+			if index >= len(seals) {
+				index = len(seals) - 1
+			}
+			seals[index] = true
+		}
+		// Last should always be verified to avoid junk.
+		seals[len(seals)-1] = true
+	}
+
+	abort, results := hc.engine.VerifyHeaders(hc, chain, seals)
 	defer close(abort)
 
 	// Iterate over the headers and ensure they all check out

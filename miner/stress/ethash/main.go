@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// This file contains a miner stress test based on the Clique consensus engine.
+// This file contains a miner stress test based on the Ethash consensus engine.
 package main
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"math/big"
 	"math/rand"
@@ -26,11 +25,11 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -45,7 +44,7 @@ import (
 )
 
 func main() {
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
 	// Generate a batch of accounts to seal and fund with
@@ -53,12 +52,11 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	sealers := make([]*ecdsa.PrivateKey, 4)
-	for i := 0; i < len(sealers); i++ {
-		sealers[i], _ = crypto.GenerateKey()
-	}
-	// Create a Clique network based off of the Sepolia config
-	genesis := makeGenesis(faucets, sealers)
+	// Pre-generate the ethash mining DAG so we don't race
+	ethash.MakeDataset(1, ethconfig.Defaults.Ethash.DatasetDir)
+
+	// Create an Ethash network
+	genesis := makeGenesis(faucets)
 
 	// Handle interrupts.
 	interruptCh := make(chan os.Signal, 5)
@@ -69,9 +67,9 @@ func main() {
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
-	for _, sealer := range sealers {
+	for i := 0; i < 4; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := makeSealer(genesis)
+		stack, ethBackend, err := makeMiner(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -88,20 +86,9 @@ func main() {
 		stacks = append(stacks, stack)
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
-
-		// Inject the signer key and start sealing with it
-		ks := keystore.NewKeyStore(stack.KeyStoreDir(), keystore.LightScryptN, keystore.LightScryptP)
-		signer, err := ks.ImportECDSA(sealer, "")
-		if err != nil {
-			panic(err)
-		}
-		if err := ks.Unlock(signer, ""); err != nil {
-			panic(err)
-		}
-		stack.AccountManager().AddBackend(ks)
 	}
 
-	// Iterate over all the nodes and start signing on them
+	// Iterate over all the nodes and start mining
 	time.Sleep(3 * time.Second)
 	for _, node := range nodes {
 		if err := node.StartMining(1); err != nil {
@@ -110,7 +97,7 @@ func main() {
 	}
 	time.Sleep(3 * time.Second)
 
-	// Start injecting transactions from the faucet like crazy
+	// Start injecting transactions from the faucets like crazy
 	nonces := make([]uint64, len(faucets))
 	for {
 		// Stop when interrupted.
@@ -123,16 +110,16 @@ func main() {
 		default:
 		}
 
-		// Pick a random signer node
+		// Pick a random mining node
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
-		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000), nil), types.HomesteadSigner{}, faucets[index])
+		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().Add([]*types.Transaction{tx}, true, false); err != nil {
+		if err := backend.TxPool().AddLocal(tx); err != nil {
 			panic(err)
 		}
 		nonces[index]++
@@ -144,15 +131,14 @@ func main() {
 	}
 }
 
-// makeGenesis creates a custom Clique genesis block based on some pre-defined
-// signer and faucet accounts.
-func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core.Genesis {
-	// Create a Clique network based off of the Sepolia config
-	genesis := core.DefaultSepoliaGenesisBlock()
+// makeGenesis creates a custom Ethash genesis block based on some pre-defined
+// faucet accounts.
+func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
+	genesis := core.DefaultGenesisBlock()
+	genesis.Difficulty = params.MinimumDifficulty
 	genesis.GasLimit = 25000000
 
 	genesis.Config.ChainID = big.NewInt(18)
-	genesis.Config.Clique.Period = 1
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
@@ -160,27 +146,10 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		}
 	}
-	// Sort the signers and embed into the extra-data section
-	signers := make([]common.Address, len(sealers))
-	for i, sealer := range sealers {
-		signers[i] = crypto.PubkeyToAddress(sealer.PublicKey)
-	}
-	for i := 0; i < len(signers); i++ {
-		for j := i + 1; j < len(signers); j++ {
-			if bytes.Compare(signers[i][:], signers[j][:]) > 0 {
-				signers[i], signers[j] = signers[j], signers[i]
-			}
-		}
-	}
-	genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
-	for i, signer := range signers {
-		copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
-	}
-	// Return the genesis block for initialization
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := os.MkdirTemp("", "")
 
@@ -193,25 +162,27 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 			NoDiscovery: true,
 			MaxPeers:    25,
 		},
+		UseLightweightKDF: true,
 	}
-	// Start the node and configure a full Ethereum node on it
+	// Create the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err
 	}
-	// Create and register the backend
 	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          legacypool.DefaultConfig,
+		TxPool:          txpool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
+		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
-			GasCeil:  genesis.GasLimit * 11 / 10,
-			GasPrice: big.NewInt(1),
-			Recommit: time.Second,
+			Etherbase: common.Address{1},
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
 		},
 	})
 	if err != nil {
