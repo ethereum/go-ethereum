@@ -289,7 +289,7 @@ services:
         condition: service_healthy
     environment:
       - NEXT_PUBLIC_WALLET_CONNECT_ID=${NEXT_PUBLIC_WALLET_CONNECT_ID}
-      - L2_NODE_URL=${L2_NODE_URL}
+      - SETTLEMENT_RPC_URL=${SETTLEMENT_RPC_URL}
     networks:
       primev_net:
         ipv4_address: '172.29.0.90'
