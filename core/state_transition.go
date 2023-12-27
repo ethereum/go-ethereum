@@ -67,14 +67,20 @@ func (result *ExecutionResult) Revert() []byte {
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool, isEIP3860 bool) (uint64, error) {
-	// Set the starting gas for the raw transaction
+	// If it's not a contract creation transaction, set gas to zero
+	if !isContractCreation {
+		return 0, nil
+	}
+
+	// Set the starting gas for contract creation
 	var gas uint64
-	if isContractCreation && isHomestead {
+	if isHomestead {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
 	}
 	dataLen := uint64(len(data))
+
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
@@ -84,6 +90,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 				nz++
 			}
 		}
+
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
 		if isEIP2028 {
@@ -100,7 +107,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 		gas += z * params.TxDataZeroGas
 
-		if isContractCreation && isEIP3860 {
+		if isEIP3860 {
 			lenWords := toWordSize(dataLen)
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
@@ -108,10 +115,12 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			gas += lenWords * params.InitCodeWordGas
 		}
 	}
+
 	if accessList != nil {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
+
 	return gas, nil
 }
 
@@ -235,33 +244,50 @@ func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval = mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
+
 	if st.msg.GasFeeCap != nil {
 		balanceCheck.SetUint64(st.msg.GasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
+
+	// Additional logic for Cancun chain configuration
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
-			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
 			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
 			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
 			balanceCheck.Add(balanceCheck, blobBalanceCheck)
-			// Pay for blobGasUsed * actual blob fee
+
 			blobFee := new(big.Int).SetUint64(blobGas)
 			blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
 			mgval.Add(mgval, blobFee)
 		}
 	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+
+	// Check if it's a contract creation transaction
+	contractCreation := st.msg.To == nil
+
+	if contractCreation {
+		// Deduct gas from sender's account for contract creation
+		if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+		}
+		st.state.SubBalance(st.msg.From, mgval)
+	} else {
+		// Deduct gas from contract's funds for contract interaction
+		contractAddress := *st.msg.To
+		if have, want := st.state.GetBalance(contractAddress), balanceCheck; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: contract address %v have %v want %v", ErrInsufficientFunds, contractAddress.Hex(), have, want)
+		}
+		st.state.SubBalance(contractAddress, mgval)
 	}
+
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
 	st.gasRemaining += st.msg.GasLimit
-
 	st.initialGas = st.msg.GasLimit
-	st.state.SubBalance(st.msg.From, mgval)
+
 	return nil
 }
 
@@ -383,7 +409,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 	)
 
-	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
@@ -393,39 +418,36 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gasRemaining -= gas
 
-	// Check clause 6
 	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 
-	// Check whether the init code size has been exceeded.
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
-	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin)
-	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	var (
 		ret   []byte
-		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
+		vmerr error
 	)
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
+
+		// Reward logic for contract interaction
+		if vmerr == nil {
+			reward := big.NewInt(100) // Define the reward amount
+			st.state.AddBalance(msg.From, reward)
+		}
 	}
 
 	var gasRefund uint64
 	if !rules.IsLondon {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
 		gasRefund = st.refundGas(params.RefundQuotient)
 	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
 		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 	effectiveTip := msg.GasPrice
@@ -433,11 +455,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
 
-	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
-		// Skip fee payment when NoBaseFee is set and the fee fields
-		// are 0. This avoids a negative effectiveTip being applied to
-		// the coinbase when simulating calls.
-	} else {
+	if !(st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0) {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
@@ -459,9 +477,20 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	}
 	st.gasRemaining += refund
 
+	// Check if it's a contract creation transaction
+	contractCreation := st.msg.To == nil
+
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
-	st.state.AddBalance(st.msg.From, remaining)
+
+	if contractCreation {
+		// For contract creation, refund the sender
+		st.state.AddBalance(st.msg.From, remaining)
+	} else {
+		// For contract interaction, refund the contract
+		contractAddress := *st.msg.To
+		st.state.AddBalance(contractAddress, remaining)
+	}
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
