@@ -197,8 +197,9 @@ type Block struct {
 	withdrawals  Withdrawals
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
+	hash       atomic.Value
+	size       atomic.Value
+	l1MsgCount atomic.Value
 
 	// These fields are used by package eth to track
 	// inter-peer block relay.
@@ -503,6 +504,55 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+// ContainsL1Messages returns true if this block contains at least one L1 message.
+func (b *Block) ContainsL1Messages() bool {
+	for _, tx := range b.transactions {
+		if tx.IsL1MessageTx() {
+			return true
+		}
+	}
+	return false
+}
+
+// NumL1MessagesProcessed returns the number of L1 messages processed in this block.
+// This count includes both skipped and included messages.
+// `firstQueueIndex` is the first queue index available for this block to process.
+func (b *Block) NumL1MessagesProcessed(firstQueueIndex uint64) int {
+	if l1MsgCount := b.l1MsgCount.Load(); l1MsgCount != nil {
+		return l1MsgCount.(int)
+	}
+
+	// find first and last queue index in block
+	var lastQueueIndex *uint64
+
+	for ii, tx := range b.transactions {
+		if !tx.IsL1MessageTx() {
+			break
+		}
+		lastQueueIndex = &b.transactions[ii].AsL1MessageTx().QueueIndex
+	}
+
+	// calculate and cache L1 message count
+	count := 0
+	if lastQueueIndex != nil {
+		// lastQueueIndex is guaranteed to be non-nil in this case
+		count = int(*lastQueueIndex - firstQueueIndex + 1)
+	}
+	b.l1MsgCount.Store(count)
+	return count
+}
+
+// CountL2Tx returns the number of L2 transactions in this block.
+func (b *Block) CountL2Tx() int {
+	count := 0
+	for _, tx := range b.transactions {
+		if !tx.IsL1MessageTx() {
+			count += 1
+		}
+	}
+	return count
 }
 
 type Blocks []*Block

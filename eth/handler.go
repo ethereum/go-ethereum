@@ -611,6 +611,11 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
+		// L1 messages are not broadcast to peers
+		if tx.IsL1MessageTx() {
+			continue
+		}
+
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 
 		var numDirect int

@@ -695,6 +695,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 		Data:              call.Data,
 		AccessList:        call.AccessList,
 		SkipAccountChecks: true,
+		IsL1MessageTx:     false,
 	}
 
 	// Create a new environment which holds all relevant information

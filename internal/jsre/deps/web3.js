@@ -3790,6 +3790,9 @@ var outputTransactionFormatter = function (tx){
       tx.maxPriorityFeePerGas = utils.toBigNumber(tx.maxPriorityFeePerGas);
     }
     tx.value = utils.toBigNumber(tx.value);
+    if(tx.queueIndex !== undefined) {
+        tx.queueIndex = utils.toBigNumber(tx.queueIndex);
+    }
     return tx;
 };
 

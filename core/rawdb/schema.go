@@ -151,6 +151,11 @@ var (
 	batchChunkRangesPrefix            = []byte("R-bcr")
 	batchMetaPrefix                   = []byte("R-bm")
 	finalizedL2BlockNumberKey         = []byte("R-finalized")
+
+	// Skipped transactions
+	numSkippedTransactionsKey    = []byte("NumberOfSkippedTransactions")
+	skippedTransactionPrefix     = []byte("skip") // skippedTransactionPrefix + tx hash -> skipped transaction
+	skippedTransactionHashPrefix = []byte("sh")   // skippedTransactionHashPrefix + index -> tx hash
 )
 
 // Use the updated "L1" prefix on all new networks
@@ -377,6 +382,16 @@ func L1MessageKey(queueIndex uint64) []byte {
 // FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
 func FirstQueueIndexNotInL2BlockKey(l2BlockHash common.Hash) []byte {
 	return append(firstQueueIndexNotInL2BlockPrefix, l2BlockHash.Bytes()...)
+}
+
+// SkippedTransactionKey = skippedTransactionPrefix + tx hash
+func SkippedTransactionKey(txHash common.Hash) []byte {
+	return append(skippedTransactionPrefix, txHash.Bytes()...)
+}
+
+// SkippedTransactionHashKey = skippedTransactionHashPrefix + index (uint64 big endian)
+func SkippedTransactionHashKey(index uint64) []byte {
+	return append(skippedTransactionHashPrefix, encodeBigEndian(index)...)
 }
 
 // batchChunkRangesKey = batchChunkRangesPrefix + batch index (uint64 big endian)

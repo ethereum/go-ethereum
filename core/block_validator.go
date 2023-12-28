@@ -21,8 +21,10 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -124,6 +126,97 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		return consensus.ErrPrunedAncestor
 	}
+
+	if err := v.ValidateL1Messages(block); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateL1Messages validates L1 messages contained in a block.
+// We check the following conditions:
+// - L1 messages are in a contiguous section at the front of the block.
+// - The first L1 message's QueueIndex is right after the last L1 message included in the chain.
+// - L1 messages follow the QueueIndex order.
+// - The L1 messages included in the block match the node's view of the L1 ledger.
+func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
+	// skip DB read if the block contains no L1 messages
+	if !block.ContainsL1Messages() {
+		return nil
+	}
+
+	blockHash := block.Hash()
+
+	if v.config.Scroll.L1Config == nil {
+		// TODO: should we allow follower nodes to skip L1 message verification?
+		panic("Running on L1Message-enabled network but no l1Config was provided")
+	}
+
+	nextQueueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(v.bc.db, block.ParentHash())
+	if nextQueueIndex == nil {
+		// we'll reprocess this block at a later time
+		return consensus.ErrMissingL1MessageData
+	}
+	queueIndex := *nextQueueIndex
+
+	L1SectionOver := false
+	it := rawdb.IterateL1MessagesFrom(v.bc.db, queueIndex)
+
+	for _, tx := range block.Transactions() {
+		if !tx.IsL1MessageTx() {
+			L1SectionOver = true
+			continue // we do not verify L2 transactions here
+		}
+
+		// check that L1 messages are before L2 transactions
+		if L1SectionOver {
+			return consensus.ErrInvalidL1MessageOrder
+		}
+
+		// queue index cannot decrease
+		txQueueIndex := tx.AsL1MessageTx().QueueIndex
+
+		if txQueueIndex < queueIndex {
+			return consensus.ErrInvalidL1MessageOrder
+		}
+
+		// skipped messages
+		// TODO: consider verifying that skipped messages overflow
+		for index := queueIndex; index < txQueueIndex; index++ {
+			if exists := it.Next(); !exists {
+				// the message in this block is not available in our local db.
+				// we'll reprocess this block at a later time.
+				return consensus.ErrMissingL1MessageData
+			}
+
+			l1msg := it.L1Message()
+			skippedTx := types.NewTx(&l1msg)
+			log.Debug("Skipped L1 message", "queueIndex", index, "tx", skippedTx.Hash().String(), "block", blockHash.String())
+			rawdb.WriteSkippedTransaction(v.bc.db, skippedTx, nil, "unknown", block.NumberU64(), &blockHash)
+		}
+
+		queueIndex = txQueueIndex + 1
+
+		if exists := it.Next(); !exists {
+			// the message in this block is not available in our local db.
+			// we'll reprocess this block at a later time.
+			return consensus.ErrMissingL1MessageData
+		}
+
+		// check that the L1 message in the block is the same that we collected from L1
+		msg := it.L1Message()
+		expectedHash := types.NewTx(&msg).Hash()
+
+		if tx.Hash() != expectedHash {
+			return consensus.ErrUnknownL1Message
+		}
+	}
+
+	// TODO: consider adding a rule to enforce L1Config.NumL1MessagesPerBlock.
+	// If there are L1 messages available, sequencer nodes should include them.
+	// However, this is hard to enforce as different nodes might have different views of L1.
+
 	return nil
 }
 

@@ -19,14 +19,17 @@ package types
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
+	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -205,7 +208,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	case BlobTxType:
 		inner = new(BlobTx)
 	case L1MessageTxType:
-		inner = new(BlobTx)
+		inner = new(L1MessageTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -349,6 +352,9 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	if tx.IsL1MessageTx() {
+		return new(big.Int), nil
+	}
 	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
@@ -606,4 +612,46 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	}
 	cpy := *a
 	return &cpy
+}
+
+// L1MessagesByQueueIndex represents a set of L1 messages ordered by their queue indices.
+type L1MessagesByQueueIndex struct {
+	msgs []L1MessageTx
+}
+
+func NewL1MessagesByQueueIndex(msgs []L1MessageTx) (*L1MessagesByQueueIndex, error) {
+	// sort by queue index
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].QueueIndex < msgs[j].QueueIndex
+	})
+
+	// check for duplicates/gaps
+	for ii := 0; ii < len(msgs)-1; ii++ {
+		current := msgs[ii].QueueIndex
+		next := msgs[ii+1].QueueIndex
+		if next != current+1 {
+			return nil, fmt.Errorf("invalid L1 message set, current index: %d, next index: %d", current, next)
+		}
+	}
+
+	return &L1MessagesByQueueIndex{msgs: msgs}, nil
+}
+
+func (t *L1MessagesByQueueIndex) Peek() *Transaction {
+	if len(t.msgs) == 0 {
+		return nil
+	}
+	return NewTx(&t.msgs[0])
+}
+
+func (t *L1MessagesByQueueIndex) Shift() {
+	t.msgs = t.msgs[1:]
+}
+
+func (t *L1MessagesByQueueIndex) Pop() {
+	log.Error("Pop() is called on L1MessagesByQueueIndex")
+
+	// this is a logic error, the intention should be "Shift()",
+	// so we will follow the same behavior in Pop
+	t.Shift()
 }
