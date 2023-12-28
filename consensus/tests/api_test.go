@@ -18,7 +18,6 @@ var (
 )
 
 func TestConfigApi(t *testing.T) {
-
 	bc := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, params.TestXDPoSMockChainConfig)
