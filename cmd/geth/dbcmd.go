@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
@@ -75,6 +77,7 @@ Remove blockchain and state databases`,
 			dbCompactCmd,
 			dbGetCmd,
 			dbDeleteCmd,
+			dbInspectTrieCmd,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
@@ -92,6 +95,17 @@ Remove blockchain and state databases`,
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectTrieCmd = &cli.Command{
+		Action:    inspectTrie,
+		Name:      "inspect-trie",
+		ArgsUsage: "<blocknum> <jobnum>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+		},
+		Usage:       "Inspect the MPT tree of the account and contract.",
+		Description: `This commands iterates the entrie WorldState.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -299,6 +313,92 @@ func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFla
 		}
 		log.Info("Database successfully deleted", "kind", kind, "paths", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+}
+
+func inspectTrie(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	if ctx.NArg() > 3 {
+		return fmt.Errorf("Max 3 arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	var (
+		blockNumber  uint64
+		trieRootHash common.Hash
+		jobnum       uint64
+	)
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	var headerBlockHash common.Hash
+	if ctx.NArg() >= 1 {
+		if ctx.Args().Get(0) == "latest" {
+			headerHash := rawdb.ReadHeadHeaderHash(db)
+			blockNumber = *(rawdb.ReadHeaderNumber(db, headerHash))
+		} else if ctx.Args().Get(0) == "snapshot" {
+			trieRootHash = rawdb.ReadSnapshotRoot(db)
+			blockNumber = math.MaxUint64
+		} else {
+			var err error
+			blockNumber, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to Parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
+			}
+		}
+
+		if ctx.NArg() == 1 {
+			jobnum = 1000
+		} else {
+			var err error
+			jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to Parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
+			}
+		}
+
+		if blockNumber != math.MaxUint64 {
+			headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
+			if headerBlockHash == (common.Hash{}) {
+				return fmt.Errorf("ReadHeadBlockHash empry hash")
+			}
+			blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
+			trieRootHash = blockHeader.Root
+		}
+		if (trieRootHash == common.Hash{}) {
+			log.Error("Empty root hash")
+		}
+		fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
+
+		dbScheme := rawdb.ReadStateScheme(db)
+		var config *trie.Config
+		if dbScheme == rawdb.PathScheme {
+			config = &trie.Config{
+				PathDB: pathdb.ReadOnly,
+			}
+		} else if dbScheme == rawdb.HashScheme {
+			config = trie.HashDefaults
+		}
+
+		triedb := trie.NewDatabase(db, config)
+		theTrie, err := trie.New(trie.TrieID(trieRootHash), triedb)
+		if err != nil {
+			fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
+			return err
+		}
+		theInspect, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
+		if err != nil {
+			return err
+		}
+		theInspect.Run()
+		theInspect.DisplayResult()
+	}
+	return nil
 }
 
 func inspect(ctx *cli.Context) error {
