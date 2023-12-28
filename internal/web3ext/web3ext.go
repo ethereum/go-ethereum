@@ -157,8 +157,8 @@ web3._extend({
 			call: 'XDPoS_getLatestPoolStatus'
 		}),
 		new web3._extend.Method({
-			name: 'getMissiedRoundsInEpochByBlockNum',
-			call: 'XDPoS_getMissiedRoundsInEpochByBlockNum',
+			name: 'getMissedRoundsInEpochByBlockNum',
+			call: 'XDPoS_getMissedRoundsInEpochByBlockNum',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),

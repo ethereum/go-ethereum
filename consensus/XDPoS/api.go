@@ -279,7 +279,7 @@ func (api *API) NetworkInformation() NetworkInformation {
 /*
 An API exclusively for V2 consensus, designed to assist in troubleshooting miners by identifying who mined during their allocated term.
 */
-func (api *API) GetMissiedRoundsInEpochByBlockNum(number *rpc.BlockNumber) (*utils.PublicApiMissedRoundsMetadata, error) {
+func (api *API) GetMissedRoundsInEpochByBlockNum(number *rpc.BlockNumber) (*utils.PublicApiMissedRoundsMetadata, error) {
 	return api.XDPoS.CalculateMissingRounds(api.chain, api.getHeaderFromApiBlockNum(number))
 }
 

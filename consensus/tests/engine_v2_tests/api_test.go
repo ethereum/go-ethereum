@@ -11,25 +11,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetMissiedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
+func TestGetMissedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
 	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
 	blockNum := rpc.BlockNumber(123)
 
-	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.EqualError(t, err, "Not supported in the v1 consensus")
 	assert.Nil(t, data)
 }
 
-func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
+func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
 	_, bc, cb, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
 	blockNum := rpc.BlockNumber(cb.NumberU64())
 
-	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.Nil(t, err)
 	assert.Equal(t, types.Round(900), data.EpochRound)
@@ -38,7 +38,7 @@ func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
 
 	blockNum = rpc.BlockNumber(1800)
 
-	data, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.Nil(t, err)
 	assert.Equal(t, types.Round(900), data.EpochRound)
@@ -47,7 +47,7 @@ func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
 
 	blockNum = rpc.BlockNumber(1801)
 
-	data, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.Nil(t, err)
 	assert.Equal(t, types.Round(900), data.EpochRound)
@@ -55,13 +55,13 @@ func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2(t *testing.T) {
 	assert.Equal(t, 0, len(data.MissedRounds))
 }
 
-func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2FistEpoch(t *testing.T) {
+func TestGetMissedRoundsInEpochByBlockNumReturnEmptyForV2FistEpoch(t *testing.T) {
 	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 
 	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
 	blockNum := rpc.BlockNumber(901)
 
-	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.Nil(t, err)
 	assert.Equal(t, types.Round(1), data.EpochRound)
@@ -69,7 +69,7 @@ func TestGetMissiedRoundsInEpochByBlockNumReturnEmptyForV2FistEpoch(t *testing.T
 	assert.Equal(t, 0, len(data.MissedRounds))
 }
 
-func TestGetMissiedRoundsInEpochByBlockNum(t *testing.T) {
+func TestGetMissedRoundsInEpochByBlockNum(t *testing.T) {
 	blockchain, bc, currentBlock, signer, signFn := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
 	chainConfig := params.TestXDPoSMockChainConfig
 	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
@@ -92,7 +92,7 @@ func TestGetMissiedRoundsInEpochByBlockNum(t *testing.T) {
 
 	blockNum := rpc.BlockNumber(1803)
 
-	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissiedRoundsInEpochByBlockNum(&blockNum)
+	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
 	assert.Nil(t, err)
 	assert.Equal(t, types.Round(900), data.EpochRound)
