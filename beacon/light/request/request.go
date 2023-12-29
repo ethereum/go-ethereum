@@ -27,30 +27,30 @@ type (
 	Response    any
 	ID          uint64
 	ServerAndId struct {
-		Server Server
+		Server any
 		Id     ID
 	}
 )
 
 // one per sync process
-type RequestTracker struct {
+type tracker struct {
 	servers       serverSet // one per trigger
 	scheduler     *Scheduler
 	module        Module
 	requestEvents []RequestEvent
 }
 
-func (p *RequestTracker) TryRequest(requestFn func(server Server) (Request, float32)) (ServerAndId, Request) {
+func (p *tracker) TryRequest(requestFn func(server any) (Request, float32)) (ServerAndId, Request) {
 	var (
 		maxServerPriority, maxRequestPriority float32
-		bestServer                            Server
+		bestServer                            server
 		bestRequest                           Request
 	)
 	maxServerPriority, maxRequestPriority = -math.MaxFloat32, -math.MaxFloat32
 	serverCount := len(p.servers)
 	var removed, candidates int
 	for server, _ := range p.servers {
-		canRequest, serverPriority := server.CanRequestNow()
+		canRequest, serverPriority := server.canRequestNow()
 		if !canRequest {
 			delete(p.servers, server)
 			removed++
@@ -71,7 +71,11 @@ func (p *RequestTracker) TryRequest(requestFn func(server Server) (Request, floa
 	if bestServer == nil {
 		return ServerAndId{}, nil
 	}
-	id := ServerAndId{Server: bestServer, Id: bestServer.SendRequest(bestRequest)}
+	id := ServerAndId{Server: bestServer, Id: bestServer.sendRequest(bestRequest)}
 	p.scheduler.pending[id] = pendingRequest{request: bestRequest, module: p.module}
 	return id, bestRequest
+}
+
+func (p *tracker) InvalidResponse(id ServerAndId, desc string) {
+	id.Server.(server).fail(desc)
 }

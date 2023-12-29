@@ -37,7 +37,12 @@ type Module interface {
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
-	Process(*RequestTracker, []RequestEvent, []ServerEvent) bool
+	Process(Tracker, []RequestEvent, []ServerEvent) bool
+}
+
+type Tracker interface {
+	TryRequest(requestFn func(server any) (Request, float32)) (ServerAndId, Request)
+	InvalidResponse(id ServerAndId, desc string)
 }
 
 // Scheduler is a modular network data retrieval framework that coordinates multiple
@@ -49,8 +54,8 @@ type Scheduler struct {
 	clock        mclock.Clock
 	modules      []Module // first has highest priority
 	names        map[Module]string
-	trackers     map[Module]*RequestTracker
-	servers      map[Server]struct{}
+	trackers     map[Module]*tracker
+	servers      map[server]struct{}
 	pending      map[ServerAndId]pendingRequest
 	serverEvents []ServerEvent
 	stopCh       chan chan struct{}
@@ -61,7 +66,7 @@ type Scheduler struct {
 }
 
 type ServerEvent struct {
-	Server Server
+	Server any
 	Type   string
 	Data   any
 }
@@ -83,9 +88,9 @@ type pendingRequest struct {
 func NewScheduler(clock mclock.Clock) *Scheduler {
 	s := &Scheduler{
 		clock:    clock,
-		servers:  make(map[Server]struct{}),
+		servers:  make(map[server]struct{}),
 		names:    make(map[Module]string),
-		trackers: make(map[Module]*RequestTracker),
+		trackers: make(map[Module]*tracker),
 		pending:  make(map[ServerAndId]pendingRequest),
 		stopCh:   make(chan chan struct{}),
 		// Note: testWaitCh should not have capacity in order to ensure
@@ -105,7 +110,7 @@ func (s *Scheduler) RegisterModule(m Module, name string) {
 	defer s.lock.Unlock()
 
 	s.modules = append(s.modules, m)
-	s.trackers[m] = &RequestTracker{
+	s.trackers[m] = &tracker{
 		scheduler: s,
 		module:    m,
 	}
@@ -113,12 +118,13 @@ func (s *Scheduler) RegisterModule(m Module, name string) {
 }
 
 // RegisterServer registers a new server.
-func (s *Scheduler) RegisterServer(server Server) {
+func (s *Scheduler) RegisterServer(rs requestServer) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	server := newServer(rs, s.clock)
 	s.handleEvent(server, Event{Type: EvRegistered})
-	server.Subscribe(func(event Event) {
+	server.subscribe(func(event Event) {
 		s.lock.Lock()
 		if _, ok := s.servers[server]; ok {
 			s.handleEvent(server, event)
@@ -131,13 +137,18 @@ func (s *Scheduler) RegisterServer(server Server) {
 }
 
 // UnregisterServer removes a registered server.
-func (s *Scheduler) UnregisterServer(server Server) {
+func (s *Scheduler) UnregisterServer(rs requestServer) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	server.Unsubscribe()
-	delete(s.servers, server)
-	s.handleEvent(server, Event{Type: EvUnregistered})
+	for server := range s.servers {
+		if sl, ok := server.(*serverWithLimits); ok && sl.parent == rs {
+			server.unsubscribe()
+			delete(s.servers, server)
+			s.handleEvent(server, Event{Type: EvUnregistered})
+			return
+		}
+	}
 }
 
 // Start starts the scheduler. It should be called after registering all modules
@@ -150,7 +161,7 @@ func (s *Scheduler) Start() {
 func (s *Scheduler) Stop() {
 	s.lock.Lock()
 	for server, _ := range s.servers {
-		server.Unsubscribe()
+		server.unsubscribe()
 	}
 	s.servers = nil
 	s.lock.Unlock()
@@ -186,7 +197,7 @@ func (s *Scheduler) processModules() {
 	s.lock.Lock()
 	servers := make(serverSet)
 	for server, _ := range s.servers {
-		if ok, _ := server.CanRequestNow(); ok {
+		if ok, _ := server.canRequestNow(); ok {
 			servers[server] = struct{}{}
 		}
 	}
@@ -233,7 +244,7 @@ func (s *Scheduler) Trigger() {
 	}
 }
 
-func (s *Scheduler) addRequestEvent(server Server, id ID, response Response, timeout, finalized bool) {
+func (s *Scheduler) addRequestEvent(server any, id ID, response Response, timeout, finalized bool) {
 	sid := ServerAndId{Server: server, Id: id}
 	if pr, ok := s.pending[sid]; ok {
 		tracker := s.trackers[pr.module]
@@ -254,11 +265,11 @@ func (s *Scheduler) addRequestEvent(server Server, id ID, response Response, tim
 	}
 }
 
-func (s *Scheduler) addServerEvent(server Server, event Event) {
+func (s *Scheduler) addServerEvent(server any, event Event) {
 	s.serverEvents = append(s.serverEvents, ServerEvent{Server: server, Type: event.Type, Data: event.Data})
 }
 
-func (s *Scheduler) handleEvent(server Server, event Event) {
+func (s *Scheduler) handleEvent(server any, event Event) {
 	s.Trigger()
 	switch event.Type {
 	case EvResponse:

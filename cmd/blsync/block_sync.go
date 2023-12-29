@@ -44,7 +44,7 @@ type beaconBlockSync struct {
 	recentBlocks  *lru.Cache[common.Hash, *capella.BeaconBlock]
 	validatedHead types.Header
 	pending       map[common.Hash]struct{}
-	serverHeads   map[request.Server]common.Hash
+	serverHeads   map[any]common.Hash
 	headTracker   *light.HeadTracker
 }
 
@@ -53,12 +53,12 @@ func newBeaconBlockSyncer(headTracker *light.HeadTracker) *beaconBlockSync {
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
 		pending:      make(map[common.Hash]struct{}),
-		serverHeads:  make(map[request.Server]common.Hash),
+		serverHeads:  make(map[any]common.Hash),
 	}
 }
 
 // Process implements request.Module
-func (s *beaconBlockSync) Process(tracker *request.RequestTracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *beaconBlockSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
 	s.validatedHead = s.headTracker.ValidatedHead().Header
 	if s.validatedHead == (types.Header{}) {
 		return false
@@ -105,14 +105,14 @@ func (s *beaconBlockSync) getHeadBlock() *capella.BeaconBlock {
 	return block
 }
 
-func (s *beaconBlockSync) tryRequestBlock(tracker *request.RequestTracker, blockRoot common.Hash, prefetch bool) {
+func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot common.Hash, prefetch bool) {
 	if _, ok := s.recentBlocks.Get(blockRoot); ok {
 		return
 	}
 	if _, ok := s.pending[blockRoot]; ok {
 		return
 	}
-	if _, request := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
+	if _, request := tracker.TryRequest(func(server any) (request.Request, float32) {
 		if prefetch && s.serverHeads[server] != blockRoot {
 			// when requesting a not yet validated head, request it from someone
 			// who has announced it already
@@ -179,7 +179,7 @@ type engineApiUpdater struct {
 }
 
 // Process implements request.Module
-func (s *engineApiUpdater) Process(tracker *request.RequestTracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
+func (s *engineApiUpdater) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
 	if atomic.LoadUint32(&s.updating) == 1 {
 		return false
 	}

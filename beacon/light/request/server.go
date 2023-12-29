@@ -28,13 +28,13 @@ import (
 
 var (
 	// request events
-	EvResponse = "response" // data: IdAndResponse; sent by RequestServer
-	EvFail     = "fail"     // data: ID; sent by RequestServer
+	EvResponse = "response" // data: IdAndResponse; sent by requestServer
+	EvFail     = "fail"     // data: ID; sent by requestServer
 	EvTimeout  = "timeout"  // data: ID; sent by serverWithTimeout
 	// server events
 	EvRegistered      = "registered"      // data: nil; sent by Scheduler
 	EvUnregistered    = "unregistered"    // data: nil; sent by Scheduler
-	EvCanRequestAgain = "canRequestAgain" // data: nil; sent by serverWithLimits
+	EvCanRequestAgain = "canRequestAgain" // data: nil; sent by server
 )
 
 const (
@@ -51,31 +51,35 @@ const (
 	maxFailureDelay      = time.Minute
 )
 
-// RequestServer can send a set of requests pre-defined by the application and
+// requestServer can send a set of requests pre-defined by the application and
 // signal events through the event callback. After each request, it should send
 // back either EvResponse or EvFail. Additionally, it may also send application-
 // defined events that the Modules can interpret.
-type RequestServer interface {
+//
+//TODO ?separate request and server events here?
+type requestServer interface {
 	Subscribe(eventCallback func(event Event))
 	SendRequest(request Request) ID
 	Unsubscribe()
 }
 
-type Server interface {
-	RequestServer
-	CanRequestNow() (bool, float32)
-	Fail(desc string)
+type server interface {
+	subscribe(eventCallback func(event Event))
+	canRequestNow() (bool, float32)
+	sendRequest(request Request) ID
+	fail(desc string)
+	unsubscribe()
 }
 
-func NewServer(rs RequestServer, clock mclock.Clock) Server {
+func newServer(rs requestServer, clock mclock.Clock) server {
 	s := &serverWithLimits{}
-	s.serverWithTimeout.RequestServer = rs
+	s.parent = rs
 	s.serverWithTimeout.init(clock)
 	s.init()
 	return s
 }
 
-type serverSet map[Server]struct{}
+type serverSet map[server]struct{}
 
 type Event struct {
 	Type string
@@ -87,13 +91,13 @@ type IdAndResponse struct {
 	Response Response
 }
 
-// serverWithTimeout wraps a RequestServer and implements timeouts. After
+// serverWithTimeout wraps a requestServer and implements timeouts. After
 // softRequestTimeout it sends an EvTimeout after which and EvResponse or an
 // EvFail will still follow (EvTimeout cannot follow the latter two).
 // After hardRequestTimeout it sends an EvFail and blocks any further events
-// related to the given request coming from the parent RequestServer.
+// related to the given request coming from the parent requestServer.
 type serverWithTimeout struct {
-	RequestServer
+	parent       requestServer
 	lock         sync.Mutex
 	clock        mclock.Clock
 	childEventCb func(event Event)
@@ -105,12 +109,12 @@ func (s *serverWithTimeout) init(clock mclock.Clock) {
 	s.timeouts = make(map[ID]mclock.Timer)
 }
 
-func (s *serverWithTimeout) Subscribe(eventCallback func(event Event)) {
+func (s *serverWithTimeout) subscribe(eventCallback func(event Event)) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.childEventCb = eventCallback
-	s.RequestServer.Subscribe(s.eventCallback)
+	s.parent.Subscribe(s.eventCallback)
 }
 
 func (s *serverWithTimeout) eventCallback(event Event) {
@@ -137,11 +141,11 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	}
 }
 
-func (s *serverWithTimeout) SendRequest(request Request) (reqId ID) {
+func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	reqId = s.RequestServer.SendRequest(request)
+	reqId = s.parent.SendRequest(request)
 	s.timeouts[reqId] = s.clock.AfterFunc(softRequestTimeout, func() {
 		/*if s.testTimerResults != nil {
 			s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
@@ -173,7 +177,7 @@ func (s *serverWithTimeout) SendRequest(request Request) (reqId ID) {
 }
 
 // stop stops all goroutines associated with the server.
-func (s *serverWithTimeout) Unsubscribe() {
+func (s *serverWithTimeout) unsubscribe() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -183,7 +187,7 @@ func (s *serverWithTimeout) Unsubscribe() {
 		}
 	}
 	s.childEventCb = nil
-	s.RequestServer.Unsubscribe()
+	s.parent.Unsubscribe()
 }
 
 func (s *serverWithTimeout) stopTimer(timer mclock.Timer) {
@@ -193,13 +197,15 @@ func (s *serverWithTimeout) stopTimer(timer mclock.Timer) {
 	}*/
 }
 
-// serverWithLimits wraps serverWithTimeout and implements Server. It limits the
+// serverWithLimits wraps serverWithTimeout and implements server. It limits the
 // number of parallel in-flight requests and prevents sending new requests when a
 // pending one has already timed out. It also implements a failure delay mechanism
 // that adds an exponentially growing delay each time a request fails (wrong answer
 // or hard timeout). This makes the syncing mechanism less brittle as temporary
 // failures of the server might happen sometimes, but still avoids hammering a
 // non-functional server with requests.
+//
+//TODO protect against excessive server events
 type serverWithLimits struct {
 	serverWithTimeout
 	lock                       sync.Mutex
@@ -219,12 +225,12 @@ func (s *serverWithLimits) init() {
 	s.parallelLimit = defaultParallelLimit
 }
 
-func (s *serverWithLimits) Subscribe(eventCallback func(event Event)) {
+func (s *serverWithLimits) subscribe(eventCallback func(event Event)) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.childEventCb = eventCallback
-	s.serverWithTimeout.Subscribe(s.eventCallback)
+	s.serverWithTimeout.subscribe(s.eventCallback)
 }
 
 func (s *serverWithLimits) eventCallback(event Event) {
@@ -255,12 +261,12 @@ func (s *serverWithLimits) eventCallback(event Event) {
 			s.parallelLimit += parallelAdjustUp
 		}
 		s.pendingCount--
-		if canRequest, _ := s.canRequestNow(); canRequest {
+		if canRequest, _ := s.canRequest(); canRequest {
 			sendCanRequestAgain = s.sendEvent
 			s.sendEvent = false
 		}
 		if event.Type == EvFail {
-			s.fail("failed request")
+			s.failLocked("failed request")
 		}
 	}
 	childEventCb := s.childEventCb
@@ -271,17 +277,17 @@ func (s *serverWithLimits) eventCallback(event Event) {
 	}
 }
 
-func (s *serverWithLimits) SendRequest(request Request) (reqId ID) {
+func (s *serverWithLimits) sendRequest(request Request) (reqId ID) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.pendingCount++
-	id := s.serverWithTimeout.SendRequest(request)
+	id := s.serverWithTimeout.sendRequest(request)
 	return id
 }
 
 // stop stops all goroutines associated with the server.
-func (s *serverWithLimits) Unsubscribe() {
+func (s *serverWithLimits) unsubscribe() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -290,10 +296,10 @@ func (s *serverWithLimits) Unsubscribe() {
 		s.delayTimer = nil
 	}
 	s.childEventCb = nil
-	s.serverWithTimeout.Unsubscribe()
+	s.serverWithTimeout.unsubscribe()
 }
 
-func (s *serverWithLimits) canRequestNow() (bool, float32) {
+func (s *serverWithLimits) canRequest() (bool, float32) {
 	if s.delayTimer != nil || s.pendingCount >= int(s.parallelLimit) {
 		return false, 0
 	}
@@ -304,10 +310,10 @@ func (s *serverWithLimits) canRequestNow() (bool, float32) {
 }
 
 // EvCanRequestAgain guaranteed if it returns false
-func (s *serverWithLimits) CanRequestNow() (bool, float32) {
+func (s *serverWithLimits) canRequestNow() (bool, float32) {
 	var sendCanRequestAgain bool
 	s.lock.Lock()
-	canRequest, priority := s.canRequestNow()
+	canRequest, priority := s.canRequest()
 	if canRequest {
 		sendCanRequestAgain = s.sendEvent
 		s.sendEvent = false
@@ -340,7 +346,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 		s.lock.Lock()
 		if s.delayTimer != nil && s.delayCounter == delayCounter { // do nothing if there is a new timer now
 			s.delayTimer = nil
-			if canRequest, _ := s.canRequestNow(); canRequest {
+			if canRequest, _ := s.canRequest(); canRequest {
 				sendCanRequestAgain = s.sendEvent
 				s.sendEvent = false
 			}
@@ -353,14 +359,14 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 	})
 }
 
-func (s *serverWithLimits) Fail(desc string) {
+func (s *serverWithLimits) fail(desc string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.fail(desc)
+	s.failLocked(desc)
 }
 
-func (s *serverWithLimits) fail(desc string) {
+func (s *serverWithLimits) failLocked(desc string) {
 	log.Debug("Server error", "description", desc)
 	s.failureDelay *= 2
 	now := s.clock.Now()
