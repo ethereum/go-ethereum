@@ -279,6 +279,7 @@ services:
     environment:
       - NEXT_PUBLIC_WALLET_CONNECT_ID=${NEXT_PUBLIC_WALLET_CONNECT_ID}
       - SETTLEMENT_RPC_URL=${SETTLEMENT_RPC_URL}
+      - PUBLIC_SETTLEMENT_RPC_URL=${PUBLIC_SETTLEMENT_RPC_URL}
     networks:
       primev_net:
         ipv4_address: '172.29.0.90'
