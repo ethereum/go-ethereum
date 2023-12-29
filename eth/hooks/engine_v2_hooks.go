@@ -37,9 +37,9 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 				break
 			}
 			log.Info("[V2 Hook Penalty] parentHeader is nil, wait block to be writen in disk", "parentNumber", parentNumber)
-			time.Sleep(200 * time.Millisecond) // 0.2s
+			time.Sleep(time.Second) // 1s
 
-			if timeout > 50 { // wait over 10s
+			if timeout > 30 { // wait over 30s
 				log.Error("[V2 Hook Penalty] parentHeader is nil, wait too long not writen in to disk", "parentNumber", parentNumber)
 				return []common.Address{}, fmt.Errorf("parentHeader is nil")
 			}
