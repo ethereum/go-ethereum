@@ -39,8 +39,6 @@ import (
 	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/les"
-	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -94,22 +92,19 @@ type ethNode struct {
 	enode      *enode.Node
 	api        *ethcatalyst.ConsensusAPI
 	ethBackend *eth.Ethereum
-	lapi       *lescatalyst.ConsensusAPI
-	lesBackend *les.LightEthereum
 }
 
 func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode {
 	var (
 		err        error
 		api        *ethcatalyst.ConsensusAPI
-		lapi       *lescatalyst.ConsensusAPI
 		stack      *node.Node
 		ethBackend *eth.Ethereum
-		lesBackend *les.LightEthereum
 	)
 	// Start the node and wait until it's up
 	if typ == eth2LightClient {
-		stack, lesBackend, lapi, err = makeLightNode(genesis)
+		//stack, lesBackend, lapi, err = makeLightNode(genesis)
+		panic("LES no longer supported")
 	} else {
 		stack, ethBackend, api, err = makeFullNode(genesis)
 	}
@@ -185,14 +180,6 @@ func (n *ethNode) insertBlock(eb engine.ExecutableData) error {
 			return errors.New("failed to insert block")
 		}
 		return nil
-	case eth2LightClient:
-		newResp, err := n.lapi.ExecutePayloadV1(eb)
-		if err != nil {
-			return err
-		} else if newResp.Status != "VALID" {
-			return errors.New("failed to insert block")
-		}
-		return nil
 	default:
 		return errors.New("undefined node")
 	}
@@ -217,11 +204,6 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed engine.Executab
 	switch n.typ {
 	case eth2NormalNode, eth2MiningNode:
 		if _, err := n.api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-			return err
-		}
-		return nil
-	case eth2LightClient:
-		if _, err := n.lapi.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			return err
 		}
 		return nil
@@ -321,7 +303,6 @@ func (mgr *nodeManager) run() {
 		}
 		nodes := mgr.getNodes(eth2MiningNode)
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
-		//nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range nodes {
 			fcState := engine.ForkchoiceStateV1{
 				HeadBlockHash:      parentBlock.Hash(),
@@ -370,7 +351,6 @@ func (mgr *nodeManager) run() {
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
-			nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 			for _, node := range nodes {
 				if err := node.insertBlockAndSetHead(parentBlock.Header(), *ed); err != nil {
 					log.Error("Failed to insert block", "type", node.typ, "err", err)
@@ -405,7 +385,6 @@ func main() {
 	manager.createNode(eth2MiningNode)
 	manager.createNode(legacyMiningNode)
 	manager.createNode(legacyNormalNode)
-	manager.createNode(eth2LightClient)
 
 	// Iterate over all the nodes and start mining
 	time.Sleep(3 * time.Second)
@@ -504,50 +483,8 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalys
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	_, err = les.NewLesServer(stack, ethBackend, econfig)
-	if err != nil {
-		log.Crit("Failed to create the LES server", "err", err)
-	}
 	err = stack.Start()
 	return stack, ethBackend, ethcatalyst.NewConsensusAPI(ethBackend), err
-}
-
-func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
-	// Define the basic configurations for the Ethereum node
-	datadir, _ := os.MkdirTemp("", "")
-
-	config := &node.Config{
-		Name:    "geth",
-		Version: params.Version,
-		DataDir: datadir,
-		P2P: p2p.Config{
-			ListenAddr:  "0.0.0.0:0",
-			NoDiscovery: true,
-			MaxPeers:    25,
-		},
-		UseLightweightKDF: true,
-	}
-	// Create the node and configure a full Ethereum node on it
-	stack, err := node.New(config)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	lesBackend, err := les.New(stack, &ethconfig.Config{
-		Genesis:         genesis,
-		NetworkId:       genesis.Config.ChainID.Uint64(),
-		SyncMode:        downloader.LightSync,
-		DatabaseCache:   256,
-		DatabaseHandles: 256,
-		TxPool:          txpool.DefaultConfig,
-		GPO:             ethconfig.Defaults.GPO,
-		Ethash:          ethconfig.Defaults.Ethash,
-		LightPeers:      10,
-	})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	err = stack.Start()
-	return stack, lesBackend, lescatalyst.NewConsensusAPI(lesBackend), err
 }
 
 func eth2types(typ nodetype) bool {
