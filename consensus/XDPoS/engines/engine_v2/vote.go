@@ -193,7 +193,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, blockInfo *types.BlockInfo, quorumCert *types.QuorumCert) (bool, error) {
 	// Make sure this node has not voted for this round.
 	if x.currentRound <= x.highestVotedRound {
-		log.Warn("Failed to pass the voting rule verification, currentRound is not large then highestVoteRound", "x.currentRound", x.currentRound, "x.highestVotedRound", x.highestVotedRound)
+		log.Info("Failed to pass the voting rule verification, currentRound is not large then highestVoteRound", "x.currentRound", x.currentRound, "x.highestVotedRound", x.highestVotedRound)
 		return false, nil
 	}
 	/*
@@ -203,7 +203,7 @@ func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, bloc
 		header's QC's ProposedBlockInfo.Round > lockQuorumCert's ProposedBlockInfo.Round
 	*/
 	if blockInfo.Round != x.currentRound {
-		log.Warn("Failed to pass the voting rule verification, blockRound is not equal currentRound", "x.currentRound", x.currentRound, "blockInfo.Round", blockInfo.Round)
+		log.Info("Failed to pass the voting rule verification, blockRound is not equal currentRound", "x.currentRound", x.currentRound, "blockInfo.Round", blockInfo.Round)
 		return false, nil
 	}
 	// XDPoS v1.0 switch to v2.0, the proposed block can always pass voting rule
