@@ -1275,9 +1275,34 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
 	var (
+	        rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
+		rollbackErr error
 		mode       = d.getMode()
 		gotHeaders = false // Wait for batches of headers to process
 	)
+	defer func() {
+		if rollback > 0 {
+			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
+			if mode != LightSync {
+				lastFastBlock = d.blockchain.CurrentSnapBlock().Number
+				lastBlock = d.blockchain.CurrentBlock().Number
+			}
+			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
+				// We're already unwinding the stack, only print the error to make it more visible
+				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
+			}
+			curFastBlock, curBlock := common.Big0, common.Big0
+			if mode != LightSync {
+				curFastBlock = d.blockchain.CurrentSnapBlock().Number
+				curBlock = d.blockchain.CurrentBlock().Number
+			}
+			log.Warn("Rolled back chain segment",
+				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
+				"snap", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
+				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
+		}
+	}()
+
 	for {
 		select {
 		case <-d.cancelCh:
