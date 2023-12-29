@@ -28,14 +28,20 @@ import (
 
 const maxUpdateRequest = 8
 
+type committeeChain interface {
+	CheckpointInit(bootstrap types.BootstrapData) error
+	InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error
+	NextSyncPeriod() (uint64, bool)
+}
+
 type CheckpointInit struct {
-	chain          *light.CommitteeChain
+	chain          committeeChain
 	checkpointHash common.Hash
 	pending        bool
 	initialized    bool
 }
 
-func NewCheckpointInit(chain *light.CommitteeChain, checkpointHash common.Hash) *CheckpointInit {
+func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *CheckpointInit {
 	return &CheckpointInit{
 		chain:          chain,
 		checkpointHash: checkpointHash,
@@ -43,7 +49,7 @@ func NewCheckpointInit(chain *light.CommitteeChain, checkpointHash common.Hash) 
 }
 
 // Process implements request.Module
-func (s *CheckpointInit) Process(tracker *request.RequestTracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
+func (s *CheckpointInit) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
 	if s.initialized {
 		return false
 	}
@@ -57,11 +63,11 @@ func (s *CheckpointInit) Process(tracker *request.RequestTracker, requestEvents 
 				s.initialized = true
 				return true
 			}
-			event.Server.Fail("invalid checkpoint data")
+			tracker.InvalidResponse(event.ServerAndId, "invalid checkpoint data")
 		}
 	}
 	if !s.pending {
-		if _, request := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
+		if _, request := tracker.TryRequest(func(server any) (request.Request, float32) {
 			return ReqCheckpointData(s.checkpointHash), 0
 		}); request != nil {
 			s.pending = true
@@ -74,14 +80,14 @@ type ForwardUpdateSync struct {
 	chain          *light.CommitteeChain
 	rangeLock      rangeLock
 	processQueue   []request.RequestEvent
-	nextSyncPeriod map[request.Server]uint64
+	nextSyncPeriod map[any]uint64
 }
 
 func NewForwardUpdateSync(chain *light.CommitteeChain) *ForwardUpdateSync {
 	return &ForwardUpdateSync{
 		chain:          chain,
 		rangeLock:      make(rangeLock),
-		nextSyncPeriod: make(map[request.Server]uint64),
+		nextSyncPeriod: make(map[any]uint64),
 	}
 }
 
@@ -138,7 +144,7 @@ func (s *ForwardUpdateSync) verifyRange(event request.RequestEvent) bool {
 }
 
 // returns true for partial success
-func (s *ForwardUpdateSync) processResponse(event request.RequestEvent) (success bool) {
+func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event request.RequestEvent) (success bool) {
 	response, ok := event.Response.(RespUpdates)
 	if !ok {
 		return false
@@ -151,7 +157,7 @@ func (s *ForwardUpdateSync) processResponse(event request.RequestEvent) (success
 				return
 			}
 			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
-				event.Server.Fail("invalid update received")
+				tracker.InvalidResponse(event.ServerAndId, "invalid update received")
 			} else {
 				log.Error("Unexpected InsertUpdate error", "error", err)
 			}
@@ -171,11 +177,11 @@ func (u updateResponseList) Less(i, j int) bool {
 }
 
 // Process implements request.Module
-func (s *ForwardUpdateSync) Process(tracker *request.RequestTracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *ForwardUpdateSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
 	// iterate events and add responses to process queue
 	for _, event := range requestEvents {
 		if event.Response != nil && !s.verifyRange(event) {
-			event.Server.Fail("invalid update range")
+			tracker.InvalidResponse(event.ServerAndId, "invalid update range")
 			event.Response = nil
 		}
 		req := event.Request.(ReqUpdates)
@@ -197,7 +203,7 @@ func (s *ForwardUpdateSync) Process(tracker *request.RequestTracker, requestEven
 	sort.Sort(updateResponseList(s.processQueue)) //TODO
 	for s.processQueue != nil {
 		event := s.processQueue[0]
-		if !s.processResponse(event) {
+		if !s.processResponse(tracker, event) {
 			break
 		}
 		trigger = true
@@ -227,7 +233,7 @@ func (s *ForwardUpdateSync) Process(tracker *request.RequestTracker, requestEven
 	}
 	for {
 		firstPeriod, maxCount := s.rangeLock.firstUnlocked(startPeriod, maxUpdateRequest)
-		if _, request := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
+		if _, request := tracker.TryRequest(func(server any) (request.Request, float32) {
 			nextPeriod := s.nextSyncPeriod[server]
 			if nextPeriod <= firstPeriod {
 				return nil, 0

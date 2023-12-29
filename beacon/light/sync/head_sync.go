@@ -17,21 +17,24 @@
 package sync
 
 import (
-	"fmt"
 	"math"
 
-	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
 
+type headTracker interface {
+	Validate(head types.SignedHeader) (bool, error)
+	SetPrefetchHead(head types.HeadInfo)
+}
+
 type HeadSync struct {
-	headTracker     *light.HeadTracker
-	chain           *light.CommitteeChain
+	headTracker     headTracker
+	chain           committeeChain
 	nextSyncPeriod  uint64
 	chainInit       bool
-	queuedHeads     map[request.Server][]types.SignedHeader
-	serverHeads     map[request.Server]types.HeadInfo
+	queuedHeads     map[any][]types.SignedHeader
+	serverHeads     map[any]types.HeadInfo
 	headServerCount map[types.HeadInfo]headServerCount
 	headCounter     uint64
 	prefetchHead    types.HeadInfo
@@ -42,20 +45,20 @@ type headServerCount struct {
 	headCounter uint64
 }
 
-func NewHeadSync(headTracker *light.HeadTracker, chain *light.CommitteeChain) *HeadSync {
+func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
 		headTracker:     headTracker,
 		chain:           chain,
 		nextSyncPeriod:  math.MaxUint64,
-		queuedHeads:     make(map[request.Server][]types.SignedHeader),
-		serverHeads:     make(map[request.Server]types.HeadInfo),
+		queuedHeads:     make(map[any][]types.SignedHeader),
+		serverHeads:     make(map[any]types.HeadInfo),
 		headServerCount: make(map[types.HeadInfo]headServerCount),
 	}
 	return s
 }
 
 // Process implements request.Module
-func (s *HeadSync) Process(tracker *request.RequestTracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
@@ -76,24 +79,20 @@ func (s *HeadSync) Process(tracker *request.RequestTracker, requestEvents []requ
 	return
 }
 
-func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) {
+func (s *HeadSync) newSignedHead(server any, signedHead types.SignedHeader) {
 	if signedHead.Header.SyncPeriod() > s.nextSyncPeriod {
-		s.queuedHeads[server] = append(s.queuedHeads[server], signedHead) //TODO protect against future period spam
+		s.queuedHeads[server] = append(s.queuedHeads[server], signedHead)
 		return
 	}
-	if _, err := s.headTracker.Validate(signedHead); err != nil {
-		server.Fail(fmt.Sprintf("Invalid signed head: %v", err))
-	}
+	s.headTracker.Validate(signedHead)
 }
 
 func (s *HeadSync) processQueuedHeads() {
 	for server, queued := range s.queuedHeads {
 		j := len(queued)
 		for i := len(queued) - 1; i >= 0; i-- {
-			if signedHead := queued[i]; signedHead.Header.SyncPeriod() <= s.nextSyncPeriod {
-				if _, err := s.headTracker.Validate(signedHead); err != nil {
-					server.Fail(fmt.Sprintf("Invalid queued head: %v", err))
-				}
+			if signedHead := queued[i]; types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
+				s.headTracker.Validate(signedHead)
 			} else {
 				j--
 				if j != i {
@@ -110,7 +109,7 @@ func (s *HeadSync) processQueuedHeads() {
 // setServerHead processes non-validated server head announcements and updates
 // the prefetch head if necessary.
 //TODO report server failure if a server announces many heads that do not become validated soon.
-func (s *HeadSync) setServerHead(server request.Server, head types.HeadInfo) bool {
+func (s *HeadSync) setServerHead(server any, head types.HeadInfo) bool {
 	if oldHead, ok := s.serverHeads[server]; ok {
 		if head == oldHead {
 			return false
