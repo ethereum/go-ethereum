@@ -1275,10 +1275,10 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
 	var (
-	        rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
+		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
 		rollbackErr error
-		mode       = d.getMode()
-		gotHeaders = false // Wait for batches of headers to process
+		mode        = d.getMode()
+		gotHeaders  = false // Wait for batches of headers to process
 	)
 	defer func() {
 		if rollback > 0 {
