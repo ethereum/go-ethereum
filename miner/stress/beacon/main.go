@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -134,8 +134,6 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 		typ:        typ,
 		api:        api,
 		ethBackend: ethBackend,
-		lapi:       lapi,
-		lesBackend: lesBackend,
 		stack:      stack,
 		enode:      enode,
 	}
@@ -192,7 +190,7 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed engine.Executab
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
-	block, err := engine.ExecutableDataToBlock(ed)
+	block, err := engine.ExecutableDataToBlock(ed, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -347,7 +345,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := engine.ExecutableDataToBlock(*ed)
+			block, _ := engine.ExecutableDataToBlock(*ed, nil, nil)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
@@ -365,7 +363,7 @@ func (mgr *nodeManager) run() {
 }
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
 	// Generate a batch of accounts to seal and fund with
@@ -404,11 +402,12 @@ func main() {
 		node := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
-		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(10_000_000_000+rand.Int63n(6_553_600_000)), nil), types.HomesteadSigner{}, faucets[index])
+		ttx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(10_000_000_000+rand.Int63n(6_553_600_000)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
-		if err := node.ethBackend.TxPool().AddLocal(tx); err != nil {
+		tx := []*types.Transaction{ttx}
+		if err := node.ethBackend.TxPool().Add(tx, true, true); err != nil {
 			panic(err)
 		}
 		nonces[index]++
@@ -466,7 +465,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalys
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          txpool.DefaultConfig,
+		TxPool:          legacypool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{

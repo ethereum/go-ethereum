@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -44,7 +44,7 @@ import (
 )
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+        log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
 	// Generate a batch of accounts to seal and fund with
@@ -115,11 +115,12 @@ func main() {
 		backend := nodes[index%len(nodes)]
 
 		// Create a self transaction and inject into the pool
-		tx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), types.HomesteadSigner{}, faucets[index])
+		ttx, err := types.SignTx(types.NewTransaction(nonces[index], crypto.PubkeyToAddress(faucets[index].PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), types.HomesteadSigner{}, faucets[index])
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().AddLocal(tx); err != nil {
+		tx := []*types.Transaction{ttx}
+		if err := backend.TxPool().Add(tx, true, true); err != nil {
 			panic(err)
 		}
 		nonces[index]++
@@ -175,7 +176,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          txpool.DefaultConfig,
+		TxPool:          legacypool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{

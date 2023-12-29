@@ -96,7 +96,7 @@ func TestRemoteNotifyFull(t *testing.T) {
 	config := Config{
 		PowMode:    ModeTest,
 		NotifyFull: true,
-		Log:        testlog.Logger(t, log.LvlWarn),
+		Log:        testlog.Logger(t, log.LevelWarn),
 	}
 	ethash := New(config, []string{server.URL}, false)
 	defer ethash.Close()
@@ -139,7 +139,7 @@ func TestRemoteMultiNotify(t *testing.T) {
 
 	// Create the custom ethash engine.
 	ethash := NewTester([]string{server.URL}, false)
-	ethash.config.Log = testlog.Logger(t, log.LvlWarn)
+	ethash.config.Log = testlog.Logger(t, log.LevelWarn)
 	defer ethash.Close()
 
 	// Provide a results reader.
@@ -186,7 +186,7 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 	config := Config{
 		PowMode:    ModeTest,
 		NotifyFull: true,
-		Log:        testlog.Logger(t, log.LvlWarn),
+		Log:        testlog.Logger(t, log.LevelWarn),
 	}
 	ethash := New(config, []string{server.URL}, false)
 	defer ethash.Close()
