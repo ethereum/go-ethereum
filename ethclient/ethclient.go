@@ -305,14 +305,15 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 // TransactionReceipt returns the receipt of a transaction by transaction hash.
 // Note that the receipt is not available for pending transactions.
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	var r *types.Receipt
-	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
-	if err == nil {
-		if r == nil {
-			return nil, ethereum.NotFound
-		}
-	}
-	return r, err
+    var r *types.Receipt
+    err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+    if err != nil {
+        return nil, err
+    }
+    if r == nil {
+        return nil, ethereum.NotFound
+    }
+    return r, nil
 }
 
 // SyncProgress retrieves the current progress of the sync algorithm. If there's
