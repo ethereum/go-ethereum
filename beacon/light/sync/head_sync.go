@@ -29,15 +29,15 @@ type headTracker interface {
 }
 
 type HeadSync struct {
-	headTracker     headTracker
-	chain           committeeChain
-	nextSyncPeriod  uint64
-	chainInit       bool
-	queuedHeads     map[any][]types.SignedHeader
-	serverHeads     map[any]types.HeadInfo
-	headServerCount map[types.HeadInfo]headServerCount
-	headCounter     uint64
-	prefetchHead    types.HeadInfo
+	headTracker      headTracker
+	chain            committeeChain
+	nextSyncPeriod   uint64
+	chainInit        bool
+	unvalidatedHeads map[any]types.SignedHeader
+	serverHeads      map[any]types.HeadInfo
+	headServerCount  map[types.HeadInfo]headServerCount
+	headCounter      uint64
+	prefetchHead     types.HeadInfo
 }
 
 type headServerCount struct {
@@ -47,12 +47,12 @@ type headServerCount struct {
 
 func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
-		headTracker:     headTracker,
-		chain:           chain,
-		nextSyncPeriod:  math.MaxUint64,
-		queuedHeads:     make(map[any][]types.SignedHeader),
-		serverHeads:     make(map[any]types.HeadInfo),
-		headServerCount: make(map[types.HeadInfo]headServerCount),
+		headTracker:      headTracker,
+		chain:            chain,
+		nextSyncPeriod:   math.MaxUint64,
+		unvalidatedHeads: make(map[any]types.SignedHeader),
+		serverHeads:      make(map[any]types.HeadInfo),
+		headServerCount:  make(map[types.HeadInfo]headServerCount),
 	}
 	return s
 }
@@ -62,46 +62,43 @@ func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.Requ
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		s.processQueuedHeads()
+		s.processUnvalidatedHeadsHeads()
 	}
 	for _, event := range serverEvents {
 		switch event.Type {
 		case EvNewHead:
-			trigger = trigger || s.setServerHead(event.Server, event.Data.(types.HeadInfo))
+			if s.setServerHead(event.Server, event.Data.(types.HeadInfo)) {
+				trigger = true
+			}
 		case EvNewSignedHead:
 			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
 		case request.EvUnregistered:
-			trigger = trigger || s.setServerHead(event.Server, types.HeadInfo{})
+			if s.setServerHead(event.Server, types.HeadInfo{}) {
+				trigger = true
+			}
 			delete(s.serverHeads, event.Server)
-			delete(s.queuedHeads, event.Server)
+			delete(s.unvalidatedHeads, event.Server)
 		}
 	}
 	return
 }
 
 func (s *HeadSync) newSignedHead(server any, signedHead types.SignedHeader) {
-	if signedHead.Header.SyncPeriod() > s.nextSyncPeriod {
-		s.queuedHeads[server] = append(s.queuedHeads[server], signedHead)
+	if !s.chainInit || signedHead.Header.SyncPeriod() > s.nextSyncPeriod {
+		s.unvalidatedHeads[server] = signedHead
 		return
 	}
 	s.headTracker.Validate(signedHead)
 }
 
-func (s *HeadSync) processQueuedHeads() {
-	for server, queued := range s.queuedHeads {
-		j := len(queued)
-		for i := len(queued) - 1; i >= 0; i-- {
-			if signedHead := queued[i]; types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
-				s.headTracker.Validate(signedHead)
-			} else {
-				j--
-				if j != i {
-					queued[j] = queued[i]
-				}
-			}
-		}
-		if j != 0 {
-			s.queuedHeads[server] = queued[j:]
+func (s *HeadSync) processUnvalidatedHeadsHeads() {
+	if !s.chainInit {
+		return
+	}
+	for server, signedHead := range s.unvalidatedHeads {
+		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
+			s.headTracker.Validate(signedHead)
+			delete(s.unvalidatedHeads, server)
 		}
 	}
 }
@@ -129,6 +126,9 @@ func (s *HeadSync) setServerHead(server any, head types.HeadInfo) bool {
 		}
 		h.serverCount++
 		s.headServerCount[head] = h
+		s.serverHeads[server] = head
+	} else {
+		delete(s.serverHeads, server)
 	}
 	var (
 		bestHead     types.HeadInfo
