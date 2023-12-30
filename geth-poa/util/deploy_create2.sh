@@ -2,7 +2,7 @@
 
 # Deploys create2 proxy according to https://github.com/primevprotocol/deterministic-deployment-proxy
 
-set -x
+set -e
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <JSON_RPC_URL>"
