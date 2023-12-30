@@ -12,18 +12,18 @@ else
     exit 1
 fi
 
+# "make print-warp-deploy" prints these contract addrs
+SEPOLIA_ROUTER=${SEPOLIA_ROUTER:-"0xBc96ff3E2458D4c6dDCE0DE5E87bC4B254626a64"}
+SIDECHAIN_ROUTER=${SIDECHAIN_ROUTER:-"0x4b2DC8A5C4da51f821390AbD2B6fe8122BC6fA97"}
+
+SEPOLIA_URL=${SEPOLIA_URL:-"https://ethereum-sepolia.publicnode.com"}
+SIDECHAIN_URL=${SIDECHAIN_URL:-"nil"}
+
 # Test account, this must be funded on Sepolia
 # Address:     0xa43b806D2f09AE94dfa38bc00d6F75426D274540
 # Private key: 0x8b21e3bc5c26d3327109d341d121fbfb7cb79c95fba5eb2f8c064f87332df7dd
 ADDRESS=0xa43b806D2f09AE94dfa38bc00d6F75426D274540
 PRIVATE_KEY=0x8b21e3bc5c26d3327109d341d121fbfb7cb79c95fba5eb2f8c064f87332df7dd
-
-# "make print-warp-deploy" prints these contract addrs
-SEPOLIA_ROUTER=0xBc96ff3E2458D4c6dDCE0DE5E87bC4B254626a64
-SIDECHAIN_ROUTER=0x4b2DC8A5C4da51f821390AbD2B6fe8122BC6fA97
-
-SEPOLIA_URL=https://ethereum-sepolia.publicnode.com
-SIDECHAIN_URL=http://69.67.151.95:8545
 
 # Store initial sidechain native balance
 SIDECHAIN_BALANCE=$(cast balance --rpc-url $SIDECHAIN_URL $ADDRESS)
