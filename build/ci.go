@@ -123,12 +123,13 @@ var (
 	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish,
 	//   kinetic
 	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11", // EOL: 04/2024
-		"xenial": "golang-go",   // EOL: 04/2026
-		"bionic": "golang-go",   // EOL: 04/2028
-		"focal":  "golang-go",   // EOL: 04/2030
-		"jammy":  "golang-go",   // EOL: 04/2032
-		"lunar":  "golang-go",   // EOL: 01/2024
+		"trusty": "golang-1.11", // 14.04, EOL: 04/2024
+		"xenial": "golang-go",   // 16.04, EOL: 04/2026
+		"bionic": "golang-go",   // 18.04, EOL: 04/2028
+		"focal":  "golang-go",   // 20.04, EOL: 04/2030
+		"jammy":  "golang-go",   // 22.04, EOL: 04/2032
+		"lunar":  "golang-go",   // 23.04, EOL: 01/2024
+		"mantic": "golang-go",   // 23.10, EOL: 07/2024
 	}
 
 	debGoBootPaths = map[string]string{
@@ -285,7 +286,7 @@ func doTest(cmdline []string) {
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 		verbose  = flag.Bool("v", false, "Whether to log verbosely")
 		race     = flag.Bool("race", false, "Execute the race detector")
-		short     = flag.Bool("short", false, "Pass the 'short'-flag to go test")
+		short    = flag.Bool("short", false, "Pass the 'short'-flag to go test")
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching downloads")
 	)
 	flag.CommandLine.Parse(cmdline)
