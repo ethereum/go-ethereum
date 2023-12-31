@@ -1,4 +1,4 @@
-## Go Ethereum
+## Go Ethereum copyright by @IsabelSchoepd
 
 Official Golang execution layer implementation of the Ethereum protocol.
 
