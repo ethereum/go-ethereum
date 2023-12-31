@@ -1,8 +1,7 @@
 ## Go Ethereum copyright by @IsabelSchoepd
- implementation of the Ethereum protocol.
 
-[![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667)
+The Ethereum protocol 2007 Copyright (C) Happy NEW YEAR 2024 by Isabel Schoeps Thiel (standalone with my Dog Don)
+
 
 Automated builds are available for stable releases and the unstable master branch. Binary archives are published at 
 
