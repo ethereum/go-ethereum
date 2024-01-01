@@ -90,7 +90,7 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 		if hash, ok := hn.(hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
-			enc := nodeToBytes(n)
+			enc := n.encode(nil)
 			if !ok {
 				hash = hasher.hashData(enc)
 			}

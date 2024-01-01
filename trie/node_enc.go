@@ -17,48 +17,46 @@
 package trie
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/qianbin/drlp"
 )
 
-func nodeToBytes(n node) []byte {
-	w := rlp.NewEncoderBuffer(nil)
-	n.encode(w)
-	result := w.ToBytes()
-	w.Flush()
-	return result
-}
-
-func (n *fullNode) encode(w rlp.EncoderBuffer) {
-	offset := w.List()
+func (n *fullNode) encode(buf []byte) []byte {
+	if buf == nil {
+		buf = make([]byte, 0, 550)
+	}
+	offset := len(buf)
 	for _, c := range n.Children {
 		if c != nil {
-			c.encode(w)
+			buf = c.encode(buf)
 		} else {
-			w.Write(rlp.EmptyString)
+			buf = drlp.AppendUint(buf, 0)
 		}
 	}
-	w.ListEnd(offset)
+	return drlp.EndList(buf, offset)
 }
 
-func (n *shortNode) encode(w rlp.EncoderBuffer) {
-	offset := w.List()
-	w.WriteBytes(n.Key)
-	if n.Val != nil {
-		n.Val.encode(w)
-	} else {
-		w.Write(rlp.EmptyString)
+func (n *shortNode) encode(buf []byte) []byte {
+	if buf == nil {
+		buf = make([]byte, 0, len(n.Key)+40)
 	}
-	w.ListEnd(offset)
+	offset := len(buf)
+	buf = drlp.AppendString(buf, n.Key)
+	if n.Val != nil {
+		buf = n.Val.encode(buf)
+	} else {
+		buf = drlp.AppendUint(buf, 0)
+	}
+	return drlp.EndList(buf, offset)
 }
 
-func (n hashNode) encode(w rlp.EncoderBuffer) {
-	w.WriteBytes(n)
+func (n hashNode) encode(buf []byte) []byte {
+	return drlp.AppendString(buf, n)
 }
 
-func (n valueNode) encode(w rlp.EncoderBuffer) {
-	w.WriteBytes(n)
+func (n valueNode) encode(buf []byte) []byte {
+	return drlp.AppendString(buf, n)
 }
 
-func (n rawNode) encode(w rlp.EncoderBuffer) {
-	w.Write(n)
+func (n rawNode) encode(buf []byte) []byte {
+	return append(buf, n...)
 }

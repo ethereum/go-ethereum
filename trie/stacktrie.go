@@ -377,8 +377,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 			st.children[i] = nil
 			stPool.Put(child.reset()) // Release child back to pool.
 		}
-		nodes.encode(t.h.encbuf)
-		blob = t.h.encodedBytes()
+		t.h.tmp = nodes.encode(t.h.tmp[:0])
+		blob = t.h.tmp
 
 	case extNode:
 		// recursively hash and commit child as the first step
@@ -400,8 +400,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		} else {
 			n.Val = hashNode(st.children[0].val)
 		}
-		n.encode(t.h.encbuf)
-		blob = t.h.encodedBytes()
+		t.h.tmp = n.encode(t.h.tmp[:0])
+		blob = t.h.tmp
 
 		stPool.Put(st.children[0].reset()) // Release child back to pool.
 		st.children[0] = nil
@@ -410,8 +410,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		st.key = append(st.key, byte(16))
 		n := shortNode{Key: hexToCompactInPlace(st.key), Val: valueNode(st.val)}
 
-		n.encode(t.h.encbuf)
-		blob = t.h.encodedBytes()
+		t.h.tmp = n.encode(t.h.tmp[:0])
+		blob = t.h.tmp
 
 	default:
 		panic("invalid node type")
