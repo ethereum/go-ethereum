@@ -106,7 +106,7 @@ jobs:
 
         - name: Test
           run: make test
-        
+
         - uses: actions/upload-artifact@v2
           with:
             name: unitTest-coverage
@@ -217,7 +217,7 @@ jobs:
 
         - uses: actions/setup-node@v3
           with:
-            node-version: '16.17.1'
+            node-version: '18.19.0'
             cache: 'npm'
             cache-dependency-path: |
               matic-cli/package-lock.json
@@ -231,7 +231,7 @@ jobs:
             npm install --prefer-offline --no-audit --progress=false
             mkdir devnet
             cd devnet
-            ../bin/matic-cli setup devnet -c ../../bor/.github/matic-cli-config.yml
+            ../bin/matic-cli.js setup devnet -c ../../bor/.github/matic-cli-config.yml
 
         - name: Launch devnet
           run: |
