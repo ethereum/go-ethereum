@@ -50,3 +50,7 @@ profile.cov
 logs/
 
 tests/spec-tests/
+
+contracts/node_modules
+contracts/cache
+contracts/artifacts
