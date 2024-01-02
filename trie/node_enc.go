@@ -17,7 +17,7 @@
 package trie
 
 import (
-	"github.com/qianbin/drlp"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func (n *fullNode) encode(buf []byte) []byte {
@@ -29,10 +29,10 @@ func (n *fullNode) encode(buf []byte) []byte {
 		if c != nil {
 			buf = c.encode(buf)
 		} else {
-			buf = drlp.AppendUint(buf, 0)
+			buf = rlp.AppendUint64(buf, 0)
 		}
 	}
-	return drlp.EndList(buf, offset)
+	return rlp.EndList(buf, offset)
 }
 
 func (n *shortNode) encode(buf []byte) []byte {
@@ -40,21 +40,21 @@ func (n *shortNode) encode(buf []byte) []byte {
 		buf = make([]byte, 0, len(n.Key)+40)
 	}
 	offset := len(buf)
-	buf = drlp.AppendString(buf, n.Key)
+	buf = rlp.AppendString(buf, n.Key)
 	if n.Val != nil {
 		buf = n.Val.encode(buf)
 	} else {
-		buf = drlp.AppendUint(buf, 0)
+		buf = rlp.AppendUint64(buf, 0)
 	}
-	return drlp.EndList(buf, offset)
+	return rlp.EndList(buf, offset)
 }
 
 func (n hashNode) encode(buf []byte) []byte {
-	return drlp.AppendString(buf, n)
+	return rlp.AppendString(buf, n)
 }
 
 func (n valueNode) encode(buf []byte) []byte {
-	return drlp.AppendString(buf, n)
+	return rlp.AppendString(buf, n)
 }
 
 func (n rawNode) encode(buf []byte) []byte {
