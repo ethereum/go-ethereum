@@ -1,4 +1,4 @@
-package storage
+package sqlite
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	contentStorage "github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 )
@@ -36,7 +37,7 @@ func TestBasicStorage(t *testing.T) {
 	content := []byte("value")
 
 	_, err = storage.Get(contentId)
-	assert.Equal(t, ErrContentNotFound, err)
+	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	pt := storage.Put(contentId, content)
 	assert.NoError(t, pt.Err())
@@ -177,10 +178,10 @@ func TestDBPruning(t *testing.T) {
 	assert.True(t, usedSize < storage.storageCapacityInBytes)
 
 	_, err = storage.Get(furthestElement.Bytes())
-	assert.Equal(t, ErrContentNotFound, err)
+	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	_, err = storage.Get(secondFurthest.Bytes())
-	assert.Equal(t, ErrContentNotFound, err)
+	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	val, err := storage.Get(thirdFurthest.Bytes())
 	assert.NoError(t, err)
@@ -241,10 +242,10 @@ func TestSimpleForcePruning(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = storage.Get(furthestElement.Bytes())
-	assert.Equal(t, ErrContentNotFound, err)
+	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	_, err = storage.Get(secondFurthest.Bytes())
-	assert.Equal(t, ErrContentNotFound, err)
+	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	_, err = storage.Get(third.Bytes())
 	assert.NoError(t, err)

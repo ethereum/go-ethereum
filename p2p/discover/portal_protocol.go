@@ -68,12 +68,6 @@ var ErrNilContentKey = errors.New("content key cannot be nil")
 
 var ContentNotFound = storage.ErrContentNotFound
 
-type ContentStorage interface {
-	Get(contentId []byte) ([]byte, error)
-
-	Put(contentId []byte, content []byte) error
-}
-
 type ContentElement struct {
 	Node        enode.ID
 	ContentKeys [][]byte
@@ -144,7 +138,7 @@ type PortalProtocol struct {
 	radiusCache    *fastcache.Cache
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
-	storage        ContentStorage
+	storage        storage.ContentStorage
 	toContentId    func(contentKey []byte) []byte
 
 	contentQueue chan *ContentElement
@@ -155,7 +149,7 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 	return digest[:]
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	nodeDB, err := enode.OpenDB(config.NodeDBPath)
 	if err != nil {
 		return nil, err
