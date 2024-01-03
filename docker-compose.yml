@@ -1,0 +1,8 @@
+version: "3"
+
+services:
+  geth:
+    image: go-ethereum-dev
+    ports:
+      - "8545:8545"
+    command: ["geth", "--dev", "--http", "--http.addr=0.0.0.0"]
