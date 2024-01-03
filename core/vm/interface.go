@@ -34,7 +34,7 @@ type StateDB interface {
 
 	// SubBalance subtracts the amount from the address's balance
 	SubBalance(common.Address, *big.Int)
-	// SubBalance adds the amount to the address's balance
+	// AddBalance adds the amount to the address's balance
 	AddBalance(common.Address, *big.Int)
 	// GetBalance returns the balance for the given address
 	//
@@ -71,7 +71,7 @@ type StateDB interface {
 	// GetRefund returns the total (gas) refund
 	GetRefund() uint64
 
-	// GetCommittedState returns the value for the given (address, key) pair (aka slot) using commited state only
+	// GetCommittedState returns the value for the given (address, key) pair (aka slot) using committed state only
 	//
 	// For non-existent addresses or non-existent keys it should return empty hash (common.Hash{})
 	GetCommittedState(addr common.Address, key common.Hash) common.Hash
