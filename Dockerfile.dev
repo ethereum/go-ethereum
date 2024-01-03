@@ -1,0 +1,17 @@
+FROM golang:1.20-alpine
+
+# Set up dependencies
+# bash, jq, curl for debugging
+# git, make for installation
+# libc-dev, gcc, linux-headers, eudev-dev are used for cgo and ledger installation
+# RUN apk add bash git make libc-dev gcc linux-headers eudev-dev jq curl
+RUN apk add make curl bash
+
+RUN mkdir -p $GOPATH/src/github.com/Kava-Labs/go-ethereum
+WORKDIR $GOPATH/src/github.com/Kava-Labs/go-ethereum
+
+COPY . .
+RUN make geth
+RUN cp ./build/bin/geth /go/bin/
+
+CMD ["geth","--dev","--http"]

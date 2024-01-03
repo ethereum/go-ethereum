@@ -105,6 +105,7 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):    &blake2F{},
 	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
+	//common.BytesToAddress([]byte{0x0b}): &sum3{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -229,6 +230,19 @@ func (c *sha256hash) RequiredGas(input []byte) uint64 {
 func (c *sha256hash) Run(input []byte) ([]byte, error) {
 	h := sha256.Sum256(input)
 	return h[:], nil
+}
+
+type sum3 struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *sum3) RequiredGas(input []byte) uint64 {
+	return 1
+}
+func (c *sum3) Run(input []byte) ([]byte, error) {
+	return input, nil
 }
 
 // RIPEMD160 implemented as a native contract.
