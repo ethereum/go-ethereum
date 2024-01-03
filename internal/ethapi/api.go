@@ -1048,32 +1048,35 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
-// ApplyToHeader overrides the given fields into a header.
-func (o *BlockOverrides) ApplyToHeader(header *types.Header) {
+// MakeHeader returns a new header object with the overridden
+// fields.
+func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o == nil {
-		return
+		return header
 	}
+	h := types.CopyHeader(header)
 	if o.Number != nil {
-		header.Number = o.Number.ToInt()
+		h.Number = o.Number.ToInt()
 	}
 	if o.Difficulty != nil {
-		header.Difficulty = o.Difficulty.ToInt()
+		h.Difficulty = o.Difficulty.ToInt()
 	}
 	if o.Time != nil {
-		header.Time = uint64(*o.Time)
+		h.Time = uint64(*o.Time)
 	}
 	if o.GasLimit != nil {
-		header.GasLimit = uint64(*o.GasLimit)
+		h.GasLimit = uint64(*o.GasLimit)
 	}
 	if o.FeeRecipient != nil {
-		header.Coinbase = *o.FeeRecipient
+		h.Coinbase = *o.FeeRecipient
 	}
 	if o.PrevRandao != nil {
-		header.MixDigest = *o.PrevRandao
+		h.MixDigest = *o.PrevRandao
 	}
 	if o.BaseFeePerGas != nil {
-		header.BaseFee = o.BaseFeePerGas.ToInt()
+		h.BaseFee = o.BaseFeePerGas.ToInt()
 	}
+	return h
 }
 
 // ChainContextBackend provides methods required to implement ChainContext.

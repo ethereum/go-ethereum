@@ -319,6 +319,7 @@ func repairLogs(results []mcBlockResult, blockHash common.Hash) {
 		}
 	}
 }
+
 func makeHeaders(config *params.ChainConfig, blocks []mcBlock, base *types.Header) ([]*types.Header, error) {
 	res := make([]*types.Header, len(blocks))
 	var (
@@ -360,8 +361,7 @@ func makeHeaders(config *params.ChainConfig, blocks []mcBlock, base *types.Heade
 			//MixDigest:  header.MixDigest,
 			BaseFee: baseFee,
 		}
-		overrides.ApplyToHeader(header)
-		res[bi] = header
+		res[bi] = overrides.MakeHeader(header)
 	}
 	return res, nil
 }
