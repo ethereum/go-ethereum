@@ -1018,61 +1018,61 @@ type BlockOverrides struct {
 }
 
 // Apply overrides the given header fields into the given block context.
-func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
-	if diff == nil {
+func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
+	if o == nil {
 		return
 	}
-	if diff.Number != nil {
-		blockCtx.BlockNumber = diff.Number.ToInt()
+	if o.Number != nil {
+		blockCtx.BlockNumber = o.Number.ToInt()
 	}
-	if diff.Difficulty != nil {
-		blockCtx.Difficulty = diff.Difficulty.ToInt()
+	if o.Difficulty != nil {
+		blockCtx.Difficulty = o.Difficulty.ToInt()
 	}
-	if diff.Time != nil {
-		blockCtx.Time = uint64(*diff.Time)
+	if o.Time != nil {
+		blockCtx.Time = uint64(*o.Time)
 	}
-	if diff.GasLimit != nil {
-		blockCtx.GasLimit = uint64(*diff.GasLimit)
+	if o.GasLimit != nil {
+		blockCtx.GasLimit = uint64(*o.GasLimit)
 	}
-	if diff.FeeRecipient != nil {
-		blockCtx.Coinbase = *diff.FeeRecipient
+	if o.FeeRecipient != nil {
+		blockCtx.Coinbase = *o.FeeRecipient
 	}
-	if diff.PrevRandao != nil {
-		blockCtx.Random = diff.PrevRandao
+	if o.PrevRandao != nil {
+		blockCtx.Random = o.PrevRandao
 	}
-	if diff.BaseFeePerGas != nil {
-		blockCtx.BaseFee = diff.BaseFeePerGas.ToInt()
+	if o.BaseFeePerGas != nil {
+		blockCtx.BaseFee = o.BaseFeePerGas.ToInt()
 	}
-	if diff.BlobBaseFee != nil {
-		blockCtx.BlobBaseFee = diff.BlobBaseFee.ToInt()
+	if o.BlobBaseFee != nil {
+		blockCtx.BlobBaseFee = o.BlobBaseFee.ToInt()
 	}
 }
 
 // ApplyToHeader overrides the given fields into a header.
-func (diff *BlockOverrides) ApplyToHeader(header *types.Header) {
-	if diff == nil {
+func (o *BlockOverrides) ApplyToHeader(header *types.Header) {
+	if o == nil {
 		return
 	}
-	if diff.Number != nil {
-		header.Number = diff.Number.ToInt()
+	if o.Number != nil {
+		header.Number = o.Number.ToInt()
 	}
-	if diff.Difficulty != nil {
-		header.Difficulty = diff.Difficulty.ToInt()
+	if o.Difficulty != nil {
+		header.Difficulty = o.Difficulty.ToInt()
 	}
-	if diff.Time != nil {
-		header.Time = uint64(*diff.Time)
+	if o.Time != nil {
+		header.Time = uint64(*o.Time)
 	}
-	if diff.GasLimit != nil {
-		header.GasLimit = uint64(*diff.GasLimit)
+	if o.GasLimit != nil {
+		header.GasLimit = uint64(*o.GasLimit)
 	}
-	if diff.FeeRecipient != nil {
-		header.Coinbase = *diff.FeeRecipient
+	if o.FeeRecipient != nil {
+		header.Coinbase = *o.FeeRecipient
 	}
-	if diff.PrevRandao != nil {
-		header.MixDigest = *diff.PrevRandao
+	if o.PrevRandao != nil {
+		header.MixDigest = *o.PrevRandao
 	}
-	if diff.BaseFeePerGas != nil {
-		header.BaseFee = diff.BaseFeePerGas.ToInt()
+	if o.BaseFeePerGas != nil {
+		header.BaseFee = o.BaseFeePerGas.ToInt()
 	}
 }
 
