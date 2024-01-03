@@ -13,7 +13,6 @@ import (
 	"math/big"
 	"net"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/tetratelabs/wabin/leb128"
@@ -1352,7 +1351,7 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 	return nodes
 }
 
-type contentLookupResult struct {
+type findContentResult struct {
 	flag    byte
 	content any
 	src     *enode.Node
@@ -1364,145 +1363,128 @@ type ContentLookupResult struct {
 	NodeInterestedInContent []*enode.Node
 }
 
-func (p *PortalProtocol) ContentLookup(contentKey []byte) (res *ContentLookupResult, err error) {
-	var mutex sync.Mutex
-
+func (p *PortalProtocol) ContentLookup(contentKey []byte) (*ContentLookupResult, error) {
 	contentId := p.toContentId(contentKey)
 	nodesByDis := p.table.findnodeByID(enode.ID(contentId), bucketSize, false)
 	closestNodes := nodesByDis.entries
+	// findContent enrs chan
+	newNodeChan := make(chan []*enode.Node)
+	// target node for findContent
+	nodeChan := p.genNodeChan(closestNodes, contentId, newNodeChan)
 
+	nodesWithoutContent := make([]*enode.Node, 0)
+	// find content result
+	stopFindContentChan := make(chan struct{})
+
+	contentResultChan := p.parallelFindContent(stopFindContentChan, nodeChan, contentKey)
+
+	defer close(newNodeChan)
+
+	for result := range contentResultChan {
+		if result.err == ContentNotFound {
+			return nil, result.err
+		}
+		switch result.flag {
+		case portalwire.ContentRawSelector:
+			content, ok := result.content.([]byte)
+			if !ok {
+				p.log.Trace("failed to assert to raw content, value is: %v", result.content)
+				continue
+			}
+			stopFindContentChan <- struct{}{}
+			return &ContentLookupResult{Content: content, NodeInterestedInContent: nodesWithoutContent}, nil
+		case portalwire.ContentEnrsSelector:
+			nodeIdStr := result.src.ID().String()
+			// Get may modify the content of srcId
+			maybeRadius := p.radiusCache.Get(nil, []byte(nodeIdStr))
+			if len(maybeRadius) > 0 {
+				radius := uint256.MustFromBig(big.NewInt(0).SetBytes(maybeRadius))
+				if inRange(result.src.ID(), radius, p.toContentId(contentKey)) {
+					nodesWithoutContent = append(nodesWithoutContent, result.src)
+				}
+			}
+			nodes, ok := result.content.([]*enode.Node)
+			if !ok {
+				p.log.Trace("failed to assert to enrs content, value is: %v", result.content)
+				continue
+			}
+			// handle new nodes
+			newNodeChan <- nodes
+		}
+	}
+
+	return nil, ContentNotFound
+}
+
+func (p *PortalProtocol) genNodeChan(initNodes []*node, contentId []byte, newNodeChan chan []*enode.Node) <-chan *node {
+	nodeChan := make(chan *node, alpha)
+
+	closestNodes := initNodes
 	asked := make(map[enode.ID]struct{})
 	seen := make(map[enode.ID]struct{})
 	asked[p.localNode.ID()] = struct{}{}
 	seen[p.localNode.ID()] = struct{}{}
-
 	for _, node := range closestNodes {
 		seen[node.ID()] = struct{}{}
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	pendingQueries := make(map[enode.ID]struct{}, 0)
-	// find content query chan
-	pendingChan := make(chan struct{}, alpha)
-
-	for i := 0; i < alpha; i++ {
-		pendingChan <- struct{}{}
+	for i := 0; i < len(closestNodes) && i < alpha; i++ {
+		wrapedNode := closestNodes[i]
+		if _, ok := asked[wrapedNode.ID()]; !ok {
+			asked[wrapedNode.ID()] = struct{}{}
+			nodeChan <- wrapedNode
+		}
 	}
+	go func() {
+		for nodes := range newNodeChan {
+			for _, n := range nodes {
+				if _, ok := seen[n.ID()]; !ok {
+					seen[n.ID()] = struct{}{}
+					p.table.addSeenNode(wrapNode(n))
+					// insert node into closestNodes with distance
+					closestNodes = insertWithDistance(closestNodes, wrapNode(n), enode.ID(contentId))
+					if len(closestNodes) > bucketSize {
+						closestNodes = closestNodes[:bucketSize]
+					}
+				}
+			}
+			newRequest := false
+			for _, wrapedNode := range closestNodes {
+				if _, ok := asked[wrapedNode.ID()]; !ok {
+					newRequest = true
+					asked[wrapedNode.ID()] = struct{}{}
+					nodeChan <- wrapedNode
+				}
+			}
+			if !newRequest {
+				close(nodeChan)
+			}
+		}
+	}()
 
+	return nodeChan
+}
+
+func (p *PortalProtocol) parallelFindContent(closeChan <-chan struct{}, nodeChan <-chan *node, contentKey []byte) <-chan findContentResult {
+	contentResultChan := make(chan findContentResult, alpha)
 	requestAmount := 0
-
-	nodesWithoutContent := make([]*enode.Node, 0)
-	// find content result
-	contentResultChan := make(chan contentLookupResult)
-	stopFindContentChan := make(chan struct{})
-	// content lookup result
-	resChan := make(chan *ContentLookupResult)
-	defer close(resChan)
-	defer close(stopFindContentChan)
-
-	// get findContent
 	go func() {
 		defer close(contentResultChan)
 		for {
 			select {
-			case <-pendingChan:
-				for i := 0; i < len(closestNodes) && len(pendingQueries) < alpha; i++ {
-					wrapedNode := closestNodes[i]
-					if _, ok := asked[wrapedNode.ID()]; !ok {
-						mutex.Lock()
-						asked[wrapedNode.ID()] = struct{}{}
-						pendingQueries[wrapedNode.ID()] = struct{}{}
-						mutex.Unlock()
-						go func() {
-							flag, content, err := p.findContent(unwrapNode(wrapedNode), contentKey)
-							select {
-							case contentResultChan <- contentLookupResult{flag: flag, content: content, err: err, src: unwrapNode(wrapedNode)}:
-								return
-							case <-stopFindContentChan:
-								return
-							}
-						}()
-						requestAmount++
-						fmt.Printf("requestAmount %v", requestAmount)
-					}
-
-					if len(pendingQueries) == 0 {
-						contentResultChan <- contentLookupResult{err: ContentNotFound}
-						return
-					}
+			case wrapedNode, ok := <-nodeChan:
+				if wrapedNode == nil && !ok {
+					contentResultChan <- findContentResult{err: ContentNotFound}
+					return
 				}
-			case <-ctx.Done():
+				flag, content, err := p.findContent(unwrapNode(wrapedNode), contentKey)
+				requestAmount++
+				contentResultChan <- findContentResult{flag: flag, content: content, err: err, src: unwrapNode(wrapedNode)}
+			case <-closeChan:
 				return
 			}
 		}
 	}()
-
-	// handler result
-	go func() {
-		// cancel context
-		defer cancel()
-		defer close(pendingChan)
-		for result := range contentResultChan {
-			if result.err == ContentNotFound {
-				err = ContentNotFound
-				resChan <- res
-				return
-			}
-			mutex.Lock()
-			delete(pendingQueries, result.src.ID())
-			mutex.Unlock()
-			if result.err != nil {
-				p.log.Trace("find content err: %v", result.err)
-				continue
-			}
-
-			switch result.flag {
-			case portalwire.ContentRawSelector:
-				content, ok := result.content.([]byte)
-				if !ok {
-					p.log.Trace("failed to assert to raw content, value is: %v", result.content)
-					continue
-				}
-				stopFindContentChan <- struct{}{}
-				resChan <- &ContentLookupResult{Content: content, NodeInterestedInContent: nodesWithoutContent}
-				return
-
-			case portalwire.ContentEnrsSelector:
-				nodeIdStr := result.src.ID().String()
-				// Get may modify the content of srcId
-				maybeRadius := p.radiusCache.Get(nil, []byte(nodeIdStr))
-				if len(maybeRadius) > 0 {
-					radius := uint256.MustFromBig(big.NewInt(0).SetBytes(maybeRadius))
-					if inRange(result.src.ID(), radius, p.toContentId(contentKey)) {
-						nodesWithoutContent = append(nodesWithoutContent, result.src)
-					}
-				}
-				nodes, ok := result.content.([]*enode.Node)
-				if !ok {
-					p.log.Trace("failed to assert to enrs content, value is: %v", result.content)
-					continue
-				}
-				for _, n := range nodes {
-					if _, ok := seen[n.ID()]; !ok {
-						seen[n.ID()] = struct{}{}
-						p.table.addSeenNode(wrapNode(n))
-						// insert node into closestNodes with distance
-						closestNodes = insertWithDistance(closestNodes, wrapNode(n), enode.ID(contentId))
-						if len(closestNodes) > bucketSize {
-							closestNodes = closestNodes[:bucketSize]
-						}
-					}
-				}
-				pendingChan <- struct{}{}
-			}
-		}
-	}()
-
-	res = <-resChan
-
-	return res, err
+	return contentResultChan
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
