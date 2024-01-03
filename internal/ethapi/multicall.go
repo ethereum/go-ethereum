@@ -195,7 +195,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 				// Block hash will be repaired after execution.
 				Tracer: newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, tx.Hash(), uint(i)),
 			}
-			result, err := applyMessage(ctx, mc.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, opts.Validation)
+			result, err := applyMessage(ctx, mc.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, !opts.Validation)
 			if err != nil {
 				txErr := txValidationError(err)
 				return nil, txErr
