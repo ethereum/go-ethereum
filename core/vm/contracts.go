@@ -42,6 +42,10 @@ type PrecompiledContract interface {
 	Run(evm *EVM, sender common.Address, input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
+type DynamicGasPrecompiledContract interface {
+	RunAndCalculateGas(evm *EVM, sender common.Address, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) // Run runs the precompiled contract and calculate gas dynamically
+}
+
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
 var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
@@ -169,6 +173,9 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the _remaining_ gas,
 // - any error that occurred
 func RunPrecompiledContract(p PrecompiledContract, evm *EVM, sender common.Address, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	if dp, ok := p.(DynamicGasPrecompiledContract); ok {
+		return dp.RunAndCalculateGas(evm, sender, input, suppliedGas)
+	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
