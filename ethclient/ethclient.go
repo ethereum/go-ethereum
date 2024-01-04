@@ -306,13 +306,11 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 // Note that the receipt is not available for pending transactions.
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
-	if err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash); err != nil {
-		return nil, err
-	}
-	if r == nil {
+	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+	if err == nil && r == nil {
 		return nil, ethereum.NotFound
 	}
-	return r, nil
+	return r, err
 }
 
 // SyncProgress retrieves the current progress of the sync algorithm. If there's
