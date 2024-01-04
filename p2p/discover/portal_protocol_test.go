@@ -337,21 +337,21 @@ func TestCancel(t *testing.T) {
 // }
 
 func TestContentLookup(t *testing.T) {
-	node1, err := setupLocalPortalNode(":7777", nil)
+	node1, err := setupLocalPortalNode(":17777", nil)
 	assert.NoError(t, err)
 	node1.log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
 	fmt.Println(node1.localNode.Node().String())
 
-	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
+	node2, err := setupLocalPortalNode(":17778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node2.log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
 	fmt.Println(node2.localNode.Node().String())
 
-	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
+	node3, err := setupLocalPortalNode(":17779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node3.log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
