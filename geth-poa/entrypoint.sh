@@ -125,6 +125,44 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
 		--nat extip:$NODE_IP
+
+elif [ "$GETH_NODE_TYPE" = "member" ]; then
+	echo "Starting member node"
+
+	exec geth \
+		--verbosity="$VERBOSITY" \
+		--datadir="$GETH_DATA_DIR" \
+		--port 30311 \
+		--syncmode=full \
+		--gcmode=full \
+		--state.scheme=path \
+		--db.engine=pebble \
+		--http \
+		--http.corsdomain="*" \
+		--http.vhosts="*" \
+		--http.addr=0.0.0.0 \
+		--http.port="$RPC_PORT" \
+		--http.api=web3,debug,eth,txpool,net,engine \
+		--bootnodes $BOOTNODE_ENDPOINT \
+		--networkid=$CHAIN_ID \
+		--password="$GETH_DATA_DIR"/password \
+		--metrics \
+		--metrics.addr=0.0.0.0 \
+		--metrics.port=6060 \
+    		--pprof \
+    		--pprof.addr=0.0.0.0 \
+        	--pprof.port=60601 \
+		--ws \
+		--ws.addr=0.0.0.0 \
+		--ws.port="$WS_PORT" \
+		--ws.origins="*" \
+		--ws.api=debug,eth,txpool,net,engine \
+		--rpc.allow-unprotected-txs \
+		--authrpc.addr="0.0.0.0" \
+		--authrpc.port="8551" \
+		--authrpc.vhosts="*" \
+		--txpool.accountqueue=512 \
+		--nat extip:$NODE_IP
 else
 	echo "Invalid GETH_NODE_TYPE specified"
 fi
