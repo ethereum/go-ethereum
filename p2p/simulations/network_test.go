@@ -76,7 +76,11 @@ func TestSnapshot(t *testing.T) {
 	// subscribe to peer events
 	evC := make(chan *Event)
 	sub := network.Events().Subscribe(evC)
-	defer sub.Unsubscribe()
+	defer func() {
+		if !sub.Closed() {
+			sub.Unsubscribe()
+		}
+	}()
 
 	// connect nodes in a ring
 	// spawn separate thread to avoid deadlock in the event listeners
