@@ -18,6 +18,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ExampleSHA256__factory>;
     getContractFactory(
+      name: "ExampleSum3",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ExampleSum3__factory>;
+    getContractFactory(
       name: "Lock",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Lock__factory>;
@@ -28,6 +32,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ExampleSHA256>;
     getContractAt(
+      name: "ExampleSum3",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ExampleSum3>;
+    getContractAt(
       name: "Lock",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -38,6 +47,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ExampleSHA256>;
     deployContract(
+      name: "ExampleSum3",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ExampleSum3>;
+    deployContract(
       name: "Lock",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Lock>;
@@ -47,6 +60,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ExampleSHA256>;
+    deployContract(
+      name: "ExampleSum3",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ExampleSum3>;
     deployContract(
       name: "Lock",
       args: any[],

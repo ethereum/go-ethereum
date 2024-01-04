@@ -3,4 +3,3 @@
 /* eslint-disable */
 export { ExampleSHA256__factory } from "./ExampleSHA256__factory";
 export { ExampleSum3__factory } from "./ExampleSum3__factory";
-export { Lock__factory } from "./Lock__factory";

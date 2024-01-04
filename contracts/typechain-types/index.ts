@@ -2,7 +2,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { ExampleSHA256 } from "./ExampleSHA256";
+export type { ExampleSum3 } from "./ExampleSum3";
 export type { Lock } from "./Lock";
 export * as factories from "./factories";
 export { ExampleSHA256__factory } from "./factories/ExampleSHA256__factory";
+export { ExampleSum3__factory } from "./factories/ExampleSum3__factory";
 export { Lock__factory } from "./factories/Lock__factory";
