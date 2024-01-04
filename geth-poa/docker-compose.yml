@@ -97,7 +97,7 @@ services:
       primev_net:
         ipv4_address: '172.29.0.100'
     ports:
-      - 60604:60601
+      - 60603:60601
     volumes:
       - geth-data-node2:/data
     profiles:
@@ -135,7 +135,7 @@ services:
       primev_net:
         ipv4_address: '172.29.0.101'
     ports:
-      - 60603:60601
+      - 60604:60601
     volumes:
       - geth-data-node3:/data
     profiles:
