@@ -187,7 +187,12 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			if err := call.validateAll(); err != nil {
 				return nil, err
 			}
-			tx := call.ToTransaction(true)
+			// Default to dynamic-fee transaction type.
+			type2 := true
+			if call.GasPrice != nil {
+				type2 = false
+			}
+			tx := call.ToTransaction(type2)
 			txes[i] = tx
 			// TODO: repair log block hashes post execution.
 			vmConfig := &vm.Config{
