@@ -11,10 +11,10 @@ describe("sum3", function() {
         const ExampleSum3 = await ethers.getContractFactory("ExampleSum3")
         const exampleSum3 = await ExampleSum3.deploy();
 
-        const array = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3]
-        const uint8Array = new Uint8Array(array);
-        console.log(await exampleSum3.sum3(uint8Array));
+        // const array = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3]
+        // const uint8Array = new Uint8Array(array);
+        console.log(await exampleSum3.sum3(3, 4, 5));
 
-        expect(await exampleSum3.sum3(uint8Array)).to.equal("0x0000000000000000000000000000000000000000000000000000000000000003");
+        expect(await exampleSum3.sum3(3, 4, 5)).to.equal("0x000000000000000000000000000000000000000000000000000000000000000c");
     })
 })

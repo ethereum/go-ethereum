@@ -249,13 +249,20 @@ func (c *sum3) RequiredGas(input []byte) uint64 {
 func (c *sum3) Run(input []byte) ([]byte, error) {
 	log.Info(fmt.Sprintf("input: %v\n", input))
 
-	//a := make([]byte, 32)
-	//copy(a, input[:32])
-
 	a := big.Int{}
 	a.SetBytes(input[:32])
 
-	return common.LeftPadBytes(a.Bytes(), 32), nil
+	b := big.Int{}
+	b.SetBytes(input[32:64])
+
+	_c := big.Int{}
+	_c.SetBytes(input[64:96])
+
+	rez := big.Int{}
+	rez.Add(&a, &b)
+	rez.Add(&rez, &_c)
+
+	return common.LeftPadBytes(rez.Bytes(), 32), nil
 }
 
 // RIPEMD160 implemented as a native contract.

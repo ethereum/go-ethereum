@@ -3,6 +3,7 @@
 /* eslint-disable */
 import type {
   BaseContract,
+  BigNumberish,
   BytesLike,
   FunctionFragment,
   Result,
@@ -22,7 +23,10 @@ import type {
 export interface ExampleSum3Interface extends Interface {
   getFunction(nameOrSignature: "sum3"): FunctionFragment;
 
-  encodeFunctionData(functionFragment: "sum3", values: [BytesLike]): string;
+  encodeFunctionData(
+    functionFragment: "sum3",
+    values: [BigNumberish, BigNumberish, BigNumberish]
+  ): string;
 
   decodeFunctionResult(functionFragment: "sum3", data: BytesLike): Result;
 }
@@ -70,7 +74,11 @@ export interface ExampleSum3 extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  sum3: TypedContractMethod<[a: BytesLike], [string], "view">;
+  sum3: TypedContractMethod<
+    [a: BigNumberish, b: BigNumberish, c: BigNumberish],
+    [string],
+    "view"
+  >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -78,7 +86,11 @@ export interface ExampleSum3 extends BaseContract {
 
   getFunction(
     nameOrSignature: "sum3"
-  ): TypedContractMethod<[a: BytesLike], [string], "view">;
+  ): TypedContractMethod<
+    [a: BigNumberish, b: BigNumberish, c: BigNumberish],
+    [string],
+    "view"
+  >;
 
   filters: {};
 }
