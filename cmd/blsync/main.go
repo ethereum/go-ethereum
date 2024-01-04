@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -99,13 +100,13 @@ func run(ctx *cli.Context) error {
 		engine = makeRPCClient(ctx)
 		server = ctx.String(LightClientServerFlag.Name)
 	)
-	chain, err := bootstrap(context.Background(), server, common.HexToHash(root))
+	chain, err := light.Bootstrap(context.Background(), server, common.HexToHash(root))
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %v", err)
 	}
 	go chain.Start()
 
-	headCh := make(chan ChainHeadEvent)
+	headCh := make(chan light.ChainHeadEvent)
 	chain.SubscribeChainHeadEvent(headCh)
 
 	// Send new head events to engine api.

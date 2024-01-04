@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,16 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package light
 
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"time"
 
+	eth2spec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/ethereum/go-ethereum/beacon/beaclient"
 	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
+	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -31,16 +36,16 @@ import (
 // LightClient tracks the head of the chain using the light client protocol,
 // which assumes the majority of beacon chain sync committe is honest.
 type LightClient struct {
-	beacon *BeaconClient
+	beacon *beaclient.Client
 	store  *store
 
 	chainHeadFeed event.Feed
 }
 
-// bootstrap retrieves a light client bootstrap and authenticates it against the
+// Bootstrap retrieves a light client bootstrap and authenticates it against the
 // provided trusted root.
-func bootstrap(ctx context.Context, server string, root common.Hash) (*LightClient, error) {
-	api, err := NewBeaconClient(ctx, server)
+func Bootstrap(ctx context.Context, server string, root common.Hash) (*LightClient, error) {
+	api, err := beaclient.NewClient(ctx, server)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to beacon server: %w", err)
 	}
@@ -58,7 +63,7 @@ func bootstrap(ctx context.Context, server string, root common.Hash) (*LightClie
 	return &LightClient{
 		beacon: api,
 		store: &store{
-			config:     SepoliaChainConfig,
+			config:     params.SepoliaChainConfig,
 			current:    current,
 			optimistic: &bs.Header.Header,
 			finalized:  &bs.Header.Header,
@@ -88,7 +93,7 @@ func (c *LightClient) Finalized() *types.Header {
 func (c *LightClient) Start() {
 	log.Info("beacon light client starting")
 	var (
-		ticker       = time.NewTicker(SecondsPerSlot * time.Second)
+		ticker       = time.NewTicker(params.SlotLength * time.Second)
 		lastFinality = time.Now()
 	)
 	for ; ; <-ticker.C {
@@ -108,7 +113,7 @@ func (c *LightClient) Start() {
 		}
 
 		var (
-			update *LightClientUpdate
+			update *types.LightClientUpdate
 			err    error
 		)
 		if time.Since(lastFinality) > time.Minute*5 {
@@ -158,4 +163,115 @@ func (c *LightClient) getExecutableData(head common.Hash) (*engine.ExecutableDat
 		return nil, fmt.Errorf("unable to verify block body against sync committee update")
 	}
 	return versionedBlockToExecutableData(block), nil
+}
+
+// versionedBlockToExecutableData parses versioned blocks and returns a generic
+// execution payload object.
+func versionedBlockToExecutableData(block *eth2spec.VersionedSignedBeaconBlock) *engine.ExecutableData {
+	var ep *engine.ExecutableData
+	switch block.Version {
+	case eth2spec.DataVersionPhase0:
+		panic("phase0 block has no execution payload to send")
+	case eth2spec.DataVersionAltair:
+		panic("altair block has no execution payload to send")
+	case eth2spec.DataVersionBellatrix:
+		p := block.Bellatrix.Message.Body.ExecutionPayload
+		ep = &engine.ExecutableData{
+			ParentHash:    common.Hash(p.ParentHash),
+			FeeRecipient:  common.Address(p.FeeRecipient),
+			StateRoot:     p.StateRoot,
+			ReceiptsRoot:  p.ReceiptsRoot,
+			LogsBloom:     p.LogsBloom[:],
+			Random:        p.PrevRandao,
+			Number:        p.BlockNumber,
+			GasLimit:      p.GasLimit,
+			GasUsed:       p.GasUsed,
+			Timestamp:     p.Timestamp,
+			ExtraData:     p.ExtraData,
+			BaseFeePerGas: new(big.Int).SetBytes(reverse(p.BaseFeePerGas[:])),
+			BlockHash:     common.Hash(p.BlockHash),
+			Transactions:  [][]byte{},
+			Withdrawals:   nil,
+			BlobGasUsed:   nil,
+			ExcessBlobGas: nil,
+		}
+		for _, tx := range p.Transactions {
+			ep.Transactions = append(ep.Transactions, tx)
+		}
+	case eth2spec.DataVersionCapella:
+		p := block.Capella.Message.Body.ExecutionPayload
+		ep = &engine.ExecutableData{
+			ParentHash:    common.Hash(p.ParentHash),
+			FeeRecipient:  common.Address(p.FeeRecipient),
+			StateRoot:     p.StateRoot,
+			ReceiptsRoot:  p.ReceiptsRoot,
+			LogsBloom:     p.LogsBloom[:],
+			Random:        p.PrevRandao,
+			Number:        p.BlockNumber,
+			GasLimit:      p.GasLimit,
+			GasUsed:       p.GasUsed,
+			Timestamp:     p.Timestamp,
+			ExtraData:     p.ExtraData,
+			BaseFeePerGas: new(big.Int).SetBytes(reverse(p.BaseFeePerGas[:])),
+			BlockHash:     common.Hash(p.BlockHash),
+			Transactions:  [][]byte{},
+			Withdrawals:   nil,
+			BlobGasUsed:   nil,
+			ExcessBlobGas: nil,
+		}
+		for _, tx := range p.Transactions {
+			ep.Transactions = append(ep.Transactions, tx)
+		}
+		for _, wx := range p.Withdrawals {
+			ep.Withdrawals = append(ep.Withdrawals, &ctypes.Withdrawal{
+				Index:     uint64(wx.Index),
+				Validator: uint64(wx.ValidatorIndex),
+				Address:   common.Address(wx.Address),
+				Amount:    uint64(wx.Amount),
+			})
+		}
+	case eth2spec.DataVersionDeneb:
+		p := block.Deneb.Message.Body.ExecutionPayload
+		ep = &engine.ExecutableData{
+			ParentHash:    common.Hash(p.ParentHash),
+			FeeRecipient:  common.Address(p.FeeRecipient),
+			StateRoot:     common.Hash(p.StateRoot),
+			ReceiptsRoot:  common.Hash(p.ReceiptsRoot),
+			LogsBloom:     p.LogsBloom[:],
+			Random:        p.PrevRandao,
+			Number:        p.BlockNumber,
+			GasLimit:      p.GasLimit,
+			GasUsed:       p.GasUsed,
+			Timestamp:     p.Timestamp,
+			ExtraData:     p.ExtraData,
+			BaseFeePerGas: nil, // TODO: convert this []uint64 correctly to big.Int
+			BlockHash:     common.Hash(p.BlockHash),
+			Transactions:  [][]byte{},
+			Withdrawals:   nil,
+			BlobGasUsed:   &p.BlobGasUsed,
+			ExcessBlobGas: &p.ExcessBlobGas,
+		}
+		for _, tx := range p.Transactions {
+			ep.Transactions = append(ep.Transactions, tx)
+		}
+		for _, wx := range p.Withdrawals {
+			ep.Withdrawals = append(ep.Withdrawals, &ctypes.Withdrawal{
+				Index:     uint64(wx.Index),
+				Validator: uint64(wx.ValidatorIndex),
+				Address:   common.Address(wx.Address),
+				Amount:    uint64(wx.Amount),
+			})
+		}
+	default:
+		panic("unknown beacon block version")
+	}
+	return ep
+}
+
+func reverse(b []byte) []byte {
+	for i := 0; i < len(b)/2; i++ {
+		j := len(b) - i - 1
+		b[i], b[j] = b[j], b[i]
+	}
+	return b
 }

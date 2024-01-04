@@ -17,15 +17,18 @@
 package params
 
 const (
+	SlotLength       = 12
 	EpochLength      = 32
 	SyncPeriodLength = 8192
 
 	BLSSignatureSize = 96
 	BLSPubkeySize    = 48
 
-	SyncCommitteeSize          = 512
-	SyncCommitteeBitmaskSize   = SyncCommitteeSize / 8
-	SyncCommitteeSupermajority = (SyncCommitteeSize*2 + 2) / 3
+	SyncCommitteeSize            = 512
+	SyncCommitteeBitmaskSize     = SyncCommitteeSize / 8
+	SyncCommitteeSupermajority   = (SyncCommitteeSize*2 + 2) / 3
+	SyncCommitteeMinParticipants = 1
+	SyncCommitteeEpochsPerPeriod = 256
 )
 
 const (

@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package params
 
 import (
+	"crypto/sha256"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -51,7 +53,7 @@ type ChainConfig struct {
 
 // Version returns the active version for a given slot.
 func (c *ChainConfig) Version(slot uint64) []byte {
-	epoch := slot / SlotsPerEpoch
+	epoch := slot / SlotLength
 	switch {
 	case c.Capella.Epoch <= epoch:
 		return c.Capella.Version
@@ -73,4 +75,22 @@ func (c *ChainConfig) Domain(typ []byte, slot uint64) common.Hash {
 	copy(domain[0:4], typ[:])
 	copy(domain[4:], forkData[0:28])
 	return domain
+}
+
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_fork_data_root
+func computeForkDataRoot(version []byte, genesisValidatorsRoot common.Hash) common.Hash {
+	var padded common.Hash
+	copy(padded[:], version)
+	return hash(padded.Bytes(), genesisValidatorsRoot.Bytes())
+}
+
+func hash(left, right []byte) common.Hash {
+	var (
+		hasher = sha256.New()
+		sum    common.Hash
+	)
+	hasher.Write(left)
+	hasher.Write(right)
+	hasher.Sum(sum[:0])
+	return sum
 }

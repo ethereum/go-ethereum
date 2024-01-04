@@ -14,15 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package light
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	errNotEnoughParticipants          = errors.New("not enough sync committee participants")
+	errWrongPeriod                    = errors.New("update not from active period")
+	errUselessUpdate                  = errors.New("useless update")
+	errInvalidFinalityBranch          = errors.New("invalid finality branch")
+	errInvalidNextSyncCommitteeBranch = errors.New("invalid next sync committee branch")
+	errInvalidSyncCommitteeSignature  = errors.New("invalid sync committee signature")
 )
 
 // store implements the light client state machine LightClientStore from the
@@ -30,7 +42,7 @@ import (
 //
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientstore
 type store struct {
-	config *ChainConfig
+	config *params.ChainConfig
 
 	finalized  *types.Header
 	optimistic *types.Header
@@ -38,7 +50,7 @@ type store struct {
 	current *types.SyncCommittee
 	next    *types.SyncCommittee
 
-	best *LightClientUpdate
+	best *types.LightClientUpdate
 
 	prevActive uint64
 	currActive uint64
@@ -49,8 +61,8 @@ func (s *store) copy() *store {
 	return shallow
 }
 
-func (s *store) validate(update *LightClientUpdate) error {
-	if update.SyncAggregate.SignerCount() <= MinSyncCommitteeParticipants {
+func (s *store) validate(update *types.LightClientUpdate) error {
+	if update.SyncAggregate.SignerCount() <= params.SyncCommitteeMinParticipants {
 		return errNotEnoughParticipants
 	}
 	var (
@@ -93,7 +105,7 @@ func (s *store) validate(update *LightClientUpdate) error {
 
 	// Validate sync committee signature.
 	var (
-		domain      = s.config.Domain(SyncCommitteeDomain, update.SignatureSlot)
+		domain      = s.config.Domain(params.SyncCommitteeDomain, update.SignatureSlot)
 		signingRoot = computeSigningRoot(update.AttestedHeader.Hash(), domain)
 	)
 	committee := s.current
@@ -115,7 +127,7 @@ func (s *store) finalizedPeriod() int {
 	return int(types.SyncPeriod(s.finalized.Slot))
 }
 
-func (s *store) Insert(update *LightClientUpdate) error {
+func (s *store) Insert(update *types.LightClientUpdate) error {
 	if err := s.validate(update); err != nil {
 		return err
 	}
@@ -180,4 +192,19 @@ func max(x, y uint64) uint64 {
 		return y
 	}
 	return x
+}
+
+func computeSigningRoot(root, domain common.Hash) common.Hash {
+	return hash(root.Bytes(), domain.Bytes())
+}
+
+func hash(left, right []byte) common.Hash {
+	var (
+		hasher = sha256.New()
+		sum    common.Hash
+	)
+	hasher.Write(left)
+	hasher.Write(right)
+	hasher.Sum(sum[:0])
+	return sum
 }
