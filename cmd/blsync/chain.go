@@ -87,7 +87,10 @@ func (c *LightClient) Finalized() *types.Header {
 // underlying light client store.
 func (c *LightClient) Start() {
 	log.Info("beacon light client starting")
-	ticker := time.NewTicker(SecondsPerSlot * time.Second)
+	var (
+		ticker       = time.NewTicker(SecondsPerSlot * time.Second)
+		lastFinality = time.Now()
+	)
 	for ; ; <-ticker.C {
 		if c.store.next == nil {
 			log.Debug("fetching committee update", "period", c.store.finalizedPeriod())
@@ -108,23 +111,25 @@ func (c *LightClient) Start() {
 			update *LightClientUpdate
 			err    error
 		)
-		if c.store.optimistic.Slot%SlotsPerEpoch == 0 {
-			log.Debug("fetching finality update")
+		if time.Since(lastFinality) > time.Minute*5 {
+			log.Trace("fetching finality update")
+			lastFinality = time.Now()
 			update, err = c.beacon.GetFinalityUpdate()
 		} else {
-			log.Debug("fetching optimistic update")
+			log.Trace("fetching optimistic update")
 			update, err = c.beacon.GetOptimisticUpdate()
 		}
 		if err != nil {
 			log.Error("failed to retrieve update", "err", err)
 			continue
 		}
+		log.Trace("got update", "slot", update.AttestedHeader.Slot, "root", update.AttestedHeader.Hash(), "sigslot", update.SignatureSlot, "period", update.AttestedHeader.SyncPeriod(), "hasFinalized", update.FinalizedHeader != nil, "hasNext", update.NextSyncCommittee != nil)
 		if err := c.store.Insert(update); err != nil {
 			log.Error("failed to insert update", "err", err)
 			continue
 		}
 		head := update.AttestedHeader
-		log.Info("updated head", "slot", head.Slot, "root", head.Hash(), "finalized", c.Finalized().Hash(), "signers", update.SyncAggregate.SignerCount())
+		log.Info("beacon head updated", "slot", head.Slot, "root", head.Hash(), "finalized", c.Finalized().Hash(), "signers", update.SyncAggregate.SignerCount())
 
 		// Fetch full execution payload from beacon provider and send to head feed.
 		data, err := c.getExecutableData(head.Hash())
