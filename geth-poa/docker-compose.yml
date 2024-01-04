@@ -124,6 +124,44 @@ services:
           }
         ]
 
+  sl-node3:
+    build:
+      context: ..
+      dockerfile: geth-poa/Dockerfile
+    environment:
+      - GETH_NODE_TYPE=member
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
+    networks:
+      primev_net:
+        ipv4_address: '172.29.0.101'
+    ports:
+      - 60604:60601
+    volumes:
+      - geth-data-node3:/data
+    profiles:
+      - settlement
+    labels:
+      com.datadoghq.ad.check_names: '["openmetrics"]'
+      com.datadoghq.ad.init_configs: '[{}]'
+      com.datadoghq.ad.instances: |
+        [
+          {
+            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
+            "namespace": "geth-poa",
+            "metrics": [
+              "txpool*",
+              "trie*",
+              "system*",
+              "state*",
+              "rpc*",
+              "p2p*",
+              "eth*",
+              "chain*",
+              "clique*"
+            ]
+          }
+        ]
+
   # L1 geth services only used for local dev
   l1-bootnode:
     build:
@@ -326,6 +364,7 @@ volumes:
   geth-data-bootnode:
   geth-data-node1:
   geth-data-node2:
+  geth-data-node3:
   geth-data-l1-bootnode:
   geth-data-l1-first-signer:
   geth-data-l1-second-signer:
