@@ -52,6 +52,7 @@ func TestSetFeeDefaults(t *testing.T) {
 
 	var (
 		b        = newBackendMock()
+		zero     = (*hexutil.Big)(big.NewInt(0))
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
 		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
@@ -67,11 +68,25 @@ func TestSetFeeDefaults(t *testing.T) {
 			nil,
 		},
 		{
+			"legacy tx pre-London with zero price",
+			false,
+			&TransactionArgs{GasPrice: zero},
+			&TransactionArgs{GasPrice: zero},
+			nil,
+		},
+		{
 			"legacy tx post-London, explicit gas price",
 			true,
 			&TransactionArgs{GasPrice: fortytwo},
 			&TransactionArgs{GasPrice: fortytwo},
 			nil,
+		},
+		{
+			"legacy tx post-London with zero price",
+			true,
+			&TransactionArgs{GasPrice: zero},
+			nil,
+			errors.New("gasPrice must be non-zero after london fork"),
 		},
 
 		// Access list txs
@@ -160,6 +175,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			&TransactionArgs{MaxFeePerGas: (*hexutil.Big)(big.NewInt(7))},
 			nil,
 			errors.New("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
+		},
+		{
+			"dynamic fee tx post-London, explicit gas price",
+			true,
+			&TransactionArgs{MaxFeePerGas: zero, MaxPriorityFeePerGas: zero},
+			nil,
+			errors.New("maxFeePerGas must be non-zero"),
 		},
 
 		// Misc

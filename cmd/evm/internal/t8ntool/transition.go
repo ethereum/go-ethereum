@@ -24,8 +24,6 @@ import (
 	"os"
 	"path"
 
-	"golang.org/x/exp/slog"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -33,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -82,62 +81,43 @@ type input struct {
 }
 
 func Transition(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
-	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
-	log.SetDefault(log.NewLogger(glogger))
-
-	var (
-		err    error
-		tracer vm.EVMLogger
-	)
-	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
+	var getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) { return nil, nil }
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}
-	if ctx.Bool(TraceFlag.Name) {
-		if ctx.IsSet(TraceDisableMemoryFlag.Name) && ctx.IsSet(TraceEnableMemoryFlag.Name) {
-			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableReturnDataFlag.Name) && ctx.IsSet(TraceEnableReturnDataFlag.Name) {
-			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableMemoryFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableReturnDataFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-		}
+
+	if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		// Configure the EVM logger
 		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-			EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name) || ctx.Bool(TraceEnableMemoryFlag.Name),
-			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name) || ctx.Bool(TraceEnableReturnDataFlag.Name),
+			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 			Debug:            true,
 		}
-		var prevFile *os.File
-		// This one closes the last file
-		defer func() {
-			if prevFile != nil {
-				prevFile.Close()
-			}
-		}()
 		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-			if prevFile != nil {
-				prevFile.Close()
-			}
 			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			prevFile = traceFile
-			return logger.NewJSONLogger(logConfig, traceFile), nil
+			return &traceWriter{logger.NewJSONLogger(logConfig, traceFile), traceFile}, nil
 		}
-	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
-			return nil, nil
+	} else if ctx.IsSet(TraceTracerFlag.Name) {
+		var config json.RawMessage
+		if ctx.IsSet(TraceTracerConfigFlag.Name) {
+			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
+		}
+		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			if err != nil {
+				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			if err != nil {
+				return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+			}
+			return &traceWriter{tracer, traceFile}, nil
 		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
@@ -176,9 +156,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	prestate.Env = *inputData.Env
 
-	vmConfig := vm.Config{
-		Tracer: tracer,
-	}
+	vmConfig := vm.Config{}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {

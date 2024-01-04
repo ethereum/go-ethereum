@@ -269,7 +269,7 @@ func TestUDPv4_findnode(t *testing.T) {
 		}
 		nodes.push(n, numCandidates)
 	}
-	fillTable(test.table, nodes.entries)
+	fillTable(test.table, nodes.entries, false)
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.

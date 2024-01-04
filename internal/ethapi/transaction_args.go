@@ -74,11 +74,11 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
-func (args *TransactionArgs) validateAll() error {
+func (args *TransactionArgs) validateAll(b Backend) error {
 	if err := args.validate(); err != nil {
 		return err
 	}
-	return args.validateFees()
+	return args.validateFees(b)
 }
 
 func (args *TransactionArgs) validate() error {
@@ -91,19 +91,32 @@ func (args *TransactionArgs) validate() error {
 	return nil
 }
 
-func (args *TransactionArgs) validateFees() error {
+func (args *TransactionArgs) validateFees(b Backend) error {
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
-	// who are not yet synced past London to get defaults for other tx values. See
-	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
+	// If the tx has completely specified a fee mechanism, no default is needed.
+	// This allows users who are not yet synced past London to get defaults for
+	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
+	// for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
-		// Sanity check the EIP-1559 fee parameters if present.
-		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+
+	// Sanity check the EIP-1559 fee parameters if present.
+	if args.GasPrice == nil && eip1559ParamsSet {
+		if args.MaxFeePerGas.ToInt().Sign() == 0 {
+			return errors.New("maxFeePerGas must be non-zero")
+		}
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+	} else if args.GasPrice != nil && !eip1559ParamsSet {
+		// Sanity check the non-EIP-1559 fee parameters.
+		head := b.CurrentHeader()
+		isLondon := b.ChainConfig().IsLondon(head.Number)
+		// Zero gas-price is not allowed after London fork
+		if args.GasPrice.ToInt().Sign() == 0 && isLondon {
+			return errors.New("gasPrice must be non-zero after london fork")
 		}
 	}
 	return nil
@@ -165,7 +178,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	if err := args.validateFees(); err != nil {
+	if err := args.validateFees(b); err != nil {
 		return err
 	}
 	if args.GasPrice != nil && args.MaxFeePerGas == nil && args.MaxPriorityFeePerGas == nil {

@@ -179,18 +179,17 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 				remaining := blockContext.GasLimit - gasUsed
 				call.Gas = (*hexutil.Uint64)(&remaining)
 			}
-			if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
-				call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
-				call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
-			}
 			// TODO: check chainID and against current header for london fees
-			if err := call.validateAll(); err != nil {
+			if err := call.validateAll(mc.b); err != nil {
 				return nil, err
 			}
 			// Default to dynamic-fee transaction type.
 			type2 := true
 			if call.GasPrice != nil {
 				type2 = false
+			} else if call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
+				call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
+				call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
 			}
 			tx := call.ToTransaction(type2)
 			txes[i] = tx
