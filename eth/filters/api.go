@@ -266,9 +266,9 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	if err != nil {
 		return nil, err
 	}
-	defer logsSub.Unsubscribe()
 
 	go func() {
+		defer logsSub.Unsubscribe()
 		for {
 			select {
 			case logs := <-matchedLogs:
