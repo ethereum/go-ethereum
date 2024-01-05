@@ -1012,9 +1012,7 @@ type BlockOverrides struct {
 	FeeRecipient  *common.Address
 	PrevRandao    *common.Hash
 	BaseFeePerGas *hexutil.Big
-	// TODO: is this right? should we override this since it doesn't exist
-	// in header or excessBlobGas which is used to calculate the base fee?
-	BlobBaseFee *hexutil.Big
+	BlobGasPrice  *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1043,13 +1041,15 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if o.BaseFeePerGas != nil {
 		blockCtx.BaseFee = o.BaseFeePerGas.ToInt()
 	}
-	if o.BlobBaseFee != nil {
-		blockCtx.BlobBaseFee = o.BlobBaseFee.ToInt()
+	if o.BlobGasPrice != nil {
+		blockCtx.BlobBaseFee = o.BlobGasPrice.ToInt()
 	}
 }
 
 // MakeHeader returns a new header object with the overridden
 // fields.
+// Note: MakeHeader ignores blobGasPrice if set. That's because
+// header has no such field.
 func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o == nil {
 		return header

@@ -141,8 +141,8 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 	for bi, block := range blocks {
 		header := headers[bi]
 		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
-		if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
-			blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
+		if block.BlockOverrides != nil && block.BlockOverrides.BlobGasPrice != nil {
+			blockContext.BlobBaseFee = block.BlockOverrides.BlobGasPrice.ToInt()
 		}
 		// Respond to BLOCKHASH requests.
 		blockContext.GetHash = func(n uint64) common.Hash {
