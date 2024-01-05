@@ -39,12 +39,14 @@ var (
 	beaconLightClientFinalityUpdate   = "eth/v1/beacon/light_client/finality_update"
 )
 
+// Client is a wrapper around the attestantio/go-eth2-client beacon api client.
 type Client struct {
 	ctx    context.Context
 	url    string
 	client eth2client.Service
 }
 
+// NewClient creates a Client for the given server URL.
 func NewClient(ctx context.Context, server string) (*Client, error) {
 	client, err := eth2http.New(
 		ctx,
@@ -62,72 +64,48 @@ func NewClient(ctx context.Context, server string) (*Client, error) {
 	}, nil
 }
 
+// Bootstrap retrieves a bootstrap object associated with the given root from
+// the beacon server.
 func (c *Client) Bootstrap(root common.Hash) (*types.Bootstrap, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/%s/%s", c.url, beaconLightClientBootstrap, root.String()))
-	if err != nil {
-		return nil, fmt.Errorf("failed http request: %w", err)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	var bs types.Bootstrap
-	if err := json.Unmarshal(b, &bs); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %v", err)
+	if err := fetch(fmt.Sprintf("%s/%s/%s", c.url, beaconLightClientBootstrap, root.String()), &bs); err != nil {
+		return nil, err
 	}
 	return &bs, nil
 }
 
+// GetRangeUpdate retrieves a range update for the desired periods. The updates
+// include the next sync committee and finalized header from the period.
 func (c *Client) GetRangeUpdate(start, count int) ([]*types.LightClientUpdate, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/%s?start_period=%d&count=%d", c.url, beaconLightClientUpdate, start, count))
-	if err != nil {
-		return nil, fmt.Errorf("failed http request: %w", err)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	var u []*types.LightClientUpdate
-	if err := json.Unmarshal(b, &u); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %v", err)
+	if err := fetch(fmt.Sprintf("%s/%s?start_period=%d&count=%d", c.url, beaconLightClientUpdate, start, count), &u); err != nil {
+		return nil, err
 	}
 	return u, nil
 
 }
 
+// GetOptimisticUpdate retrieves the latest available optimistic update from the
+// beacon api server.
 func (c *Client) GetOptimisticUpdate() (*types.LightClientUpdate, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/%s", c.url, beaconLightClientOptimisticUpdate))
-	if err != nil {
-		return nil, fmt.Errorf("failed http request: %w", err)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	var u types.LightClientUpdate
-	if err := json.Unmarshal(b, &u); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %v", err)
+	if err := fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientOptimisticUpdate), &u); err != nil {
+		return nil, err
 	}
 	return &u, nil
 }
 
+// GetFinalityUpdate retrieves the latest available finality update from the
+// beacon api server.
 func (c *Client) GetFinalityUpdate() (*types.LightClientUpdate, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/%s", c.url, beaconLightClientFinalityUpdate))
-	if err != nil {
-		return nil, fmt.Errorf("failed http request: %w", err)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	var u types.LightClientUpdate
-	if err := json.Unmarshal(b, &u); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %v", err)
+	if err := fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientFinalityUpdate), &u); err != nil {
+		return nil, err
 	}
 	return &u, nil
-
 }
 
+// GetBlock retrieves the full beacon block associated with the given root.
 func (c *Client) GetBlock(root common.Hash) (*eth2spec.VersionedSignedBeaconBlock, error) {
 	provider, ok := c.client.(eth2client.SignedBeaconBlockProvider)
 	if !ok {
@@ -138,4 +116,19 @@ func (c *Client) GetBlock(root common.Hash) (*eth2spec.VersionedSignedBeaconBloc
 		return nil, fmt.Errorf("failed http request: %w", err)
 	}
 	return resp.Data, nil
+}
+
+func fetch(url string, val any) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed http request: %w", err)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	if err := json.Unmarshal(b, val); err != nil {
+		return fmt.Errorf("failed to unmarshal data: %v", err)
+	}
+	return nil
 }
