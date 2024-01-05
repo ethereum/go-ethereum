@@ -166,13 +166,13 @@ func (mv *MVHashMap) MarkEstimate(k Key, txIdx int) {
 		panic(fmt.Errorf("path must already exist"))
 	})
 
-	cells.rw.RLock()
+	cells.rw.Lock()
 	if ci, ok := cells.tm.Get(txIdx); !ok {
 		panic(fmt.Sprintf("should not happen - cell should be present for path. TxIdx: %v, path, %x, cells keys: %v", txIdx, k, cells.tm.Keys()))
 	} else {
 		ci.(*WriteCell).flag = FlagEstimate
 	}
-	cells.rw.RUnlock()
+	cells.rw.Unlock()
 }
 
 func (mv *MVHashMap) Delete(k Key, txIdx int) {
