@@ -410,7 +410,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		if err != nil {
 			return err
 		}
+		h.wg.Add(1)
 		go func(number uint64, hash common.Hash, req *eth.Request) {
+			defer h.wg.Done()
 			// Ensure the request gets cancelled in case of error/drop
 			defer req.Close()
 
