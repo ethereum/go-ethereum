@@ -345,6 +345,19 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return sub, nil
 }
 
+// SubscribeChainReorg subscribes to notifications about the chain reorg events
+// on the given channel.
+func (ec *Client) SubscribeChainReorg(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	sub, err := ec.c.EthSubscribe(ctx, ch, "chainReorgs")
+	if err != nil {
+		// Defensively prefer returning nil interface explicitly on error-path, instead
+		// of letting default golang behavior wrap it with non-nil interface that stores
+		// nil concrete type value.
+		return nil, err
+	}
+	return sub, nil
+}
+
 // State Access
 
 // NetworkID returns the network ID for this client.
