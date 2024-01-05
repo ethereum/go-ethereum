@@ -115,6 +115,7 @@ type Config struct {
 
 	// Beacon light client options
 	BeaconAPI              string
+	BeaconAPIHeaders       []string
 	BeaconTrustedBlockRoot string
 
 	// Database options

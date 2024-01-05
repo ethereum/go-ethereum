@@ -915,6 +915,11 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Usage:    "server which provides the beacon light client apis",
 		Category: flags.BeaconCategory,
 	}
+	BeaconAPIHeadersFlag = &cli.StringSliceFlag{
+		Name:     "beacon.api.headers",
+		Usage:    "headers to provide with each request",
+		Category: flags.BeaconCategory,
+	}
 	BeaconTrustedBlockRootFlag = &cli.StringFlag{
 		Name:     "beacon.wss",
 		Usage:    "root of trusted block within the weak-subjectivity window",
@@ -1599,6 +1604,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag)
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+	CheckExclusive(ctx, DeveloperFlag, BeaconAPIFlag)      // Can't use both simulated beacon and blsync
 
 	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
@@ -1859,6 +1865,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		Fatalf("Must set both beacon api flag and beacon trusted block root flag to use beacon light client")
 	}
 	cfg.BeaconAPI = ctx.String(BeaconAPIFlag.Name)
+	cfg.BeaconAPIHeaders = ctx.StringSlice(BeaconAPIHeadersFlag.Name)
 	cfg.BeaconTrustedBlockRoot = ctx.String(BeaconTrustedBlockRootFlag.Name)
 }
 

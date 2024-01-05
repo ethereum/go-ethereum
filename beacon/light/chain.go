@@ -45,8 +45,8 @@ type LightClient struct {
 
 // Bootstrap retrieves a light client bootstrap and authenticates it against the
 // provided trusted root.
-func Bootstrap(ctx context.Context, server string, root common.Hash) (*LightClient, error) {
-	api, err := beaclient.NewClient(ctx, server)
+func Bootstrap(server string, headers []string, root common.Hash) (*LightClient, error) {
+	api, err := beaclient.NewClient(context.Background(), server, headers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to beacon server: %w", err)
 	}

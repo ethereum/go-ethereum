@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	eth2api "github.com/attestantio/go-eth2-client/api"
@@ -41,26 +42,40 @@ var (
 
 // Client is a wrapper around the attestantio/go-eth2-client beacon api client.
 type Client struct {
-	ctx    context.Context
-	url    string
-	client eth2client.Service
+	ctx          context.Context
+	url          string
+	http         *http.Client
+	extraHeaders map[string]string
+	client       eth2client.Service
 }
 
 // NewClient creates a Client for the given server URL.
-func NewClient(ctx context.Context, server string) (*Client, error) {
+func NewClient(ctx context.Context, server string, headers []string) (*Client, error) {
+	// Parse additional headers.
+	extraHeaders := make(map[string]string)
+	for _, h := range headers {
+		s := strings.Split(h, ":")
+		if len(s) != 2 {
+			return nil, fmt.Errorf("malformed extra header: %s", h)
+		}
+		extraHeaders[s[0]] = s[1]
+	}
 	client, err := eth2http.New(
 		ctx,
 		eth2http.WithAddress(server),
 		eth2http.WithLogLevel(zerolog.WarnLevel),
 		eth2http.WithEnforceJSON(true),
+		eth2http.WithExtraHeaders(extraHeaders),
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{
-		ctx:    ctx,
-		url:    server,
-		client: client,
+		ctx:          ctx,
+		url:          server,
+		http:         &http.Client{},
+		extraHeaders: extraHeaders,
+		client:       client,
 	}, nil
 }
 
@@ -68,7 +83,7 @@ func NewClient(ctx context.Context, server string) (*Client, error) {
 // the beacon server.
 func (c *Client) Bootstrap(root common.Hash) (*types.Bootstrap, error) {
 	var bs types.Bootstrap
-	if err := fetch(fmt.Sprintf("%s/%s/%s", c.url, beaconLightClientBootstrap, root.String()), &bs); err != nil {
+	if err := c.fetch(fmt.Sprintf("%s/%s/%s", c.url, beaconLightClientBootstrap, root.String()), &bs); err != nil {
 		return nil, err
 	}
 	return &bs, nil
@@ -78,7 +93,7 @@ func (c *Client) Bootstrap(root common.Hash) (*types.Bootstrap, error) {
 // include the next sync committee and finalized header from the period.
 func (c *Client) GetRangeUpdate(start, count int) ([]*types.LightClientUpdate, error) {
 	var u []*types.LightClientUpdate
-	if err := fetch(fmt.Sprintf("%s/%s?start_period=%d&count=%d", c.url, beaconLightClientUpdate, start, count), &u); err != nil {
+	if err := c.fetch(fmt.Sprintf("%s/%s?start_period=%d&count=%d", c.url, beaconLightClientUpdate, start, count), &u); err != nil {
 		return nil, err
 	}
 	return u, nil
@@ -89,7 +104,7 @@ func (c *Client) GetRangeUpdate(start, count int) ([]*types.LightClientUpdate, e
 // beacon api server.
 func (c *Client) GetOptimisticUpdate() (*types.LightClientUpdate, error) {
 	var u types.LightClientUpdate
-	if err := fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientOptimisticUpdate), &u); err != nil {
+	if err := c.fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientOptimisticUpdate), &u); err != nil {
 		return nil, err
 	}
 	return &u, nil
@@ -99,7 +114,7 @@ func (c *Client) GetOptimisticUpdate() (*types.LightClientUpdate, error) {
 // beacon api server.
 func (c *Client) GetFinalityUpdate() (*types.LightClientUpdate, error) {
 	var u types.LightClientUpdate
-	if err := fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientFinalityUpdate), &u); err != nil {
+	if err := c.fetch(fmt.Sprintf("%s/%s", c.url, beaconLightClientFinalityUpdate), &u); err != nil {
 		return nil, err
 	}
 	return &u, nil
@@ -118,10 +133,20 @@ func (c *Client) GetBlock(root common.Hash) (*eth2spec.VersionedSignedBeaconBloc
 	return resp.Data, nil
 }
 
-func fetch(url string, val any) error {
-	resp, err := http.Get(url)
+func (c *Client) fetch(url string, val any) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	for k, v := range c.extraHeaders {
+		req.Header.Set(k, v)
+	}
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed http request: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed http request: status %d", resp.StatusCode)
 	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {

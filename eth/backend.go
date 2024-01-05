@@ -18,7 +18,6 @@
 package eth
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -277,7 +276,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	if config.BeaconAPI != "" && config.BeaconTrustedBlockRoot != "" {
-		beacon, err := light.Bootstrap(context.Background(), config.BeaconAPI, common.HexToHash(config.BeaconTrustedBlockRoot))
+		beacon, err := light.Bootstrap(config.BeaconAPI, config.BeaconAPIHeaders, common.HexToHash(config.BeaconTrustedBlockRoot))
 		if err != nil {
 			return nil, err
 		}

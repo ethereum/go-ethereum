@@ -147,6 +147,7 @@ var (
 		utils.LogDebugFlag,
 		utils.LogBacktraceAtFlag,
 		utils.BeaconAPIFlag,
+		utils.BeaconAPIHeadersFlag,
 		utils.BeaconTrustedBlockRootFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
