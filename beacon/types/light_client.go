@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// copyright 2023 the go-ethereum authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify

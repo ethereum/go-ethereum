@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -71,7 +70,6 @@ func (s *store) validate(update *types.LightClientUpdate) error {
 	)
 	// Verify update does not skip a sync committee.
 	if updatePeriod != storedPeriod && (s.next == nil || updatePeriod != storedPeriod+1) {
-		log.Error("update not from current or next sync committee", "stored", storedPeriod, "update", updatePeriod)
 		return errWrongPeriod
 	}
 	if !(update.AttestedHeader.Slot > s.finalized.Slot || update.NextSyncCommittee != nil) {

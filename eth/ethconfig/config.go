@@ -113,6 +113,10 @@ type Config struct {
 	LightNoPrune     bool `toml:",omitempty"` // Whether to disable light chain pruning
 	LightNoSyncServe bool `toml:",omitempty"` // Whether to serve light clients before syncing
 
+	// Beacon light client options
+	BeaconAPI              string
+	BeaconTrustedBlockRoot string
+
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`

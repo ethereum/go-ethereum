@@ -908,6 +908,18 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Beacon light client flags.
+	BeaconAPIFlag = &cli.StringFlag{
+		Name:     "beacon.api",
+		Usage:    "server which provides the beacon light client apis",
+		Category: flags.BeaconCategory,
+	}
+	BeaconTrustedBlockRootFlag = &cli.StringFlag{
+		Name:     "beacon.wss",
+		Usage:    "root of trusted block within the weak-subjectivity window",
+		Category: flags.BeaconCategory,
+	}
 )
 
 var (
@@ -1842,6 +1854,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
 		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
 	}
+
+	if (ctx.IsSet(BeaconAPIFlag.Name) && !ctx.IsSet(BeaconTrustedBlockRootFlag.Name)) || (!ctx.IsSet(BeaconAPIFlag.Name) && ctx.IsSet(BeaconTrustedBlockRootFlag.Name)) {
+		Fatalf("Must set both beacon api flag and beacon trusted block root flag to use beacon light client")
+	}
+	cfg.BeaconAPI = ctx.String(BeaconAPIFlag.Name)
+	cfg.BeaconTrustedBlockRoot = ctx.String(BeaconTrustedBlockRootFlag.Name)
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if

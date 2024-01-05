@@ -40,6 +40,7 @@ type LightClient struct {
 	store  *store
 
 	chainHeadFeed event.Feed
+	quitCh        chan struct{}
 }
 
 // Bootstrap retrieves a light client bootstrap and authenticates it against the
@@ -68,6 +69,7 @@ func Bootstrap(ctx context.Context, server string, root common.Hash) (*LightClie
 			optimistic: &bs.Header.Header,
 			finalized:  &bs.Header.Header,
 		},
+		quitCh: make(chan struct{}),
 	}, nil
 }
 
@@ -90,65 +92,72 @@ func (c *LightClient) Finalized() *types.Header {
 
 // Start executes the main active loop of the light client which drives the
 // underlying light client store.
-func (c *LightClient) Start() {
-	log.Info("beacon light client starting")
+func (c *LightClient) Start() error {
 	var (
 		ticker       = time.NewTicker(params.SlotLength * time.Second)
 		lastFinality = time.Now()
 	)
-	for ; ; <-ticker.C {
-		if c.store.next == nil {
-			log.Debug("fetching committee update", "period", c.store.finalizedPeriod())
-			updates, err := c.beacon.GetRangeUpdate(c.store.finalizedPeriod(), 1)
-			if err != nil {
-				log.Error("failed to fetch next committee", "err", err)
-			} else {
-				for _, update := range updates {
-					if err := c.store.Insert(update); err != nil {
-						log.Error("failed to insert committee update", "err", err)
-						break
+	for {
+		select {
+		case <-c.quitCh:
+			return nil
+		case <-ticker.C:
+			if c.store.next == nil {
+				log.Debug("Fetching committee update", "period", c.store.finalizedPeriod())
+				updates, err := c.beacon.GetRangeUpdate(c.store.finalizedPeriod(), 1)
+				if err != nil {
+					log.Error("Failed to fetch next committee", "err", err)
+				} else {
+					for _, update := range updates {
+						if err := c.store.Insert(update); err != nil {
+							log.Error("Failed to insert committee update", "err", err)
+							break
+						}
 					}
 				}
 			}
-		}
 
-		var (
-			update *types.LightClientUpdate
-			err    error
-		)
-		if time.Since(lastFinality) > time.Minute*5 {
-			log.Trace("fetching finality update")
-			lastFinality = time.Now()
-			update, err = c.beacon.GetFinalityUpdate()
-		} else {
-			log.Trace("fetching optimistic update")
-			update, err = c.beacon.GetOptimisticUpdate()
-		}
-		if err != nil {
-			log.Error("failed to retrieve update", "err", err)
-			continue
-		}
-		log.Trace("got update", "slot", update.AttestedHeader.Slot, "root", update.AttestedHeader.Hash(), "sigslot", update.SignatureSlot, "period", update.AttestedHeader.SyncPeriod(), "hasFinalized", update.FinalizedHeader != nil, "hasNext", update.NextSyncCommittee != nil)
-		if err := c.store.Insert(update); err != nil {
-			log.Error("failed to insert update", "err", err)
-			continue
-		}
-		head := update.AttestedHeader
-		log.Info("beacon head updated", "slot", head.Slot, "root", head.Hash(), "finalized", c.Finalized().Hash(), "signers", update.SyncAggregate.SignerCount())
+			var (
+				update *types.LightClientUpdate
+				err    error
+			)
+			if time.Since(lastFinality) > time.Minute*5 {
+				lastFinality = time.Now()
+				update, err = c.beacon.GetFinalityUpdate()
+			} else {
+				update, err = c.beacon.GetOptimisticUpdate()
+			}
+			if err != nil {
+				log.Error("Failed to retrieve update", "err", err)
+				continue
+			}
+			log.Trace("New beacon update", "slot", update.AttestedHeader.Slot, "root", update.AttestedHeader.Hash(), "sigslot", update.SignatureSlot, "period", update.AttestedHeader.SyncPeriod(), "hasFinalized", update.FinalizedHeader != nil, "hasNext", update.NextSyncCommittee != nil)
+			if err := c.store.Insert(update); err != nil {
+				log.Error("Failed to insert update", "err", err)
+				continue
+			}
+			head := update.AttestedHeader
+			log.Info("Beacon head updated", "slot", head.Slot, "root", head.Hash(), "finalized", c.Finalized().Hash(), "signers", update.SyncAggregate.SignerCount())
 
-		// Fetch full execution payload from beacon provider and send to head feed.
-		data, err := c.getExecutableData(head.Hash())
-		if err != nil {
-			log.Error("failed to insert update", "err", err)
-			continue
+			// Fetch full execution payload from beacon provider and send to head feed.
+			data, err := c.fetchExecutableData(head.Hash())
+			if err != nil {
+				log.Error("Failed to insert update", "err", err)
+				continue
+			}
+			c.chainHeadFeed.Send(ChainHeadEvent{Data: data})
 		}
-		c.chainHeadFeed.Send(ChainHeadEvent{Data: data})
 	}
 }
 
-// getExecutableData retrieves the full beacon block associated with the beacon
+func (c *LightClient) Stop() error {
+	close(c.quitCh)
+	return nil
+}
+
+// fetchExecutableData retrieves the full beacon block associated with the beacon
 // block root and returns the inner execution payload.
-func (c *LightClient) getExecutableData(head common.Hash) (*engine.ExecutableData, error) {
+func (c *LightClient) fetchExecutableData(head common.Hash) (*engine.ExecutableData, error) {
 	block, err := c.beacon.GetBlock(head)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get execution payload: %w", err)

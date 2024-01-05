@@ -221,6 +221,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
+	} else if ctx.IsSet(utils.BeaconAPIFlag.Name) && ctx.IsSet(utils.BeaconTrustedBlockRootFlag.Name) {
+		blsync := catalyst.NewBlsync(eth)
+		stack.RegisterLifecycle(blsync)
 	} else {
 		err := catalyst.Register(stack, eth)
 		if err != nil {

@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -25,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -71,6 +73,7 @@ type Ethereum struct {
 	txPool *txpool.TxPool
 
 	blockchain         *core.BlockChain
+	beacon             *light.LightClient
 	handler            *handler
 	ethDialCandidates  enode.Iterator
 	snapDialCandidates enode.Iterator
@@ -271,6 +274,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
 	if err != nil {
 		return nil, err
+	}
+
+	if config.BeaconAPI != "" && config.BeaconTrustedBlockRoot != "" {
+		beacon, err := light.Bootstrap(context.Background(), config.BeaconAPI, common.HexToHash(config.BeaconTrustedBlockRoot))
+		if err != nil {
+			return nil, err
+		}
+		eth.beacon = beacon
 	}
 
 	// Start the RPC service
@@ -476,6 +487,7 @@ func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
+func (s *Ethereum) Beacon() *light.LightClient         { return s.beacon }
 func (s *Ethereum) TxPool() *txpool.TxPool             { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
