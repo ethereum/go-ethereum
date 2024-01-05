@@ -38,7 +38,7 @@ func TestStore(t *testing.T) {
 		current = newSyncCommitteeSigner()
 		_       = newSyncCommitteeSigner()
 		base    = store{
-			config:     SepoliaChainConfig,
+			config:     params.SepoliaChainConfig,
 			finalized:  &types.Header{},
 			optimistic: &types.Header{},
 			current:    current.committee(),
@@ -127,12 +127,12 @@ func TestFakeStateRoot(t *testing.T) {
 // syncCommitteeSigner represents a SyncCommittee and allows for signing
 // functionality on behalf of the committee.
 type syncCommitteeSigner struct {
-	config  *ChainConfig
+	config  *params.ChainConfig
 	members []*bls.SecretKey
 }
 
 func newSyncCommitteeSigner() *syncCommitteeSigner {
-	c := &syncCommitteeSigner{config: SepoliaChainConfig}
+	c := &syncCommitteeSigner{config: params.SepoliaChainConfig}
 	for i := 0; i < params.SyncCommitteeSize; i++ {
 		var sk bls.SecretKey
 		if err := sk.Deserialize(rand32()); err != nil {
@@ -174,7 +174,7 @@ func (c *syncCommitteeSigner) signHeader(header *types.Header, quorum float32) t
 
 	// Compute aggregate signature.
 	var (
-		domain  = c.config.Domain(SyncCommitteeDomain, header.Slot)
+		domain  = c.config.Domain(params.SyncCommitteeDomain, header.Slot)
 		root    = computeSigningRoot(header.Hash(), domain)
 		sigs    = make([]*bls.Signature, count)
 		keys    = make([]*bls.Pubkey, count)
@@ -240,7 +240,7 @@ func makeHeader(parent *types.Header) *types.Header {
 
 // updateGen is an interface representing different test generators.
 type updateGen interface {
-	gen(*types.Header) []*LightClientUpdate
+	gen(*types.Header) []*types.LightClientUpdate
 	error() *error
 }
 
@@ -255,12 +255,12 @@ type single struct {
 }
 
 // gen generates a single LightClientUpdate given the generation parameters.
-func (u *single) gen(parent *types.Header) []*LightClientUpdate {
+func (u *single) gen(parent *types.Header) []*types.LightClientUpdate {
 	if u.header == nil {
 		u.header = makeHeader(parent)
 	}
 	var (
-		finalizedHeader *LightClientHeader
+		finalizedHeader *types.LightClientHeader
 		finalizedBranch *merkle.Values
 		next            *types.SerializedSyncCommittee
 		nextBranch      *merkle.Values
@@ -271,14 +271,14 @@ func (u *single) gen(parent *types.Header) []*LightClientUpdate {
 		}
 		root, fb, nb := fakeStateRoot(u.finalized.Hash(), u.next.Root())
 		u.header.StateRoot = root
-		finalizedHeader = &LightClientHeader{Header: *u.finalized}
+		finalizedHeader = &types.LightClientHeader{Header: *u.finalized}
 		finalizedBranch = &fb
 		next = u.next
 		nextBranch = &nb
 	}
-	return []*LightClientUpdate{
+	return []*types.LightClientUpdate{
 		{
-			AttestedHeader:          LightClientHeader{*u.header},
+			AttestedHeader:          types.LightClientHeader{Header: *u.header},
 			SyncAggregate:           u.signer.signHeader(u.header, u.quorum),
 			SignatureSlot:           u.header.Slot,
 			FinalizedHeader:         finalizedHeader,

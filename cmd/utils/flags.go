@@ -921,7 +921,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.BeaconCategory,
 	}
 	BeaconTrustedBlockRootFlag = &cli.StringFlag{
-		Name:     "beacon.wss",
+		Name:     "beacon.wsc",
 		Usage:    "root of trusted block within the weak-subjectivity window",
 		Category: flags.BeaconCategory,
 	}
