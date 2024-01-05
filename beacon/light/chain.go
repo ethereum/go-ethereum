@@ -150,6 +150,7 @@ func (c *LightClient) Start() error {
 	}
 }
 
+// Stop halts the light client.
 func (c *LightClient) Stop() error {
 	close(c.quitCh)
 	return nil
@@ -253,7 +254,7 @@ func versionedBlockToExecutableData(block *eth2spec.VersionedSignedBeaconBlock) 
 			GasUsed:       p.GasUsed,
 			Timestamp:     p.Timestamp,
 			ExtraData:     p.ExtraData,
-			BaseFeePerGas: nil, // TODO: convert this []uint64 correctly to big.Int
+			BaseFeePerGas: p.BaseFeePerGas.ToBig(),
 			BlockHash:     common.Hash(p.BlockHash),
 			Transactions:  [][]byte{},
 			Withdrawals:   nil,
