@@ -222,8 +222,8 @@ func (mv *MVHashMap) Read(k Key, txIdx int) (res MVReadResult) {
 	}
 
 	cells.rw.RLock()
+
 	fk, fv := cells.tm.Floor(txIdx - 1)
-	cells.rw.RUnlock()
 
 	if fk != nil && fv != nil {
 		c := fv.(*WriteCell)
@@ -241,6 +241,8 @@ func (mv *MVHashMap) Read(k Key, txIdx int) (res MVReadResult) {
 			panic(fmt.Errorf("should not happen - unknown flag value"))
 		}
 	}
+
+	cells.rw.RUnlock()
 
 	return
 }
