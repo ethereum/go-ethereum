@@ -166,7 +166,6 @@ func (s *store) Insert(update *types.LightClientUpdate) error {
 	// Process finalized header update.
 	if update.FinalizedHeader != nil {
 		if update.FinalizedHeader.Header.Slot > s.finalized.Slot {
-			s.finalized = &update.FinalizedHeader.Header
 			var (
 				storedPeriod = types.SyncPeriod(s.finalized.Slot)
 				updatePeriod = types.SyncPeriod(update.FinalizedHeader.Slot)
@@ -179,6 +178,7 @@ func (s *store) Insert(update *types.LightClientUpdate) error {
 				s.prevActive = s.currActive
 				s.currActive = 0
 			}
+			s.finalized = &update.FinalizedHeader.Header
 		}
 	}
 

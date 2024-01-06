@@ -54,6 +54,9 @@ func Bootstrap(server string, headers []string, root common.Hash) (*LightClient,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bootstrap data: %w", err)
 	}
+	if bs.Header.Hash() != root {
+		return nil, fmt.Errorf("bootstrap root did not match requested: want %s, got %s", root, bs.Header.Hash())
+	}
 	if err := bs.Valid(); err != nil {
 		return nil, fmt.Errorf("failed to validate bootstrap data: %w", err)
 	}
@@ -95,20 +98,22 @@ func (c *LightClient) Finalized() *types.Header {
 func (c *LightClient) Start() error {
 	var (
 		ticker       = time.NewTicker(params.SlotLength * time.Second)
-		lastFinality = time.Now()
+		lastFinality = time.Time{}
 	)
 	for {
 		select {
 		case <-c.quitCh:
 			return nil
 		case <-ticker.C:
+			log.Trace("Blsync status", "period", c.store.finalizedPeriod(), "active", c.store.currActive, "prevActive", c.store.prevActive, "currCommittee", c.store.current != nil, "nextCommittee", c.store.next != nil)
 			if c.store.next == nil {
-				log.Debug("Fetching committee update", "period", c.store.finalizedPeriod())
+				log.Debug("Fetching committee update", "period", c.store.finalizedPeriod()+1)
 				updates, err := c.beacon.GetRangeUpdate(c.store.finalizedPeriod(), 1)
 				if err != nil {
 					log.Error("Failed to fetch next committee", "err", err)
 				} else {
 					for _, update := range updates {
+						log.Trace("New beacon range update", "slot", update.AttestedHeader.Slot, "root", update.AttestedHeader.Hash(), "sigslot", update.SignatureSlot, "period", update.AttestedHeader.SyncPeriod())
 						if err := c.store.Insert(update); err != nil {
 							log.Error("Failed to insert committee update", "err", err)
 							break
