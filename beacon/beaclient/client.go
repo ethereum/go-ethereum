@@ -97,7 +97,6 @@ func (c *Client) GetRangeUpdate(start, count int) ([]*types.LightClientUpdate, e
 		return nil, err
 	}
 	return u, nil
-
 }
 
 // GetOptimisticUpdate retrieves the latest available optimistic update from the

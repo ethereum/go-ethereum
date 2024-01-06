@@ -34,7 +34,7 @@ import (
 )
 
 // LightClient tracks the head of the chain using the light client protocol,
-// which assumes the majority of beacon chain sync committe is honest.
+// which assumes the majority of beacon chain sync committee is honest.
 type LightClient struct {
 	beacon *beaclient.Client
 	store  *store

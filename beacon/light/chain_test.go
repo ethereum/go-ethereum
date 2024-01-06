@@ -143,22 +143,6 @@ func newSyncCommitteeSigner() *syncCommitteeSigner {
 	return c
 }
 
-func (c *syncCommitteeSigner) shuffledCommittee() ([]int, []*bls.SecretKey) {
-	var (
-		shuffled []*bls.SecretKey
-		indexes  []int
-	)
-	for i, m := range c.members {
-		shuffled = append(shuffled, m)
-		indexes = append(indexes, i)
-	}
-	mrand.Shuffle(len(shuffled), func(i, j int) {
-		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		indexes[i], indexes[j] = indexes[j], indexes[i]
-	})
-	return indexes, shuffled
-}
-
 func (c *syncCommitteeSigner) signHeader(header *types.Header, quorum float32) types.SyncAggregate {
 	var (
 		count   = int(quorum * float32(params.SyncCommitteeSize))
@@ -326,7 +310,7 @@ func runTest(t *testing.T, tt *test, i int) {
 				}
 				if update.NextSyncCommittee != nil {
 					if tt.store.next == nil {
-						t.Fatalf("test %d: expected next sync committe set, but found nil", i)
+						t.Fatalf("test %d: expected next sync committee set, but found nil", i)
 					}
 					var (
 						have = tt.store.next.Aggregate.Serialize()
