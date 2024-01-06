@@ -37,7 +37,3 @@ create-docker-network:
 deploy-create2:
 	@echo "Deploying create2 deployment proxy..."
 	./util/deploy_create2.sh "http://localhost:8545"	
-
-print-warp-deploy:
-	@echo "Printing hyperlane warp deployment artifact"
-	docker run --rm -v geth-poa_hyperlane-deploy-artifacts:/data alpine cat /data/warp-deployment.json
