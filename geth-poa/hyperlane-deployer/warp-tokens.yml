@@ -1,8 +1,0 @@
-base:
-  chainName: sepolia
-  type: native
-synthetics:
-  - chainName: mevcommitsettlement
-  # name: "Commit ETH"
-  # symbol: "cETH"
-  # totalSupply: 10000000
