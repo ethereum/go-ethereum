@@ -1,17 +1,17 @@
 # Prod targets ref the amd agent image for this commit: 
 # https://github.com/hyperlane-xyz/hyperlane-monorepo/commit/69850642365251e16b9f23b87d6caf187036b3ee
 
-up-prod-settlement:
+up-prod:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
-	docker compose --profile settlement up -d --build	
+	DD_KEY=nil docker compose --profile settlement up -d --build	
 
-up-dev-settlement:
+up-dev:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
-	docker compose --profile settlement up -d --build
+	DD_KEY=nil docker compose --profile settlement up -d --build
 
 up-dev-local-l1:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
-	docker compose --profile settlement --profile local_l1 up -d
+	DD_KEY=nil docker compose --profile settlement --profile local_l1 up -d
 
 down:
 	docker compose --profile settlement --profile prod_agents --profile local_l1 down
