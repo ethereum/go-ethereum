@@ -215,8 +215,6 @@ services:
     profiles:
       - local_l1
 
-
-
   datadog-agent:
     image: gcr.io/datadoghq/agent:latest
     restart: always
@@ -257,9 +255,4 @@ volumes:
   geth-data-l1-bootnode:
   geth-data-l1-first-signer:
   geth-data-l1-second-signer:
-  hyperlane-deploy-artifacts:
-  hyperlane-validator1-sigs:
-  hyperlane-validator2-sigs:
-  hyperlane-validator1-db:
-  hyperlane-validator2-db:
-  hyperlane-relayer-db:
+
