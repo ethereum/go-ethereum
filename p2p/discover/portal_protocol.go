@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/tetratelabs/wabin/leb128"
@@ -1365,8 +1366,7 @@ type ContentLookupResult struct {
 
 func (p *PortalProtocol) ContentLookup(contentKey []byte) (*ContentLookupResult, error) {
 	contentId := p.toContentId(contentKey)
-	nodesByDis := p.table.findnodeByID(enode.ID(contentId), bucketSize, false)
-	closestNodes := nodesByDis.entries
+	closestNodes := p.Lookup(enode.ID(contentId))
 	// findContent enrs chan
 	newNodeChan := make(chan []*enode.Node)
 	// target node for findContent
@@ -1374,7 +1374,7 @@ func (p *PortalProtocol) ContentLookup(contentKey []byte) (*ContentLookupResult,
 
 	nodesWithoutContent := make([]*enode.Node, 0)
 	// find content result
-	stopFindContentChan := make(chan struct{})
+	stopFindContentChan := make(chan struct{}, 1)
 
 	contentResultChan := p.parallelFindContent(stopFindContentChan, nodeChan, contentKey)
 
@@ -1416,17 +1416,12 @@ func (p *PortalProtocol) ContentLookup(contentKey []byte) (*ContentLookupResult,
 	return nil, ContentNotFound
 }
 
-func (p *PortalProtocol) genNodeChan(initNodes []*node, contentId []byte, newNodeChan chan []*enode.Node) <-chan *node {
-	nodeChan := make(chan *node, alpha)
+func (p *PortalProtocol) genNodeChan(initNodes []*enode.Node, contentId []byte, newNodeChan chan []*enode.Node) <-chan *enode.Node {
+	nodeChan := make(chan *enode.Node, alpha)
 
 	closestNodes := initNodes
 	asked := make(map[enode.ID]struct{})
-	seen := make(map[enode.ID]struct{})
 	asked[p.localNode.ID()] = struct{}{}
-	seen[p.localNode.ID()] = struct{}{}
-	for _, node := range closestNodes {
-		seen[node.ID()] = struct{}{}
-	}
 	for i := 0; i < len(closestNodes) && i < alpha; i++ {
 		wrapedNode := closestNodes[i]
 		if _, ok := asked[wrapedNode.ID()]; !ok {
@@ -1435,13 +1430,14 @@ func (p *PortalProtocol) genNodeChan(initNodes []*node, contentId []byte, newNod
 		}
 	}
 	go func() {
+		var once sync.Once
 		for nodes := range newNodeChan {
 			for _, n := range nodes {
-				if _, ok := seen[n.ID()]; !ok {
-					seen[n.ID()] = struct{}{}
+				if _, ok := asked[n.ID()]; !ok {
+					asked[n.ID()] = struct{}{}
 					p.table.addSeenNode(wrapNode(n))
 					// insert node into closestNodes with distance
-					closestNodes = insertWithDistance(closestNodes, wrapNode(n), enode.ID(contentId))
+					closestNodes = insertWithDistance(closestNodes, n, enode.ID(contentId))
 					if len(closestNodes) > bucketSize {
 						closestNodes = closestNodes[:bucketSize]
 					}
@@ -1456,7 +1452,9 @@ func (p *PortalProtocol) genNodeChan(initNodes []*node, contentId []byte, newNod
 				}
 			}
 			if !newRequest {
-				close(nodeChan)
+				once.Do(func() {
+					close(nodeChan)
+				})
 			}
 		}
 	}()
@@ -1464,8 +1462,8 @@ func (p *PortalProtocol) genNodeChan(initNodes []*node, contentId []byte, newNod
 	return nodeChan
 }
 
-func (p *PortalProtocol) parallelFindContent(closeChan <-chan struct{}, nodeChan <-chan *node, contentKey []byte) <-chan findContentResult {
-	contentResultChan := make(chan findContentResult, alpha)
+func (p *PortalProtocol) parallelFindContent(closeChan <-chan struct{}, nodeChan <-chan *enode.Node, contentKey []byte) <-chan findContentResult {
+	contentResultChan := make(chan findContentResult)
 	requestAmount := 0
 	go func() {
 		defer close(contentResultChan)
@@ -1476,9 +1474,9 @@ func (p *PortalProtocol) parallelFindContent(closeChan <-chan struct{}, nodeChan
 					contentResultChan <- findContentResult{err: ContentNotFound}
 					return
 				}
-				flag, content, err := p.findContent(unwrapNode(wrapedNode), contentKey)
+				flag, content, err := p.findContent(wrapedNode, contentKey)
 				requestAmount++
-				contentResultChan <- findContentResult{flag: flag, content: content, err: err, src: unwrapNode(wrapedNode)}
+				contentResultChan <- findContentResult{flag: flag, content: content, err: err, src: wrapedNode}
 			case <-closeChan:
 				return
 			}
@@ -1547,8 +1545,8 @@ func getContentKeys(request *OfferRequest) [][]byte {
 	}
 }
 
-func insertWithDistance(nodes []*node, newNode *node, targetId enode.ID) []*node {
-	res := make([]*node, 0, len(nodes)+1)
+func insertWithDistance(nodes []*enode.Node, newNode *enode.Node, targetId enode.ID) []*enode.Node {
+	res := make([]*enode.Node, 0, len(nodes)+1)
 	for i := 0; i < len(nodes); i++ {
 		curNode := nodes[i]
 		curDis := enode.LogDist(curNode.ID(), newNode.ID())
