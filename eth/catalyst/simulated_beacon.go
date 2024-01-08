@@ -144,9 +144,9 @@ func (c *SimulatedBeacon) Stop() error {
 
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
-func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, tstamp uint64) error {
-	if tstamp <= c.lastBlockTime {
-		tstamp = c.lastBlockTime + 1
+func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp uint64) error {
+	if timestamp <= c.lastBlockTime {
+		timestamp = c.lastBlockTime + 1
 	}
 	c.feeRecipientLock.Lock()
 	feeRecipient := c.feeRecipient
@@ -161,7 +161,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, tstamp uint
 	var random [32]byte
 	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
-		Timestamp:             tstamp,
+		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,

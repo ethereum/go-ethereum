@@ -178,7 +178,7 @@ func (n *Backend) Fork(parentHash common.Hash) error {
 	return n.beacon.Fork(parentHash)
 }
 
-// AdjustTime changes the block timestamp.
+// AdjustTime changes the block timestamp and creates a new block.
 // It can only be called on empty blocks.
 func (n *Backend) AdjustTime(adjustment time.Duration) error {
 	return n.beacon.AdjustTime(adjustment)
