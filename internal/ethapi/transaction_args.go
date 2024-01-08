@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -273,9 +274,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		gas = globalGasCap
 	}
 	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
+		gasPrice      *big.Int
+		gasFeeCap     *big.Int
+		gasTipCap     *big.Int
+		blobGasFeeCap *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -307,6 +309,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			}
 		}
 	}
+	if args.MaxFeePerBlobGas != nil {
+		blobGasFeeCap = args.MaxFeePerBlobGas.ToInt()
+	}
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -326,6 +331,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		GasTipCap:         gasTipCap,
 		Data:              data,
 		AccessList:        accessList,
+		BlobGasFeeCap:     blobGasFeeCap,
+		BlobHashes:        args.BlobVersionedHashes,
 		SkipAccountChecks: true,
 	}
 	return msg, nil
@@ -336,6 +343,24 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
+	case args.BlobVersionedHashes != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.BlobTx{
+			To:         *args.To,
+			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			BlobHashes: args.BlobVersionedHashes,
+			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.MaxFeePerBlobGas)),
+		}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
