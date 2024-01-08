@@ -128,7 +128,7 @@ func (s *Suite) sendInvalidTxs(txs []*types.Transaction) error {
 		invalids[tx.Hash()] = struct{}{}
 	}
 
-	// Get repsonses.
+	// Get responses.
 	recvConn.SetReadDeadline(time.Now().Add(timeout))
 	for {
 		msg, err := recvConn.ReadEth()
