@@ -260,20 +260,98 @@ type BlockChain struct {
 	vmConfig   vm.Config
 }
 
+// blockChainConfig stores configuration options for the BlockChain.
+type blockChainConfig struct {
+	cacheConfig    *CacheConfig
+	genesis        *Genesis
+	overrides      *ChainOverrides
+	shouldPreserve func(header *types.Header) bool
+	txLookupLimit  *uint64
+	vmConfig       *vm.Config
+}
+
+// A BlockChainOption is a function that takes in and modifies a *blockChainConfig
+type BlockChainOption func(config *blockChainConfig)
+
+// NewBlockChainConfig creates a new blockChainConfig with optional configurations.
+func NewBlockChainConfig(options ...BlockChainOption) *blockChainConfig {
+	var config blockChainConfig
+
+	for _, f := range options {
+		f(&config)
+	}
+
+	return &config
+}
+
+// WithCacheConfig returns a BlockChainOption that sets the CacheConfig.
+func WithCacheConfig(cacheConfig *CacheConfig) BlockChainOption {
+	changeConfig := func(bcConfig *blockChainConfig) {
+		bcConfig.cacheConfig = cacheConfig
+	}
+
+	return changeConfig
+}
+
+// WithGenesis returns a BlockChainOption that sets the genesis block.
+func WithGenesis(genesis *Genesis) BlockChainOption {
+	changeGenesis := func(bcConfig *blockChainConfig) {
+		bcConfig.genesis = genesis
+	}
+
+	return changeGenesis
+}
+
+// WithOverrides returns a BlockChainOption that sets the overrides for the BlockChain.
+func WithOverrides(overrides *ChainOverrides) BlockChainOption {
+	changeOverrides := func(config *blockChainConfig) {
+		config.overrides = overrides
+	}
+
+	return changeOverrides
+}
+
+// WithShouldPreserve returns a BlockChainOption that sets the shouldPreserve function.
+func WithShouldPreserve(shouldPreserve func(header *types.Header) bool) BlockChainOption {
+	changeShouldPreserve := func(config *blockChainConfig) {
+		config.shouldPreserve = shouldPreserve
+	}
+
+	return changeShouldPreserve
+}
+
+// WithTxLookupLimit returns a BlockChainOption that sets the transaction lookup limit.
+func WithTxLookupLimit(limit *uint64) BlockChainOption {
+	changeTxLookupLimit := func(config *blockChainConfig) {
+		config.txLookupLimit = limit
+	}
+
+	return changeTxLookupLimit
+}
+
+// WithVmConfig returns a BlockChainOption that sets the vm.Config.
+func WithVmConfig(vmConfig *vm.Config) BlockChainOption {
+	changeVmConfig := func(config *blockChainConfig) {
+		config.vmConfig = vmConfig
+	}
+
+	return changeVmConfig
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
-	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
+func NewBlockChain(db ethdb.Database, engine consensus.Engine, bcConfig *blockChainConfig) (*BlockChain, error) {
+	if bcConfig.cacheConfig == nil {
+		bcConfig.cacheConfig = defaultCacheConfig
 	}
 	// Open trie database with provided config
-	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
+	triedb := trie.NewDatabase(db, bcConfig.cacheConfig.triedbConfig())
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, bcConfig.genesis, bcConfig.overrides)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -287,7 +365,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
-		cacheConfig:   cacheConfig,
+		cacheConfig:   bcConfig.cacheConfig,
 		db:            db,
 		triedb:        triedb,
 		triegc:        prque.New[int64, common.Hash](nil),
@@ -300,10 +378,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		txLookupCache: lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
-		vmConfig:      vmConfig,
+		vmConfig:      *bcConfig.vmConfig,
 	}
-	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.forker = NewForkChoice(bc, shouldPreserve)
+	bc.flushInterval.Store(int64(bcConfig.cacheConfig.TrieTimeLimit))
+	bc.forker = NewForkChoice(bc, bcConfig.shouldPreserve)
 	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -464,8 +542,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
 	// Start tx indexer/unindexer if required.
-	if txLookupLimit != nil {
-		bc.txLookupLimit = *txLookupLimit
+	if bcConfig.txLookupLimit != nil {
+		bc.txLookupLimit = *bcConfig.txLookupLimit
 
 		bc.wg.Add(1)
 		go bc.maintainTxIndex()

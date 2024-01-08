@@ -148,9 +148,14 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
-		Tracer: tracer,
-	}, nil, nil)
+
+	bcConfig := core.NewBlockChainConfig(
+		core.WithCacheConfig(cache),
+		core.WithGenesis(gspec),
+		core.WithVmConfig(&vm.Config{Tracer: tracer}),
+	)
+
+	chain, err := core.NewBlockChain(db, engine, bcConfig)
 	if err != nil {
 		return err
 	}

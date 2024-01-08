@@ -104,8 +104,17 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil, nil)
+		noForkConfig = core.NewBlockChainConfig(
+			core.WithGenesis(gspecNoFork),
+			core.WithVmConfig(&vm.Config{}),
+		)
+		chainNoFork, _ = core.NewBlockChain(dbNoFork, engine, noForkConfig)
+
+		proForkConfig = core.NewBlockChainConfig(
+			core.WithGenesis(gspecProFork),
+			core.WithVmConfig(&vm.Config{}),
+		)
+		chainProFork, _ = core.NewBlockChain(dbProFork, engine, proForkConfig)
 
 		_, blocksNoFork, _  = core.GenerateChainWithGenesis(gspecNoFork, engine, 2, nil)
 		_, blocksProFork, _ = core.GenerateChainWithGenesis(gspecProFork, engine, 2, nil)

@@ -163,8 +163,15 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		}
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
+
+	bcConfig := core.NewBlockChainConfig(
+		core.WithCacheConfig(&core.CacheConfig{TrieCleanNoPrefetch: true}),
+		core.WithGenesis(gspec),
+		core.WithVmConfig(&vm.Config{}),
+	)
+
 	// Construct testing chain
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), engine, bcConfig)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}

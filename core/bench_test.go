@@ -195,7 +195,9 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	config := NewBlockChainConfig(WithGenesis(gspec), WithVmConfig(&vm.Config{}))
+
+	chainman, _ := NewBlockChain(db, ethash.NewFaker(), config)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -298,6 +300,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	db.Close()
 	cacheConfig := *defaultCacheConfig
 	cacheConfig.TrieDirtyDisabled = true
+	config := NewBlockChainConfig(WithCacheConfig(&cacheConfig), WithVmConfig(&vm.Config{}))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -307,7 +310,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, &cacheConfig, nil, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := NewBlockChain(db, ethash.NewFaker(), config)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

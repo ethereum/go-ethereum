@@ -213,7 +213,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory)
+
+	bcConfig := core.NewBlockChainConfig(
+		core.WithCacheConfig(cacheConfig),
+		core.WithGenesis(config.Genesis),
+		core.WithOverrides(&overrides),
+		core.WithShouldPreserve(eth.shouldPreserve),
+		core.WithTxLookupLimit(&config.TransactionHistory),
+		core.WithVmConfig(&vmConfig),
+	)
+
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.engine, bcConfig)
 	if err != nil {
 		return nil, err
 	}

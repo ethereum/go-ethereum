@@ -72,7 +72,13 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+
+	config := core.NewBlockChainConfig(
+		core.WithGenesis(gspec),
+		core.WithVmConfig(&vm.Config{}),
+	)
+
+	chain, err := core.NewBlockChain(db, ethash.NewFaker(), config)
 	if err != nil {
 		panic(err)
 	}

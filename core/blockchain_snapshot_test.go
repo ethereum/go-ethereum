@@ -80,8 +80,13 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 			Config:  params.AllEthashProtocolChanges,
 		}
 		engine = ethash.NewFullFaker()
+		config = NewBlockChainConfig(
+			WithCacheConfig(DefaultCacheConfigWithScheme(basic.scheme)),
+			WithGenesis(gspec),
+			WithVmConfig(&vm.Config{}),
+		)
 	)
-	chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(basic.scheme), gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(db, engine, config)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -228,7 +233,14 @@ func (snaptest *snapshotTest) test(t *testing.T) {
 
 	// Restart the chain normally
 	chain.Stop()
-	newchain, err := NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+
+	config := NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(snaptest.scheme)),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err := NewBlockChain(snaptest.db, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -270,13 +282,19 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// the crash, we do restart twice here: one after the crash and one
 	// after the normal stop. It's used to ensure the broken snapshot
 	// can be detected all the time.
-	newchain, err := NewBlockChain(newdb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+	config := NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(snaptest.scheme)),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err := NewBlockChain(newdb, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
 	newchain.Stop()
 
-	newchain, err = NewBlockChain(newdb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+	newchain, err = NewBlockChain(newdb, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -313,15 +331,28 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  0,
 		StateScheme:    snaptest.scheme,
 	}
-	newchain, err := NewBlockChain(snaptest.db, cacheConfig, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+
+	config := NewBlockChainConfig(
+		WithCacheConfig(cacheConfig),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err := NewBlockChain(snaptest.db, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
 	newchain.InsertChain(gappedBlocks)
 	newchain.Stop()
 
+	config = NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(snaptest.scheme)),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
 	// Restart the chain with enabling the snapshot
-	newchain, err = NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+	newchain, err = NewBlockChain(snaptest.db, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -349,7 +380,13 @@ func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 	chain.SetHead(snaptest.setHead)
 	chain.Stop()
 
-	newchain, err := NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+	config := NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(snaptest.scheme)),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err := NewBlockChain(snaptest.db, snaptest.engine, config)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -385,7 +422,14 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  0,
 		StateScheme:    snaptest.scheme,
 	}
-	newchain, err := NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+
+	bcConfig := NewBlockChainConfig(
+		WithCacheConfig(config),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err := NewBlockChain(snaptest.db, snaptest.engine, bcConfig)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -402,7 +446,14 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotWait:   false, // Don't wait rebuild
 		StateScheme:    snaptest.scheme,
 	}
-	tmp, err := NewBlockChain(snaptest.db, config, snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+
+	bcConfig = NewBlockChainConfig(
+		WithCacheConfig(config),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	tmp, err := NewBlockChain(snaptest.db, snaptest.engine, bcConfig)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -411,7 +462,13 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	tmp.triedb.Close()
 	tmp.stopWithoutSaving()
 
-	newchain, err = NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil, nil)
+	bcConfig = NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(snaptest.scheme)),
+		WithGenesis(snaptest.gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
+	newchain, err = NewBlockChain(snaptest.db, snaptest.engine, bcConfig)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

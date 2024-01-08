@@ -151,7 +151,13 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Config: params.TestChainConfig,
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+
+	config := core.NewBlockChainConfig(
+		core.WithGenesis(gspec),
+		core.WithVmConfig(&vm.Config{}),
+	)
+
+	chain, _ := core.NewBlockChain(db, ethash.NewFaker(), config)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {

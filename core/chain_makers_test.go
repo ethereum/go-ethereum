@@ -123,8 +123,13 @@ func TestGeneratePOSChain(t *testing.T) {
 		}
 	})
 
+	bcConfig := NewBlockChainConfig(
+		WithGenesis(gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, beacon.NewFaker(), bcConfig)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(genchain); err != nil {
@@ -238,8 +243,14 @@ func ExampleGenerateChain() {
 		}
 	})
 
+	config := NewBlockChainConfig(
+		WithCacheConfig(DefaultCacheConfigWithScheme(rawdb.HashScheme)),
+		WithGenesis(gspec),
+		WithVmConfig(&vm.Config{}),
+	)
+
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.HashScheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, ethash.NewFaker(), config)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {

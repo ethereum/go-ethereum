@@ -131,8 +131,12 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				// Advance to block #4, past the homestead transition block of customg.
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))
 				oldcustomg.Commit(db, tdb)
-
-				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+				config := NewBlockChainConfig(
+					WithGenesis(&oldcustomg),
+					WithCacheConfig(DefaultCacheConfigWithScheme(scheme)),
+					WithVmConfig(&vm.Config{}),
+				)
+				bc, _ := NewBlockChain(db, ethash.NewFullFaker(), config)
 				defer bc.Stop()
 
 				_, blocks, _ := GenerateChainWithGenesis(&oldcustomg, ethash.NewFaker(), 4, nil)
