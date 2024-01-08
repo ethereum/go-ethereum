@@ -94,7 +94,7 @@ func TestCreation(t *testing.T) {
 				{6000001, 1678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // First Shanghai block
 				{6500002, 1705473119, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // Last Shanghai block
 				{6500003, 1705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // First Cancun block
-				{6500003, 2705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // Future Shanghai block
+				{6500003, 2705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // Future Cancun block
 			},
 		},
 		// Sepolia test cases
