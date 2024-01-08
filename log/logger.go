@@ -83,7 +83,7 @@ func LevelAlignedString(l slog.Level) string {
 	}
 }
 
-// LevelString returns a 5-character string containing the name of a Lvl.
+// LevelString returns a string containing the name of a Lvl.
 func LevelString(l slog.Level) string {
 	switch l {
 	case LevelTrace:
@@ -95,7 +95,7 @@ func LevelString(l slog.Level) string {
 	case slog.LevelWarn:
 		return "warn"
 	case slog.LevelError:
-		return "eror"
+		return "error"
 	case LevelCrit:
 		return "crit"
 	default:
