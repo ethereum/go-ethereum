@@ -19,14 +19,12 @@ package catalyst
 import (
 	"crypto/rand"
 	"errors"
-	"math"
 	"math/big"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -88,7 +86,6 @@ type SimulatedBeacon struct {
 // Period sets the period in which blocks should be produced.
 //
 //   - If period is set to 0, a block is produced on every transaction.
-//   - If period is set to math.MaxUint64, blocks can only be produced
 //     via Commit, Fork and AdjustTime.
 func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
@@ -125,9 +122,7 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine.
 func (c *SimulatedBeacon) Start() error {
 	if c.period == 0 {
-		go c.loopOnDemand()
-	} else if c.period == math.MaxUint64 {
-		// if period is set to MaxUint, do not mine at all
+		// if period is set to 0, do not mine at all
 		// this is used in the simulated backend where blocks
 		// are explicitly mined via Commit, AdjustTime and Fork
 	} else {
@@ -202,32 +197,6 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 	c.lastBlockTime = payload.Timestamp
 	return nil
-}
-
-// loopOnDemand runs the block production loop for "on-demand" configuration (period = 0)
-func (c *SimulatedBeacon) loopOnDemand() {
-	var (
-		newTxs = make(chan core.NewTxsEvent)
-		sub    = c.eth.TxPool().SubscribeTransactions(newTxs, true)
-	)
-	defer sub.Unsubscribe()
-
-	for {
-		select {
-		case <-c.shutdownCh:
-			return
-		case w := <-c.withdrawals.pending:
-			withdrawals := append(c.withdrawals.gatherPending(9), w)
-			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
-			}
-		case <-newTxs:
-			withdrawals := c.withdrawals.gatherPending(10)
-			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
-			}
-		}
-	}
 }
 
 // loop runs the block production loop for non-zero period configuration
@@ -318,10 +287,15 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 }
 
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
+	api := &api{sim}
+	if sim.period == 0 {
+		// mine on demand if period is set to 0
+		go api.loop()
+	}
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "dev",
-			Service:   &api{sim},
+			Service:   api,
 			Version:   "1.0",
 		},
 	})

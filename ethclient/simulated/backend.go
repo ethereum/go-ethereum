@@ -17,7 +17,6 @@
 package simulated
 
 import (
-	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -90,7 +89,7 @@ func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
 	conf.Genesis = &genesis
 	conf.SyncMode = downloader.FullSync
 	conf.TxPool.NoLocals = true
-	sim, err := newWithNode(stack, &conf, math.MaxUint64)
+	sim, err := newWithNode(stack, &conf, 0)
 	if err != nil {
 		// This should never happen, if it does, please open an issue
 		panic(err)
