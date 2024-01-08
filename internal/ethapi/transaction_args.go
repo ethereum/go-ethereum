@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -53,6 +54,10 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	// Introduced by EIP-4844.
+	MaxFeePerBlobGas    *hexutil.Big  `json:"maxFeePerBlobGas"`
+	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -91,6 +96,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
+	}
+	if args.BlobVersionedHashes != nil && args.To == nil {
+		return errors.New(`blob transactions cannot have the form of a create transaction`)
+	}
+	if args.BlobVersionedHashes != nil && len(args.BlobVersionedHashes) == 0 {
+		return errors.New(`need at least 1 blob for a blob-tx`)
 	}
 	if args.To == nil && len(args.data()) == 0 {
 		return errors.New(`contract creation without any data provided`)
@@ -153,6 +164,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		}
 		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
+	// Sanity check the EIP-4844 fee parameters.
+	if args.MaxFeePerBlobGas != nil && args.MaxFeePerBlobGas.ToInt().Sign() == 0 {
+		return errors.New("maxFeePerBlobGas must be non-zero")
+	}
 	// Sanity check the non-EIP-1559 fee parameters.
 	head := b.CurrentHeader()
 	isLondon := b.ChainConfig().IsLondon(head.Number)
@@ -165,14 +180,21 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	}
 
 	// Now attempt to fill in default value depending on whether London is active or not.
-	if isLondon {
+	if b.ChainConfig().IsCancun(head.Number, head.Time) {
+		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
+	} else if isLondon {
+		if args.MaxFeePerBlobGas != nil {
+			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
+		}
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
 			return err
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.MaxFeePerBlobGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active")
 		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
@@ -182,6 +204,21 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		args.GasPrice = (*hexutil.Big)(price)
 	}
 	return nil
+}
+
+// setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
+func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+	// Set maxFeePerBlobGas if it is missing.
+	if args.BlobVersionedHashes != nil && args.MaxFeePerBlobGas == nil {
+		// ExcessBlobGas must be set for a Cancun block.
+		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
+		// Set the max fee to be 2 times larger than the previous block's blob base fee.
+		// The additional slack allows the tx to not become invalidated if the base
+		// fee is rising.
+		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
+		args.MaxFeePerBlobGas = (*hexutil.Big)(val)
+	}
+	return args.setLondonFeeDefaults(ctx, head, b)
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.

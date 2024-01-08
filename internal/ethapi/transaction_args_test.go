@@ -153,14 +153,14 @@ func TestSetFeeDefaults(t *testing.T) {
 			false,
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			nil,
-			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx pre-London, priorityFee set",
 			false,
 			&TransactionArgs{MaxPriorityFeePerGas: fortytwo},
 			nil,
-			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee",
