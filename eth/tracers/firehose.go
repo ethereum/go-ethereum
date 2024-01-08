@@ -298,12 +298,18 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 }
 
 func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
+	firehoseTrace("assigning ordinal and index to logs")
+	defer func() {
+		firehoseTrace("assigning ordinal and index to logs terminated")
+	}()
+
 	trx := f.transaction
 
 	receiptsLogs := trx.Receipt.Logs
 
 	callLogs := []*pbeth.Log{}
 	for _, call := range trx.Calls {
+		firehoseTrace("checking call reverted=%t logs=%d", call.StateReverted, len(call.Logs))
 		if call.StateReverted {
 			continue
 		}
@@ -744,6 +750,8 @@ func (f *Firehose) OnLog(l *types.Log) {
 	}
 
 	activeCall := f.callStack.Peek()
+	firehoseTrace("adding log to call address=%s call=%d (has already %d logs)", l.Address, activeCall.Index, len(activeCall.Logs))
+
 	activeCall.Logs = append(activeCall.Logs, &pbeth.Log{
 		Address:    l.Address.Bytes(),
 		Topics:     topics,
