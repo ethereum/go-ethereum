@@ -17,10 +17,20 @@
 package vm
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+const (
+	// vmInterpreterRunExecutionTime is the name of a metric to capture the
+	// elapsed execution time (in nanoseconds) of the vm interpreter's Run
+	// method.
+	vmInterpreterRunExecutionTime = "vm/interpreter_run_execution_time"
 )
 
 // Config are the configuration options for the Interpreter
@@ -105,6 +115,12 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	if metrics.Enabled {
+		defer func(start time.Time) {
+			metrics.GetOrRegisterTimer(vmInterpreterRunExecutionTime, nil).UpdateSince(start)
+		}(time.Now())
+	}
+
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()

@@ -79,6 +79,7 @@ services:
               "eth*",
               "chain*",
               "clique*"
+              "vm*"
             ]
           }
         ]
@@ -120,6 +121,7 @@ services:
               "eth*",
               "chain*",
               "clique*"
+              "vm*"
             ]
           }
         ]
@@ -158,6 +160,7 @@ services:
               "eth*",
               "chain*",
               "clique*"
+              "vm*"
             ]
           }
         ]
