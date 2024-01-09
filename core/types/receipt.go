@@ -71,6 +71,9 @@ type Receipt struct {
 	BlockHash        common.Hash `json:"blockHash,omitempty"`
 	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
 	TransactionIndex uint        `json:"transactionIndex"`
+
+	// Scroll rollup
+	L1Fee *big.Int `json:"l1Fee,omitempty"`
 }
 
 type receiptMarshaling struct {
@@ -84,6 +87,7 @@ type receiptMarshaling struct {
 	BlobGasPrice      *hexutil.Big
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
+	L1Fee             *hexutil.Big
 }
 
 // receiptRLP is the consensus encoding of a receipt.
@@ -99,6 +103,7 @@ type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Logs              []*Log
+	L1Fee             *big.Int
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
@@ -264,6 +269,10 @@ type ReceiptForStorage Receipt
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
+	if r.L1Fee == nil {
+		r.L1Fee = big.NewInt(0)
+	}
+
 	w := rlp.NewEncoderBuffer(_w)
 	outerList := w.List()
 	w.WriteBytes((*Receipt)(r).statusEncoding())
@@ -275,6 +284,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+	w.WriteBigInt(r.L1Fee)
 	w.ListEnd(outerList)
 	return w.Flush()
 }
@@ -292,6 +302,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.L1Fee = stored.L1Fee
 
 	return nil
 }

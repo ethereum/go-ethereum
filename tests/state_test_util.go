@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
@@ -254,9 +255,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		return nil, nil, nil, common.Hash{}, err
 	}
 
+	var ttx types.Transaction
 	// Try to recover tx with current signer
 	if len(post.TxBytes) != 0 {
-		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
 			triedb.Close()
@@ -289,7 +290,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	_, err = core.ApplyMessage(evm, msg, gaspool)
+	l1DataFee, err := fees.CalculateL1DataFee(&ttx, statedb)
+	if err != nil {
+		return nil, nil, nil, common.Hash{}, err
+	}
+	_, err = core.ApplyMessage(evm, msg, gaspool, l1DataFee)
 	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}

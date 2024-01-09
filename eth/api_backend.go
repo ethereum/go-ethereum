@@ -304,6 +304,7 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	// will `VerifyFee` & `validateTx` in txPool.Add
 	return b.eth.txPool.Add([]*types.Transaction{signedTx}, true, false)[0]
 }
 

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 )
 
 // ValidationOptions define certain differences between transaction validation
@@ -219,8 +220,22 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		balance = opts.State.GetBalance(from)
 		cost    = tx.Cost()
 	)
+	// 1. Check balance >= transaction cost (V + GP * GL) to maintain compatibility with the logic without considering L1 data fee.
 	if balance.Cmp(cost) < 0 {
 		return fmt.Errorf("%w: balance %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, cost, new(big.Int).Sub(cost, balance))
+	}
+	// 2. Perform an additional check for L1 data fees.
+	// Always perform the check, because it's not easy to check FeeVault here
+	// Get L1 data fee in current state
+	l1DataFee, err := fees.CalculateL1DataFee(tx, opts.State)
+	if err != nil {
+		return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == L1 data fee + V + GP * GL
+	cost = new(big.Int).Add(tx.Cost(), l1DataFee)
+	if balance.Cmp(cost) < 0 {
+		return fmt.Errorf("invalid transaction: %w", core.ErrInsufficientFundsWithL1DataFee)
 	}
 	// Ensure the transactor has enough funds to cover for replacements or nonce
 	// expansions without overdrafts

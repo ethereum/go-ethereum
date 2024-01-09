@@ -74,6 +74,10 @@ var (
 	// is higher than the balance of the user's account.
 	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
+	// ErrInsufficientFundsWithL1DataFee is returned if (the total cost of executing a transaction + L1DataFee)
+	// is higher than the balance of the user's account.
+	ErrInsufficientFundsWithL1DataFee = errors.New("insufficient funds for l1fee + gas * price + value")
+
 	// ErrGasUintOverflow is returned when calculating gas usage.
 	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 

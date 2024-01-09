@@ -26,6 +26,7 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -149,6 +150,18 @@ type Message struct {
 	IsL1MessageTx bool
 }
 
+func (m *Message) GetFrom() common.Address         { return m.From }
+func (m *Message) GetTo() *common.Address          { return m.To }
+func (m *Message) GetGasPrice() *big.Int           { return m.GasPrice }
+func (m *Message) GetGasLimit() uint64             { return m.GasLimit }
+func (m *Message) GetGasFeeCap() *big.Int          { return m.GasFeeCap }
+func (m *Message) GetGasTipCap() *big.Int          { return m.GasTipCap }
+func (m *Message) GetValue() *big.Int              { return m.Value }
+func (m *Message) GetNonce() uint64                { return m.Nonce }
+func (m *Message) GetData() []byte                 { return m.Data }
+func (m *Message) GetAccessList() types.AccessList { return m.AccessList }
+func (m *Message) GetIsL1MessageTx() bool          { return m.IsL1MessageTx }
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
@@ -182,8 +195,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool, l1DataFee *big.Int) (*ExecutionResult, error) {
+	return NewStateTransition(evm, msg, gp, l1DataFee).TransitionDb()
 }
 
 // StateTransition represents a state transition.
@@ -215,15 +228,18 @@ type StateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
+
+	l1DataFee *big.Int
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool, l1DataFee *big.Int) *StateTransition {
 	return &StateTransition{
-		gp:    gp,
-		evm:   evm,
-		msg:   msg,
-		state: evm.StateDB,
+		gp:        gp,
+		evm:       evm,
+		msg:       msg,
+		state:     evm.StateDB,
+		l1DataFee: l1DataFee,
 	}
 }
 
@@ -238,11 +254,28 @@ func (st *StateTransition) to() common.Address {
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval = mgval.Mul(mgval, st.msg.GasPrice)
+
+	if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
+		// should be fine to add st.l1DataFee even without `L1MessageTx` check, since L1MessageTx will come with 0 l1DataFee,
+		// but double check to make sure
+		if !st.msg.IsL1MessageTx {
+			log.Debug("Adding L1DataFee", "l1DataFee", st.l1DataFee)
+			mgval = mgval.Add(mgval, st.l1DataFee)
+		}
+	}
+
 	balanceCheck := new(big.Int).Set(mgval)
 	if st.msg.GasFeeCap != nil {
 		balanceCheck.SetUint64(st.msg.GasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 		balanceCheck.Add(balanceCheck, st.msg.Value)
+		if st.evm.ChainConfig().Scroll.FeeVaultEnabled() {
+			// should be fine to add st.l1DataFee even without `L1MessageTx` check, since L1MessageTx will come with 0 l1DataFee,
+			// but double check to make sure
+			if !st.msg.IsL1MessageTx {
+				balanceCheck.Add(balanceCheck, st.l1DataFee)
+			}
+		}
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
@@ -455,12 +488,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
 	} else {
+		// The L2 Fee is the same as the fee that is charged in the normal geth
+		// codepath. Add the L1DataFee to the L2 fee for the total fee that is sent
+		// to the sequencer.
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+		fee.Add(fee, st.l1DataFee)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee) // TODO: change to `st.evm.FeeRecipient()`
 	}
 
 	return &ExecutionResult{
+		L1DataFee:  st.l1DataFee,
 		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
 		ReturnData: ret,

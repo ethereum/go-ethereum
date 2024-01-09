@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -121,7 +122,11 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+			if err != nil {
+				t.Fatalf("failed to calculate L1DataFee: %v", err)
+			}
+			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()), l1DataFee)
 			if _, err = st.TransitionDb(); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}

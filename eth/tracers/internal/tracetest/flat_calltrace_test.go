@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/tests"
 
 	// Force-load the native, to trigger registration
@@ -114,7 +115,11 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+	if err != nil {
+		return fmt.Errorf("failed to calculate L1DataFee: %v", err)
+	}
+	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()), l1DataFee)
 
 	if _, err = st.TransitionDb(); err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)

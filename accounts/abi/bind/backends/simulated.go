@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -704,8 +705,13 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	signer := types.MakeSigner(b.blockchain.Config(), header.Number, header.Time)
+	l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.blockchain.Config().ChainID, signer, stateDB)
+	if err != nil {
+		return nil, err
+	}
 
-	return core.ApplyMessage(vmEnv, msg, gasPool)
+	return core.ApplyMessage(vmEnv, msg, gasPool, l1DataFee)
 }
 
 // SendTransaction updates the pending block to include the given transaction.

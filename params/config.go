@@ -345,6 +345,9 @@ type ScrollConfig struct {
 	// Maximum tx payload size of blocks that we produce [optional]
 	MaxTxPayloadBytesPerBlock *int `json:"maxTxPayloadBytesPerBlock,omitempty"`
 
+	// Transaction fee vault address [optional]
+	FeeVaultAddress *common.Address `json:"feeVaultAddress,omitempty"`
+
 	// L1 config
 	L1Config *L1Config `json:"l1Config,omitempty"`
 }
@@ -364,6 +367,10 @@ func (c *L1Config) String() string {
 
 	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v}",
 		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
+}
+
+func (s ScrollConfig) FeeVaultEnabled() bool {
+	return s.FeeVaultAddress != nil
 }
 
 func (s ScrollConfig) ShouldIncludeL1Messages() bool {

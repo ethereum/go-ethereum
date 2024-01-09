@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 )
 
 const (
@@ -379,10 +380,24 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return txpool.ErrNegativeValue
 	}
 
+	// 1. Check balance >= transaction cost (V + GP * GL) to maintain compatibility with the logic without considering L1 data fee.
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
+	}
+	// 2. If FeeVault is enabled, perform an additional check for L1 data fees.
+	if pool.config.Scroll.FeeVaultEnabled() {
+		// Get L1 data fee in current state
+		l1DataFee, err := fees.CalculateL1DataFee(tx, currentState)
+		if err != nil {
+			return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
+		}
+		// Transactor should have enough funds to cover the costs
+		// cost == L1 data fee + V + GP * GL
+		if b := currentState.GetBalance(from); b.Cmp(new(big.Int).Add(tx.Cost(), l1DataFee)) < 0 {
+			return fmt.Errorf("invalid transaction: %w", core.ErrInsufficientFundsWithL1DataFee)
+		}
 	}
 
 	// Should supply enough intrinsic gas
