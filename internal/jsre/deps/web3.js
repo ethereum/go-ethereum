@@ -2361,7 +2361,7 @@ var isFunction = function (object) {
 };
 
 /**
- * Returns true if object is Objet, otherwise false
+ * Returns true if object is Object, otherwise false
  *
  * @method isObject
  * @param {Object}
@@ -2757,7 +2757,7 @@ var Batch = function (web3) {
  * Should be called to add create new request to batch request
  *
  * @method add
- * @param {Object} jsonrpc requet object
+ * @param {Object} jsonrpc request object
  */
 Batch.prototype.add = function (request) {
     this.requests.push(request);
@@ -6706,7 +6706,7 @@ var exchangeAbi = require('../contracts/SmartExchange.json');
  * @method transfer
  * @param {String} from
  * @param {String} to iban
- * @param {Value} value to be tranfered
+ * @param {Value} value to be transferred
  * @param {Function} callback, callback
  */
 var transfer = function (eth, from, to, value, callback) {
@@ -6736,7 +6736,7 @@ var transfer = function (eth, from, to, value, callback) {
  * @method transferToAddress
  * @param {String} from
  * @param {String} to
- * @param {Value} value to be tranfered
+ * @param {Value} value to be transferred
  * @param {Function} callback, callback
  */
 var transferToAddress = function (eth, from, to, value, callback) {
@@ -9444,7 +9444,7 @@ module.exports = transfer;
 	            var M_offset_14 = M[offset + 14];
 	            var M_offset_15 = M[offset + 15];
 
-	            // Working varialbes
+	            // Working variables
 	            var a = H[0];
 	            var b = H[1];
 	            var c = H[2];
