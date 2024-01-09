@@ -66,6 +66,7 @@ type Firehose struct {
 	transaction         *pbeth.TransactionTrace
 	transactionLogIndex uint32
 	isPrecompiledAddr   func(addr common.Address) bool
+	isBeforeHomestead   bool
 
 	// Call state
 	callStack               *CallStack
@@ -109,6 +110,7 @@ func (f *Firehose) resetTransaction() {
 	f.transaction = nil
 	f.transactionLogIndex = 0
 	f.isPrecompiledAddr = nil
+	f.isBeforeHomestead = false
 
 	f.callStack.Reset()
 	f.latestCallStartSuicided = false
@@ -180,14 +182,17 @@ func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction, from commo
 		to = *tx.To()
 	}
 
-	f.captureTxStart(tx, tx.Hash(), from, to, evm.IsPrecompileAddr)
+	isBeforeHomestead := !evm.ChainConfig().IsHomestead(big.NewInt(int64(f.block.Number)))
+
+	f.captureTxStart(tx, tx.Hash(), from, to, evm.IsPrecompileAddr, isBeforeHomestead)
 }
 
 // captureTxStart is used internally a two places, in the normal "tracer" and in the "OnGenesisBlock",
 // we manually pass some override to the `tx` because genesis block has a different way of creating
 // the transaction that wraps the genesis block.
-func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from, to common.Address, isPrecompiledAddr func(common.Address) bool) {
+func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from, to common.Address, isPrecompiledAddr func(common.Address) bool, isBeforeHomestead bool) {
 	f.isPrecompiledAddr = isPrecompiledAddr
+	f.isBeforeHomestead = isBeforeHomestead
 
 	v, r, s := tx.RawSignatureValues()
 
@@ -505,6 +510,12 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error) {
 	firehoseDebug("call end source=%s index=%d output=%s gasUsed=%d err=%s", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err))
 
+	if err != nil && f.isBeforeHomestead && errors.Is(err, vm.ErrCodeStoreOutOfGas) {
+		// Before Homestead, the code store out of gas error was not considered a failure so we must not consider this error as a failure
+		firehoseDebug("ignoring code store out of gas error before Homestead")
+		err = nil
+	}
+
 	if f.latestCallStartSuicided {
 		if source != "child" {
 			panic(fmt.Errorf("unexpected source for suicided call end, expected child but got %s, suicide are always produced on a 'child' source", source))
@@ -595,7 +606,7 @@ func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	f.OnBlockStart(b, big.NewInt(0), nil, nil)
-	f.captureTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress, func(common.Address) bool { return false })
+	f.captureTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress, func(common.Address) bool { return false }, false)
 	f.CaptureStart(emptyCommonAddress, emptyCommonAddress, false, nil, 0, nil)
 
 	for _, addr := range sortedKeys(alloc) {
