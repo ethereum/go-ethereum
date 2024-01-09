@@ -13,7 +13,6 @@ import (
 	"math/big"
 	"net"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/tetratelabs/wabin/leb128"
@@ -1352,137 +1351,43 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 	return nodes
 }
 
-type findContentResult struct {
-	flag    byte
-	content any
-	src     *enode.Node
-	err     error
-}
+func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, error) {
+	lookupContext, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resChan := make(chan []byte, 1)
 
-type ContentLookupResult struct {
-	Content                 []byte
-	NodeInterestedInContent []*enode.Node
-}
+	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
+		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
+	}).run()
 
-func (p *PortalProtocol) ContentLookup(contentKey []byte) (*ContentLookupResult, error) {
-	contentId := p.toContentId(contentKey)
-	closestNodes := p.Lookup(enode.ID(contentId))
-	// findContent enrs chan
-	newNodeChan := make(chan []*enode.Node)
-	// target node for findContent
-	nodeChan := p.genNodeChan(closestNodes, contentId, newNodeChan)
-
-	nodesWithoutContent := make([]*enode.Node, 0)
-	// find content result
-	stopFindContentChan := make(chan struct{}, 1)
-
-	contentResultChan := p.parallelFindContent(stopFindContentChan, nodeChan, contentKey)
-
-	defer close(newNodeChan)
-
-	for result := range contentResultChan {
-		if result.err == ContentNotFound {
-			return nil, result.err
-		}
-		switch result.flag {
-		case portalwire.ContentRawSelector:
-			content, ok := result.content.([]byte)
-			if !ok {
-				p.log.Trace("failed to assert to raw content, value is: %v", result.content)
-				continue
-			}
-			stopFindContentChan <- struct{}{}
-			return &ContentLookupResult{Content: content, NodeInterestedInContent: nodesWithoutContent}, nil
-		case portalwire.ContentEnrsSelector:
-			nodeIdStr := result.src.ID().String()
-			// Get may modify the content of srcId
-			maybeRadius := p.radiusCache.Get(nil, []byte(nodeIdStr))
-			if len(maybeRadius) > 0 {
-				radius := uint256.MustFromBig(big.NewInt(0).SetBytes(maybeRadius))
-				if inRange(result.src.ID(), radius, p.toContentId(contentKey)) {
-					nodesWithoutContent = append(nodesWithoutContent, result.src)
-				}
-			}
-			nodes, ok := result.content.([]*enode.Node)
-			if !ok {
-				p.log.Trace("failed to assert to enrs content, value is: %v", result.content)
-				continue
-			}
-			// handle new nodes
-			newNodeChan <- nodes
-		}
+	if len(resChan) > 0 {
+		return <-resChan, nil
 	}
-
 	return nil, ContentNotFound
 }
 
-func (p *PortalProtocol) genNodeChan(initNodes []*enode.Node, contentId []byte, newNodeChan chan []*enode.Node) <-chan *enode.Node {
-	nodeChan := make(chan *enode.Node, alpha)
-
-	closestNodes := initNodes
-	asked := make(map[enode.ID]struct{})
-	asked[p.localNode.ID()] = struct{}{}
-	for i := 0; i < len(closestNodes) && i < alpha; i++ {
-		wrapedNode := closestNodes[i]
-		if _, ok := asked[wrapedNode.ID()]; !ok {
-			asked[wrapedNode.ID()] = struct{}{}
-			nodeChan <- wrapedNode
-		}
+func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- []byte) ([]*node, error) {
+	wrapedNode := make([]*node, 0)
+	flag, content, err := p.findContent(n, contentKey)
+	if err != nil {
+		return nil, err
 	}
-	go func() {
-		var once sync.Once
-		for nodes := range newNodeChan {
-			for _, n := range nodes {
-				if _, ok := asked[n.ID()]; !ok {
-					asked[n.ID()] = struct{}{}
-					p.table.addSeenNode(wrapNode(n))
-					// insert node into closestNodes with distance
-					closestNodes = insertWithDistance(closestNodes, n, enode.ID(contentId))
-					if len(closestNodes) > bucketSize {
-						closestNodes = closestNodes[:bucketSize]
-					}
-				}
-			}
-			newRequest := false
-			for _, wrapedNode := range closestNodes {
-				if _, ok := asked[wrapedNode.ID()]; !ok {
-					newRequest = true
-					asked[wrapedNode.ID()] = struct{}{}
-					nodeChan <- wrapedNode
-				}
-			}
-			if !newRequest {
-				once.Do(func() {
-					close(nodeChan)
-				})
-			}
+	switch flag {
+	case portalwire.ContentRawSelector:
+		content, ok := content.([]byte)
+		if !ok {
+			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)
 		}
-	}()
-
-	return nodeChan
-}
-
-func (p *PortalProtocol) parallelFindContent(closeChan <-chan struct{}, nodeChan <-chan *enode.Node, contentKey []byte) <-chan findContentResult {
-	contentResultChan := make(chan findContentResult)
-	requestAmount := 0
-	go func() {
-		defer close(contentResultChan)
-		for {
-			select {
-			case wrapedNode, ok := <-nodeChan:
-				if wrapedNode == nil && !ok {
-					contentResultChan <- findContentResult{err: ContentNotFound}
-					return
-				}
-				flag, content, err := p.findContent(wrapedNode, contentKey)
-				requestAmount++
-				contentResultChan <- findContentResult{flag: flag, content: content, err: err, src: wrapedNode}
-			case <-closeChan:
-				return
-			}
+		resChan <- content
+		return wrapedNode, err
+	case portalwire.ContentEnrsSelector:
+		nodes, ok := content.([]*enode.Node)
+		if !ok {
+			return wrapedNode, fmt.Errorf("failed to assert to enrs content, value is: %v", content)
 		}
-	}()
-	return contentResultChan
+		return wrapNodes(nodes), nil
+	}
+	return wrapedNode, nil
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
@@ -1543,21 +1448,4 @@ func getContentKeys(request *OfferRequest) [][]byte {
 	} else {
 		return request.Request.(*PersistOfferRequest).ContentKeys
 	}
-}
-
-func insertWithDistance(nodes []*enode.Node, newNode *enode.Node, targetId enode.ID) []*enode.Node {
-	res := make([]*enode.Node, 0, len(nodes)+1)
-	for i := 0; i < len(nodes); i++ {
-		curNode := nodes[i]
-		curDis := enode.LogDist(curNode.ID(), newNode.ID())
-		newDis := enode.LogDist(newNode.ID(), targetId)
-		if newDis < curDis {
-			res = append(res, newNode)
-			res = append(res, nodes[i:]...)
-			break
-		} else {
-			res = append(res, curNode)
-		}
-	}
-	return res
 }
