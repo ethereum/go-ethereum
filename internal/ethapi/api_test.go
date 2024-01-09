@@ -747,7 +747,7 @@ func TestCall(t *testing.T) {
 	var (
 		accounts = newAccounts(3)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.MergedTestChainConfig,
 			Alloc: core.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -757,12 +757,13 @@ func TestCall(t *testing.T) {
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
@@ -883,6 +884,32 @@ func TestCall(t *testing.T) {
 			},
 			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
+		},
+		// Invalid blob-tx
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:                &accounts[1].addr,
+				Input:               &hexutil.Bytes{0x00},
+				BlobVersionedHashes: []common.Hash{},
+			},
+			expectErr: core.ErrBlobTxCreate,
+		},
+		// BLOBHASH opcode
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:                &accounts[1].addr,
+				To:                  &randomAccounts[2].addr,
+				BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				MaxFeePerBlobGas:    (*hexutil.Big)(big.NewInt(1)),
+			},
+			overrides: StateOverride{
+				randomAccounts[2].addr: {
+					Code: hex2Bytes("60004960005260206000f3"),
+				},
+			},
+			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for i, tc := range testSuite {

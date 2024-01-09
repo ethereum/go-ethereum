@@ -311,6 +311,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	}
 	if args.MaxFeePerBlobGas != nil {
 		blobGasFeeCap = args.MaxFeePerBlobGas.ToInt()
+	} else if args.BlobVersionedHashes != nil {
+		blobGasFeeCap = new(big.Int)
 	}
 	value := new(big.Int)
 	if args.Value != nil {
