@@ -199,9 +199,13 @@ type GasPricer interface {
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 }
 
-// GasPricer1559 provides access to the EIP-1559 gas price oracle.
-type GasPricer1559 interface {
+// GasTipCapReader provides access to the EIP-1559 gas price oracle.
+type GasTipCapReader interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+}
+
+// FeeHistoryReader provides access to the fee history oracle.
+type FeeHistoryReader interface {
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*FeeHistory, error)
 }
 
