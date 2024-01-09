@@ -23,12 +23,17 @@ import (
 )
 
 type (
+	Server      any
 	Request     any
 	Response    any
 	ID          uint64
-	ServerAndId struct {
-		Server any
-		Id     ID
+	ServerAndID struct {
+		Server Server
+		ID     ID
+	}
+	RequestWithID struct {
+		ServerAndID
+		Request Request
 	}
 )
 
@@ -40,7 +45,7 @@ type tracker struct {
 	requestEvents []RequestEvent
 }
 
-func (p *tracker) TryRequest(requestFn func(server any) (Request, float32)) (ServerAndId, Request) {
+func (p *tracker) TryRequest(requestFn func(server Server) (Request, float32)) (RequestWithID, bool) {
 	var (
 		maxServerPriority, maxRequestPriority float32
 		bestServer                            server
@@ -69,13 +74,13 @@ func (p *tracker) TryRequest(requestFn func(server any) (Request, float32)) (Ser
 	}
 	log.Debug("Request attempt", "serverCount", serverCount, "removedServers", removed, "requestCandidates", candidates)
 	if bestServer == nil {
-		return ServerAndId{}, nil
+		return RequestWithID{}, false
 	}
-	id := ServerAndId{Server: bestServer, Id: bestServer.sendRequest(bestRequest)}
+	id := ServerAndID{Server: bestServer, ID: bestServer.sendRequest(bestRequest)}
 	p.scheduler.pending[id] = pendingRequest{request: bestRequest, module: p.module}
-	return id, bestRequest
+	return RequestWithID{ServerAndID: id, Request: bestRequest}, true
 }
 
-func (p *tracker) InvalidResponse(id ServerAndId, desc string) {
+func (p *tracker) InvalidResponse(id ServerAndID, desc string) {
 	id.Server.(server).fail(desc)
 }

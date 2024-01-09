@@ -42,10 +42,7 @@ type BootstrapData struct {
 }
 
 // Validate verifies the proof included in BootstrapData.
-func (c *BootstrapData) Validate(checkpointHash common.Hash) error {
-	if c.Header.Hash() != checkpointHash {
-		return errors.New("wrong checkpoint hash")
-	}
+func (c *BootstrapData) Validate() error {
 	if c.CommitteeRoot != c.Committee.Root() {
 		return errors.New("wrong committee root")
 	}

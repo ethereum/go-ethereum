@@ -33,8 +33,8 @@ type HeadSync struct {
 	chain            committeeChain
 	nextSyncPeriod   uint64
 	chainInit        bool
-	unvalidatedHeads map[any]types.SignedHeader
-	serverHeads      map[any]types.HeadInfo
+	unvalidatedHeads map[request.Server]types.SignedHeader
+	serverHeads      map[request.Server]types.HeadInfo
 	headServerCount  map[types.HeadInfo]headServerCount
 	headCounter      uint64
 	prefetchHead     types.HeadInfo
@@ -50,8 +50,8 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 		headTracker:      headTracker,
 		chain:            chain,
 		nextSyncPeriod:   math.MaxUint64,
-		unvalidatedHeads: make(map[any]types.SignedHeader),
-		serverHeads:      make(map[any]types.HeadInfo),
+		unvalidatedHeads: make(map[request.Server]types.SignedHeader),
+		serverHeads:      make(map[request.Server]types.HeadInfo),
 		headServerCount:  make(map[types.HeadInfo]headServerCount),
 	}
 	return s
@@ -62,7 +62,7 @@ func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.Requ
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		s.processUnvalidatedHeadsHeads()
+		trigger = s.processUnvalidatedHeadsHeads()
 	}
 	for _, event := range serverEvents {
 		switch event.Type {
@@ -71,7 +71,9 @@ func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.Requ
 				trigger = true
 			}
 		case EvNewSignedHead:
-			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
+			if s.newSignedHead(event.Server, event.Data.(types.SignedHeader)) {
+				trigger = true
+			}
 		case request.EvUnregistered:
 			if s.setServerHead(event.Server, types.HeadInfo{}) {
 				trigger = true
@@ -83,30 +85,34 @@ func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.Requ
 	return
 }
 
-func (s *HeadSync) newSignedHead(server any, signedHead types.SignedHeader) {
-	if !s.chainInit || signedHead.Header.SyncPeriod() > s.nextSyncPeriod {
+func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) (trigger bool) {
+	if !s.chainInit || types.SyncPeriod(signedHead.SignatureSlot) > s.nextSyncPeriod {
 		s.unvalidatedHeads[server] = signedHead
-		return
+		return false
 	}
-	s.headTracker.Validate(signedHead)
+	updated, _ := s.headTracker.Validate(signedHead)
+	return updated
 }
 
-func (s *HeadSync) processUnvalidatedHeadsHeads() {
+func (s *HeadSync) processUnvalidatedHeadsHeads() (trigger bool) {
 	if !s.chainInit {
-		return
+		return false
 	}
 	for server, signedHead := range s.unvalidatedHeads {
 		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
-			s.headTracker.Validate(signedHead)
+			if updated, _ := s.headTracker.Validate(signedHead); updated {
+				trigger = true
+			}
 			delete(s.unvalidatedHeads, server)
 		}
 	}
+	return
 }
 
 // setServerHead processes non-validated server head announcements and updates
 // the prefetch head if necessary.
 //TODO report server failure if a server announces many heads that do not become validated soon.
-func (s *HeadSync) setServerHead(server any, head types.HeadInfo) bool {
+func (s *HeadSync) setServerHead(server request.Server, head types.HeadInfo) bool {
 	if oldHead, ok := s.serverHeads[server]; ok {
 		if head == oldHead {
 			return false
