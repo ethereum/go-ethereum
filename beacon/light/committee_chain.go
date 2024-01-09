@@ -188,8 +188,7 @@ func (s *CommitteeChain) Reset() {
 	}
 }
 
-// CheckpointInit initializes a CommitteeChain based on a previously validated
-// checkpoint.
+// CheckpointInit initializes a CommitteeChain based on a checkpoint.
 // Note: if the chain is already initialized and the committees proven by the
 // checkpoint do match the existing chain then the chain is retained and the
 // new checkpoint becomes fixed.
@@ -197,6 +196,9 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
+	if err := bootstrap.Validate(); err != nil {
+		return err
+	}
 	period := bootstrap.Header.SyncPeriod()
 	if err := s.deleteFixedCommitteeRootsFrom(period + 2); err != nil {
 		s.Reset()

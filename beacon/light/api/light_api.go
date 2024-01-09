@@ -296,8 +296,11 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 		CommitteeRoot:   data.Data.Committee.Root(),
 		Committee:       data.Data.Committee,
 	}
-	if err := checkpoint.Validate(checkpointHash); err != nil {
-		return nil, fmt.Errorf("invalid sync committee Merkle proof: %w", err)
+	if err := checkpoint.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid checkpoint: %w", err)
+	}
+	if checkpoint.Header.Hash() != checkpointHash {
+		return nil, errors.New("wrong checkpoint hash")
 	}
 	return checkpoint, nil
 }
