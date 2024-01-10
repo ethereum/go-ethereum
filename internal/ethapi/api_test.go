@@ -627,7 +627,7 @@ func TestEstimateGas(t *testing.T) {
 	var (
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.MergedTestChainConfig,
 			Alloc: core.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -637,12 +637,13 @@ func TestEstimateGas(t *testing.T) {
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -741,6 +742,18 @@ func TestEstimateGas(t *testing.T) {
 			},
 			expectErr: nil,
 			want:      67595,
+		},
+		// Blobs should have no effect on gas estimate
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:                &accounts[0].addr,
+				To:                  &accounts[1].addr,
+				Value:               (*hexutil.Big)(big.NewInt(1)),
+				BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				MaxFeePerBlobGas:    (*hexutil.Big)(big.NewInt(1)),
+			},
+			want: 21000,
 		},
 	}
 	for i, tc := range testSuite {
