@@ -37,12 +37,35 @@ type (
 	}
 )
 
+// Tracker allows Modules to start requests and provide feedback about responses
+// that were found to be invalid during processing.
+type Tracker interface {
+	// TryRequest iterates through currently available servers and selects the
+	// best server and request to send. The caller provides a callback function
+	// that generates a request candidate for each available server. Note that
+	// the module may keep track of relevant server specific info, such as assumed
+	// available range of data to request, and therefore it may generate different
+	// request candidates for different servers. The callback also returns a
+	// priority value. TryRequest selects the request candidate with the highest
+	// priority value. If multiple candidates belonging to multiple servers have
+	// the same highest priority then it selects based on server priority.
+	// If a request candidate and a server has been selected, the request is sent
+	// and also returned along with the target server and request ID.
+	TryRequest(requestFn func(server Server) (Request, float32)) (RequestWithID, bool)
+	// InvalidResponse signals that the given response was invalid. Note that
+	// certain responses can only be judged by modules, in the context of existing,
+	// partially synced data structures. Giving this signal results in blocking
+	// the given server for a certain amount of time, ensuring that the same
+	// request will not be instantly sent again to the same server.
+	InvalidResponse(id ServerAndID, desc string)
+}
+
 // one per sync process
 type tracker struct {
 	servers       serverSet // one per trigger
 	scheduler     *Scheduler
 	module        Module
-	requestEvents []RequestEvent
+	requestEvents []Event
 }
 
 func (p *tracker) TryRequest(requestFn func(server Server) (Request, float32)) (RequestWithID, bool) {

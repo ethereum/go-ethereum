@@ -48,30 +48,7 @@ type Module interface {
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
-	Process(Tracker, []RequestEvent, []ServerEvent) bool
-}
-
-// Tracker allows Modules to start requests and provide feedback about responses
-// that were found to be invalid during processing.
-type Tracker interface {
-	// TryRequest iterates through currently available servers and selects the
-	// best server and request to send. The caller provides a callback function
-	// that generates a request candidate for each available server. Note that
-	// the module may keep track of relevant server specific info, such as assumed
-	// available range of data to request, and therefore it may generate different
-	// request candidates for different servers. The callback also returns a
-	// priority value. TryRequest selects the request candidate with the highest
-	// priority value. If multiple candidates belonging to multiple servers have
-	// the same highest priority then it selects based on server priority.
-	// If a request candidate and a server has been selected, the request is sent
-	// and also returned along with the target server and request ID.
-	TryRequest(requestFn func(server Server) (Request, float32)) (RequestWithID, bool)
-	// InvalidResponse signals that the given response was invalid. Note that
-	// certain responses can only be judged by modules, in the context of existing,
-	// partially synced data structures. Giving this signal results in blocking
-	// the given server for a certain amount of time, ensuring that the same
-	// request will not be instantly sent again to the same server.
-	InvalidResponse(id ServerAndID, desc string)
+	Process(Tracker, []Event) bool
 }
 
 // Scheduler is a modular network data retrieval framework that coordinates multiple
@@ -86,7 +63,7 @@ type Scheduler struct {
 	trackers     map[Module]*tracker
 	servers      map[server]struct{}
 	pending      map[ServerAndID]pendingRequest
-	serverEvents []ServerEvent
+	serverEvents []Event
 	stopCh       chan chan struct{}
 
 	triggerCh chan struct{} // restarts waiting sync loop
@@ -94,36 +71,11 @@ type Scheduler struct {
 	//	testTimerResults []bool        // true is appended when simulated timer is processed; false when stopped
 }
 
-// ServerEvent represents a server-related event. These events are passed to all
-// modules. Scheduler generates an EvRegister and EvUnregister event for each
-// server when added or removed. Other, application-specific server events may
-// be emitted by the servers themselves and are also passed to the modules.
-type ServerEvent struct {
-	Server Server
-	Type   string
-	Data   any // data type defined by application-specific events
-}
-
-// RequestEvent represents a request-related event. These events are passed to
-// the module that sent the given request. A Finalized event means either a
-// response or a hard timeout (depending on whether there is also a Response),
-// after which no further event related to the same request is emitted.
-// Once a module has successfully sent a request, Scheduler guarantees that it
-// receives exactly one Finalized event related to it. If a request reaches a
-// soft timeout, a Timeout event is emitted that is not Finalized yet. In this
-// case later the Finalized event will also have its Timeout flag set.
-type RequestEvent struct {
-	RequestWithID
-	Response           Response
-	Timeout, Finalized bool
-}
-
 // pendingRequest keeps track of sent and not finalized requests and their sender
 // modules and whether a soft timeout has already happened.
 type pendingRequest struct {
 	request Request
 	module  Module
-	timeout bool
 }
 
 // NewScheduler creates a new Scheduler.
@@ -165,11 +117,12 @@ func (s *Scheduler) RegisterServer(rs requestServer) {
 	defer s.lock.Unlock()
 
 	server := newServer(rs, s.clock)
-	s.handleEvent(server, Event{Type: EvRegistered})
+	s.handleEvent(Event{Type: EvRegistered, Server: server})
 	server.subscribe(func(event Event) {
 		s.lock.Lock()
 		if _, ok := s.servers[server]; ok {
-			s.handleEvent(server, event)
+			event.Server = server
+			s.handleEvent(event)
 		} else {
 			log.Error("Event received from unsubscribed server")
 		}
@@ -187,7 +140,7 @@ func (s *Scheduler) UnregisterServer(rs requestServer) {
 		if sl, ok := server.(*serverWithLimits); ok && sl.parent == rs {
 			server.unsubscribe()
 			delete(s.servers, server)
-			s.handleEvent(server, Event{Type: EvUnregistered})
+			s.handleEvent(Event{Type: EvUnregistered, Server: server})
 			return
 		}
 	}
@@ -248,7 +201,7 @@ func (s *Scheduler) processModules() {
 
 	eventTypes := make([]string, len(serverEvents))
 	for i, ev := range serverEvents {
-		eventTypes[i] = ev.Type
+		eventTypes[i] = ev.Type.Name
 	}
 	log.Debug("Processing modules", "servers", len(servers), "server events", eventTypes)
 
@@ -262,17 +215,18 @@ func (s *Scheduler) processModules() {
 
 		var respCount, failCount, timeoutCount int
 		for _, ev := range requestEvents {
-			if ev.Response != nil {
+			switch ev.Type {
+			case EvResponse:
 				respCount++
-			} else if ev.Finalized {
+			case EvFail:
 				failCount++
-			} else {
+			case EvTimeout:
 				timeoutCount++
 			}
 		}
 		log.Debug("Processing module", "name", s.names[module], "responses", respCount, "fails", failCount, "timeouts", timeoutCount)
 
-		if module.Process(tracker, requestEvents, serverEvents) {
+		if module.Process(tracker, append(serverEvents, requestEvents...)) {
 			s.Trigger()
 		}
 	}
@@ -289,24 +243,12 @@ func (s *Scheduler) Trigger() {
 
 // addRequestEvent adds a request event to the sender module's Tracker, ensuring
 // that the module receives it in the next processing round.
-func (s *Scheduler) addRequestEvent(server Server, id ID, response Response, timeout, finalized bool) {
-	sid := ServerAndID{Server: server, ID: id}
+func (s *Scheduler) addRequestEvent(event Event) {
+	sid, _, _ := event.RequestInfo()
 	if pr, ok := s.pending[sid]; ok {
 		tracker := s.trackers[pr.module]
-		timeout = timeout || pr.timeout
-		tracker.requestEvents = append(tracker.requestEvents, RequestEvent{
-			RequestWithID: RequestWithID{
-				ServerAndID: sid,
-				Request:     pr.request,
-			},
-			Response:  response,
-			Timeout:   timeout,
-			Finalized: finalized,
-		})
-		if timeout && !finalized {
-			pr.timeout = true
-			s.pending[sid] = pr
-		} else {
+		tracker.requestEvents = append(tracker.requestEvents, event)
+		if event.Type != EvTimeout {
 			delete(s.pending, sid)
 		}
 	}
@@ -314,8 +256,8 @@ func (s *Scheduler) addRequestEvent(server Server, id ID, response Response, tim
 
 // addServerEvent adds a server event to the global server event list, ensuring
 // that all modules receive it in the next processing round.
-func (s *Scheduler) addServerEvent(server Server, event Event) {
-	s.serverEvents = append(s.serverEvents, ServerEvent{Server: server, Type: event.Type, Data: event.Data})
+func (s *Scheduler) addServerEvent(event Event) {
+	s.serverEvents = append(s.serverEvents, event)
 }
 
 // handleEvent processes an Event and adds it either as a request event or a
@@ -323,25 +265,26 @@ func (s *Scheduler) addServerEvent(server Server, event Event) {
 // it also closes all pending requests to the given server by emitting a failed
 // request event (Finalized without Response), ensuring that all requests get
 // finalized and thereby allowing the module logic to be safe and simple.
-func (s *Scheduler) handleEvent(server Server, event Event) {
+func (s *Scheduler) handleEvent(event Event) {
 	s.Trigger()
-	switch event.Type {
-	case EvResponse:
-		idr := event.Data.(IdAndResponse)
-		s.addRequestEvent(server, idr.ID, idr.Response, false, true)
-	case EvFail:
-		s.addRequestEvent(server, event.Data.(ID), nil, false, true)
-	case EvTimeout:
-		s.addRequestEvent(server, event.Data.(ID), nil, true, false)
-	case EvUnregistered:
-		for id, _ := range s.pending {
-			if id.Server != server {
+	if event.IsRequestEvent() {
+		s.addRequestEvent(event)
+		return
+	}
+	if event.Type == EvUnregistered {
+		for id, pending := range s.pending {
+			if id.Server != event.Server {
 				continue
 			}
-			s.addRequestEvent(server, id.ID, nil, false, true)
+			s.addRequestEvent(Event{
+				Type:   EvFail,
+				Server: event.Server,
+				Data: RequestResponse{
+					ID:      id.ID,
+					Request: pending.request,
+				},
+			})
 		}
-		s.addServerEvent(server, event)
-	default:
-		s.addServerEvent(server, event)
 	}
+	s.addServerEvent(event)
 }

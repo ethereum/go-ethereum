@@ -97,6 +97,18 @@ func ExpTrigger(t *testing.T, tci int, expTrigger, trigger bool) {
 	}
 }
 
+func TestReqEvent(evType *request.EventType, req request.RequestWithID, response request.Response) request.Event {
+	return request.Event{
+		Type:   evType,
+		Server: req.ServerAndID.Server,
+		Data: request.RequestResponse{
+			ID:       req.ServerAndID.ID,
+			Request:  req.Request,
+			Response: response,
+		},
+	}
+}
+
 type TestCommitteeChain struct {
 	fsp, nsp uint64
 	init     bool

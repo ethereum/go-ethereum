@@ -37,7 +37,7 @@ type committeeChain interface {
 type CheckpointInit struct {
 	chain          committeeChain
 	checkpointHash common.Hash
-	pending        bool
+	locked         bool
 	initialized    bool
 }
 
@@ -49,28 +49,30 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 }
 
 // Process implements request.Module
-func (s *CheckpointInit) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
+func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event) bool {
 	if s.initialized {
 		return false
 	}
-	for _, event := range requestEvents {
-		if event.Timeout != event.Finalized {
-			s.pending = false
+	for _, event := range events {
+		if !event.IsRequestEvent() {
+			continue
 		}
-		if event.Response != nil {
-			if checkpoint, ok := event.Response.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(event.Request.(ReqCheckpointData)) {
+		s.locked = false
+		sid, request, response := event.RequestInfo()
+		if response != nil {
+			if checkpoint, ok := response.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(request.(ReqCheckpointData)) {
 				s.chain.CheckpointInit(*checkpoint) //TODO
 				s.initialized = true
 				return true
 			}
-			tracker.InvalidResponse(event.ServerAndID, "invalid checkpoint data")
+			tracker.InvalidResponse(sid, "invalid checkpoint data")
 		}
 	}
-	if !s.pending {
+	if !s.locked {
 		if _, ok := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
 			return ReqCheckpointData(s.checkpointHash), 0
 		}); ok {
-			s.pending = true
+			s.locked = true
 		}
 	}
 	return false
@@ -79,7 +81,8 @@ func (s *CheckpointInit) Process(tracker request.Tracker, requestEvents []reques
 type ForwardUpdateSync struct {
 	chain          committeeChain
 	rangeLock      rangeLock
-	processQueue   []request.RequestEvent
+	lockedIDs      map[request.ServerAndID]struct{}
+	processQueue   []request.Event
 	nextSyncPeriod map[request.Server]uint64
 }
 
@@ -87,6 +90,7 @@ func NewForwardUpdateSync(chain committeeChain) *ForwardUpdateSync {
 	return &ForwardUpdateSync{
 		chain:          chain,
 		rangeLock:      make(rangeLock),
+		lockedIDs:      make(map[request.ServerAndID]struct{}),
 		nextSyncPeriod: make(map[request.Server]uint64),
 	}
 }
@@ -123,12 +127,30 @@ func (r rangeLock) firstUnlocked(start, maxCount uint64) (first, count uint64) {
 	return
 }
 
-func (s *ForwardUpdateSync) verifyRange(event request.RequestEvent) bool {
-	request, ok := event.Request.(ReqUpdates)
+func (s *ForwardUpdateSync) lockRange(sid request.ServerAndID, req request.Request) {
+	if _, ok := s.lockedIDs[sid]; ok {
+		return
+	}
+	s.lockedIDs[sid] = struct{}{}
+	r := req.(ReqUpdates)
+	s.rangeLock.lock(r.FirstPeriod, r.Count, 1)
+}
+
+func (s *ForwardUpdateSync) unlockRange(sid request.ServerAndID, req request.Request) {
+	if _, ok := s.lockedIDs[sid]; !ok {
+		return
+	}
+	delete(s.lockedIDs, sid)
+	r := req.(ReqUpdates)
+	s.rangeLock.lock(r.FirstPeriod, r.Count, -1)
+}
+
+func (s *ForwardUpdateSync) verifyRange(req request.Request, resp request.Response) bool {
+	request, ok := req.(ReqUpdates)
 	if !ok {
 		return false
 	}
-	response, ok := event.Response.(RespUpdates)
+	response, ok := resp.(RespUpdates)
 	if !ok {
 		return false
 	}
@@ -144,8 +166,9 @@ func (s *ForwardUpdateSync) verifyRange(event request.RequestEvent) bool {
 }
 
 // returns true for partial success
-func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event request.RequestEvent) (success bool) {
-	response, ok := event.Response.(RespUpdates)
+func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event request.Event) (success bool) {
+	sid, _, resp := event.RequestInfo()
+	response, ok := resp.(RespUpdates)
 	if !ok {
 		return false
 	}
@@ -157,7 +180,7 @@ func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event reque
 				return
 			}
 			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
-				tracker.InvalidResponse(event.ServerAndID, "invalid update received")
+				tracker.InvalidResponse(sid, "invalid update received")
 			} else {
 				log.Error("Unexpected InsertUpdate error", "error", err)
 			}
@@ -168,34 +191,38 @@ func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event reque
 	return
 }
 
-type updateResponseList []request.RequestEvent
+type updateResponseList []request.Event
 
 func (u updateResponseList) Len() int      { return len(u) }
 func (u updateResponseList) Swap(i, j int) { u[i], u[j] = u[j], u[i] }
 func (u updateResponseList) Less(i, j int) bool {
-	return u[i].Request.(ReqUpdates).FirstPeriod < u[j].Request.(ReqUpdates).FirstPeriod
+	return u[i].Data.(request.RequestResponse).Request.(ReqUpdates).FirstPeriod <
+		u[j].Data.(request.RequestResponse).Request.(ReqUpdates).FirstPeriod
 }
 
 // Process implements request.Module
-func (s *ForwardUpdateSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
 	// iterate events and add responses to process queue
-	for _, event := range requestEvents {
-		if event.Response != nil && !s.verifyRange(event) {
-			tracker.InvalidResponse(event.ServerAndID, "invalid update range")
-			event.Response = nil
-		}
-		req := event.Request.(ReqUpdates)
-		if event.Response != nil {
-			// there is a response with a valid format; put it in the process queue
-			s.processQueue = append(s.processQueue, event)
-			if event.Timeout {
-				// it was already timed out and unlocked; lock again until processed
-				s.rangeLock.lock(req.FirstPeriod, req.Count, 1)
+	for _, event := range events {
+		switch event.Type {
+		case request.EvResponse, request.EvFail, request.EvTimeout:
+			sid, req, resp := event.RequestInfo()
+			if event.Type == request.EvResponse && !s.verifyRange(req, resp) {
+				tracker.InvalidResponse(sid, "invalid update range")
+				resp = nil
 			}
-		} else if event.Timeout != event.Finalized {
-			// unlock if timed out or returned with an invalid response without
-			// previously being unlocked by a timeout
-			s.rangeLock.lock(req.FirstPeriod, req.Count, -1)
+			if resp != nil {
+				// there is a response with a valid format; put it in the process queue
+				s.processQueue = append(s.processQueue, event)
+				s.lockRange(sid, req)
+			} else {
+				s.unlockRange(sid, req)
+			}
+		case EvNewSignedHead:
+			signedHead := event.Data.(types.SignedHeader)
+			s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
+		case request.EvUnregistered:
+			delete(s.nextSyncPeriod, event.Server)
 		}
 	}
 
@@ -207,22 +234,11 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, requestEvents []req
 			break
 		}
 		trigger = true
-		req := event.Request.(ReqUpdates)
-		s.rangeLock.lock(req.FirstPeriod, req.Count, -1)
+		sid, req, _ := event.RequestInfo()
+		s.unlockRange(sid, req)
 		s.processQueue = s.processQueue[1:]
 		if len(s.processQueue) == 0 {
 			s.processQueue = nil
-		}
-	}
-
-	// update nextSyncPeriod of servers based on server events
-	for _, event := range serverEvents {
-		switch event.Type {
-		case EvNewSignedHead:
-			signedHead := event.Data.(types.SignedHeader)
-			s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
-		case request.EvUnregistered:
-			delete(s.nextSyncPeriod, event.Server)
 		}
 	}
 
@@ -233,7 +249,7 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, requestEvents []req
 	}
 	for {
 		firstPeriod, maxCount := s.rangeLock.firstUnlocked(startPeriod, maxUpdateRequest)
-		if request, ok := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
+		if reqWithID, ok := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
 			nextPeriod := s.nextSyncPeriod[server]
 			if nextPeriod <= firstPeriod {
 				return nil, 0
@@ -244,8 +260,7 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, requestEvents []req
 			}
 			return ReqUpdates{FirstPeriod: firstPeriod, Count: count}, float32(count)
 		}); ok {
-			req := request.Request.(ReqUpdates)
-			s.rangeLock.lock(req.FirstPeriod, req.Count, 1)
+			s.lockRange(reqWithID.ServerAndID, reqWithID.Request)
 		} else {
 			break
 		}

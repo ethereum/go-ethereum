@@ -58,13 +58,13 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 }
 
 // Process implements request.Module
-func (s *HeadSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		trigger = s.processUnvalidatedHeadsHeads()
+		trigger = s.processUnvalidatedHeads()
 	}
-	for _, event := range serverEvents {
+	for _, event := range events {
 		switch event.Type {
 		case EvNewHead:
 			if s.setServerHead(event.Server, event.Data.(types.HeadInfo)) {
@@ -94,7 +94,7 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 	return updated
 }
 
-func (s *HeadSync) processUnvalidatedHeadsHeads() (trigger bool) {
+func (s *HeadSync) processUnvalidatedHeads() (trigger bool) {
 	if !s.chainInit {
 		return false
 	}

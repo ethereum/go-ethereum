@@ -40,7 +40,7 @@ import (
 type beaconBlockSync struct {
 	recentBlocks  *lru.Cache[common.Hash, *capella.BeaconBlock]
 	validatedHead common.Hash
-	pending       map[common.Hash]struct{}
+	locked        map[common.Hash]struct{}
 	serverHeads   map[request.Server]common.Hash
 	headTracker   headTracker
 }
@@ -54,36 +54,31 @@ func newBeaconBlockSyncer(headTracker headTracker) *beaconBlockSync {
 	return &beaconBlockSync{
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
-		pending:      make(map[common.Hash]struct{}),
+		locked:       make(map[common.Hash]struct{}),
 		serverHeads:  make(map[request.Server]common.Hash),
 	}
 }
 
 // Process implements request.Module
-func (s *beaconBlockSync) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) (trigger bool) {
+func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
 	if header := s.headTracker.ValidatedHead().Header; header != (types.Header{}) {
 		s.validatedHead = header.Hash()
 	}
 
 	// iterate events and add valid responses to recentBlocks
-	for _, event := range requestEvents {
-		blockRoot := common.Hash(event.Request.(sync.ReqBeaconBlock))
-		if event.Response != nil {
-			block := event.Response.(*capella.BeaconBlock)
-			s.recentBlocks.Add(blockRoot, block)
-			if blockRoot == s.validatedHead {
-				trigger = true
-			}
-		}
-		if event.Timeout || event.Finalized {
-			// unlock if timed out or returned with an invalid response
-			delete(s.pending, blockRoot)
-		}
-	}
-
-	// update server heads
-	for _, event := range serverEvents {
+	for _, event := range events {
 		switch event.Type {
+		case request.EvResponse, request.EvFail, request.EvTimeout:
+			_, req, resp := event.RequestInfo()
+			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
+			if resp != nil {
+				block := resp.(*capella.BeaconBlock)
+				s.recentBlocks.Add(blockRoot, block)
+				if blockRoot == s.validatedHead {
+					trigger = true
+				}
+			}
+			delete(s.locked, blockRoot)
 		case sync.EvNewHead:
 			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
 		case request.EvUnregistered:
@@ -111,7 +106,7 @@ func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot com
 	if _, ok := s.recentBlocks.Get(blockRoot); ok {
 		return
 	}
-	if _, ok := s.pending[blockRoot]; ok {
+	if _, ok := s.locked[blockRoot]; ok {
 		return
 	}
 	if _, ok := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
@@ -122,7 +117,7 @@ func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot com
 		}
 		return sync.ReqBeaconBlock(blockRoot), 0
 	}); ok {
-		s.pending[blockRoot] = struct{}{}
+		s.locked[blockRoot] = struct{}{}
 	}
 }
 
@@ -185,7 +180,7 @@ type engineApiUpdater struct {
 }
 
 // Process implements request.Module
-func (s *engineApiUpdater) Process(tracker request.Tracker, requestEvents []request.RequestEvent, serverEvents []request.ServerEvent) bool {
+func (s *engineApiUpdater) Process(tracker request.Tracker, events []request.Event) bool {
 	if atomic.LoadUint32(&s.updating) == 1 {
 		return false
 	}
