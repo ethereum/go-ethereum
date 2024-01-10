@@ -28,6 +28,11 @@ type headTracker interface {
 	SetPrefetchHead(head types.HeadInfo)
 }
 
+// HeadSync implements request.Module; it updates the validated and prefetch
+// heads of HeadTracker based on the EvHead and EvSignedHead events coming from
+// registered servers.
+// It can also postpone the validation of the latest announced signed head
+// until the committee chain is synced up to at least the required period.
 type HeadSync struct {
 	headTracker      headTracker
 	chain            committeeChain
@@ -40,11 +45,16 @@ type HeadSync struct {
 	prefetchHead     types.HeadInfo
 }
 
+// headServerCount is associated with most recently seen head infos; it counts
+// the number of servers currently having the given head info as their announced
+// head and a counter signaling how recent that head is.
+// This data is used for selecting the prefetch head.
 type headServerCount struct {
 	serverCount int
 	headCounter uint64
 }
 
+// NewHeadSync creates a new HeadSync.
 func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
 		headTracker:      headTracker,
@@ -85,6 +95,8 @@ func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) (tri
 	return
 }
 
+// newSignedHead handles received signed head; either validates it if the chain
+// is properly synced or stores it for further validation.
 func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) (trigger bool) {
 	if !s.chainInit || types.SyncPeriod(signedHead.SignatureSlot) > s.nextSyncPeriod {
 		s.unvalidatedHeads[server] = signedHead
@@ -94,6 +106,8 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 	return updated
 }
 
+// processUnvalidatedHeads iterates the list of unvalidated heads and validates
+// those which can be validated.
 func (s *HeadSync) processUnvalidatedHeads() (trigger bool) {
 	if !s.chainInit {
 		return false

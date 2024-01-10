@@ -31,19 +31,18 @@ import (
 // with servers but may keep track of certain parameters of registered servers,
 // based on the received server events. These server parameters may affect the
 // possible range of requests to be sent to a given server.
-// Modules are called by Scheduler whenever a global trigger is fired. All request
-// and server events fire the trigger. Modules themselves can also self-trigger,
-// ensuring an immediate next processing round after the target data structure has
-// been changed in a way that could make further actions possible either by the
-// same or another Module.
+// Modules are called by Scheduler whenever a global trigger is fired. All events
+// fire the trigger. Modules themselves can also self-trigger, ensuring an
+// immediate next processing round after the target data structure has been
+// changed in a way that could make further actions possible either by the same
+// or another Module.
 type Module interface {
 	// Process is a non-blocking function that is called on each Module whenever
 	// a processing round is triggered. It can start new requests through the
-	// received Tracker, process events related to servers and previosly sent
-	// requests and/or do other data processing tasks. Note that request events
-	// are only passed to the module that made the given request while server
-	// events are passed to every module. Process can also trigger a next
-	// processing round by returning true.
+	// received Tracker, process events and/or do other data processing tasks.
+	// Note that request events are only passed to the module that made the given
+	// request while server events are passed to every module. Process can also
+	// trigger a next processing round by returning true.
 	//
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
@@ -54,7 +53,8 @@ type Module interface {
 // Scheduler is a modular network data retrieval framework that coordinates multiple
 // servers and retrieval mechanisms (modules). It implements a trigger mechanism
 // that calls the Process function of registered modules whenever either the state
-// of existing data structures or connected servers could allow new operations.
+// of existing data structures or events coming from registered servers could
+// allow new operations.
 type Scheduler struct {
 	lock         sync.Mutex
 	clock        mclock.Clock
@@ -71,8 +71,8 @@ type Scheduler struct {
 	//	testTimerResults []bool        // true is appended when simulated timer is processed; false when stopped
 }
 
-// pendingRequest keeps track of sent and not finalized requests and their sender
-// modules and whether a soft timeout has already happened.
+// pendingRequest keeps track of sent and not yet finalized requests and their
+// sender modules.
 type pendingRequest struct {
 	request Request
 	module  Module
@@ -185,7 +185,7 @@ func (s *Scheduler) syncLoop() {
 	}
 }
 
-// processModules runs an entire processing round, calling the process functions
+// processModules runs an entire processing round, calling the Process functions
 // of all modules, passing all relevant events.
 func (s *Scheduler) processModules() {
 	s.lock.Lock()
@@ -241,7 +241,7 @@ func (s *Scheduler) Trigger() {
 	}
 }
 
-// addRequestEvent adds a request event to the sender module's Tracker, ensuring
+// addRequestEvent adds a request event to the sender module's tracker, ensuring
 // that the module receives it in the next processing round.
 func (s *Scheduler) addRequestEvent(event Event) {
 	sid, _, _ := event.RequestInfo()
@@ -263,8 +263,8 @@ func (s *Scheduler) addServerEvent(event Event) {
 // handleEvent processes an Event and adds it either as a request event or a
 // server event, depending on its type. In case of an EvUnregistered server event
 // it also closes all pending requests to the given server by emitting a failed
-// request event (Finalized without Response), ensuring that all requests get
-// finalized and thereby allowing the module logic to be safe and simple.
+// request event (EvFail), ensuring that all requests get finalized and thereby
+// allowing the module logic to be safe and simple.
 func (s *Scheduler) handleEvent(event Event) {
 	s.Trigger()
 	if event.IsRequestEvent() {
