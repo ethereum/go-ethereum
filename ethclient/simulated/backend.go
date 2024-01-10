@@ -56,7 +56,7 @@ type Client interface {
 	ethereum.ContractCaller
 	ethereum.GasEstimator
 	ethereum.GasPricer
-	ethereum.GasTipCapReader
+	ethereum.GasPricer1559
 	ethereum.FeeHistoryReader
 	ethereum.LogFilterer
 	ethereum.PendingStateReader
