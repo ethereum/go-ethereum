@@ -304,8 +304,6 @@ func (m *sortedMap) Len() int {
 }
 
 func (m *sortedMap) flatten() types.Transactions {
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
 	// If the sorting was not cached yet, create and cache it
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()

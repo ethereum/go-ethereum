@@ -100,7 +100,8 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 
 func TestTransactionBlobTx(t *testing.T) {
 	config := *params.TestChainConfig
-
+	config.ShanghaiBlock = big.NewInt(0)
+	config.CancunBlock = big.NewInt(0)
 	tests := allBlobTxs(common.Address{0xde, 0xad}, &config)
 
 	testTransactionMarshal(t, tests, &config)
@@ -1469,6 +1470,8 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
 	config := *params.TestChainConfig
+	config.ShanghaiBlock = big.NewInt(0)
+	config.CancunBlock = big.NewInt(0)
 
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1741,5 +1744,6 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 	if err != nil {
 		t.Fatalf("error reading expected test file: %s output: %v", outputFile, err)
 	}
-	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
+
+	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data), rpc, file)
 }

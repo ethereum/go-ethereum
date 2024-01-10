@@ -362,6 +362,7 @@ func TestEncoding(t *testing.T) {
 // Tests that time-based forks which are active at genesis are not included in
 // forkid hash.
 func TestTimeBasedForkInGenesis(t *testing.T) {
+	t.Skip("This test is not valid in bor since bor has block based hardforks")
 	var (
 		time       = uint64(1690475657)
 		genesis    = types.NewBlockWithHeader(&types.Header{Time: time})

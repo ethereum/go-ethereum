@@ -61,9 +61,9 @@ func TestGeneratePOSChain(t *testing.T) {
 	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiBlock = common.Big0
-	gspec.Config.CancunBlock = common.Big0
-	gspec.Config.PragueBlock = common.Big0
-	gspec.Config.VerkleBlock = common.Big0
+	config.CancunBlock = common.Big0
+	config.PragueBlock = common.Big0
+	config.VerkleBlock = common.Big0
 
 	// init 0xaa with some storage elements
 	storage := make(map[common.Hash]common.Hash)
@@ -98,32 +98,33 @@ func TestGeneratePOSChain(t *testing.T) {
 		})
 		gen.AddTx(tx)
 
+		// Withdrawls disabled in bor
 		// Add withdrawals.
-		if i == 1 {
-			gen.AddWithdrawal(&types.Withdrawal{
-				Validator: 42,
-				Address:   common.Address{0xee},
-				Amount:    1337,
-			})
-			gen.AddWithdrawal(&types.Withdrawal{
-				Validator: 13,
-				Address:   common.Address{0xee},
-				Amount:    1,
-			})
-		}
+		// if i == 1 {
+		// 	gen.AddWithdrawal(&types.Withdrawal{
+		// 		Validator: 42,
+		// 		Address:   common.Address{0xee},
+		// 		Amount:    1337,
+		// 	})
+		// 	gen.AddWithdrawal(&types.Withdrawal{
+		// 		Validator: 13,
+		// 		Address:   common.Address{0xee},
+		// 		Amount:    1,
+		// 	})
+		// }
 
-		if i == 3 {
-			gen.AddWithdrawal(&types.Withdrawal{
-				Validator: 42,
-				Address:   common.Address{0xee},
-				Amount:    1337,
-			})
-			gen.AddWithdrawal(&types.Withdrawal{
-				Validator: 13,
-				Address:   common.Address{0xee},
-				Amount:    1,
-			})
-		}
+		// if i == 3 {
+		// 	gen.AddWithdrawal(&types.Withdrawal{
+		// 		Validator: 42,
+		// 		Address:   common.Address{0xee},
+		// 		Amount:    1337,
+		// 	})
+		// 	gen.AddWithdrawal(&types.Withdrawal{
+		// 		Validator: 13,
+		// 		Address:   common.Address{0xee},
+		// 		Amount:    1,
+		// 	})
+		// }
 	})
 
 	// Import the chain. This runs all block validation rules.

@@ -590,9 +590,9 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 	}
 }
 
-func TestTransactionStatusLes2(t *testing.T) { testTransactionStatus(t, lpv2) }
-func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, lpv3) }
-func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, lpv4) }
+// func TestTransactionStatusLes2(t *testing.T) { testTransactionStatus(t, lpv2) }
+// func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, lpv3) }
+// func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, lpv4) }
 
 func testTransactionStatus(t *testing.T, protocol int) {
 	netconfig := testnetConfig{

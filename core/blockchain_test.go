@@ -192,13 +192,13 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 }
 
 func TestParallelBlockChainImport(t *testing.T) {
+	t.Parallel()
+
 	testParallelBlockChainImport(t, rawdb.HashScheme)
 	testParallelBlockChainImport(t, rawdb.PathScheme)
 }
 
 func testParallelBlockChainImport(t *testing.T, scheme string) {
-	t.Parallel()
-
 	db, _, blockchain, err := newCanonical(ethash.NewFaker(), 10, true, scheme)
 	blockchain.parallelProcessor = NewParallelStateProcessor(blockchain.chainConfig, blockchain, blockchain.engine)
 
@@ -3321,18 +3321,26 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
-	states := int(chain.cacheConfig.TriesInMemory) + 1
+
+	// In path-based trie database implementation, it will keep 128 diff + 1 disk
+	// layers, totally 129 latest states available. In hash-based it's 128.
+	states := int(defaultCacheConfig.TriesInMemory)
+	if scheme == rawdb.PathScheme {
+		states = int(defaultCacheConfig.TriesInMemory) + 1
+	}
 
 	lastPrunedIndex := len(blocks) - states - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
 
 	// Verify pruning of lastPrunedBlock
-	t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
+		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	}
 
 	firstNonPrunedBlock := blocks[len(blocks)-states]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+		t.Errorf("Block %d pruned, scheme : %s", firstNonPrunedBlock.NumberU64(), scheme)
 	}
 	// Now re-import some old blocks
 	blockToReimport := blocks[5:8]

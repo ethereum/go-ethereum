@@ -29,9 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// nolint : paralleltest
 func TestBuildPayload(t *testing.T) {
-	t.Parallel()
-
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		recipient = common.HexToAddress("0xdeadbeef")

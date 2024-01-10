@@ -492,23 +492,13 @@ func (g *Genesis) ToBlock() *types.Block {
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
 		if conf.IsShanghai(num) {
-			head.WithdrawalsHash = nil
+			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 			withdrawals = nil
 		}
 		if conf.IsCancun(num) {
-			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
-			// the zero hash. This is because the genesis block does not have a parent
-			// by definition.
 			head.ParentBeaconRoot = new(common.Hash)
-			// EIP-4844 fields
-			head.ExcessBlobGas = g.ExcessBlobGas
-			head.BlobGasUsed = g.BlobGasUsed
-			if head.ExcessBlobGas == nil {
-				head.ExcessBlobGas = new(uint64)
-			}
-			if head.BlobGasUsed == nil {
-				head.BlobGasUsed = new(uint64)
-			}
+			head.ExcessBlobGas = nil
+			head.BlobGasUsed = nil
 		}
 	}
 

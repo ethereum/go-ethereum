@@ -188,7 +188,7 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 	SnapshotWait:   true,
-	TriesInMemory:  1024,
+	TriesInMemory:  128,
 	StateScheme:    rawdb.HashScheme,
 }
 
