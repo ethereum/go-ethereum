@@ -1000,6 +1000,39 @@ func TestSignBlobTransaction(t *testing.T) {
 	}
 }
 
+func TestSendBlobTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  core.GenesisAlloc{},
+		}
+	)
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:                &b.acc.Address,
+		To:                  &to,
+		Value:               (*hexutil.Big)(big.NewInt(1)),
+		BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
+	})
+	if err != nil {
+		t.Fatalf("failed to fill tx defaults: %v\n", err)
+	}
+
+	_, err = api.SendTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	if err == nil {
+		t.Errorf("sending tx should have failed")
+	} else if !errors.Is(err, errBlobTxNotSupported) {
+		t.Errorf("unexpected error. Have %v, want %v\n", err, errBlobTxNotSupported)
+	}
+}
+
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
 		gas   = tx.Gas()
