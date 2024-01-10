@@ -790,7 +790,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
-	// Create blob txs for each tests with unqiue tx hashes.
+	// Create blob txs for each tests with unique tx hashes.
 	var (
 		t1 = s.makeBlobTxs(2, 3, 0x1)
 		t2 = s.makeBlobTxs(2, 3, 0x2)
