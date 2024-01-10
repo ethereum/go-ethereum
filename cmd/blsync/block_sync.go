@@ -37,6 +37,8 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
+// beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
+// to the validated and prefetch heads.
 type beaconBlockSync struct {
 	recentBlocks  *lru.Cache[common.Hash, *capella.BeaconBlock]
 	validatedHead common.Hash
@@ -50,7 +52,8 @@ type headTracker interface {
 	ValidatedHead() types.SignedHeader
 }
 
-func newBeaconBlockSyncer(headTracker headTracker) *beaconBlockSync {
+// newBeaconBlockSync returns a new beaconBlockSync.
+func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	return &beaconBlockSync{
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
@@ -96,12 +99,18 @@ func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Even
 	return
 }
 
-// belongs to validatedHead (or nil)
+// getHeadBlock returns the beacon block belonging to ValidatedHead or nil if not available.
 func (s *beaconBlockSync) getHeadBlock() *capella.BeaconBlock {
 	block, _ := s.recentBlocks.Get(s.validatedHead)
 	return block
 }
 
+// tryRequestBlock tries to send a block request for the given root if the block
+// is not available and the root is not locked by another pending request.
+// If prefetch is true then the request is only sent to a server whose latest
+// announced head has the same block root. If prefetch is false then a validated
+// block is requested which is expected to be available at every properly synced
+// server, therefore no such restriction is applied.
 func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot common.Hash, prefetch bool) {
 	if _, ok := s.recentBlocks.Get(blockRoot); ok {
 		return
@@ -121,6 +130,7 @@ func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot com
 	}
 }
 
+// getExecBlock extracts the execution block from the beacon block's payload.
 func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
 	payload := &beaconBlock.Body.ExecutionPayload
 	txs := make([]*ctypes.Transaction, len(payload.Transactions))
@@ -167,10 +177,14 @@ func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
 	return execBlock, nil
 }
 
+// beaconBlockHash calculates the hash of a beacon block.
 func beaconBlockHash(beaconBlock *capella.BeaconBlock) common.Hash {
 	return common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
 }
 
+// engineApiUpdater implements request.Module. This module does not start requests,
+// it is only implemented as a module in order to easily trigger it by successful
+// head block retrieval.
 type engineApiUpdater struct {
 	client    *rpc.Client
 	trigger   func()

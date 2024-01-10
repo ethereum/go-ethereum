@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const maxUpdateRequest = 8
+const maxUpdateRequest = 8 // maximum number of updates requested in a single request
 
 type committeeChain interface {
 	CheckpointInit(bootstrap types.BootstrapData) error
@@ -34,6 +34,9 @@ type committeeChain interface {
 	NextSyncPeriod() (uint64, bool)
 }
 
+// CheckpointInit implements request.Module; it fetches the light client bootstrap
+// data belonging to the given checkpoint hash and initializes the committee chain
+// if successful.
 type CheckpointInit struct {
 	chain          committeeChain
 	checkpointHash common.Hash
@@ -41,6 +44,7 @@ type CheckpointInit struct {
 	initialized    bool
 }
 
+// NewCheckpointInit creates a new CheckpointInit.
 func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *CheckpointInit {
 	return &CheckpointInit{
 		chain:          chain,
@@ -78,6 +82,12 @@ func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event
 	return false
 }
 
+// ForwardUpdateSync implements request.Module; it fetches updates between the
+// committee chain head and each server's announced head. Updates are fetched
+// in batches and multiple batches can also be requested in parallel.
+// Out of order responses are also handled; if a batch of updates cannot be added
+// to the chain immediately because of a gap then the future updates are
+// remembered until they can be processed.
 type ForwardUpdateSync struct {
 	chain          committeeChain
 	rangeLock      rangeLock
@@ -86,6 +96,7 @@ type ForwardUpdateSync struct {
 	nextSyncPeriod map[request.Server]uint64
 }
 
+// NewForwardUpdateSync creates a new ForwardUpdateSync.
 func NewForwardUpdateSync(chain committeeChain) *ForwardUpdateSync {
 	return &ForwardUpdateSync{
 		chain:          chain,
@@ -95,8 +106,12 @@ func NewForwardUpdateSync(chain committeeChain) *ForwardUpdateSync {
 	}
 }
 
+// rangeLock allows locking sections of an integer space, preventing the syncing
+// mechanism from making requests again for sections where a not timed out request
+// is already pending or where already fetched and unprocessed data is available.
 type rangeLock map[uint64]int
 
+// lock locks or unlocks the given section, depending on the sign of the add parameter.
 func (r rangeLock) lock(first, count uint64, add int) {
 	for i := first; i < first+count; i++ {
 		if v := r[i] + add; v > 0 {
@@ -107,6 +122,8 @@ func (r rangeLock) lock(first, count uint64, add int) {
 	}
 }
 
+// firstUnlocked returns the first unlocked section starting at or after start
+// and not longer than maxCount.
 func (r rangeLock) firstUnlocked(start, maxCount uint64) (first, count uint64) {
 	first = start
 	for {
@@ -127,6 +144,8 @@ func (r rangeLock) firstUnlocked(start, maxCount uint64) (first, count uint64) {
 	return
 }
 
+// lockRange locks the range belonging to the given update request, unless the
+// same request has already been locked
 func (s *ForwardUpdateSync) lockRange(sid request.ServerAndID, req request.Request) {
 	if _, ok := s.lockedIDs[sid]; ok {
 		return
@@ -136,6 +155,8 @@ func (s *ForwardUpdateSync) lockRange(sid request.ServerAndID, req request.Reque
 	s.rangeLock.lock(r.FirstPeriod, r.Count, 1)
 }
 
+// unlockRange unlocks the range belonging to the given update request, unless
+// same request has already been unlocked
 func (s *ForwardUpdateSync) unlockRange(sid request.ServerAndID, req request.Request) {
 	if _, ok := s.lockedIDs[sid]; !ok {
 		return
@@ -145,6 +166,8 @@ func (s *ForwardUpdateSync) unlockRange(sid request.ServerAndID, req request.Req
 	s.rangeLock.lock(r.FirstPeriod, r.Count, -1)
 }
 
+// verifyRange returns true if the number of updates and the individual update
+// periods in the response match the requested section.
 func (s *ForwardUpdateSync) verifyRange(req request.Request, resp request.Response) bool {
 	request, ok := req.(ReqUpdates)
 	if !ok {
@@ -165,7 +188,8 @@ func (s *ForwardUpdateSync) verifyRange(req request.Request, resp request.Respon
 	return true
 }
 
-// returns true for partial success
+// processResponse adds the fetched updates and committees to the committee chain.
+// Returns true in case of full or partial success.
 func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event request.Event) (success bool) {
 	sid, _, resp := event.RequestInfo()
 	response, ok := resp.(RespUpdates)
@@ -191,6 +215,7 @@ func (s *ForwardUpdateSync) processResponse(tracker request.Tracker, event reque
 	return
 }
 
+// updateResponseList implements sort.Sort and sorts update request/response events by FirstPeriod.
 type updateResponseList []request.Event
 
 func (u updateResponseList) Len() int      { return len(u) }

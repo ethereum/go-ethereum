@@ -25,6 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// HeadTracker keeps track of the latest validated head and the "prefetch" head
+// which is the (not necessarily validated) head announced by the majority of
+// servers.
 type HeadTracker struct {
 	lock            sync.RWMutex
 	committeeChain  *CommitteeChain
@@ -34,6 +37,7 @@ type HeadTracker struct {
 	prefetchHead    types.HeadInfo
 }
 
+// NewHeadTracker creates a new HeadTracker.
 func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTracker {
 	return &HeadTracker{
 		committeeChain: committeeChain,
@@ -41,6 +45,7 @@ func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTra
 	}
 }
 
+// ValidatedHead returns the latest validated head.
 func (h *HeadTracker) ValidatedHead() types.SignedHeader {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -48,6 +53,10 @@ func (h *HeadTracker) ValidatedHead() types.SignedHeader {
 	return h.signedHead
 }
 
+// Validate validates the given signed head. If the head is successfully validated
+// and it is better than the old validated head (higher slot or same slot and more
+// signers) then ValidatedHead is updated. The boolean return flag signals if
+// ValidatedHead has been changed.
 func (h *HeadTracker) Validate(head types.SignedHeader) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -76,6 +85,11 @@ func (h *HeadTracker) Validate(head types.SignedHeader) (bool, error) {
 	return true, nil
 }
 
+// PrefetchHead returns the latest known prefetch head's head info.
+// This head can be used to start fetching related data hoping that it will be
+// validated soon.
+// Note that the prefetch head cannot be validated cryptographically so it should
+// only be used as a performance optimization hint.
 func (h *HeadTracker) PrefetchHead() types.HeadInfo {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -83,6 +97,9 @@ func (h *HeadTracker) PrefetchHead() types.HeadInfo {
 	return h.prefetchHead
 }
 
+// SetPrefetchHead sets the prefetch head info.
+// Note that HeadTracker does not verify the prefetch head, just acts as a thread
+// safe bulletin board.
 func (h *HeadTracker) SetPrefetchHead(head types.HeadInfo) {
 	h.lock.Lock()
 	defer h.lock.Unlock()

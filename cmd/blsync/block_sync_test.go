@@ -41,7 +41,7 @@ func TestBlockSync(t *testing.T) {
 	tracker.AddServer(testServer1, 1)
 	tracker.AddServer(testServer2, 1)
 	ht := &testHeadTracker{}
-	blockSync := newBeaconBlockSyncer(ht)
+	blockSync := newBeaconBlockSync(ht)
 
 	expHeadBlock := func(tci int, expHead *capella.BeaconBlock) {
 		expInfo := blockHeadInfo(expHead)

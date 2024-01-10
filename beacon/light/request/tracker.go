@@ -23,6 +23,11 @@ import (
 )
 
 type (
+	// Server identifies a server without allowing any direct interaction.
+	// Note: server interface is used by Scheduler and Tracker but not used by
+	// the modules that do not interact with them directly.
+	// In order to make module testing easier, Server interface is used in
+	// events and modules.
 	Server      any
 	Request     any
 	Response    any
@@ -60,14 +65,20 @@ type Tracker interface {
 	InvalidResponse(id ServerAndID, desc string)
 }
 
-// one per sync process
+// tracker implements Tracker. A separate instance is created for each Module.
 type tracker struct {
-	servers       serverSet // one per trigger
-	scheduler     *Scheduler
-	module        Module
+	// servers is a set of currently available servers; it is recreated at every
+	// processModule round.
+	servers   serverSet
+	scheduler *Scheduler
+	module    Module
+	// requestEvents is a list of events related to requests sent by the given
+	// module. It is reset before module processing and the previous contents are
+	// passed to Module.Process along with the globally collected server events.
 	requestEvents []Event
 }
 
+// TryRequest implements Tracker.
 func (p *tracker) TryRequest(requestFn func(server Server) (Request, float32)) (RequestWithID, bool) {
 	var (
 		maxServerPriority, maxRequestPriority float32
@@ -104,6 +115,7 @@ func (p *tracker) TryRequest(requestFn func(server Server) (Request, float32)) (
 	return RequestWithID{ServerAndID: id, Request: bestRequest}, true
 }
 
+// InvalidResponse implements Tracker.
 func (p *tracker) InvalidResponse(id ServerAndID, desc string) {
 	id.Server.(server).fail(desc)
 }

@@ -125,7 +125,7 @@ func blsync(ctx *cli.Context) error {
 
 	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	beaconBlockSync := newBeaconBlockSyncer(headTracker)
+	beaconBlockSync := newBeaconBlockSync(headTracker)
 	engineApiUpdater := &engineApiUpdater{ //TODO constructor
 		client:    makeRPCClient(ctx),
 		blockSync: beaconBlockSync,
