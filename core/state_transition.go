@@ -314,6 +314,9 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
+		// The to field of a blob tx type is mandatory.
+		// However messages created through RPC (eth_call)
+		// don't have this restriction.
 		if msg.To == nil {
 			return ErrBlobTxCreate
 		}
