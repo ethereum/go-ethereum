@@ -21,17 +21,11 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
-)
-
-const (
-	// snapWaitTimeout is the amount of time to wait for the snap protocol to be started.
-	snapWaitTimeout = 5 * time.Second
 )
 
 var (
@@ -50,9 +44,6 @@ var (
 	// errSnapWithoutEth is returned if a peer attempts to connect only on the
 	// snap protocol without advertising the eth main protocol.
 	errSnapWithoutEth = errors.New("peer connected on snap without compatible eth support")
-
-	// errSnapTimeout is returned if the peer takes too long to start the snap protocol.
-	errSnapTimeout = errors.New("peer timeout starting snap protocol")
 )
 
 // peerSet represents the collection of active peers currently participating in
@@ -66,6 +57,7 @@ type peerSet struct {
 
 	lock   sync.RWMutex
 	closed bool
+	quitCh chan struct{} // Quit channel to signal termination
 }
 
 // newPeerSet creates a new peer set to track the active participants.
@@ -74,6 +66,7 @@ func newPeerSet() *peerSet {
 		peers:    make(map[string]*ethPeer),
 		snapWait: make(map[string]chan *snap.Peer),
 		snapPend: make(map[string]*snap.Peer),
+		quitCh:   make(chan struct{}),
 	}
 }
 
@@ -138,19 +131,15 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 	ps.snapWait[id] = wait
 	ps.lock.Unlock()
 
-	t := time.NewTicker(snapWaitTimeout)
-	defer t.Stop()
 	for {
 		select {
 		case p := <-wait:
 			return p, nil
-		case <-t.C:
-			if ps.closed {
-				ps.lock.Lock()
-				delete(ps.snapWait, id)
-				ps.lock.Unlock()
-				return nil, errSnapTimeout
-			}
+		case <-ps.quitCh:
+			ps.lock.Lock()
+			delete(ps.snapWait, id)
+			ps.lock.Unlock()
+			return nil, errPeerSetClosed
 		}
 	}
 }
@@ -279,5 +268,6 @@ func (ps *peerSet) close() {
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
+	close(ps.quitCh)
 	ps.closed = true
 }
