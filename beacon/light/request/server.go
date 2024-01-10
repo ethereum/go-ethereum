@@ -28,13 +28,13 @@ import (
 
 var (
 	// request events
-	EvResponse = "response" // data: IdAndResponse; sent by requestServer
-	EvFail     = "fail"     // data: ID; sent by requestServer
-	EvTimeout  = "timeout"  // data: ID; sent by serverWithTimeout
+	EvResponse = &EventType{Name: "response", requestEvent: true} // data: RequestResponse
+	EvFail     = &EventType{Name: "fail", requestEvent: true}     // data: RequestResponse
+	EvTimeout  = &EventType{Name: "timeout", requestEvent: true}  // data: RequestResponse
 	// server events
-	EvRegistered      = "registered"      // data: nil; sent by Scheduler
-	EvUnregistered    = "unregistered"    // data: nil; sent by Scheduler
-	EvCanRequestAgain = "canRequestAgain" // data: nil; sent by server
+	EvRegistered      = &EventType{Name: "registered"}      // data: nil; sent by Scheduler
+	EvUnregistered    = &EventType{Name: "unregistered"}    // data: nil; sent by Scheduler
+	EvCanRequestAgain = &EventType{Name: "canRequestAgain"} // data: nil; sent by serverWithLimits
 )
 
 const (
@@ -81,13 +81,29 @@ func newServer(rs requestServer, clock mclock.Clock) server {
 
 type serverSet map[server]struct{}
 
-type Event struct {
-	Type string
-	Data any
+type EventType struct {
+	Name         string
+	requestEvent bool
 }
 
-type IdAndResponse struct {
+type Event struct {
+	Type   *EventType
+	Server Server // filled by Scheduler
+	Data   any
+}
+
+func (e *Event) IsRequestEvent() bool {
+	return e.Type.requestEvent
+}
+
+func (e *Event) RequestInfo() (ServerAndID, Request, Response) {
+	data := e.Data.(RequestResponse)
+	return ServerAndID{Server: e.Server, ID: data.ID}, data.Request, data.Response
+}
+
+type RequestResponse struct {
 	ID       ID
+	Request  Request
 	Response Response
 }
 
@@ -123,12 +139,7 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 
 	switch event.Type {
 	case EvResponse, EvFail:
-		var id ID
-		if event.Type == EvResponse {
-			id = event.Data.(IdAndResponse).ID
-		} else {
-			id = event.Data.(ID)
-		}
+		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
 			// Note: if stopping the timer is unsuccessful then the resulting AfterFunc
 			// call will just do nothing
@@ -167,11 +178,11 @@ func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
 			delete(s.timeouts, reqId)
 			childEventCb := s.childEventCb
 			s.lock.Unlock()
-			childEventCb(Event{Type: EvFail, Data: reqId})
+			childEventCb(Event{Type: EvFail, Data: RequestResponse{ID: reqId, Request: request}})
 		})
 		childEventCb := s.childEventCb
 		s.lock.Unlock()
-		childEventCb(Event{Type: EvTimeout, Data: reqId})
+		childEventCb(Event{Type: EvTimeout, Data: RequestResponse{ID: reqId, Request: request}})
 	})
 	return reqId
 }
@@ -238,7 +249,8 @@ func (s *serverWithLimits) eventCallback(event Event) {
 	var sendCanRequestAgain bool
 	switch event.Type {
 	case EvTimeout:
-		s.softTimeouts[event.Data.(ID)] = struct{}{}
+		id := event.Data.(RequestResponse).ID
+		s.softTimeouts[id] = struct{}{}
 		s.timeoutCount++
 		s.parallelLimit -= parallelAdjustDown
 		if s.parallelLimit < minParallelLimit {
@@ -246,12 +258,7 @@ func (s *serverWithLimits) eventCallback(event Event) {
 		}
 		log.Debug("Server timeout", "count", s.timeoutCount, "parallelLimit", s.parallelLimit)
 	case EvResponse, EvFail:
-		var id ID
-		if event.Type == EvResponse {
-			id = event.Data.(IdAndResponse).ID
-		} else {
-			id = event.Data.(ID)
-		}
+		id := event.Data.(RequestResponse).ID
 		if _, ok := s.softTimeouts[id]; ok {
 			delete(s.softTimeouts, id)
 			s.timeoutCount--

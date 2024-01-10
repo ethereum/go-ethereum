@@ -51,7 +51,7 @@ func TestBlockSync(t *testing.T) {
 		}
 	}
 
-	sync.ExpTrigger(t, 1, false, blockSync.Process(tracker, nil, []request.ServerEvent{
+	sync.ExpTrigger(t, 1, false, blockSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer2, Type: request.EvRegistered},
 	}))
@@ -61,7 +61,7 @@ func TestBlockSync(t *testing.T) {
 	// set block 1 as prefetch head, announced by server 2
 	head1 := blockHeadInfo(testBlock1)
 	ht.prefetch = head1
-	sync.ExpTrigger(t, 2, false, blockSync.Process(tracker, nil, []request.ServerEvent{
+	sync.ExpTrigger(t, 2, false, blockSync.Process(tracker, []request.Event{
 		{Server: testServer2, Type: sync.EvNewHead, Data: head1},
 	}))
 	// expect request to server 2 which has announced the head
@@ -69,43 +69,43 @@ func TestBlockSync(t *testing.T) {
 	tracker.ExpRequests(t, 2, []request.RequestWithID{req1})
 	// valid response
 	tracker.AddAllowance(testServer2, 1)
-	sync.ExpTrigger(t, 3, false, blockSync.Process(tracker, []request.RequestEvent{
-		request.RequestEvent{RequestWithID: req1, Response: testBlock1, Finalized: true},
-	}, nil))
+	sync.ExpTrigger(t, 3, false, blockSync.Process(tracker, []request.Event{
+		sync.TestReqEvent(request.EvResponse, req1, testBlock1),
+	}))
 	// head block still not expected as the fetched block is not the validated head yet
 	expHeadBlock(2, nil)
 	// set as validated head, expect no further requests but block 1 set as head block
 	ht.validated.Header = blockHeader(testBlock1)
-	sync.ExpTrigger(t, 4, false, blockSync.Process(tracker, nil, nil))
+	sync.ExpTrigger(t, 4, false, blockSync.Process(tracker, nil))
 	tracker.ExpRequests(t, 3, nil)
 	expHeadBlock(3, testBlock1)
 
 	// set block 2 as prefetch head, announced by server 1
 	head2 := blockHeadInfo(testBlock2)
 	ht.prefetch = head2
-	sync.ExpTrigger(t, 5, false, blockSync.Process(tracker, nil, []request.ServerEvent{
+	sync.ExpTrigger(t, 5, false, blockSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: sync.EvNewHead, Data: head2},
 	}))
 	// expect request to server 1
 	req2 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer1, ID: 2}, Request: sync.ReqBeaconBlock(head2.BlockRoot)}
 	tracker.ExpRequests(t, 4, []request.RequestWithID{req2})
-	// req2 times out but no further requests expected because server 2 has not announced it
-	sync.ExpTrigger(t, 6, false, blockSync.Process(tracker, []request.RequestEvent{
-		request.RequestEvent{RequestWithID: req2, Timeout: true},
-	}, nil))
+	// req2 fails, no further requests expected because server 2 has not announced it
+	sync.ExpTrigger(t, 6, false, blockSync.Process(tracker, []request.Event{
+		sync.TestReqEvent(request.EvFail, req2, nil),
+	}))
 	tracker.ExpRequests(t, 5, nil)
 	// set as validated head before retrieving block; now it's assumed to be available from server 2 too
 	ht.validated.Header = blockHeader(testBlock2)
-	sync.ExpTrigger(t, 7, false, blockSync.Process(tracker, nil, nil))
+	sync.ExpTrigger(t, 7, false, blockSync.Process(tracker, nil))
 	// now head block is unavailable again
 	expHeadBlock(4, nil)
 	// expect req2 retry to server 2
 	req2r := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 3}, Request: sync.ReqBeaconBlock(head2.BlockRoot)}
 	tracker.ExpRequests(t, 6, []request.RequestWithID{req2r})
 	// valid response, now head block should be block 2 immediately as it is already validated
-	sync.ExpTrigger(t, 8, true, blockSync.Process(tracker, []request.RequestEvent{
-		request.RequestEvent{RequestWithID: req2r, Response: testBlock2, Finalized: true},
-	}, nil))
+	sync.ExpTrigger(t, 8, true, blockSync.Process(tracker, []request.Event{
+		sync.TestReqEvent(request.EvResponse, req2r, testBlock2),
+	}))
 	expHeadBlock(5, testBlock2)
 }
 

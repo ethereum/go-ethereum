@@ -50,38 +50,38 @@ func TestValidatedHead(t *testing.T) {
 	headSync := NewHeadSync(ht, chain)
 
 	ht.ExpValidated(t, 1, nil)
-	ExpTrigger(t, 1, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 1, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead1},
 	}))
 	ht.ExpValidated(t, 2, nil)
 	chain.SetNextSyncPeriod(0)
-	ExpTrigger(t, 2, true, headSync.Process(tracker, nil, nil))
+	ExpTrigger(t, 2, true, headSync.Process(tracker, nil))
 	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead1})
 	chain.SetNextSyncPeriod(1)
-	ExpTrigger(t, 3, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 3, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead2},
 		{Server: testServer2, Type: request.EvRegistered},
 		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead2},
 	}))
 	ht.ExpValidated(t, 4, []types.SignedHeader{testSHead2, testSHead2})
-	ExpTrigger(t, 4, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 4, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead3},
 		{Server: testServer3, Type: request.EvRegistered},
 		{Server: testServer3, Type: EvNewSignedHead, Data: testSHead4},
 	}))
 	ht.ExpValidated(t, 5, nil)
 	chain.SetNextSyncPeriod(2)
-	ExpTrigger(t, 5, true, headSync.Process(tracker, nil, nil))
+	ExpTrigger(t, 5, true, headSync.Process(tracker, nil))
 	ht.ExpValidated(t, 6, []types.SignedHeader{testSHead3})
-	ExpTrigger(t, 6, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 6, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer3, Type: request.EvUnregistered},
 	}))
 	ht.ExpValidated(t, 7, nil)
 	chain.SetNextSyncPeriod(3)
-	ExpTrigger(t, 7, false, headSync.Process(tracker, nil, nil))
+	ExpTrigger(t, 7, false, headSync.Process(tracker, nil))
 	ht.ExpValidated(t, 8, nil)
-	ExpTrigger(t, 8, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 8, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead4},
 	}))
 	ht.ExpValidated(t, 9, []types.SignedHeader{testSHead4})
@@ -94,47 +94,47 @@ func TestPrefetchHead(t *testing.T) {
 	headSync := NewHeadSync(ht, chain)
 
 	ht.ExpPrefetch(t, 1, testHead0) // no servers registered
-	ExpTrigger(t, 1, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 1, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewHead, Data: testHead1},
 	}))
 	ht.ExpPrefetch(t, 2, testHead1) // s1: h1
-	ExpTrigger(t, 2, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 2, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer2, Type: request.EvRegistered},
 		{Server: testServer2, Type: EvNewHead, Data: testHead2},
 	}))
 	ht.ExpPrefetch(t, 3, testHead2) // s1: h1, s2: h2
-	ExpTrigger(t, 3, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 3, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: EvNewHead, Data: testHead2},
 	}))
 	ht.ExpPrefetch(t, 4, testHead2) // s1: h2, s2: h2
-	ExpTrigger(t, 4, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 4, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer3, Type: request.EvRegistered},
 		{Server: testServer3, Type: EvNewHead, Data: testHead3},
 	}))
 	ht.ExpPrefetch(t, 5, testHead2) // s1: h2, s2: h2, s3: h3
-	ExpTrigger(t, 5, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 5, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer4, Type: request.EvRegistered},
 		{Server: testServer4, Type: EvNewHead, Data: testHead4},
 	}))
 	ht.ExpPrefetch(t, 6, testHead2) // s1: h2, s2: h2, s3: h3, s4: h4
-	ExpTrigger(t, 6, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 6, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer2, Type: EvNewHead, Data: testHead3},
 	}))
 	ht.ExpPrefetch(t, 7, testHead3) // s1: h2, s2: h3, s3: h3, s4: h4
-	ExpTrigger(t, 7, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 7, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer3, Type: request.EvUnregistered},
 	}))
 	ht.ExpPrefetch(t, 8, testHead4) // s1: h2, s2: h3, s4: h4
-	ExpTrigger(t, 8, false, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 8, false, headSync.Process(tracker, []request.Event{
 		{Server: testServer1, Type: request.EvUnregistered},
 	}))
 	ht.ExpPrefetch(t, 9, testHead4) // s2: h3, s4: h4
-	ExpTrigger(t, 9, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 9, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer4, Type: request.EvUnregistered},
 	}))
 	ht.ExpPrefetch(t, 10, testHead3) // s2: h3
-	ExpTrigger(t, 10, true, headSync.Process(tracker, nil, []request.ServerEvent{
+	ExpTrigger(t, 10, true, headSync.Process(tracker, []request.Event{
 		{Server: testServer2, Type: request.EvUnregistered},
 	}))
 	ht.ExpPrefetch(t, 11, testHead0) // no servers registered

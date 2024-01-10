@@ -78,9 +78,9 @@ func (s *ApiServer) SendRequest(req request.Request) request.ID {
 		default:
 		}
 		if resp != nil {
-			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.IdAndResponse{ID: id, Response: resp}})
+			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.RequestResponse{ID: id, Request: req, Response: resp}})
 		} else {
-			s.eventCallback(request.Event{Type: request.EvFail, Data: id})
+			s.eventCallback(request.Event{Type: request.EvFail, Data: request.RequestResponse{ID: id, Request: req}})
 		}
 	}()
 	return id
