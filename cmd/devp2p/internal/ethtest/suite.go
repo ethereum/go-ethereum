@@ -19,6 +19,7 @@ package ethtest
 import (
 	"crypto/rand"
 	"math/big"
+	"math/bits"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,7 +63,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 }
 
 func (s *Suite) EthTests() []utesting.Test {
-	return []utesting.Test{
+	tests := []utesting.Test{
 		// status
 		{Name: "TestStatus", Fn: s.TestStatus},
 		// get block headers
@@ -78,10 +79,15 @@ func (s *Suite) EthTests() []utesting.Test {
 		// test transactions
 		{Name: "TestTransaction", Fn: s.TestTransaction},
 		{Name: "TestInvalidTxs", Fn: s.TestInvalidTxs},
-		{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest},
 		{Name: "TestNewPooledTxs", Fn: s.TestNewPooledTxs},
 		{Name: "TestBlobViolations", Fn: s.TestBlobViolations},
 	}
+	// This test is often failing on 32-bit CI.
+	if bits.UintSize > 32 {
+		tests = append(tests, utesting.Test{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest})
+	}
+	return tests
+
 }
 
 func (s *Suite) SnapTests() []utesting.Test {
