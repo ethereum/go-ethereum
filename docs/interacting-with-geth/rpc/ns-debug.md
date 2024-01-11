@@ -455,8 +455,8 @@ Stops writing the Go runtime trace.
 
 | Client  | Method invocation                               |
 | :------ | ----------------------------------------------- |
-| Console | `debug.stopGoTrace(file)`                      |
-| RPC     | `{"method": "debug_stopGoTrace", "params": [string]}` |
+| Console | `debug.stopGoTrace()`                      |
+| RPC     | `{"method": "debug_stopGoTrace", "params": []}` |
 
 ### debug_storageRangeAt
 
