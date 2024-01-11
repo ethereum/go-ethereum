@@ -260,7 +260,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
 ```json
 {
   "config": {
-    "chainId": 12345,
+    "chainId": 123454321,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -283,8 +283,8 @@ In each data directory save a copy of the following `genesis.json` to the top le
   "gasLimit": "800000000",
   "extradata": "0x0000000000000000000000000000000000000000000000000000000000000000C1B2c0dFD381e6aC08f34816172d6343Decbb12b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "alloc": {
-    "C1B2c0dFD381e6aC08f34816172d6343Decbb12b": { "balance": "500000" },
-    "c94d95a5106270775351eecfe43f97e8e75e59e8": { "balance": "500000" }
+    "C1B2c0dFD381e6aC08f34816172d6343Decbb12b": { "balance": "1000000000000000000" },
+    "c94d95a5106270775351eecfe43f97e8e75e59e8": { "balance": "1000000000000000000" }
   }
 }
 ```
