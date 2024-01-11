@@ -937,10 +937,25 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 
 	f.outputBuffer.Reset()
 
-	libNum, libID := finalityStatus.ToFirehoseLogParams()
+	previousHash := block.PreviousID()
+	previousNum := 0
+	if block.Number > 0 {
+		previousNum = int(block.Number) - 1
+	}
+
+	libNum := finalityStatus.LastIrreversibleBlockNumber
+	if finalityStatus.IsEmpty() {
+		// FIXME: We should have access to the genesis block to perform this operation to ensure we never go below the
+		// the genesis block
+		if block.Number >= 200 {
+			libNum = block.Number - 200
+		} else {
+			libNum = 0
+		}
+	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %s %s ", block.Number, hex.EncodeToString(block.Hash), libNum, libID))
+	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
 	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
 	if _, err = encoder.Write(marshalled); err != nil {
@@ -1530,16 +1545,6 @@ func (s *FinalityStatus) populateFromChain(finalHeader *types.Header) {
 
 	s.LastIrreversibleBlockNumber = finalHeader.Number.Uint64()
 	s.LastIrreversibleBlockHash = finalHeader.Hash().Bytes()
-}
-
-// ToFirehoseLogParams converts the data into the format expected by Firehose reader,
-// replacing the value with "." if the data is empty.
-func (s *FinalityStatus) ToFirehoseLogParams() (libNum, libID string) {
-	if s.IsEmpty() {
-		return ".", "."
-	}
-
-	return strconv.FormatUint(s.LastIrreversibleBlockNumber, 10), hex.EncodeToString(s.LastIrreversibleBlockHash)
 }
 
 func (s *FinalityStatus) Reset() {
