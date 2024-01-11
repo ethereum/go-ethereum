@@ -70,6 +70,7 @@ type CommitteeChain struct {
 	committees          *canonicalStore[*types.SerializedSyncCommittee]
 	fixedCommitteeRoots *canonicalStore[common.Hash]
 	committeeCache      *lru.Cache[uint64, syncCommittee] // cache deserialized committees
+	changeCounter       uint64
 
 	clock       mclock.Clock         // monotonic clock (simulated clock in tests)
 	unixNano    func() int64         // system clock (simulated clock in tests)
@@ -186,6 +187,7 @@ func (s *CommitteeChain) Reset() {
 	if err := s.rollback(0); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 	}
+	s.changeCounter++
 }
 
 // CheckpointInit initializes a CommitteeChain based on a checkpoint.
@@ -219,6 +221,7 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 		s.Reset()
 		return err
 	}
+	s.changeCounter++
 	return nil
 }
 
@@ -371,6 +374,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 			return ErrWrongCommitteeRoot
 		}
 	}
+	s.changeCounter++
 	if reorg {
 		if err := s.rollback(period + 1); err != nil {
 			return err
@@ -407,6 +411,13 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 		return s.updates.periods.End, true
 	}
 	return s.committees.periods.End - 1, true
+}
+
+func (s *CommitteeChain) ChangeCounter() uint64 {
+	s.chainmu.RLock()
+	defer s.chainmu.RUnlock()
+
+	return s.changeCounter
 }
 
 // rollback removes all committees and fixed roots from the given period and updates

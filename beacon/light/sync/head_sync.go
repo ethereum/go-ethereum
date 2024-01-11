@@ -68,26 +68,20 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 }
 
 // Process implements request.Module
-func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
+func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		trigger = s.processUnvalidatedHeads()
+		s.processUnvalidatedHeads()
 	}
 	for _, event := range events {
 		switch event.Type {
 		case EvNewHead:
-			if s.setServerHead(event.Server, event.Data.(types.HeadInfo)) {
-				trigger = true
-			}
+			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
 		case EvNewSignedHead:
-			if s.newSignedHead(event.Server, event.Data.(types.SignedHeader)) {
-				trigger = true
-			}
+			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
 		case request.EvUnregistered:
-			if s.setServerHead(event.Server, types.HeadInfo{}) {
-				trigger = true
-			}
+			s.setServerHead(event.Server, types.HeadInfo{})
 			delete(s.serverHeads, event.Server)
 			delete(s.unvalidatedHeads, event.Server)
 		}
@@ -97,35 +91,31 @@ func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) (tri
 
 // newSignedHead handles received signed head; either validates it if the chain
 // is properly synced or stores it for further validation.
-func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) (trigger bool) {
+func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) {
 	if !s.chainInit || types.SyncPeriod(signedHead.SignatureSlot) > s.nextSyncPeriod {
 		s.unvalidatedHeads[server] = signedHead
-		return false
+		return
 	}
-	updated, _ := s.headTracker.Validate(signedHead)
-	return updated
+	s.headTracker.Validate(signedHead)
 }
 
 // processUnvalidatedHeads iterates the list of unvalidated heads and validates
 // those which can be validated.
-func (s *HeadSync) processUnvalidatedHeads() (trigger bool) {
+func (s *HeadSync) processUnvalidatedHeads() {
 	if !s.chainInit {
-		return false
+		return
 	}
 	for server, signedHead := range s.unvalidatedHeads {
 		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
-			if updated, _ := s.headTracker.Validate(signedHead); updated {
-				trigger = true
-			}
+			s.headTracker.Validate(signedHead)
 			delete(s.unvalidatedHeads, server)
 		}
 	}
-	return
 }
 
 // setServerHead processes non-validated server head announcements and updates
 // the prefetch head if necessary.
-//TODO report server failure if a server announces many heads that do not become validated soon.
+// TODO report server failure if a server announces many heads that do not become validated soon.
 func (s *HeadSync) setServerHead(server request.Server, head types.HeadInfo) bool {
 	if oldHead, ok := s.serverHeads[server]; ok {
 		if head == oldHead {

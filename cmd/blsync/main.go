@@ -17,26 +17,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -126,16 +120,13 @@ func blsync(ctx *cli.Context) error {
 	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	beaconBlockSync := newBeaconBlockSync(headTracker)
-	engineApiUpdater := &engineApiUpdater{ //TODO constructor
-		client:    makeRPCClient(ctx),
-		blockSync: beaconBlockSync,
-	}
-
+	scheduler.RegisterTarget(headTracker)
+	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
-	scheduler.RegisterModule(engineApiUpdater, "engineApiUpdater")
+	go updateEngineApi(makeRPCClient(ctx), beaconBlockSync.headBlockCh)
 	// start
 	scheduler.Start()
 	// register server(s)
@@ -146,26 +137,6 @@ func blsync(ctx *cli.Context) error {
 	// run until stopped
 	<-ctx.Done()
 	scheduler.Stop()
+	close(beaconBlockSync.headBlockCh)
 	return nil
-}
-
-func callNewPayloadV2(client *rpc.Client, block *ctypes.Block) (string, error) {
-	var resp engine.PayloadStatusV1
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	err := client.CallContext(ctx, &resp, "engine_newPayloadV2", *engine.BlockToExecutableData(block, nil, nil).ExecutionPayload)
-	cancel()
-	return resp.Status, err
-}
-
-func callForkchoiceUpdatedV1(client *rpc.Client, headHash, finalizedHash common.Hash) (string, error) {
-	var resp engine.ForkChoiceResponse
-	update := engine.ForkchoiceStateV1{
-		HeadBlockHash:      headHash,
-		SafeBlockHash:      finalizedHash,
-		FinalizedBlockHash: finalizedHash,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	err := client.CallContext(ctx, &resp, "engine_forkchoiceUpdatedV1", update, nil)
-	cancel()
-	return resp.PayloadStatus.Status, err
 }
