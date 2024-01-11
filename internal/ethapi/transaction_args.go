@@ -408,3 +408,8 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 func (args *TransactionArgs) ToTransaction() *types.Transaction {
 	return args.toTransaction()
 }
+
+// IsEIP4844 returns an indicator if the args contains EIP4844 fields.
+func (args *TransactionArgs) IsEIP4844() bool {
+	return args.BlobVersionedHashes != nil || args.MaxFeePerBlobGas != nil
+}
