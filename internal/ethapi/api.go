@@ -1233,14 +1233,14 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
-// MulticallV1 executes series of transactions on top of a base state.
+// SimulateV1 executes series of transactions on top of a base state.
 // The transactions are packed into blocks. For each block, block header
 // fields can be overridden. The state can also be overridden prior to
 // execution of each block.
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) MulticallV1(ctx context.Context, opts mcOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]mcBlockResult, error) {
+func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts mcOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]mcBlockResult, error) {
 	if len(opts.BlockStateCalls) == 0 {
 		return nil, &invalidParamsError{message: "empty input"}
 	} else if len(opts.BlockStateCalls) > maxMulticallBlocks {
