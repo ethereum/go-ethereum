@@ -87,7 +87,6 @@ func (s *Suite) EthTests() []utesting.Test {
 		tests = append(tests, utesting.Test{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest})
 	}
 	return tests
-
 }
 
 func (s *Suite) SnapTests() []utesting.Test {
