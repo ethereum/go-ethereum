@@ -285,6 +285,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
+	if chainConfig.Scroll.FeeVaultEnabled() {
+		log.Warn("Using fee vault address", "FeeVaultAddress", *chainConfig.Scroll.FeeVaultAddress)
+	}
+
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
 		cacheConfig:   cacheConfig,

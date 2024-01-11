@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -37,7 +38,7 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+func NewEVMBlockContext(header *types.Header, chain ChainContext, chainConfig *params.ChainConfig, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -45,8 +46,9 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		random      *common.Hash
 	)
 
-	// If we don't have an explicit author (i.e. not mining), extract from the header
-	if author == nil {
+	if chainConfig.Scroll.FeeVaultEnabled() { // If we enable the feevault feature, use the feevault address
+		beneficiary = *chainConfig.Scroll.FeeVaultAddress
+	} else if author == nil { // If we don't have an explicit author (i.e. not mining), extract from the header
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author

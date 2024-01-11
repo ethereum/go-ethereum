@@ -82,12 +82,12 @@ var (
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
-	signer   types.Signer
-	state    *state.StateDB // apply state changes here
-	tcount   int            // tx count in cycle
-	blockSize uint64 // approximate size of tx payload in bytes
-	gasPool  *core.GasPool  // available gas used to pack transactions
-	coinbase common.Address
+	signer    types.Signer
+	state     *state.StateDB // apply state changes here
+	tcount    int            // tx count in cycle
+	blockSize uint64         // approximate size of tx payload in bytes
+	gasPool   *core.GasPool  // available gas used to pack transactions
+	coinbase  common.Address
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -994,7 +994,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		return nil, err
 	}
 	if header.ParentBeaconRoot != nil {
-		context := core.NewEVMBlockContext(header, w.chain, nil)
+		context := core.NewEVMBlockContext(header, w.chain, w.chainConfig, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}

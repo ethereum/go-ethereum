@@ -93,7 +93,7 @@ func (b *BlockGen) SetPoS() {
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	var (
-		blockContext = NewEVMBlockContext(b.header, nil, &b.header.Coinbase)
+		blockContext = NewEVMBlockContext(b.header, nil, b.config, &b.header.Coinbase)
 		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.config, vm.Config{})
 	)
 	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
