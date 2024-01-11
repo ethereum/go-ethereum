@@ -91,12 +91,6 @@ func (tt *TestTracker) InvalidResponse(id request.ServerAndID, desc string) {
 	return
 }
 
-func ExpTrigger(t *testing.T, tci int, expTrigger, trigger bool) {
-	if trigger != expTrigger {
-		t.Errorf("Invalid process trigger output in test case #%d (expected %v, got %v)", tci, expTrigger, trigger)
-	}
-}
-
 func TestReqEvent(evType *request.EventType, req request.RequestWithID, response request.Response) request.Event {
 	return request.Event{
 		Type:   evType,

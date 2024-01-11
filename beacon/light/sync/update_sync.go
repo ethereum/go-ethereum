@@ -53,9 +53,9 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 }
 
 // Process implements request.Module
-func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event) bool {
+func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event) {
 	if s.initialized {
-		return false
+		return
 	}
 	for _, event := range events {
 		if !event.IsRequestEvent() {
@@ -67,7 +67,7 @@ func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event
 			if checkpoint, ok := response.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(request.(ReqCheckpointData)) {
 				s.chain.CheckpointInit(*checkpoint) //TODO
 				s.initialized = true
-				return true
+				return
 			}
 			tracker.InvalidResponse(sid, "invalid checkpoint data")
 		}
@@ -79,7 +79,7 @@ func (s *CheckpointInit) Process(tracker request.Tracker, events []request.Event
 			s.locked = true
 		}
 	}
-	return false
+	return
 }
 
 // ForwardUpdateSync implements request.Module; it fetches updates between the
@@ -226,7 +226,7 @@ func (u updateResponseList) Less(i, j int) bool {
 }
 
 // Process implements request.Module
-func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
+func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Event) {
 	// iterate events and add responses to process queue
 	for _, event := range events {
 		switch event.Type {
@@ -258,7 +258,6 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Ev
 		if !s.processResponse(tracker, event) {
 			break
 		}
-		trigger = true
 		sid, req, _ := event.RequestInfo()
 		s.unlockRange(sid, req)
 		s.processQueue = s.processQueue[1:]
@@ -270,7 +269,7 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Ev
 	// start new requests if necessary
 	startPeriod, chainInit := s.chain.NextSyncPeriod()
 	if !chainInit {
-		return false
+		return
 	}
 	for {
 		firstPeriod, maxCount := s.rangeLock.firstUnlocked(startPeriod, maxUpdateRequest)
@@ -290,5 +289,4 @@ func (s *ForwardUpdateSync) Process(tracker request.Tracker, events []request.Ev
 			break
 		}
 	}
-	return
 }

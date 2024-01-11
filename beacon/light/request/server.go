@@ -238,7 +238,7 @@ func (s *serverWithTimeout) stopTimer(timer mclock.Timer) {
 // failures of the server might happen sometimes, but still avoids hammering a
 // non-functional server with requests.
 //
-//TODO protect against excessive server events
+// TODO protect against excessive server events
 type serverWithLimits struct {
 	serverWithTimeout
 	lock                       sync.Mutex

@@ -17,34 +17,24 @@
 package main
 
 import (
-	"fmt"
-	"math/big"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	ctypes "github.com/ethereum/go-ethereum/core/types"
-
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
 )
 
 // beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
 // to the validated and prefetch heads.
 type beaconBlockSync struct {
-	recentBlocks  *lru.Cache[common.Hash, *capella.BeaconBlock]
-	validatedHead common.Hash
-	locked        map[common.Hash]struct{}
-	serverHeads   map[request.Server]common.Hash
-	headTracker   headTracker
+	recentBlocks *lru.Cache[common.Hash, *capella.BeaconBlock]
+	locked       map[common.Hash]struct{}
+	serverHeads  map[request.Server]common.Hash
+	headTracker  headTracker
+
+	lastHeadBlock *capella.BeaconBlock
+	headBlockCh   chan *capella.BeaconBlock
 }
 
 type headTracker interface {
@@ -59,15 +49,12 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
 		locked:       make(map[common.Hash]struct{}),
 		serverHeads:  make(map[request.Server]common.Hash),
+		headBlockCh:  make(chan *capella.BeaconBlock, 1),
 	}
 }
 
 // Process implements request.Module
-func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Event) (trigger bool) {
-	if header := s.headTracker.ValidatedHead().Header; header != (types.Header{}) {
-		s.validatedHead = header.Hash()
-	}
-
+func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Event) {
 	// iterate events and add valid responses to recentBlocks
 	for _, event := range events {
 		switch event.Type {
@@ -77,9 +64,6 @@ func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Even
 			if resp != nil {
 				block := resp.(*capella.BeaconBlock)
 				s.recentBlocks.Add(blockRoot, block)
-				if blockRoot == s.validatedHead {
-					trigger = true
-				}
 			}
 			delete(s.locked, blockRoot)
 		case sync.EvNewHead:
@@ -89,20 +73,23 @@ func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Even
 		}
 	}
 
-	// start new requests if necessary
-	if s.validatedHead != (common.Hash{}) {
-		s.tryRequestBlock(tracker, s.validatedHead, false)
+	// send validated head block or request it if unavailable
+	if vh := s.headTracker.ValidatedHead(); vh != (types.SignedHeader{}) {
+		validatedHead := vh.Header.Hash()
+		if headBlock, ok := s.recentBlocks.Get(validatedHead); ok && headBlock != s.lastHeadBlock {
+			select {
+			case s.headBlockCh <- headBlock:
+				s.lastHeadBlock = headBlock
+			default:
+			}
+		} else {
+			s.tryRequestBlock(tracker, validatedHead, false)
+		}
 	}
+	// request prefetch head
 	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
 		s.tryRequestBlock(tracker, prefetchHead, true)
 	}
-	return
-}
-
-// getHeadBlock returns the beacon block belonging to ValidatedHead or nil if not available.
-func (s *beaconBlockSync) getHeadBlock() *capella.BeaconBlock {
-	block, _ := s.recentBlocks.Get(s.validatedHead)
-	return block
 }
 
 // tryRequestBlock tries to send a block request for the given root if the block
@@ -128,110 +115,4 @@ func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot com
 	}); ok {
 		s.locked[blockRoot] = struct{}{}
 	}
-}
-
-// getExecBlock extracts the execution block from the beacon block's payload.
-func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
-	payload := &beaconBlock.Body.ExecutionPayload
-	txs := make([]*ctypes.Transaction, len(payload.Transactions))
-	for i, opaqueTx := range payload.Transactions {
-		var tx ctypes.Transaction
-		if err := tx.UnmarshalBinary(opaqueTx); err != nil {
-			return nil, fmt.Errorf("failed to parse tx %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	withdrawals := make([]*ctypes.Withdrawal, len(payload.Withdrawals))
-	for i, w := range payload.Withdrawals {
-		withdrawals[i] = &ctypes.Withdrawal{
-			Index:     uint64(w.Index),
-			Validator: uint64(w.ValidatorIndex),
-			Address:   common.Address(w.Address),
-			Amount:    uint64(w.Amount),
-		}
-	}
-	wroot := ctypes.DeriveSha(ctypes.Withdrawals(withdrawals), trie.NewStackTrie(nil))
-	execHeader := &ctypes.Header{
-		ParentHash:      common.Hash(payload.ParentHash),
-		UncleHash:       ctypes.EmptyUncleHash,
-		Coinbase:        common.Address(payload.FeeRecipient),
-		Root:            common.Hash(payload.StateRoot),
-		TxHash:          ctypes.DeriveSha(ctypes.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:     common.Hash(payload.ReceiptsRoot),
-		Bloom:           ctypes.Bloom(payload.LogsBloom),
-		Difficulty:      common.Big0,
-		Number:          new(big.Int).SetUint64(uint64(payload.BlockNumber)),
-		GasLimit:        uint64(payload.GasLimit),
-		GasUsed:         uint64(payload.GasUsed),
-		Time:            uint64(payload.Timestamp),
-		Extra:           []byte(payload.ExtraData),
-		MixDigest:       common.Hash(payload.PrevRandao), // reused in merge
-		Nonce:           ctypes.BlockNonce{},             // zero
-		BaseFee:         (*uint256.Int)(&payload.BaseFeePerGas).ToBig(),
-		WithdrawalsHash: &wroot,
-	}
-	execBlock := ctypes.NewBlockWithHeader(execHeader).WithBody(txs, nil).WithWithdrawals(withdrawals)
-	if execBlockHash := execBlock.Hash(); execBlockHash != common.Hash(payload.BlockHash) {
-		return nil, fmt.Errorf("Sanity check failed, payload hash does not match (expected %x, got %x)", common.Hash(payload.BlockHash), execBlockHash)
-	}
-	return execBlock, nil
-}
-
-// beaconBlockHash calculates the hash of a beacon block.
-func beaconBlockHash(beaconBlock *capella.BeaconBlock) common.Hash {
-	return common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
-}
-
-// engineApiUpdater implements request.Module. This module does not start requests,
-// it is only implemented as a module in order to easily trigger it by successful
-// head block retrieval.
-type engineApiUpdater struct {
-	client    *rpc.Client
-	trigger   func()
-	lastHead  common.Hash
-	blockSync *beaconBlockSync
-	updating  uint32
-}
-
-// Process implements request.Module
-func (s *engineApiUpdater) Process(tracker request.Tracker, events []request.Event) bool {
-	if atomic.LoadUint32(&s.updating) == 1 {
-		return false
-	}
-	headBlock := s.blockSync.getHeadBlock()
-	if headBlock == nil {
-		return false
-	}
-	headRoot := beaconBlockHash(headBlock)
-	if headRoot == s.lastHead {
-		return false
-	}
-
-	s.lastHead = headRoot
-	execBlock, err := getExecBlock(headBlock)
-	if err != nil {
-		log.Error("Error extracting execution block from validated beacon block", "error", err)
-		return false
-	}
-	execRoot := execBlock.Hash()
-	if s.client == nil { // dry run, no engine API specified
-		log.Info("New execution block retrieved", "block number", execBlock.NumberU64(), "block hash", execRoot)
-	} else {
-		atomic.StoreUint32(&s.updating, 1)
-		go func() {
-			if status, err := callNewPayloadV2(s.client, execBlock); err == nil {
-				log.Info("Successful NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "status", status)
-			} else {
-				log.Error("Failed NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "error", err)
-			}
-			if status, err := callForkchoiceUpdatedV1(s.client, execRoot, common.Hash{}); err == nil {
-				log.Info("Successful ForkchoiceUpdated", "head", execRoot, "status", status)
-			} else {
-				log.Error("Failed ForkchoiceUpdated", "head", execRoot, "error", err)
-			}
-			atomic.StoreUint32(&s.updating, 0)
-			s.trigger()
-		}()
-	}
-	return false
 }

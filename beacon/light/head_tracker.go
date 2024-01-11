@@ -35,6 +35,7 @@ type HeadTracker struct {
 	signedHead      types.SignedHeader
 	headSignerCount int
 	prefetchHead    types.HeadInfo
+	changeCounter   uint64
 }
 
 // NewHeadTracker creates a new HeadTracker.
@@ -82,6 +83,7 @@ func (h *HeadTracker) Validate(head types.SignedHeader) (bool, error) {
 		return false, errors.New("invalid header signature")
 	}
 	h.signedHead, h.headSignerCount = head, signerCount
+	h.changeCounter++
 	return true, nil
 }
 
@@ -104,5 +106,16 @@ func (h *HeadTracker) SetPrefetchHead(head types.HeadInfo) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	if head == h.prefetchHead {
+		return
+	}
 	h.prefetchHead = head
+	h.changeCounter++
+}
+
+func (h *HeadTracker) ChangeCounter() uint64 {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.changeCounter
 }

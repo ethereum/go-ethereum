@@ -88,7 +88,7 @@ func (p *tracker) TryRequest(requestFn func(server Server) (Request, float32)) (
 	maxServerPriority, maxRequestPriority = -math.MaxFloat32, -math.MaxFloat32
 	serverCount := len(p.servers)
 	var removed, candidates int
-	for server, _ := range p.servers {
+	for server := range p.servers {
 		canRequest, serverPriority := server.canRequestNow()
 		if !canRequest {
 			delete(p.servers, server)

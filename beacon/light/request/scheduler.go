@@ -41,13 +41,12 @@ type Module interface {
 	// a processing round is triggered. It can start new requests through the
 	// received Tracker, process events and/or do other data processing tasks.
 	// Note that request events are only passed to the module that made the given
-	// request while server events are passed to every module. Process can also
-	// trigger a next processing round by returning true.
+	// request while server events are passed to every module.
 	//
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
-	Process(Tracker, []Event) bool
+	Process(Tracker, []Event)
 }
 
 // Scheduler is a modular network data retrieval framework that coordinates multiple
@@ -63,12 +62,17 @@ type Scheduler struct {
 	trackers     map[Module]*tracker
 	servers      map[server]struct{}
 	pending      map[ServerAndID]pendingRequest
+	target       map[targetData]uint64
 	serverEvents []Event
 	stopCh       chan chan struct{}
 
 	triggerCh chan struct{} // restarts waiting sync loop
 	//	testWaitCh       chan struct{} // accepts sends when sync loop is waiting
 	//	testTimerResults []bool        // true is appended when simulated timer is processed; false when stopped
+}
+
+type targetData interface {
+	ChangeCounter() uint64
 }
 
 // pendingRequest keeps track of sent and not yet finalized requests and their
@@ -86,6 +90,7 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 		names:    make(map[Module]string),
 		trackers: make(map[Module]*tracker),
 		pending:  make(map[ServerAndID]pendingRequest),
+		target:   make(map[targetData]uint64),
 		stopCh:   make(chan chan struct{}),
 		// Note: testWaitCh should not have capacity in order to ensure
 		// that after a trigger happens testWaitCh will block until the resulting
@@ -94,6 +99,13 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 		//testWaitCh: make(chan struct{}),
 	}
 	return s
+}
+
+func (s *Scheduler) RegisterTarget(t targetData) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.target[t] = 0
 }
 
 // RegisterModule registers a module. Should be called before starting the scheduler.
@@ -155,7 +167,7 @@ func (s *Scheduler) Start() {
 // Stop stops the scheduler.
 func (s *Scheduler) Stop() {
 	s.lock.Lock()
-	for server, _ := range s.servers {
+	for server := range s.servers {
 		server.unsubscribe()
 	}
 	s.servers = nil
@@ -171,6 +183,9 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) syncLoop() {
 	for {
 		s.processModules()
+		for s.targetChanged() {
+			s.processModules()
+		}
 	loop:
 		for {
 			select {
@@ -185,12 +200,22 @@ func (s *Scheduler) syncLoop() {
 	}
 }
 
+func (s *Scheduler) targetChanged() (changed bool) {
+	for target, counter := range s.target {
+		if newCounter := target.ChangeCounter(); newCounter != counter {
+			s.target[target] = newCounter
+			changed = true
+		}
+	}
+	return
+}
+
 // processModules runs an entire processing round, calling the Process functions
 // of all modules, passing all relevant events.
 func (s *Scheduler) processModules() {
 	s.lock.Lock()
 	servers := make(serverSet)
-	for server, _ := range s.servers {
+	for server := range s.servers {
 		if ok, _ := server.canRequestNow(); ok {
 			servers[server] = struct{}{}
 		}
@@ -225,10 +250,7 @@ func (s *Scheduler) processModules() {
 			}
 		}
 		log.Debug("Processing module", "name", s.names[module], "responses", respCount, "fails", failCount, "timeouts", timeoutCount)
-
-		if module.Process(tracker, append(serverEvents, requestEvents...)) {
-			s.Trigger()
-		}
+		module.Process(tracker, append(serverEvents, requestEvents...))
 	}
 }
 
