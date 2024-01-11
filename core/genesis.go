@@ -492,11 +492,11 @@ func (g *Genesis) ToBlock() *types.Block {
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
 		if conf.IsShanghai(num) {
-			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
+			head.WithdrawalsHash = nil
 			withdrawals = nil
 		}
 		if conf.IsCancun(num) {
-			head.ParentBeaconRoot = new(common.Hash)
+			head.ParentBeaconRoot = nil
 			head.ExcessBlobGas = nil
 			head.BlobGasUsed = nil
 		}

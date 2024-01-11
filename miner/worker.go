@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -1257,19 +1256,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
 	}
-	// Apply EIP-4844, EIP-4788.
-	if w.chainConfig.IsCancun(header.Number) {
-		var excessBlobGas uint64
-		if w.chainConfig.IsCancun(parent.Number) {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
-		} else {
-			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
-			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0)
-		}
-		header.BlobGasUsed = new(uint64)
-		header.ExcessBlobGas = &excessBlobGas
-		header.ParentBeaconRoot = genParams.beaconRoot
-	}
+
+	header.BlobGasUsed = nil
+	header.ExcessBlobGas = nil
+	header.ParentBeaconRoot = nil
+
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		switch err.(type) {
