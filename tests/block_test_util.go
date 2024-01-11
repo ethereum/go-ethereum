@@ -128,7 +128,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// Commit genesis state
 	gspec := t.genesis(config)
 	triedb := trie.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb, nil)
+	gblock, err := gspec.Commit(db, triedb)
 	if err != nil {
 		return err
 	}
