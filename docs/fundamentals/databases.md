@@ -8,7 +8,7 @@ Since v1.9.0, Geth has divided its database into two parts. Recent blocks and st
 ## Recent blocks
 
 Geth stores recent blocks in a LevelDB database. This is a persistent key-value store that can be queried very quickly. The LevelDB database is supposed to be run on top of a fast SSD hard disk so that the disk IO is not bottlenecked by the underlying hardware. In addition to basic storage, the LevelDB database supports batch writes and iterations over the keyspace in binary-alphabetical order.
-The database is periodically compacted to reduce the operational cost of accessing indivdual items. This is achieved by flattening the underlying data store for a given range of keys. Any deleted or overwritten items in that key range are removed and the surviving data is reorganized for efficiency.
+The database is periodically compacted to reduce the operational cost of accessing individual items. This is achieved by flattening the underlying data store for a given range of keys. Any deleted or overwritten items in that key range are removed and the surviving data is reorganized for efficiency.
 
 Geth also tracks several performance metrics for the LevelDB database that can be monitored via the metrics subsystem. These are:
 
