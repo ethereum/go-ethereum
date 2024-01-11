@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"golang.org/x/exp/maps"
@@ -74,10 +75,11 @@ type Firehose struct {
 	latestCallStartSuicided bool
 }
 
+const FirehoseProtocolVersion = "3.0"
+
 func NewFirehoseLogger() *Firehose {
 	// FIXME: Where should we put our actual INIT line?
-	// FIXME: Pickup version from go-ethereum (PR comment)
-	printToFirehose("INIT", "2.3", "geth", "1.12.0")
+	printToFirehose("INIT", FirehoseProtocolVersion, "geth", params.Version)
 
 	return &Firehose{
 		// Global state
@@ -460,12 +462,6 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		input = nil
 	}
 
-	v := firehoseBigIntFromNative(value)
-	if callType == pbeth.CallType_DELEGATE {
-		// If it's a delegate call, the there should be a call in the stack and value should be parent's value
-		v = f.callStack.Peek().Value
-	}
-
 	call := &pbeth.Call{
 		// Known Firehose issue: Ref 042a2ff03fd623f151d7726314b8aad6 (see below)
 		//
@@ -477,7 +473,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Address:  to.Bytes(),
 		// We need to clone `input` received by the tracer as it's re-used within Geth!
 		Input:    bytes.Clone(input),
-		Value:    v,
+		Value:    firehoseBigIntFromNative(value),
 		GasLimit: gas,
 	}
 
