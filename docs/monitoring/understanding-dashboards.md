@@ -39,7 +39,7 @@ Disk tracks the rate that data is written to (plotted as `write`) or read from (
 
 #### Goroutines
 
-Tracks the total number of active goroutines being used by Geth. Goroutines are lighweight threads managed by the Go runtime, they allow processes to
+Tracks the total number of active goroutines being used by Geth. Goroutines are lightweight threads managed by the Go runtime, they allow processes to
 execute concurrently.
 
 ![The goroutine panel](/images/docs/grafana/goroutines.png)
