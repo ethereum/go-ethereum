@@ -121,7 +121,7 @@ Like with GPU mining, an etherbase account must be set. This defaults to the pri
 geth --miner.etherbase '0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10' --mine
 ```
 
-If there is no account available an account wil be created and automatically configured to be the coinbase. The Javascript console can be used to reset the etherbase account at runtime:
+If there is no account available an account will be created and automatically configured to be the coinbase. The Javascript console can be used to reset the etherbase account at runtime:
 
 ```sh
 miner.setEtherbase(eth.accounts[2])
