@@ -34,20 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Backend is a simulated blockchain. You can use it to test your contracts or
-// other code that interacts with the Ethereum chain.
-type Backend struct {
-	eth    *eth.Ethereum
-	beacon *catalyst.SimulatedBeacon
-	client simClient
-}
-
-// simClient wraps ethclient. This exists to prevent extracting ethclient.Client
-// from the Client interface returned by Backend.
-type simClient struct {
-	*ethclient.Client
-}
-
 // Client exposes the methods provided by the Ethereum RPC client.
 type Client interface {
 	ethereum.BlockNumberReader
@@ -66,32 +52,51 @@ type Client interface {
 	ethereum.ChainIDReader
 }
 
+// simClient wraps ethclient. This exists to prevent extracting ethclient.Client
+// from the Client interface returned by Backend.
+type simClient struct {
+	*ethclient.Client
+}
+
+// Backend is a simulated blockchain. You can use it to test your contracts or
+// other code that interacts with the Ethereum chain.
+type Backend struct {
+	eth    *eth.Ethereum
+	beacon *catalyst.SimulatedBeacon
+	client simClient
+}
+
 // NewBackend creates a new simulated blockchain that can be used as a backend for
 // contract bindings in unit tests.
 //
 // A simulated backend always uses chainID 1337.
-func NewBackend(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
-	// Configure the node object
+func NewBackend(alloc core.GenesisAlloc, gasLimit uint64, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
+	// Create the default configurations for the outer node shell and the Ethereum
+	// service to mutate with the options afterwards
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{NoDiscovery: true}
-	stack, err := node.New(&nodeConf)
-	if err != nil {
-		panic(err) // this should never happen
-	}
-	// Configure the Ethereum service on the node
-	conf := ethconfig.Defaults
-	conf.Genesis = &core.Genesis{
+
+	ethConf := ethconfig.Defaults
+	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	conf.Miner.GasCeil = gasLimit
-	conf.RPCGasCap = 10 * gasLimit
-	conf.SyncMode = downloader.FullSync
-	conf.TxPool.NoLocals = true
+	ethConf.Miner.GasCeil = gasLimit
+	ethConf.RPCGasCap = 10 * gasLimit
+	ethConf.SyncMode = downloader.FullSync
+	ethConf.TxPool.NoLocals = true
 
-	sim, err := newWithNode(stack, &conf, 0)
+	for _, option := range options {
+		option(&nodeConf, &ethConf)
+	}
+	// Assemble the Ethereum stack to run the chain with
+	stack, err := node.New(&nodeConf)
+	if err != nil {
+		panic(err) // this should never happen
+	}
+	sim, err := newWithNode(stack, &ethConf, 0)
 	if err != nil {
 		panic(err) // this should never happen
 	}
