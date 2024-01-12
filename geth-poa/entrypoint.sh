@@ -1,6 +1,7 @@
 #!/bin/sh
 set -exu
 
+GETH_BIN_PATH=${GETH_BIN_PATH:-geth}
 GENESIS_L1_PATH=${GENESIS_L1_PATH:-/genesis.json}
 VERBOSITY=3
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
@@ -16,7 +17,7 @@ if [ ! -d "$GETH_KEYSTORE_DIR" ] && [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "$GETH_KEYSTORE_DIR missing, running account import"
 	echo -n "pwd" > "$GETH_DATA_DIR"/password
 	echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
-	geth --verbosity="$VERBOSITY" \
+	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
 		--nousb \
 		account import \
 		--datadir="$GETH_DATA_DIR" \
@@ -30,7 +31,7 @@ fi
 if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 	echo "$GETH_CHAINDATA_DIR missing, running init"
 	echo "Initializing genesis."
-	geth --verbosity="$VERBOSITY" \
+	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
 		--nousb \
 		--state.scheme=path \
 		--db.engine=pebble \
@@ -49,7 +50,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	# Generate boot.key
 	echo "$BOOT_KEY" > $GETH_DATA_DIR/boot.key
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
@@ -85,7 +86,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30311 \
@@ -129,7 +130,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30311 \
