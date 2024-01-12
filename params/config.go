@@ -518,7 +518,6 @@ type ChainConfig struct {
 	CancunBlock   *big.Int `json:"cancunBlock,omitempty"`   // Cancun switch Block (nil = no fork, 0 = already on cancun)
 	PragueBlock   *big.Int `json:"pragueBlock,omitempty"`   // Prague switch Block (nil = no fork, 0 = already on prague)
 	VerkleBlock   *big.Int `json:"verkleBlock,omitempty"`   // Verkle switch Block (nil = no fork, 0 = already on verkle)
-	NapoliBlock   *big.Int `json:"napoliBlock,omitempty"`   // Napoli switch Block (nil = no fork, 0 = already on Napoli)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -858,11 +857,6 @@ func (c *ChainConfig) IsPrague(num *big.Int) bool {
 	return isBlockForked(c.PragueBlock, num)
 }
 
-// IsNapoli returns whether num is either equal to the Napoli fork block or greater.
-func (c *ChainConfig) IsNapoli(num *big.Int) bool {
-	return isBlockForked(c.NapoliBlock, num)
-}
-
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
@@ -1151,7 +1145,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
-	IsVerkle, IsNapoli                                      bool
+	IsVerkle                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1177,6 +1171,5 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsShanghai:       c.IsShanghai(num),
 		IsCancun:         c.IsCancun(num),
 		IsPrague:         c.IsPrague(num),
-		IsNapoli:         c.IsNapoli(num),
 	}
 }
