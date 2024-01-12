@@ -21,19 +21,19 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 )
 
-// WithGasLimit configures the simulated backend to target a specific gas limit
+// WithBlockGasLimit configures the simulated backend to target a specific gas limit
 // when producing blocks.
-func WithGasLimit(gaslimit uint64) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+func WithBlockGasLimit(gaslimit uint64) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
 	return func(nodeConf *node.Config, ethConf *ethconfig.Config) {
 		ethConf.Genesis.GasLimit = gaslimit
 		ethConf.Miner.GasCeil = gaslimit
 	}
 }
 
-// WithCallGasCap configures the simulated backend to cap eth_calls to a specific
+// WithCallGasLimit configures the simulated backend to cap eth_calls to a specific
 // gas limit when running client operations.
-func WithCallGasCap(gascap uint64) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+func WithCallGasLimit(gaslimit uint64) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
 	return func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-		ethConf.RPCGasCap = gascap
+		ethConf.RPCGasCap = gaslimit
 	}
 }

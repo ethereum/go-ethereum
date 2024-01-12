@@ -29,9 +29,9 @@ import (
 
 // Tests that the simulator starts with the initial gas limit in the genesis block,
 // and that it keeps the same target value.
-func TestWithGasLimitOption(t *testing.T) {
+func TestWithBlockGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
-	sim := NewBackend(core.GenesisAlloc{}, WithGasLimit(12_345_678))
+	sim := NewBackend(core.GenesisAlloc{}, WithBlockGasLimit(12_345_678))
 	defer sim.Close()
 
 	client := sim.Client()
@@ -54,11 +54,11 @@ func TestWithGasLimitOption(t *testing.T) {
 }
 
 // Tests that the simulator honors the RPC call caps set by the options.
-func TestWithCallGasCapOption(t *testing.T) {
+func TestWithCallGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
 	sim := NewBackend(core.GenesisAlloc{
 		testAddr: {Balance: big.NewInt(10000000000000000)},
-	}, WithCallGasCap(params.TxGas-1))
+	}, WithCallGasLimit(params.TxGas-1))
 	defer sim.Close()
 
 	client := sim.Client()
