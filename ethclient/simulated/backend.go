@@ -66,70 +66,64 @@ type Client interface {
 	ethereum.ChainIDReader
 }
 
-// New creates a new binding backend using a simulated blockchain
-// for testing purposes.
+// NewBackend creates a new simulated blockchain that can be used as a backend for
+// contract bindings in unit tests.
+//
 // A simulated backend always uses chainID 1337.
-func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
-	// Setup the node object
+func NewBackend(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
+	// Configure the node object
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{NoDiscovery: true}
 	stack, err := node.New(&nodeConf)
 	if err != nil {
-		// This should never happen, if it does, please open an issue
-		panic(err)
+		panic(err) // this should never happen
 	}
-
-	// Setup ethereum
-	genesis := core.Genesis{
+	// Configure the Ethereum service on the node
+	conf := ethconfig.Defaults
+	conf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	conf := ethconfig.Defaults
-	conf.Genesis = &genesis
+	conf.Miner.GasCeil = gasLimit
+	conf.RPCGasCap = 10 * gasLimit
 	conf.SyncMode = downloader.FullSync
 	conf.TxPool.NoLocals = true
+
 	sim, err := newWithNode(stack, &conf, 0)
 	if err != nil {
-		// This should never happen, if it does, please open an issue
-		panic(err)
+		panic(err) // this should never happen
 	}
 	return sim
 }
 
-// newWithNode sets up a simulated backend on an existing node
-// this allows users to do persistent simulations.
-// The provided node must not be started and will be started by newWithNode
+// newWithNode sets up a simulated backend on an existing node. The provided node
+// must not be started and will be started by this method.
 func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
 	}
-
 	// Register the filter system
 	filterSystem := filters.NewFilterSystem(backend.APIBackend, filters.Config{})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, false),
 	}})
-
 	// Start the node
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
-
 	// Set up the simulated beacon
 	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend)
 	if err != nil {
 		return nil, err
 	}
-
 	// Reorg our chain back to genesis
 	if err := beacon.Fork(backend.BlockChain().GetCanonicalHash(0)); err != nil {
 		return nil, err
 	}
-
 	return &Backend{
 		eth:    backend,
 		beacon: beacon,
