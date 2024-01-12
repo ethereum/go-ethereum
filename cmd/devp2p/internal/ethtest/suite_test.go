@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"runtime"
 	"testing"
 	"time"
 
@@ -62,11 +61,10 @@ func TestEthSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
-	skipReason, skip := skipSlow()
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
-			if test.Slow && skip {
-				t.Skipf("%s: %s", test.Name, skipReason)
+			if test.Slow && testing.Short() {
+				t.Skipf("%s: skipping in -short mode", test.Name)
 			}
 			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
@@ -152,14 +150,4 @@ func setupGeth(stack *node.Node, dir string) error {
 	}
 	_, err = backend.BlockChain().InsertChain(chain.blocks[1:])
 	return err
-}
-
-func skipSlow() (string, bool) {
-	if testing.Short() {
-		return "skipped in -short mode", true
-	}
-	if runtime.GOARCH == "386" {
-		return "skipped on 386 arch", true
-	}
-	return "", false
 }
