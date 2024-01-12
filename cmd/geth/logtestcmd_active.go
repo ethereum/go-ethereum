@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
@@ -51,9 +50,6 @@ func (c customQuotedStringer) String() string {
 // logTest is an entry point which spits out some logs. This is used by testing
 // to verify expected outputs
 func logTest(ctx *cli.Context) error {
-	// clear field padding map
-	debug.ResetLogging()
-
 	{ // big.Int
 		ba, _ := new(big.Int).SetString("111222333444555678999", 10)    // "111,222,333,444,555,678,999"
 		bb, _ := new(big.Int).SetString("-111222333444555678999", 10)   // "-111,222,333,444,555,678,999"
