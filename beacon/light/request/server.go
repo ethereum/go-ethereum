@@ -28,6 +28,7 @@ import (
 
 var (
 	// request events
+	EvRequest  = &EventType{Name: "request", requestEvent: true}  // data: RequestResponse; sent by Scheduler
 	EvResponse = &EventType{Name: "response", requestEvent: true} // data: RequestResponse; sent by requestServer
 	EvFail     = &EventType{Name: "fail", requestEvent: true}     // data: RequestResponse; sent by requestServer
 	EvTimeout  = &EventType{Name: "timeout", requestEvent: true}  // data: RequestResponse; sent by serverWithTimeout
@@ -71,7 +72,7 @@ type server interface {
 	subscribe(eventCallback func(event Event))
 	canRequestNow() (bool, float32)
 	sendRequest(request Request) ID
-	fail(desc string)
+	Fail(desc string)
 	unsubscribe()
 }
 
@@ -299,7 +300,7 @@ func (s *serverWithLimits) eventCallback(event Event) {
 			s.sendEvent = false
 		}
 		if event.Type == EvFail {
-			s.failLocked("failed request")
+			s.fail("failed request")
 		}
 	}
 	childEventCb := s.childEventCb
@@ -404,15 +405,15 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 
 // fail reports that a response from the server was found invalid by the processing
 // Module, disabling new requests for a dynamically adjused time period.
-func (s *serverWithLimits) fail(desc string) {
+func (s *serverWithLimits) Fail(desc string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.failLocked(desc)
+	s.fail(desc)
 }
 
-// failLocked calculates the dynamic failure delay and applies it.
-func (s *serverWithLimits) failLocked(desc string) {
+// fail calculates the dynamic failure delay and applies it.
+func (s *serverWithLimits) fail(desc string) {
 	log.Debug("Server error", "description", desc)
 	s.failureDelay *= 2
 	now := s.clock.Now()

@@ -67,26 +67,29 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	return s
 }
 
-// Process implements request.Module
-func (s *HeadSync) Process(tracker request.Tracker, events []request.Event) {
+func (s *HeadSync) HandleEvent(event request.Event) {
+	switch event.Type {
+	case EvNewHead:
+		s.setServerHead(event.Server, event.Data.(types.HeadInfo))
+	case EvNewSignedHead:
+		s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
+	case request.EvUnregistered:
+		s.setServerHead(event.Server, types.HeadInfo{})
+		delete(s.serverHeads, event.Server)
+		delete(s.unvalidatedHeads, event.Server)
+	}
+}
+
+func (s *HeadSync) Process() {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
 		s.processUnvalidatedHeads()
 	}
-	for _, event := range events {
-		switch event.Type {
-		case EvNewHead:
-			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
-		case EvNewSignedHead:
-			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
-		case request.EvUnregistered:
-			s.setServerHead(event.Server, types.HeadInfo{})
-			delete(s.serverHeads, event.Server)
-			delete(s.unvalidatedHeads, event.Server)
-		}
-	}
-	return
+}
+
+func (s *HeadSync) MakeRequest(server request.Server) (request.Request, float32) {
+	return nil, 0
 }
 
 // newSignedHead handles received signed head; either validates it if the chain
@@ -102,9 +105,6 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 // processUnvalidatedHeads iterates the list of unvalidated heads and validates
 // those which can be validated.
 func (s *HeadSync) processUnvalidatedHeads() {
-	if !s.chainInit {
-		return
-	}
 	for server, signedHead := range s.unvalidatedHeads {
 		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
 			s.headTracker.Validate(signedHead)

@@ -53,27 +53,25 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	}
 }
 
-// Process implements request.Module
-func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Event) {
-	// iterate events and add valid responses to recentBlocks
-	for _, event := range events {
-		switch event.Type {
-		case request.EvResponse, request.EvFail, request.EvTimeout:
-			_, req, resp := event.RequestInfo()
-			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
-			if resp != nil {
-				block := resp.(*capella.BeaconBlock)
-				s.recentBlocks.Add(blockRoot, block)
-			}
-			delete(s.locked, blockRoot)
-		case sync.EvNewHead:
-			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
-		case request.EvUnregistered:
-			delete(s.serverHeads, event.Server)
+func (s *beaconBlockSync) HandleEvent(event request.Event) {
+	switch event.Type {
+	case request.EvResponse, request.EvFail, request.EvTimeout:
+		_, req, resp := event.RequestInfo()
+		blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
+		if resp != nil {
+			block := resp.(*capella.BeaconBlock)
+			s.recentBlocks.Add(blockRoot, block)
 		}
+		delete(s.locked, blockRoot)
+	case sync.EvNewHead:
+		s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
+	case request.EvUnregistered:
+		delete(s.serverHeads, event.Server)
 	}
+}
 
-	// send validated head block or request it if unavailable
+func (s *beaconBlockSync) Process() {
+	// send validated head block
 	if vh := s.headTracker.ValidatedHead(); vh != (types.SignedHeader{}) {
 		validatedHead := vh.Header.Hash()
 		if headBlock, ok := s.recentBlocks.Get(validatedHead); ok && headBlock != s.lastHeadBlock {
@@ -82,37 +80,27 @@ func (s *beaconBlockSync) Process(tracker request.Tracker, events []request.Even
 				s.lastHeadBlock = headBlock
 			default:
 			}
-		} else {
-			s.tryRequestBlock(tracker, validatedHead, false)
 		}
-	}
-	// request prefetch head
-	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
-		s.tryRequestBlock(tracker, prefetchHead, true)
 	}
 }
 
-// tryRequestBlock tries to send a block request for the given root if the block
-// is not available and the root is not locked by another pending request.
-// If prefetch is true then the request is only sent to a server whose latest
-// announced head has the same block root. If prefetch is false then a validated
-// block is requested which is expected to be available at every properly synced
-// server, therefore no such restriction is applied.
-func (s *beaconBlockSync) tryRequestBlock(tracker request.Tracker, blockRoot common.Hash, prefetch bool) {
-	if _, ok := s.recentBlocks.Get(blockRoot); ok {
-		return
-	}
-	if _, ok := s.locked[blockRoot]; ok {
-		return
-	}
-	if _, ok := tracker.TryRequest(func(server request.Server) (request.Request, float32) {
-		if prefetch && s.serverHeads[server] != blockRoot {
-			// when requesting a not yet validated head, request it from someone
-			// who has announced it already
-			return nil, 0
+func (s *beaconBlockSync) MakeRequest(server request.Server) (request.Request, float32) {
+	// request validated head block if unavailable and not yet requested
+	if vh := s.headTracker.ValidatedHead(); vh != (types.SignedHeader{}) {
+		validatedHead := vh.Header.Hash()
+		if _, ok := s.recentBlocks.Get(validatedHead); !ok {
+			if _, ok := s.locked[validatedHead]; !ok {
+				return sync.ReqBeaconBlock(validatedHead), 1
+			}
 		}
-		return sync.ReqBeaconBlock(blockRoot), 0
-	}); ok {
-		s.locked[blockRoot] = struct{}{}
 	}
+	// request prefetch head if the given server has announced it
+	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) && prefetchHead != s.serverHeads[server] {
+		if _, ok := s.recentBlocks.Get(prefetchHead); !ok {
+			if _, ok := s.locked[prefetchHead]; !ok {
+				return sync.ReqBeaconBlock(prefetchHead), 0
+			}
+		}
+	}
+	return nil, 0
 }
