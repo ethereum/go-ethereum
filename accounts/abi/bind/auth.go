@@ -117,7 +117,7 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore.
+// a decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
 		return nil, ErrNoChainID

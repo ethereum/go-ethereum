@@ -24,6 +24,7 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -41,8 +42,7 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 			case common.Address:
 				copy(topic[common.HashLength-common.AddressLength:], rule[:])
 			case *big.Int:
-				blob := rule.Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				copy(topic[:], math.U256Bytes(rule))
 			case bool:
 				if rule {
 					topic[common.HashLength-1] = 1
@@ -75,7 +75,7 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 				copy(topic[:], hash[:])
 
 			default:
-				// todo(rjl493456442) according solidity documentation, indexed event
+				// todo(rjl493456442) according to solidity documentation, indexed event
 				// parameters that are not value types i.e. arrays and structs are not
 				// stored directly but instead a keccak256-hash of an encoding is stored.
 				//

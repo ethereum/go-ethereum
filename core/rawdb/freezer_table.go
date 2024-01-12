@@ -467,6 +467,20 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	return nil
 }
 
+// sizeHidden returns the total data size of hidden items in the freezer table.
+// This function assumes the lock is already held.
+func (t *freezerTable) sizeHidden() (uint64, error) {
+	hidden, offset := t.itemHidden.Load(), t.itemOffset.Load()
+	if hidden <= offset {
+		return 0, nil
+	}
+	indices, err := t.getIndices(hidden-1, 1)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(indices[1].offset), nil
+}
+
 // truncateTail discards any recent data before the provided threshold number.
 func (t *freezerTable) truncateTail(items uint64) error {
 	t.lock.Lock()
@@ -495,6 +509,12 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		newTail.unmarshalBinary(buffer)
 		newTailId = newTail.filenum
 	}
+	// Save the old size for metrics tracking. This needs to be done
+	// before any updates to either itemHidden or itemOffset.
+	oldSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
 	// Update the virtual tail marker and hidden these entries in table.
 	t.itemHidden.Store(items)
 	if err := writeMetadata(t.meta, newMetadata(items)); err != nil {
@@ -509,18 +529,12 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	if t.tailId > newTailId {
 		return fmt.Errorf("invalid index, tail-file %d, item-file %d", t.tailId, newTailId)
 	}
-	// Hidden items exceed the current tail file, drop the relevant
-	// data files. We need to truncate, save the old size for metrics
-	// tracking.
-	oldSize, err := t.sizeNolock()
-	if err != nil {
-		return err
-	}
 	// Count how many items can be deleted from the file.
 	var (
 		newDeleted = items
 		deleted    = t.itemOffset.Load()
 	)
+	// Hidden items exceed the current tail file, drop the relevant data files.
 	for current := items - 1; current >= deleted; current -= 1 {
 		if _, err := t.index.ReadAt(buffer, int64((current-deleted+1)*indexEntrySize)); err != nil {
 			return err
@@ -680,6 +694,7 @@ func (t *freezerTable) releaseFilesBefore(num uint32, remove bool) {
 func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 	// Apply the table-offset
 	from = from - t.itemOffset.Load()
+
 	// For reading N items, we need N+1 indices.
 	buffer := make([]byte, (count+1)*indexEntrySize)
 	if _, err := t.index.ReadAt(buffer, int64(from*indexEntrySize)); err != nil {
@@ -870,14 +885,18 @@ func (t *freezerTable) size() (uint64, error) {
 	return t.sizeNolock()
 }
 
-// sizeNolock returns the total data size in the freezer table without obtaining
-// the mutex first.
+// sizeNolock returns the total data size in the freezer table. This function
+// assumes the lock is already held.
 func (t *freezerTable) sizeNolock() (uint64, error) {
 	stat, err := t.index.Stat()
 	if err != nil {
 		return 0, err
 	}
-	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
+	hidden, err := t.sizeHidden()
+	if err != nil {
+		return 0, err
+	}
+	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size()) - hidden
 	return total, nil
 }
 

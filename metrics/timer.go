@@ -106,20 +106,18 @@ func (t *StandardTimer) Time(f func()) {
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event.
+// Record the duration of an event, in nanoseconds.
 func (t *StandardTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.histogram.Update(int64(d))
+	t.histogram.Update(d.Nanoseconds())
 	t.meter.Mark(1)
 }
 
 // Record the duration of an event that started at a time and ends now.
+// The record uses nanoseconds.
 func (t *StandardTimer) UpdateSince(ts time.Time) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	t.histogram.Update(int64(time.Since(ts)))
-	t.meter.Mark(1)
+	t.Update(time.Since(ts))
 }
 
 // timerSnapshot is a read-only copy of another Timer.

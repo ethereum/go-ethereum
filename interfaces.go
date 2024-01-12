@@ -199,6 +199,16 @@ type GasPricer interface {
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 }
 
+// GasPricer1559 provides access to the EIP-1559 gas price oracle.
+type GasPricer1559 interface {
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+}
+
+// FeeHistoryReader provides access to the fee history oracle.
+type FeeHistoryReader interface {
+	FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*FeeHistory, error)
+}
+
 // FeeHistory provides recent fee market data that consumers can use to determine
 // a reasonable maxPriorityFeePerGas value.
 type FeeHistory struct {
@@ -238,4 +248,14 @@ type GasEstimator interface {
 // pending state.
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
+}
+
+// BlockNumberReader provides access to the current block number.
+type BlockNumberReader interface {
+	BlockNumber(ctx context.Context) (uint64, error)
+}
+
+// ChainIDReader provides access to the chain ID.
+type ChainIDReader interface {
+	ChainID(ctx context.Context) (*big.Int, error)
 }

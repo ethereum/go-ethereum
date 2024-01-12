@@ -65,7 +65,7 @@ var (
 	pooltipGauge = metrics.NewRegisteredGauge("blobpool/pooltip", nil)
 
 	// addwait/time, resetwait/time and getwait/time track the rough health of
-	// the pool and wether or not it's capable of keeping up with the load from
+	// the pool and whether or not it's capable of keeping up with the load from
 	// the network.
 	addwaitHist   = metrics.NewRegisteredHistogram("blobpool/addwait", nil, metrics.NewExpDecaySample(1028, 0.015))
 	addtimeHist   = metrics.NewRegisteredHistogram("blobpool/addtime", nil, metrics.NewExpDecaySample(1028, 0.015))
