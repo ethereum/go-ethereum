@@ -28,10 +28,10 @@ import (
 )
 
 // Tests that the simulator starts with the initial gas limit in the genesis block,
-// but that it can target a different value.
+// and that it keeps the same target value.
 func TestWithGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
-	sim := NewBackend(core.GenesisAlloc{}, 30_000_000, WithGasLimit(29_940_000))
+	sim := NewBackend(core.GenesisAlloc{}, WithGasLimit(12_345_678))
 	defer sim.Close()
 
 	client := sim.Client()
@@ -39,8 +39,8 @@ func TestWithGasLimitOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve genesis block: %v", err)
 	}
-	if genesis.GasLimit() != 30_000_000 {
-		t.Errorf("genesis gas limit mismatch: have %v, want %v", genesis.GasLimit(), 30_000_000)
+	if genesis.GasLimit() != 12_345_678 {
+		t.Errorf("genesis gas limit mismatch: have %v, want %v", genesis.GasLimit(), 12_345_678)
 	}
 	// Produce a number of blocks and verify the locked in gas target
 	sim.Commit()
@@ -48,24 +48,8 @@ func TestWithGasLimitOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve head block: %v", err)
 	}
-	if head.GasLimit() != 29_970_705 {
-		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), 29_970_705)
-	}
-	sim.Commit()
-	head, err = client.BlockByNumber(context.Background(), big.NewInt(2))
-	if err != nil {
-		t.Fatalf("failed to retrieve head block: %v", err)
-	}
-	if head.GasLimit() != 29_941_438 {
-		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), 29_941_438)
-	}
-	sim.Commit()
-	head, err = client.BlockByNumber(context.Background(), big.NewInt(3))
-	if err != nil {
-		t.Fatalf("failed to retrieve head block: %v", err)
-	}
-	if head.GasLimit() != 29_940_000 {
-		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), 29_940_000)
+	if head.GasLimit() != 12_345_678 {
+		t.Errorf("head gas limit mismatch: have %v, want %v", head.GasLimit(), 12_345_678)
 	}
 }
 
@@ -74,7 +58,7 @@ func TestWithCallGasCapOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
 	sim := NewBackend(core.GenesisAlloc{
 		testAddr: {Balance: big.NewInt(10000000000000000)},
-	}, 30_000_000, WithCallGasCap(params.TxGas-1))
+	}, WithCallGasCap(params.TxGas-1))
 	defer sim.Close()
 
 	client := sim.Client()

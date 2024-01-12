@@ -70,7 +70,7 @@ type Backend struct {
 // contract bindings in unit tests.
 //
 // A simulated backend always uses chainID 1337.
-func NewBackend(alloc core.GenesisAlloc, gasLimit uint64, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
+func NewBackend(alloc core.GenesisAlloc, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
 	// Create the default configurations for the outer node shell and the Ethereum
 	// service to mutate with the options afterwards
 	nodeConf := node.DefaultConfig
@@ -80,11 +80,9 @@ func NewBackend(alloc core.GenesisAlloc, gasLimit uint64, options ...func(nodeCo
 	ethConf := ethconfig.Defaults
 	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
-		GasLimit: gasLimit,
+		GasLimit: ethconfig.Defaults.Miner.GasCeil,
 		Alloc:    alloc,
 	}
-	ethConf.Miner.GasCeil = gasLimit
-	ethConf.RPCGasCap = 10 * gasLimit
 	ethConf.SyncMode = downloader.FullSync
 	ethConf.TxPool.NoLocals = true
 

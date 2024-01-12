@@ -43,7 +43,7 @@ func simTestBackend(testAddr common.Address) *Backend {
 	return NewBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
-		}, 10000000,
+		},
 	)
 }
 
@@ -71,7 +71,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 }
 
 func TestNewBackend(t *testing.T) {
-	sim := NewBackend(core.GenesisAlloc{}, 30_000_000)
+	sim := NewBackend(core.GenesisAlloc{})
 	defer sim.Close()
 
 	client := sim.Client()
@@ -94,7 +94,7 @@ func TestNewBackend(t *testing.T) {
 }
 
 func TestAdjustTime(t *testing.T) {
-	sim := NewBackend(core.GenesisAlloc{}, 10_000_000)
+	sim := NewBackend(core.GenesisAlloc{})
 	defer sim.Close()
 
 	client := sim.Client()
