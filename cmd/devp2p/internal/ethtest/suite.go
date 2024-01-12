@@ -105,6 +105,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
+}
 
 // headersMatch returns whether the received headers match the given request
 func headersMatch(expected []*types.Header, headers []*types.Header) bool {
