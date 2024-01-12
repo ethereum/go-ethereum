@@ -41,7 +41,7 @@ else
 fi
 
 # Obtain assigned container IP for p2p
-NODE_IP=$(hostname -i)
+NODE_IP=${NODE_IP:-$(hostname -i)}
 
 if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	echo "Starting bootnode"
@@ -56,11 +56,11 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--http \
 		--http.corsdomain="*" \
 		--http.vhosts="*" \
-		--http.addr=0.0.0.0 \
+		--http.addr="$NODE_IP" \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
 		--ws \
-		--ws.addr=0.0.0.0 \
+		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
 		--ws.origins="*" \
 		--ws.api=debug,eth,txpool,net,engine \
@@ -71,10 +71,10 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--networkid=$CHAIN_ID \
 		--nousb \
 		--metrics \
-		--metrics.addr=0.0.0.0 \
+		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
   		--pprof \
-    		--pprof.addr=0.0.0.0 \
+    		--pprof.addr="$NODE_IP" \
         	--pprof.port=60601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
@@ -96,7 +96,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--http \
 		--http.corsdomain="*" \
 		--http.vhosts="*" \
-		--http.addr=0.0.0.0 \
+		--http.addr="$NODE_IP" \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
 		--bootnodes $BOOTNODE_ENDPOINT \
@@ -109,18 +109,18 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--nousb \
 		--netrestrict $NET_RESTRICT \
 		--metrics \
-		--metrics.addr=0.0.0.0 \
+		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
     		--pprof \
-    		--pprof.addr=0.0.0.0 \
+    		--pprof.addr="$NODE_IP" \
         	--pprof.port=60601 \
 		--ws \
-		--ws.addr=0.0.0.0 \
+		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
 		--ws.origins="*" \
 		--ws.api=debug,eth,txpool,net,engine \
 		--rpc.allow-unprotected-txs \
-		--authrpc.addr="0.0.0.0" \
+		--authrpc.addr="$NODE_IP" \
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
@@ -140,25 +140,25 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--http \
 		--http.corsdomain="*" \
 		--http.vhosts="*" \
-		--http.addr=0.0.0.0 \
+		--http.addr="$NODE_IP" \
 		--http.port="$RPC_PORT" \
 		--http.api=web3,debug,eth,txpool,net,engine \
 		--bootnodes $BOOTNODE_ENDPOINT \
 		--networkid=$CHAIN_ID \
 		--password="$GETH_DATA_DIR"/password \
 		--metrics \
-		--metrics.addr=0.0.0.0 \
+		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
     		--pprof \
-    		--pprof.addr=0.0.0.0 \
+    		--pprof.addr="$NODE_IP" \
         	--pprof.port=60601 \
 		--ws \
-		--ws.addr=0.0.0.0 \
+		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
 		--ws.origins="*" \
 		--ws.api=debug,eth,txpool,net,engine \
 		--rpc.allow-unprotected-txs \
-		--authrpc.addr="0.0.0.0" \
+		--authrpc.addr="$NODE_IP" \
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
