@@ -34,20 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Backend is a simulated blockchain. You can use it to test your contracts or
-// other code that interacts with the Ethereum chain.
-type Backend struct {
-	eth    *eth.Ethereum
-	beacon *catalyst.SimulatedBeacon
-	client simClient
-}
-
-// simClient wraps ethclient. This exists to prevent extracting ethclient.Client
-// from the Client interface returned by Backend.
-type simClient struct {
-	*ethclient.Client
-}
-
 // Client exposes the methods provided by the Ethereum RPC client.
 type Client interface {
 	ethereum.BlockNumberReader
@@ -66,70 +52,81 @@ type Client interface {
 	ethereum.ChainIDReader
 }
 
-// New creates a new binding backend using a simulated blockchain
-// for testing purposes.
+// simClient wraps ethclient. This exists to prevent extracting ethclient.Client
+// from the Client interface returned by Backend.
+type simClient struct {
+	*ethclient.Client
+}
+
+// Backend is a simulated blockchain. You can use it to test your contracts or
+// other code that interacts with the Ethereum chain.
+type Backend struct {
+	eth    *eth.Ethereum
+	beacon *catalyst.SimulatedBeacon
+	client simClient
+}
+
+// NewBackend creates a new simulated blockchain that can be used as a backend for
+// contract bindings in unit tests.
+//
 // A simulated backend always uses chainID 1337.
-func New(alloc core.GenesisAlloc, gasLimit uint64) *Backend {
-	// Setup the node object
+func NewBackend(alloc core.GenesisAlloc, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
+	// Create the default configurations for the outer node shell and the Ethereum
+	// service to mutate with the options afterwards
 	nodeConf := node.DefaultConfig
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{NoDiscovery: true}
-	stack, err := node.New(&nodeConf)
-	if err != nil {
-		// This should never happen, if it does, please open an issue
-		panic(err)
-	}
 
-	// Setup ethereum
-	genesis := core.Genesis{
+	ethConf := ethconfig.Defaults
+	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
-		GasLimit: gasLimit,
+		GasLimit: ethconfig.Defaults.Miner.GasCeil,
 		Alloc:    alloc,
 	}
-	conf := ethconfig.Defaults
-	conf.Genesis = &genesis
-	conf.SyncMode = downloader.FullSync
-	conf.TxPool.NoLocals = true
-	sim, err := newWithNode(stack, &conf, 0)
+	ethConf.SyncMode = downloader.FullSync
+	ethConf.TxPool.NoLocals = true
+
+	for _, option := range options {
+		option(&nodeConf, &ethConf)
+	}
+	// Assemble the Ethereum stack to run the chain with
+	stack, err := node.New(&nodeConf)
 	if err != nil {
-		// This should never happen, if it does, please open an issue
-		panic(err)
+		panic(err) // this should never happen
+	}
+	sim, err := newWithNode(stack, &ethConf, 0)
+	if err != nil {
+		panic(err) // this should never happen
 	}
 	return sim
 }
 
-// newWithNode sets up a simulated backend on an existing node
-// this allows users to do persistent simulations.
-// The provided node must not be started and will be started by newWithNode
+// newWithNode sets up a simulated backend on an existing node. The provided node
+// must not be started and will be started by this method.
 func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
 	}
-
 	// Register the filter system
 	filterSystem := filters.NewFilterSystem(backend.APIBackend, filters.Config{})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, false),
 	}})
-
 	// Start the node
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
-
 	// Set up the simulated beacon
 	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend)
 	if err != nil {
 		return nil, err
 	}
-
 	// Reorg our chain back to genesis
 	if err := beacon.Fork(backend.BlockChain().GetCanonicalHash(0)); err != nil {
 		return nil, err
 	}
-
 	return &Backend{
 		eth:    backend,
 		beacon: beacon,
