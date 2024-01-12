@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math/big"
 	"sync/atomic"
 
@@ -536,10 +537,16 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 	if leftOverGas != 0 {
 		tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
 	}
-
+	var reverted bool
+	if err != nil {
+		reverted = true
+	}
+	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
+		reverted = false
+	}
 	if isRoot {
-		tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err))
+		tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 	} else {
-		tracer.CaptureExit(ret, startGas-leftOverGas, VMErrorFromErr(err))
+		tracer.CaptureExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 	}
 }

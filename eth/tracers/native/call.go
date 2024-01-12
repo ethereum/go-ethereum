@@ -59,7 +59,8 @@ type callFrame struct {
 	Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
-	Value *big.Int `json:"value,omitempty" rlp:"optional"`
+	Value            *big.Int `json:"value,omitempty" rlp:"optional"`
+	revertedSnapshot bool
 }
 
 func (f callFrame) TypeString() string {
@@ -67,16 +68,17 @@ func (f callFrame) TypeString() string {
 }
 
 func (f callFrame) failed() bool {
-	return len(f.Error) > 0
+	return len(f.Error) > 0 && f.revertedSnapshot
 }
 
-func (f *callFrame) processOutput(output []byte, err error) {
+func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 	output = common.CopyBytes(output)
 	if err == nil {
 		f.Output = output
 		return
 	}
 	f.Error = err.Error()
+	f.revertedSnapshot = reverted
 	if f.Type == vm.CREATE || f.Type == vm.CREATE2 {
 		f.To = nil
 	}
@@ -147,8 +149,8 @@ func (t *callTracer) CaptureStart(from common.Address, to common.Address, create
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.callstack[0].processOutput(output, err)
+func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	t.callstack[0].processOutput(output, err, reverted)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -180,7 +182,7 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
 	t.depth--
 	if t.config.OnlyTopCall {
 		return
@@ -195,7 +197,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size -= 1
 
 	call.GasUsed = gasUsed
-	call.processOutput(output, err)
+	call.processOutput(output, err, reverted)
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 

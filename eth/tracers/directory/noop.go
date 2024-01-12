@@ -44,7 +44,7 @@ func (t *NoopTracer) CaptureStart(from common.Address, to common.Address, create
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *NoopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *NoopTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -67,7 +67,7 @@ func (t *NoopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
 func (*NoopTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {}
