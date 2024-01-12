@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -113,7 +113,7 @@ func Transition(ctx *cli.Context) error {
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			tracer, err := directory.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
 			if err != nil {
 				return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}

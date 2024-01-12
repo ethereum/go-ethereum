@@ -22,8 +22,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -38,11 +39,11 @@ type traceWriter struct {
 // Compile-time interface check
 var _ = vm.EVMLogger((*traceWriter)(nil))
 
-func (t *traceWriter) CaptureTxEnd(restGas uint64) {
-	t.inner.CaptureTxEnd(restGas)
+func (t *traceWriter) CaptureTxEnd(receipt *types.Receipt, err error) {
+	t.inner.CaptureTxEnd(receipt, err)
 	defer t.f.Close()
 
-	if tracer, ok := t.inner.(tracers.Tracer); ok {
+	if tracer, ok := t.inner.(directory.Tracer); ok {
 		result, err := tracer.GetResult()
 		if err != nil {
 			log.Warn("Error in tracer", "err", err)
@@ -56,21 +57,23 @@ func (t *traceWriter) CaptureTxEnd(restGas uint64) {
 	}
 }
 
-func (t *traceWriter) CaptureTxStart(gasLimit uint64) { t.inner.CaptureTxStart(gasLimit) }
-func (t *traceWriter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.inner.CaptureStart(env, from, to, create, input, gas, value)
+func (t *traceWriter) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+	t.inner.CaptureTxStart(env, tx, from)
+}
+func (t *traceWriter) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.inner.CaptureStart(from, to, create, input, gas, value)
 }
 
-func (t *traceWriter) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.inner.CaptureEnd(output, gasUsed, err)
+func (t *traceWriter) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	t.inner.CaptureEnd(output, gasUsed, err, reverted)
 }
 
 func (t *traceWriter) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.inner.CaptureEnter(typ, from, to, input, gas, value)
 }
 
-func (t *traceWriter) CaptureExit(output []byte, gasUsed uint64, err error) {
-	t.inner.CaptureExit(output, gasUsed, err)
+func (t *traceWriter) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+	t.inner.CaptureExit(output, gasUsed, err, reverted)
 }
 
 func (t *traceWriter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
@@ -78,4 +81,12 @@ func (t *traceWriter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 }
 func (t *traceWriter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	t.inner.CaptureFault(pc, op, gas, cost, scope, depth, err)
+}
+
+func (t *traceWriter) CaptureKeccakPreimage(hash common.Hash, data []byte) {
+	t.inner.CaptureKeccakPreimage(hash, data)
+}
+
+func (t *traceWriter) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
+	t.inner.OnGasChange(old, new, reason)
 }
