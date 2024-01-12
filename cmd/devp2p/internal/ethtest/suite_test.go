@@ -62,10 +62,11 @@ func TestEthSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
+	skipReason, skip := skipSlow()
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
-			if test.Slow && skipSlow() {
-				t.Skipf("skipped slow test %s", test.Name)
+			if test.Slow && skip {
+				t.Skipf("%s: %s", test.Name, skipReason)
 			}
 			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
@@ -153,6 +154,12 @@ func setupGeth(stack *node.Node, dir string) error {
 	return err
 }
 
-func skipSlow() bool {
-	return testing.Short() || runtime.GOARCH == "386"
+func skipSlow() (string, bool) {
+	if testing.Short() {
+		return "skipped in -short mode", true
+	}
+	if runtime.GOARCH == "386" {
+		return "skipped on 386 arch", true
+	}
+	return "", false
 }
