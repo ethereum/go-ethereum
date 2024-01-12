@@ -597,7 +597,20 @@ func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 		activeCall.KeccakPreimages = make(map[string]string)
 	}
 
-	activeCall.KeccakPreimages[hex.EncodeToString(hash.Bytes())] = hex.EncodeToString(data)
+	// Known Firehose issue: It appears the old Firehose instrumentation have a bug
+	// where when the keccak256 preimage is empty, it is written as "." which is
+	// completely wrong.
+	//
+	// To keep the same behavior, we will write the preimage as a "." when the encoded
+	// data is an empty string.
+	//
+	// For new chain, this code should be remove so that we just keep `hex.EncodeToString(data)`.
+	encodedData := hex.EncodeToString(data)
+	if encodedData == "" {
+		encodedData = "."
+	}
+
+	activeCall.KeccakPreimages[hex.EncodeToString(hash.Bytes())] = encodedData
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
