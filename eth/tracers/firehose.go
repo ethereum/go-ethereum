@@ -571,6 +571,11 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 		// We also treat ErrInsufficientBalance and ErrDepth as reverted in Firehose model
 		// because they do not cost any gas.
 		call.StatusReverted = errors.Is(err, vm.ErrExecutionReverted) || errors.Is(err, vm.ErrInsufficientBalance) || errors.Is(err, vm.ErrDepth)
+
+		// Known Firehose issue: FIXME Document!
+		if !call.ExecutedCode && (errors.Is(err, vm.ErrInsufficientBalance) || errors.Is(err, vm.ErrDepth)) {
+			call.ExecutedCode = call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
+		}
 	}
 
 	// Known Firehose issue: The EndOrdinal of the genesis block root call is never actually
