@@ -43,17 +43,19 @@ fi
 
 # Obtain assigned container IP for p2p
 NODE_IP=${NODE_IP:-$(hostname -i)}
+echo "NODE_IP is set to: $NODE_IP"
 
-if [ -n "${PUBLIC_NODE_IP:-}" ]; then
+PUBLIC_NODE_IP=${PUBLIC_NODE_IP:-""}
+echo "EXTERNAL_NODE_IP is set to: $PUBLIC_NODE_IP"
+
+# Set NAT_FLAG based on whether PUBLIC_NODE_IP is empty or not
+if [ -n "$PUBLIC_NODE_IP" ]; then
     NAT_FLAG="--nat=extip:$PUBLIC_NODE_IP"
 else
     NAT_FLAG="--nat=none"
 fi
 
-
 # (Optional) Echo the values for verification
-echo "NODE_IP is set to: $NODE_IP"
-echo "EXTERNAL_NODE_IP is set to: $PUBLIC_NODE_IP"
 
 if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	echo "Starting bootnode"
