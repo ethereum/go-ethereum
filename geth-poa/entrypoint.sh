@@ -45,9 +45,9 @@ fi
 NODE_IP=${NODE_IP:-$(hostname -i)}
 
 if [ -n "$PUBLIC_NODE_IP" ]; then
-    NAT_FLAG="--nat extip:$PUBLIC_NODE_IP"
+    NAT_FLAG="--nat=extip:$PUBLIC_NODE_IP"
 else
-    NAT_FLAG="--nat none"
+    NAT_FLAG="--nat=none"
 fi
 
 
