@@ -43,6 +43,11 @@ fi
 
 # Obtain assigned container IP for p2p
 NODE_IP=${NODE_IP:-$(hostname -i)}
+PUBLIC_NODE_IP=${PUBLIC_NODE_IP:-$NODE_IP}
+
+# (Optional) Echo the values for verification
+echo "NODE_IP is set to: $NODE_IP"
+echo "EXTERNAL_NODE_IP is set to: $PUBLIC_NODE_IP"
 
 if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	echo "Starting bootnode"
@@ -79,7 +84,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
         	--pprof.port=60601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
-		--nat extip:$NODE_IP \
+		--nat extip:$PUBLIC_NODE_IP \
 		--txpool.accountqueue=512 \
 		--rpc.allow-unprotected-txs
 
@@ -125,7 +130,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--nat extip:$NODE_IP
+		--nat extip:$PUBLIC_NODE_IP
 
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
@@ -163,7 +168,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--nat extip:$NODE_IP
+		--nat extip:$PUBLIC_NODE_IP
 else
 	echo "Invalid GETH_NODE_TYPE specified"
 fi
