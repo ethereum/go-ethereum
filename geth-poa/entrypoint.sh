@@ -90,7 +90,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
         	--pprof.port=60601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
-		$NAT_FLAG \
+		"$NAT_FLAG" \
 		--txpool.accountqueue=512 \
 		--rpc.allow-unprotected-txs
 
@@ -136,7 +136,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		$NAT_FLAG
+		"$NAT_FLAG"
 
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
@@ -174,7 +174,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		$NAT_FLAG
+		"$NAT_FLAG"
 else
 	echo "Invalid GETH_NODE_TYPE specified"
 fi
