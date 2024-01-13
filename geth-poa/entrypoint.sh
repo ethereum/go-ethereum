@@ -44,7 +44,7 @@ fi
 # Obtain assigned container IP for p2p
 NODE_IP=${NODE_IP:-$(hostname -i)}
 
-if [ -n "$PUBLIC_NODE_IP" ]; then
+if [ -n "${PUBLIC_NODE_IP:-}" ]; then
     NAT_FLAG="--nat=extip:$PUBLIC_NODE_IP"
 else
     NAT_FLAG="--nat=none"
