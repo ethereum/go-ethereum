@@ -63,6 +63,9 @@ func TestEthSuite(t *testing.T) {
 	}
 	for _, test := range suite.EthTests() {
 		t.Run(test.Name, func(t *testing.T) {
+			if test.Slow && testing.Short() {
+				t.Skipf("%s: skipping in -short mode", test.Name)
+			}
 			result := utesting.RunTests([]utesting.Test{{Name: test.Name, Fn: test.Fn}}, os.Stdout)
 			if result[0].Failed {
 				t.Fatal()

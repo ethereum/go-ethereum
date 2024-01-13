@@ -168,22 +168,12 @@ var Flags = []cli.Flag{
 }
 
 var (
-	glogger                *log.GlogHandler
-	logOutputFile          io.WriteCloser
-	defaultTerminalHandler *log.TerminalHandler
+	glogger       *log.GlogHandler
+	logOutputFile io.WriteCloser
 )
 
 func init() {
-	defaultTerminalHandler = log.NewTerminalHandler(os.Stderr, false)
-	glogger = log.NewGlogHandler(defaultTerminalHandler)
-	glogger.Verbosity(log.LvlInfo)
-	log.SetDefault(log.NewLogger(glogger))
-}
-
-func ResetLogging() {
-	if defaultTerminalHandler != nil {
-		defaultTerminalHandler.ResetFieldPadding()
-	}
+	glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.

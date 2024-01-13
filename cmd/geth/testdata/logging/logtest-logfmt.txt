@@ -29,7 +29,7 @@ t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="repeated-key 1" foo=alpha foo=beta
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="repeated-key 2" xx=short xx=longer
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="log at level info"
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=warn msg="log at level warn"
-t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=eror msg="log at level error"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=error msg="log at level error"
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar=short a="aligned left"
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar="a long message" a=1
 t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar=short a="aligned right"
