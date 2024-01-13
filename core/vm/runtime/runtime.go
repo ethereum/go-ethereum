@@ -179,7 +179,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	var (
 		vmenv   = NewEnv(cfg)
-		sender  = cfg.State.GetOrNewStateObject(cfg.Origin)
+		sender  = vm.AccountRef(cfg.Origin)
 		statedb = cfg.State
 		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 	)

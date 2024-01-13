@@ -513,7 +513,7 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
+	return b.pendingState.GetNonce(account), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
@@ -680,8 +680,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	}
 
 	// Set infinite balance to the fake caller account.
-	from := stateDB.GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256)
+	stateDB.SetBalance(call.From, math.MaxBig256)
 
 	// Execute the call.
 	msg := &core.Message{
