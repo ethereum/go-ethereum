@@ -188,7 +188,7 @@ func Transition(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	// Dump the excution result
+	// Dump the execution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)
