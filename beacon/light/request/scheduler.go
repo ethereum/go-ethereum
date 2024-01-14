@@ -152,14 +152,8 @@ func (s *Scheduler) RegisterServer(rs requestServer) {
 	server := newServer(rs, s.clock)
 	s.addEvent(Event{Type: EvRegistered, Server: server})
 	server.subscribe(func(event Event) {
-		s.lock.Lock()
-		if _, ok := s.servers[server]; ok {
-			event.Server = server
-			s.addEvent(event)
-		} else {
-			log.Error("Event received from unsubscribed server")
-		}
-		s.lock.Unlock()
+		event.Server = server
+		s.addEvent(event)
 	})
 	s.servers[server] = struct{}{}
 }
@@ -205,8 +199,11 @@ func (s *Scheduler) syncLoop() {
 	for {
 		s.lock.Lock()
 		s.handleEvents()
-		for s.targetChanged() {
+		for {
 			s.processModules()
+			if !s.targetChanged() {
+				break
+			}
 		}
 		s.sendRequests()
 		s.lock.Unlock()
@@ -330,7 +327,11 @@ func (s *Scheduler) handleEvents() {
 	s.events = nil
 	s.eventLock.Unlock()
 	for _, event := range events {
-		s.handleEvent(event)
+		if _, ok := s.servers[event.Server.(server)]; ok {
+			s.handleEvent(event)
+		} else {
+			log.Error("Event received from unsubscribed server")
+		}
 	}
 }
 
