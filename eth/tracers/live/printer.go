@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -68,7 +69,6 @@ func (p *Printer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common
 		return
 	}
 	fmt.Printf("CaptureTxStart: tx=%s\n", buf)
-
 }
 
 func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {
@@ -84,7 +84,7 @@ func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	fmt.Printf("CaptureTxEnd: receipt=%s\n", buf)
 }
 
-func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header) {
+func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
 	if finalized != nil && safe != nil {
 		fmt.Printf("OnBlockStart: b=%v, td=%v, finalized=%v, safe=%v\n", b.NumberU64(), td, finalized.Number.Uint64(), safe.Number.Uint64())
 	} else {

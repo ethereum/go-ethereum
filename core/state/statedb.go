@@ -60,7 +60,6 @@ type StateLogger interface {
 	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
 	OnLog(log *types.Log)
 	// OnNewAccount is called when a new account is created.
-	// Note: it will be even invoked when precompiled contracts are populated.
 	OnNewAccount(addr common.Address)
 }
 
@@ -477,13 +476,20 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
+	var (
+		prev = new(big.Int).Set(stateObject.Balance())
+		n    = new(big.Int)
+	)
 	s.journal.append(selfDestructChange{
 		account:     &addr,
 		prev:        stateObject.selfDestructed,
-		prevbalance: new(big.Int).Set(stateObject.Balance()),
+		prevbalance: prev,
 	})
+	if s.logger != nil {
+		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
+	}
 	stateObject.markSelfdestructed()
-	stateObject.data.Balance = new(big.Int)
+	stateObject.data.Balance = n
 }
 
 func (s *StateDB) Selfdestruct6780(addr common.Address) {
@@ -695,9 +701,6 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		delete(s.accountsOrigin, prev.address)
 		delete(s.storagesOrigin, prev.address)
 	}
-
-	newobj.created = true
-
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
 		return newobj, prev
@@ -874,6 +877,10 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
 
+			// If ether was sent to account post-selfdestruct it is burnt.
+			if bal := obj.Balance(); bal.Sign() != 0 && s.logger != nil {
+				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
+			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct
 			// event is tracked.

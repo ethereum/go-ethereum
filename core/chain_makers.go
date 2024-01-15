@@ -409,7 +409,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 	triedb := trie.NewDatabase(db, trie.HashDefaults)
 	defer triedb.Close()
-	_, err := genesis.Commit(db, triedb, nil)
+	_, err := genesis.Commit(db, triedb)
 	if err != nil {
 		panic(err)
 	}

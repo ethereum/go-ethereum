@@ -119,7 +119,7 @@ func (f *Firehose) resetTransaction() {
 	f.deferredCallState.Reset()
 }
 
-func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.Header, safe *types.Header) {
+func (f *Firehose) OnBlockStart(b *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, chainConfig *params.ChainConfig) {
 	firehoseDebug("block start number=%d hash=%s", b.NumberU64(), b.Hash())
 
 	f.ensureNotInBlock()
@@ -427,7 +427,7 @@ func (f *Firehose) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 		f.callStack.Peek().Suicide = true
 
 		if value.Sign() != 0 {
-			f.OnBalanceChange(from, value, common.Big0, state.BalanceChangeSuicideWithdraw)
+			f.OnBalanceChange(from, value, common.Big0, state.BalanceDecreaseSelfdestruct)
 		}
 
 		// The next CaptureExit must be ignored, this variable will make the next CaptureExit to be ignored
@@ -619,7 +619,7 @@ func (f *Firehose) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
-	f.OnBlockStart(b, big.NewInt(0), nil, nil)
+	f.OnBlockStart(b, big.NewInt(0), nil, nil, nil)
 	f.captureTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress, func(common.Address) bool { return false }, false)
 	f.CaptureStart(emptyCommonAddress, emptyCommonAddress, false, nil, 0, nil)
 
@@ -1174,20 +1174,20 @@ func newAccessListFromChain(accessList types.AccessList) (out []*pbeth.AccessTup
 }
 
 var balanceChangeReasonToPb = map[state.BalanceChangeReason]pbeth.BalanceChange_Reason{
-	state.BalanceChangeRewardMineUncle:      pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE,
-	state.BalanceChangeRewardMineBlock:      pbeth.BalanceChange_REASON_REWARD_MINE_BLOCK,
-	state.BalanceChangeDaoRefundContract:    pbeth.BalanceChange_REASON_DAO_REFUND_CONTRACT,
-	state.BalanceChangeDaoAdjustBalance:     pbeth.BalanceChange_REASON_DAO_ADJUST_BALANCE,
-	state.BalanceChangeTransfer:             pbeth.BalanceChange_REASON_TRANSFER,
-	state.BalanceChangeGenesisBalance:       pbeth.BalanceChange_REASON_GENESIS_BALANCE,
-	state.BalanceChangeGasBuy:               pbeth.BalanceChange_REASON_GAS_BUY,
-	state.BalanceChangeRewardTransactionFee: pbeth.BalanceChange_REASON_REWARD_TRANSACTION_FEE,
-	state.BalanceChangeGasRefund:            pbeth.BalanceChange_REASON_GAS_REFUND,
-	state.BalanceChangeTouchAccount:         pbeth.BalanceChange_REASON_TOUCH_ACCOUNT,
-	state.BalanceChangeSuicideRefund:        pbeth.BalanceChange_REASON_SUICIDE_REFUND,
-	state.BalanceChangeSuicideWithdraw:      pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW,
-	state.BalanceChangeBurn:                 pbeth.BalanceChange_REASON_BURN,
-	state.BalanceChangeWithdrawal:           pbeth.BalanceChange_REASON_WITHDRAWAL,
+	state.BalanceIncreaseRewardMineUncle:      pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE,
+	state.BalanceIncreaseRewardMineBlock:      pbeth.BalanceChange_REASON_REWARD_MINE_BLOCK,
+	state.BalanceIncreaseDaoContract:          pbeth.BalanceChange_REASON_DAO_REFUND_CONTRACT,
+	state.BalanceDecreaseDaoAccount:           pbeth.BalanceChange_REASON_DAO_ADJUST_BALANCE,
+	state.BalanceChangeTransfer:               pbeth.BalanceChange_REASON_TRANSFER,
+	state.BalanceIncreaseGenesisBalance:       pbeth.BalanceChange_REASON_GENESIS_BALANCE,
+	state.BalanceDecreaseGasBuy:               pbeth.BalanceChange_REASON_GAS_BUY,
+	state.BalanceIncreaseRewardTransactionFee: pbeth.BalanceChange_REASON_REWARD_TRANSACTION_FEE,
+	state.BalanceIncreaseGasReturn:            pbeth.BalanceChange_REASON_GAS_REFUND,
+	state.BalanceChangeTouchAccount:           pbeth.BalanceChange_REASON_TOUCH_ACCOUNT,
+	state.BalanceIncreaseSelfdestruct:         pbeth.BalanceChange_REASON_SUICIDE_REFUND,
+	state.BalanceDecreaseSelfdestruct:         pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW,
+	state.BalanceDecreaseSelfdestructBurn:     pbeth.BalanceChange_REASON_BURN,
+	state.BalanceChangeWithdrawal:             pbeth.BalanceChange_REASON_WITHDRAWAL,
 
 	state.BalanceChangeUnspecified: pbeth.BalanceChange_REASON_UNKNOWN,
 }

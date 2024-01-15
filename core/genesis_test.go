@@ -38,7 +38,7 @@ func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
 	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, trie.NewDatabase(db, nil), nil); err == nil {
+	if _, err := block.Commit(db, trie.NewDatabase(db, nil)); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
 }
@@ -97,7 +97,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb, nil)
+				customg.Commit(db, tdb)
 				return SetupGenesisBlock(db, tdb, nil)
 			},
 			wantHash:   customghash,
@@ -107,7 +107,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "custom block in DB, genesis == goerli",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb, nil)
+				customg.Commit(db, tdb)
 				return SetupGenesisBlock(db, tdb, DefaultGoerliGenesisBlock())
 			},
 			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.GoerliGenesisHash},
@@ -118,7 +118,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb, nil)
+				oldcustomg.Commit(db, tdb)
 				return SetupGenesisBlock(db, tdb, &customg)
 			},
 			wantHash:   customghash,
@@ -130,7 +130,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb, nil)
+				oldcustomg.Commit(db, tdb)
 
 				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil)
 				defer bc.Stop()

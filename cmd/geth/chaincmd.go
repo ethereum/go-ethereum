@@ -202,7 +202,7 @@ func initGenesis(ctx *cli.Context) error {
 		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 		defer triedb.Close()
 
-		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)
+		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
@@ -474,11 +474,6 @@ func dump(ctx *cli.Context) error {
 	if ctx.Bool(utils.IterativeOutputFlag.Name) {
 		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
 	} else {
-		if conf.OnlyWithAddresses {
-			fmt.Fprintf(os.Stderr, "If you want to include accounts with missing preimages, you need iterative output, since"+
-				" otherwise the accounts will overwrite each other in the resulting mapping.")
-			return errors.New("incompatible options")
-		}
 		fmt.Println(string(state.Dump(conf)))
 	}
 	return nil

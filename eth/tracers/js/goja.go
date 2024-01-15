@@ -144,19 +144,29 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (dire
 		vm:  vm,
 		ctx: make(map[string]goja.Value),
 	}
+
+	t.setTypeConverters()
+	t.setBuiltinFunctions()
+
 	if ctx == nil {
 		ctx = new(directory.Context)
 	}
 	if ctx.BlockHash != (common.Hash{}) {
-		t.ctx["blockHash"] = vm.ToValue(ctx.BlockHash.Bytes())
+		blockHash, err := t.toBuf(vm, ctx.BlockHash.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		t.ctx["blockHash"] = blockHash
 		if ctx.TxHash != (common.Hash{}) {
 			t.ctx["txIndex"] = vm.ToValue(ctx.TxIndex)
-			t.ctx["txHash"] = vm.ToValue(ctx.TxHash.Bytes())
+			txHash, err := t.toBuf(vm, ctx.TxHash.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			t.ctx["txHash"] = txHash
 		}
 	}
 
-	t.setTypeConverters()
-	t.setBuiltinFunctions()
 	ret, err := vm.RunString("(" + code + ")")
 	if err != nil {
 		return nil, err
@@ -223,8 +233,14 @@ func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from commo
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 	t.ctx["block"] = t.vm.ToValue(t.env.Context.BlockNumber.Uint64())
-	t.ctx["gasPrice"] = t.vm.ToValue(t.env.TxContext.GasPrice)
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
+	gasPriceBig, err := t.toBig(t.vm, env.TxContext.GasPrice.String())
+	if err != nil {
+		t.err = err
+		t.env.Cancel()
+		return
+	}
+	t.ctx["gasPrice"] = gasPriceBig
 }
 
 // CaptureTxEnd implements the Tracer interface and is invoked at the end of
@@ -242,17 +258,36 @@ func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	cancel := func(err error) {
+		t.err = err
+		t.env.Cancel()
+	}
 	if create {
 		t.ctx["type"] = t.vm.ToValue("CREATE")
 	} else {
 		t.ctx["type"] = t.vm.ToValue("CALL")
 	}
-	t.ctx["from"] = t.vm.ToValue(from.Bytes())
-	t.ctx["to"] = t.vm.ToValue(to.Bytes())
-	t.ctx["input"] = t.vm.ToValue(input)
+	fromVal, err := t.toBuf(t.vm, from.Bytes())
+	if err != nil {
+		cancel(err)
+		return
+	}
+	t.ctx["from"] = fromVal
+	toVal, err := t.toBuf(t.vm, to.Bytes())
+	if err != nil {
+		cancel(err)
+		return
+	}
+	t.ctx["to"] = toVal
+	inputVal, err := t.toBuf(t.vm, input)
+	if err != nil {
+		cancel(err)
+		return
+	}
+	t.ctx["input"] = inputVal
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
-		t.err = err
+		cancel(err)
 		return
 	}
 	t.ctx["value"] = valueBig
@@ -297,10 +332,15 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.ctx["output"] = t.vm.ToValue(output)
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
+	outputVal, err := t.toBuf(t.vm, output)
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["output"] = outputVal
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -469,13 +509,13 @@ func (t *jsTracer) setBuiltinFunctions() {
 		}
 		return false
 	})
-	vm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
+	vm.Set("slice", func(slice goja.Value, start, end int64) goja.Value {
 		b, err := t.fromBuf(vm, slice, false)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
-		if start < 0 || start > end || end > len(b) {
+		if start < 0 || start > end || end > int64(len(b)) {
 			vm.Interrupt(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", len(b), start, end-start))
 			return nil
 		}
