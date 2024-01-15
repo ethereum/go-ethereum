@@ -399,7 +399,7 @@ func TestSpanURL(t *testing.T) {
 	const expected = "http://bor0/bor/span/1"
 
 	if url.String() != expected {
-		t.Fatalf("expected URL %q, got %q", url.String(), expected)
+		t.Fatalf("expected URL %q, got %q", expected, url.String())
 	}
 }
 
@@ -414,6 +414,6 @@ func TestStateSyncURL(t *testing.T) {
 	const expected = "http://bor0/clerk/event-record/list?from-id=10&to-time=100&limit=50"
 
 	if url.String() != expected {
-		t.Fatalf("expected URL %q, got %q", url.String(), expected)
+		t.Fatalf("expected URL %q, got %q", expected, url.String())
 	}
 }
