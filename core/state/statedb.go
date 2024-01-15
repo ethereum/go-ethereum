@@ -485,7 +485,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prev:        stateObject.selfDestructed,
 		prevbalance: prev,
 	})
-	if s.logger != nil {
+	if s.logger != nil && prev.Sign() > 0 {
 		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()

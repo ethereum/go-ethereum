@@ -423,10 +423,6 @@ func (f *Firehose) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 		f.ensureInCall()
 		f.callStack.Peek().Suicide = true
 
-		if value.Sign() != 0 {
-			f.OnBalanceChange(from, value, common.Big0, state.BalanceDecreaseSelfdestruct)
-		}
-
 		// The next CaptureExit must be ignored, this variable will make the next CaptureExit to be ignored
 		f.latestCallStartSuicided = true
 		return
@@ -667,6 +663,15 @@ func sortedKeys[K bytesGetter, V any](m map[K]V) []K {
 func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason state.BalanceChangeReason) {
 	if reason == state.BalanceChangeUnspecified {
 		// We ignore those, if they are mislabelled, too bad so particular attention needs to be ported to this
+		return
+	}
+
+	// Known Firehose issue: It's possible to burn Ether by sending some ether to a suicided account. In those case,
+	// at theend of block producing, StateDB finalize the block by burning ether from the account. This is something
+	// we were not tracking in the old Firehose instrumentation.
+	//
+	// New chain integration should remove this `if` statement all along.
+	if reason == state.BalanceDecreaseSelfdestructBurn {
 		return
 	}
 
@@ -1067,7 +1072,6 @@ func transactionTypeFromChainTxType(txType uint8) pbeth.TransactionTrace_Type {
 		return pbeth.TransactionTrace_TRX_TYPE_DYNAMIC_FEE
 	case types.LegacyTxType:
 		return pbeth.TransactionTrace_TRX_TYPE_LEGACY
-	// Add when enabled in a fork
 	// case types.BlobTxType:
 	// 	return pbeth.TransactionTrace_TRX_TYPE_BLOB
 	default:
