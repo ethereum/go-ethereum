@@ -151,8 +151,8 @@ func (t *flatCallTracer) CaptureStart(from common.Address, to common.Address, cr
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.tracer.CaptureEnd(output, gasUsed, err)
+func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	t.tracer.CaptureEnd(output, gasUsed, err, reverted)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -178,8 +178,8 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	t.tracer.CaptureExit(output, gasUsed, err)
+func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+	t.tracer.CaptureExit(output, gasUsed, err, reverted)
 
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
 	// By default we remove them from the callstack.

@@ -29,7 +29,7 @@ const (
 	// BalanceIncreaseRewardMineBlock is a reward for mining a block.
 	BalanceIncreaseRewardMineBlock BalanceChangeReason = 2
 	// BalanceIncreaseWithdrawal is ether withdrawn from the beacon chain.
-	BalanceChangeWithdrawal BalanceChangeReason = 3
+	BalanceIncreaseWithdrawal BalanceChangeReason = 3
 	// BalanceIncreaseGenesisBalance is ether allocated at the genesis block.
 	BalanceIncreaseGenesisBalance BalanceChangeReason = 4
 
@@ -58,8 +58,6 @@ const (
 	// BalanceIncreaseSelfdestruct is added to the recipient as indicated by a selfdestructing account.
 	BalanceIncreaseSelfdestruct BalanceChangeReason = 12
 	// BalanceDecreaseSelfdestruct is deducted from a contract due to self-destruct.
-	// This can happen either at the point of self-destruction, or at the end of the tx
-	// if ether was sent to contract post-selfdestruct.
 	BalanceDecreaseSelfdestruct BalanceChangeReason = 13
 	// BalanceDecreaseSelfdestructBurn is ether that is sent to an already self-destructed
 	// account within the same tx (captured at end of tx).

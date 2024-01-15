@@ -36,10 +36,18 @@ type EVMLogger interface {
 	CaptureTxEnd(receipt *types.Receipt, err error)
 	// Top call frame
 	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-	CaptureEnd(output []byte, gasUsed uint64, err error)
+	// CaptureEnd is invoked when the processing of the top call ends.
+	// See docs for `CaptureExit` for info on the `reverted` parameter.
+	CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool)
 	// Rest of call frames
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
-	CaptureExit(output []byte, gasUsed uint64, err error)
+	// CaptureExit is invoked when the processing of a message ends.
+	// `revert` is true when there was an error during the execution.
+	// Exceptionally, before the homestead hardfork a contract creation that
+	// ran out of gas when attempting to persist the code to database did not
+	// count as a call failure and did not cause a revert of the call. This will
+	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
+	CaptureExit(output []byte, gasUsed uint64, err error, reverted bool)
 	// Opcode level
 	CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)

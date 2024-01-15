@@ -67,7 +67,6 @@ type Firehose struct {
 	transaction         *pbeth.TransactionTrace
 	transactionLogIndex uint32
 	isPrecompiledAddr   func(addr common.Address) bool
-	isBeforeHomestead   bool
 
 	// Call state
 	callStack               *CallStack
@@ -112,7 +111,6 @@ func (f *Firehose) resetTransaction() {
 	f.transaction = nil
 	f.transactionLogIndex = 0
 	f.isPrecompiledAddr = nil
-	f.isBeforeHomestead = false
 
 	f.callStack.Reset()
 	f.latestCallStartSuicided = false
@@ -194,7 +192,6 @@ func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction, from commo
 // the transaction that wraps the genesis block.
 func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from, to common.Address, isPrecompiledAddr func(common.Address) bool, isBeforeHomestead bool) {
 	f.isPrecompiledAddr = isPrecompiledAddr
-	f.isBeforeHomestead = isBeforeHomestead
 
 	v, r, s := tx.RawSignatureValues()
 
@@ -364,8 +361,8 @@ func (f *Firehose) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	f.callEnd("root", output, gasUsed, err)
+func (f *Firehose) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	f.callEnd("root", output, gasUsed, err, reverted)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -445,8 +442,8 @@ func (f *Firehose) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (f *Firehose) CaptureExit(output []byte, gasUsed uint64, err error) {
-	f.callEnd("child", output, gasUsed, err)
+func (f *Firehose) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+	f.callEnd("child", output, gasUsed, err, reverted)
 }
 
 func (f *Firehose) callStart(source string, callType pbeth.CallType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
@@ -503,14 +500,8 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	f.callStack.Push(call)
 }
 
-func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error) {
-	firehoseDebug("call end source=%s index=%d output=%s gasUsed=%d err=%s", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err))
-
-	if err != nil && f.isBeforeHomestead && errors.Is(err, vm.ErrCodeStoreOutOfGas) {
-		// Before Homestead, the code store out of gas error was not considered a failure so we must not consider this error as a failure
-		firehoseDebug("ignoring code store out of gas error before Homestead")
-		err = nil
-	}
+func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error, reverted bool) {
+	firehoseDebug("call end source=%s index=%d output=%s gasUsed=%d err=%s reverted=%t", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err), reverted)
 
 	if f.latestCallStartSuicided {
 		if source != "child" {
@@ -564,8 +555,13 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 		call.ExecutedCode = false
 	}
 
-	if err != nil {
-		call.FailureReason = err.Error()
+	if reverted {
+		failureReason := ""
+		if err != nil {
+			failureReason = err.Error()
+		}
+
+		call.FailureReason = failureReason
 		call.StatusFailed = true
 
 		// We also treat ErrInsufficientBalance and ErrDepth as reverted in Firehose model
@@ -646,7 +642,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 		}
 	}
 
-	f.CaptureEnd(nil, 0, nil)
+	f.CaptureEnd(nil, 0, nil, false)
 	f.CaptureTxEnd(&types.Receipt{
 		PostState: b.Root().Bytes(),
 		Status:    types.ReceiptStatusSuccessful,
@@ -1187,7 +1183,7 @@ var balanceChangeReasonToPb = map[state.BalanceChangeReason]pbeth.BalanceChange_
 	state.BalanceIncreaseSelfdestruct:         pbeth.BalanceChange_REASON_SUICIDE_REFUND,
 	state.BalanceDecreaseSelfdestruct:         pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW,
 	state.BalanceDecreaseSelfdestructBurn:     pbeth.BalanceChange_REASON_BURN,
-	state.BalanceChangeWithdrawal:             pbeth.BalanceChange_REASON_WITHDRAWAL,
+	state.BalanceIncreaseWithdrawal:           pbeth.BalanceChange_REASON_WITHDRAWAL,
 
 	state.BalanceChangeUnspecified: pbeth.BalanceChange_REASON_UNKNOWN,
 }

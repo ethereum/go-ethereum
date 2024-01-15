@@ -31,7 +31,7 @@ func (p *Printer) CaptureStart(from common.Address, to common.Address, create bo
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (p *Printer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (p *Printer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
 	fmt.Printf("CaptureEnd: output=%s, gasUsed=%v, err=%v\n", hexutil.Bytes(output), gasUsed, err)
 }
 
@@ -55,7 +55,7 @@ func (p *Printer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Add
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (p *Printer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
 	fmt.Printf("CaptureExit: output=%s, gasUsed=%v, err=%v\n", hexutil.Bytes(output), gasUsed, err)
 }
 

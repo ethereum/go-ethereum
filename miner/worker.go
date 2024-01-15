@@ -1074,7 +1074,7 @@ func (w *worker) commitWork(interrupt *atomic.Int32, timestamp int64) {
 	case err == nil:
 		// The entire block is filled, decrease resubmit interval in case
 		// of current interval is larger than the user-specified one.
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+		w.adjustResubmitInterval(&intervalAdjust{inc: false})
 
 	case errors.Is(err, errBlockInterruptedByRecommit):
 		// Notify resubmit loop to increase resubmitting interval if the
@@ -1084,10 +1084,10 @@ func (w *worker) commitWork(interrupt *atomic.Int32, timestamp int64) {
 		if ratio < 0.1 {
 			ratio = 0.1
 		}
-		w.resubmitAdjustCh <- &intervalAdjust{
+		w.adjustResubmitInterval(&intervalAdjust{
 			ratio: ratio,
 			inc:   true,
-		}
+		})
 
 	case errors.Is(err, errBlockInterruptedByNewHead):
 		// If the block building is interrupted by newhead event, discard it
@@ -1167,6 +1167,15 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 func (w *worker) isTTDReached(header *types.Header) bool {
 	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
 	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
+}
+
+// adjustResubmitInterval adjusts the resubmit interval.
+func (w *worker) adjustResubmitInterval(message *intervalAdjust) {
+	select {
+	case w.resubmitAdjustCh <- message:
+	default:
+		log.Warn("the resubmitAdjustCh is full, discard the message")
+	}
 }
 
 // copyReceipts makes a deep copy of the given receipts.

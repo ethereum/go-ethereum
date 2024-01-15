@@ -170,14 +170,31 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		}
 		db.freezer = freezer
 
-		// Truncate the extra state histories above in freezer in case
-		// it's not aligned with the disk layer.
-		pruned, err := truncateFromHead(db.diskdb, freezer, db.tree.bottom().stateID())
-		if err != nil {
-			log.Crit("Failed to truncate extra state histories", "err", err)
-		}
-		if pruned != 0 {
-			log.Warn("Truncated extra state histories", "number", pruned)
+		diskLayerID := db.tree.bottom().stateID()
+		if diskLayerID == 0 {
+			// Reset the entire state histories in case the trie database is
+			// not initialized yet, as these state histories are not expected.
+			frozen, err := db.freezer.Ancients()
+			if err != nil {
+				log.Crit("Failed to retrieve head of state history", "err", err)
+			}
+			if frozen != 0 {
+				err := db.freezer.Reset()
+				if err != nil {
+					log.Crit("Failed to reset state histories", "err", err)
+				}
+				log.Info("Truncated extraneous state history")
+			}
+		} else {
+			// Truncate the extra state histories above in freezer in case
+			// it's not aligned with the disk layer.
+			pruned, err := truncateFromHead(db.diskdb, freezer, diskLayerID)
+			if err != nil {
+				log.Crit("Failed to truncate extra state histories", "err", err)
+			}
+			if pruned != 0 {
+				log.Warn("Truncated extra state histories", "number", pruned)
+			}
 		}
 	}
 	// Disable database in case node is still in the initial state sync stage.
@@ -431,6 +448,9 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 			inited = true
 		}
 	})
+	if !inited {
+		inited = rawdb.ReadSnapSyncStatusFlag(db.diskdb) != rawdb.StateSyncUnknown
+	}
 	return inited
 }
 

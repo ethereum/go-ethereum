@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -83,23 +84,25 @@ type stPostState struct {
 //go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 
 type stEnv struct {
-	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
-	Difficulty *big.Int       `json:"currentDifficulty" gencodec:"optional"`
-	Random     *big.Int       `json:"currentRandom"     gencodec:"optional"`
-	GasLimit   uint64         `json:"currentGasLimit"   gencodec:"required"`
-	Number     uint64         `json:"currentNumber"     gencodec:"required"`
-	Timestamp  uint64         `json:"currentTimestamp"  gencodec:"required"`
-	BaseFee    *big.Int       `json:"currentBaseFee"    gencodec:"optional"`
+	Coinbase      common.Address `json:"currentCoinbase"      gencodec:"required"`
+	Difficulty    *big.Int       `json:"currentDifficulty"    gencodec:"optional"`
+	Random        *big.Int       `json:"currentRandom"        gencodec:"optional"`
+	GasLimit      uint64         `json:"currentGasLimit"      gencodec:"required"`
+	Number        uint64         `json:"currentNumber"        gencodec:"required"`
+	Timestamp     uint64         `json:"currentTimestamp"     gencodec:"required"`
+	BaseFee       *big.Int       `json:"currentBaseFee"       gencodec:"optional"`
+	ExcessBlobGas *uint64        `json:"currentExcessBlobGas" gencodec:"optional"`
 }
 
 type stEnvMarshaling struct {
-	Coinbase   common.UnprefixedAddress
-	Difficulty *math.HexOrDecimal256
-	Random     *math.HexOrDecimal256
-	GasLimit   math.HexOrDecimal64
-	Number     math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
-	BaseFee    *math.HexOrDecimal256
+	Coinbase      common.UnprefixedAddress
+	Difficulty    *math.HexOrDecimal256
+	Random        *math.HexOrDecimal256
+	GasLimit      math.HexOrDecimal64
+	Number        math.HexOrDecimal64
+	Timestamp     math.HexOrDecimal64
+	BaseFee       *math.HexOrDecimal256
+	ExcessBlobGas *math.HexOrDecimal64
 }
 
 //go:generate go run github.com/fjl/gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
@@ -282,6 +285,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
+	}
+	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
+		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
