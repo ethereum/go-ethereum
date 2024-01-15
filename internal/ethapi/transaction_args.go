@@ -366,7 +366,9 @@ func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 }
 
 // ToTransaction converts the arguments to a transaction.
+// It defaults to a dynamic fee transaction unless legacy gas price
+// is explicitly provided.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction(type2 bool) *types.Transaction {
-	return args.toTransaction(type2)
+func (args *TransactionArgs) ToTransaction() *types.Transaction {
+	return args.toTransaction(args.GasPrice == nil)
 }
