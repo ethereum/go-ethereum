@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -163,33 +164,13 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			callResults = make([]mcCallResult, len(block.Calls))
 		)
 		for i, call := range block.Calls {
-			if call.Nonce == nil {
-				nonce := state.GetNonce(call.from())
-				call.Nonce = (*hexutil.Uint64)(&nonce)
-			}
-			var gas uint64
-			if call.Gas != nil {
-				gas = uint64(*call.Gas)
-			}
-			if gasUsed+gas > blockContext.GasLimit {
-				return nil, &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
-			}
-			// Let the call run wild unless explicitly specified.
-			if call.Gas == nil {
-				remaining := blockContext.GasLimit - gasUsed
-				call.Gas = (*hexutil.Uint64)(&remaining)
-			}
-			// TODO: check chainID and against current header for london fees
-			if err := call.validateAll(mc.b); err != nil {
+			if err := mc.sanitizeCall(&call, state, &gasUsed, blockContext); err != nil {
 				return nil, err
 			}
 			// Default to dynamic-fee transaction type.
 			type2 := true
 			if call.GasPrice != nil {
 				type2 = false
-			} else if call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
-				call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
-				call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
 			}
 			tx := call.ToTransaction(type2)
 			txes[i] = tx
@@ -240,6 +221,34 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 		repairLogs(results, header.Hash())
 	}
 	return results, nil
+}
+
+func (mc *multicall) sanitizeCall(call *TransactionArgs, state *state.StateDB, gasUsed *uint64, blockContext vm.BlockContext) error {
+	if call.Nonce == nil {
+		nonce := state.GetNonce(call.from())
+		call.Nonce = (*hexutil.Uint64)(&nonce)
+	}
+	var gas uint64
+	if call.Gas != nil {
+		gas = uint64(*call.Gas)
+	}
+	if *gasUsed+gas > blockContext.GasLimit {
+		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
+	}
+	// Let the call run wild unless explicitly specified.
+	if call.Gas == nil {
+		remaining := blockContext.GasLimit - *gasUsed
+		call.Gas = (*hexutil.Uint64)(&remaining)
+	}
+	// TODO: check chainID and against current header for london fees
+	if err := call.validateAll(mc.b); err != nil {
+		return err
+	}
+	if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
+		call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
+		call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
+	}
+	return nil
 }
 
 // getBlockHash returns the hash for the block of the given number. Block can be
