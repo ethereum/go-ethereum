@@ -497,7 +497,7 @@ func FindnodeAmplificationWrongIP(t *utesting.T) {
 	// If we receive a NEIGHBORS response, the attack worked and the test fails.
 	reply, _, _ := te.read(te.l2)
 	if reply != nil {
-		t.Error("Got NEIGHORS response for FINDNODE from wrong IP")
+		t.Error("Got NEIGHBORS response for FINDNODE from wrong IP")
 	}
 }
 
