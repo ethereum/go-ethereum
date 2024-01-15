@@ -1,12 +1,10 @@
-# Support setting various labels on the final image
+l Support setting various labels on the final image
 ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
 FROM golang:1.21-alpine as builder
-
-ARG PLUGIN_REPOSITORIES=""
 
 RUN apk add --no-cache gcc musl-dev linux-headers git bash
 
@@ -18,11 +16,7 @@ RUN cd /go-ethereum && go mod download
 ADD . /go-ethereum
 RUN cd /go-ethereum
 
-ENV PLUGIN_REPOSITORIES=${PLUGIN_REPOSITORIES}
-
 RUN env
-
-RUN cd /go-ethereum && /go-ethereum/pull_plugins.sh
 
 RUN cd /go-ethereum && /go-ethereum/plugins/build.sh
 RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
