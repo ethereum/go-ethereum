@@ -29,7 +29,7 @@ const (
 	// BalanceIncreaseRewardMineBlock is a reward for mining a block.
 	BalanceIncreaseRewardMineBlock BalanceChangeReason = 2
 	// BalanceIncreaseWithdrawal is ether withdrawn from the beacon chain.
-	BalanceChangeWithdrawal BalanceChangeReason = 3
+	BalanceIncreaseWithdrawal BalanceChangeReason = 3
 	// BalanceIncreaseGenesisBalance is ether allocated at the genesis block.
 	BalanceIncreaseGenesisBalance BalanceChangeReason = 4
 
