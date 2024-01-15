@@ -149,9 +149,9 @@ SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`
 
 This occurs _after_ successful completion of the entire signing procedure, but right before the signed transaction is passed to the external caller. This method (and data) can be used by the UI to signal to the user that the transaction was signed, but it is primarily useful for ruleset implementations.
 
-A ruleset that implements a rate limitation needs to know what transactions are sent out to the external interface. By hooking into this methods, the ruleset can maintain track of that count.
+A ruleset that implements a rate limitation needs to know what transactions are sent out to the external interface. By hooking into this method, the ruleset can maintain track of that count.
 
-**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content.
+**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g. through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content.
 
 The `OnApproved` method cannot be responded to, it's purely informative
 
