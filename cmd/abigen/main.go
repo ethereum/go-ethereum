@@ -72,6 +72,10 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
 	}
+	contractFlag = &cli.StringFlag{
+		Name:  "contract",
+		Usage: "Name of the contract to generate the bindings for",
+	}
 )
 
 var app = flags.NewApp("Ethereum ABI wrapper code generator")
@@ -88,6 +92,7 @@ func init() {
 		outFlag,
 		langFlag,
 		aliasFlag,
+		contractFlag,
 	}
 	app.Action = abigen
 }
@@ -184,6 +189,10 @@ func abigen(c *cli.Context) error {
 			typeName := nameParts[len(nameParts)-1]
 			if exclude != nil && exclude.Matches(name) {
 				fmt.Fprintf(os.Stderr, "excluding: %v\n", name)
+				continue
+			}
+			// If a contract name is provided then ignore all other contracts
+			if c.IsSet(contractFlag.Name) && c.String(contractFlag.Name) != typeName {
 				continue
 			}
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
