@@ -72,6 +72,14 @@ resource "aws_default_security_group" "devnet_xdcnode_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "rpc port"
+    from_port   = 8545
+    to_port     = 8545
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

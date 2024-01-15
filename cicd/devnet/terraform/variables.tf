@@ -5,7 +5,7 @@ locals {
     {{Name of the node, in a pattern of 'xdc'+ number. i.e xdc50}}: {
       pk: {{Value of the node private key}},
       ... any other configuration we want to pass.
-    }
+    }    
     Note: No `n` is allowed in the node name
     **/
     predefinedNodesConfig = jsondecode(data.aws_s3_object.devnet_xdc_node_config.body)
@@ -39,6 +39,8 @@ locals {
       for r in local.regions : 
         r.name => { for i in local.keyNames[r.name]: i => local.predefinedNodesConfig[i] }
     }
+    
+    rpcNodeKeys = { "rpc1": local.predefinedNodesConfig["rpc1"]} // we hardcode the rpc to a single node for now
 
     s3BucketName = "tf-devnet-bucket"
 }
