@@ -6,6 +6,7 @@ on:
       - "pgeth"
   schedule:
     - cron: "0 * * * *" # every hour
+  workflow_dispatch:
 
 permissions: write-all
 
