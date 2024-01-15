@@ -35,7 +35,7 @@ jobs:
           git rebase --stat geth/master
       - name: "build the docker image to ensure project still builds"
         if: steps.diffcheck.outputs.stdout != '0'
-        run: docker build . --tag ghcr.io/kilnfi/pgeth:latest --tag ghcr.io/kilnfi/pgeth:${GITHUB_SHA}
+        run: docker build -f Dockerfile.plugins . --tag ghcr.io/kilnfi/pgeth:latest --tag ghcr.io/kilnfi/pgeth:${GITHUB_SHA}
       - name: "push rebased master branch"
         if: steps.diffcheck.outputs.stdout != '0'
         run: git push origin master --force
