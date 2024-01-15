@@ -131,16 +131,14 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 	ps.snapWait[id] = wait
 	ps.lock.Unlock()
 
-	for {
-		select {
-		case p := <-wait:
-			return p, nil
-		case <-ps.quitCh:
-			ps.lock.Lock()
-			delete(ps.snapWait, id)
-			ps.lock.Unlock()
-			return nil, errPeerSetClosed
-		}
+	select {
+	case p := <-wait:
+		return p, nil
+	case <-ps.quitCh:
+		ps.lock.Lock()
+		delete(ps.snapWait, id)
+		ps.lock.Unlock()
+		return nil, errPeerSetClosed
 	}
 }
 
@@ -268,6 +266,8 @@ func (ps *peerSet) close() {
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
 	}
-	close(ps.quitCh)
+	if !ps.closed {
+		close(ps.quitCh)
+	}
 	ps.closed = true
 }
