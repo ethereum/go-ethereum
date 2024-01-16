@@ -62,7 +62,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -144,7 +144,7 @@ jobs:
         - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
 
         # Install Go to allow building with
-        - curl https://dl.google.com/go/go1.20.5.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.21.4.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -184,14 +184,14 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
       dist: bionic
-      go: 1.20.x
+      go: 1.21.x
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
