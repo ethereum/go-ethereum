@@ -230,6 +230,9 @@ func TestForkResendTx(t *testing.T) {
 
 	// 5.
 	sim.Commit()
+	// The new-head-event needs to trickle out to the tx pool(s), so they reset
+	// their internal state.
+	time.Sleep(1 * time.Second)
 	if err := client.SendTransaction(ctx, tx); err != nil {
 		t.Fatalf("sending transaction: %v", err)
 	}
