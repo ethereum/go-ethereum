@@ -199,7 +199,7 @@ func TestTable_findnodeByID(t *testing.T) {
 		tab, db := newTestTable(transport)
 		defer db.Close()
 		defer tab.close()
-		fillTable(tab, test.All)
+		fillTable(tab, test.All, true)
 
 		// check that closest(Target, N) returns nodes
 		result := tab.findnodeByID(test.Target, test.N, false).entries

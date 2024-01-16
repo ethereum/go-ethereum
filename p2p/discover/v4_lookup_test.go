@@ -40,7 +40,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	}
 
 	// Seed table with initial node.
-	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))})
+	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))}, true)
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)
@@ -74,7 +74,7 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 	for i := range lookupTestnet.dists[256] {
 		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
 	}
-	fillTable(test.table, bootnodes)
+	fillTable(test.table, bootnodes, true)
 	go serveTestnet(test, lookupTestnet)
 
 	// Create the iterator and collect the nodes it yields.
@@ -109,7 +109,7 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	for i := range lookupTestnet.dists[256] {
 		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
 	}
-	fillTable(test.table, bootnodes)
+	fillTable(test.table, bootnodes, true)
 	go serveTestnet(test, lookupTestnet)
 
 	it := test.udp.RandomNodes()

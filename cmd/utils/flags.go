@@ -1088,8 +1088,10 @@ func SplitAndTrim(input string) (ret []string) {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
-	if ctx.Bool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
-		cfg.HTTPHost = "127.0.0.1"
+	if ctx.Bool(HTTPEnabledFlag.Name) {
+		if cfg.HTTPHost == "" {
+			cfg.HTTPHost = "127.0.0.1"
+		}
 		if ctx.IsSet(HTTPListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
 		}
@@ -1153,8 +1155,10 @@ func setGraphQL(ctx *cli.Context, cfg *node.Config) {
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setWS(ctx *cli.Context, cfg *node.Config) {
-	if ctx.Bool(WSEnabledFlag.Name) && cfg.WSHost == "" {
-		cfg.WSHost = "127.0.0.1"
+	if ctx.Bool(WSEnabledFlag.Name) {
+		if cfg.WSHost == "" {
+			cfg.WSHost = "127.0.0.1"
+		}
 		if ctx.IsSet(WSListenAddrFlag.Name) {
 			cfg.WSHost = ctx.String(WSListenAddrFlag.Name)
 		}
@@ -1677,10 +1681,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
-	if !ctx.Bool(SnapshotFlag.Name) {
+	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
 		if cfg.SyncMode == downloader.SnapSync {
-			log.Info("Snap sync requested, enabling --snapshot")
+			if !ctx.Bool(SnapshotFlag.Name) {
+				log.Warn("Snap sync requested, enabling --snapshot")
+			}
+			if cfg.SnapshotCache == 0 {
+				log.Warn("Snap sync requested, resetting --cache.snapshot")
+				cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * CacheSnapshotFlag.Value / 100
+			}
 		} else {
 			cfg.TrieCleanCache += cfg.SnapshotCache
 			cfg.SnapshotCache = 0 // Disabled

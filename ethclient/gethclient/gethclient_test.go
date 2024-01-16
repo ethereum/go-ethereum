@@ -169,7 +169,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       &common.Address{},
 		Gas:      21000,
-		GasPrice: big.NewInt(765625000),
+		GasPrice: big.NewInt(875000000),
 		Value:    big.NewInt(1),
 	}
 	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
@@ -450,7 +450,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func TestOverrideAccountMarshal(t *testing.T) {
 	om := map[common.Address]OverrideAccount{
 		{0x11}: {
-			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+			// Zero-valued nonce is not overridden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
 		{0xaa}: {

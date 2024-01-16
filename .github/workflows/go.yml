@@ -1,0 +1,23 @@
+name: i386 linux tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.21.4
+      - name: Run tests
+        run: go test -short ./...
+        env:
+          GOOS: linux
+          GOARCH: 386

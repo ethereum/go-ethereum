@@ -186,7 +186,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 // waitlist, and none of them are scheduled for retrieval until the wait expires.
 //
 // This test is an extended version of TestTransactionFetcherWaiting. It's mostly
-// to cover the metadata checkes without bloating up the basic behavioral tests
+// to cover the metadata checks without bloating up the basic behavioral tests
 // with all the useless extra fields.
 func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
@@ -1030,7 +1030,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 }
 
 // Tests that if huge transactions are announced, only a small number of them will
-// be requested at a time, to keep the responses below a resonable level.
+// be requested at a time, to keep the responses below a reasonable level.
 func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {

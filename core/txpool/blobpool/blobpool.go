@@ -583,7 +583,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	txs[0].evictionBlobFeeJumps = txs[0].blobfeeJumps
 
 	for i := 1; i < len(txs); i++ {
-		// If there's no nonce gap, initialize the evicion thresholds as the
+		// If there's no nonce gap, initialize the eviction thresholds as the
 		// minimum between the cumulative thresholds and the current tx fees
 		if txs[i].nonce == txs[i-1].nonce+1 {
 			txs[i].evictionExecTip = txs[i-1].evictionExecTip
@@ -738,7 +738,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 }
 
 // Reset implements txpool.SubPool, allowing the blob pool's internal state to be
-// kept in sync with the main transacion pool's internal state.
+// kept in sync with the main transaction pool's internal state.
 func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
 	p.lock.Lock()
@@ -972,7 +972,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
-// to be kept in sync with the main transacion pool's gas requirements.
+// to be kept in sync with the main transaction pool's gas requirements.
 func (p *BlobPool) SetGasTip(tip *big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -1355,7 +1355,7 @@ func (p *BlobPool) drop() {
 	p.stored -= uint64(drop.size)
 	delete(p.lookup, drop.hash)
 
-	// Remove the transaction from the pool's evicion heap:
+	// Remove the transaction from the pool's eviction heap:
 	//   - If the entire account was dropped, pop off the address
 	//   - Otherwise, if the new tail has better eviction caps, fix the heap
 	if last {

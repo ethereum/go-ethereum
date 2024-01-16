@@ -57,7 +57,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *trie.Database, com
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
 	for i := byte(0); i < 96; i++ {
-		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj := state.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
 		obj.AddBalance(big.NewInt(int64(11 * i)))
