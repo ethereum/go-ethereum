@@ -136,11 +136,11 @@ func newMockState(t *testing.T) *mockState {
 
 	preState.AddBalance(premineKeyAddr, big.NewInt(1000000000000000000))
 
-	root, err := preState.Commit(true)
+	root, err := preState.Commit(1, true)
 	require.NoError(t, err)
 
 	// for the sake of this test, we only need all the forks enabled
-	chainConfig := params.SuaveChainConfig
+	chainConfig := params.TestChainConfig
 
 	// Disable london so that we do not check gasFeeCap (TODO: Fix)
 	chainConfig.LondonBlock = big.NewInt(100)

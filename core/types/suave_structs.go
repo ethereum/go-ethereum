@@ -30,3 +30,24 @@ type DataRecord struct {
 	AllowedStores       []common.Address
 	Version             string
 }
+
+type HttpRequest struct {
+	Url                    string
+	Method                 string
+	Headers                []string
+	Body                   []byte
+	WithFlashbotsSignature bool
+}
+
+type SimulateTransactionResult struct {
+	Egp     uint64
+	Logs    []*SimulatedLog
+	Success bool
+	Error   string
+}
+
+type SimulatedLog struct {
+	Data   []byte
+	Addr   common.Address
+	Topics []common.Hash
+}
