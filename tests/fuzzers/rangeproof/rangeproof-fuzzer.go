@@ -185,7 +185,7 @@ func (f *fuzzer) fuzz() int {
 //   - 0 otherwise
 //
 // other values are reserved for future use.
-func Fuzz(input []byte) int {
+func fuzz(input []byte) int {
 	if len(input) < 100 {
 		return 0
 	}

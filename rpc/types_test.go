@@ -153,3 +153,24 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestBlockNumberOrHash_StringAndUnmarshal(t *testing.T) {
+	tests := []BlockNumberOrHash{
+		BlockNumberOrHashWithNumber(math.MaxInt64),
+		BlockNumberOrHashWithNumber(PendingBlockNumber),
+		BlockNumberOrHashWithNumber(LatestBlockNumber),
+		BlockNumberOrHashWithNumber(EarliestBlockNumber),
+		BlockNumberOrHashWithNumber(32),
+		BlockNumberOrHashWithHash(common.Hash{0xaa}, false),
+	}
+	for _, want := range tests {
+		marshalled, _ := json.Marshal(want.String())
+		var have BlockNumberOrHash
+		if err := json.Unmarshal(marshalled, &have); err != nil {
+			t.Fatalf("cannot unmarshal (%v): %v", string(marshalled), err)
+		}
+		if !reflect.DeepEqual(want, have) {
+			t.Fatalf("wrong result: have %v, want %v", have, want)
+		}
+	}
+}

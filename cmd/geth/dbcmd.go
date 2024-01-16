@@ -43,12 +43,22 @@ import (
 )
 
 var (
+	removeStateDataFlag = &cli.BoolFlag{
+		Name:  "remove.state",
+		Usage: "If set, selects the state data for removal",
+	}
+	removeChainDataFlag = &cli.BoolFlag{
+		Name:  "remove.chain",
+		Usage: "If set, selects the state data for removal",
+	}
+
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: "",
-		Flags:     utils.DatabaseFlags,
+		Flags: flags.Merge(utils.DatabaseFlags,
+			[]cli.Flag{removeStateDataFlag, removeChainDataFlag}),
 		Description: `
 Remove blockchain and state databases`,
 	}
@@ -108,7 +118,7 @@ a data corruption.`,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
-		Description: `This command performs a database compaction. 
+		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
@@ -130,7 +140,7 @@ corruption if it is aborted during execution'!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
-		Description: `This command deletes the specified database key from the database. 
+		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = &cli.Command{
@@ -141,7 +151,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
-		Description: `This command sets a given database key to the given value. 
+		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbGetSlotsCmd = &cli.Command{
@@ -198,60 +208,85 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 func removeDB(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)
 
-	// Remove the full node state database
-	path := stack.ResolvePath("chaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node state database")
-	} else {
-		log.Info("Full node state database missing", "path", path)
-	}
-	// Remove the full node ancient database
-	path = config.Eth.DatabaseFreezer
+	// Resolve folder paths.
+	var (
+		rootDir    = stack.ResolvePath("chaindata")
+		ancientDir = config.Eth.DatabaseFreezer
+	)
 	switch {
-	case path == "":
-		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	case !filepath.IsAbs(path):
-		path = config.Node.ResolvePath(path)
+	case ancientDir == "":
+		ancientDir = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	case !filepath.IsAbs(ancientDir):
+		ancientDir = config.Node.ResolvePath(ancientDir)
 	}
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node ancient database")
-	} else {
-		log.Info("Full node ancient database missing", "path", path)
-	}
-	// Remove the light node database
-	path = stack.ResolvePath("lightchaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "light node database")
-	} else {
-		log.Info("Light node database missing", "path", path)
-	}
+	// Delete state data
+	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
+	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
+
+	// Delete ancient chain
+	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
+	confirmAndRemoveDB(chainPaths, "ancient chain", ctx, removeChainDataFlag.Name)
 	return nil
 }
 
+// removeFolder deletes all files (not folders) inside the directory 'dir' (but
+// not files in subfolders).
+func removeFolder(dir string) {
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		// If we're at the top level folder, recurse into
+		if path == dir {
+			return nil
+		}
+		// Delete all the files, but not subfolders
+		if !info.IsDir() {
+			os.Remove(path)
+			return nil
+		}
+		return filepath.SkipDir
+	})
+}
+
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
-// folder if accepted.
-func confirmAndRemoveDB(database string, kind string) {
-	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, database))
+// list of folders if accepted.
+func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFlagName string) {
+	var (
+		confirm bool
+		err     error
+	)
+	msg := fmt.Sprintf("Location(s) of '%s': \n", kind)
+	for _, path := range paths {
+		msg += fmt.Sprintf("\t- %s\n", path)
+	}
+	fmt.Println(msg)
+	if ctx.IsSet(removeFlagName) {
+		confirm = ctx.Bool(removeFlagName)
+		if confirm {
+			fmt.Printf("Remove '%s'? [y/n] y\n", kind)
+		} else {
+			fmt.Printf("Remove '%s'? [y/n] n\n", kind)
+		}
+	} else {
+		confirm, err = prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	}
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
 	case !confirm:
-		log.Info("Database deletion skipped", "path", database)
+		log.Info("Database deletion skipped", "kind", kind, "paths", paths)
 	default:
-		start := time.Now()
-		filepath.Walk(database, func(path string, info os.FileInfo, err error) error {
-			// If we're at the top level folder, recurse into
-			if path == database {
-				return nil
+		var (
+			deleted []string
+			start   = time.Now()
+		)
+		for _, path := range paths {
+			if common.FileExist(path) {
+				removeFolder(path)
+				deleted = append(deleted, path)
+			} else {
+				log.Info("Folder is not existent", "path", path)
 			}
-			// Delete all the files, but not subfolders
-			if !info.IsDir() {
-				os.Remove(path)
-				return nil
-			}
-			return filepath.SkipDir
-		})
-		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+		log.Info("Database successfully deleted", "kind", kind, "paths", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 
@@ -482,7 +517,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, db, false, true)
+	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
 	defer triedb.Close()
 
 	var (

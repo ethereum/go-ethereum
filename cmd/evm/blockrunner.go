@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -30,11 +32,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var RunFlag = &cli.StringFlag{
+	Name:  "run",
+	Value: ".*",
+	Usage: "Run only those tests matching the regular expression.",
+}
+
 var blockTestCommand = &cli.Command{
 	Action:    blockTestCmd,
 	Name:      "blocktest",
-	Usage:     "executes the given blockchain tests",
+	Usage:     "Executes the given blockchain tests",
 	ArgsUsage: "<file>",
+	Flags:     []cli.Flag{RunFlag},
 }
 
 func blockTestCmd(ctx *cli.Context) error {
@@ -61,15 +70,29 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
-	// run them in order
+	re, err := regexp.Compile(ctx.String(RunFlag.Name))
+	if err != nil {
+		return fmt.Errorf("invalid regex -%s: %v", RunFlag.Name, err)
+	}
+
+	// Run them in order
 	var keys []string
 	for key := range tests {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
+		if !re.MatchString(name) {
+			continue
+		}
 		test := tests[name]
-		if err := test.Run(false, rawdb.HashScheme, tracer); err != nil {
+		if err := test.Run(false, rawdb.HashScheme, tracer, func(res error, chain *core.BlockChain) {
+			if ctx.Bool(DumpFlag.Name) {
+				if state, _ := chain.State(); state != nil {
+					fmt.Println(string(state.Dump(nil)))
+				}
+			}
+		}); err != nil {
 			return fmt.Errorf("test %v: %w", name, err)
 		}
 	}

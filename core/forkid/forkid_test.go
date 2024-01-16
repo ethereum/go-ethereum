@@ -91,8 +91,10 @@ func TestCreation(t *testing.T) {
 				{5000000, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}},             // Last Berlin block
 				{5062605, 0, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}},          // First London block
 				{6000000, 1678832735, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}}, // Last London block
-				{6000001, 1678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 0}},          // First Shanghai block
-				{6500000, 2678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 0}},          // Future Shanghai block
+				{6000001, 1678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // First Shanghai block
+				{6500002, 1705473119, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // Last Shanghai block
+				{6500003, 1705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // First Cancun block
+				{6500003, 2705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // Future Cancun block
 			},
 		},
 		// Sepolia test cases
@@ -366,8 +368,9 @@ func TestValidation(t *testing.T) {
 		// TODO(karalabe): Enable this when Cancun is specced
 		//{params.MainnetChainConfig, 20999999, 1677999999, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, ErrLocalIncompatibleOrStale},
 	}
+	genesis := core.DefaultGenesisBlock().ToBlock()
 	for i, tt := range tests {
-		filter := newFilter(tt.config, core.DefaultGenesisBlock().ToBlock(), func() (uint64, uint64) { return tt.head, tt.time })
+		filter := newFilter(tt.config, genesis, func() (uint64, uint64) { return tt.head, tt.time })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}

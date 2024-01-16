@@ -44,7 +44,7 @@ func main() {
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
 		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
 		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
-		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-5)")
+		verbosity   = flag.Int("verbosity", 3, "log verbosity (0-5)")
 		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
 		nodeKey *ecdsa.PrivateKey
@@ -52,10 +52,11 @@ func main() {
 	)
 	flag.Parse()
 
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(*verbosity))
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	slogVerbosity := log.FromLegacyLevel(*verbosity)
+	glogger.Verbosity(slogVerbosity)
 	glogger.Vmodule(*vmodule)
-	log.Root().SetHandler(glogger)
+	log.SetDefault(log.NewLogger(glogger))
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {

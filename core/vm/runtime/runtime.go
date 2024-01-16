@@ -46,6 +46,7 @@ type Config struct {
 	BaseFee     *big.Int
 	BlobBaseFee *big.Int
 	BlobHashes  []common.Hash
+	BlobFeeCap  *big.Int
 	Random      *common.Hash
 
 	State     *state.StateDB
@@ -97,7 +98,7 @@ func setDefaults(cfg *Config) {
 		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
 	}
 	if cfg.BlobBaseFee == nil {
-		cfg.BlobBaseFee = new(big.Int)
+		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
 }
 

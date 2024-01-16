@@ -26,6 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 var (
@@ -139,14 +143,14 @@ var (
 var stateTransitionCommand = &cli.Command{
 	Name:    "transition",
 	Aliases: []string{"t8n"},
-	Usage:   "executes a full state transition",
+	Usage:   "Executes a full state transition",
 	Action:  t8ntool.Transition,
 	Flags: []cli.Flag{
 		t8ntool.TraceFlag,
-		t8ntool.TraceDisableMemoryFlag,
+		t8ntool.TraceTracerFlag,
+		t8ntool.TraceTracerConfigFlag,
 		t8ntool.TraceEnableMemoryFlag,
 		t8ntool.TraceDisableStackFlag,
-		t8ntool.TraceDisableReturnDataFlag,
 		t8ntool.TraceEnableReturnDataFlag,
 		t8ntool.OutputBasedir,
 		t8ntool.OutputAllocFlag,
@@ -158,27 +162,25 @@ var stateTransitionCommand = &cli.Command{
 		t8ntool.ForknameFlag,
 		t8ntool.ChainIDFlag,
 		t8ntool.RewardFlag,
-		t8ntool.VerbosityFlag,
 	},
 }
 
 var transactionCommand = &cli.Command{
 	Name:    "transaction",
 	Aliases: []string{"t9n"},
-	Usage:   "performs transaction validation",
+	Usage:   "Performs transaction validation",
 	Action:  t8ntool.Transaction,
 	Flags: []cli.Flag{
 		t8ntool.InputTxsFlag,
 		t8ntool.ChainIDFlag,
 		t8ntool.ForknameFlag,
-		t8ntool.VerbosityFlag,
 	},
 }
 
 var blockBuilderCommand = &cli.Command{
 	Name:    "block-builder",
 	Aliases: []string{"b11r"},
-	Usage:   "builds a block",
+	Usage:   "Builds a block",
 	Action:  t8ntool.BuildBlock,
 	Flags: []cli.Flag{
 		t8ntool.OutputBasedir,
@@ -188,7 +190,6 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.InputWithdrawalsFlag,
 		t8ntool.InputTxsRlpFlag,
 		t8ntool.SealCliqueFlag,
-		t8ntool.VerbosityFlag,
 	},
 }
 

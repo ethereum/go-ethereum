@@ -26,6 +26,7 @@ import (
 // This test checks that computeChanges/splitChanges create DNS changes in
 // leaf-added -> root-changed -> leaf-deleted order.
 func TestRoute53ChangeSort(t *testing.T) {
+	t.Parallel()
 	testTree0 := map[string]recordSet{
 		"2kfjogvxdqtxxugbh7gs7naaai.n": {ttl: 3333, values: []string{
 			`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-""vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`,
@@ -164,6 +165,7 @@ func TestRoute53ChangeSort(t *testing.T) {
 
 // This test checks that computeChanges compares the quoted value of the records correctly.
 func TestRoute53NoChange(t *testing.T) {
+	t.Parallel()
 	// Existing record set.
 	testTree0 := map[string]recordSet{
 		"n": {ttl: rootTTL, values: []string{
