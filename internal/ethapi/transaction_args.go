@@ -102,7 +102,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		return errors.New(`blob transactions cannot have the form of a create transaction`)
 	}
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
-		return errors.New(`need at least 1 blob for a blob-tx`)
+		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
 	if args.To == nil && len(args.data()) == 0 {
 		return errors.New(`contract creation without any data provided`)

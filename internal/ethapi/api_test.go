@@ -922,7 +922,7 @@ func TestCall(t *testing.T) {
 			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
 		},
-		// Invalid blob-tx
+		// Invalid blob tx
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
@@ -1039,7 +1039,7 @@ func TestSignBlobTransaction(t *testing.T) {
 
 	_, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
 	if err == nil {
-		t.Fatalf("should fail on blob-tx")
+		t.Fatalf("should fail on blob transaction")
 	}
 	if !errors.Is(err, errBlobTxNotSupported) {
 		t.Errorf("error mismatch. Have: %v, want: %v", err, errBlobTxNotSupported)

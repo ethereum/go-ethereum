@@ -222,7 +222,7 @@ func TestSetFeeDefaults(t *testing.T) {
 			errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active"),
 		},
 		{
-			"set gas price and maxFee for blob-tx",
+			"set gas price and maxFee for blob transaction",
 			"cancun",
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, BlobHashes: []common.Hash{}},
 			nil,
