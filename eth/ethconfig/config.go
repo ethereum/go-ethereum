@@ -67,7 +67,7 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.SnapSync,
+	SyncMode:           downloader.FullSync,
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
