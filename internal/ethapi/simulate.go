@@ -162,29 +162,54 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			gasUsed     uint64
 			txes        = make([]*types.Transaction, len(block.Calls))
 			callResults = make([]mcCallResult, len(block.Calls))
+			receipts    = make([]*types.Receipt, len(block.Calls))
+			tracer      = newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
+			config      = mc.b.ChainConfig()
+			vmConfig    = &vm.Config{
+				NoBaseFee: true,
+				// Block hash will be repaired after execution.
+				Tracer: tracer,
+			}
+			evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, state, config, *vmConfig)
 		)
+		if precompiles != nil {
+			evm.SetPrecompiles(precompiles)
+		}
 		for i, call := range block.Calls {
+			// TODO: Pre-estimate nonce and gas
+			// TODO: Move gas fees sanitizing to beginning of func
 			if err := mc.sanitizeCall(&call, state, &gasUsed, blockContext); err != nil {
 				return nil, err
 			}
 			tx := call.ToTransaction()
 			txes[i] = tx
-			// TODO: repair log block hashes post execution.
-			vmConfig := &vm.Config{
-				NoBaseFee: true,
-				// Block hash will be repaired after execution.
-				Tracer: newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, tx.Hash(), uint(i)),
+
+			msg, err := call.ToMessage(gp.Gas(), header.BaseFee, !opts.Validation)
+			if err != nil {
+				return nil, err
 			}
-			result, err := applyMessage(ctx, mc.b, call, state, header, timeout, gp, &blockContext, vmConfig, precompiles, !opts.Validation)
+			tracer.reset(tx.Hash(), uint(i))
+			evm.Reset(core.NewEVMTxContext(msg), state)
+			result, err := applyMessageWithEVM(ctx, evm, msg, state, timeout, gp)
 			if err != nil {
 				txErr := txValidationError(err)
 				return nil, txErr
 			}
+			// Update the state with pending changes.
+			var root []byte
+			if config.IsByzantium(blockContext.BlockNumber) {
+				state.Finalise(true)
+			} else {
+				root = state.IntermediateRoot(config.IsEIP158(blockContext.BlockNumber)).Bytes()
+			}
+			gasUsed += result.UsedGas
+			receipt := core.MakeReceipt(evm, result, state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
+			receipts[i] = receipt
 			// If the result contains a revert reason, try to unpack it.
 			if len(result.Revert()) > 0 {
 				result.Err = newRevertError(result.Revert())
 			}
-			logs := vmConfig.Tracer.(*tracer).Logs()
+			logs := tracer.Logs()
 			callRes := mcCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 			if result.Failed() {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
@@ -197,8 +222,6 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
 			}
 			callResults[i] = callRes
-			gasUsed += result.UsedGas
-			state.Finalise(true)
 		}
 		var (
 			parentHash common.Hash
@@ -212,6 +235,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 		header.Root = state.IntermediateRoot(true)
 		header.GasUsed = gasUsed
 		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
+		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
 		results[bi] = mcBlockResultFromHeader(header, callResults)
 		repairLogs(results, header.Hash())
 	}

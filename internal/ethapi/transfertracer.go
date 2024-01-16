@@ -175,6 +175,13 @@ func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
 	t.captureLog(transferAddress, topics, common.BigToHash(value).Bytes())
 }
 
+// reset prepares the tracer for the next transaction.
+func (t *tracer) reset(txHash common.Hash, txIdx uint) {
+	t.logs = make([][]*types.Log, 1)
+	t.txHash = txHash
+	t.txIdx = txIdx
+}
+
 func (t *tracer) Logs() []*types.Log {
 	return t.logs[0]
 }

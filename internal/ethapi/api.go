@@ -1147,6 +1147,10 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 		evm.SetPrecompiles(precompiles)
 	}
 
+	return applyMessageWithEVM(ctx, evm, msg, state, timeout, gp)
+}
+
+func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, state *state.StateDB, timeout time.Duration, gp *core.GasPool) (*core.ExecutionResult, error) {
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
 	go func() {
