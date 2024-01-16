@@ -274,10 +274,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		gas = globalGasCap
 	}
 	var (
-		gasPrice      *big.Int
-		gasFeeCap     *big.Int
-		gasTipCap     *big.Int
-		blobGasFeeCap *big.Int
+		gasPrice   *big.Int
+		gasFeeCap  *big.Int
+		gasTipCap  *big.Int
+		blobFeeCap *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -310,9 +310,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		}
 	}
 	if args.BlobFeeCap != nil {
-		blobGasFeeCap = args.BlobFeeCap.ToInt()
+		blobFeeCap = args.BlobFeeCap.ToInt()
 	} else if args.BlobHashes != nil {
-		blobGasFeeCap = new(big.Int)
+		blobFeeCap = new(big.Int)
 	}
 	value := new(big.Int)
 	if args.Value != nil {
@@ -333,7 +333,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		GasTipCap:         gasTipCap,
 		Data:              data,
 		AccessList:        accessList,
-		BlobGasFeeCap:     blobGasFeeCap,
+		BlobGasFeeCap:     blobFeeCap,
 		BlobHashes:        args.BlobHashes,
 		SkipAccountChecks: true,
 	}
