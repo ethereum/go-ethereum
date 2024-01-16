@@ -24,33 +24,94 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
 
-type TestTracker struct {
+type TestServer struct{ ID int }
+
+func (ts *TestServer) Fail(desc string) {}
+
+type TestScheduler struct {
+	t         *testing.T
+	module    request.Module
+	events    []request.Event
 	servers   []request.Server
 	allowance map[request.Server]int
-	sent      []request.RequestWithID
+	sent      map[int]request.RequestWithID
 	lastId    request.ID
 }
 
-func (tt *TestTracker) AddServer(server request.Server, allowance int) {
-	tt.servers = append(tt.servers, server)
-	if tt.allowance == nil {
-		tt.allowance = make(map[request.Server]int)
+func NewTestScheduler(t *testing.T, module request.Module) *TestScheduler {
+	return &TestScheduler{
+		t:         t,
+		module:    module,
+		allowance: make(map[request.Server]int),
+		sent:      make(map[int]request.RequestWithID),
 	}
-	tt.allowance[server] = allowance
 }
 
-func (tt *TestTracker) AddAllowance(server request.Server, allowance int) {
-	tt.allowance[server] += allowance
+func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq request.Request) {
+	ts.module.Process(ts.events)
+	ts.events = nil
+	expReqWithID := request.RequestWithID{
+		ServerAndID: request.ServerAndID{Server: expServer, ID: ts.lastId + 1},
+		Request:     expReq,
+	}
+	req, ok := ts.tryRequest(testIndex, ts.module.MakeRequest)
+	if expReq == nil {
+		if ok {
+			ts.t.Errorf("Unexpected request in test case #%d (expected none, got %v)", testIndex, req)
+		}
+		return
+	}
+	if !ok {
+		ts.t.Errorf("Missing request in test case #%d (expected none, got %v)", testIndex, expReqWithID)
+		return
+	}
+	if req != expReqWithID {
+		ts.t.Errorf("Wrong request in test case #%d (expected %v, got %v)", testIndex, req, expReqWithID)
+	}
 }
 
-func (tt *TestTracker) TryRequest(requestFn func(server request.Server) (request.Request, float32)) (request.RequestWithID, bool) {
+func (ts *TestScheduler) ServerEvent(evType *request.EventType, server request.Server, data any) {
+	ts.events = append(ts.events, request.Event{
+		Type:   evType,
+		Server: server,
+		Data:   data,
+	})
+}
+
+func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, resp request.Response) {
+	req, ok := ts.sent[testIndex]
+	if !ok {
+		ts.t.Errorf("Missing request from test case %v", testIndex)
+		return
+	}
+	ts.events = append(ts.events, request.Event{
+		Type:   evType,
+		Server: req.ServerAndID.Server,
+		Data: request.RequestResponse{
+			ID:       req.ServerAndID.ID,
+			Request:  req.Request,
+			Response: resp,
+		},
+	})
+}
+
+func (ts *TestScheduler) AddServer(server request.Server, allowance int) {
+	ts.servers = append(ts.servers, server)
+	ts.allowance[server] = allowance
+}
+
+func (ts *TestScheduler) AddAllowance(server request.Server, allowance int) {
+	ts.allowance[server] += allowance
+}
+
+func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request.Server) (request.Request, float32)) (request.RequestWithID, bool) {
 	var (
 		bestServer request.Server
 		bestReq    request.Request
 		bestPri    float32
 	)
-	for _, server := range tt.servers {
-		if tt.allowance[server] == 0 {
+	for _, server := range ts.servers {
+		if ts.allowance[server] == 0 {
 			continue
 		}
 		req, pri := requestFn(server)
@@ -61,46 +122,14 @@ func (tt *TestTracker) TryRequest(requestFn func(server request.Server) (request
 	if bestServer == nil {
 		return request.RequestWithID{}, false
 	}
-	tt.allowance[bestServer]--
-	tt.lastId++
+	ts.allowance[bestServer]--
+	ts.lastId++
 	req := request.RequestWithID{
-		ServerAndID: request.ServerAndID{Server: bestServer, ID: tt.lastId},
+		ServerAndID: request.ServerAndID{Server: bestServer, ID: ts.lastId},
 		Request:     bestReq,
 	}
-	tt.sent = append(tt.sent, req)
+	ts.sent[testIndex] = req
 	return req, true
-}
-
-func (tt *TestTracker) ExpRequests(t *testing.T, tci int, expSent []request.RequestWithID) {
-	for i, expReq := range expSent {
-		if i >= len(tt.sent) {
-			t.Errorf("Missing sent request in test case #%d index #%d (expected %v, got none)", tci, i, expReq)
-			continue
-		}
-		if tt.sent[i] != expReq {
-			t.Errorf("Wrong sent request in test case #%d index #%d (expected %v, got %v)", tci, i, expReq, tt.sent[i])
-		}
-	}
-	for i := len(expSent); i < len(tt.sent); i++ {
-		t.Errorf("Unexpected sent request in test case #%d index #%d (expected none, got %v)", tci, i, tt.sent[i])
-	}
-	tt.sent = nil
-}
-
-func (tt *TestTracker) InvalidResponse(id request.ServerAndID, desc string) {
-	return
-}
-
-func TestReqEvent(evType *request.EventType, req request.RequestWithID, response request.Response) request.Event {
-	return request.Event{
-		Type:   evType,
-		Server: req.ServerAndID.Server,
-		Data: request.RequestResponse{
-			ID:       req.ServerAndID.ID,
-			Request:  req.Request,
-			Response: response,
-		},
-	}
 }
 
 type TestCommitteeChain struct {

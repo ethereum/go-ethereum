@@ -44,97 +44,95 @@ var (
 )
 
 func TestValidatedHead(t *testing.T) {
-	tracker := &TestTracker{}
 	chain := &TestCommitteeChain{}
 	ht := &TestHeadTracker{}
 	headSync := NewHeadSync(ht, chain)
 
 	ht.ExpValidated(t, 1, nil)
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead1},
 	})
 	ht.ExpValidated(t, 2, nil)
 	chain.SetNextSyncPeriod(0)
-	headSync.Process(tracker, nil)
+	headSync.Process(nil)
 	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead1})
 	chain.SetNextSyncPeriod(1)
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead2},
 		{Server: testServer2, Type: request.EvRegistered},
 		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead2},
 	})
 	ht.ExpValidated(t, 4, []types.SignedHeader{testSHead2, testSHead2})
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead3},
 		{Server: testServer3, Type: request.EvRegistered},
 		{Server: testServer3, Type: EvNewSignedHead, Data: testSHead4},
 	})
 	ht.ExpValidated(t, 5, nil)
 	chain.SetNextSyncPeriod(2)
-	headSync.Process(tracker, nil)
+	headSync.Process(nil)
 	ht.ExpValidated(t, 6, []types.SignedHeader{testSHead3})
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer3, Type: request.EvUnregistered},
 	})
 	ht.ExpValidated(t, 7, nil)
 	chain.SetNextSyncPeriod(3)
-	headSync.Process(tracker, nil)
+	headSync.Process(nil)
 	ht.ExpValidated(t, 8, nil)
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead4},
 	})
 	ht.ExpValidated(t, 9, []types.SignedHeader{testSHead4})
 }
 
 func TestPrefetchHead(t *testing.T) {
-	tracker := &TestTracker{}
 	chain := &TestCommitteeChain{}
 	ht := &TestHeadTracker{}
 	headSync := NewHeadSync(ht, chain)
 
 	ht.ExpPrefetch(t, 1, testHead0) // no servers registered
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewHead, Data: testHead1},
 	})
 	ht.ExpPrefetch(t, 2, testHead1) // s1: h1
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer2, Type: request.EvRegistered},
 		{Server: testServer2, Type: EvNewHead, Data: testHead2},
 	})
 	ht.ExpPrefetch(t, 3, testHead2) // s1: h1, s2: h2
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: EvNewHead, Data: testHead2},
 	})
 	ht.ExpPrefetch(t, 4, testHead2) // s1: h2, s2: h2
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer3, Type: request.EvRegistered},
 		{Server: testServer3, Type: EvNewHead, Data: testHead3},
 	})
 	ht.ExpPrefetch(t, 5, testHead2) // s1: h2, s2: h2, s3: h3
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer4, Type: request.EvRegistered},
 		{Server: testServer4, Type: EvNewHead, Data: testHead4},
 	})
 	ht.ExpPrefetch(t, 6, testHead2) // s1: h2, s2: h2, s3: h3, s4: h4
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer2, Type: EvNewHead, Data: testHead3},
 	})
 	ht.ExpPrefetch(t, 7, testHead3) // s1: h2, s2: h3, s3: h3, s4: h4
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer3, Type: request.EvUnregistered},
 	})
 	ht.ExpPrefetch(t, 8, testHead4) // s1: h2, s2: h3, s4: h4
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer1, Type: request.EvUnregistered},
 	})
 	ht.ExpPrefetch(t, 9, testHead4) // s2: h3, s4: h4
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer4, Type: request.EvUnregistered},
 	})
 	ht.ExpPrefetch(t, 10, testHead3) // s2: h3
-	headSync.Process(tracker, []request.Event{
+	headSync.Process([]request.Event{
 		{Server: testServer2, Type: request.EvUnregistered},
 	})
 	ht.ExpPrefetch(t, 11, testHead0) // no servers registered

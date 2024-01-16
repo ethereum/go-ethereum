@@ -24,61 +24,63 @@ import (
 )
 
 func TestCheckpointInit(t *testing.T) {
-	tracker := &TestTracker{}
-	// add 2 servers
-	tracker.AddServer(testServer1, 1)
-	tracker.AddServer(testServer2, 1)
 	chain := &TestCommitteeChain{}
 	checkpoint := &types.BootstrapData{Header: types.Header{Slot: 0x2000*4 + 0x1000}} // period 4
 	checkpointHash := checkpoint.Header.Hash()
 	chkInit := NewCheckpointInit(chain, checkpointHash)
-	chkInit.Process(tracker, []request.Event{
+	ts := NewTestScheduler(t, chkInit)
+	// add 2 servers
+	ts.AddServer(testServer1, 1)
+	ts.AddServer(testServer2, 1)
+
+	chkInit.Process([]request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer2, Type: request.EvRegistered},
 	})
 	// expect bootstrap request to server 1
 	req1 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer1, ID: 1}, Request: ReqCheckpointData(checkpointHash)}
-	tracker.ExpRequests(t, 1, []request.RequestWithID{req1})
+	ts.ExpRequests(t, 1, []request.RequestWithID{req1})
 	// req1 times out; expect request to server 2
-	chkInit.Process(tracker, []request.Event{
+	chkInit.Process([]request.Event{
 		TestReqEvent(request.EvTimeout, req1, nil),
 	})
 	req2 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 2}, Request: ReqCheckpointData(checkpointHash)}
-	tracker.ExpRequests(t, 2, []request.RequestWithID{req2})
+	ts.ExpRequests(t, 2, []request.RequestWithID{req2})
 	// invalid response to req2; expect init state to still be false
 	wrongCheckpoint := &types.BootstrapData{Header: types.Header{Slot: 123456}}
-	chkInit.Process(tracker, []request.Event{
+	chkInit.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req2, wrongCheckpoint),
 	})
 	// req1 fails (hard timeout)
-	chkInit.Process(tracker, []request.Event{
+	chkInit.Process([]request.Event{
 		TestReqEvent(request.EvFail, req1, nil),
 	})
 	chain.ExpInit(t, false)
 	// server 3 is registered
-	tracker.AddServer(testServer3, 1)
-	chkInit.Process(tracker, []request.Event{
+	ts.AddServer(testServer3, 1)
+	chkInit.Process([]request.Event{
 		{Server: testServer3, Type: request.EvRegistered},
 	})
 	// expect bootstrap request to server 3
 	req3 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer3, ID: 3}, Request: ReqCheckpointData(checkpointHash)}
-	tracker.ExpRequests(t, 3, []request.RequestWithID{req3})
+	ts.ExpRequests(t, 3, []request.RequestWithID{req3})
 	// valid response to req3; expect chain to be initialized
-	chkInit.Process(tracker, []request.Event{
+	chkInit.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req3, checkpoint),
 	})
 	chain.ExpInit(t, true)
 }
 
 func TestUpdateSyncParallel(t *testing.T) {
-	tracker := &TestTracker{}
-	// add 2 servers, head at period 100; allow 3-3 parallel requests for each
-	tracker.AddServer(testServer1, 3)
-	tracker.AddServer(testServer2, 3)
 	chain := &TestCommitteeChain{}
 	chain.SetNextSyncPeriod(0)
 	updateSync := NewForwardUpdateSync(chain)
-	updateSync.Process(tracker, []request.Event{
+	ts := NewTestScheduler(t, updateSync)
+	// add 2 servers, head at period 100; allow 3-3 parallel requests for each
+	ts.AddServer(testServer1, 3)
+	ts.AddServer(testServer2, 3)
+
+	updateSync.Process([]request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewSignedHead, Data: types.SignedHeader{SignatureSlot: 0x2000*100 + 0x1000}},
 		{Server: testServer2, Type: request.EvRegistered},
@@ -91,19 +93,19 @@ func TestUpdateSyncParallel(t *testing.T) {
 	req4 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 4}, Request: ReqUpdates{FirstPeriod: 24, Count: 8}}
 	req5 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 5}, Request: ReqUpdates{FirstPeriod: 32, Count: 8}}
 	req6 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 6}, Request: ReqUpdates{FirstPeriod: 40, Count: 8}}
-	tracker.ExpRequests(t, 1, []request.RequestWithID{req1, req2, req3, req4, req5, req6})
+	ts.ExpRequests(t, 1, []request.RequestWithID{req1, req2, req3, req4, req5, req6})
 	// valid response to request 1
-	tracker.AddAllowance(testServer1, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer1, 1)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req1, testRespUpdate(req1)),
 	})
 	// expect 8 periods synced and a new request started
 	chain.ExpNextSyncPeriod(t, 8)
 	req7 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer1, ID: 7}, Request: ReqUpdates{FirstPeriod: 48, Count: 8}}
-	tracker.ExpRequests(t, 2, []request.RequestWithID{req7})
+	ts.ExpRequests(t, 2, []request.RequestWithID{req7})
 	// valid response to requests 4 and 5
-	tracker.AddAllowance(testServer2, 2)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer2, 2)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req4, testRespUpdate(req4)),
 		TestReqEvent(request.EvResponse, req5, testRespUpdate(req5)),
 	})
@@ -111,17 +113,17 @@ func TestUpdateSyncParallel(t *testing.T) {
 	chain.ExpNextSyncPeriod(t, 8)
 	req8 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 8}, Request: ReqUpdates{FirstPeriod: 56, Count: 8}}
 	req9 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 9}, Request: ReqUpdates{FirstPeriod: 64, Count: 8}}
-	tracker.ExpRequests(t, 3, []request.RequestWithID{req8, req9})
+	ts.ExpRequests(t, 3, []request.RequestWithID{req8, req9})
 	// soft timeout for requests 2 and 3 (server 1 is overloaded)
-	updateSync.Process(tracker, []request.Event{
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvTimeout, req2, nil),
 		TestReqEvent(request.EvTimeout, req3, nil),
 	})
 	// no allowance, no more requests
-	tracker.ExpRequests(t, 4, nil)
+	ts.ExpRequests(t, 4, nil)
 	// valid response to requests 6 and 8 and 9
-	tracker.AddAllowance(testServer2, 3)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer2, 3)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req6, testRespUpdate(req6)),
 		TestReqEvent(request.EvResponse, req8, testRespUpdate(req8)),
 		TestReqEvent(request.EvResponse, req9, testRespUpdate(req9)),
@@ -130,19 +132,19 @@ func TestUpdateSyncParallel(t *testing.T) {
 	req2r := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 10}, Request: ReqUpdates{FirstPeriod: 8, Count: 8}}
 	req3r := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 11}, Request: ReqUpdates{FirstPeriod: 16, Count: 8}}
 	req10 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 12}, Request: ReqUpdates{FirstPeriod: 72, Count: 8}}
-	tracker.ExpRequests(t, 5, []request.RequestWithID{req2r, req3r, req10})
+	ts.ExpRequests(t, 5, []request.RequestWithID{req2r, req3r, req10})
 	// server 1 finally answers timed out request 2
-	tracker.AddAllowance(testServer1, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer1, 1)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req2, testRespUpdate(req2)),
 	})
 	// expect sync progress and one new request
 	chain.ExpNextSyncPeriod(t, 16)
 	req11 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer1, ID: 13}, Request: ReqUpdates{FirstPeriod: 80, Count: 8}}
-	tracker.ExpRequests(t, 6, []request.RequestWithID{req11})
+	ts.ExpRequests(t, 6, []request.RequestWithID{req11})
 	// server 2 answers re-sent requests 2 and 3
-	tracker.AddAllowance(testServer2, 2)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer2, 2)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req2r, testRespUpdate(req2r)),
 		TestReqEvent(request.EvResponse, req3r, testRespUpdate(req3r)),
 	})
@@ -151,9 +153,9 @@ func TestUpdateSyncParallel(t *testing.T) {
 	// expect 2 new requests from server 2 (now the available range is covered)
 	req12 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 14}, Request: ReqUpdates{FirstPeriod: 88, Count: 8}}
 	req13 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 15}, Request: ReqUpdates{FirstPeriod: 96, Count: 4}}
-	tracker.ExpRequests(t, 7, []request.RequestWithID{req12, req13})
+	ts.ExpRequests(t, 7, []request.RequestWithID{req12, req13})
 	// all remaining requests are answered
-	updateSync.Process(tracker, []request.Event{
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req3, testRespUpdate(req3)),
 		TestReqEvent(request.EvResponse, req7, testRespUpdate(req7)),
 		TestReqEvent(request.EvResponse, req10, testRespUpdate(req10)),
@@ -166,15 +168,16 @@ func TestUpdateSyncParallel(t *testing.T) {
 }
 
 func TestUpdateSyncDifferentHeads(t *testing.T) {
-	tracker := &TestTracker{}
-	// add 3 servers with different announced head periods
-	tracker.AddServer(testServer1, 1)
-	tracker.AddServer(testServer2, 1)
-	tracker.AddServer(testServer3, 1)
 	chain := &TestCommitteeChain{}
 	chain.SetNextSyncPeriod(10)
 	updateSync := NewForwardUpdateSync(chain)
-	updateSync.Process(tracker, []request.Event{
+	ts := NewTestScheduler(t, updateSync)
+	// add 3 servers with different announced head periods
+	ts.AddServer(testServer1, 1)
+	ts.AddServer(testServer2, 1)
+	ts.AddServer(testServer3, 1)
+
+	updateSync.Process([]request.Event{
 		{Server: testServer1, Type: request.EvRegistered},
 		{Server: testServer1, Type: EvNewSignedHead, Data: types.SignedHeader{SignatureSlot: 0x2000*15 + 0x1000}},
 		{Server: testServer2, Type: request.EvRegistered},
@@ -184,50 +187,50 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	})
 	// expect request to the best announced head
 	req1 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer3, ID: 1}, Request: ReqUpdates{FirstPeriod: 10, Count: 7}}
-	tracker.ExpRequests(t, 1, []request.RequestWithID{req1})
+	ts.ExpRequests(t, 1, []request.RequestWithID{req1})
 	// request times out, expect request to the next best head
-	updateSync.Process(tracker, []request.Event{
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvTimeout, req1, nil),
 	})
 	req2 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer2, ID: 2}, Request: ReqUpdates{FirstPeriod: 10, Count: 6}}
-	tracker.ExpRequests(t, 2, []request.RequestWithID{req2})
+	ts.ExpRequests(t, 2, []request.RequestWithID{req2})
 	// request times out, expect request to the last available server
-	updateSync.Process(tracker, []request.Event{
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvTimeout, req2, nil),
 	})
 	req3 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer1, ID: 3}, Request: ReqUpdates{FirstPeriod: 10, Count: 5}}
-	tracker.ExpRequests(t, 3, []request.RequestWithID{req3})
+	ts.ExpRequests(t, 3, []request.RequestWithID{req3})
 	// valid response to request 3, expect chain synced to period 15
-	tracker.AddAllowance(testServer1, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer1, 1)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req3, testRespUpdate(req3)),
 	})
 	chain.ExpNextSyncPeriod(t, 15)
 	// invalid response to request 1, server can only deliver updates up to period 15 despite announced head
 	req1x := request.RequestWithID{ServerAndID: req1.ServerAndID, Request: ReqUpdates{FirstPeriod: 10, Count: 5}}
-	updateSync.Process(tracker, []request.Event{
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req1, testRespUpdate(req1x)),
 	})
 	// expect no progress of chain head
 	chain.ExpNextSyncPeriod(t, 15)
 	// valid response to request 2, expect chain synced to period 16
-	tracker.AddAllowance(testServer2, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer2, 1)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req2, testRespUpdate(req2)),
 	})
 	chain.ExpNextSyncPeriod(t, 16)
 	// a new server is registered with announced head period 17
-	tracker.AddServer(testServer4, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddServer(testServer4, 1)
+	updateSync.Process([]request.Event{
 		{Server: testServer4, Type: request.EvRegistered},
 		{Server: testServer4, Type: EvNewSignedHead, Data: types.SignedHeader{SignatureSlot: 0x2000*17 + 0x1000}},
 	})
 	// expect request to sync one more period
 	req4 := request.RequestWithID{ServerAndID: request.ServerAndID{Server: testServer4, ID: 4}, Request: ReqUpdates{FirstPeriod: 16, Count: 1}}
-	tracker.ExpRequests(t, 4, []request.RequestWithID{req4})
+	ts.ExpRequests(t, 4, []request.RequestWithID{req4})
 	// valid response, expect chain synced to period 17
-	tracker.AddAllowance(testServer1, 1)
-	updateSync.Process(tracker, []request.Event{
+	ts.AddAllowance(testServer1, 1)
+	updateSync.Process([]request.Event{
 		TestReqEvent(request.EvResponse, req4, testRespUpdate(req4)),
 	})
 	chain.ExpNextSyncPeriod(t, 17)

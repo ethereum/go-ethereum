@@ -99,7 +99,7 @@ func (s *beaconBlockSync) MakeRequest(server request.Server) (request.Request, f
 		}
 	}
 	// request prefetch head if the given server has announced it
-	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead == s.serverHeads[server] {
+	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) && prefetchHead == s.serverHeads[server] {
 		if _, ok := s.recentBlocks.Get(prefetchHead); !ok {
 			if _, ok := s.locked[prefetchHead]; !ok {
 				return sync.ReqBeaconBlock(prefetchHead), 0
