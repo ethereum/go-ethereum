@@ -497,8 +497,8 @@ func (s *PersonalAccountAPI) SignTransaction(ctx context.Context, args Transacti
 	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
 		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
-	if args.IsEIP4844() && (args.BlobVersionedHashes == nil || args.MaxFeePerBlobGas == nil) {
-		return nil, errors.New("missing maxFeePerBlobGas or blobVersionedHashes")
+	if args.IsEIP4844() {
+		return nil, errBlobTxNotSupported
 	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
@@ -1905,8 +1905,8 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
 		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
-	if args.IsEIP4844() && (args.BlobVersionedHashes == nil || args.MaxFeePerBlobGas == nil) {
-		return nil, errors.New("missing maxFeePerBlobGas or blobVersionedHashes")
+	if args.IsEIP4844() {
+		return nil, errBlobTxNotSupported
 	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
