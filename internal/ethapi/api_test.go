@@ -747,11 +747,11 @@ func TestEstimateGas(t *testing.T) {
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:                &accounts[0].addr,
-				To:                  &accounts[1].addr,
-				Value:               (*hexutil.Big)(big.NewInt(1)),
-				BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
-				MaxFeePerBlobGas:    (*hexutil.Big)(big.NewInt(1)),
+				From:       &accounts[0].addr,
+				To:         &accounts[1].addr,
+				Value:      (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
 			want: 21000,
 		},
@@ -926,9 +926,9 @@ func TestCall(t *testing.T) {
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:                &accounts[1].addr,
-				Input:               &hexutil.Bytes{0x00},
-				BlobVersionedHashes: []common.Hash{},
+				From:       &accounts[1].addr,
+				Input:      &hexutil.Bytes{0x00},
+				BlobHashes: []common.Hash{},
 			},
 			expectErr: core.ErrBlobTxCreate,
 		},
@@ -936,10 +936,10 @@ func TestCall(t *testing.T) {
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:                &accounts[1].addr,
-				To:                  &randomAccounts[2].addr,
-				BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
-				MaxFeePerBlobGas:    (*hexutil.Big)(big.NewInt(1)),
+				From:       &accounts[1].addr,
+				To:         &randomAccounts[2].addr,
+				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
 			overrides: StateOverride{
 				randomAccounts[2].addr: {
@@ -1028,10 +1028,10 @@ func TestSignBlobTransaction(t *testing.T) {
 	})
 	api := NewTransactionAPI(b, nil)
 	res, err := api.FillTransaction(context.Background(), TransactionArgs{
-		From:                &b.acc.Address,
-		To:                  &to,
-		Value:               (*hexutil.Big)(big.NewInt(1)),
-		BlobVersionedHashes: []common.Hash{{0x01, 0x22}},
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{{0x01, 0x22}},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1062,10 +1062,10 @@ func TestSendBlobTransaction(t *testing.T) {
 	})
 	api := NewTransactionAPI(b, nil)
 	res, err := api.FillTransaction(context.Background(), TransactionArgs{
-		From:                &b.acc.Address,
-		To:                  &to,
-		Value:               (*hexutil.Big)(big.NewInt(1)),
-		BlobVersionedHashes: []common.Hash{common.Hash{0x01, 0x22}},
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1097,8 +1097,8 @@ func argsFromTransaction(tx *types.Transaction, from common.Address) Transaction
 		ChainID:              (*hexutil.Big)(tx.ChainId()),
 		// TODO: impl accessList conversion
 		//AccessList: tx.AccessList(),
-		MaxFeePerBlobGas:    (*hexutil.Big)(tx.BlobGasFeeCap()),
-		BlobVersionedHashes: tx.BlobHashes(),
+		BlobFeeCap: (*hexutil.Big)(tx.BlobGasFeeCap()),
+		BlobHashes: tx.BlobHashes(),
 	}
 }
 

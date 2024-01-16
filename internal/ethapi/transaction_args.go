@@ -57,8 +57,8 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
 	// Introduced by EIP-4844.
-	MaxFeePerBlobGas    *hexutil.Big  `json:"maxFeePerBlobGas"`
-	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+	BlobFeeCap *hexutil.Big  `json:"maxFeePerBlobGas"`
+	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -98,10 +98,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
 	}
-	if args.BlobVersionedHashes != nil && args.To == nil {
+	if args.BlobHashes != nil && args.To == nil {
 		return errors.New(`blob transactions cannot have the form of a create transaction`)
 	}
-	if args.BlobVersionedHashes != nil && len(args.BlobVersionedHashes) == 0 {
+	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob-tx`)
 	}
 	if args.To == nil && len(args.data()) == 0 {
@@ -166,7 +166,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
 	// Sanity check the EIP-4844 fee parameters.
-	if args.MaxFeePerBlobGas != nil && args.MaxFeePerBlobGas.ToInt().Sign() == 0 {
+	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas must be non-zero")
 	}
 	// Sanity check the non-EIP-1559 fee parameters.
@@ -186,7 +186,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 			return err
 		}
 	} else if isLondon {
-		if args.MaxFeePerBlobGas != nil {
+		if args.BlobFeeCap != nil {
 			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
 		}
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
@@ -194,7 +194,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 			return err
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.MaxFeePerBlobGas != nil {
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
 			return errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active")
 		}
 		// London not active, set gas price.
@@ -210,14 +210,14 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
 func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
-	if args.BlobVersionedHashes != nil && args.MaxFeePerBlobGas == nil {
+	if args.BlobHashes != nil && args.BlobFeeCap == nil {
 		// ExcessBlobGas must be set for a Cancun block.
 		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
 		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
-		args.MaxFeePerBlobGas = (*hexutil.Big)(val)
+		args.BlobFeeCap = (*hexutil.Big)(val)
 	}
 	return args.setLondonFeeDefaults(ctx, head, b)
 }
@@ -309,9 +309,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			}
 		}
 	}
-	if args.MaxFeePerBlobGas != nil {
-		blobGasFeeCap = args.MaxFeePerBlobGas.ToInt()
-	} else if args.BlobVersionedHashes != nil {
+	if args.BlobFeeCap != nil {
+		blobGasFeeCap = args.BlobFeeCap.ToInt()
+	} else if args.BlobHashes != nil {
 		blobGasFeeCap = new(big.Int)
 	}
 	value := new(big.Int)
@@ -334,7 +334,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		Data:              data,
 		AccessList:        accessList,
 		BlobGasFeeCap:     blobGasFeeCap,
-		BlobHashes:        args.BlobVersionedHashes,
+		BlobHashes:        args.BlobHashes,
 		SkipAccountChecks: true,
 	}
 	return msg, nil
@@ -345,7 +345,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.BlobVersionedHashes != nil:
+	case args.BlobHashes != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -360,8 +360,8 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
 			Data:       args.data(),
 			AccessList: al,
-			BlobHashes: args.BlobVersionedHashes,
-			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.MaxFeePerBlobGas)),
+			BlobHashes: args.BlobHashes,
+			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
@@ -411,5 +411,5 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 
 // IsEIP4844 returns an indicator if the args contains EIP4844 fields.
 func (args *TransactionArgs) IsEIP4844() bool {
-	return args.BlobVersionedHashes != nil || args.MaxFeePerBlobGas != nil
+	return args.BlobHashes != nil || args.BlobFeeCap != nil
 }
