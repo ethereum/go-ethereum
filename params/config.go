@@ -45,7 +45,7 @@ var (
 			SwitchRound:          0,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
-			TimeoutPeriod:        20,
+			TimeoutPeriod:        30,
 			MinePeriod:           2,
 		},
 	}
@@ -64,7 +64,7 @@ var (
 			SwitchRound:          900000,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
-			TimeoutPeriod:        20,
+			TimeoutPeriod:        30,
 			MinePeriod:           2,
 		},
 	}
@@ -74,8 +74,8 @@ var (
 			MaxMasternodes:       108,
 			SwitchRound:          0,
 			CertThreshold:        0.667,
-			TimeoutSyncThreshold: 5,
-			TimeoutPeriod:        10,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        30,
 			MinePeriod:           2,
 		},
 	}
