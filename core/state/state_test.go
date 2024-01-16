@@ -48,11 +48,11 @@ func TestDump(t *testing.T) {
 	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
-	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
+	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
-	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
+	obj2 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
-	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
+	obj3 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
 	// write some of them to the trie
@@ -105,13 +105,13 @@ func TestIterativeDump(t *testing.T) {
 	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
-	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
+	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
-	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
+	obj2 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
-	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
+	obj3 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
-	obj4 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x00}))
+	obj4 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x00}))
 	obj4.AddBalance(big.NewInt(1337))
 
 	// write some of them to the trie
