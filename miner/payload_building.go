@@ -118,8 +118,9 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 			"root", r.block.Root(),
 			"elapsed", common.PrettyDuration(elapsed),
 		)
+		payload.cond.Broadcast() // fire signal for notifying full block
 	}
-	payload.cond.Broadcast() // fire signal for notifying full block
+	
 }
 
 // Resolve returns the latest built payload and also terminates the background
