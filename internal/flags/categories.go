@@ -37,6 +37,7 @@ const (
 	MiscCategory       = "MISC"
 	TestingCategory    = "TESTING"
 	DeprecatedCategory = "ALIASED (deprecated)"
+	SuaveCategory      = "SUAVE"
 )
 
 func init() {

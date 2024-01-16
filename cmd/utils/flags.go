@@ -69,6 +69,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/suave"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
@@ -908,6 +909,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// SUAVE namespace rpc settings
+	SuaveEnabled = &cli.BoolFlag{
+		Name:     "suave",
+		Usage:    "Enable the suave",
+		Category: flags.SuaveCategory,
+	}
 )
 
 var (
@@ -1342,6 +1350,10 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NoDiscovery = true
 		cfg.DiscoveryV5 = false
 	}
+}
+
+func SetSuaveConfig(ctx *cli.Context, cfg *suave.Config) {
+	cfg.Enabled = ctx.IsSet(SuaveEnabled.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
@@ -1859,11 +1871,18 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, suaveConfig *suave.Config) (ethapi.Backend, *eth.Ethereum) {
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
+	if suaveConfig.Enabled {
+		log.Info("Enable suave service")
+		if err := suave.Register(stack, backend, suaveConfig); err != nil {
+			Fatalf("Failed to register the suave service: %v", err)
+		}
+	}
+
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }

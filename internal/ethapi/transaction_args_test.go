@@ -365,3 +365,15 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (n *backendMock) BuildBlockFromTxs(ctx context.Context, buildArgs *types.BuildBlockArgs, txs types.Transactions) (*types.Block, *big.Int, error) {
+	return nil, nil, nil
+}
+
+func (n *backendMock) BuildBlockFromBundles(ctx context.Context, buildArgs *types.BuildBlockArgs, bundles []types.SBundle) (*types.Block, *big.Int, error) {
+	return nil, nil, nil
+}
+
+func (n *backendMock) Call(ctx context.Context, contractAddr common.Address, input []byte) ([]byte, error) {
+	return nil, nil
+}
