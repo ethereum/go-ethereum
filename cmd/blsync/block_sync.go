@@ -53,28 +53,28 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	}
 }
 
-func (s *beaconBlockSync) HandleEvent(event request.Event) {
-	switch event.Type {
-	case request.EvRequest:
-		_, req, _ := event.RequestInfo()
-		blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
-		s.locked[blockRoot] = struct{}{}
-	case request.EvResponse, request.EvFail, request.EvTimeout:
-		_, req, resp := event.RequestInfo()
-		blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
-		if resp != nil {
-			block := resp.(*capella.BeaconBlock)
-			s.recentBlocks.Add(blockRoot, block)
+func (s *beaconBlockSync) Process(events []request.Event) {
+	for _, event := range events {
+		switch event.Type {
+		case request.EvRequest:
+			_, req, _ := event.RequestInfo()
+			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
+			s.locked[blockRoot] = struct{}{}
+		case request.EvResponse, request.EvFail, request.EvTimeout:
+			_, req, resp := event.RequestInfo()
+			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
+			if resp != nil {
+				block := resp.(*capella.BeaconBlock)
+				s.recentBlocks.Add(blockRoot, block)
+			}
+			delete(s.locked, blockRoot)
+		case sync.EvNewHead:
+			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
+		case request.EvUnregistered:
+			delete(s.serverHeads, event.Server)
 		}
-		delete(s.locked, blockRoot)
-	case sync.EvNewHead:
-		s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
-	case request.EvUnregistered:
-		delete(s.serverHeads, event.Server)
 	}
-}
 
-func (s *beaconBlockSync) Process() {
 	// send validated head block
 	if vh := s.headTracker.ValidatedHead(); vh != (types.SignedHeader{}) {
 		validatedHead := vh.Header.Hash()

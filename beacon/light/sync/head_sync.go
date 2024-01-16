@@ -67,20 +67,20 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	return s
 }
 
-func (s *HeadSync) HandleEvent(event request.Event) {
-	switch event.Type {
-	case EvNewHead:
-		s.setServerHead(event.Server, event.Data.(types.HeadInfo))
-	case EvNewSignedHead:
-		s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
-	case request.EvUnregistered:
-		s.setServerHead(event.Server, types.HeadInfo{})
-		delete(s.serverHeads, event.Server)
-		delete(s.unvalidatedHeads, event.Server)
+func (s *HeadSync) Process(events []request.Event) {
+	for _, event := range events {
+		switch event.Type {
+		case EvNewHead:
+			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
+		case EvNewSignedHead:
+			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
+		case request.EvUnregistered:
+			s.setServerHead(event.Server, types.HeadInfo{})
+			delete(s.serverHeads, event.Server)
+			delete(s.unvalidatedHeads, event.Server)
+		}
 	}
-}
 
-func (s *HeadSync) Process() {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit

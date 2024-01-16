@@ -47,8 +47,7 @@ type Module interface {
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
-	HandleEvent(Event)
-	Process()
+	Process([]Event)
 	MakeRequest(Server) (Request, float32)
 }
 
@@ -65,10 +64,11 @@ type Scheduler struct {
 	servers map[server]struct{}
 	targets map[targetData]uint64
 
-	pending   map[ServerAndID]pendingRequest
-	eventLock sync.Mutex
-	events    []Event
-	stopCh    chan chan struct{}
+	pending       map[ServerAndID]pendingRequest
+	eventLock     sync.Mutex
+	serverEvents  []Event
+	requestEvents map[Module][]Event
+	stopCh        chan chan struct{}
 
 	triggerCh chan struct{} // restarts waiting sync loop
 	//	testWaitCh       chan struct{} // accepts sends when sync loop is waiting
@@ -150,12 +150,16 @@ func (s *Scheduler) RegisterServer(rs requestServer) {
 	defer s.lock.Unlock()
 
 	server := newServer(rs, s.clock)
+	s.servers[server] = struct{}{}
+	s.eventLock.Lock()
 	s.addEvent(Event{Type: EvRegistered, Server: server})
+	s.eventLock.Unlock()
 	server.subscribe(func(event Event) {
 		event.Server = server
+		s.eventLock.Lock()
 		s.addEvent(event)
+		s.eventLock.Unlock()
 	})
-	s.servers[server] = struct{}{}
 }
 
 // UnregisterServer removes a registered server.
@@ -166,8 +170,10 @@ func (s *Scheduler) UnregisterServer(rs requestServer) {
 	for server := range s.servers {
 		if sl, ok := server.(*serverWithLimits); ok && sl.parent == rs {
 			server.unsubscribe()
-			delete(s.servers, server)
+			s.eventLock.Lock()
 			s.addEvent(Event{Type: EvUnregistered, Server: server})
+			s.eventLock.Unlock()
+			delete(s.servers, server)
 			return
 		}
 	}
@@ -198,7 +204,6 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) syncLoop() {
 	for {
 		s.lock.Lock()
-		s.handleEvents()
 		for {
 			s.processModules()
 			if !s.targetChanged() {
@@ -234,8 +239,15 @@ func (s *Scheduler) targetChanged() (changed bool) {
 // processModules runs an entire processing round, calling the Process functions
 // of all modules, passing all relevant events.
 func (s *Scheduler) processModules() {
+	s.eventLock.Lock()
+	serverEvents, requestEvents := s.serverEvents, s.requestEvents
+	s.serverEvents, s.requestEvents = nil, nil
+	s.eventLock.Unlock()
+
+	log.Debug("Processing modules", "server events", len(s.serverEvents))
 	for _, module := range s.modules {
-		module.Process()
+		log.Debug("Processing module", "name", s.names[module], "request events", len(s.requestEvents[module]))
+		module.Process(append(serverEvents, requestEvents[module]...))
 	}
 }
 
@@ -246,26 +258,25 @@ func (s *Scheduler) sendRequests() {
 			servers[server] = struct{}{}
 		}
 	}
-	log.Debug("Processing modules", "servers", len(servers))
+	log.Debug("Generating request candidates", "servers", len(servers))
 
 	for _, module := range s.modules {
-		for {
-			if len(servers) == 0 {
-				return
-			}
-			if req, sent := s.tryRequest(module, servers); sent {
-				module.HandleEvent(Event{
-					Type:   EvRequest,
-					Server: req.Server,
-					Data: RequestResponse{
-						ID:      req.ID,
-						Request: req.Request,
-					},
-				})
-			} else {
-				break
-			}
+		if len(servers) == 0 {
+			return
 		}
+		s.eventLock.Lock() // ensure that EvRequest is added first
+		if req, sent := s.tryRequest(module, servers); sent {
+			log.Debug("Sent request", "module", s.names[module])
+			s.addEvent(Event{
+				Type:   EvRequest,
+				Server: req.Server,
+				Data: RequestResponse{
+					ID:      req.ID,
+					Request: req.Request,
+				},
+			})
+		}
+		s.eventLock.Unlock()
 	}
 }
 
@@ -314,38 +325,21 @@ func (s *Scheduler) Trigger() {
 	}
 }
 
+// addEvent adds an Event either as a request event or a server event, depending
+// on its type. In case of an EvUnregistered server event it also closes all
+// pending requests to the given server by adding a failed request event (EvFail),
+// ensuring that all requests get finalized and thereby allowing the module logic
+// to be safe and simple.
 func (s *Scheduler) addEvent(event Event) {
-	s.eventLock.Lock()
-	s.events = append(s.events, event)
-	s.Trigger()
-	s.eventLock.Unlock()
-}
-
-func (s *Scheduler) handleEvents() {
-	s.eventLock.Lock()
-	events := s.events
-	s.events = nil
-	s.eventLock.Unlock()
-	for _, event := range events {
-		if _, ok := s.servers[event.Server.(server)]; ok {
-			s.handleEvent(event)
-		} else {
-			log.Error("Event received from unsubscribed server")
-		}
+	if _, ok := s.servers[event.Server.(server)]; !ok {
+		return
 	}
-}
-
-// handleEvent processes an Event and adds it either as a request event or a
-// server event, depending on its type. In case of an EvUnregistered server event
-// it also closes all pending requests to the given server by emitting a failed
-// request event (EvFail), ensuring that all requests get finalized and thereby
-// allowing the module logic to be safe and simple.
-func (s *Scheduler) handleEvent(event Event) {
+	s.Trigger()
 	if event.IsRequestEvent() {
 		sid, _, _ := event.RequestInfo()
 		if pr, ok := s.pending[sid]; ok {
-			pr.module.HandleEvent(event)
-			if event.Type != EvTimeout {
+			s.addRequestEvent(pr.module, event)
+			if event.Type == EvResponse || event.Type == EvFail {
 				delete(s.pending, sid)
 			}
 		}
@@ -356,7 +350,7 @@ func (s *Scheduler) handleEvent(event Event) {
 			if id.Server != event.Server {
 				continue
 			}
-			pending.module.HandleEvent(Event{
+			s.addRequestEvent(pending.module, Event{
 				Type:   EvFail,
 				Server: event.Server,
 				Data: RequestResponse{
@@ -366,7 +360,12 @@ func (s *Scheduler) handleEvent(event Event) {
 			})
 		}
 	}
-	for _, module := range s.modules {
-		module.HandleEvent(event)
+	s.serverEvents = append(s.serverEvents, event)
+}
+
+func (s *Scheduler) addRequestEvent(module Module, event Event) {
+	if s.requestEvents == nil {
+		s.requestEvents = make(map[Module][]Event)
 	}
+	s.requestEvents[module] = append(s.requestEvents[module], event)
 }

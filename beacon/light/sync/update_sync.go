@@ -52,29 +52,29 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 	}
 }
 
-func (s *CheckpointInit) HandleEvent(event request.Event) {
-	if !event.IsRequestEvent() {
-		return
-	}
-	sid, req, resp := event.RequestInfo()
-	if event.Type == request.EvRequest {
-		s.locked = sid
-		return
-	}
-	if s.locked == sid {
-		s.locked = request.ServerAndID{}
-	}
-	if resp != nil {
-		if checkpoint, ok := resp.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
-			s.chain.CheckpointInit(*checkpoint)
-			s.initialized = true
+func (s *CheckpointInit) Process(events []request.Event) {
+	for _, event := range events {
+		if !event.IsRequestEvent() {
 			return
 		}
-		event.Server.Fail("invalid checkpoint data")
+		sid, req, resp := event.RequestInfo()
+		if event.Type == request.EvRequest {
+			s.locked = sid
+			return
+		}
+		if s.locked == sid {
+			s.locked = request.ServerAndID{}
+		}
+		if resp != nil {
+			if checkpoint, ok := resp.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
+				s.chain.CheckpointInit(*checkpoint)
+				s.initialized = true
+				return
+			}
+			event.Server.Fail("invalid checkpoint data")
+		}
 	}
 }
-
-func (s *CheckpointInit) Process() {}
 
 func (s *CheckpointInit) MakeRequest(server request.Server) (request.Request, float32) {
 	if s.initialized || s.locked != (request.ServerAndID{}) {
@@ -226,33 +226,33 @@ func (u updateResponseList) Less(i, j int) bool {
 		u[j].Data.(request.RequestResponse).Request.(ReqUpdates).FirstPeriod
 }
 
-func (s *ForwardUpdateSync) HandleEvent(event request.Event) {
-	switch event.Type {
-	case request.EvRequest:
-		sid, req, _ := event.RequestInfo()
-		s.lockRange(sid, req)
-	case request.EvResponse, request.EvFail, request.EvTimeout:
-		sid, req, resp := event.RequestInfo()
-		if event.Type == request.EvResponse && !s.verifyRange(req, resp) {
-			event.Server.Fail("invalid update range")
-			resp = nil
-		}
-		if resp != nil {
-			// there is a response with a valid format; put it in the process queue
-			s.processQueue = append(s.processQueue, event)
+func (s *ForwardUpdateSync) Process(events []request.Event) {
+	for _, event := range events {
+		switch event.Type {
+		case request.EvRequest:
+			sid, req, _ := event.RequestInfo()
 			s.lockRange(sid, req)
-		} else {
-			s.unlockRange(sid, req)
+		case request.EvResponse, request.EvFail, request.EvTimeout:
+			sid, req, resp := event.RequestInfo()
+			if event.Type == request.EvResponse && !s.verifyRange(req, resp) {
+				event.Server.Fail("invalid update range")
+				resp = nil
+			}
+			if resp != nil {
+				// there is a response with a valid format; put it in the process queue
+				s.processQueue = append(s.processQueue, event)
+				s.lockRange(sid, req)
+			} else {
+				s.unlockRange(sid, req)
+			}
+		case EvNewSignedHead:
+			signedHead := event.Data.(types.SignedHeader)
+			s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
+		case request.EvUnregistered:
+			delete(s.nextSyncPeriod, event.Server)
 		}
-	case EvNewSignedHead:
-		signedHead := event.Data.(types.SignedHeader)
-		s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
-	case request.EvUnregistered:
-		delete(s.nextSyncPeriod, event.Server)
 	}
-}
 
-func (s *ForwardUpdateSync) Process() {
 	// try processing ordered list of available responses
 	sort.Sort(updateResponseList(s.processQueue)) //TODO
 	for s.processQueue != nil {
