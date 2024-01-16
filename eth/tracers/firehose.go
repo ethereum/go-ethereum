@@ -64,6 +64,7 @@ type Firehose struct {
 	blockFinality *FinalityStatus
 
 	// Transaction state
+	evm                 *vm.EVM
 	transaction         *pbeth.TransactionTrace
 	transactionLogIndex uint32
 	isPrecompiledAddr   func(addr common.Address) bool
@@ -109,6 +110,7 @@ func (f *Firehose) resetBlock() {
 // resetTransaction resets the transaction state and the call state in one shot
 func (f *Firehose) resetTransaction() {
 	f.transaction = nil
+	f.evm = nil
 	f.transactionLogIndex = 0
 	f.isPrecompiledAddr = nil
 
@@ -175,6 +177,7 @@ func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction, from commo
 
 	f.ensureInBlockAndNotInTrxAndNotInCall()
 
+	f.evm = evm
 	var to common.Address
 	if tx.To() == nil {
 		to = crypto.CreateAddress(from, evm.StateDB.GetNonce(from))
@@ -409,9 +412,11 @@ func (f *Firehose) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call, pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, rData []byte, depth int, err error) {
-	if !activeCall.ExecutedCode {
-		firehoseTrace("setting active call executed code to true")
-		activeCall.ExecutedCode = true
+	// for call, we need to process the executed code here
+	// since in old firehose executed code calculation depends if the code exist
+	if activeCall.CallType == pbeth.CallType_CALL && !activeCall.ExecutedCode {
+		firehoseTrace("Intepreter step for callType_CALL")
+		activeCall.ExecutedCode = len(activeCall.Input) > 0
 	}
 }
 
@@ -470,6 +475,9 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		GasLimit: gas,
 	}
 
+	precompile := f.isPrecompiledAddr(common.BytesToAddress(call.Address))
+	call.ExecutedCode = getExecutedCode(f.evm, precompile, call)
+
 	// Known Firehose issue: The BeginOrdinal of the genesis block root call is never actually
 	// incremented and it's always 0.
 	//
@@ -494,6 +502,31 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	}
 
 	f.callStack.Push(call)
+}
+
+func getExecutedCode(evm *vm.EVM, precompile bool, call *pbeth.Call) bool {
+	if evm != nil && call.CallType == pbeth.CallType_CALL {
+		if !evm.StateDB.Exist(common.BytesToAddress(call.Address)) &&
+			!precompile && evm.ChainConfig().Rules(evm.Context.BlockNumber, evm.Context.Random != nil, evm.Context.Time).IsEIP158 &&
+			(call.Value == nil || call.Value.Native().Sign() == 0) {
+			firehoseDebug("executed code IsSpuriousDragon callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+			return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
+		}
+	}
+
+	if precompile {
+		firehoseDebug("executed code isprecompile callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+		return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
+	}
+
+	if call.CallType == pbeth.CallType_CALL {
+		firehoseDebug("executed code callType_CALL")
+		// calculation for executed code will happen in captureInterpreterStep
+		return false
+	}
+
+	firehoseDebug("executed code default callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+	return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
 }
 
 func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err error, reverted bool) {
@@ -537,19 +570,19 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	// to false
 	//
 	// For precompiled address however, interpreter does not run so determine  there was a bug in Firehose instrumentation where we would
-	if call.ExecutedCode || f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
-		// In this case, we are sure that some code executed. This translates in the old Firehose instrumentation
-		// that it would have **never** emitted an `account_without_code`.
-		//
-		// When no `account_without_code` was executed in the previous Firehose instrumentation,
-		// the `call.ExecutedCode` defaulted to the condition below
-		call.ExecutedCode = call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
-	} else {
-		// In all other cases, we are sure that no code executed. This translates in the old Firehose instrumentation
-		// that it would have emitted an `account_without_code` and it would have then forced set the `call.ExecutedCode`
-		// to `false`.
-		call.ExecutedCode = false
-	}
+	// if call.ExecutedCode || f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
+	// 	// In this case, we are sure that some code executed. This translates in the old Firehose instrumentation
+	// 	// that it would have **never** emitted an `account_without_code`.
+	// 	//
+	// 	// When no `account_without_code` was executed in the previous Firehose instrumentation,
+	// 	// the `call.ExecutedCode` defaulted to the condition below
+	// 	call.ExecutedCode = call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
+	// } else {
+	// 	// In all other cases, we are sure that no code executed. This translates in the old Firehose instrumentation
+	// 	// that it would have emitted an `account_without_code` and it would have then forced set the `call.ExecutedCode`
+	// 	// to `false`.
+	// 	call.ExecutedCode = false
+	// }
 
 	if reverted {
 		failureReason := ""
