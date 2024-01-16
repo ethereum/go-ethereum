@@ -1,0 +1,34 @@
+name: build
+
+on:
+  push:
+    branches:
+      - "pgeth"
+
+permissions: write-all
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: "generate:build_id"
+        run: |
+          branch=${GITHUB_REF##*/}
+          sha=${GITHUB_SHA::8}
+          ts=$(date +%s)
+          echo "BUILD_ID=${branch}-${sha}-${ts}" >> $GITHUB_ENV
+      - name: "build the docker image"
+        run: docker build -f Dockerfile.plugins . --tag "ghcr.io/kilnfi/pgeth:${{ env.BUILD_ID }}" --tag ghcr.io/kilnfi/pgeth:latest --tag ghcr.io/kilnfi/pgeth:${GITHUB_SHA}
+      - name: "login to ghcr"
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: "push to ghcr"
+        run: |
+          docker push ghcr.io/kilnfi/pgeth:latest
+          docker push ghcr.io/kilnfi/pgeth:${GITHUB_SHA}

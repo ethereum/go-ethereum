@@ -1,12 +1,8 @@
 name: sync
 
 on:
-  push:
-    branches:
-      - "pgeth"
   schedule:
     - cron: "0 * * * *" # every hour
-  workflow_dispatch:
 
 permissions: write-all
 
@@ -25,24 +21,10 @@ jobs:
       - name: "check if diff exists"
         id: diffcheck
         run: echo "stdout=$(git diff master geth/master -- | wc -c)" >> $GITHUB_OUTPUT
-
-      - name: "generate:build_id"
-        run: |
-          branch=${GITHUB_REF##*/}
-          sha=${GITHUB_SHA::8}
-          ts=$(date +%s)
-          echo "BUILD_ID=${branch}-${sha}-${ts}" >> $GITHUB_ENV
-        if: github.event_name == 'push'
-      - name: "generate:build_id"
-        run: |
-          echo "BUILD_ID=${{ github.event.release.name }}" >> $GITHUB_ENV
-        if: github.event_name == 'release'
       - name: "generate:build_id"
         run: |
           ts=$(date +%d%m%Y-%H%M%S)
           echo "BUILD_ID=auto-${ts}" >> $GITHUB_ENV
-        if: github.event_name == 'schedule'
-
       - name: "perform sync operations"
         if: steps.diffcheck.outputs.stdout != '0'
         run: |
