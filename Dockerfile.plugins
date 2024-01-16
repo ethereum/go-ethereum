@@ -28,7 +28,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 COPY --from=builder /go-ethereum/plugins /pgeth-plugins
 
-ENV PGETH_DIRECTORY="/pgeth-plugins"
+ENV PGETH_MONITORING_CONFIG="/pgeth-plugins/pgeth-monitoring/config.yaml"
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
