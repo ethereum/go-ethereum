@@ -55,7 +55,7 @@ import (
 // allowed to produce in order to speed up calculations.
 const estimateGasErrorRatio = 0.015
 
-var errBlobTxNotSupported = errors.New("blob-tx not supported")
+var errBlobTxNotSupported = errors.New("signing blob transactions not supported. Use clef to sign. Submit via eth_sendRawTransaction.")
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
