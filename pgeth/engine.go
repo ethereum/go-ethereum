@@ -110,7 +110,7 @@ func (p *PluginEngine) Start(ctx context.Context) error {
 		go func(_plug *Plugin) {
 			defer func() {
 				if err := recover(); err != nil {
-					p.logger.Error("Plugin crashed", "error", err, "plugin", _plug.Details.Name)
+					p.logger.Error(fmt.Sprintf("Plugin crashed, error: %v, plugin: %s", err, _plug.Details.Name))
 					// logs entire trace
 					debug.PrintStack()
 				}

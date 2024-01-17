@@ -130,6 +130,7 @@ func (m *MonitoringTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 		}
 
 		if fetchSize < size {
+			fmt.Println("DEVNET DEBUG: add zeros ", size, fetchSize)
 			data = addZeros(data, size-fetchSize)
 		}
 
@@ -180,6 +181,7 @@ func (m *MonitoringTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 		}
 
 		if fetchSize < size {
+			fmt.Println("DEVNET DEBUG: add zeros ", size, fetchSize)
 			data = addZeros(data, size-fetchSize)
 		}
 
