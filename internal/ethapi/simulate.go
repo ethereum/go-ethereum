@@ -39,32 +39,32 @@ import (
 )
 
 const (
-	// maxMulticallBlocks is the maximum number of blocks that can be simulated
+	// maxSimulateBlocks is the maximum number of blocks that can be simulated
 	// in a single request.
-	maxMulticallBlocks = 256
+	maxSimulateBlocks = 256
 )
 
-// mcBlock is a batch of calls to be simulated sequentially.
-type mcBlock struct {
+// simBlock is a batch of calls to be simulated sequentially.
+type simBlock struct {
 	BlockOverrides *BlockOverrides
 	StateOverrides *StateOverride
 	Calls          []TransactionArgs
 }
 
-type mcBlockResult struct {
-	Number       hexutil.Uint64 `json:"number"`
-	Hash         common.Hash    `json:"hash"`
-	Time         hexutil.Uint64 `json:"timestamp"`
-	GasLimit     hexutil.Uint64 `json:"gasLimit"`
-	GasUsed      hexutil.Uint64 `json:"gasUsed"`
-	FeeRecipient common.Address `json:"feeRecipient"`
-	BaseFee      *hexutil.Big   `json:"baseFeePerGas"`
-	PrevRandao   common.Hash    `json:"prevRandao"`
-	Calls        []mcCallResult `json:"calls"`
+type simBlockResult struct {
+	Number       hexutil.Uint64  `json:"number"`
+	Hash         common.Hash     `json:"hash"`
+	Time         hexutil.Uint64  `json:"timestamp"`
+	GasLimit     hexutil.Uint64  `json:"gasLimit"`
+	GasUsed      hexutil.Uint64  `json:"gasUsed"`
+	FeeRecipient common.Address  `json:"feeRecipient"`
+	BaseFee      *hexutil.Big    `json:"baseFeePerGas"`
+	PrevRandao   common.Hash     `json:"prevRandao"`
+	Calls        []simCallResult `json:"calls"`
 }
 
-func mcBlockResultFromHeader(header *types.Header, callResults []mcCallResult) mcBlockResult {
-	return mcBlockResult{
+func mcBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
+	return simBlockResult{
 		Number:       hexutil.Uint64(header.Number.Uint64()),
 		Hash:         header.Hash(),
 		Time:         hexutil.Uint64(header.Time),
@@ -77,7 +77,7 @@ func mcBlockResultFromHeader(header *types.Header, callResults []mcCallResult) m
 	}
 }
 
-type mcCallResult struct {
+type simCallResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
@@ -85,8 +85,8 @@ type mcCallResult struct {
 	Error       *callError     `json:"error,omitempty"`
 }
 
-func (r *mcCallResult) MarshalJSON() ([]byte, error) {
-	type callResultAlias mcCallResult
+func (r *simCallResult) MarshalJSON() ([]byte, error) {
+	type callResultAlias simCallResult
 	// Marshal logs to be an empty array instead of nil when empty
 	if r.Logs == nil {
 		r.Logs = []*types.Log{}
@@ -94,20 +94,20 @@ func (r *mcCallResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
-type mcOpts struct {
-	BlockStateCalls []mcBlock
+type simOpts struct {
+	BlockStateCalls []simBlock
 	TraceTransfers  bool
 	Validation      bool
 }
 
-type multicall struct {
+type simulator struct {
 	blockNrOrHash rpc.BlockNumberOrHash
 	b             Backend
 	hashes        []common.Hash
 }
 
-func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult, error) {
-	state, base, err := mc.b.StateAndHeaderByNumberOrHash(ctx, mc.blockNrOrHash)
+func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResult, error) {
+	state, base, err := sim.b.StateAndHeaderByNumberOrHash(ctx, sim.blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var (
 		cancel  context.CancelFunc
-		timeout = mc.b.RPCEVMTimeout()
+		timeout = sim.b.RPCEVMTimeout()
 		blocks  = opts.BlockStateCalls
 	)
 	if timeout > 0 {
@@ -126,28 +126,28 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	headers, err := makeHeaders(mc.b.ChainConfig(), blocks, base)
+	headers, err := makeHeaders(sim.b.ChainConfig(), blocks, base)
 	if err != nil {
 		return nil, err
 	}
 	var (
-		results = make([]mcBlockResult, len(blocks))
+		results = make([]simBlockResult, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
-		gp          = new(core.GasPool).AddGas(mc.b.RPCGasCap())
-		precompiles = mc.activePrecompiles(ctx, base)
+		gp          = new(core.GasPool).AddGas(sim.b.RPCGasCap())
+		precompiles = sim.activePrecompiles(ctx, base)
 		numHashes   = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64() + 256
 	)
 	// Cache for the block hashes.
-	mc.hashes = make([]common.Hash, numHashes)
+	sim.hashes = make([]common.Hash, numHashes)
 	for bi, block := range blocks {
 		header := headers[bi]
-		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, mc.b), nil)
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
 		if block.BlockOverrides != nil && block.BlockOverrides.BlobGasPrice != nil {
 			blockContext.BlobBaseFee = block.BlockOverrides.BlobGasPrice.ToInt()
 		}
 		// Respond to BLOCKHASH requests.
 		blockContext.GetHash = func(n uint64) common.Hash {
-			h, err := mc.getBlockHash(ctx, n, base, headers)
+			h, err := sim.getBlockHash(ctx, n, base, headers)
 			if err != nil {
 				log.Warn(err.Error())
 				return common.Hash{}
@@ -161,10 +161,10 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 		var (
 			gasUsed     uint64
 			txes        = make([]*types.Transaction, len(block.Calls))
-			callResults = make([]mcCallResult, len(block.Calls))
+			callResults = make([]simCallResult, len(block.Calls))
 			receipts    = make([]*types.Receipt, len(block.Calls))
 			tracer      = newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
-			config      = mc.b.ChainConfig()
+			config      = sim.b.ChainConfig()
 			vmConfig    = &vm.Config{
 				NoBaseFee: true,
 				// Block hash will be repaired after execution.
@@ -172,13 +172,15 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			}
 			evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, state, config, *vmConfig)
 		)
+		// It is possible to override precompiles with EVM bytecode, or
+		// move them to another address.
 		if precompiles != nil {
 			evm.SetPrecompiles(precompiles)
 		}
 		for i, call := range block.Calls {
 			// TODO: Pre-estimate nonce and gas
 			// TODO: Move gas fees sanitizing to beginning of func
-			if err := mc.sanitizeCall(&call, state, &gasUsed, blockContext); err != nil {
+			if err := sim.sanitizeCall(&call, state, &gasUsed, blockContext); err != nil {
 				return nil, err
 			}
 			tx := call.ToTransaction()
@@ -210,7 +212,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 				result.Err = newRevertError(result.Revert())
 			}
 			logs := tracer.Logs()
-			callRes := mcCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+			callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 			if result.Failed() {
 				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 				if errors.Is(result.Err, vm.ErrExecutionReverted) {
@@ -227,7 +229,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 			parentHash common.Hash
 			err        error
 		)
-		parentHash, err = mc.getBlockHash(ctx, header.Number.Uint64()-1, base, headers)
+		parentHash, err = sim.getBlockHash(ctx, header.Number.Uint64()-1, base, headers)
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +244,7 @@ func (mc *multicall) execute(ctx context.Context, opts mcOpts) ([]mcBlockResult,
 	return results, nil
 }
 
-func (mc *multicall) sanitizeCall(call *TransactionArgs, state *state.StateDB, gasUsed *uint64, blockContext vm.BlockContext) error {
+func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, gasUsed *uint64, blockContext vm.BlockContext) error {
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -260,7 +262,7 @@ func (mc *multicall) sanitizeCall(call *TransactionArgs, state *state.StateDB, g
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
 	// TODO: check chainID and against current header for london fees
-	if err := call.validateAll(mc.b); err != nil {
+	if err := call.validateAll(sim.b); err != nil {
 		return err
 	}
 	if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
@@ -274,7 +276,7 @@ func (mc *multicall) sanitizeCall(call *TransactionArgs, state *state.StateDB, g
 // part of the canonical chain, a simulated block or a phantom block.
 // Note getBlockHash assumes `n` is smaller than the last already simulated block
 // and smaller than the last block to be simulated.
-func (mc *multicall) getBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
+func (sim *simulator) getBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
 	// getIndex returns the index of the hash in the hashes cache.
 	// The cache potentially includes 255 blocks prior to the base.
 	getIndex := func(n uint64) int {
@@ -282,24 +284,24 @@ func (mc *multicall) getBlockHash(ctx context.Context, n uint64, base *types.Hea
 		return int(n - first)
 	}
 	index := getIndex(n)
-	if h := mc.hashes[index]; h != (common.Hash{}) {
+	if h := sim.hashes[index]; h != (common.Hash{}) {
 		return h, nil
 	}
-	h, err := mc.computeBlockHash(ctx, n, base, headers)
+	h, err := sim.computeBlockHash(ctx, n, base, headers)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	if h != (common.Hash{}) {
-		mc.hashes[index] = h
+		sim.hashes[index] = h
 	}
 	return h, nil
 }
 
-func (mc *multicall) computeBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
+func (sim *simulator) computeBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
 	if n == base.Number.Uint64() {
 		return base.Hash(), nil
 	} else if n < base.Number.Uint64() {
-		h, err := mc.b.HeaderByNumber(ctx, rpc.BlockNumber(n))
+		h, err := sim.b.HeaderByNumber(ctx, rpc.BlockNumber(n))
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("failed to load block hash for number %d. Err: %v\n", n, err)
 		}
@@ -315,7 +317,7 @@ func (mc *multicall) computeBlockHash(ctx context.Context, n uint64, base *types
 			return hash, nil
 		} else if tmp.Number.Uint64() > n {
 			// Phantom block.
-			lastNonPhantomHash, err := mc.getBlockHash(ctx, h.Number.Uint64(), base, headers)
+			lastNonPhantomHash, err := sim.getBlockHash(ctx, h.Number.Uint64(), base, headers)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -331,10 +333,10 @@ func (mc *multicall) computeBlockHash(ctx context.Context, n uint64, base *types
 	return common.Hash{}, errors.New("requested block is in future")
 }
 
-func (mc *multicall) activePrecompiles(ctx context.Context, base *types.Header) vm.PrecompiledContracts {
+func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header) vm.PrecompiledContracts {
 	var (
-		blockContext = core.NewEVMBlockContext(base, NewChainContext(ctx, mc.b), nil)
-		rules        = mc.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
+		blockContext = core.NewEVMBlockContext(base, NewChainContext(ctx, sim.b), nil)
+		rules        = sim.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 	)
 	return vm.ActivePrecompiledContracts(rules).Copy()
 }
@@ -342,7 +344,7 @@ func (mc *multicall) activePrecompiles(ctx context.Context, base *types.Header) 
 // repairLogs updates the block hash in the logs present in a multicall
 // result object. This is needed as during execution when logs are collected
 // the block hash is not known.
-func repairLogs(results []mcBlockResult, blockHash common.Hash) {
+func repairLogs(results []simBlockResult, blockHash common.Hash) {
 	for i := range results {
 		for j := range results[i].Calls {
 			for k := range results[i].Calls[j].Logs {
@@ -352,7 +354,7 @@ func repairLogs(results []mcBlockResult, blockHash common.Hash) {
 	}
 }
 
-func makeHeaders(config *params.ChainConfig, blocks []mcBlock, base *types.Header) ([]*types.Header, error) {
+func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Header) ([]*types.Header, error) {
 	res := make([]*types.Header, len(blocks))
 	var (
 		prevNumber    = base.Number.Uint64()

@@ -1244,17 +1244,17 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts mcOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]mcBlockResult, error) {
+func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]simBlockResult, error) {
 	if len(opts.BlockStateCalls) == 0 {
 		return nil, &invalidParamsError{message: "empty input"}
-	} else if len(opts.BlockStateCalls) > maxMulticallBlocks {
+	} else if len(opts.BlockStateCalls) > maxSimulateBlocks {
 		return nil, &clientLimitExceededError{message: "too many blocks"}
 	}
 	if blockNrOrHash == nil {
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
 	}
-	mc := &multicall{b: s.b, blockNrOrHash: *blockNrOrHash}
+	mc := &simulator{b: s.b, blockNrOrHash: *blockNrOrHash}
 	return mc.execute(ctx, opts)
 }
 
