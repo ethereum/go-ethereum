@@ -20,6 +20,7 @@ package kzg4844
 import (
 	"embed"
 	"errors"
+	"hash"
 	"sync/atomic"
 )
 
@@ -107,4 +108,17 @@ func VerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
 		return ckzgVerifyBlobProof(blob, commitment, proof)
 	}
 	return gokzgVerifyBlobProof(blob, commitment, proof)
+}
+
+// CalcBlobHashV1 calculates the 'versioned blob hash' of a commitment.
+// The given hasher must be a sha256 hash instance, otherwise the result will be invalid!
+func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
+	if hasher.Size() != 32 {
+		panic("wrong hash size")
+	}
+	hasher.Reset()
+	hasher.Write(commit[:])
+	hasher.Sum(vh[:0])
+	vh[0] = 0x01 // version
+	return vh
 }
