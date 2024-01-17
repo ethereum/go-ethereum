@@ -55,12 +55,12 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 func (s *CheckpointInit) Process(events []request.Event) {
 	for _, event := range events {
 		if !event.IsRequestEvent() {
-			return
+			continue
 		}
 		sid, req, resp := event.RequestInfo()
 		if event.Type == request.EvRequest {
 			s.locked = sid
-			return
+			continue
 		}
 		if s.locked == sid {
 			s.locked = request.ServerAndID{}

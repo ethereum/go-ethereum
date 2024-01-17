@@ -56,8 +56,6 @@ func TestBlockSync(t *testing.T) {
 		}
 	}
 
-	ts.ServerEvent(request.EvRegistered, testServer1, nil)
-	ts.ServerEvent(request.EvRegistered, testServer2, nil)
 	// no block requests expected until head tracker knows about a head
 	ts.Run(1, nil, nil)
 	expHeadBlock(1, nil)

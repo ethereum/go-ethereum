@@ -19,16 +19,15 @@ package sync
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
-	testServer1 = 1
-	testServer2 = 2
-	testServer3 = 3
-	testServer4 = 4
+	testServer1 = &TestServer{ID: 1}
+	testServer2 = &TestServer{ID: 2}
+	testServer3 = &TestServer{ID: 3}
+	testServer4 = &TestServer{ID: 4}
 
 	testHead0 = types.HeadInfo{}
 	testHead1 = types.HeadInfo{Slot: 123, BlockRoot: common.Hash{1}}
@@ -47,93 +46,98 @@ func TestValidatedHead(t *testing.T) {
 	chain := &TestCommitteeChain{}
 	ht := &TestHeadTracker{}
 	headSync := NewHeadSync(ht, chain)
+	ts := NewTestScheduler(t, headSync)
 
+	ht.ExpValidated(t, 0, nil)
+
+	ts.AddServer(testServer1, 1)
+	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead1)
+	ts.Run(1, nil, nil)
 	ht.ExpValidated(t, 1, nil)
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: request.EvRegistered},
-		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead1},
-	})
-	ht.ExpValidated(t, 2, nil)
+
 	chain.SetNextSyncPeriod(0)
-	headSync.Process(nil)
-	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead1})
+	ts.Run(2, nil, nil)
+	ht.ExpValidated(t, 2, []types.SignedHeader{testSHead1})
+
 	chain.SetNextSyncPeriod(1)
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead2},
-		{Server: testServer2, Type: request.EvRegistered},
-		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead2},
-	})
-	ht.ExpValidated(t, 4, []types.SignedHeader{testSHead2, testSHead2})
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: EvNewSignedHead, Data: testSHead3},
-		{Server: testServer3, Type: request.EvRegistered},
-		{Server: testServer3, Type: EvNewSignedHead, Data: testSHead4},
-	})
-	ht.ExpValidated(t, 5, nil)
+	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead2)
+	ts.AddServer(testServer2, 1)
+	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead2)
+	ts.Run(3, nil, nil)
+	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead2, testSHead2})
+
+	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead3)
+	ts.AddServer(testServer3, 1)
+	ts.ServerEvent(EvNewSignedHead, testServer3, testSHead4)
+	ts.Run(4, nil, nil)
+	ht.ExpValidated(t, 4, nil)
+
 	chain.SetNextSyncPeriod(2)
-	headSync.Process(nil)
-	ht.ExpValidated(t, 6, []types.SignedHeader{testSHead3})
-	headSync.Process([]request.Event{
-		{Server: testServer3, Type: request.EvUnregistered},
-	})
-	ht.ExpValidated(t, 7, nil)
+	ts.Run(5, nil, nil)
+	ht.ExpValidated(t, 5, []types.SignedHeader{testSHead3})
+
+	ts.RemoveServer(testServer3)
+	ts.Run(6, nil, nil)
+	ht.ExpValidated(t, 6, nil)
+
 	chain.SetNextSyncPeriod(3)
-	headSync.Process(nil)
-	ht.ExpValidated(t, 8, nil)
-	headSync.Process([]request.Event{
-		{Server: testServer2, Type: EvNewSignedHead, Data: testSHead4},
-	})
-	ht.ExpValidated(t, 9, []types.SignedHeader{testSHead4})
+	ts.Run(7, nil, nil)
+	ht.ExpValidated(t, 7, nil)
+
+	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead4)
+	ts.Run(8, nil, nil)
+	ht.ExpValidated(t, 8, []types.SignedHeader{testSHead4})
 }
 
 func TestPrefetchHead(t *testing.T) {
 	chain := &TestCommitteeChain{}
 	ht := &TestHeadTracker{}
 	headSync := NewHeadSync(ht, chain)
+	ts := NewTestScheduler(t, headSync)
 
-	ht.ExpPrefetch(t, 1, testHead0) // no servers registered
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: request.EvRegistered},
-		{Server: testServer1, Type: EvNewHead, Data: testHead1},
-	})
-	ht.ExpPrefetch(t, 2, testHead1) // s1: h1
-	headSync.Process([]request.Event{
-		{Server: testServer2, Type: request.EvRegistered},
-		{Server: testServer2, Type: EvNewHead, Data: testHead2},
-	})
-	ht.ExpPrefetch(t, 3, testHead2) // s1: h1, s2: h2
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: EvNewHead, Data: testHead2},
-	})
-	ht.ExpPrefetch(t, 4, testHead2) // s1: h2, s2: h2
-	headSync.Process([]request.Event{
-		{Server: testServer3, Type: request.EvRegistered},
-		{Server: testServer3, Type: EvNewHead, Data: testHead3},
-	})
-	ht.ExpPrefetch(t, 5, testHead2) // s1: h2, s2: h2, s3: h3
-	headSync.Process([]request.Event{
-		{Server: testServer4, Type: request.EvRegistered},
-		{Server: testServer4, Type: EvNewHead, Data: testHead4},
-	})
-	ht.ExpPrefetch(t, 6, testHead2) // s1: h2, s2: h2, s3: h3, s4: h4
-	headSync.Process([]request.Event{
-		{Server: testServer2, Type: EvNewHead, Data: testHead3},
-	})
-	ht.ExpPrefetch(t, 7, testHead3) // s1: h2, s2: h3, s3: h3, s4: h4
-	headSync.Process([]request.Event{
-		{Server: testServer3, Type: request.EvUnregistered},
-	})
-	ht.ExpPrefetch(t, 8, testHead4) // s1: h2, s2: h3, s4: h4
-	headSync.Process([]request.Event{
-		{Server: testServer1, Type: request.EvUnregistered},
-	})
-	ht.ExpPrefetch(t, 9, testHead4) // s2: h3, s4: h4
-	headSync.Process([]request.Event{
-		{Server: testServer4, Type: request.EvUnregistered},
-	})
-	ht.ExpPrefetch(t, 10, testHead3) // s2: h3
-	headSync.Process([]request.Event{
-		{Server: testServer2, Type: request.EvUnregistered},
-	})
-	ht.ExpPrefetch(t, 11, testHead0) // no servers registered
+	ht.ExpPrefetch(t, 0, testHead0) // no servers registered
+
+	ts.AddServer(testServer1, 1)
+	ts.ServerEvent(EvNewHead, testServer1, testHead1)
+	ts.Run(1, nil, nil)
+	ht.ExpPrefetch(t, 1, testHead1) // s1: h1
+
+	ts.AddServer(testServer2, 1)
+	ts.ServerEvent(EvNewHead, testServer2, testHead2)
+	ts.Run(2, nil, nil)
+	ht.ExpPrefetch(t, 2, testHead2) // s1: h1, s2: h2
+
+	ts.ServerEvent(EvNewHead, testServer1, testHead2)
+	ts.Run(3, nil, nil)
+	ht.ExpPrefetch(t, 3, testHead2) // s1: h2, s2: h2
+
+	ts.AddServer(testServer3, 1)
+	ts.ServerEvent(EvNewHead, testServer3, testHead3)
+	ts.Run(4, nil, nil)
+	ht.ExpPrefetch(t, 4, testHead2) // s1: h2, s2: h2, s3: h3
+
+	ts.AddServer(testServer4, 1)
+	ts.ServerEvent(EvNewHead, testServer4, testHead4)
+	ts.Run(5, nil, nil)
+	ht.ExpPrefetch(t, 5, testHead2) // s1: h2, s2: h2, s3: h3, s4: h4
+
+	ts.ServerEvent(EvNewHead, testServer2, testHead3)
+	ts.Run(6, nil, nil)
+	ht.ExpPrefetch(t, 6, testHead3) // s1: h2, s2: h3, s3: h3, s4: h4
+
+	ts.RemoveServer(testServer3)
+	ts.Run(7, nil, nil)
+	ht.ExpPrefetch(t, 7, testHead4) // s1: h2, s2: h3, s4: h4
+
+	ts.RemoveServer(testServer1)
+	ts.Run(8, nil, nil)
+	ht.ExpPrefetch(t, 8, testHead4) // s2: h3, s4: h4
+
+	ts.RemoveServer(testServer4)
+	ts.Run(9, nil, nil)
+	ht.ExpPrefetch(t, 9, testHead3) // s2: h3
+
+	ts.RemoveServer(testServer2)
+	ts.Run(10, nil, nil)
+	ht.ExpPrefetch(t, 10, testHead0) // no servers registered
 }

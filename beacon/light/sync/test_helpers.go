@@ -62,12 +62,16 @@ func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq req
 		return
 	}
 	if !ok {
-		ts.t.Errorf("Missing request in test case #%d (expected none, got %v)", testIndex, expReqWithID)
+		ts.t.Errorf("Missing request in test case #%d (expected %v, got none)", testIndex, expReqWithID)
 		return
 	}
 	if req != expReqWithID {
-		ts.t.Errorf("Wrong request in test case #%d (expected %v, got %v)", testIndex, req, expReqWithID)
+		ts.t.Errorf("Wrong request in test case #%d (expected %v, got %v)", testIndex, expReqWithID, req)
 	}
+}
+
+func (ts *TestScheduler) Request(testIndex int) request.RequestWithID {
+	return ts.sent[testIndex]
 }
 
 func (ts *TestScheduler) ServerEvent(evType *request.EventType, server request.Server, data any) {
@@ -98,6 +102,20 @@ func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, 
 func (ts *TestScheduler) AddServer(server request.Server, allowance int) {
 	ts.servers = append(ts.servers, server)
 	ts.allowance[server] = allowance
+	ts.ServerEvent(request.EvRegistered, server, nil)
+}
+
+func (ts *TestScheduler) RemoveServer(server request.Server) {
+	ts.servers = append(ts.servers, server)
+	for i, s := range ts.servers {
+		if s == server {
+			copy(ts.servers[i:len(ts.servers)-1], ts.servers[i+1:])
+			ts.servers = ts.servers[:len(ts.servers)-1]
+			break
+		}
+	}
+	delete(ts.allowance, server)
+	ts.ServerEvent(request.EvUnregistered, server, nil)
 }
 
 func (ts *TestScheduler) AddAllowance(server request.Server, allowance int) {
@@ -129,6 +147,7 @@ func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request
 		Request:     bestReq,
 	}
 	ts.sent[testIndex] = req
+	ts.RequestEvent(request.EvRequest, testIndex, nil)
 	return req, true
 }
 

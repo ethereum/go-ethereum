@@ -17,8 +17,6 @@
 package sync
 
 import (
-	"math"
-
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
@@ -59,7 +57,6 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
 		headTracker:      headTracker,
 		chain:            chain,
-		nextSyncPeriod:   math.MaxUint64,
 		unvalidatedHeads: make(map[request.Server]types.SignedHeader),
 		serverHeads:      make(map[request.Server]types.HeadInfo),
 		headServerCount:  make(map[types.HeadInfo]headServerCount),
@@ -105,6 +102,9 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 // processUnvalidatedHeads iterates the list of unvalidated heads and validates
 // those which can be validated.
 func (s *HeadSync) processUnvalidatedHeads() {
+	if !s.chainInit {
+		return
+	}
 	for server, signedHead := range s.unvalidatedHeads {
 		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
 			s.headTracker.Validate(signedHead)
