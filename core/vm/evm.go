@@ -414,20 +414,30 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+func (evm *EVM) create(
+	caller ContractRef,
+	codeAndHash *codeAndHash,
+	gas uint64,
+	value *big.Int,
+	address common.Address,
+	typ OpCode,
+	updateCallerNonce bool,
+) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Address{}, gas, ErrDepth
 	}
-	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+	if value.Sign() > 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
-	nonce := evm.StateDB.GetNonce(caller.Address())
-	if nonce+1 < nonce {
-		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	if updateCallerNonce {
+		nonce := evm.StateDB.GetNonce(caller.Address())
+		if nonce+1 < nonce {
+			return nil, common.Address{}, gas, ErrNonceUintOverflow
+		}
+		evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	}
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
 	if evm.chainRules.IsBerlin {
@@ -444,7 +454,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+	// transfer if value bigger than zero
+	if value.Sign() > 0 {
+		evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+	}
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -507,7 +520,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, true)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -517,7 +530,15 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, true)
+}
+
+// CreateAt creates a new contract using code as deployment code at the given address
+//
+// the behaviour is similar to Create2 execpt we don't compute the address
+// using hash and it doesn't increment the nonce for the caller
+func (evm *EVM) CreateAt(caller ContractRef, to common.Address, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	return evm.create(caller, &codeAndHash{code: code}, gas, endowment, to, CREATE2, false)
 }
 
 // ChainConfig returns the environment's chain configuration
