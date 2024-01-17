@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -61,17 +62,18 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		random = &header.MixDigest
 	}
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		BlobBaseFee: blobBaseFee,
-		GasLimit:    header.GasLimit,
-		Random:      random,
+		CanTransfer:   CanTransfer,
+		Transfer:      Transfer,
+		GetHash:       GetHashFn(header, chain),
+		GetPrecompile: GetPrecompile,
+		Coinbase:      beneficiary,
+		BlockNumber:   new(big.Int).Set(header.Number),
+		Time:          header.Time,
+		Difficulty:    new(big.Int).Set(header.Difficulty),
+		BaseFee:       baseFee,
+		BlobBaseFee:   blobBaseFee,
+		GasLimit:      header.GasLimit,
+		Random:        random,
 	}
 }
 
@@ -125,6 +127,24 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 		}
 		return common.Hash{}
 	}
+}
+
+func GetPrecompile(rules params.Rules, addr common.Address) (vm.PrecompiledContract, bool) {
+	var precompiles map[common.Address]vm.PrecompiledContract
+	switch {
+	case rules.IsCancun:
+		precompiles = vm.PrecompiledContractsCancun
+	case rules.IsBerlin:
+		precompiles = vm.PrecompiledContractsBerlin
+	case rules.IsIstanbul:
+		precompiles = vm.PrecompiledContractsIstanbul
+	case rules.IsByzantium:
+		precompiles = vm.PrecompiledContractsByzantium
+	default:
+		precompiles = vm.PrecompiledContractsHomestead
+	}
+	p, ok := precompiles[addr]
+	return p, ok
 }
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.

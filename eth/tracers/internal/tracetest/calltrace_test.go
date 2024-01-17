@@ -124,14 +124,15 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = vm.BlockContext{
-					CanTransfer: core.CanTransfer,
-					Transfer:    core.Transfer,
-					Coinbase:    test.Context.Miner,
-					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        uint64(test.Context.Time),
-					Difficulty:  (*big.Int)(test.Context.Difficulty),
-					GasLimit:    uint64(test.Context.GasLimit),
-					BaseFee:     test.Genesis.BaseFee,
+					CanTransfer:   core.CanTransfer,
+					Transfer:      core.Transfer,
+					GetPrecompile: core.GetPrecompile,
+					Coinbase:      test.Context.Miner,
+					BlockNumber:   new(big.Int).SetUint64(uint64(test.Context.Number)),
+					Time:          uint64(test.Context.Time),
+					Difficulty:    (*big.Int)(test.Context.Difficulty),
+					GasLimit:      uint64(test.Context.GasLimit),
+					BaseFee:       test.Genesis.BaseFee,
 				}
 				triedb, _, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
@@ -223,13 +224,14 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		GasPrice: tx.GasPrice(),
 	}
 	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    test.Context.Miner,
-		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        uint64(test.Context.Time),
-		Difficulty:  (*big.Int)(test.Context.Difficulty),
-		GasLimit:    uint64(test.Context.GasLimit),
+		CanTransfer:   core.CanTransfer,
+		Transfer:      core.Transfer,
+		GetPrecompile: core.GetPrecompile,
+		Coinbase:      test.Context.Miner,
+		BlockNumber:   new(big.Int).SetUint64(uint64(test.Context.Number)),
+		Time:          uint64(test.Context.Time),
+		Difficulty:    (*big.Int)(test.Context.Difficulty),
+		GasLimit:      uint64(test.Context.GasLimit),
 	}
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
@@ -267,13 +269,14 @@ func TestInternals(t *testing.T) {
 			GasPrice: big.NewInt(1),
 		}
 		context = vm.BlockContext{
-			CanTransfer: core.CanTransfer,
-			Transfer:    core.Transfer,
-			Coinbase:    common.Address{},
-			BlockNumber: new(big.Int).SetUint64(8000000),
-			Time:        5,
-			Difficulty:  big.NewInt(0x30000),
-			GasLimit:    uint64(6000000),
+			CanTransfer:   core.CanTransfer,
+			Transfer:      core.Transfer,
+			GetPrecompile: core.GetPrecompile,
+			Coinbase:      common.Address{},
+			BlockNumber:   new(big.Int).SetUint64(8000000),
+			Time:          5,
+			Difficulty:    big.NewInt(0x30000),
+			GasLimit:      uint64(6000000),
 		}
 	)
 	mkTracer := func(name string, cfg json.RawMessage) tracers.Tracer {

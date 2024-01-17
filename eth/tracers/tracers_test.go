@@ -52,14 +52,15 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		GasPrice: tx.GasPrice(),
 	}
 	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    common.Address{},
-		BlockNumber: new(big.Int).SetUint64(uint64(5)),
-		Time:        5,
-		Difficulty:  big.NewInt(0xffffffff),
-		GasLimit:    gas,
-		BaseFee:     big.NewInt(8),
+		CanTransfer:   core.CanTransfer,
+		Transfer:      core.Transfer,
+		GetPrecompile: core.GetPrecompile,
+		Coinbase:      common.Address{},
+		BlockNumber:   new(big.Int).SetUint64(uint64(5)),
+		Time:          5,
+		Difficulty:    big.NewInt(0xffffffff),
+		GasLimit:      gas,
+		BaseFee:       big.NewInt(8),
 	}
 	alloc := core.GenesisAlloc{}
 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
