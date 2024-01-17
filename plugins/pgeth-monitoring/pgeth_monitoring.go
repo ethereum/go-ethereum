@@ -9,9 +9,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/redis/go-redis/v9"
-
-	"github.com/attestantio/go-eth2-client/http"
+  "github.com/redis/go-redis/v9"
+  "github.com/attestantio/go-eth2-client/http"
 	"github.com/rs/zerolog"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -245,7 +244,7 @@ func (me *MonitoringEngine) analyzePending(ctx context.Context, txs []*types.Tra
 	mt := tracer.MonitoringTracer{}
 	var vmConfig vm.Config = vm.Config{
 		Tracer:                  &mt,
-		NoBaseFee:               false,
+		NoBaseFee:               true,
 		EnablePreimageRecording: false,
 		ExtraEips:               []int{},
 	}
@@ -308,7 +307,7 @@ func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
 			return
 		case newHead := <-headChan:
 			me.update(ctx, newHead.Block)
-			me.ptk.Logger.Info("Head was updated", "number", newHead.Block.NumberU64(), "hash", newHead.Block.Hash(), "root", newHead.Block.Root())
+			me.ptk.Logger.Info(fmt.Sprintf("Head was updated, number: %d, hash: %s, root: %s", newHead.Block.NumberU64(), newHead.Block.Hash(), newHead.Block.Root()))
 
 			analyzedTransactions := me.analyze(ctx, newHead.Block, "head")
 			cache[newHead.Block.Hash()] = CachedBlockSimulation{
