@@ -148,26 +148,41 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.feeRecipientLock.Unlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+	var (
+		header   = c.eth.BlockChain().CurrentBlock()
+		number   = new(big.Int).Add(header.Number, big.NewInt(1))
+		isCancun = c.eth.BlockChain().Config().IsCancun(number, timestamp)
+	)
+	if c.curForkchoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, &engine.PayloadAttributes{
-		Timestamp:             timestamp,
-		SuggestedFeeRecipient: feeRecipient,
-		Withdrawals:           withdrawals,
-		Random:                random,
-	})
+
+	var (
+		attrs = &engine.PayloadAttributes{
+			Timestamp:             timestamp,
+			SuggestedFeeRecipient: feeRecipient,
+			Withdrawals:           withdrawals,
+			Random:                random,
+		}
+		fcResponse engine.ForkChoiceResponse
+		err        error
+	)
+	if isCancun {
+		attrs.BeaconRoot = &common.Hash{}
+		fcResponse, err = c.engineAPI.ForkchoiceUpdatedV3(c.curForkchoiceState, attrs)
+	} else {
+		fcResponse, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, attrs)
+	}
 	if err != nil {
 		return err
 	}
 	if fcResponse == engine.STATUS_SYNCING {
 		return errors.New("chain rewind prevented invocation of payload creation")
 	}
-
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
 		return err
@@ -186,8 +201,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	// Mark the payload as canon
-	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
-		return err
+	if isCancun {
+		if _, err = c.engineAPI.NewPayloadV3(*payload, []common.Hash{}, &common.Hash{}); err != nil {
+			return err
+		}
+	} else {
+		if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
+			return err
+		}
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
