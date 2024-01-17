@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -77,6 +78,17 @@ func simBlockResultFromHeader(header *types.Header, callResults []simCallResult)
 	}
 }
 
+// repairLogs updates the block hash in the logs present in the result of
+// a simulated block. This is needed as during execution when logs are collected
+// the block hash is not known.
+func (b *simBlockResult) repairLogs() {
+	for i := range b.Calls {
+		for j := range b.Calls[i].Logs {
+			b.Calls[i].Logs[j].BlockHash = b.Hash
+		}
+	}
+}
+
 type simCallResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
@@ -101,22 +113,20 @@ type simOpts struct {
 }
 
 type simulator struct {
-	blockNrOrHash rpc.BlockNumberOrHash
-	b             Backend
-	hashes        []common.Hash
+	b              Backend
+	hashes         []common.Hash
+	state          *state.StateDB
+	base           *types.Header
+	traceTransfers bool
+	validate       bool
 }
 
-func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResult, error) {
-	state, base, err := sim.b.StateAndHeaderByNumberOrHash(ctx, sim.blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBlockResult, error) {
 	// Setup context so it may be cancelled before the calls completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var (
 		cancel  context.CancelFunc
 		timeout = sim.b.RPCEVMTimeout()
-		blocks  = opts.BlockStateCalls
 	)
 	if timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -126,7 +136,7 @@ func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResu
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	headers, err := makeHeaders(sim.b.ChainConfig(), blocks, base)
+	headers, err := makeHeaders(sim.b.ChainConfig(), blocks, sim.base)
 	if err != nil {
 		return nil, err
 	}
@@ -134,118 +144,126 @@ func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResu
 		results = make([]simBlockResult, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		gp          = new(core.GasPool).AddGas(sim.b.RPCGasCap())
-		precompiles = sim.activePrecompiles(ctx, base)
-		numHashes   = headers[len(headers)-1].Number.Uint64() - base.Number.Uint64() + 256
+		precompiles = sim.activePrecompiles(ctx, sim.base)
+		numHashes   = headers[len(headers)-1].Number.Uint64() - sim.base.Number.Uint64() + 256
 	)
 	// Cache for the block hashes.
 	sim.hashes = make([]common.Hash, numHashes)
 	for bi, block := range blocks {
-		header := headers[bi]
-		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
-		if block.BlockOverrides != nil && block.BlockOverrides.BlobGasPrice != nil {
-			blockContext.BlobBaseFee = block.BlockOverrides.BlobGasPrice.ToInt()
-		}
-		// Respond to BLOCKHASH requests.
-		blockContext.GetHash = func(n uint64) common.Hash {
-			h, err := sim.getBlockHash(ctx, n, base, headers)
-			if err != nil {
-				log.Warn(err.Error())
-				return common.Hash{}
-			}
-			return h
-		}
-		// State overrides are applied prior to execution of a block
-		if err := block.StateOverrides.Apply(state, precompiles); err != nil {
-			return nil, err
-		}
-		var (
-			gasUsed     uint64
-			txes        = make([]*types.Transaction, len(block.Calls))
-			callResults = make([]simCallResult, len(block.Calls))
-			receipts    = make([]*types.Receipt, len(block.Calls))
-			tracer      = newTracer(opts.TraceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
-			config      = sim.b.ChainConfig()
-			vmConfig    = &vm.Config{
-				NoBaseFee: true,
-				// Block hash will be repaired after execution.
-				Tracer: tracer,
-			}
-			evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, state, config, *vmConfig)
-		)
-		// It is possible to override precompiles with EVM bytecode, or
-		// move them to another address.
-		if precompiles != nil {
-			evm.SetPrecompiles(precompiles)
-		}
-		for i, call := range block.Calls {
-			// TODO: Pre-estimate nonce and gas
-			// TODO: Move gas fees sanitizing to beginning of func
-			if err := sim.sanitizeCall(&call, state, &gasUsed, blockContext); err != nil {
-				return nil, err
-			}
-			tx := call.ToTransaction()
-			txes[i] = tx
-
-			msg, err := call.ToMessage(gp.Gas(), header.BaseFee, !opts.Validation)
-			if err != nil {
-				return nil, err
-			}
-			tracer.reset(tx.Hash(), uint(i))
-			evm.Reset(core.NewEVMTxContext(msg), state)
-			result, err := applyMessageWithEVM(ctx, evm, msg, state, timeout, gp)
-			if err != nil {
-				txErr := txValidationError(err)
-				return nil, txErr
-			}
-			// Update the state with pending changes.
-			var root []byte
-			if config.IsByzantium(blockContext.BlockNumber) {
-				state.Finalise(true)
-			} else {
-				root = state.IntermediateRoot(config.IsEIP158(blockContext.BlockNumber)).Bytes()
-			}
-			gasUsed += result.UsedGas
-			receipts[i] = core.MakeReceipt(evm, result, state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
-			// If the result contains a revert reason, try to unpack it.
-			if len(result.Revert()) > 0 {
-				result.Err = newRevertError(result.Revert())
-			}
-			logs := tracer.Logs()
-			callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
-			if result.Failed() {
-				callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
-				if errors.Is(result.Err, vm.ErrExecutionReverted) {
-					callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeReverted}
-				} else {
-					callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
-				}
-			} else {
-				callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
-			}
-			callResults[i] = callRes
-		}
-		var (
-			parentHash common.Hash
-			err        error
-		)
-		parentHash, err = sim.getBlockHash(ctx, header.Number.Uint64()-1, base, headers)
+		result, err := sim.processBlock(ctx, &block, headers[bi], headers, gp, precompiles, timeout)
 		if err != nil {
 			return nil, err
 		}
-		header.ParentHash = parentHash
-		header.Root = state.IntermediateRoot(true)
-		header.GasUsed = gasUsed
-		if len(txes) > 0 {
-			header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
-		}
-		if len(receipts) > 0 {
-			header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
-			header.Bloom = types.CreateBloom(types.Receipts(receipts))
-		}
-		results[bi] = simBlockResultFromHeader(header, callResults)
-		repairLogs(results, header.Hash())
+		results[bi] = *result
 	}
 	return results, nil
+}
+
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
+	blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
+	if block.BlockOverrides != nil && block.BlockOverrides.BlobGasPrice != nil {
+		blockContext.BlobBaseFee = block.BlockOverrides.BlobGasPrice.ToInt()
+	}
+	// Respond to BLOCKHASH requests.
+	blockContext.GetHash = func(n uint64) common.Hash {
+		h, err := sim.getBlockHash(ctx, n, sim.base, headers)
+		if err != nil {
+			log.Warn(err.Error())
+			return common.Hash{}
+		}
+		return h
+	}
+	// State overrides are applied prior to execution of a block
+	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
+		return nil, err
+	}
+	var (
+		gasUsed     uint64
+		txes        = make([]*types.Transaction, len(block.Calls))
+		callResults = make([]simCallResult, len(block.Calls))
+		receipts    = make([]*types.Receipt, len(block.Calls))
+		tracer      = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
+		config      = sim.b.ChainConfig()
+		vmConfig    = &vm.Config{
+			NoBaseFee: true,
+			// Block hash will be repaired after execution.
+			Tracer: tracer,
+		}
+		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, config, *vmConfig)
+	)
+	// It is possible to override precompiles with EVM bytecode, or
+	// move them to another address.
+	if precompiles != nil {
+		evm.SetPrecompiles(precompiles)
+	}
+	for i, call := range block.Calls {
+		// TODO: Pre-estimate nonce and gas
+		// TODO: Move gas fees sanitizing to beginning of func
+		if err := sim.sanitizeCall(&call, sim.state, &gasUsed, blockContext); err != nil {
+			return nil, err
+		}
+		tx := call.ToTransaction()
+		txes[i] = tx
+
+		msg, err := call.ToMessage(gp.Gas(), header.BaseFee, !sim.validate)
+		if err != nil {
+			return nil, err
+		}
+		tracer.reset(tx.Hash(), uint(i))
+		evm.Reset(core.NewEVMTxContext(msg), sim.state)
+		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, gp)
+		if err != nil {
+			txErr := txValidationError(err)
+			return nil, txErr
+		}
+		// Update the state with pending changes.
+		var root []byte
+		if config.IsByzantium(blockContext.BlockNumber) {
+			sim.state.Finalise(true)
+		} else {
+			root = sim.state.IntermediateRoot(config.IsEIP158(blockContext.BlockNumber)).Bytes()
+		}
+		gasUsed += result.UsedGas
+		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
+		// If the result contains a revert reason, try to unpack it.
+		if len(result.Revert()) > 0 {
+			result.Err = newRevertError(result.Revert())
+		}
+		logs := tracer.Logs()
+		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+		if result.Failed() {
+			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
+			if errors.Is(result.Err, vm.ErrExecutionReverted) {
+				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeReverted}
+			} else {
+				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
+			}
+		} else {
+			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
+		}
+		callResults[i] = callRes
+	}
+	var (
+		parentHash common.Hash
+		err        error
+	)
+	parentHash, err = sim.getBlockHash(ctx, header.Number.Uint64()-1, sim.base, headers)
+	if err != nil {
+		return nil, err
+	}
+	header.ParentHash = parentHash
+	header.Root = sim.state.IntermediateRoot(true)
+	header.GasUsed = gasUsed
+	if len(txes) > 0 {
+		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
+	}
+	if len(receipts) > 0 {
+		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
+		header.Bloom = types.CreateBloom(types.Receipts(receipts))
+	}
+	result := simBlockResultFromHeader(header, callResults)
+	result.repairLogs()
+	return &result, nil
 }
 
 func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, gasUsed *uint64, blockContext vm.BlockContext) error {
@@ -343,19 +361,6 @@ func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header)
 		rules        = sim.b.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 	)
 	return vm.ActivePrecompiledContracts(rules).Copy()
-}
-
-// repairLogs updates the block hash in the logs present in a multicall
-// result object. This is needed as during execution when logs are collected
-// the block hash is not known.
-func repairLogs(results []simBlockResult, blockHash common.Hash) {
-	for i := range results {
-		for j := range results[i].Calls {
-			for k := range results[i].Calls[j].Logs {
-				results[i].Calls[j].Logs[k].BlockHash = blockHash
-			}
-		}
-	}
 }
 
 func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Header) ([]*types.Header, error) {

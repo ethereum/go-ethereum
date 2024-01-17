@@ -1254,8 +1254,12 @@ func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrH
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
 	}
-	mc := &simulator{b: s.b, blockNrOrHash: *blockNrOrHash}
-	return mc.execute(ctx, opts)
+	state, base, err := s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	sim := &simulator{b: s.b, state: state, base: base, traceTransfers: opts.TraceTransfers, validate: opts.Validation}
+	return sim.execute(ctx, opts.BlockStateCalls)
 }
 
 // DoEstimateGas returns the lowest possible gas limit that allows the transaction to run
