@@ -63,7 +63,7 @@ type simBlockResult struct {
 	Calls        []simCallResult `json:"calls"`
 }
 
-func mcBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
+func simBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
 	return simBlockResult{
 		Number:       hexutil.Uint64(header.Number.Uint64()),
 		Hash:         header.Hash(),
@@ -242,7 +242,7 @@ func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResu
 			header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
 			header.Bloom = types.CreateBloom(types.Receipts(receipts))
 		}
-		results[bi] = mcBlockResultFromHeader(header, callResults)
+		results[bi] = simBlockResultFromHeader(header, callResults)
 		repairLogs(results, header.Hash())
 	}
 	return results, nil
