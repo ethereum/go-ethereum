@@ -122,3 +122,8 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 	vh[0] = 0x01 // version
 	return vh
 }
+
+// IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.
+func IsValidVersionedHash(h []byte) bool {
+	return len(h) == 32 && h[0] == 0x01
+}
