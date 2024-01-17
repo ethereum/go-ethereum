@@ -78,6 +78,22 @@ var (
 			TimeoutPeriod:        30,
 			MinePeriod:           2,
 		},
+		7956000: { // 2024.01.17 Devnet Deplyment Issue
+			MaxMasternodes:       108,
+			SwitchRound:          7956000,
+			CertThreshold:        0.4,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        30,
+			MinePeriod:           2,
+		},
+		7974000: {
+			MaxMasternodes:       108,
+			SwitchRound:          7974000,
+			CertThreshold:        0.667,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        30,
+			MinePeriod:           2,
+		},
 	}
 
 	UnitTestV2Configs = map[uint64]*V2Config{
