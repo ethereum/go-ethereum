@@ -43,12 +43,22 @@ import (
 )
 
 var (
+	removeStateDataFlag = &cli.BoolFlag{
+		Name:  "remove.state",
+		Usage: "If set, selects the state data for removal",
+	}
+	removeChainDataFlag = &cli.BoolFlag{
+		Name:  "remove.chain",
+		Usage: "If set, selects the state data for removal",
+	}
+
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: "",
-		Flags:     utils.DatabaseFlags,
+		Flags: flags.Merge(utils.DatabaseFlags,
+			[]cli.Flag{removeStateDataFlag, removeChainDataFlag}),
 		Description: `
 Remove blockchain and state databases`,
 	}
@@ -211,11 +221,11 @@ func removeDB(ctx *cli.Context) error {
 	}
 	// Delete state data
 	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
-	confirmAndRemoveDB(statePaths, "state data")
+	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 
 	// Delete ancient chain
 	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
-	confirmAndRemoveDB(chainPaths, "ancient chain")
+	confirmAndRemoveDB(chainPaths, "ancient chain", ctx, removeChainDataFlag.Name)
 	return nil
 }
 
@@ -238,14 +248,26 @@ func removeFolder(dir string) {
 
 // confirmAndRemoveDB prompts the user for a last confirmation and removes the
 // list of folders if accepted.
-func confirmAndRemoveDB(paths []string, kind string) {
+func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFlagName string) {
+	var (
+		confirm bool
+		err     error
+	)
 	msg := fmt.Sprintf("Location(s) of '%s': \n", kind)
 	for _, path := range paths {
 		msg += fmt.Sprintf("\t- %s\n", path)
 	}
 	fmt.Println(msg)
-
-	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	if ctx.IsSet(removeFlagName) {
+		confirm = ctx.Bool(removeFlagName)
+		if confirm {
+			fmt.Printf("Remove '%s'? [y/n] y\n", kind)
+		} else {
+			fmt.Printf("Remove '%s'? [y/n] n\n", kind)
+		}
+	} else {
+		confirm, err = prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	}
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
