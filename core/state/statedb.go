@@ -670,17 +670,6 @@ func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newob
 	newobj = newObject(s, addr, nil)
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
-		if s.logger != nil {
-			if checkPrecompile {
-				// Precompiled contracts are touched during a call.
-				// Make sure we avoid emitting a new account event for them.
-				if _, ok := s.precompiles[addr]; !ok {
-					s.logger.OnNewAccount(addr)
-				}
-			} else {
-				s.logger.OnNewAccount(addr)
-			}
-		}
 	} else {
 		// The original account should be marked as destructed and all cached
 		// account and storage data should be cleared as well. Note, it must
@@ -709,6 +698,19 @@ func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newob
 		delete(s.accountsOrigin, prev.address)
 		delete(s.storagesOrigin, prev.address)
 	}
+
+	if s.logger != nil {
+		if checkPrecompile {
+			// Precompiled contracts are touched during a call.
+			// Make sure we avoid emitting a new account event for them.
+			if _, ok := s.precompiles[addr]; !ok {
+				s.logger.OnNewAccount(addr)
+			}
+		} else {
+			s.logger.OnNewAccount(addr)
+		}
+	}
+
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
 		return newobj, prev
