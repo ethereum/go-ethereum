@@ -56,7 +56,7 @@ func TestUpdateLeaks(t *testing.T) {
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
 		addr := common.BytesToAddress([]byte{i})
-		state.AddBalance(addr, big.NewInt(int64(11*i)), 0x0)
+		state.AddBalance(addr, big.NewInt(int64(11*i)), false, 0x0)
 		state.SetNonce(addr, uint64(42*i))
 		if i%2 == 0 {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
@@ -273,7 +273,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "AddBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.AddBalance(addr, big.NewInt(a.args[0]), 0x0)
+				s.AddBalance(addr, big.NewInt(a.args[0]), false, 0x0)
 			},
 			args: make([]int64, 1),
 		},
@@ -536,7 +536,7 @@ func TestTouchDelete(t *testing.T) {
 	s.state, _ = New(root, s.state.db, s.state.snaps)
 
 	snapshot := s.state.Snapshot()
-	s.state.AddBalance(common.Address{}, new(big.Int), 0x0)
+	s.state.AddBalance(common.Address{}, new(big.Int), false, 0x0)
 
 	if len(s.state.journal.dirties) != 1 {
 		t.Fatal("expected one dirty state object")

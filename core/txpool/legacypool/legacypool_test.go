@@ -309,7 +309,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 
 func testAddBalance(pool *LegacyPool, addr common.Address, amount *big.Int) {
 	pool.mu.Lock()
-	pool.currentState.AddBalance(addr, amount, 0x0)
+	pool.currentState.AddBalance(addr, amount, false, 0x0)
 	pool.mu.Unlock()
 }
 
@@ -470,7 +470,7 @@ func TestChainFork(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000), 0x0)
+		statedb.AddBalance(addr, big.NewInt(100000000000000), false, 0x0)
 
 		pool.chain = newTestBlockChain(pool.chainconfig, 1000000, statedb, new(event.Feed))
 		<-pool.requestReset(nil, nil)
@@ -499,7 +499,7 @@ func TestDoubleNonce(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000), 0x0)
+		statedb.AddBalance(addr, big.NewInt(100000000000000), false, 0x0)
 
 		pool.chain = newTestBlockChain(pool.chainconfig, 1000000, statedb, new(event.Feed))
 		<-pool.requestReset(nil, nil)
@@ -2662,7 +2662,7 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.GenerateKey()
 		account := crypto.PubkeyToAddress(key.PublicKey)
-		pool.currentState.AddBalance(account, big.NewInt(1000000), 0x0)
+		pool.currentState.AddBalance(account, big.NewInt(1000000), false, 0x0)
 		tx := transaction(uint64(0), 100000, key)
 		batches[i] = tx
 	}
