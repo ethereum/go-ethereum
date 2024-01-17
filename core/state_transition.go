@@ -315,7 +315,7 @@ func (st *StateTransition) preCheck() error {
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
-		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil. 
+		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
 		// However, messages created through RPC (eth_call) don't have this restriction.
 		if msg.To == nil {
 			return ErrBlobTxCreate
