@@ -24,9 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
 
-type TestServer struct{ ID int }
+type TestServer struct {
+	ts *TestScheduler
+	ID int
+}
 
-func (ts *TestServer) Fail(desc string) {}
+func (s *TestServer) Fail(desc string) {
+	s.ts.serverFail(s)
+}
 
 type TestScheduler struct {
 	t         *testing.T
@@ -35,6 +40,8 @@ type TestScheduler struct {
 	servers   []request.Server
 	allowance map[request.Server]int
 	sent      map[int]request.RequestWithID
+	testIndex int
+	expFail   map[request.Server]int // expected Server.Fail calls during next Run
 	lastId    request.ID
 }
 
@@ -43,13 +50,24 @@ func NewTestScheduler(t *testing.T, module request.Module) *TestScheduler {
 		t:         t,
 		module:    module,
 		allowance: make(map[request.Server]int),
+		expFail:   make(map[request.Server]int),
 		sent:      make(map[int]request.RequestWithID),
 	}
 }
 
 func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq request.Request) {
+	ts.testIndex = testIndex
 	ts.module.Process(ts.events)
 	ts.events = nil
+
+	for server, count := range ts.expFail {
+		delete(ts.expFail, server)
+		if count == 0 {
+			continue
+		}
+		ts.t.Errorf("Missing %d Server.Fail(s) from server %d in test case #%d", count, server.(*TestServer).ID, testIndex)
+	}
+
 	expReqWithID := request.RequestWithID{
 		ServerAndID: request.ServerAndID{Server: expServer, ID: ts.lastId + 1},
 		Request:     expReq,
@@ -100,6 +118,7 @@ func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, 
 }
 
 func (ts *TestScheduler) AddServer(server request.Server, allowance int) {
+	server.(*TestServer).ts = ts
 	ts.servers = append(ts.servers, server)
 	ts.allowance[server] = allowance
 	ts.ServerEvent(request.EvRegistered, server, nil)
@@ -120,6 +139,18 @@ func (ts *TestScheduler) RemoveServer(server request.Server) {
 
 func (ts *TestScheduler) AddAllowance(server request.Server, allowance int) {
 	ts.allowance[server] += allowance
+}
+
+func (ts *TestScheduler) ExpFail(server request.Server) {
+	ts.expFail[server]++
+}
+
+func (ts *TestScheduler) serverFail(server request.Server) {
+	if ts.expFail[server] == 0 {
+		ts.t.Errorf("Unexpected Server.Fail from server %d in test case #%d", server.(*TestServer).ID, ts.testIndex)
+		return
+	}
+	ts.expFail[server]--
 }
 
 func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request.Server) (request.Request, float32)) (request.RequestWithID, bool) {

@@ -40,8 +40,9 @@ func TestCheckpointInit(t *testing.T) {
 	ts.RequestEvent(request.EvTimeout, 1, nil)
 	ts.Run(2, testServer2, ReqCheckpointData(checkpointHash))
 
-	// invalid response to server 2; expect init state to still be false
+	// invalid response from server 2; expect init state to still be false
 	ts.RequestEvent(request.EvResponse, 2, &types.BootstrapData{Header: types.Header{Slot: 123456}})
+	ts.ExpFail(testServer2)
 	ts.Run(3, nil, nil)
 	chain.ExpInit(t, false)
 
@@ -172,6 +173,7 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	req1x := ts.Request(1)
 	req1x.Request = ReqUpdates{FirstPeriod: 10, Count: 5}
 	ts.RequestEvent(request.EvResponse, 1, testRespUpdate(req1x))
+	ts.ExpFail(testServer3)
 	ts.Run(5, nil, nil)
 	// expect no progress of chain head
 	chain.ExpNextSyncPeriod(t, 15)
