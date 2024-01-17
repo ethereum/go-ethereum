@@ -9,9 +9,10 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-  "github.com/redis/go-redis/v9"
-  
-  "github.com/attestantio/go-eth2-client/http"
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/attestantio/go-eth2-client/http"
 	"github.com/rs/zerolog"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -340,15 +341,15 @@ func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
 				me.eth2 = client
 			}
 
-			res, err := me.eth2.(eth2client.SignedBeaconBlockProvider).SignedBeaconBlock(ctx, "finalized")
+			res, err := me.eth2.(eth2client.SignedBeaconBlockProvider).SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{Block: "finalized"})
 			if err != nil {
 				me.errChan <- err
 				continue
 			}
 
-			newHighestFinalized := res.Capella.Message.Body.ExecutionPayload.BlockNumber
+			newHighestFinalized := res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
 			if highestFinalized == 0 {
-				highestFinalized = res.Capella.Message.Body.ExecutionPayload.BlockNumber
+				highestFinalized = res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
 				me.ptk.Logger.Info("Finalized head was updated", "number", highestFinalized)
 			} else if newHighestFinalized > highestFinalized {
 				me.ptk.Logger.Info("Updating finalized head", "from", highestFinalized, "to", newHighestFinalized)
