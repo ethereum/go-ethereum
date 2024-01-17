@@ -3,7 +3,7 @@ package tracers
 import (
 	"testing"
 
-	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
+	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
 	"github.com/stretchr/testify/require"
 )
 
