@@ -84,6 +84,10 @@ func (s *testService) Sleep(ctx context.Context, duration time.Duration) {
 	time.Sleep(duration)
 }
 
+func (s *testService) Null() any {
+	return nil
+}
+
 func (s *testService) Block(ctx context.Context) error {
 	<-ctx.Done()
 	return errors.New("context canceled in testservice_block")
