@@ -205,8 +205,7 @@ func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResu
 				root = state.IntermediateRoot(config.IsEIP158(blockContext.BlockNumber)).Bytes()
 			}
 			gasUsed += result.UsedGas
-			receipt := core.MakeReceipt(evm, result, state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
-			receipts[i] = receipt
+			receipts[i] = core.MakeReceipt(evm, result, state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
 			// If the result contains a revert reason, try to unpack it.
 			if len(result.Revert()) > 0 {
 				result.Err = newRevertError(result.Revert())
@@ -236,8 +235,13 @@ func (sim *simulator) execute(ctx context.Context, opts simOpts) ([]simBlockResu
 		header.ParentHash = parentHash
 		header.Root = state.IntermediateRoot(true)
 		header.GasUsed = gasUsed
-		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
-		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
+		if len(txes) > 0 {
+			header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
+		}
+		if len(receipts) > 0 {
+			header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
+			header.Bloom = types.CreateBloom(types.Receipts(receipts))
+		}
 		results[bi] = mcBlockResultFromHeader(header, callResults)
 		repairLogs(results, header.Hash())
 	}
@@ -388,10 +392,12 @@ func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Head
 			baseFee = eip1559.CalcBaseFee(config, header)
 		}
 		header = &types.Header{
-			UncleHash:  types.EmptyUncleHash,
-			Coinbase:   base.Coinbase,
-			Difficulty: base.Difficulty,
-			GasLimit:   base.GasLimit,
+			UncleHash:   types.EmptyUncleHash,
+			ReceiptHash: types.EmptyReceiptsHash,
+			TxHash:      types.EmptyTxsHash,
+			Coinbase:    base.Coinbase,
+			Difficulty:  base.Difficulty,
+			GasLimit:    base.GasLimit,
 			//MixDigest:  header.MixDigest,
 			BaseFee: baseFee,
 		}
