@@ -268,6 +268,8 @@ func ethFilter(args []string) (nodeFilter, error) {
 		filter = forkid.NewStaticFilter(params.MumbaiChainConfig, params.MumbaiGenesisHash)
 	case "bor-mainnet":
 		filter = forkid.NewStaticFilter(params.BorMainnetChainConfig, params.BorMainnetGenesisHash)
+	case "bor-amoy":
+		filter = forkid.NewStaticFilter(params.AmoyChainConfig, params.AmoyGenesisHash)
 	default:
 		return nil, fmt.Errorf("unknown network %q", args[0])
 	}

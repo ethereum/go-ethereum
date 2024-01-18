@@ -20,7 +20,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
-- ```chain```: Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file (default: mainnet)
+- ```chain```: Name of the chain to sync ('mumbai', 'mainnet', 'amoy') or path to a genesis file (default: mainnet)
 
 - ```config```: Path to the TOML configuration file
 

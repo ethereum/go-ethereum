@@ -38,6 +38,7 @@ var flagMap = map[string][]string{
 	"mainnet":                          {"BoolFlag", "No"},
 	"goerli":                           {"BoolFlag", "No"},
 	"bor-mumbai":                       {"BoolFlag", "No"},
+	"bor-amoy":                         {"BoolFlag", "No"},
 	"bor-mainnet":                      {"BoolFlag", "No"},
 	"sepolia":                          {"BoolFlag", "No"},
 	"exitwhensynced":                   {"BoolFlag", "No"},
@@ -209,6 +210,8 @@ var replacedFlagsMapFlagAndValue = map[string]map[string]map[string]string{
 			"137":     "mainnet",
 			"'80001'": "mumbai",
 			"80001":   "mumbai",
+			"'80002'": "amoy",
+			"80002":   "amoy",
 		},
 	},
 	"verbosity": {
