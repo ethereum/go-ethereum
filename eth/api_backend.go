@@ -19,7 +19,6 @@ package eth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -310,14 +309,24 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 }
 
 // GetTransaction retrieves the lookup along with the transaction itself associate
-// with the given transaction hash. A non-nil error will be returned if the
-// transaction is not found.
-func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+// with the given transaction hash.
+//
+// An error will be returned if the transaction is not found, and background
+// indexing for transactions is still in progress. The error is used to indicate the
+// scenario explicitly that the transaction might be reachable shortly.
+//
+// A null will be returned in the transaction is not found and background transaction
+// indexing is already finished. The transaction is not existent from the perspective
+// of node.
+func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	lookup, tx, err := b.eth.blockchain.GetTransactionLookup(txHash)
 	if err != nil {
-		return nil, common.Hash{}, 0, 0, fmt.Errorf("tx is not existent or not indexed, %w", err)
+		return false, nil, common.Hash{}, 0, 0, err
 	}
-	return tx, lookup.BlockHash, lookup.BlockIndex, lookup.Index, nil
+	if lookup == nil || tx == nil {
+		return false, nil, common.Hash{}, 0, 0, nil
+	}
+	return true, tx, lookup.BlockHash, lookup.BlockIndex, lookup.Index, nil
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {

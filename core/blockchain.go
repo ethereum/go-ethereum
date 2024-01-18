@@ -186,7 +186,7 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
-// transaction itself.
+// transaction object.
 type txLookup struct {
 	lookup      *rawdb.LegacyTxLookupEntry
 	transaction *types.Transaction
@@ -194,18 +194,17 @@ type txLookup struct {
 
 // txIndexProgress is the struct describing the progress for transaction indexing.
 type txIndexProgress struct {
-	tail  uint64 // the oldest block indexed for transactions
-	head  uint64 // the latest block indexed for transactions
-	limit uint64 // the number of blocks required for transaction indexing(0 means the whole chain)
+	head    uint64 // the current chain head
+	indexed uint64 // the number of blocks have been indexed
+	limit   uint64 // the number of blocks required for transaction indexing(0 means the whole chain)
 }
 
-// Error implements Error returning the progress in string format.
-func (prog txIndexProgress) Error() string {
-	limit := "entire chain"
-	if prog.limit != 0 {
-		limit = fmt.Sprintf("last %d blocks", prog.limit)
+// done returns an indicator if the transaction indexing is finished.
+func (prog txIndexProgress) done() bool {
+	if prog.limit == 0 {
+		return prog.indexed == (prog.head + 1) // genesis included
 	}
-	return fmt.Sprintf("index-tail: %d, index-head: %d, limit: %s", prog.tail, prog.head, limit)
+	return prog.indexed >= prog.limit
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -2453,18 +2452,17 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 
 // reportTxIndexProgress returns the tx indexing progress.
 func (bc *BlockChain) reportTxIndexProgress(head uint64) txIndexProgress {
-	tail := rawdb.ReadTxIndexTail(bc.db)
-	if tail == nil {
-		return txIndexProgress{
-			tail:  0, // not indexed yet
-			head:  0, // not indexed yet
-			limit: bc.txLookupLimit,
-		}
+	var (
+		indexed uint64
+		tail    = rawdb.ReadTxIndexTail(bc.db)
+	)
+	if tail != nil {
+		indexed = head - *tail + 1
 	}
 	return txIndexProgress{
-		tail:  *tail,
-		head:  head,
-		limit: bc.txLookupLimit,
+		head:    head,
+		indexed: indexed,
+		limit:   bc.txLookupLimit,
 	}
 }
 
@@ -2510,6 +2508,7 @@ func (bc *BlockChain) maintainTxIndex() {
 	// indexer is never triggered.
 	if head := rawdb.ReadHeadBlock(bc.db); head != nil && head.Number().Uint64() != 0 {
 		done = make(chan struct{})
+		lastHead = head.Number().Uint64()
 		go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
 	}
 	for {
