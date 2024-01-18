@@ -24,7 +24,8 @@ func (n *fullNode) encode(buf []byte) []byte {
 	if buf == nil {
 		buf = make([]byte, 0, 550)
 	}
-	offset := len(buf)
+	var offset int
+	buf, offset = rlp.StartList(buf)
 	for _, c := range n.Children {
 		if c != nil {
 			buf = c.encode(buf)
@@ -39,7 +40,8 @@ func (n *shortNode) encode(buf []byte) []byte {
 	if buf == nil {
 		buf = make([]byte, 0, len(n.Key)+40)
 	}
-	offset := len(buf)
+	var offset int
+	buf, offset = rlp.StartList(buf)
 	buf = rlp.AppendString(buf, n.Key)
 	if n.Val != nil {
 		buf = n.Val.encode(buf)

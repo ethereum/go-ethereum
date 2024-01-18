@@ -315,23 +315,35 @@ func AppendString(buf, str []byte) []byte {
 	}
 }
 
+// StartList appends a one-byte header, and returns the offset to
+// before the header. It is expected that StartList is later followed by EndList.
+func StartList(buf []byte) ([]byte, int) {
+	offset := len(buf)
+	// append a 1-byte header, which will suffice if content size is < 56 bytes
+	return append(buf, 0xc0), offset
+}
+
 // EndList ends up list starting from offset and returns the extended buffer.
 // Content after offset is treated as list content.
+//
+// OBS: It is assumed that a 1-bytes header is already in place, put there
+// by a preceding call to StartList.
 func EndList(buf []byte, offset int) []byte {
-	contentSize := len(buf) - offset
-	if contentSize == 0 {
-		buf = append(buf, 0xC0)
-	} else if contentSize < 56 {
-		// shift the content for room of list header
-		buf = append(buf[:offset+1], buf[offset:]...)
+	contentSize := len(buf) - offset - 1
+	if contentSize < 56 {
 		// write list header
 		buf[offset] = 0xC0 + byte(contentSize)
-	} else {
-		headerSize := intsize(uint64(contentSize)) + 1
-		// shift the content for room of list header
-		buf = append(buf[:offset+headerSize], buf[offset:]...)
-		// write list header
-		appendUintWithTag(buf[:offset], uint64(contentSize), 0xF7)
+		return buf
 	}
+	headerSize := intsize(uint64(contentSize)) + 1
+	// shift the content for room of list header
+	buf = append(buf[:offset+headerSize], buf[offset:]...)
+	// write list header. OBS! This call ignores the return value,
+	// since the append operation is performed on buf[:offset], and we
+	// already just moved the content, we know that the append operation
+	// will not cause a realloc. This operation simply writes the header into
+	// the given location.
+	appendUintWithTag(buf[:offset], uint64(contentSize), 0xF7)
+
 	return buf
 }
