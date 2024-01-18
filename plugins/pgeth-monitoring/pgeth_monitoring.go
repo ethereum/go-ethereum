@@ -348,9 +348,9 @@ func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
 				continue
 			}
 
-			newHighestFinalized := res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
+			newHighestFinalized := res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
 			if highestFinalized == 0 {
-				highestFinalized = res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
+				highestFinalized = res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
 				me.ptk.Logger.Info("Finalized head was updated", "number", highestFinalized)
 			} else if newHighestFinalized > highestFinalized {
 				me.ptk.Logger.Info("Updating finalized head", "from", highestFinalized, "to", newHighestFinalized)
