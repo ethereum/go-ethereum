@@ -335,13 +335,13 @@ INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453
 The two nodes can now be started. Open separate terminals for each node, leaving the bootnode running in the original terminal. In the terminal for Node 1, run the following command (replacing bootnodes, account address and etherbase for Node 1. The password file for Node 1 must also be provided): 
 
 ```sh
-./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt --authrpc.port 8551 --mine --miner.etherbase 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b
+geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt --authrpc.port 8551 --mine --miner.etherbase 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b
 ```
 
 In the terminal for Node 2, run the following command (replacing bootnodes and account address for Node 2. The password file for Node 2 must also be provided): 
 
 ```sh
-./geth --datadir node2 --port 30307 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xc94d95a5106270775351eecfe43f97e8e75e59e8 --password node2/password.txt --authrpc.port 8552
+geth --datadir node2 --port 30307 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xc94d95a5106270775351eecfe43f97e8e75e59e8 --password node2/password.txt --authrpc.port 8552
 ```
 
 These will start the nodes using the bootnode as an entry point and run Node 1 as a signer. In each terminal, the following logs indicate success:
