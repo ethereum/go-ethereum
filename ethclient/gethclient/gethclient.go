@@ -236,6 +236,22 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	if msg.GasPrice != nil {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
 	}
+	if msg.GasFeeCap != nil {
+		arg["maxFeePerGas"] = (*hexutil.Big)(msg.GasFeeCap)
+	}
+	if msg.GasTipCap != nil {
+		arg["maxPriorityFeePerGas"] = (*hexutil.Big)(msg.GasTipCap)
+	}
+	if msg.AccessList != nil {
+		accessListArg := make([]map[string]interface{}, len(msg.AccessList))
+		for i, access := range msg.AccessList {
+			accessListArg[i] = map[string]interface{}{
+				"address":     access.Address,
+				"storageKeys": access.StorageKeys,
+			}
+		}
+		arg["accessList"] = accessListArg
+	}
 	return arg
 }
 
