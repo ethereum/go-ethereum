@@ -141,3 +141,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+retract v1.13.9 // wrong commit was tagged
