@@ -20,7 +20,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Build
@@ -33,7 +33,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
     - name: Install rust
       uses: actions-rs/toolchain@v1
       with:
@@ -55,7 +55,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Lint
@@ -69,7 +69,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.x
+        go-version: 1.20.x
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@latest
     - name: Checkout code
@@ -89,7 +89,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.x
+        go-version: 1.20.x
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Test

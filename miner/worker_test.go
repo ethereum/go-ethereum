@@ -141,7 +141,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true})}, nil, nil)
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
@@ -242,7 +242,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	b.genesis.MustCommit(db2)
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -572,7 +572,7 @@ func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
 	b.genesis.MustCommit(db)
 	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -639,7 +639,7 @@ func TestAcceptableTxlimit(t *testing.T) {
 	b.genesis.MustCommit(db)
 	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -702,7 +702,7 @@ func TestUnacceptableTxlimit(t *testing.T) {
 	b.genesis.MustCommit(db)
 	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -765,7 +765,7 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 	b.genesis.MustCommit(db)
 	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -827,7 +827,7 @@ func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, withL2Tx bool, callba
 	b.genesis.MustCommit(db)
 	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -1135,7 +1135,7 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 	b.genesis.MustCommit(db2)
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{
 		Debug:  true,
-		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil, false)
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.

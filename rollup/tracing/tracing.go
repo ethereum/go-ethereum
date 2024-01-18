@@ -1,4 +1,4 @@
-package core
+package tracing
 
 import (
 	"bytes"
@@ -10,10 +10,13 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus"
+	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
+	"github.com/scroll-tech/go-ethereum/eth/tracers"
+	_ "github.com/scroll-tech/go-ethereum/eth/tracers/native"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
@@ -22,6 +25,24 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 	"github.com/scroll-tech/go-ethereum/trie/zkproof"
 )
+
+// TracerWrapper implements ScrollTracerWrapper interface
+type TracerWrapper struct{}
+
+// TracerWrapper creates a new TracerWrapper
+func NewTracerWrapper() *TracerWrapper {
+	return &TracerWrapper{}
+}
+
+// CreateTraceEnvAndGetBlockTrace wraps the whole block tracing logic for a block
+func (tw *TracerWrapper) CreateTraceEnvAndGetBlockTrace(chainConfig *params.ChainConfig, chainContext core.ChainContext, engine consensus.Engine, chaindb ethdb.Database, statedb *state.StateDB, parent *types.Block, block *types.Block, commitAfterApply bool) (*types.BlockTrace, error) {
+	traceEnv, err := CreateTraceEnv(chainConfig, chainContext, engine, chaindb, statedb, parent, block, commitAfterApply)
+	if err != nil {
+		return nil, err
+	}
+
+	return traceEnv.GetBlockTrace(block)
+}
 
 type TraceEnv struct {
 	logConfig        *vm.LogConfig
@@ -88,8 +109,9 @@ func CreateTraceEnvHelper(chainConfig *params.ChainConfig, logConfig *vm.LogConf
 	}
 }
 
-func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, engine consensus.Engine, chaindb ethdb.Database, statedb *state.StateDB, parent *types.Block, block *types.Block, commitAfterApply bool) (*TraceEnv, error) {
+func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext core.ChainContext, engine consensus.Engine, chaindb ethdb.Database, statedb *state.StateDB, parent *types.Block, block *types.Block, commitAfterApply bool) (*TraceEnv, error) {
 	var coinbase common.Address
+
 	var err error
 	if chainConfig.Scroll.FeeVaultEnabled() {
 		coinbase = *chainConfig.Scroll.FeeVaultAddress
@@ -119,11 +141,10 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext ChainContext, 
 	env := CreateTraceEnvHelper(
 		chainConfig,
 		&vm.LogConfig{
-			DisableStorage:   true,
 			EnableMemory:     false,
 			EnableReturnData: true,
 		},
-		NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
+		core.NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
 		*startL1QueueIndex,
 		coinbase,
 		statedb,
@@ -189,13 +210,13 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(env.signer, block.BaseFee())
 		env.state.Prepare(tx.Hash(), i)
-		vmenv := vm.NewEVM(env.blockCtx, NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
+		vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
 		l1DataFee, err := fees.CalculateL1DataFee(tx, env.state)
 		if err != nil {
 			failed = err
 			break
 		}
-		if _, err = ApplyMessage(vmenv, msg, new(GasPool).AddGas(msg.Gas()), l1DataFee); err != nil {
+		if _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), l1DataFee); err != nil {
 			failed = err
 			break
 		}
@@ -270,9 +291,24 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		}
 	}
 
-	tracer := vm.NewStructLogger(env.logConfig)
+	txContext := core.NewEVMTxContext(msg)
+	tracerContext := tracers.Context{
+		BlockHash: block.Hash(),
+		TxIndex:   index,
+		TxHash:    tx.Hash(),
+	}
+	callTracer, err := tracers.New("callTracer", &tracerContext)
+	if err != nil {
+		return fmt.Errorf("failed to create callTracer: %w", err)
+	}
+	prestateTracer, err := tracers.New("prestateTracer", &tracerContext)
+	if err != nil {
+		return fmt.Errorf("failed to create prestateTracer: %w", err)
+	}
+	structLogger := vm.NewStructLogger(env.logConfig)
+	tracer := NewMuxTracer(structLogger, callTracer, prestateTracer)
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(env.blockCtx, NewEVMTxContext(msg), state, env.chainConfig, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(env.blockCtx, txContext, state, env.chainConfig, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
 	// Call Prepare to clear out the statedb access list
 	state.Prepare(txctx.TxHash, txctx.TxIndex)
@@ -282,7 +318,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	if err != nil {
 		return err
 	}
-	result, err := ApplyMessage(vmenv, msg, new(GasPool).AddGas(msg.Gas()), l1DataFee)
+	result, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), l1DataFee)
 	if err != nil {
 		return err
 	}
@@ -292,7 +328,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		returnVal = result.Revert()
 	}
 
-	createdAcc := tracer.CreatedAccount()
+	createdAcc := structLogger.CreatedAccount()
 	var after []*types.AccountWrapper
 	if to == nil {
 		if createdAcc == nil {
@@ -325,7 +361,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	}
 
 	// merge required proof data
-	proofAccounts := tracer.UpdatedAccounts()
+	proofAccounts := structLogger.UpdatedAccounts()
 	proofAccounts[vmenv.FeeRecipient()] = struct{}{}
 	for addr := range proofAccounts {
 		addrStr := addr.String()
@@ -351,7 +387,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		env.pMu.Unlock()
 	}
 
-	proofStorages := tracer.UpdatedStorages()
+	proofStorages := structLogger.UpdatedStorages()
 	for addr, keys := range proofStorages {
 		if _, existed := txStorageTrace.StorageProofs[addr.String()]; !existed {
 			txStorageTrace.StorageProofs[addr.String()] = make(map[string][]hexutil.Bytes)
@@ -420,6 +456,15 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		}
 	}
 
+	callTrace, err := callTracer.GetResult()
+	if err != nil {
+		return fmt.Errorf("failed to get callTracer result: %w", err)
+	}
+	prestate, err := prestateTracer.GetResult()
+	if err != nil {
+		return fmt.Errorf("failed to get prestateTracer result: %w", err)
+	}
+
 	env.ExecutionResults[index] = &types.ExecutionResult{
 		From:           sender,
 		To:             receiver,
@@ -429,7 +474,9 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		Gas:            result.UsedGas,
 		Failed:         result.Failed(),
 		ReturnValue:    fmt.Sprintf("%x", returnVal),
-		StructLogs:     vm.FormatLogs(tracer.StructLogs()),
+		StructLogs:     vm.FormatLogs(structLogger.StructLogs()),
+		CallTrace:      callTrace,
+		Prestate:       prestate,
 	}
 	env.TxStorageTraces[index] = txStorageTrace
 

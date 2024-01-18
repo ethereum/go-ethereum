@@ -4,20 +4,34 @@ import (
 	"context"
 	"errors"
 
+	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/core"
+	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
+	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
+
+var errNoScrollTracerWrapper = errors.New("no ScrollTracerWrapper")
 
 type TraceBlock interface {
 	GetBlockTraceByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (trace *types.BlockTrace, err error)
 	GetTxBlockTraceOnTopOfBlock(ctx context.Context, tx *types.Transaction, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*types.BlockTrace, error)
 }
 
+type scrollTracerWrapper interface {
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, core.ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+}
+
 // GetBlockTraceByNumberOrHash replays the block and returns the structured BlockTrace by hash or number.
 func (api *API) GetBlockTraceByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (trace *types.BlockTrace, err error) {
+	if api.scrollTracerWrapper == nil {
+		return nil, errNoScrollTracerWrapper
+	}
+
 	var block *types.Block
 	if number, ok := blockNrOrHash.Number(); ok {
 		block, err = api.blockByNumber(ctx, number)
@@ -33,15 +47,14 @@ func (api *API) GetBlockTraceByNumberOrHash(ctx context.Context, blockNrOrHash r
 		return nil, errors.New("genesis is not traceable")
 	}
 
-	env, err := api.createTraceEnv(ctx, config, block)
-	if err != nil {
-		return nil, err
-	}
-
-	return env.GetBlockTrace(block)
+	return api.createTraceEnvAndGetBlockTrace(ctx, config, block)
 }
 
 func (api *API) GetTxBlockTraceOnTopOfBlock(ctx context.Context, tx *types.Transaction, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*types.BlockTrace, error) {
+	if api.scrollTracerWrapper == nil {
+		return nil, errNoScrollTracerWrapper
+	}
+
 	// Try to retrieve the specified block
 	var (
 		err   error
@@ -63,17 +76,11 @@ func (api *API) GetTxBlockTraceOnTopOfBlock(ctx context.Context, tx *types.Trans
 
 	block = types.NewBlockWithHeader(block.Header()).WithBody([]*types.Transaction{tx}, nil)
 
-	// create current execution environment.
-	env, err := api.createTraceEnv(ctx, config, block)
-	if err != nil {
-		return nil, err
-	}
-
-	return env.GetBlockTrace(block)
+	return api.createTraceEnvAndGetBlockTrace(ctx, config, block)
 }
 
-// Make trace environment for current block.
-func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *types.Block) (*core.TraceEnv, error) {
+// Make trace environment for current block, and then get the trace for the block.
+func (api *API) createTraceEnvAndGetBlockTrace(ctx context.Context, config *TraceConfig, block *types.Block) (*types.BlockTrace, error) {
 	if config == nil {
 		config = &TraceConfig{
 			LogConfig: &vm.LogConfig{
@@ -100,5 +107,5 @@ func (api *API) createTraceEnv(ctx context.Context, config *TraceConfig, block *
 	}
 
 	chaindb := api.backend.ChainDb()
-	return core.CreateTraceEnv(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
+	return api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
 }

@@ -67,6 +67,8 @@ type ExecutionResult struct {
 	// If it is a contract call, the contract code is returned.
 	ByteCode   string          `json:"byteCode,omitempty"`
 	StructLogs []*StructLogRes `json:"structLogs"`
+	CallTrace  json.RawMessage `json:"callTrace"`
+	Prestate   json.RawMessage `json:"prestate"`
 }
 
 // StructLogRes stores a structured log emitted by the EVM while replaying a

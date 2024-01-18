@@ -1,6 +1,6 @@
 module github.com/scroll-tech/go-ethereum
 
-go 1.18
+go 1.20
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0

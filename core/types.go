@@ -32,6 +32,10 @@ type Validator interface {
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.
 	ValidateState(block *types.Block, state *state.StateDB, receipts types.Receipts, usedGas uint64) error
+
+	// SetupTracerAndCircuitCapacityChecker sets up ScrollTracerWrapper and CircuitCapacityChecker for validator,
+	// to get scroll-related traces and to validate the circuit row consumption
+	SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper)
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.

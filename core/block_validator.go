@@ -43,23 +43,30 @@ type BlockValidator struct {
 
 	// circuit capacity checker related fields
 	checkCircuitCapacity   bool                                           // whether enable circuit capacity check
-	db                     ethdb.Database                                 // db to store row consumption
 	cMu                    sync.Mutex                                     // mutex for circuit capacity checker
+	tracer                 tracerWrapper                                  // scroll tracer wrapper
 	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker // circuit capacity checker instance
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine, db ethdb.Database, checkCircuitCapacity bool) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine) *BlockValidator {
 	validator := &BlockValidator{
-		config:                 config,
-		engine:                 engine,
-		bc:                     blockchain,
-		checkCircuitCapacity:   checkCircuitCapacity,
-		db:                     db,
-		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(true),
+		config: config,
+		engine: engine,
+		bc:     blockchain,
 	}
-	log.Info("created new BlockValidator", "CircuitCapacityChecker ID", validator.circuitCapacityChecker.ID)
 	return validator
+}
+
+type tracerWrapper interface {
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+}
+
+func (v *BlockValidator) SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper) {
+	v.checkCircuitCapacity = true
+	v.tracer = tracer
+	v.circuitCapacityChecker = circuitcapacitychecker.NewCircuitCapacityChecker(true)
+	log.Info("new CircuitCapacityChecker in BlockValidator", "ID", v.circuitCapacityChecker.ID)
 }
 
 // ValidateBody validates the given block's uncles and verifies the block
@@ -101,7 +108,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		// if a block's RowConsumption has been stored, which means it has been processed before,
 		// (e.g., in miner/worker.go or in insertChain),
 		// we simply skip its calculation and validation
-		if rawdb.ReadBlockRowConsumption(v.db, block.Hash()) != nil {
+		if rawdb.ReadBlockRowConsumption(v.bc.db, block.Hash()) != nil {
 			return nil
 		}
 		rowConsumption, err := v.validateCircuitRowConsumption(block)
@@ -115,7 +122,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			"hash", block.Hash().String(),
 			"rowConsumption", rowConsumption,
 		)
-		rawdb.WriteBlockRowConsumption(v.db, block.Hash(), rowConsumption)
+		rawdb.WriteBlockRowConsumption(v.bc.db, block.Hash(), rowConsumption)
 	}
 	return nil
 }
@@ -179,7 +186,7 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 			l1msg := it.L1Message()
 			skippedTx := types.NewTx(&l1msg)
 			log.Debug("Skipped L1 message", "queueIndex", index, "tx", skippedTx.Hash().String(), "block", blockHash.String())
-			rawdb.WriteSkippedTransaction(v.db, skippedTx, nil, "unknown", block.NumberU64(), &blockHash)
+			rawdb.WriteSkippedTransaction(v.bc.db, skippedTx, nil, "unknown", block.NumberU64(), &blockHash)
 		}
 
 		queueIndex = txQueueIndex + 1
@@ -260,7 +267,7 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 	return limit
 }
 
-func (v *BlockValidator) createTraceEnv(block *types.Block) (*TraceEnv, error) {
+func (v *BlockValidator) createTraceEnvAndGetBlockTrace(block *types.Block) (*types.BlockTrace, error) {
 	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return nil, errors.New("validateCircuitRowConsumption: no parent block found")
@@ -271,7 +278,7 @@ func (v *BlockValidator) createTraceEnv(block *types.Block) (*TraceEnv, error) {
 		return nil, err
 	}
 
-	return CreateTraceEnv(v.config, v.bc, v.engine, v.db, statedb, parent, block, true)
+	return v.tracer.CreateTraceEnvAndGetBlockTrace(v.config, v.bc, v.engine, v.bc.db, statedb, parent, block, true)
 }
 
 func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {
@@ -283,12 +290,7 @@ func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*typ
 		"len(txs)", block.Transactions().Len(),
 	)
 
-	env, err := v.createTraceEnv(block)
-	if err != nil {
-		return nil, err
-	}
-
-	traces, err := env.GetBlockTrace(block)
+	traces, err := v.createTraceEnvAndGetBlockTrace(block)
 	if err != nil {
 		return nil, err
 	}

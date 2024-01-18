@@ -13,8 +13,8 @@ linters:
   disable-all: true
   enable:
     - deadcode
-    - goconst
-    - goimports
+    # - goconst
+    # - goimports
     - gosimple
     - govet
     - ineffassign

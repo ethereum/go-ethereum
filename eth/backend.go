@@ -57,6 +57,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/rollup/rollup_sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
+	"github.com/scroll-tech/go-ethereum/rollup/tracing"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -194,10 +195,15 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 			MPTWitness:          config.MPTWitness,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, config.CheckCircuitCapacity)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}
+	if config.CheckCircuitCapacity {
+		tracer := tracing.NewTracerWrapper()
+		eth.blockchain.Validator().SetupTracerAndCircuitCapacityChecker(tracer)
+	}
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)

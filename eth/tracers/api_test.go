@@ -82,7 +82,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, nil, nil, false)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, backend.chainConfig, backend.engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestTraceCall(t *testing.T) {
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
-	}))
+	}), nil)
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -337,7 +337,7 @@ func TestTraceTransaction(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 		target = tx.Hash()
-	}))
+	}), nil)
 	result, err := api.TraceTransaction(context.Background(), target, nil)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
@@ -371,7 +371,7 @@ func TestTraceBlock(t *testing.T) {
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
-	}))
+	}), nil)
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -446,7 +446,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
-	}))
+	}), nil)
 	randomAccounts := newAccounts(3)
 	type res struct {
 		Gas         int
