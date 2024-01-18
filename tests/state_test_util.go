@@ -291,6 +291,17 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 
+	{ // Blob transactions may be present after the Cancun fork.
+		// In production,
+		// - the header is verified against the max in eip4844.go:VerifyEIP4844Header
+		// - the block body is verified against the header in block_validator.go:ValidateBody
+		// Here, we just do this shortcut smaller fix, since state tests do not
+		// utilize those codepaths
+		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+			return nil, nil, nil, common.Hash{}, errors.New("blob gas exceeds maximum")
+		}
+	}
+
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
