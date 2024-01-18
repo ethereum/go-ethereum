@@ -10,6 +10,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/rs/zerolog"
 
@@ -215,8 +217,7 @@ func (me *MonitoringEngine) analyze(ctx context.Context, block *types.Block, sco
 	// We simulate all the transactions of the block
 	for idx, tx := range block.Transactions() {
 		state.SetTxContext(tx.Hash(), idx)
-		fmt.Println("HEADER BASE FEES", block.Header().BaseFee)
-		receipt, err := core.ApplyTransaction(me.chainConfig, me.backend.Ethereum().Blockchain(), &block.Header().Coinbase, gp, state, block.Header(), tx, &block.Header().GasUsed, vmConfig)
+		receipt, err := core.ApplyTransaction(me.chainConfig, me.backend.Ethereum().BlockChain(), &block.Header().Coinbase, gp, state, block.Header(), tx, &block.Header().GasUsed, vmConfig)
 		if err != nil {
 			me.errChan <- err
 			return nil
