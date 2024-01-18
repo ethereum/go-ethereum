@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -403,10 +405,30 @@ func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 	}
 }
 
+func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
+	var (
+		dir        = t.TempDir()
+		am         = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: true})
+		b          = keystore.NewKeyStore(dir, 2, 1)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	)
+	acc, err := b.ImportECDSA(testKey, "")
+	if err != nil {
+		t.Fatalf("failed to create test account: %v", err)
+	}
+	if err := b.Unlock(acc, ""); err != nil {
+		t.Fatalf("failed to unlock account: %v\n", err)
+	}
+	am.AddBackend(b)
+	return am, acc
+}
+
 type testBackend struct {
 	db      ethdb.Database
 	chain   *core.BlockChain
 	pending *types.Block
+	accman  *accounts.Manager
+	acc     accounts.Account
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -419,6 +441,8 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 			TrieDirtyDisabled: true, // Archive mode
 		}
 	)
+	accman, acc := newTestAccountManager(t)
+	gspec.Alloc[acc.Address] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -430,7 +454,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	backend := &testBackend{db: db, chain: chain}
+	backend := &testBackend{db: db, chain: chain, accman: accman, acc: acc}
 	return backend
 }
 
@@ -446,7 +470,7 @@ func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBloc
 	return nil, nil, nil, nil, nil
 }
 func (b testBackend) ChainDb() ethdb.Database           { return b.db }
-func (b testBackend) AccountManager() *accounts.Manager { return nil }
+func (b testBackend) AccountManager() *accounts.Manager { return b.accman }
 func (b testBackend) ExtRPCEnabled() bool               { return false }
 func (b testBackend) RPCGasCap() uint64                 { return 10000000 }
 func (b testBackend) RPCEVMTimeout() time.Duration      { return time.Second }
@@ -566,7 +590,7 @@ func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*t
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
 func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	panic("implement me")
+	return 0, nil
 }
 func (b testBackend) Stats() (pending int, queued int) { panic("implement me") }
 func (b testBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
@@ -603,7 +627,7 @@ func TestEstimateGas(t *testing.T) {
 	var (
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.MergedTestChainConfig,
 			Alloc: core.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -613,12 +637,13 @@ func TestEstimateGas(t *testing.T) {
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -718,6 +743,18 @@ func TestEstimateGas(t *testing.T) {
 			expectErr: nil,
 			want:      67595,
 		},
+		// Blobs should have no effect on gas estimate
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:       &accounts[0].addr,
+				To:         &accounts[1].addr,
+				Value:      (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+			},
+			want: 21000,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
@@ -747,7 +784,7 @@ func TestCall(t *testing.T) {
 	var (
 		accounts = newAccounts(3)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.MergedTestChainConfig,
 			Alloc: core.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -757,12 +794,13 @@ func TestCall(t *testing.T) {
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
@@ -884,6 +922,32 @@ func TestCall(t *testing.T) {
 			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
 		},
+		// Invalid blob tx
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:       &accounts[1].addr,
+				Input:      &hexutil.Bytes{0x00},
+				BlobHashes: []common.Hash{},
+			},
+			expectErr: core.ErrBlobTxCreate,
+		},
+		// BLOBHASH opcode
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:       &accounts[1].addr,
+				To:         &randomAccounts[2].addr,
+				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+			},
+			overrides: StateOverride{
+				randomAccounts[2].addr: {
+					Code: hex2Bytes("60004960005260206000f3"),
+				},
+			},
+			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -907,6 +971,134 @@ func TestCall(t *testing.T) {
 		if !reflect.DeepEqual(result.String(), tc.want) {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, result.String(), tc.want)
 		}
+	}
+}
+
+func TestSignTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  core.GenesisAlloc{},
+		}
+	)
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:  &b.acc.Address,
+		To:    &to,
+		Value: (*hexutil.Big)(big.NewInt(1)),
+	})
+	if err != nil {
+		t.Fatalf("failed to fill tx defaults: %v\n", err)
+	}
+
+	res, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	if err != nil {
+		t.Fatalf("failed to sign tx: %v\n", err)
+	}
+	tx, err := json.Marshal(res.Tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0x684ee180","value":"0x1","input":"0x","accessList":[],"v":"0x0","r":"0x8fabeb142d585dd9247f459f7e6fe77e2520c88d50ba5d220da1533cea8b34e1","s":"0x582dd68b21aef36ba23f34e49607329c20d981d30404daf749077f5606785ce7","yParity":"0x0","hash":"0x93927839207cfbec395da84b8a2bc38b7b65d2cb2819e9fef1f091f5b1d4cc8f"}`
+	if !bytes.Equal(tx, []byte(expect)) {
+		t.Errorf("result mismatch. Have:\n%s\nWant:\n%s\n", tx, expect)
+	}
+}
+
+func TestSignBlobTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  core.GenesisAlloc{},
+		}
+	)
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{{0x01, 0x22}},
+	})
+	if err != nil {
+		t.Fatalf("failed to fill tx defaults: %v\n", err)
+	}
+
+	_, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	if err == nil {
+		t.Fatalf("should fail on blob transaction")
+	}
+	if !errors.Is(err, errBlobTxNotSupported) {
+		t.Errorf("error mismatch. Have: %v, want: %v", err, errBlobTxNotSupported)
+	}
+}
+
+func TestSendBlobTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  core.GenesisAlloc{},
+		}
+	)
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+	})
+	if err != nil {
+		t.Fatalf("failed to fill tx defaults: %v\n", err)
+	}
+
+	_, err = api.SendTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	if err == nil {
+		t.Errorf("sending tx should have failed")
+	} else if !errors.Is(err, errBlobTxNotSupported) {
+		t.Errorf("unexpected error. Have %v, want %v\n", err, errBlobTxNotSupported)
+	}
+}
+
+func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
+	var (
+		gas   = tx.Gas()
+		nonce = tx.Nonce()
+		input = tx.Data()
+	)
+	return TransactionArgs{
+		From:                 &from,
+		To:                   tx.To(),
+		Gas:                  (*hexutil.Uint64)(&gas),
+		MaxFeePerGas:         (*hexutil.Big)(tx.GasFeeCap()),
+		MaxPriorityFeePerGas: (*hexutil.Big)(tx.GasTipCap()),
+		Value:                (*hexutil.Big)(tx.Value()),
+		Nonce:                (*hexutil.Uint64)(&nonce),
+		Input:                (*hexutil.Bytes)(&input),
+		ChainID:              (*hexutil.Big)(tx.ChainId()),
+		// TODO: impl accessList conversion
+		//AccessList: tx.AccessList(),
+		BlobFeeCap: (*hexutil.Big)(tx.BlobGasFeeCap()),
+		BlobHashes: tx.BlobHashes(),
 	}
 }
 
@@ -1399,9 +1591,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	config := *params.TestChainConfig
-	config.ShanghaiTime = new(uint64)
-	config.CancunTime = new(uint64)
+	config := *params.MergedTestChainConfig
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -1432,9 +1622,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		txHashes = make([]common.Hash, genBlocks)
 	)
 
-	// Set the terminal total difficulty in the config
-	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
-	genesis.Config.TerminalTotalDifficultyPassed = true
 	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
 			tx  *types.Transaction
