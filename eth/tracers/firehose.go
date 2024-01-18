@@ -69,6 +69,7 @@ type Firehose struct {
 	evm                 *vm.EVM
 	transaction         *pbeth.TransactionTrace
 	transactionLogIndex uint32
+	inSystemCall        bool
 	isPrecompiledAddr   func(addr common.Address) bool
 
 	// Call state
@@ -112,6 +113,7 @@ func (f *Firehose) resetTransaction() {
 	f.transaction = nil
 	f.evm = nil
 	f.transactionLogIndex = 0
+	f.inSystemCall = false
 	f.isPrecompiledAddr = nil
 
 	f.callStack.Reset()
@@ -163,13 +165,20 @@ func (f *Firehose) OnBlockEnd(err error) {
 }
 
 func (f *Firehose) OnBeaconBlockRootStart(root common.Hash) {
-	// FIXME: This needs to be implemented when hard-fork bringing beacon block root is implemented
-	// We kind-of decided on having `system_calls` on the Block directly.
+	firehoseDebug("system call start for=%s", "beacon_block_root")
+	f.ensureInBlockAndNotInTrx()
+
+	f.inSystemCall = true
+	f.transaction = &pbeth.TransactionTrace{}
 }
 
 func (f *Firehose) OnBeaconBlockRootEnd() {
-	// FIXME: This needs to be implemented when hard-fork bringing beacon block root is implemented
-	// We kind-of decided on having `system_calls` on the Block directly.
+	f.ensureInBlockAndInTrx()
+	f.ensureInSystemCall()
+
+	f.block.SystemCalls = append(f.block.SystemCalls, f.transaction.Calls...)
+
+	f.resetTransaction()
 }
 
 func (f *Firehose) CaptureTxStart(evm *vm.EVM, tx *types.Transaction, from common.Address) {
@@ -198,6 +207,11 @@ func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from,
 
 	v, r, s := tx.RawSignatureValues()
 
+	var blobGas *uint64
+	if tx.Type() == types.BlobTxType {
+		blobGas = ptr(tx.BlobGas())
+	}
+
 	f.transaction = &pbeth.TransactionTrace{
 		BeginOrdinal:         f.blockOrdinal.Next(),
 		Hash:                 hash.Bytes(),
@@ -215,6 +229,9 @@ func (f *Firehose) captureTxStart(tx *types.Transaction, hash common.Hash, from,
 		AccessList:           newAccessListFromChain(tx.AccessList()),
 		MaxFeePerGas:         maxFeePerGas(tx),
 		MaxPriorityFeePerGas: maxPriorityFeePerGas(tx),
+		BlobGas:              blobGas,
+		BlobGasFeeCap:        firehoseBigIntFromNative(tx.BlobGasFeeCap()),
+		BlobHashes:           newBlobHashesFromChain(tx.BlobHashes()),
 	}
 }
 
@@ -249,7 +266,7 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	if receipt != nil {
 		f.transaction.Index = uint32(receipt.TransactionIndex)
 		f.transaction.GasUsed = receipt.GasUsed
-		f.transaction.Receipt = newTxReceiptFromChain(receipt)
+		f.transaction.Receipt = newTxReceiptFromChain(receipt, f.transaction.Type)
 		f.transaction.Status = transactionStatusFromChainTxReceipt(receipt.Status)
 	}
 
@@ -570,7 +587,7 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	// to false
 	//
 	// For precompiled address however, interpreter does not run so determine  there was a bug in Firehose instrumentation where we would
-	// if call.ExecutedCode || f.isPrecompiledAddr(common.BytesToAddress(call.Address)) {
+	// if call.ExecutedCode || (f.isPrecompiledAddr != nil && f.isPrecompiledAddr(common.BytesToAddress(call.Address))) {
 	// 	// In this case, we are sure that some code executed. This translates in the old Firehose instrumentation
 	// 	// that it would have **never** emitted an `account_without_code`.
 	// 	//
@@ -968,6 +985,12 @@ func (f *Firehose) ensureInCall() {
 	}
 }
 
+func (f *Firehose) ensureInSystemCall() {
+	if !f.inSystemCall {
+		f.panicNotInState("call expected to be in system call state but we were not, this is a bug")
+	}
+}
+
 func (f *Firehose) panicNotInState(msg string) string {
 	panic(fmt.Errorf("%s (inBlock=%t, inTransaction=%t, inCall=%t)", msg, f.block != nil, f.transaction != nil, f.callStack.HasActiveCall()))
 }
@@ -1067,6 +1090,11 @@ func newBlockHeaderFromChainHeader(h *types.Header, td *pbeth.BigInt) *pbeth.Blo
 		withdrawalsHashBytes = hash.Bytes()
 	}
 
+	var parentBeaconRootBytes []byte
+	if root := h.ParentBeaconRoot; root != nil {
+		parentBeaconRootBytes = root.Bytes()
+	}
+
 	pbHead := &pbeth.BlockHeader{
 		Hash:             h.Hash().Bytes(),
 		Number:           h.Number.Uint64(),
@@ -1087,6 +1115,12 @@ func newBlockHeaderFromChainHeader(h *types.Header, td *pbeth.BigInt) *pbeth.Blo
 		Nonce:            h.Nonce.Uint64(),
 		BaseFeePerGas:    firehoseBigIntFromNative(h.BaseFee),
 		WithdrawalsRoot:  withdrawalsHashBytes,
+		BlobGasUsed:      h.BlobGasUsed,
+		ExcessBlobGas:    h.ExcessBlobGas,
+		ParentBeaconRoot: parentBeaconRootBytes,
+
+		// Only set on Polygon fork(s)
+		TxDependency: nil,
 	}
 
 	if pbHead.Difficulty == nil {
@@ -1105,8 +1139,8 @@ func transactionTypeFromChainTxType(txType uint8) pbeth.TransactionTrace_Type {
 		return pbeth.TransactionTrace_TRX_TYPE_DYNAMIC_FEE
 	case types.LegacyTxType:
 		return pbeth.TransactionTrace_TRX_TYPE_LEGACY
-	// case types.BlobTxType:
-	// 	return pbeth.TransactionTrace_TRX_TYPE_BLOB
+	case types.BlobTxType:
+		return pbeth.TransactionTrace_TRX_TYPE_BLOB
 	default:
 		panic(fmt.Errorf("unknown transaction type %d", txType))
 	}
@@ -1148,11 +1182,16 @@ func callTypeFromOpCode(typ vm.OpCode) pbeth.CallType {
 	return pbeth.CallType_UNSPECIFIED
 }
 
-func newTxReceiptFromChain(receipt *types.Receipt) (out *pbeth.TransactionReceipt) {
+func newTxReceiptFromChain(receipt *types.Receipt, txType pbeth.TransactionTrace_Type) (out *pbeth.TransactionReceipt) {
 	out = &pbeth.TransactionReceipt{
 		StateRoot:         receipt.PostState,
 		CumulativeGasUsed: receipt.CumulativeGasUsed,
 		LogsBloom:         receipt.Bloom[:],
+	}
+
+	if txType == pbeth.TransactionTrace_TRX_TYPE_BLOB {
+		out.BlobGasUsed = &receipt.BlobGasUsed
+		out.BlobGasPrice = firehoseBigIntFromNative(receipt.BlobGasPrice)
 	}
 
 	if len(receipt.Logs) > 0 {
@@ -1201,6 +1240,19 @@ func newAccessListFromChain(accessList types.AccessList) (out []*pbeth.AccessTup
 				return out
 			}(),
 		}
+	}
+
+	return
+}
+
+func newBlobHashesFromChain(blobHashes []common.Hash) (out [][]byte) {
+	if len(blobHashes) == 0 {
+		return nil
+	}
+
+	out = make([][]byte, len(blobHashes))
+	for i, blobHash := range blobHashes {
+		out[i] = blobHash.Bytes()
 	}
 
 	return
@@ -1762,4 +1814,8 @@ func validateField[T any](into *validationResult, field string, a, b T, equal bo
 	if !equal {
 		into.failures = append(into.failures, fmt.Sprintf("%s [(actual) %s %s %s (expected)]", field, toString(a), "!=", toString(b)))
 	}
+}
+
+func ptr[T any](t T) *T {
+	return &t
 }
