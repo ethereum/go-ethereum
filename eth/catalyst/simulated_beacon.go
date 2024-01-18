@@ -19,6 +19,7 @@ package catalyst
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -202,6 +203,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Mark the payload as canon
 	if isCancun {
+		txes, err := decodeTransactions(payload.Transactions)
+		if err != nil {
+			return err
+		}
+		blobHashes := make([]common.Hash, 0)
+		for _, tx := range txes {
+			blobHashes = append(blobHashes, tx.BlobHashes()...)
+		}
 		if _, err = c.engineAPI.NewPayloadV3(*payload, []common.Hash{}, &common.Hash{}); err != nil {
 			return err
 		}
@@ -320,4 +329,16 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 			Version:   "1.0",
 		},
 	})
+}
+
+func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+	var txs = make([]*types.Transaction, len(enc))
+	for i, encTx := range enc {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(encTx); err != nil {
+			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+		}
+		txs[i] = &tx
+	}
+	return txs, nil
 }
