@@ -10,8 +10,6 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/redis/go-redis/v9"
-
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/rs/zerolog"
 
@@ -144,13 +142,14 @@ func (me *MonitoringEngine) update(ctx context.Context, parent *types.Block) {
 		return
 	}
 	me.header = &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     new(big.Int).Add(parent.Number(), common.Big1),
-		GasLimit:   parent.GasLimit(),
-		Time:       parent.Time() + 12,
-		Coinbase:   parent.Coinbase(),
-		BaseFee:    eip1559.CalcBaseFee(me.chainConfig, parent.Header()),
-		Difficulty: parent.Difficulty(),
+		ParentHash:    parent.Hash(),
+		Number:        new(big.Int).Add(parent.Number(), common.Big1),
+		GasLimit:      parent.GasLimit(),
+		Time:          parent.Time() + 12,
+		Coinbase:      parent.Coinbase(),
+		BaseFee:       eip1559.CalcBaseFee(me.chainConfig, parent.Header()),
+		Difficulty:    parent.Difficulty(),
+		ExcessBlobGas: parent.ExcessBlobGas(),
 	}
 	me.coinbase = parent.Coinbase()
 	me.state = state
