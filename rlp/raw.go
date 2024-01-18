@@ -336,8 +336,8 @@ func EndList(buf []byte, offset int) []byte {
 		return buf
 	}
 	headerSize := intsize(uint64(contentSize)) + 1
-	// shift the content for room of list header
-	buf = append(buf[:offset+headerSize], buf[offset:]...)
+	// shift the content for room of list header (minus the one byte already written)
+	buf = append(buf[:offset+headerSize-1], buf[offset:]...)
 	// write list header. OBS! This call ignores the return value,
 	// since the append operation is performed on buf[:offset], and we
 	// already just moved the content, we know that the append operation

@@ -340,22 +340,21 @@ func TestAppendString(t *testing.T) {
 func TestEndList(t *testing.T) {
 	tests := []struct {
 		input  interface{}
-		slice  []byte
 		output string
 	}{
-		{[]interface{}{}, nil, "C0"},
-		{[]interface{}{1, 2, 3}, nil, "C3010203"},
+		{[]interface{}{}, "C0"},
+		{[]interface{}{1, 2, 3}, "C3010203"},
 		{
 			// [ [], [[]], [ [], [[]] ] ]
-			[]interface{}{[]interface{}{}, []interface{}{[]interface{}{}}, []interface{}{[]interface{}{}, []interface{}{[]interface{}{}}}}, nil,
+			[]interface{}{[]interface{}{}, []interface{}{[]interface{}{}}, []interface{}{[]interface{}{}, []interface{}{[]interface{}{}}}},
 			"C7C0C1C0C3C0C1C0",
 		},
 		{
-			[]interface{}{"aaa", "bbb", "ccc", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj", "kkk", "lll", "mmm", "nnn", "ooo"}, nil,
+			[]interface{}{"aaa", "bbb", "ccc", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj", "kkk", "lll", "mmm", "nnn", "ooo"},
 			"F83C836161618362626283636363836464648365656583666666836767678368686883696969836A6A6A836B6B6B836C6C6C836D6D6D836E6E6E836F6F6F",
 		},
 		{
-			[]interface{}{1, 0xFFFFFF, []interface{}{[]interface{}{4, 5, 5}}, "abc"}, nil,
+			[]interface{}{1, 0xFFFFFF, []interface{}{[]interface{}{4, 5, 5}}, "abc"},
 			"CE0183FFFFFFC4C304050583616263",
 		},
 		{[]interface{}{
@@ -390,7 +389,7 @@ func TestEndList(t *testing.T) {
 			[]interface{}{"asdf", "qwer", "zxcv"},
 			[]interface{}{"asdf", "qwer", "zxcv"},
 			[]interface{}{"asdf", "qwer", "zxcv"},
-			[]interface{}{"asdf", "qwer", "zxcv"}}, nil,
+			[]interface{}{"asdf", "qwer", "zxcv"}},
 			"F90200CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376"},
 	}
 
@@ -398,7 +397,8 @@ func TestEndList(t *testing.T) {
 	encode = func(buf []byte, v interface{}) []byte {
 		switch v := v.(type) {
 		case []interface{}:
-			offset := len(buf)
+			var offset int
+			buf, offset = StartList(buf)
 			for _, c := range v {
 				buf = encode(buf, c)
 			}
@@ -416,10 +416,11 @@ func TestEndList(t *testing.T) {
 		}
 	}
 
-	for _, test := range tests {
-		x := encode(test.slice, test.input)
-		if !bytes.Equal(x, unhex(test.output)) {
-			t.Errorf("TestEndList(%v, %d): got %x, want %s", test.slice, test.input, x, test.output)
+	for i, test := range tests {
+		have := encode(nil, test.input)
+		want := unhex(test.output)
+		if !bytes.Equal(have, want) {
+			t.Errorf("test %d: input %v \n\thave %x\n\twant %x", i, test.input, have, want)
 		}
 	}
 }
