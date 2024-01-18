@@ -10,6 +10,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/attestantio/go-eth2-client/http"
 	"github.com/rs/zerolog"
 
