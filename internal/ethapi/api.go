@@ -1839,7 +1839,7 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 // FillTransaction fills the defaults (nonce, gas, gasPrice or 1559 fields)
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
-func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+func (s *TransactionAPI) FillTransaction(ctx context.Context, args BlobTransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err

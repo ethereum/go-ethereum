@@ -63,7 +63,7 @@ type BlobTxSidecar struct {
 func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 	h := make([]common.Hash, len(sc.Commitments))
 	for i := range sc.Blobs {
-		h[i] = blobHash(&sc.Commitments[i])
+		h[i] = BlobHash(&sc.Commitments[i])
 	}
 	return h
 }
@@ -190,6 +190,12 @@ func (tx *BlobTx) withoutSidecar() *BlobTx {
 	return &cpy
 }
 
+func (tx *BlobTx) withSidecar(sidecar *BlobTxSidecar) *BlobTx {
+	cpy := *tx
+	tx.Sidecar = sidecar
+	return &cpy
+}
+
 func (tx *BlobTx) encode(b *bytes.Buffer) error {
 	if tx.Sidecar == nil {
 		return rlp.Encode(b, tx)
@@ -236,7 +242,7 @@ func (tx *BlobTx) decode(input []byte) error {
 	return nil
 }
 
-func blobHash(commit *kzg4844.Commitment) common.Hash {
+func BlobHash(commit *kzg4844.Commitment) common.Hash {
 	hasher := sha256.New()
 	hasher.Write(commit[:])
 	var vhash common.Hash

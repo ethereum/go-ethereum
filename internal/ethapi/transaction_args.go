@@ -29,10 +29,106 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
+
+var (
+	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+)
+
+// BlobTransactionArgs represents the arguments to construct a new
+// blob transaction. It includes the blob side-car.
+type BlobTransactionArgs struct {
+	TransactionArgs
+	Blobs       []kzg4844.Blob       `json:"blobs"`
+	Commitments []kzg4844.Commitment `json:"commitments"`
+	Proofs      []kzg4844.Proof      `json:"proofs"`
+}
+
+func (args *BlobTransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+	// First validate and fill in other fields to avoid
+	// the expensive blob proof computation for an invalid transaction.
+	if err := args.TransactionArgs.setDefaults(ctx, b); err != nil {
+		return err
+	}
+	// No blobs, we're done.
+	if args.Blobs == nil {
+		return nil
+	}
+	n := len(args.Blobs)
+	// Assume user provides either only blobs (w/o hashes), or
+	// blobs together with commitments and proofs.
+	if args.Commitments == nil && args.Proofs != nil {
+		return errors.New(`blob proofs provided while commitments were not`)
+	} else if args.Commitments != nil && args.Proofs == nil {
+		return errors.New(`blob commitments provided while proofs were not`)
+	}
+	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	if args.Commitments != nil && len(args.Commitments) != n {
+		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+	}
+	if args.Proofs != nil && len(args.Proofs) != n {
+		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) != n {
+		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
+	}
+	if args.Commitments == nil {
+		// Generate commitment and proof.
+		commitments := make([]kzg4844.Commitment, n)
+		proofs := make([]kzg4844.Proof, n)
+		for i, b := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(b)
+			if err != nil {
+				return err
+			}
+			commitments[i] = c
+			p, err := kzg4844.ComputeBlobProof(b, c)
+			if err != nil {
+				return err
+			}
+			proofs[i] = p
+		}
+		args.Commitments = commitments
+		args.Proofs = proofs
+	} else {
+		for i, b := range args.Blobs {
+			if err := kzg4844.VerifyBlobProof(b, args.Commitments[i], args.Proofs[i]); err != nil {
+				return fmt.Errorf("failed to verify blob proof: %v", err)
+			}
+		}
+	}
+	hashes := make([]common.Hash, n)
+	for i, c := range args.Commitments {
+		hashes[i] = types.BlobHash(&c)
+	}
+	if args.BlobHashes != nil {
+		for i, h := range hashes {
+			if h != args.BlobHashes[i] {
+				return fmt.Errorf("blob hash verification failed (have=%s, want=%s)", args.BlobHashes[i], h)
+			}
+		}
+	} else {
+		args.BlobHashes = hashes
+	}
+	return nil
+}
+
+func (args *BlobTransactionArgs) toTransaction() *types.Transaction {
+	tx := args.TransactionArgs.toTransaction()
+	if args.Blobs != nil && tx.Type() == types.BlobTxType {
+		return tx.WithBlobTxSidecar(&types.BlobTxSidecar{
+			Blobs:       args.Blobs,
+			Commitments: args.Commitments,
+			Proofs:      args.Proofs,
+		})
+	}
+	return tx
+}
 
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
@@ -103,6 +199,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
+		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
 	}
 	if args.To == nil && len(args.data()) == 0 {
 		return errors.New(`contract creation without any data provided`)
