@@ -534,8 +534,9 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // CreateAt creates a new contract using code as deployment code at the given address
 //
-// the behaviour is similar to Create2 execpt we don't compute the address
-// using hash and it doesn't increment the nonce for the caller
+// the behaviour is similar to Create2 execpt the deployment address is provided
+// WARNING! this method should not be used for regular transactions sent by EOA accounts
+// and is only provided for the network to deploy contacts at specific addreses.
 func (evm *EVM) CreateAt(caller ContractRef, to common.Address, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	return evm.create(caller, &codeAndHash{code: code}, gas, endowment, to, CREATE2)
 }
