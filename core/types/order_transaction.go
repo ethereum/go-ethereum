@@ -304,6 +304,9 @@ func NewOrderTransactionByNonce(signer OrderSigner, txs map[common.Address]Order
 	// Initialize a price based heap with the head transactions
 	heads := make(OrderTxByNonce, 0, len(txs))
 	for from, accTxs := range txs {
+		if len(accTxs) == 0 {
+			continue
+		}
 		heads = append(heads, accTxs[0])
 		// Ensure the sender address is from the signer
 		acc, _ := OrderSender(signer, accTxs[0])
