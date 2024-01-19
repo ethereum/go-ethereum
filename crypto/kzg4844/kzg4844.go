@@ -43,6 +43,11 @@ func (b *Blob) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(blobT, input, b[:])
 }
 
+// MarshalText returns the hex representation of b.
+func (b Blob) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(b[:]).MarshalText()
+}
+
 // Commitment is a serialized commitment to a polynomial.
 type Commitment [48]byte
 
@@ -51,12 +56,22 @@ func (c *Commitment) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(commitmentT, input, c[:])
 }
 
+// MarshalText returns the hex representation of c.
+func (c Commitment) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(c[:]).MarshalText()
+}
+
 // Proof is a serialized commitment to the quotient polynomial.
 type Proof [48]byte
 
 // UnmarshalJSON parses a proof in hex syntax.
 func (p *Proof) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(proofT, input, p[:])
+}
+
+// MarshalText returns the hex representation of p.
+func (p Proof) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(p[:]).MarshalText()
 }
 
 // Point is a BLS field element.

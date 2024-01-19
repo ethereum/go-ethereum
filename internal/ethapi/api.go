@@ -1846,7 +1846,6 @@ func (s *TransactionAPI) FillTransaction(ctx context.Context, args BlobTransacti
 	}
 	// Assemble the transaction and obtain rlp
 	tx := args.toTransaction()
-	// TODO(s1na): fill in blob proofs, commitments
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
