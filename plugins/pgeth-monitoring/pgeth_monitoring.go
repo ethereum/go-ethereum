@@ -120,7 +120,6 @@ type CachedBlockSimulation struct {
 }
 
 func NewMonitoringEngine(pt *toolkit.PluginToolkit, rdb *redis.Client, eth2 eth2client.Service, beaconEndpoint string, errChan chan error) *MonitoringEngine {
-
 	return &MonitoringEngine{
 		ptk:            pt,
 		backend:        pt.Backend.(*eth.EthAPIBackend),
@@ -144,13 +143,14 @@ func (me *MonitoringEngine) update(ctx context.Context, parent *types.Block) {
 		return
 	}
 	me.header = &types.Header{
-		ParentHash:    parent.Hash(),
-		Number:        new(big.Int).Add(parent.Number(), common.Big1),
-		GasLimit:      parent.GasLimit(),
-		Time:          parent.Time() + 12,
-		Coinbase:      parent.Coinbase(),
-		BaseFee:       eip1559.CalcBaseFee(me.chainConfig, parent.Header()),
-		Difficulty:    parent.Difficulty(),
+		ParentHash: parent.Hash(),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		GasLimit:   parent.GasLimit(),
+		Time:       parent.Time() + 12,
+		Coinbase:   parent.Coinbase(),
+		BaseFee:    eip1559.CalcBaseFee(me.chainConfig, parent.Header()),
+		Difficulty: parent.Difficulty(),
+		// should stay nil on pre-cancun chains
 		ExcessBlobGas: parent.ExcessBlobGas(),
 	}
 	me.coinbase = parent.Coinbase()
@@ -348,9 +348,16 @@ func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
 				continue
 			}
 
-			newHighestFinalized := res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
+			var blockHeight uint64
+			if me.chainConfig.CancunTime != nil {
+				blockHeight = res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
+			} else {
+				blockHeight = res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
+			}
+
+			newHighestFinalized := blockHeight
 			if highestFinalized == 0 {
-				highestFinalized = res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
+				highestFinalized = blockHeight
 				me.ptk.Logger.Info("Finalized head was updated", "number", highestFinalized)
 			} else if newHighestFinalized > highestFinalized {
 				me.ptk.Logger.Info("Updating finalized head", "from", highestFinalized, "to", newHighestFinalized)
