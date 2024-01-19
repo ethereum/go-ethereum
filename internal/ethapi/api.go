@@ -27,7 +27,6 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -1133,37 +1132,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
 }
 
-func newRevertError(revert []byte) *revertError {
-	err := vm.ErrExecutionReverted
-
-	reason, errUnpack := abi.UnpackRevert(revert)
-	if errUnpack == nil {
-		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
-	}
-	return &revertError{
-		error:  err,
-		reason: hexutil.Encode(revert),
-	}
-}
-
-// revertError is an API error that encompasses an EVM revertal with JSON error
-// code and a binary data blob.
-type revertError struct {
-	error
-	reason string // revert reason hex encoded
-}
-
-// ErrorCode returns the JSON error code for a revertal.
-// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
-func (e *revertError) ErrorCode() int {
-	return 3
-}
-
-// ErrorData returns the hex encoded revert reason.
-func (e *revertError) ErrorData() interface{} {
-	return e.reason
-}
-
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
@@ -1658,7 +1626,10 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		if tx := s.b.GetPoolTransaction(hash); tx != nil {
 			return NewRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
 		}
-		return nil, err
+		if err == nil {
+			return nil, nil
+		}
+		return nil, NewTxIndexingError()
 	}
 	header, err := s.b.HeaderByHash(ctx, blockHash)
 	if err != nil {
@@ -1672,11 +1643,14 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 	// Retrieve a finalized transaction, or a pooled otherwise
 	found, tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
 	if !found {
-		if tx = s.b.GetPoolTransaction(hash); tx == nil {
-			return nil, err
+		if tx = s.b.GetPoolTransaction(hash); tx != nil {
+			return tx.MarshalBinary()
 		}
+		if err == nil {
+			return nil, nil
+		}
+		return nil, NewTxIndexingError()
 	}
-	// Serialize to RLP and return
 	return tx.MarshalBinary()
 }
 
@@ -1684,7 +1658,7 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	found, tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
-		return nil, err // transaction is not fully indexed
+		return nil, NewTxIndexingError() // transaction is not fully indexed
 	}
 	if !found {
 		return nil, nil // transaction is not existent or reachable
@@ -2079,10 +2053,13 @@ func (s *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hex
 	// Retrieve a finalized transaction, or a pooled otherwise
 	found, tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
 	if !found {
-		if tx = s.b.GetPoolTransaction(hash); tx == nil {
-			// Transaction not found anywhere, abort
-			return nil, err
+		if tx = s.b.GetPoolTransaction(hash); tx != nil {
+			return tx.MarshalBinary()
 		}
+		if err == nil {
+			return nil, nil
+		}
+		return nil, NewTxIndexingError()
 	}
 	return tx.MarshalBinary()
 }

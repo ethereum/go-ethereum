@@ -279,7 +279,7 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		// The transaction indexing is not finished yet, returning an
 		// error to explicitly indicate it.
 		if !progress.done() {
-			return nil, nil, errors.New("transaction is still indexing")
+			return nil, nil, errors.New("transaction indexing still in progress")
 		}
 		// The transaction is already indexed, the transaction is either
 		// not existent or not in the range of index, returning null.
