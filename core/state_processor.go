@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -78,6 +79,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if p.config.IsPrague(block.Number(), block.Time()) {
+		ProcessParentBlockHash(statedb, block.NumberU64()-1, block.ParentHash())
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -188,4 +192,10 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.Big0)
 	statedb.Finalise(true)
+}
+
+func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash) {
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], prevNumber)
+	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
 }

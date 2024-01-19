@@ -978,6 +978,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
+	if w.chainConfig.IsPrague(header.Number, header.Time) {
+		core.ProcessParentBlockHash(env.state, header.Number.Uint64()-1, header.ParentHash)
+	}
 	return env, nil
 }
 
