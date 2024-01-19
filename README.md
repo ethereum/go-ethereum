@@ -15,13 +15,13 @@ The easiest way to get started with bor is to install the packages using the com
     
     curl -L https://raw.githubusercontent.com/maticnetwork/install/main/bor.sh | bash -s -- v0.4.0 <network> <node_type>
 
-The network accepts `mainnet` or `mumbai` and the node type accepts `validator` or `sentry` or `archive`. The installation script does the following things:
+The network accepts `mainnet`,`amoy` or `mumbai` and the node type accepts `validator` or `sentry` or `archive`. The installation script does the following things:
 - Create a new user named `bor`.
 - Install the bor binary at `/usr/bin/bor`.
 - Dump the suitable config file (based on the network and node type provided) at `/var/lib/bor` and uses it as the home dir.
 - Create a systemd service named `bor` at `/lib/systemd/system/bor.service` which starts bor using the config file as `bor` user.
 
-The releases supports both the networks i.e. Polygon Mainnet and Mumbai (Testnet) unless explicitly specified. Before the stable release for mainnet, pre-releases will be available marked with `beta` tag for deploying on Mumbai (testnet). On sufficient testing, stable release for mainnet will be announced with a forum post.
+The releases supports both the networks i.e. Polygon Mainnet, Amoy and Mumbai (Testnet) unless explicitly specified. Before the stable release for mainnet, pre-releases will be available marked with `beta` tag for deploying on Mumbai/Amoy (testnet). On sufficient testing, stable release for mainnet will be announced with a forum post.
 
 ### Building from source
 

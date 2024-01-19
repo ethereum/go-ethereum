@@ -15,7 +15,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "chain",
-		Usage:   "Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file",
+		Usage:   "Name of the chain to sync ('amoy', 'mumbai', 'mainnet') or path to a genesis file",
 		Value:   &c.cliConfig.Chain,
 		Default: c.cliConfig.Chain,
 	})

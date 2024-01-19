@@ -156,6 +156,10 @@ var (
 		Name:  "bor-mumbai",
 		Usage: "Mumbai network: pre-configured proof-of-stake test network",
 	}
+	AmoyFlag = &cli.BoolFlag{
+		Name:  "bor-amoy",
+		Usage: "Amoy network: pre-configured proof-of-stake test network",
+	}
 	BorMainnetFlag = &cli.BoolFlag{
 		Name:  "bor-mainnet",
 		Usage: "Bor mainnet",

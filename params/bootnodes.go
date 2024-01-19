@@ -75,6 +75,13 @@ var MumbaiBootnodes = []string{
 	"enode://209aaf7ed549cf4a5700fd833da25413f80a1248bd3aa7fe2a87203e3f7b236dd729579e5c8df61c97bf508281bae4969d6de76a7393bcbd04a0af70270333b3@54.216.248.9:30303",
 }
 
+// AmoyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Amoy test network.
+var AmoyBootnodes = []string{
+	"enode://bce861be777e91b0a5a49d58a51e14f32f201b4c6c2d1fbea6c7a1f14756cbb3f931f3188d6b65de8b07b53ff28d03b6e366d09e56360d2124a9fc5a15a0913d@54.217.171.196:30303",
+	"enode://4a3dc0081a346d26a73d79dd88216a9402d2292318e2db9947dbc97ea9c4afb2498dc519c0af04420dc13a238c279062da0320181e7c1461216ce4513bfd40bf@13.251.184.185:30303",
+}
+
 // BorMainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // main Bor network.
 var BorMainnetBootnodes = []string{
@@ -126,6 +133,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "mumbai"
 	case BorMainnetGenesisHash:
 		net = "bor-mainnet"
+	case AmoyGenesisHash:
+		net = "amoy"
 	case SepoliaGenesisHash:
 		net = "sepolia"
 	default:

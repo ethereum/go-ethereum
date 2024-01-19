@@ -143,6 +143,7 @@ var (
 		utils.SepoliaFlag,
 		utils.GoerliFlag,
 		utils.MumbaiFlag,
+		utils.AmoyFlag,
 		utils.BorMainnetFlag,
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
@@ -299,6 +300,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.MumbaiFlag.Name):
 		log.Info("Starting Bor on Mumbai testnet...")
 
+	case ctx.IsSet(utils.AmoyFlag.Name):
+		log.Info("Starting Bor on Amoy testnet...")
+
 	case ctx.IsSet(utils.BorMainnetFlag.Name):
 		log.Info("Starting Bor on Bor mainnet...")
 
@@ -329,6 +333,7 @@ func prepare(ctx *cli.Context) {
 		if !ctx.IsSet(utils.SepoliaFlag.Name) &&
 			!ctx.IsSet(utils.GoerliFlag.Name) &&
 			!ctx.IsSet(utils.MumbaiFlag.Name) &&
+			!ctx.IsSet(utils.AmoyFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)

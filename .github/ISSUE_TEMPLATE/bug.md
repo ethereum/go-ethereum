@@ -20,7 +20,7 @@ Heimdall client version: [e.g. v0.2.10] <!--Can be found by running the command 
 
 OS & Version: Windows / Linux / OSX
 
-Environment: Polygon Mainnet / Polygon Mumbai / Devnet
+Environment: Polygon Mainnet / Polygon Mumbai / Polygon Amoy / Devnet
 
 Type of node: Validator / Sentry / Archive
 

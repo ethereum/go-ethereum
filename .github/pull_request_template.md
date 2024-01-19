@@ -39,7 +39,7 @@ In case this PR includes changes that must be applied only to a subset of nodes,
 - [ ] I have added tests to CI
 - [ ] I have tested this code manually on local environment
 - [ ] I have tested this code manually on remote devnet using express-cli
-- [ ] I have tested this code manually on mumbai
+- [ ] I have tested this code manually on mumbai/amoy
 - [ ] I have created new e2e tests into express-cli
 
 ### Manual tests

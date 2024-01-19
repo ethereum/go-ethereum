@@ -132,7 +132,7 @@ func remoteConsole(ctx *cli.Context) error {
 		if path != "" {
 			if ctx.Bool(utils.GoerliFlag.Name) {
 				path = filepath.Join(path, "goerli")
-			} else if ctx.Bool(utils.MumbaiFlag.Name) || ctx.Bool(utils.BorMainnetFlag.Name) {
+			} else if ctx.Bool(utils.MumbaiFlag.Name) || ctx.Bool(utils.AmoyFlag.Name) || ctx.Bool(utils.BorMainnetFlag.Name) {
 				homeDir, _ := os.UserHomeDir()
 				path = filepath.Join(homeDir, "/.bor/data")
 			} else if ctx.Bool(utils.SepoliaFlag.Name) {

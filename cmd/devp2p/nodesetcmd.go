@@ -265,6 +265,12 @@ func ethFilter(args []string) (nodeFilter, error) {
 		filter = forkid.NewStaticFilter(params.GoerliChainConfig, core.DefaultGoerliGenesisBlock().ToBlock())
 	case "sepolia":
 		filter = forkid.NewStaticFilter(params.SepoliaChainConfig, core.DefaultSepoliaGenesisBlock().ToBlock())
+	case "bor-mumbai":
+		filter = forkid.NewStaticFilter(params.MumbaiChainConfig, core.DefaultMumbaiGenesisBlock().ToBlock())
+	case "bor-mainnet":
+		filter = forkid.NewStaticFilter(params.BorMainnetChainConfig, core.DefaultBorMainnetGenesisBlock().ToBlock())
+	case "bor-amoy":
+		filter = forkid.NewStaticFilter(params.AmoyChainConfig, core.DefaultAmoyGenesisBlock().ToBlock())
 	default:
 		return nil, fmt.Errorf("unknown network %q", args[0])
 	}
