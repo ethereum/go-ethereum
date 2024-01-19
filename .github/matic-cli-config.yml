@@ -23,3 +23,4 @@ borDockerBuildContext: "../../bor"
 heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#develop"
 sprintSizeBlockNumber:
   - '0'
+devnetBorFlags: config,config,config
