@@ -272,13 +272,13 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
-		progress, err := bc.askTxIndexProgress()
+		progress, err := bc.TxIndexProgress()
 		if err != nil {
 			return nil, nil, nil
 		}
 		// The transaction indexing is not finished yet, returning an
 		// error to explicitly indicate it.
-		if !progress.done() {
+		if !progress.Done() {
 			return nil, nil, errors.New("transaction indexing still in progress")
 		}
 		// The transaction is already indexed, the transaction is either
@@ -443,4 +443,10 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// SubscribeTxIndexEvent registers a subscription of bool where true means
+// transaction indexing has finished.
+func (bc *BlockChain) SubscribeTxIndexEvent(ch chan<- bool) event.Subscription {
+	return bc.scope.Track(bc.txIndexFeed.Subscribe(ch))
 }

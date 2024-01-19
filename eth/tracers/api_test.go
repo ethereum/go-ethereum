@@ -115,7 +115,7 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 
 func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
-	return true, tx, hash, blockNumber, index, nil
+	return tx != nil, tx, hash, blockNumber, index, nil
 }
 
 func (b *testBackend) RPCGasCap() uint64 {

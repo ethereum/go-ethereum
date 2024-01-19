@@ -192,19 +192,15 @@ type txLookup struct {
 	transaction *types.Transaction
 }
 
-// txIndexProgress is the struct describing the progress for transaction indexing.
-type txIndexProgress struct {
-	head    uint64 // the current chain head
-	indexed uint64 // the number of blocks have been indexed
-	limit   uint64 // the number of blocks required for transaction indexing(0 means the whole chain)
+// TxIndexProgress is the struct describing the progress for transaction indexing.
+type TxIndexProgress struct {
+	Indexed   uint64 // number of blocks whose transactions are indexed
+	Remaining uint64 // number of blocks whose transactions are not indexed yet
 }
 
-// done returns an indicator if the transaction indexing is finished.
-func (prog txIndexProgress) done() bool {
-	if prog.limit == 0 {
-		return prog.indexed == (prog.head + 1) // genesis included
-	}
-	return prog.indexed >= prog.limit
+// Done returns an indicator if the transaction indexing is finished.
+func (prog TxIndexProgress) Done() bool {
+	return prog.Remaining == 0
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -248,6 +244,7 @@ type BlockChain struct {
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
+	txIndexFeed   event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -273,7 +270,7 @@ type BlockChain struct {
 	quit          chan struct{}             // shutdown signal, closed in Stop.
 	stopping      atomic.Bool               // false if chain is running, true when stopped
 	procInterrupt atomic.Bool               // interrupt signaler for block processing
-	txIndexProgCh chan chan txIndexProgress // chan for querying the progress of transaction indexing
+	txIndexProgCh chan chan TxIndexProgress // chan for querying the progress of transaction indexing
 
 	engine     consensus.Engine
 	validator  Validator // Block and state validator interface
@@ -322,7 +319,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
-		txIndexProgCh: make(chan chan txIndexProgress),
+		txIndexProgCh: make(chan chan TxIndexProgress),
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}
@@ -2451,29 +2448,38 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 }
 
 // reportTxIndexProgress returns the tx indexing progress.
-func (bc *BlockChain) reportTxIndexProgress(head uint64) txIndexProgress {
+func (bc *BlockChain) reportTxIndexProgress(head uint64) TxIndexProgress {
 	var (
-		indexed uint64
-		tail    = rawdb.ReadTxIndexTail(bc.db)
+		remaining uint64
+		tail      = rawdb.ReadTxIndexTail(bc.db)
 	)
+	total := bc.txLookupLimit
+	if bc.txLookupLimit == 0 {
+		total = head + 1 // genesis included
+	}
+	var indexed uint64
 	if tail != nil {
 		indexed = head - *tail + 1
 	}
-	return txIndexProgress{
-		head:    head,
-		indexed: indexed,
-		limit:   bc.txLookupLimit,
+	// The value of indexed might be larger than total if some blocks need
+	// to unindexed, avoiding a negative remaining.
+	if indexed < total {
+		remaining = total - indexed
+	}
+	return TxIndexProgress{
+		Indexed:   indexed,
+		Remaining: remaining,
 	}
 }
 
-// askTxIndexProgress retrieves the tx indexing progress.
-func (bc *BlockChain) askTxIndexProgress() (txIndexProgress, error) {
-	ch := make(chan txIndexProgress, 1)
+// TxIndexProgress retrieves the tx indexing progress.
+func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
+	ch := make(chan TxIndexProgress, 1)
 	select {
 	case bc.txIndexProgCh <- ch:
 		return <-ch, nil
 	case <-bc.quit:
-		return txIndexProgress{}, errors.New("blockchain is closed")
+		return TxIndexProgress{}, errors.New("blockchain is closed")
 	}
 }
 
@@ -2521,6 +2527,10 @@ func (bc *BlockChain) maintainTxIndex() {
 			lastHead = head.Block.NumberU64()
 		case <-done:
 			done = nil
+
+			if bc.reportTxIndexProgress(lastHead).Done() {
+				bc.txIndexFeed.Send(true)
+			}
 		case ch := <-bc.txIndexProgCh:
 			ch <- bc.reportTxIndexProgress(lastHead)
 		case <-bc.quit:

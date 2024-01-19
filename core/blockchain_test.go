@@ -4075,6 +4075,12 @@ func TestTxIndexer(t *testing.T) {
 		}
 		verifyRange(db, *tail, 128, true)
 	}
+	verifyProgress := func(chain *BlockChain) {
+		prog := chain.reportTxIndexProgress(128)
+		if !prog.Done() {
+			t.Fatalf("Expect fully indexed")
+		}
+	}
 
 	var cases = []struct {
 		limitA uint64
@@ -4204,19 +4210,23 @@ func TestTxIndexer(t *testing.T) {
 		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA)
 		chain.indexBlocks(nil, 128, make(chan struct{}))
 		verify(db, c.tailA)
+		verifyProgress(chain)
 
 		chain.SetTxLookupLimit(c.limitB)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, c.tailB)
+		verifyProgress(chain)
 
 		chain.SetTxLookupLimit(c.limitC)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, c.tailC)
+		verifyProgress(chain)
 
 		// Recover all indexes
 		chain.SetTxLookupLimit(0)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, 0)
+		verifyProgress(chain)
 
 		chain.Stop()
 		db.Close()

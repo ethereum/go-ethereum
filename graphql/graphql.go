@@ -1509,6 +1509,12 @@ func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
 func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HealingBytecode)
 }
+func (s *SyncState) TxIndexFinishedBlocks() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TxIndexFinishedBlocks)
+}
+func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.TxIndexRemainingBlocks)
+}
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
@@ -1527,11 +1533,13 @@ func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 // - healedBytecodeBytes: number of bytecodes persisted to disk
 // - healingTrienodes:    number of state trie nodes pending
 // - healingBytecode:     number of bytecodes pending
+// - txIndexFinishedBlocks:  number of blocks whose transactions are indexed
+// - txIndexRemainingBlocks: number of blocks whose transactions are not indexed yet
 func (r *Resolver) Syncing() (*SyncState, error) {
 	progress := r.backend.SyncProgress()
 
 	// Return not syncing if the synchronisation already completed
-	if progress.CurrentBlock >= progress.HighestBlock {
+	if progress.Done() {
 		return nil, nil
 	}
 	// Otherwise gather the block sync stats

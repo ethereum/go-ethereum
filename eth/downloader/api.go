@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -29,6 +30,7 @@ import (
 // It offers only methods that operates on data that can be available to anyone without security risks.
 type DownloaderAPI struct {
 	d                         *Downloader
+	chain                     *core.BlockChain
 	mux                       *event.TypeMux
 	installSyncSubscription   chan chan interface{}
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
@@ -38,9 +40,10 @@ type DownloaderAPI struct {
 // listens for events from the downloader through the global event mux. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
-func NewDownloaderAPI(d *Downloader, m *event.TypeMux) *DownloaderAPI {
+func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *DownloaderAPI {
 	api := &DownloaderAPI{
 		d:                         d,
+		chain:                     chain,
 		mux:                       m,
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
@@ -57,7 +60,10 @@ func (api *DownloaderAPI) eventLoop() {
 	var (
 		sub               = api.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
 		syncSubscriptions = make(map[chan interface{}]struct{})
+		txIndexCh         = make(chan bool, 1)
 	)
+	txIndexSub := api.chain.SubscribeTxIndexEvent(txIndexCh)
+	defer txIndexSub.Unsubscribe()
 
 	for {
 		select {
@@ -70,20 +76,53 @@ func (api *DownloaderAPI) eventLoop() {
 			if event == nil {
 				return
 			}
-
 			var notification interface{}
+
 			switch event.Data.(type) {
 			case StartEvent:
+				prog := api.d.Progress()
+				txProg, err := api.chain.TxIndexProgress()
+				if err == nil {
+					prog.TxIndexFinishedBlocks = txProg.Indexed
+					prog.TxIndexRemainingBlocks = txProg.Remaining
+				}
 				notification = &SyncingResult{
 					Syncing: true,
-					Status:  api.d.Progress(),
+					Status:  prog,
 				}
 			case DoneEvent, FailedEvent:
 				notification = false
+
+				txProg, err := api.chain.TxIndexProgress()
+				if err == nil && !txProg.Done() {
+					prog := api.d.Progress()
+					prog.TxIndexFinishedBlocks = txProg.Indexed
+					prog.TxIndexRemainingBlocks = txProg.Remaining
+					notification = &SyncingResult{
+						Syncing: true,
+						Status:  prog,
+					}
+				}
 			}
 			// broadcast
 			for c := range syncSubscriptions {
 				c <- notification
+			}
+		case status := <-txIndexCh:
+			if !status {
+				continue
+			}
+			prog := api.d.Progress()
+			txProg, err := api.chain.TxIndexProgress()
+			if err == nil && !txProg.Done() {
+				prog.TxIndexFinishedBlocks = txProg.Indexed
+				prog.TxIndexRemainingBlocks = txProg.Remaining
+			}
+			if !prog.Done() {
+				continue
+			}
+			for c := range syncSubscriptions {
+				c <- true
 			}
 		}
 	}
