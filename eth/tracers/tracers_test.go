@@ -20,8 +20,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -204,7 +204,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 // Iterates over all the input-output datasets in the tracer test harness and
 // runs the JavaScript tracers against them.
 func TestCallTracer(t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestCallTracer(t *testing.T) {
 			t.Parallel()
 
 			// Call tracer test found, read if from disk
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+			blob, err := os.ReadFile(filepath.Join("testdata", file.Name()))
 			if err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			}

@@ -18,14 +18,14 @@ package storage
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 func initDbStore(t *testing.T) *DbStore {
-	dir, err := ioutil.TempDir("", "bzz-storage-test")
+	dir, err := os.MkdirTemp("", "bzz-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}

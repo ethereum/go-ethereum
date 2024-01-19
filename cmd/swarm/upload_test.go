@@ -18,7 +18,6 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
@@ -33,7 +32,7 @@ func TestCLISwarmUp(t *testing.T) {
 	defer cluster.Shutdown()
 
 	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
+	tmp, err := os.CreateTemp("", "swarm-test")
 	assertNil(t, err)
 	defer tmp.Close()
 	defer os.Remove(tmp.Name())
@@ -68,7 +67,7 @@ func assertHTTPResponse(t *testing.T, res *http.Response, expectedStatus int, ex
 	if res.StatusCode != expectedStatus {
 		t.Fatalf("expected HTTP status %d, got %s", expectedStatus, res.Status)
 	}
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	assertNil(t, err)
 	if string(data) != expectedBody {
 		t.Fatalf("expected HTTP body %q, got %q", expectedBody, data)

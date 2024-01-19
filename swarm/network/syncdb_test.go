@@ -19,7 +19,6 @@ package network
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +46,7 @@ type testSyncDb struct {
 
 func newTestSyncDb(priority, bufferSize, batchSize int, dbdir string, t *testing.T) *testSyncDb {
 	if len(dbdir) == 0 {
-		tmp, err := ioutil.TempDir(os.TempDir(), "syncdb-test")
+		tmp, err := os.MkdirTemp(os.TempDir(), "syncdb-test")
 		if err != nil {
 			t.Fatalf("unable to create temporary direcory %v: %v", tmp, err)
 		}

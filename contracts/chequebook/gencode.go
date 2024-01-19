@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build none
 // +build none
 
 // This program generates contract/code.go, which contains the chequebook code
@@ -22,8 +23,8 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
@@ -64,7 +65,7 @@ func main() {
 // updated when the contract code is changed.
 const ContractDeployedCode = "%#x"
 `, code)
-	if err := ioutil.WriteFile("contract/code.go", []byte(content), 0644); err != nil {
+	if err := os.WriteFile("contract/code.go", []byte(content), 0644); err != nil {
 		panic(err)
 	}
 }

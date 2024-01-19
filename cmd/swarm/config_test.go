@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -67,7 +66,7 @@ func TestFailsNoBzzAccount(t *testing.T) {
 }
 
 func TestCmdLineOverrides(t *testing.T) {
-	dir, err := ioutil.TempDir("", "bzztest")
+	dir, err := os.MkdirTemp("", "bzztest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +160,7 @@ func TestFileOverrides(t *testing.T) {
 		t.Fatalf("Error creating TOML file in TestFileOverride: %v", err)
 	}
 	//create file
-	f, err := ioutil.TempFile("", "testconfig.toml")
+	f, err := os.CreateTemp("", "testconfig.toml")
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
@@ -172,7 +171,7 @@ func TestFileOverrides(t *testing.T) {
 	}
 	f.Sync()
 
-	dir, err := ioutil.TempDir("", "bzztest")
+	dir, err := os.MkdirTemp("", "bzztest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +258,7 @@ func TestEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncEnabledFlag.EnvVar, "true"))
 
-	dir, err := ioutil.TempDir("", "bzztest")
+	dir, err := os.MkdirTemp("", "bzztest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +367,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Error creating TOML file in TestFileOverride: %v", err)
 	}
 	//write file
-	f, err := ioutil.TempFile("", "testconfig.toml")
+	f, err := os.CreateTemp("", "testconfig.toml")
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
@@ -379,7 +378,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 	}
 	f.Sync()
 
-	dir, err := ioutil.TempDir("", "bzztest")
+	dir, err := os.MkdirTemp("", "bzztest")
 	if err != nil {
 		t.Fatal(err)
 	}

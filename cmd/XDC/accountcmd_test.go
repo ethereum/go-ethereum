@@ -17,7 +17,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -115,7 +115,7 @@ Passphrase: {{.InputLine "foo"}}
 Address: {xdcd4584b5f6229b7be90727b0fc8c6b91bb427821f}
 `)
 
-	files, err := ioutil.ReadDir(filepath.Join(XDC.Datadir, "keystore"))
+	files, err := os.ReadDir(filepath.Join(XDC.Datadir, "keystore"))
 	if len(files) != 1 {
 		t.Errorf("expected one key file in keystore directory, found %d files (error: %v)", len(files), err)
 	}

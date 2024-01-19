@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"io/ioutil"
+	"io"
 	"os"
 	"runtime/pprof"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	goruntime "runtime"
 
@@ -125,13 +126,13 @@ func runCmd(ctx *cli.Context) error {
 		// If - is specified, it means that code comes from stdin
 		if ctx.GlobalString(CodeFileFlag.Name) == "-" {
 			//Try reading from stdin
-			if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
+			if hexcode, err = io.ReadAll(os.Stdin); err != nil {
 				fmt.Printf("Could not load code from stdin: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
 			// Codefile with hex assembly
-			if hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name)); err != nil {
+			if hexcode, err = os.ReadFile(ctx.GlobalString(CodeFileFlag.Name)); err != nil {
 				fmt.Printf("Could not load code from file: %v\n", err)
 				os.Exit(1)
 			}
@@ -142,7 +143,7 @@ func runCmd(ctx *cli.Context) error {
 		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
 	} else if fn := ctx.Args().First(); len(fn) > 0 {
 		// EASM-file to compile
-		src, err := ioutil.ReadFile(fn)
+		src, err := os.ReadFile(fn)
 		if err != nil {
 			return err
 		}

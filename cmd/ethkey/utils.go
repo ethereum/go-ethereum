@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
@@ -35,7 +35,7 @@ func getPassPhrase(ctx *cli.Context, confirmation bool) string {
 	// Look for the --passphrase flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
-		content, err := ioutil.ReadFile(passphraseFile)
+		content, err := os.ReadFile(passphraseFile)
 		if err != nil {
 			utils.Fatalf("Failed to read passphrase file '%s': %v",
 				passphraseFile, err)
@@ -64,7 +64,8 @@ func getPassPhrase(ctx *cli.Context, confirmation bool) string {
 // that can be safely used to calculate a signature from.
 //
 // The hash is calulcated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+//
+//	keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {

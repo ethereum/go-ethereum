@@ -19,7 +19,6 @@ package kademlia
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -165,7 +164,6 @@ offline past peer)
 || (proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|)
 || (proxBin(a) == proxBin(b) && lastChecked(a) < lastChecked(b))
 
-
 The second argument returned names the first missing slot found
 */
 func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRecord, need bool, proxLimit int) {
@@ -292,7 +290,7 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(path, data, os.ModePerm)
+	err = os.WriteFile(path, data, os.ModePerm)
 	if err != nil {
 		log.Warn(fmt.Sprintf("unable to save kaddb with %v nodes to %v: %v", n, path, err))
 	} else {
@@ -307,7 +305,7 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 	self.lock.Lock()
 
 	var data []byte
-	data, err = ioutil.ReadFile(path)
+	data, err = os.ReadFile(path)
 	if err != nil {
 		return
 	}

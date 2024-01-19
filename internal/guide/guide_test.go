@@ -23,7 +23,6 @@
 package guide
 
 import (
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -37,7 +36,7 @@ import (
 // Tests that the account management snippets work correctly.
 func TestAccountManagement(t *testing.T) {
 	// Create a temporary folder to work with
-	workdir, err := ioutil.TempDir("", "")
+	workdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temporary work dir: %v", err)
 	}

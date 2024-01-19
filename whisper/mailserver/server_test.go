@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -83,7 +83,7 @@ func TestMailServer(t *testing.T) {
 	const password = "password_for_this_test"
 	const dbPath = "whisper-server-test"
 
-	dir, err := ioutil.TempDir("", dbPath)
+	dir, err := os.MkdirTemp("", dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

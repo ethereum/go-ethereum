@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -88,7 +88,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Request failed: %v", err)
 		}
 		defer resp.Body.Close()
-		respbody, err = ioutil.ReadAll(resp.Body)
+		respbody, err = io.ReadAll(resp.Body)
 
 		if string(respbody) != testmanifest[v] {
 			isexpectedfailrequest := false
@@ -117,7 +117,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Request failed: %v", err)
 		}
 		defer resp.Body.Close()
-		respbody, err = ioutil.ReadAll(resp.Body)
+		respbody, err = io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("Read request body: %v", err)
 		}
@@ -174,7 +174,7 @@ func TestBzzGetPath(t *testing.T) {
 				t.Fatalf("HTTP request: %v", err)
 			}
 			defer resp.Body.Close()
-			respbody, err := ioutil.ReadAll(resp.Body)
+			respbody, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("Read response body: %v", err)
 			}
@@ -204,7 +204,7 @@ func TestBzzGetPath(t *testing.T) {
 				t.Fatalf("HTTP request: %v", err)
 			}
 			defer resp.Body.Close()
-			respbody, err := ioutil.ReadAll(resp.Body)
+			respbody, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("Read response body: %v", err)
 			}
@@ -250,7 +250,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Request failed: %v", err)
 		}
 		defer resp.Body.Close()
-		respbody, err = ioutil.ReadAll(resp.Body)
+		respbody, err = io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("ReadAll failed: %v", err)
 		}
@@ -272,7 +272,7 @@ func TestBzzRootRedirect(t *testing.T) {
 	client := swarm.NewClient(srv.URL)
 	data := []byte("data")
 	file := &swarm.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+		ReadCloser: io.NopCloser(bytes.NewReader(data)),
 		ManifestEntry: api.ManifestEntry{
 			Path:        "",
 			ContentType: "text/plain",
@@ -310,7 +310,7 @@ func TestBzzRootRedirect(t *testing.T) {
 	if !redirected {
 		t.Fatal("expected GET /bzz:/<hash> to redirect to /bzz:/<hash>/ but it didn't")
 	}
-	gotData, err := ioutil.ReadAll(res.Body)
+	gotData, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}

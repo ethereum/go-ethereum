@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -70,7 +69,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}
@@ -401,7 +400,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader) (string, error) {
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}
@@ -457,7 +456,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}

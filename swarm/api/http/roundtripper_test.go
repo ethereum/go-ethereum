@@ -17,7 +17,7 @@
 package http
 
 import (
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -57,7 +57,7 @@ func TestRoundTripper(t *testing.T) {
 		}
 	}()
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 		return

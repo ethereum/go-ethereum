@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -27,7 +26,7 @@ import (
 )
 
 func tmpdir(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "XDC-test")
+	dir, err := os.MkdirTemp("", "XDC-test")
 	if err != nil {
 		t.Fatal(err)
 	}

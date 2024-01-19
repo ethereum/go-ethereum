@@ -6,7 +6,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -77,7 +76,7 @@ func RandStringBytes(n int) string {
 func getSignerAndSignFn(pk *ecdsa.PrivateKey) (common.Address, func(account accounts.Account, hash []byte) ([]byte, error), error) {
 	veryLightScryptN := 2
 	veryLightScryptP := 1
-	dir, _ := ioutil.TempDir("", fmt.Sprintf("eth-getSignerAndSignFn-test-%v", RandStringBytes(5)))
+	dir, _ := os.MkdirTemp("", fmt.Sprintf("eth-getSignerAndSignFn-test-%v", RandStringBytes(5)))
 
 	new := func(kd string) *keystore.KeyStore {
 		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)

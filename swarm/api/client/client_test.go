@@ -18,7 +18,7 @@ package client
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -49,7 +49,7 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer res.Close()
-	gotData, err := ioutil.ReadAll(res)
+	gotData, err := io.ReadAll(res)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 	client := NewClient(srv.URL)
 	upload := func(manifest, path string, data []byte) string {
 		file := &File{
-			ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+			ReadCloser: io.NopCloser(bytes.NewReader(data)),
 			ManifestEntry: api.ManifestEntry{
 				Path:        path,
 				ContentType: "text/plain",
@@ -92,7 +92,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 		if file.ContentType != "text/plain" {
 			t.Fatalf("expected downloaded file to have type %q, got %q", "text/plain", file.ContentType)
 		}
-		data, err := ioutil.ReadAll(file)
+		data, err := io.ReadAll(file)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +136,7 @@ var testDirFiles = []string{
 }
 
 func newTestDirectory(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "swarm-client-test")
+	dir, err := os.MkdirTemp("", "swarm-client-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func newTestDirectory(t *testing.T) string {
 			os.RemoveAll(dir)
 			t.Fatalf("error creating dir for %s: %s", path, err)
 		}
-		if err := ioutil.WriteFile(path, []byte(file), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(file), 0644); err != nil {
 			os.RemoveAll(dir)
 			t.Fatalf("error writing file %s: %s", path, err)
 		}
@@ -180,7 +180,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer file.Close()
-		data, err := ioutil.ReadAll(file)
+		data, err := io.ReadAll(file)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +196,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	checkDownloadFile("", []byte(testDirFiles[0]))
 
 	// check we can download the directory
-	tmp, err := ioutil.TempDir("", "swarm-client-test")
+	tmp, err := os.MkdirTemp("", "swarm-client-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range testDirFiles {
-		data, err := ioutil.ReadFile(filepath.Join(tmp, file))
+		data, err := os.ReadFile(filepath.Join(tmp, file))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +283,7 @@ func TestClientMultipartUpload(t *testing.T) {
 	uploader := UploaderFunc(func(upload UploadFn) error {
 		for _, name := range testDirFiles {
 			file := &File{
-				ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+				ReadCloser: io.NopCloser(bytes.NewReader(data)),
 				ManifestEntry: api.ManifestEntry{
 					Path:        name,
 					ContentType: "text/plain",
@@ -311,7 +311,7 @@ func TestClientMultipartUpload(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer file.Close()
-		gotData, err := ioutil.ReadAll(file)
+		gotData, err := io.ReadAll(file)
 		if err != nil {
 			t.Fatal(err)
 		}

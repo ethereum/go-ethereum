@@ -18,7 +18,6 @@ package api
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -28,7 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/swarm/storage"
 )
 
-var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
+var testDownloadDir, _ = os.MkdirTemp(os.TempDir(), "bzz-test")
 
 func testFileSystem(t *testing.T, f func(*FileSystem)) {
 	testApi(t, func(api *Api) {
@@ -38,7 +37,7 @@ func testFileSystem(t *testing.T, f func(*FileSystem)) {
 
 func readPath(t *testing.T, parts ...string) string {
 	file := filepath.Join(parts...)
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 
 	if err != nil {
 		t.Fatalf("unexpected error reading '%v': %v", file, err)
@@ -100,7 +99,7 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		index, err := ioutil.ReadFile(filepath.Join("testdata", "test0", "index.html"))
+		index, err := os.ReadFile(filepath.Join("testdata", "test0", "index.html"))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return

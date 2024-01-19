@@ -17,12 +17,12 @@
 package main
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -108,7 +108,7 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	// Start a XDC instance with the requested flags set and immediately terminate
 	if genesis != "" {
 		json := filepath.Join(datadir, "genesis.json")
-		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
+		if err := os.WriteFile(json, []byte(genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", test, err)
 		}
 		runXDC(t, "--datadir", datadir, "init", json).WaitExit()

@@ -19,7 +19,6 @@ package storage
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -63,8 +62,8 @@ func TestDPArandom(t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Errorf("Comparison error.")
 	}
-	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
-	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
+	os.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
+	os.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
 	localStore.memStore = NewMemStore(dbStore, defaultCacheCapacity)
 	resultReader = dpa.Retrieve(key)
 	for i := range resultSlice {

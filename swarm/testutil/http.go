@@ -17,7 +17,6 @@
 package testutil
 
 import (
-	"io/ioutil"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -28,7 +27,7 @@ import (
 )
 
 func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
-	dir, err := ioutil.TempDir("", "swarm-storage-test")
+	dir, err := os.MkdirTemp("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}

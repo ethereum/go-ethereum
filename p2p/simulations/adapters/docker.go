@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -141,7 +140,7 @@ const dockerImage = "p2p-node"
 // when executed.
 func buildDockerImage() error {
 	// create a directory to use as the build context
-	dir, err := ioutil.TempDir("", "p2p-docker")
+	dir, err := os.MkdirTemp("", "p2p-docker")
 	if err != nil {
 		return err
 	}
@@ -168,7 +167,7 @@ FROM ubuntu:16.04
 RUN mkdir /data
 ADD self.bin /bin/p2p-node
 	`)
-	if err := ioutil.WriteFile(filepath.Join(dir, "Dockerfile"), dockerfile, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), dockerfile, 0644); err != nil {
 		return err
 	}
 
