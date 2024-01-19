@@ -98,6 +98,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
+ 	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
 
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
@@ -142,6 +143,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
+	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
 
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
