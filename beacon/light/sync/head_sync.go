@@ -22,7 +22,8 @@ import (
 )
 
 type headTracker interface {
-	Validate(head types.SignedHeader) (bool, error)
+	ValidateHead(head types.SignedHeader) (bool, error)
+	ValidateFinality(head types.FinalityUpdate) (bool, error)
 	SetPrefetchHead(head types.HeadInfo)
 }
 
@@ -32,15 +33,16 @@ type headTracker interface {
 // It can also postpone the validation of the latest announced signed head
 // until the committee chain is synced up to at least the required period.
 type HeadSync struct {
-	headTracker      headTracker
-	chain            committeeChain
-	nextSyncPeriod   uint64
-	chainInit        bool
-	unvalidatedHeads map[request.Server]types.SignedHeader
-	serverHeads      map[request.Server]types.HeadInfo
-	headServerCount  map[types.HeadInfo]headServerCount
-	headCounter      uint64
-	prefetchHead     types.HeadInfo
+	headTracker         headTracker
+	chain               committeeChain
+	nextSyncPeriod      uint64
+	chainInit           bool
+	unvalidatedHeads    map[request.Server]types.SignedHeader
+	unvalidatedFinality map[request.Server]types.FinalityUpdate
+	serverHeads         map[request.Server]types.HeadInfo
+	headServerCount     map[types.HeadInfo]headServerCount
+	headCounter         uint64
+	prefetchHead        types.HeadInfo
 }
 
 // headServerCount is associated with most recently seen head infos; it counts
@@ -55,11 +57,12 @@ type headServerCount struct {
 // NewHeadSync creates a new HeadSync.
 func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
-		headTracker:      headTracker,
-		chain:            chain,
-		unvalidatedHeads: make(map[request.Server]types.SignedHeader),
-		serverHeads:      make(map[request.Server]types.HeadInfo),
-		headServerCount:  make(map[types.HeadInfo]headServerCount),
+		headTracker:         headTracker,
+		chain:               chain,
+		unvalidatedHeads:    make(map[request.Server]types.SignedHeader),
+		unvalidatedFinality: make(map[request.Server]types.FinalityUpdate),
+		serverHeads:         make(map[request.Server]types.HeadInfo),
+		headServerCount:     make(map[types.HeadInfo]headServerCount),
 	}
 	return s
 }
@@ -71,6 +74,8 @@ func (s *HeadSync) Process(events []request.Event) {
 			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
 		case EvNewSignedHead:
 			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
+		case EvNewFinalityUpdate:
+			s.newFinalityUpdate(event.Server, event.Data.(types.FinalityUpdate))
 		case request.EvUnregistered:
 			s.setServerHead(event.Server, types.HeadInfo{})
 			delete(s.serverHeads, event.Server)
@@ -81,7 +86,7 @@ func (s *HeadSync) Process(events []request.Event) {
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		s.processUnvalidatedHeads()
+		s.processUnvalidated()
 	}
 }
 
@@ -96,19 +101,35 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 		s.unvalidatedHeads[server] = signedHead
 		return
 	}
-	s.headTracker.Validate(signedHead)
+	s.headTracker.ValidateHead(signedHead)
+}
+
+// newSignedHead handles received signed head; either validates it if the chain
+// is properly synced or stores it for further validation.
+func (s *HeadSync) newFinalityUpdate(server request.Server, finalityUpdate types.FinalityUpdate) {
+	if !s.chainInit || types.SyncPeriod(finalityUpdate.SignatureSlot) > s.nextSyncPeriod {
+		s.unvalidatedFinality[server] = finalityUpdate
+		return
+	}
+	s.headTracker.ValidateFinality(finalityUpdate)
 }
 
 // processUnvalidatedHeads iterates the list of unvalidated heads and validates
 // those which can be validated.
-func (s *HeadSync) processUnvalidatedHeads() {
+func (s *HeadSync) processUnvalidated() {
 	if !s.chainInit {
 		return
 	}
 	for server, signedHead := range s.unvalidatedHeads {
 		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
-			s.headTracker.Validate(signedHead)
+			s.headTracker.ValidateHead(signedHead)
 			delete(s.unvalidatedHeads, server)
+		}
+	}
+	for server, finalityUpdate := range s.unvalidatedFinality {
+		if types.SyncPeriod(finalityUpdate.SignatureSlot) <= s.nextSyncPeriod {
+			s.headTracker.ValidateFinality(finalityUpdate)
+			delete(s.unvalidatedFinality, server)
 		}
 	}
 }

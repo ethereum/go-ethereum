@@ -229,8 +229,13 @@ type TestHeadTracker struct {
 	validated []types.SignedHeader
 }
 
-func (ht *TestHeadTracker) Validate(head types.SignedHeader) (bool, error) {
+func (ht *TestHeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
 	ht.validated = append(ht.validated, head)
+	return true, nil
+}
+
+//TODO add test case for finality
+func (ht *TestHeadTracker) ValidateFinality(head types.FinalityUpdate) (bool, error) {
 	return true, nil
 }
 

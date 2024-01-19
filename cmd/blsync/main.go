@@ -126,7 +126,7 @@ func blsync(ctx *cli.Context) error {
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
-	go updateEngineApi(makeRPCClient(ctx), beaconBlockSync.headBlockCh)
+	go updateEngineApi(makeRPCClient(ctx), beaconBlockSync.headCh)
 	// start
 	scheduler.Start()
 	// register server(s)
@@ -137,6 +137,6 @@ func blsync(ctx *cli.Context) error {
 	// run until stopped
 	<-ctx.Done()
 	scheduler.Stop()
-	close(beaconBlockSync.headBlockCh)
+	close(beaconBlockSync.headCh)
 	return nil
 }

@@ -45,12 +45,12 @@ func TestBlockSync(t *testing.T) {
 
 	expHeadBlock := func(tci int, expHead *capella.BeaconBlock) {
 		expInfo := blockHeadInfo(expHead)
-		var head *capella.BeaconBlock
+		var head headData
 		select {
-		case head = <-blockSync.headBlockCh:
+		case head = <-blockSync.headCh:
 		default:
 		}
-		headInfo := blockHeadInfo(head)
+		headInfo := blockHeadInfo(head.block)
 		if headInfo != expInfo {
 			t.Errorf("Wrong head block in test case #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, expInfo.Slot, expInfo.BlockRoot, headInfo.Slot, headInfo.BlockRoot)
 		}
@@ -129,6 +129,15 @@ func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
 	return h.prefetch
 }
 
-func (h *testHeadTracker) ValidatedHead() types.SignedHeader {
-	return h.validated
+func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
+	return h.validated, h.validated.Header != (types.Header{})
+}
+
+//TODO add test case for finality
+func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	return types.FinalityUpdate{
+		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Signature:     h.validated.Signature,
+		SignatureSlot: h.validated.SignatureSlot,
+	}, h.validated.Header != (types.Header{})
 }

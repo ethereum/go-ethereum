@@ -35,23 +35,24 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
-func updateEngineApi(client *rpc.Client, headBlockCh chan *capella.BeaconBlock) {
-	for headBlock := range headBlockCh {
-		execBlock, err := getExecBlock(headBlock)
+func updateEngineApi(client *rpc.Client, headCh chan headData) {
+	for headData := range headCh {
+		execBlock, err := getExecBlock(headData.block)
 		if err != nil {
 			log.Error("Error extracting execution block from validated beacon block", "error", err)
 			continue
 		}
 		execRoot := execBlock.Hash()
+		finalizedRoot := common.Hash(headData.update.Finalized.PayloadHeader.BlockHash)
 		if client == nil { // dry run, no engine API specified
-			log.Info("New execution block retrieved", "block number", execBlock.NumberU64(), "block hash", execRoot)
+			log.Info("New execution block retrieved", "block number", execBlock.NumberU64(), "block hash", execRoot, "finalized block hash", finalizedRoot)
 		} else {
 			if status, err := callNewPayloadV2(client, execBlock); err == nil {
 				log.Info("Successful NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "status", status)
 			} else {
 				log.Error("Failed NewPayload", "block number", execBlock.NumberU64(), "block hash", execRoot, "error", err)
 			}
-			if status, err := callForkchoiceUpdatedV1(client, execRoot, common.Hash{}); err == nil {
+			if status, err := callForkchoiceUpdatedV1(client, execRoot, finalizedRoot); err == nil {
 				log.Info("Successful ForkchoiceUpdated", "head", execRoot, "status", status)
 			} else {
 				log.Error("Failed ForkchoiceUpdated", "head", execRoot, "error", err)

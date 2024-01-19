@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	EvNewHead       = &request.EventType{Name: "newHead"}       // data: types.HeadInfo
-	EvNewSignedHead = &request.EventType{Name: "newSignedHead"} // data: types.SignedHeader
+	EvNewHead           = &request.EventType{Name: "newHead"}           // data: types.HeadInfo
+	EvNewSignedHead     = &request.EventType{Name: "newSignedHead"}     // data: types.SignedHeader
+	EvNewFinalityUpdate = &request.EventType{Name: "newFinalityUpdate"} // data: types.FinalityUpdate
 )
 
 type (

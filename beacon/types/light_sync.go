@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/ztyp/tree"
 )
 
 // HeadInfo represents an unvalidated new head announcement.
@@ -139,4 +141,43 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 		return uFinalized
 	}
 	return u.SignerCount > w.SignerCount
+}
+
+type HeaderWithExecProof struct {
+	Header
+	PayloadHeader *capella.ExecutionPayloadHeader
+	PayloadBranch merkle.Values
+}
+
+func (h *HeaderWithExecProof) Validate() error {
+	payloadRoot := merkle.Value(h.PayloadHeader.HashTreeRoot(tree.GetHashFn()))
+	return merkle.VerifyProof(h.BodyRoot, params.BodyIndexExecPayload, h.PayloadBranch, payloadRoot)
+}
+
+type FinalityUpdate struct {
+	Attested, Finalized HeaderWithExecProof
+	FinalityBranch      merkle.Values
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
+}
+
+func (u *FinalityUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        u.Attested.Header,
+		Signature:     u.Signature,
+		SignatureSlot: u.SignatureSlot,
+	}
+}
+
+func (u *FinalityUpdate) Validate() error {
+	if err := u.Attested.Validate(); err != nil {
+		return err
+	}
+	if err := u.Finalized.Validate(); err != nil {
+		return err
+	}
+	return merkle.VerifyProof(u.Attested.StateRoot, params.StateIndexFinalBlock, u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
 }

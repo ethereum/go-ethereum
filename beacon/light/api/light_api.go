@@ -67,6 +67,12 @@ type jsonBeaconHeader struct {
 	Beacon types.Header `json:"beacon"`
 }
 
+type jsonHeaderWithExecProof struct {
+	Beacon          types.Header                    `json:"beacon"`
+	Execution       *capella.ExecutionPayloadHeader `json:"execution"`
+	ExecutionBranch merkle.Values                   `json:"execution_branch"`
+}
+
 // UnmarshalJSON unmarshals from JSON.
 func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 	var dec committeeUpdateJson
@@ -225,6 +231,55 @@ func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
 	}, nil
 }
 
+// GetFinalityUpdate fetches the latest available finality update.
+//
+// See data structure definition here:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientfinalityupdate
+func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
+	resp, err := api.httpGet("/eth/v1/beacon/light_client/finality_update")
+	if err != nil {
+		return types.FinalityUpdate{}, err
+	}
+	return decodeFinalityUpdate(resp)
+}
+
+func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
+	var data struct {
+		Data struct {
+			Attested       jsonHeaderWithExecProof `json:"attested_header"`
+			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
+			FinalityBranch merkle.Values           `json:"finality_branch"`
+			Aggregate      types.SyncAggregate     `json:"sync_aggregate"`
+			SignatureSlot  common.Decimal          `json:"signature_slot"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(enc, &data); err != nil {
+		return types.FinalityUpdate{}, err
+	}
+
+	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
+		return types.FinalityUpdate{}, errors.New("invalid sync_committee_bits length")
+	}
+	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
+		return types.FinalityUpdate{}, errors.New("invalid sync_committee_signature length")
+	}
+	return types.FinalityUpdate{
+		Attested: types.HeaderWithExecProof{
+			Header:        data.Data.Attested.Beacon,
+			PayloadHeader: data.Data.Attested.Execution,
+			PayloadBranch: data.Data.Attested.ExecutionBranch,
+		},
+		Finalized: types.HeaderWithExecProof{
+			Header:        data.Data.Finalized.Beacon,
+			PayloadHeader: data.Data.Finalized.Execution,
+			PayloadBranch: data.Data.Finalized.ExecutionBranch,
+		},
+		FinalityBranch: data.Data.FinalityBranch,
+		Signature:      data.Data.Aggregate,
+		SignatureSlot:  uint64(data.Data.SignatureSlot),
+	}, nil
+}
+
 // GetHead fetches and validates the beacon header with the given blockRoot.
 // If blockRoot is null hash then the latest head header is fetched.
 func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error) {
@@ -343,7 +398,7 @@ func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
 // head updates and calls the specified callback functions when they are received.
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
-func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHeader), errFn func(err error)) func() {
+func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHeader), finalityFn func(head types.FinalityUpdate), errFn func(err error)) func() {
 	closeCh := make(chan struct{})   // initiate closing the stream
 	closedCh := make(chan struct{})  // stream closed (or failed to create)
 	stoppedCh := make(chan struct{}) // sync loop stopped
@@ -354,7 +409,8 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		// first actual event arrives; therefore we create the subscription in
 		// a separate goroutine while letting the main goroutine sync up to the
 		// current head
-		req, err := http.NewRequest("GET", api.url+"/eth/v1/events?topics=head&topics=light_client_optimistic_update", nil)
+		req, err := http.NewRequest("GET", api.url+
+			"/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update", nil)
 		if err != nil {
 			errFn(fmt.Errorf("Error creating event subscription request: %v", err))
 			return
@@ -381,6 +437,9 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		if signedHead, err := api.GetOptimisticHeadUpdate(); err == nil {
 			signedFn(signedHead)
 		}
+		if finalityUpdate, err := api.GetFinalityUpdate(); err == nil {
+			finalityFn(finalityUpdate)
+		}
 		stream := <-streamCh
 		if stream == nil {
 			return
@@ -403,6 +462,12 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 						signedFn(signedHead)
 					} else {
 						errFn(fmt.Errorf("Error decoding optimistic update event: %v", err))
+					}
+				case "light_client_finality_update":
+					if finalityUpdate, err := decodeFinalityUpdate([]byte(event.Data())); err == nil {
+						finalityFn(finalityUpdate)
+					} else {
+						errFn(fmt.Errorf("Error decoding finality update event: %v", err))
 					}
 				default:
 					errFn(fmt.Errorf("Unexpected event: %s", event.Event()))

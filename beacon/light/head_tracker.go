@@ -29,13 +29,15 @@ import (
 // which is the (not necessarily validated) head announced by the majority of
 // servers.
 type HeadTracker struct {
-	lock            sync.RWMutex
-	committeeChain  *CommitteeChain
-	minSignerCount  int
-	signedHead      types.SignedHeader
-	headSignerCount int
-	prefetchHead    types.HeadInfo
-	changeCounter   uint64
+	lock              sync.RWMutex
+	committeeChain    *CommitteeChain
+	minSignerCount    int
+	signedHead        types.SignedHeader
+	hasSignedHead     bool
+	finalityUpdate    types.FinalityUpdate
+	hasFinalityUpdate bool
+	prefetchHead      types.HeadInfo
+	changeCounter     uint64
 }
 
 // NewHeadTracker creates a new HeadTracker.
@@ -47,26 +49,55 @@ func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTra
 }
 
 // ValidatedHead returns the latest validated head.
-func (h *HeadTracker) ValidatedHead() types.SignedHeader {
+func (h *HeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
-	return h.signedHead
+	return h.signedHead, h.hasSignedHead
+}
+
+// ValidatedHead returns the latest validated head.
+func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.finalityUpdate, h.hasFinalityUpdate
 }
 
 // Validate validates the given signed head. If the head is successfully validated
 // and it is better than the old validated head (higher slot or same slot and more
 // signers) then ValidatedHead is updated. The boolean return flag signals if
 // ValidatedHead has been changed.
-func (h *HeadTracker) Validate(head types.SignedHeader) (bool, error) {
+func (h *HeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	replace, err := h.validate(head, h.signedHead)
+	if replace {
+		h.signedHead, h.hasSignedHead = head, true
+		h.changeCounter++
+	}
+	return replace, err
+}
+
+func (h *HeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	replace, err := h.validate(update.SignedHeader(), h.finalityUpdate.SignedHeader())
+	if replace {
+		h.finalityUpdate, h.hasFinalityUpdate = update, true
+		h.changeCounter++
+	}
+	return replace, err
+}
+
+func (h *HeadTracker) validate(head, oldHead types.SignedHeader) (bool, error) {
 	signerCount := head.Signature.SignerCount()
 	if signerCount < h.minSignerCount {
 		return false, errors.New("low signer count")
 	}
-	if head.Header.Slot < h.signedHead.Header.Slot || (head.Header.Slot == h.signedHead.Header.Slot && signerCount <= h.headSignerCount) {
+	if head.Header.Slot < oldHead.Header.Slot || (head.Header.Slot == oldHead.Header.Slot && signerCount <= oldHead.Signature.SignerCount()) {
 		return false, nil
 	}
 	sigOk, age, err := h.committeeChain.VerifySignedHeader(head)
@@ -82,8 +113,6 @@ func (h *HeadTracker) Validate(head types.SignedHeader) (bool, error) {
 	if !sigOk {
 		return false, errors.New("invalid header signature")
 	}
-	h.signedHead, h.headSignerCount = head, signerCount
-	h.changeCounter++
 	return true, nil
 }
 
