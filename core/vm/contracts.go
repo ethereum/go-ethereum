@@ -105,7 +105,6 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}):          &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):          &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):          &blake2F{},
-	common.BytesToAddress([]byte{0x0a}):       &kzgPointEvaluation{},
 	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 }
 
