@@ -54,10 +54,7 @@ var nilValueNode = valueNode(nil)
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {
-	h := newHasher(false)
-	defer returnHasherToPool(h)
-	h.tmp = n.encode(h.tmp[:0])
-	_, err := w.Write(h.tmp)
+	_, err := w.Write(n.encode(nil))
 	return err
 }
 
