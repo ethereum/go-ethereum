@@ -42,3 +42,22 @@ func TestConfigLegacy(t *testing.T) {
 		readFile("./testdata/test.toml")
 	})
 }
+
+func TestDefaultConfigLegacy(t *testing.T) {
+	readFile := func(path string) {
+		expectedConfig, err := readLegacyConfig(path)
+		assert.NoError(t, err)
+
+		testConfig := DefaultConfig()
+
+		testConfig.Identity = "Polygon-Devs"
+		testConfig.DataDir = "/var/lib/bor"
+
+		assert.Equal(t, expectedConfig, testConfig)
+	}
+
+	// read file in hcl format
+	t.Run("toml", func(t *testing.T) {
+		readFile("./testdata/default.toml")
+	})
+}

@@ -2146,3 +2146,251 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
 	}
 }
+
+func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	var (
+		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
+		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
+		genesis    = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: core.GenesisAlloc{
+				acc1Addr: {Balance: big.NewInt(params.Ether)},
+				acc2Addr: {Balance: big.NewInt(params.Ether)},
+				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
+			},
+		}
+		genTxs    = 5
+		genBlocks = 1
+		signer    = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
+		txHashes  = make([]common.Hash, 0, genTxs)
+	)
+
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		switch i {
+		case 0:
+			// transfer 1000wei
+			tx1, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(0), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), types.HomesteadSigner{}, acc1Key)
+			b.AddTx(tx1)
+			txHashes = append(txHashes, tx1.Hash())
+
+			// create contract
+			tx2, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(1), To: nil, Gas: 53100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040")}), signer, acc1Key)
+			b.AddTx(tx2)
+			txHashes = append(txHashes, tx2.Hash())
+
+			// with logs
+			// transfer(address to, uint256 value)
+			data3 := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+			tx3, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(2), To: &contract, Gas: 60000, GasPrice: b.BaseFee(), Data: common.FromHex(data3)}), signer, acc1Key)
+			b.AddTx(tx3)
+			txHashes = append(txHashes, tx3.Hash())
+
+			// dynamic fee with logs
+			// transfer(address to, uint256 value)
+			data4 := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+			fee := big.NewInt(500)
+			fee.Add(fee, b.BaseFee())
+			tx4, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{Nonce: uint64(3), To: &contract, Gas: 60000, Value: big.NewInt(1), GasTipCap: big.NewInt(500), GasFeeCap: fee, Data: common.FromHex(data4)}), signer, acc1Key)
+			b.AddTx(tx4)
+			txHashes = append(txHashes, tx4.Hash())
+
+			// access list with contract create
+			accessList := types.AccessList{{
+				Address:     contract,
+				StorageKeys: []common.Hash{{0}},
+			}}
+			tx5, _ := types.SignTx(types.NewTx(&types.AccessListTx{Nonce: uint64(4), To: nil, Gas: 58100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040"), AccessList: accessList}), signer, acc1Key)
+			b.AddTx(tx5)
+			txHashes = append(txHashes, tx5.Hash())
+		}
+	})
+
+	api := NewBlockChainAPI(backend)
+	blockHashes := make([]common.Hash, genBlocks+1)
+	ctx := context.Background()
+	for i := 0; i <= genBlocks; i++ {
+		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+		if err != nil {
+			t.Errorf("failed to get block: %d err: %v", i, err)
+		}
+		blockHashes[i] = header.Hash()
+	}
+	blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHashes[1], true)
+
+	var testSuite = []struct {
+		txHash common.Hash
+		want   string
+	}{
+		// 0. normal success
+		{
+			txHash: txHashes[0],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x5208",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x5208",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000001010",
+					"topics": [
+					  "0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4",
+					  "0x0000000000000000000000000000000000000000000000000000000000001010",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000d3ab14bbad3d99f4203bd7a11acb94882050e7e"
+					],
+					"data": "0x00000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000de0a5fd640afa000000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000de0a5fd640af6180000000000000000000000000000000000000000000000000de0b6b3a76403e8",
+					"blockNumber": "0x1",
+					"transactionHash": "0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e",
+					"transactionIndex": "0x0",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x0",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000808000000000000000000000000000000000000000000000000000000000800000000000000000000100000020000000000000000000000000000000000802000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000800000000000000000000000800000108000000000000000000000000000000000000000000000000020000000000000000000100000",
+				"status": "0x1",
+				"to": "0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e",
+				"transactionHash": "0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e",
+				"transactionIndex": "0x0",
+				"type": "0x0"
+			  }`,
+		},
+		// 1. create contract
+		{
+			txHash: txHashes[1],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": "0xae9bea628c4ce503dcfd7e305cab4e29e7476592",
+				"cumulativeGasUsed": "0x12156",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0xcf4e",
+				"logs": [],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"status": "0x1",
+				"to": null,
+				"transactionHash": "0x705a7fca1d214002ee90d4e1c651b53e3506e6d5e3a539e9a7f7bf05b49add91",
+				"transactionIndex": "0x1",
+				"type": "0x0"
+			  }`,
+		},
+		// 2. with logs success
+		{
+			txHash: txHashes[2],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x17f7e",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x5e28",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000031ec7",
+					"topics": [
+					  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000000000000000000000000000000000000000001"
+					],
+					"data": "0x000000000000000000000000000000000000000000000000000000000000000b",
+					"blockNumber": "0x1",
+					"transactionHash": "0xa228af0975b99799bd28331085a6966aba2fb5814a8d89aabc342462aa40429a",
+					"transactionIndex": "0x2",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x1",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x00000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000800000000000000008000000000000000000040000000000000020000000080000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000800000000000000000000000000000000000000040000000000000000000000000000000000000000020000000000000000000000000",
+				"status": "0x1",
+				"to": "0x0000000000000000000000000000000000031ec7",
+				"transactionHash": "0xa228af0975b99799bd28331085a6966aba2fb5814a8d89aabc342462aa40429a",
+				"transactionIndex": "0x2",
+				"type": "0x0"
+			  }`,
+		},
+		// 3. dynamic tx with logs success
+		{
+			txHash: txHashes[3],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x1d30b",
+				"effectiveGasPrice": "0x342772b4",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x538d",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000001010",
+					"topics": [
+					  "0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63",
+					  "0x0000000000000000000000000000000000000000000000000000000000001010",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000000000000000000000000000000000000000000"
+					],
+					"data": "0x0000000000000000000000000000000000000000000000000000000000a32f640000000000000000000000000000000000000000000000000de06892fa4b3d9800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000de06892f9a80e340000000000000000000000000000000000000000000000000000000000a32f64",
+					"blockNumber": "0x1",
+					"transactionHash": "0xc2cc458a65bc96f642d4a2063cce162b0da642613d801271bdbc4aa7e775f3ed",
+					"transactionIndex": "0x3",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x2",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000800000000000000000000100000020000000000000020000000000000000000800000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000004000000000000000000001800000000000000000000000000000100000000020000000000000000000000000000000000000000020000000000000000000100000",
+				"status": "0x0",
+				"to": "0x0000000000000000000000000000000000031ec7",
+				"transactionHash": "0xc2cc458a65bc96f642d4a2063cce162b0da642613d801271bdbc4aa7e775f3ed",
+				"transactionIndex": "0x3",
+				"type": "0x2"
+			  }`,
+		},
+		// 4. access list tx with create contract
+		{
+			txHash: txHashes[4],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": "0xfdaa97661a584d977b4d3abb5370766ff5b86a18",
+				"cumulativeGasUsed": "0x2b325",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0xe01a",
+				"logs": [],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"status": "0x1",
+				"to": null,
+				"transactionHash": "0x1e1161cf3fd01a02fc9c5ee66fc45a4805b3828bf41edd54213c20d97fc12b1d",
+				"transactionIndex": "0x4",
+				"type": "0x1"
+			  }`,
+		},
+	}
+
+	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}

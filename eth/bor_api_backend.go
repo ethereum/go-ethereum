@@ -83,21 +83,6 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 		return false, fmt.Errorf("Hash mismatch: localChainHash %s, milestoneHash %s", localEndBlockHash, hash)
 	}
 
-	ethHandler := (*ethHandler)(b.eth.handler)
-
-	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
-
-	if !ok {
-		return false, fmt.Errorf("Bor not available")
-	}
-
-	err = bor.HeimdallClient.FetchMilestoneID(ctx, milestoneId)
-
-	if err != nil {
-		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
-		return false, fmt.Errorf("Milestone ID doesn't exist in Heimdall")
-	}
-
 	downloader.UnlockMutex(true, milestoneId, endBlockNr, localEndBlock.Hash())
 
 	return true, nil
