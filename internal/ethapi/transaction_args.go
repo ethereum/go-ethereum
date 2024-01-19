@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -103,8 +104,9 @@ func (args *BlobTransactionArgs) setDefaults(ctx context.Context, b Backend) err
 		}
 	}
 	hashes := make([]common.Hash, n)
+	hasher := sha256.New()
 	for i, c := range args.Commitments {
-		hashes[i] = types.BlobHash(&c)
+		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
 	}
 	if args.BlobHashes != nil {
 		for i, h := range hashes {

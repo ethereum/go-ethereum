@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1096,10 +1097,10 @@ func TestFillBlobTransaction(t *testing.T) {
 			Config: params.MergedTestChainConfig,
 			Alloc:  core.GenesisAlloc{},
 		}
-		emptyBlob          = kzg4844.Blob{}
-		emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-		emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
-		emptyBlobHash      = types.BlobHash(&emptyBlobCommit)
+		emptyBlob                      = kzg4844.Blob{}
+		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
+		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		b.SetPoS()
