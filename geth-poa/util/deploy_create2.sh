@@ -4,11 +4,13 @@
 
 set -e
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <JSON_RPC_URL>"
+# Use the first command line argument, if provided. Otherwise, use the environment variable.
+JSON_RPC="${1:-$JSON_RPC_URL}"
+
+if [ -z "$JSON_RPC" ]; then
+    echo "Usage: $0 <JSON_RPC_URL> or set the JSON_RPC_URL environment variable."
     exit 1
 fi
-JSON_RPC="$1"
 
 if ! [ -x "$(command -v curl)" ]; then
     echo "Curl must be installed to deploy the create2 proxy" >&2
