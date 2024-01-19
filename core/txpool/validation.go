@@ -143,17 +143,10 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) err
 	// Blob quantities match up, validate that the provers match with the
 	// transaction hash before getting to the cryptography
 	hasher := sha256.New()
-	for i, want := range hashes {
-		hasher.Write(sidecar.Commitments[i][:])
-		hash := hasher.Sum(nil)
-		hasher.Reset()
-
-		var vhash common.Hash
-		vhash[0] = params.BlobTxHashVersion
-		copy(vhash[1:], hash[1:])
-
-		if vhash != want {
-			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, vhash, want)
+	for i, vhash := range hashes {
+		computed := kzg4844.CalcBlobHashV1(hasher, &sidecar.Commitments[i])
+		if vhash != computed {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
 		}
 	}
 	// Blob commitments match with the hashes in the transaction, verify the
