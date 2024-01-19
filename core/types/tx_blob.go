@@ -192,7 +192,7 @@ func (tx *BlobTx) withoutSidecar() *BlobTx {
 
 func (tx *BlobTx) withSidecar(sidecar *BlobTxSidecar) *BlobTx {
 	cpy := *tx
-	tx.Sidecar = sidecar
+	cpy.Sidecar = sidecar
 	return &cpy
 }
 
