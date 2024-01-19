@@ -2528,6 +2528,10 @@ func (bc *BlockChain) maintainTxIndex() {
 		case <-done:
 			done = nil
 
+			// WARNING, the event will be fired for each signal once the
+			// transaction indexing is finished. Subscribers need to manage
+			// the event stream by themselves. It's recommended to unsubscribe
+			// once the event is received.
 			if bc.reportTxIndexProgress(lastHead).Done() {
 				bc.txIndexFeed.Send(true)
 			}

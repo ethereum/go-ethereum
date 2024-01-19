@@ -26,8 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// DownloaderAPI provides an API which gives information about the current synchronisation status.
-// It offers only methods that operates on data that can be available to anyone without security risks.
+// DownloaderAPI provides an API which gives information about the current
+// synchronisation status. It offers only methods that operates on data that
+// can be available to anyone without security risks.
 type DownloaderAPI struct {
 	d                         *Downloader
 	chain                     *core.BlockChain
@@ -48,27 +49,41 @@ func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
 	}
-
 	go api.eventLoop()
-
 	return api
 }
 
-// eventLoop runs a loop until the event mux closes. It will install and uninstall new
-// sync subscriptions and broadcasts sync status updates to the installed sync subscriptions.
+// eventLoop runs a loop until the event mux closes. It will install and uninstall
+// new sync subscriptions and broadcasts sync status updates to the installed sync
+// subscriptions.
+//
+// The sync status pushed to subscriptions can a stream like:
+// >>> {Syncing: true, Progress: {...}}
+// >>> {false}
+//
+// If the node is already synced up, then only a single event will be pushed {false}.
 func (api *DownloaderAPI) eventLoop() {
 	var (
-		sub               = api.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
+		sub               = api.mux.Subscribe(StartEvent{})
 		syncSubscriptions = make(map[chan interface{}]struct{})
 		txIndexCh         = make(chan bool, 1)
+		done              bool
 	)
 	txIndexSub := api.chain.SubscribeTxIndexEvent(txIndexCh)
-	defer txIndexSub.Unsubscribe()
+	defer func() {
+		if txIndexSub == nil {
+			return
+		}
+		txIndexSub.Unsubscribe()
+	}()
 
 	for {
 		select {
 		case i := <-api.installSyncSubscription:
 			syncSubscriptions[i] = struct{}{}
+			if done {
+				i <- false
+			}
 		case u := <-api.uninstallSyncSubscription:
 			delete(syncSubscriptions, u.c)
 			close(u.uninstalled)
@@ -76,53 +91,44 @@ func (api *DownloaderAPI) eventLoop() {
 			if event == nil {
 				return
 			}
-			var notification interface{}
-
 			switch event.Data.(type) {
 			case StartEvent:
 				prog := api.d.Progress()
-				txProg, err := api.chain.TxIndexProgress()
-				if err == nil {
+				if txProg, err := api.chain.TxIndexProgress(); err == nil {
 					prog.TxIndexFinishedBlocks = txProg.Indexed
 					prog.TxIndexRemainingBlocks = txProg.Remaining
 				}
-				notification = &SyncingResult{
+				notification := &SyncingResult{
 					Syncing: true,
 					Status:  prog,
 				}
-			case DoneEvent, FailedEvent:
-				notification = false
-
-				txProg, err := api.chain.TxIndexProgress()
-				if err == nil && !txProg.Done() {
-					prog := api.d.Progress()
-					prog.TxIndexFinishedBlocks = txProg.Indexed
-					prog.TxIndexRemainingBlocks = txProg.Remaining
-					notification = &SyncingResult{
-						Syncing: true,
-						Status:  prog,
-					}
+				// broadcast
+				for c := range syncSubscriptions {
+					c <- notification
 				}
 			}
-			// broadcast
-			for c := range syncSubscriptions {
-				c <- notification
-			}
-		case status := <-txIndexCh:
-			if !status {
+		case synced := <-txIndexCh:
+			if !synced {
 				continue
 			}
 			prog := api.d.Progress()
-			txProg, err := api.chain.TxIndexProgress()
-			if err == nil && !txProg.Done() {
-				prog.TxIndexFinishedBlocks = txProg.Indexed
-				prog.TxIndexRemainingBlocks = txProg.Remaining
-			}
 			if !prog.Done() {
 				continue
 			}
+			txProg, err := api.chain.TxIndexProgress()
+			if err != nil || !txProg.Done() {
+				continue
+			}
 			for c := range syncSubscriptions {
-				c <- true
+				c <- false
+			}
+			done = true
+
+			// Unsubscribe the tx indexing events as the whole
+			// state sync is already finished.
+			if txIndexSub != nil {
+				txIndexSub.Unsubscribe()
+				txIndexSub = nil
 			}
 		}
 	}
