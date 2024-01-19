@@ -989,10 +989,12 @@ func TestSignTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), TransactionArgs{
-		From:  &b.acc.Address,
-		To:    &to,
-		Value: (*hexutil.Big)(big.NewInt(1)),
+	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
+		TransactionArgs: TransactionArgs{
+			From:  &b.acc.Address,
+			To:    &to,
+			Value: (*hexutil.Big)(big.NewInt(1)),
+		},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1027,11 +1029,13 @@ func TestSignBlobTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), TransactionArgs{
-		From:       &b.acc.Address,
-		To:         &to,
-		Value:      (*hexutil.Big)(big.NewInt(1)),
-		BlobHashes: []common.Hash{{0x01, 0x22}},
+	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
+		TransactionArgs: TransactionArgs{
+			From:       &b.acc.Address,
+			To:         &to,
+			Value:      (*hexutil.Big)(big.NewInt(1)),
+			BlobHashes: []common.Hash{{0x01, 0x22}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1061,11 +1065,13 @@ func TestSendBlobTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), TransactionArgs{
-		From:       &b.acc.Address,
-		To:         &to,
-		Value:      (*hexutil.Big)(big.NewInt(1)),
-		BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
+		TransactionArgs: TransactionArgs{
+			From:       &b.acc.Address,
+			To:         &to,
+			Value:      (*hexutil.Big)(big.NewInt(1)),
+			BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
