@@ -531,7 +531,7 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 	}
 
 	// Open trie database with provided config
-	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
+	triedb := bc.triedb
 
 	chainConfig, _, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
 
