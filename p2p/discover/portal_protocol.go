@@ -248,7 +248,7 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 		})
 
 	// TODO: ZAP PRODUCTION LOG
-	logger, err := zap.NewDevelopmentConfig().Build()
+	logger, err := zap.NewProductionConfig().Build()
 	if err != nil {
 		return nil, err
 	}
@@ -1355,7 +1355,7 @@ func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	resChan := make(chan []byte, 1)
-
+	defer close(resChan)
 	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
 		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
 	}).run()
@@ -1388,6 +1388,26 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 		return wrapNodes(nodes), nil
 	}
 	return wrapedNode, nil
+}
+
+func (p *PortalProtocol) ToContentId(contentKey []byte) []byte {
+	return p.toContentId(contentKey)
+}
+
+func (p *PortalProtocol) InRange(contentId []byte) bool {
+	return inRange(p.Self().ID(), p.nodeRadius, contentId)
+}
+
+func (p *PortalProtocol) Get(contentId []byte) ([]byte, error) {
+	return p.storage.Get(contentId)
+}
+
+func (p *PortalProtocol) Put(contentId []byte, content []byte) error {
+	return p.storage.Put(contentId, content)
+}
+
+func (p *PortalProtocol) GetContent() <-chan *ContentElement {
+	return p.contentQueue
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
