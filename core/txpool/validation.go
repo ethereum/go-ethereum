@@ -35,8 +35,6 @@ import (
 type ValidationOptions struct {
 	Config *params.ChainConfig // Chain configuration to selectively validate based on current fork rules
 
-	AllowUnprotectedTxs bool // Whether to allow unprotected transactions in the pool
-
 	Accept  uint8    // Bitmap of transaction types that should be accepted for the calling pool
 	MaxSize uint64   // Maximum size of a transaction that the caller can meaningfully handle
 	MinTip  *big.Int // Minimum gas tip needed to allow a transaction into the caller pool
@@ -93,7 +91,7 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly
-	if _, err := types.Sender(signer, tx); err != nil && !opts.AllowUnprotectedTxs {
+	if _, err := types.Sender(signer, tx); err != nil {
 		return ErrInvalidSender
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
