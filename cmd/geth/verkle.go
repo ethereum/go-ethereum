@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	tutils "github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 	cli "github.com/urfave/cli/v2"
 )

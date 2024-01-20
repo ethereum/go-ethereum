@@ -19,7 +19,7 @@ package trie
 import (
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 )
 
 type verkleNodeIteratorState struct {

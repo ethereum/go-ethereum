@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 )
 
 func TestReproduceTree(t *testing.T) {

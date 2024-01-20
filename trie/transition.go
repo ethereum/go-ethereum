@@ -21,7 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 )
 
 type TransitionTrie struct {

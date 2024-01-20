@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 )
 
 const (
