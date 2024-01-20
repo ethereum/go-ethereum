@@ -166,7 +166,6 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 		delete(m.items, (*m.index)[size-1])
 	}
 	*m.index = (*m.index)[:threshold]
-	heap.Init(m.index)
 
 	// If we had a cache, shift the back
 	m.cacheMu.Lock()
