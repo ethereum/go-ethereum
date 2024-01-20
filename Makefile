@@ -7,7 +7,6 @@
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
-PROJECT_NAME = $(shell git remote get-url origin | xargs basename -s .git)
 
 #? geth: Build geth
 geth:
@@ -35,7 +34,7 @@ clean:
 # The devtools target installs tools required for 'go generate'.
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
-#? devtools: Install required developer tools
+#? devtools: Install recommended developer tools
 devtools:
 	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
 	env GOBIN= go install github.com/fjl/gencodec@latest
@@ -46,6 +45,6 @@ devtools:
 
 #? help: Get more info on make commands.
 help: Makefile
-	@echo " Choose a command run in "$(PROJECT_NAME)":"
+	@echo " Choose a command run in go-ethereum:"
 	@sed -n 's/^#?//p' $< | column -t -s ':' |  sort | sed -e 's/^/ /'
 .PHONY: help
