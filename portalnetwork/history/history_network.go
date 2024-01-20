@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type ContentType byte
@@ -123,8 +124,297 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 	return nil, storage.ErrContentNotFound
 }
 
+func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
+	header, err := h.GetBlockHeader(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	contentKey := newContentKey(BlockBodyType, blockHash).encode()
+	contentId := h.portalProtocol.ToContentId(contentKey)
+
+	if !h.portalProtocol.InRange(contentId) {
+		return nil, ErrContentOutOfRange
+	}
+
+	res, err := h.portalProtocol.Get(contentId)
+	// other error
+	// TODO maybe use nil res to replace the ErrContentNotFound
+	if err != nil && err != storage.ErrContentNotFound {
+		return nil, err
+	}
+	// no error
+	if err == nil {
+		body, err := DecodePortalBlockBodyBytes(res)
+		return body, err
+	}
+	// no content in local storage
+
+	for retries := 0; retries < requestRetries; retries++ {
+		content, err := h.portalProtocol.ContentLookup(contentKey)
+		if err != nil {
+			continue
+		}
+		body, err := DecodePortalBlockBodyBytes(content)
+		if err != nil {
+			continue
+		}
+
+		err = validateBlockBody(body, header)
+		if err != nil {
+			continue
+		}
+		// TODO handle the error
+		_ = h.portalProtocol.Put(contentId, content)
+		return body, nil
+	}
+	return nil, storage.ErrContentNotFound
+}
+
+func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error) {
+	header, err := h.GetBlockHeader(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	contentKey := newContentKey(ReceiptsType, blockHash).encode()
+	contentId := h.portalProtocol.ToContentId(contentKey)
+
+	if !h.portalProtocol.InRange(contentId) {
+		return nil, ErrContentOutOfRange
+	}
+
+	res, err := h.portalProtocol.Get(contentId)
+	// other error
+	if err != nil && err != storage.ErrContentNotFound {
+		return nil, err
+	}
+	// no error
+	if err == nil {
+		portalReceipte := new(PortalReceipts)
+		err := portalReceipte.UnmarshalSSZ(res)
+		if err != nil {
+			return nil, err
+		}
+		receipts, err := FromPortalReceipts(portalReceipte)
+		return receipts, err
+	}
+	// no content in local storage
+
+	for retries := 0; retries < requestRetries; retries++ {
+		content, err := h.portalProtocol.ContentLookup(contentKey)
+		if err != nil {
+			continue
+		}
+		receipts, err := ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
+		if err != nil {
+			continue
+		}
+		// TODO handle the error
+		_ = h.portalProtocol.Put(contentId, content)
+		return receipts, nil
+	}
+	return nil, storage.ErrContentNotFound
+}
+
 func (h *HistoryNetwork) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
 	return h.masterAccumulator.VerifyHeader(*header, proof)
+}
+
+func ValidateBlockBodyBytes(bodyBytes []byte, header *types.Header) (*types.Body, error) {
+	// TODO check shanghai, pos and legacy block
+	body, err := DecodePortalBlockBodyBytes(bodyBytes)
+	if err != nil {
+		return nil, err
+	}
+	err = validateBlockBody(body, header)
+	return body, err
+}
+
+func DecodePortalBlockBodyBytes(bodyBytes []byte) (*types.Body, error) {
+	blockBodyShanghai := new(PortalBlockBodyShanghai)
+	err := blockBodyShanghai.UnmarshalSSZ(bodyBytes)
+	if err == nil {
+		return FromPortalBlockBodyShanghai(blockBodyShanghai)
+	}
+
+	blockBodyLegacy := new(BlockBodyLegacy)
+	err = blockBodyLegacy.UnmarshalSSZ(bodyBytes)
+	if err == nil {
+		return FromBlockBodyLegacy(blockBodyLegacy)
+	}
+	return nil, errors.New("all portal block body decodings failed")
+}
+
+func validateBlockBody(body *types.Body, header *types.Header) error {
+	if hash := types.CalcUncleHash(body.Uncles); !bytes.Equal(hash[:], header.UncleHash.Bytes()) {
+		return ErrUnclesHashIsNotEqual
+	}
+
+	if hash := types.DeriveSha(types.Transactions(body.Transactions), trie.NewStackTrie(nil)); !bytes.Equal(hash[:], header.TxHash.Bytes()) {
+		return ErrTxHashIsNotEqual
+	}
+	if body.Withdrawals == nil {
+		return nil
+	}
+	if hash := types.DeriveSha(types.Withdrawals(body.Withdrawals), trie.NewStackTrie(nil)); !bytes.Equal(hash[:], header.WithdrawalsHash.Bytes()) {
+		return ErrWithdrawalHashIsNotEqual
+	}
+	return nil
+}
+
+// EncodeBlockBody encode types.Body to ssz bytes
+func EncodeBlockBody(body *types.Body) ([]byte, error) {
+	if body.Withdrawals != nil && len(body.Withdrawals) > 0 {
+		blockShanghai, err := toPortalBlockBodyShanghai(body)
+		if err != nil {
+			return nil, err
+		}
+		return blockShanghai.MarshalSSZ()
+	} else {
+		legacyBlock, err := toBlockBodyLegacy(body)
+		if err != nil {
+			return nil, err
+		}
+		return legacyBlock.MarshalSSZ()
+	}
+}
+
+// toPortalBlockBodyShanghai convert types.Body to PortalBlockBodyShanghai
+func toPortalBlockBodyShanghai(b *types.Body) (*PortalBlockBodyShanghai, error) {
+	legacy, err := toBlockBodyLegacy(b)
+	if err != nil {
+		return nil, err
+	}
+	withdrawals := make([][]byte, 0, len(b.Withdrawals))
+	for _, w := range b.Withdrawals {
+		b, err := rlp.EncodeToBytes(w)
+		if err != nil {
+			return nil, err
+		}
+		withdrawals = append(withdrawals, b)
+	}
+	return &PortalBlockBodyShanghai{Transactions: legacy.Transactions, Uncles: legacy.Uncles, Withdrawals: withdrawals}, nil
+}
+
+// toBlockBodyLegacy convert types.Body to BlockBodyLegacy
+func toBlockBodyLegacy(b *types.Body) (*BlockBodyLegacy, error) {
+	txs := make([][]byte, 0, len(b.Transactions))
+
+	for _, tx := range b.Transactions {
+		txBytes, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			return nil, err
+		}
+		txs = append(txs, txBytes)
+	}
+
+	uncleBytes, err := rlp.EncodeToBytes(b.Uncles)
+	if err != nil {
+		return nil, err
+	}
+	return &BlockBodyLegacy{Uncles: uncleBytes, Transactions: txs}, err
+}
+
+// FromPortalBlockBodyShanghai convert PortalBlockBodyShanghai to types.Body
+func FromPortalBlockBodyShanghai(b *PortalBlockBodyShanghai) (*types.Body, error) {
+	transactions := make([]*types.Transaction, 0, len(b.Transactions))
+	for _, t := range b.Transactions {
+		tran := new(types.Transaction)
+		err := tran.UnmarshalBinary(t)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, tran)
+	}
+	uncles := make([]*types.Header, 0, len(b.Uncles))
+	err := rlp.DecodeBytes(b.Uncles, &uncles)
+	withdrawals := make([]*types.Withdrawal, 0, len(b.Withdrawals))
+	for _, w := range b.Withdrawals {
+		withdrawal := new(types.Withdrawal)
+		err := rlp.DecodeBytes(w, withdrawal)
+		if err != nil {
+			return nil, err
+		}
+		withdrawals = append(withdrawals, withdrawal)
+	}
+	return &types.Body{
+		Uncles:       uncles,
+		Transactions: transactions,
+		Withdrawals:  withdrawals,
+	}, err
+}
+
+// FromBlockBodyLegacy convert BlockBodyLegacy to types.Body
+func FromBlockBodyLegacy(b *BlockBodyLegacy) (*types.Body, error) {
+	transactions := make([]*types.Transaction, 0, len(b.Transactions))
+	for _, t := range b.Transactions {
+		tran := new(types.Transaction)
+		err := tran.UnmarshalBinary(t)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, tran)
+	}
+	uncles := make([]*types.Header, 0, len(b.Uncles))
+	err := rlp.DecodeBytes(b.Uncles, &uncles)
+	return &types.Body{
+		Uncles:       uncles,
+		Transactions: transactions,
+	}, err
+}
+
+// FromPortalReceipts convert PortalReceipts to types.Receipt
+func FromPortalReceipts(r *PortalReceipts) ([]*types.Receipt, error) {
+	res := make([]*types.Receipt, 0, len(r.Receipts))
+	for _, reci := range r.Receipts {
+		recipt := new(types.Receipt)
+		err := recipt.UnmarshalBinary(reci)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, recipt)
+	}
+	return res, nil
+}
+
+func ValidatePortalReceiptsBytes(receiptBytes, receiptsRoot []byte) ([]*types.Receipt, error) {
+	portalReceipts := new(PortalReceipts)
+	err := portalReceipts.UnmarshalSSZ(receiptBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	receipts, err := FromPortalReceipts(portalReceipts)
+	if err != nil {
+		return nil, err
+	}
+
+	root := types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
+
+	if !bytes.Equal(root[:], receiptsRoot) {
+		return nil, errors.New("receipt root is not equal to the header.ReceiptHash")
+	}
+	return receipts, nil
+}
+
+func EncodeReceipts(receipts []*types.Receipt) ([]byte, error) {
+	portalReceipts, err := ToPortalReceipts(receipts)
+	if err != nil {
+		return nil, err
+	}
+	return portalReceipts.MarshalSSZ()
+}
+
+// ToPortalReceipts convert types.Receipt to PortalReceipts
+func ToPortalReceipts(receipts []*types.Receipt) (*PortalReceipts, error) {
+	res := make([][]byte, 0, len(receipts))
+	for _, r := range receipts {
+		b, err := r.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, b)
+	}
+	return &PortalReceipts{Receipts: res}, nil
 }
 
 func (h *HistoryNetwork) processContentLoop() {
@@ -158,9 +448,19 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 		}
 		return err
 	case BlockBodyType:
-		// TODO
+		header, err := h.GetBlockHeader(contentKey[1:])
+		if err != nil {
+			return err
+		}
+		_, err = ValidateBlockBodyBytes(content, header)
+		return err
 	case ReceiptsType:
-		// TODO
+		header, err := h.GetBlockHeader(contentKey[1:])
+		if err != nil {
+			return err
+		}
+		_, err = ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
+		return err
 	case EpochAccumulatorType:
 		// TODO
 	}

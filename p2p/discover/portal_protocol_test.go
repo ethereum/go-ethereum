@@ -318,24 +318,6 @@ func TestCancel(t *testing.T) {
 	time.Sleep(time.Second * 3)
 }
 
-// func TestInsertWithDistance(t *testing.T) {
-// 	targetId := uint256.NewInt(0).Bytes32()
-// 	nodes := make([]*node, 0, 10)
-// 	for i := 0; i < 10; i++ {
-// 		enode := &node{
-// 			Node: enode.Node{
-// 				id: enode.ID(uint256.NewInt(uint64(i)).Bytes32()),
-// 			},
-// 		}
-// 		nodes = append(nodes, enode)
-// 	}
-// 	newNode := &node{
-// 		Node: &enode.Node{
-// 			id: uint256.NewInt(20).Bytes32(),
-// 		},
-// 	}
-// }
-
 func TestContentLookup(t *testing.T) {
 	node1, err := setupLocalPortalNode(":17777", nil)
 	assert.NoError(t, err)

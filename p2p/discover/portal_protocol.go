@@ -1373,7 +1373,7 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 		return nil, err
 	}
 	switch flag {
-	case portalwire.ContentRawSelector:
+	case portalwire.ContentRawSelector, portalwire.ContentConnIdSelector:
 		content, ok := content.([]byte)
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)

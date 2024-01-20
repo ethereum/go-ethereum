@@ -6,7 +6,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 )
 
-//go:generate sszgen --path types.go --exclude-objs BlockHeaderProof
+//go:generate sszgen --path types.go --exclude-objs BlockHeaderProof,PortalReceipts
 
 type BlockHeaderProofType uint8
 
@@ -104,5 +104,89 @@ func (p *BlockHeaderProof) SizeSSZ() (size int) {
 }
 
 func (p *BlockHeaderProof) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	panic("implement me")
+}
+
+type PortalReceipts struct {
+	Receipts [][]byte `ssz-max:"134217728,16384"`
+}
+
+// MarshalSSZ ssz marshals the PortalReceipts object
+func (p *PortalReceipts) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PortalReceipts object to a target array
+func (p *PortalReceipts) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	if size := len(p.Receipts); size > 134217728 {
+		err = ssz.ErrListTooBigFn("PortalReceipts.Receipts", size, 134217728)
+		return
+	}
+	{
+		offset := 4 * len(p.Receipts)
+		for ii := 0; ii < len(p.Receipts); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(p.Receipts[ii])
+		}
+	}
+	for ii := 0; ii < len(p.Receipts); ii++ {
+		if size := len(p.Receipts[ii]); size > 16384 {
+			err = ssz.ErrBytesLengthFn("PortalReceipts.Receipts[ii]", size, 16384)
+			return
+		}
+		dst = append(dst, p.Receipts[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PortalReceipts object
+func (p *PortalReceipts) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+	// Field (0) 'Receipts'
+	{
+		num, err := ssz.DecodeDynamicLength(buf, 134217728)
+		if err != nil {
+			return err
+		}
+		p.Receipts = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 16384 {
+				return ssz.ErrBytesLength
+			}
+			if cap(p.Receipts[indx]) == 0 {
+				p.Receipts[indx] = make([]byte, 0, len(buf))
+			}
+			p.Receipts[indx] = append(p.Receipts[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PortalReceipts object
+func (p *PortalReceipts) SizeSSZ() (size int) {
+	size = 0
+
+	// Field (0) 'Receipts'
+	for ii := 0; ii < len(p.Receipts); ii++ {
+		size += 4
+		size += len(p.Receipts[ii])
+	}
+
+	return
+}
+
+// HashTreeRootWith ssz hashes the PortalReceipts object with a hasher
+func (p *PortalReceipts) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	panic("implement me")
 }
