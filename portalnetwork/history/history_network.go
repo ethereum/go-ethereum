@@ -215,6 +215,44 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	return nil, storage.ErrContentNotFound
 }
 
+func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulator, error) {
+	contentKey := newContentKey(EpochAccumulatorType, epochHash).encode()
+	contentId := h.portalProtocol.ToContentId(contentKey)
+
+	res, err := h.portalProtocol.Get(contentId)
+	// other error
+	if err != nil && err != storage.ErrContentNotFound {
+		return nil, err
+	}
+	// no error
+	if err == nil {
+		epochAccu, err := decodeEpochAccumulator(res)
+		return epochAccu, err
+	}
+	for retries := 0; retries < requestRetries; retries++ {
+		content, err := h.portalProtocol.ContentLookup(contentKey)
+		if err != nil {
+			continue
+		}
+		epochAccu, err := decodeEpochAccumulator(content)
+		if err != nil {
+			continue
+		}
+		hash, err := epochAccu.HashTreeRoot()
+		if err != nil {
+			continue
+		}
+		mixHash := MixInLength(hash, epochSize)
+		if !bytes.Equal(mixHash, epochHash) {
+			continue
+		}
+		// TODO handle the error
+		_ = h.portalProtocol.Put(contentId, content)
+		return epochAccu, nil
+	}
+	return nil, storage.ErrContentNotFound
+}
+
 func (h *HistoryNetwork) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
 	return h.masterAccumulator.VerifyHeader(*header, proof)
 }
@@ -462,7 +500,24 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 		_, err = ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
 		return err
 	case EpochAccumulatorType:
-		// TODO
+		if !h.masterAccumulator.Contains(contentKey[1:]) {
+			return errors.New("epoch hash is not existed")
+		}
+
+		epochAcc, err := decodeEpochAccumulator(content)
+		if err != nil {
+			return err
+		}
+		hash, err := epochAcc.HashTreeRoot()
+		if err != nil {
+			return err
+		}
+
+		epochHash := MixInLength(hash, epochSize)
+		if !bytes.Equal(contentKey[1:], epochHash) {
+			return errors.New("epoch accumulator has invalid root hash")
+		}
+		return nil
 	}
 	return errors.New("unknown content type")
 }
@@ -500,4 +555,10 @@ func DecodeBlockHeaderWithProof(content []byte) (*BlockHeaderWithProof, error) {
 	headerWithProof := new(BlockHeaderWithProof)
 	err := headerWithProof.UnmarshalSSZ(content)
 	return headerWithProof, err
+}
+
+func decodeEpochAccumulator(data []byte) (*EpochAccumulator, error) {
+	epochAccu := new(EpochAccumulator)
+	err := epochAccu.UnmarshalSSZ(data)
+	return epochAccu, err
 }

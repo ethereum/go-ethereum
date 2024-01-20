@@ -1,6 +1,7 @@
 package history
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/binary"
 	"errors"
@@ -198,6 +199,15 @@ func (f MasterAccumulator) VerifyHeader(header types.Header, headerProof BlockHe
 		return false, ErrPreMergeHeaderMustWithProof
 	}
 	return false, nil
+}
+
+func (f MasterAccumulator) Contains(epochHash []byte) bool {
+	for _, h := range f.HistoricalEpochs {
+		if bytes.Equal(h, epochHash) {
+			return true
+		}
+	}
+	return false
 }
 
 func MixInLength(root [32]byte, length uint64) []byte {
