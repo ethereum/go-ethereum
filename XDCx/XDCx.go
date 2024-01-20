@@ -95,8 +95,14 @@ func NewMongoDBEngine(cfg *Config) *XDCxDAO.MongoDatabase {
 }
 
 func New(cfg *Config) *XDCX {
-	tokenDecimalCache, _ := lru.New(defaultCacheLimit)
-	orderCache, _ := lru.New(tradingstate.OrderCacheLimit)
+	tokenDecimalCache, err := lru.New(defaultCacheLimit)
+	if err != nil {
+		log.Warn("[XDCx-New] fail to create new lru for token decimal")
+	}
+	orderCache, err := lru.New(tradingstate.OrderCacheLimit)
+	if err != nil {
+		log.Warn("[XDCx-New] fail to create new lru for order")
+	}
 	XDCX := &XDCX{
 		orderNonce:        make(map[common.Address]*big.Int),
 		Triegc:            prque.New(),
@@ -121,7 +127,10 @@ func New(cfg *Config) *XDCX {
 
 // Overflow returns an indication if the message queue is full.
 func (XDCx *XDCX) Overflow() bool {
-	val, _ := XDCx.settings.Load(overflowIdx)
+	val, ok := XDCx.settings.Load(overflowIdx)
+	if !ok {
+		log.Warn("[XDCx-Overflow] fail to load overflow index")
+	}
 	return val.(bool)
 }
 
@@ -639,7 +648,7 @@ func (XDCx *XDCX) RollbackReorgTxMatch(txhash common.Hash) error {
 				continue
 			}
 			orderCacheAtTxHash := c.(map[common.Hash]tradingstate.OrderHistoryItem)
-			orderHistoryItem, _ := orderCacheAtTxHash[tradingstate.GetOrderHistoryKey(order.BaseToken, order.QuoteToken, order.Hash)]
+			orderHistoryItem := orderCacheAtTxHash[tradingstate.GetOrderHistoryKey(order.BaseToken, order.QuoteToken, order.Hash)]
 			if (orderHistoryItem == tradingstate.OrderHistoryItem{}) {
 				log.Debug("XDCx reorg: remove order due to empty orderHistory", "order", tradingstate.ToJSON(order))
 				if err := db.DeleteObject(order.Hash, &tradingstate.OrderItem{}); err != nil {
