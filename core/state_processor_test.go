@@ -17,7 +17,6 @@
 package core
 
 import (
-	//"bytes"
 	"crypto/ecdsa"
 
 	//"fmt"
@@ -481,10 +480,10 @@ func TestProcessVerkle(t *testing.T) {
 	// is now independent of the blockchain database.
 	gspec.MustCommit(gendb)
 
-	txCost1 := params.WitnessBranchWriteCost*2 + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*3 + params.WitnessChunkReadCost*10 + params.TxGas
-	txCost2 := params.WitnessBranchWriteCost + params.WitnessBranchReadCost*2 + params.WitnessChunkWriteCost*2 + params.WitnessChunkReadCost*10 + params.TxGas
-	contractCreationCost := intrinsicContractCreationGas + uint64(6900 /* from */ +7700 /* creation */ +2939 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(6900 /* from */ +7000 /* creation */ +315944 /* execution costs */)
+	txCost1 := params.TxGas
+	txCost2 := params.TxGas
+	contractCreationCost := intrinsicContractCreationGas + uint64(7700 /* creation */ +2939 /* execution costs */)
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(7000 /* creation */ +315944 /* execution costs */)
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
@@ -492,6 +491,7 @@ func TestProcessVerkle(t *testing.T) {
 	// TODO utiliser GenerateChainWithGenesis pour le rendre plus pratique
 	chain, _, proofs, keyvals := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
+
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{byte(i), 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
 		gen.AddTx(tx)

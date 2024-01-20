@@ -139,27 +139,35 @@ func (aw *AccessWitness) TouchAndChargeContractCreateCompleted(addr []byte) uint
 }
 
 func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.VersionLeafKey)
-	gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.CodeSizeLeafKey)
-	gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.CodeKeccakLeafKey)
-	gas += aw.TouchAddressOnWriteAndComputeGas(originAddr, zeroTreeIndex, utils.NonceLeafKey)
-	gas += aw.TouchAddressOnWriteAndComputeGas(originAddr, zeroTreeIndex, utils.BalanceLeafKey)
-	return gas
+	// var gas uint64
+	// gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.VersionLeafKey)
+	// gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.CodeSizeLeafKey)
+	// gas += aw.TouchAddressOnReadAndComputeGas(originAddr, zeroTreeIndex, utils.CodeKeccakLeafKey)
+	// gas += aw.TouchAddressOnWriteAndComputeGas(originAddr, zeroTreeIndex, utils.NonceLeafKey)
+	// gas += aw.TouchAddressOnWriteAndComputeGas(originAddr, zeroTreeIndex, utils.BalanceLeafKey)
+
+	// Kaustinen note: we're currently experimenting with stop chargin gas for the origin address
+	// so simple transfer still take 21000 gas. This is to potentially avoid breaking existing tooling.
+	// This is the reason why we return 0 instead of `gas`.
+	return 0
 }
 
 func (aw *AccessWitness) TouchTxExistingAndComputeGas(targetAddr []byte, sendsValue bool) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.VersionLeafKey)
-	gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.CodeSizeLeafKey)
-	gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.CodeKeccakLeafKey)
-	gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.NonceLeafKey)
-	if sendsValue {
-		gas += aw.TouchAddressOnWriteAndComputeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey)
-	} else {
-		gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey)
-	}
-	return gas
+	// var gas uint64
+	// gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.VersionLeafKey)
+	// gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.CodeSizeLeafKey)
+	// gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.CodeKeccakLeafKey)
+	// gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.NonceLeafKey)
+	// if sendsValue {
+	// 	gas += aw.TouchAddressOnWriteAndComputeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey)
+	// } else {
+	// 	gas += aw.TouchAddressOnReadAndComputeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey)
+	// }
+
+	// Kaustinen note: we're currently experimenting with stop chargin gas for the origin address
+	// so simple transfer still take 21000 gas. This is to potentially avoid breaking existing tooling.
+	// This is the reason why we return 0 instead of `gas`.
+	return 0
 }
 
 func (aw *AccessWitness) TouchAddressOnWriteAndComputeGas(addr []byte, treeIndex uint256.Int, subIndex byte) uint64 {
