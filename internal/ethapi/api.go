@@ -1513,8 +1513,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	// If the gas amount is not set, default to RPC gas cap.
 	if args.Gas == nil {
-		tmp := hexutil.Uint64(b.RPCGasCap())
-		args.Gas = &tmp
+		if b.RPCGasCap() != 0 {
+			tmp := hexutil.Uint64(b.RPCGasCap())
+			args.Gas = &tmp
+		} else {
+			tmp := hexutil.Uint64(b.CurrentBlock().GasLimit)
+			args.Gas = &tmp
+		}
 	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
