@@ -43,20 +43,20 @@ const (
 
 // startBloomHandlers starts a batch of goroutines to accept bloom bit database
 // retrievals from possibly a range of filters and serving the data to satisfy.
-func (s *Ethereum) startBloomHandlers(sectionSize uint64) {
+func (e *Ethereum) startBloomHandlers(sectionSize uint64) {
 	for i := 0; i < bloomServiceThreads; i++ {
 		go func() {
 			for {
 				select {
-				case <-s.closeBloomHandler:
+				case <-e.closeBloomHandler:
 					return
 
-				case request := <-s.bloomRequests:
+				case request := <-e.bloomRequests:
 					task := <-request
 					task.Bitsets = make([][]byte, len(task.Sections))
 					for i, section := range task.Sections {
-						head := rawdb.ReadCanonicalHash(s.chainDb, (section+1)*sectionSize-1)
-						if compVector, err := rawdb.ReadBloomBits(s.chainDb, task.Bit, section, head); err == nil {
+						head := rawdb.ReadCanonicalHash(e.chainDb, (section+1)*sectionSize-1)
+						if compVector, err := rawdb.ReadBloomBits(e.chainDb, task.Bit, section, head); err == nil {
 							if blob, err := bitutil.DecompressBytes(compVector, int(sectionSize/8)); err == nil {
 								task.Bitsets[i] = blob
 							} else {

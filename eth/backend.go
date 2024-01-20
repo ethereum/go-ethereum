@@ -306,44 +306,44 @@ func makeExtraData(extra []byte) []byte {
 
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
+func (e *Ethereum) APIs() []rpc.API {
+	apis := ethapi.GetAPIs(e.APIBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+	apis = append(apis, e.engine.APIs(e.BlockChain())...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
 			Namespace: "eth",
-			Service:   NewEthereumAPI(s),
+			Service:   NewEthereumAPI(e),
 		}, {
 			Namespace: "miner",
-			Service:   NewMinerAPI(s),
+			Service:   NewMinerAPI(e),
 		}, {
 			Namespace: "eth",
-			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
+			Service:   downloader.NewDownloaderAPI(e.handler.downloader, e.eventMux),
 		}, {
 			Namespace: "admin",
-			Service:   NewAdminAPI(s),
+			Service:   NewAdminAPI(e),
 		}, {
 			Namespace: "debug",
-			Service:   NewDebugAPI(s),
+			Service:   NewDebugAPI(e),
 		}, {
 			Namespace: "net",
-			Service:   s.netRPCService,
+			Service:   e.netRPCService,
 		},
 	}...)
 }
 
-func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+func (e *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+	e.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
+func (e *Ethereum) Etherbase() (eb common.Address, err error) {
+	e.lock.RLock()
+	etherbase := e.etherbase
+	e.lock.RUnlock()
 
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
@@ -356,22 +356,22 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 //
 // We regard two types of accounts as local miner account: etherbase
 // and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(header *types.Header) bool {
-	author, err := s.engine.Author(header)
+func (e *Ethereum) isLocalBlock(header *types.Header) bool {
+	author, err := e.engine.Author(header)
 	if err != nil {
 		log.Warn("Failed to retrieve block author", "number", header.Number.Uint64(), "hash", header.Hash(), "err", err)
 		return false
 	}
 	// Check whether the given address is etherbase.
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
+	e.lock.RLock()
+	etherbase := e.etherbase
+	e.lock.RUnlock()
 	if author == etherbase {
 		return true
 	}
 	// Check whether the given address is specified by `txpool.local`
 	// CLI flag.
-	for _, account := range s.config.TxPool.Locals {
+	for _, account := range e.config.TxPool.Locals {
 		if account == author {
 			return true
 		}
@@ -382,7 +382,7 @@ func (s *Ethereum) isLocalBlock(header *types.Header) bool {
 // shouldPreserve checks whether we should preserve the given block
 // during the chain reorg depending on whether the author of block
 // is a local account.
-func (s *Ethereum) shouldPreserve(header *types.Header) bool {
+func (e *Ethereum) shouldPreserve(header *types.Header) bool {
 	// The reason we need to disable the self-reorg preserving for clique
 	// is it can be probable to introduce a deadlock.
 	//
@@ -399,49 +399,49 @@ func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	// is A, F and G sign the block of round5 and reject the block of opponents
 	// and in the round6, the last available signer B is offline, the whole
 	// network is stuck.
-	if _, ok := s.engine.(*clique.Clique); ok {
+	if _, ok := e.engine.(*clique.Clique); ok {
 		return false
 	}
-	return s.isLocalBlock(header)
+	return e.isLocalBlock(header)
 }
 
 // SetEtherbase sets the mining reward address.
-func (s *Ethereum) SetEtherbase(etherbase common.Address) {
-	s.lock.Lock()
-	s.etherbase = etherbase
-	s.lock.Unlock()
+func (e *Ethereum) SetEtherbase(etherbase common.Address) {
+	e.lock.Lock()
+	e.etherbase = etherbase
+	e.lock.Unlock()
 
-	s.miner.SetEtherbase(etherbase)
+	e.miner.SetEtherbase(etherbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
-func (s *Ethereum) StartMining() error {
+func (e *Ethereum) StartMining() error {
 	// If the miner was not running, initialize it
-	if !s.IsMining() {
+	if !e.IsMining() {
 		// Propagate the initial price point to the transaction pool
-		s.lock.RLock()
-		price := s.gasPrice
-		s.lock.RUnlock()
-		s.txPool.SetGasTip(price)
+		e.lock.RLock()
+		price := e.gasPrice
+		e.lock.RUnlock()
+		e.txPool.SetGasTip(price)
 
 		// Configure the local mining address
-		eb, err := s.Etherbase()
+		eb, err := e.Etherbase()
 		if err != nil {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
 		var cli *clique.Clique
-		if c, ok := s.engine.(*clique.Clique); ok {
+		if c, ok := e.engine.(*clique.Clique); ok {
 			cli = c
-		} else if cl, ok := s.engine.(*beacon.Beacon); ok {
+		} else if cl, ok := e.engine.(*beacon.Beacon); ok {
 			if c, ok := cl.InnerEngine().(*clique.Clique); ok {
 				cli = c
 			}
 		}
 		if cli != nil {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+			wallet, err := e.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
 				log.Error("Etherbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
@@ -450,103 +450,103 @@ func (s *Ethereum) StartMining() error {
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
-		s.handler.enableSyncedFeatures()
+		e.handler.enableSyncedFeatures()
 
-		go s.miner.Start()
+		go e.miner.Start()
 	}
 	return nil
 }
 
 // StopMining terminates the miner, both at the consensus engine level as well as
 // at the block creation level.
-func (s *Ethereum) StopMining() {
+func (e *Ethereum) StopMining() {
 	// Update the thread count within the consensus engine
 	type threaded interface {
 		SetThreads(threads int)
 	}
-	if th, ok := s.engine.(threaded); ok {
+	if th, ok := e.engine.(threaded); ok {
 		th.SetThreads(-1)
 	}
 	// Stop the block creating itself
-	s.miner.Stop()
+	e.miner.Stop()
 }
 
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (e *Ethereum) IsMining() bool      { return e.miner.Mining() }
+func (e *Ethereum) Miner() *miner.Miner { return e.miner }
 
-func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() *txpool.TxPool             { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
-func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
-func (s *Ethereum) Merger() *consensus.Merger          { return s.merger }
-func (s *Ethereum) SyncMode() downloader.SyncMode {
-	mode, _ := s.handler.chainSync.modeAndLocalHead()
+func (e *Ethereum) AccountManager() *accounts.Manager  { return e.accountManager }
+func (e *Ethereum) BlockChain() *core.BlockChain       { return e.blockchain }
+func (e *Ethereum) TxPool() *txpool.TxPool             { return e.txPool }
+func (e *Ethereum) EventMux() *event.TypeMux           { return e.eventMux }
+func (e *Ethereum) Engine() consensus.Engine           { return e.engine }
+func (e *Ethereum) ChainDb() ethdb.Database            { return e.chainDb }
+func (e *Ethereum) IsListening() bool                  { return true } // Always listening
+func (e *Ethereum) Downloader() *downloader.Downloader { return e.handler.downloader }
+func (e *Ethereum) Synced() bool                       { return e.handler.synced.Load() }
+func (e *Ethereum) SetSynced()                         { e.handler.enableSyncedFeatures() }
+func (e *Ethereum) ArchiveMode() bool                  { return e.config.NoPruning }
+func (e *Ethereum) BloomIndexer() *core.ChainIndexer   { return e.bloomIndexer }
+func (e *Ethereum) Merger() *consensus.Merger          { return e.merger }
+func (e *Ethereum) SyncMode() downloader.SyncMode {
+	mode, _ := e.handler.chainSync.modeAndLocalHead()
 	return mode
 }
 
 // Protocols returns all the currently configured
 // network protocols to start.
-func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
-	if s.config.SnapshotCache > 0 {
-		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
+func (e *Ethereum) Protocols() []p2p.Protocol {
+	protos := eth.MakeProtocols((*ethHandler)(e.handler), e.networkID, e.ethDialCandidates)
+	if e.config.SnapshotCache > 0 {
+		protos = append(protos, snap.MakeProtocols((*snapHandler)(e.handler), e.snapDialCandidates)...)
 	}
 	return protos
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+func (e *Ethereum) Start() error {
+	eth.StartENRUpdater(e.blockchain, e.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers(params.BloomBitsBlocks)
+	e.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Regularly update shutdown marker
-	s.shutdownTracker.Start()
+	e.shutdownTracker.Start()
 
 	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
-	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= s.p2pServer.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+	maxPeers := e.p2pServer.MaxPeers
+	if e.config.LightServ > 0 {
+		if e.config.LightPeers >= e.p2pServer.MaxPeers {
+			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", e.config.LightPeers, e.p2pServer.MaxPeers)
 		}
-		maxPeers -= s.config.LightPeers
+		maxPeers -= e.config.LightPeers
 	}
 	// Start the networking layer and the light server if requested
-	s.handler.Start(maxPeers)
+	e.handler.Start(maxPeers)
 	return nil
 }
 
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
-func (s *Ethereum) Stop() error {
+func (e *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
-	s.ethDialCandidates.Close()
-	s.snapDialCandidates.Close()
-	s.handler.Stop()
+	e.ethDialCandidates.Close()
+	e.snapDialCandidates.Close()
+	e.handler.Stop()
 
 	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
-	s.txPool.Close()
-	s.miner.Close()
-	s.blockchain.Stop()
-	s.engine.Close()
+	e.bloomIndexer.Close()
+	close(e.closeBloomHandler)
+	e.txPool.Close()
+	e.miner.Close()
+	e.blockchain.Stop()
+	e.engine.Close()
 
 	// Clean shutdown marker as the last thing before closing db
-	s.shutdownTracker.Stop()
+	e.shutdownTracker.Stop()
 
-	s.chainDb.Close()
-	s.eventMux.Stop()
+	e.chainDb.Close()
+	e.eventMux.Stop()
 
 	return nil
 }
