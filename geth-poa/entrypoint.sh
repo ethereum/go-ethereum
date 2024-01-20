@@ -99,11 +99,12 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
  	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
+  	GETH_PORT="${GETH_PORT:-30311}"
 
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
-		--port 30311 \
+		--port="$GETH_PORT" \
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
@@ -144,11 +145,12 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
 	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
+	GETH_PORT="${GETH_PORT:-30311}"
 
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
-		--port 30311 \
+		--port="$GETH_PORT" \
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
