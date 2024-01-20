@@ -214,7 +214,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			if evm.chainRules.IsPrague {
 				// proof of absence
-				tryConsumeGas(&gas, evm.Accesses.TouchAndChargeProofOfAbsence(caller.Address().Bytes()))
+				tryConsumeGas(&gas, evm.Accesses.TouchAndChargeProofOfAbsence(addr.Bytes()))
 			}
 			// Calling a non existing account, don't do anything, but ping the tracer
 			if debug {
