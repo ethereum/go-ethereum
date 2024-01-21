@@ -97,11 +97,11 @@ func NewMongoDBEngine(cfg *Config) *XDCxDAO.MongoDatabase {
 func New(cfg *Config) *XDCX {
 	tokenDecimalCache, err := lru.New(defaultCacheLimit)
 	if err != nil {
-		log.Warn("[XDCx-New] fail to create new lru for token decimal")
+		log.Warn("[XDCx-New] fail to create new lru for token decimal", "error", err)
 	}
 	orderCache, err := lru.New(tradingstate.OrderCacheLimit)
 	if err != nil {
-		log.Warn("[XDCx-New] fail to create new lru for order")
+		log.Warn("[XDCx-New] fail to create new lru for order", "error", err)
 	}
 	XDCX := &XDCX{
 		orderNonce:        make(map[common.Address]*big.Int),
