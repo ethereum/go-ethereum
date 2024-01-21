@@ -141,7 +141,7 @@ func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
 	case 500:
 		return nil, ErrInternal
 	default:
-		return nil, fmt.Errorf("Unexpected error from API endpoint \"%s\": status code %d", path, resp.StatusCode)
+		return nil, fmt.Errorf("unexpected error from API endpoint \"%s\": status code %d", path, resp.StatusCode)
 	}
 }
 
@@ -412,7 +412,7 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		req, err := http.NewRequest("GET", api.url+
 			"/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update", nil)
 		if err != nil {
-			errFn(fmt.Errorf("Error creating event subscription request: %v", err))
+			errFn(fmt.Errorf("error creating event subscription request: %v", err))
 			return
 		}
 		for k, v := range api.customHeaders {
@@ -420,7 +420,7 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		}
 		stream, err := eventsource.SubscribeWithRequest("", req)
 		if err != nil {
-			errFn(fmt.Errorf("Error creating event subscription: %v", err))
+			errFn(fmt.Errorf("error creating event subscription: %v", err))
 			close(streamCh)
 			return
 		}
@@ -455,22 +455,22 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 					if slot, blockRoot, err := decodeHeadEvent([]byte(event.Data())); err == nil {
 						headFn(slot, blockRoot)
 					} else {
-						errFn(fmt.Errorf("Error decoding head event: %v", err))
+						errFn(fmt.Errorf("error decoding head event: %v", err))
 					}
 				case "light_client_optimistic_update":
 					if signedHead, err := decodeOptimisticHeadUpdate([]byte(event.Data())); err == nil {
 						signedFn(signedHead)
 					} else {
-						errFn(fmt.Errorf("Error decoding optimistic update event: %v", err))
+						errFn(fmt.Errorf("error decoding optimistic update event: %v", err))
 					}
 				case "light_client_finality_update":
 					if finalityUpdate, err := decodeFinalityUpdate([]byte(event.Data())); err == nil {
 						finalityFn(finalityUpdate)
 					} else {
-						errFn(fmt.Errorf("Error decoding finality update event: %v", err))
+						errFn(fmt.Errorf("error decoding finality update event: %v", err))
 					}
 				default:
-					errFn(fmt.Errorf("Unexpected event: %s", event.Event()))
+					errFn(fmt.Errorf("unexpected event: %s", event.Event()))
 				}
 			case err, ok := <-stream.Errors:
 				if !ok {

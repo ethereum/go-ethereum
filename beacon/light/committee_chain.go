@@ -467,12 +467,12 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) (syncCommittee, error) 
 	if sc, ok := s.committees.get(s.db, period); ok {
 		c, err := s.sigVerifier.deserializeSyncCommittee(sc)
 		if err != nil {
-			return nil, fmt.Errorf("Sync committee #%d deserialization error: %v", period, err)
+			return nil, fmt.Errorf("sync committee #%d deserialization error: %v", period, err)
 		}
 		s.committeeCache.Add(period, c)
 		return c, nil
 	}
-	return nil, fmt.Errorf("Missing serialized sync committee #%d", period)
+	return nil, fmt.Errorf("missing serialized sync committee #%d", period)
 }
 
 // VerifySignedHeader returns true if the given signed header has a valid signature
