@@ -85,8 +85,6 @@ func newServer(rs requestServer, clock mclock.Clock) server {
 	return s
 }
 
-type serverSet map[server]struct{}
-
 // EventType identifies an event type, either related to a request or the server
 // in general. Server events can also be externally defined.
 type EventType struct {
@@ -158,6 +156,35 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	defer s.lock.Unlock()
 
 	switch event.Type {
+	case EvRequest:
+		id := event.Data.(RequestResponse).ID
+		s.timeouts[id] = s.clock.AfterFunc(softRequestTimeout, func() {
+			/*if s.testTimerResults != nil {
+				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
+			}*/
+			s.lock.Lock()
+			if _, ok := s.timeouts[id]; !ok {
+				s.lock.Unlock()
+				return
+			}
+			s.timeouts[id] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
+				/*if s.testTimerResults != nil {
+					s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
+				}*/
+				s.lock.Lock()
+				if _, ok := s.timeouts[id]; !ok {
+					s.lock.Unlock()
+					return
+				}
+				delete(s.timeouts, id)
+				childEventCb := s.childEventCb
+				s.lock.Unlock()
+				childEventCb(Event{Type: EvFail, Data: event.Data})
+			})
+			childEventCb := s.childEventCb
+			s.lock.Unlock()
+			childEventCb(Event{Type: EvTimeout, Data: event.Data})
+		})
 	case EvResponse, EvFail:
 		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
@@ -175,38 +202,7 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 // sendRequest sends a request through the parent (requestServer) and starts a
 // timer for request timeout.
 func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	reqId = s.parent.SendRequest(request)
-	s.timeouts[reqId] = s.clock.AfterFunc(softRequestTimeout, func() {
-		/*if s.testTimerResults != nil {
-			s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-		}*/
-		s.lock.Lock()
-		if _, ok := s.timeouts[reqId]; !ok {
-			s.lock.Unlock()
-			return
-		}
-		s.timeouts[reqId] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
-			/*if s.testTimerResults != nil {
-				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-			}*/
-			s.lock.Lock()
-			if _, ok := s.timeouts[reqId]; !ok {
-				s.lock.Unlock()
-				return
-			}
-			delete(s.timeouts, reqId)
-			childEventCb := s.childEventCb
-			s.lock.Unlock()
-			childEventCb(Event{Type: EvFail, Data: RequestResponse{ID: reqId, Request: request}})
-		})
-		childEventCb := s.childEventCb
-		s.lock.Unlock()
-		childEventCb(Event{Type: EvTimeout, Data: RequestResponse{ID: reqId, Request: request}})
-	})
-	return reqId
+	return s.parent.SendRequest(request)
 }
 
 // stop stops all goroutines associated with the server.

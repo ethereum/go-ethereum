@@ -254,7 +254,7 @@ func (s *ForwardUpdateSync) Process(events []request.Event) {
 	}
 
 	// try processing ordered list of available responses
-	sort.Sort(updateResponseList(s.processQueue)) //TODO
+	sort.Sort(updateResponseList(s.processQueue))
 	for s.processQueue != nil {
 		event := s.processQueue[0]
 		if !s.processResponse(event) {
