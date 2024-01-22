@@ -764,7 +764,7 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 				continue
 			}
 			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingItemHistoryItem)
-			lendingItemHistory, _ := cacheAtTxHash[lendingstate.GetLendingItemHistoryKey(item.LendingToken, item.CollateralToken, item.Hash)]
+			lendingItemHistory := cacheAtTxHash[lendingstate.GetLendingItemHistoryKey(item.LendingToken, item.CollateralToken, item.Hash)]
 			if (lendingItemHistory == lendingstate.LendingItemHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove item due to empty lendingItemHistory", "item", lendingstate.ToJSON(item))
 				if err := db.DeleteObject(item.Hash, &lendingstate.LendingItem{}); err != nil {
@@ -797,7 +797,7 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 				continue
 			}
 			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingTradeHistoryItem)
-			lendingTradeHistoryItem, _ := cacheAtTxHash[trade.Hash]
+			lendingTradeHistoryItem := cacheAtTxHash[trade.Hash]
 			if (lendingTradeHistoryItem == lendingstate.LendingTradeHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove trade due to empty LendingTradeHistory", "trade", lendingstate.ToJSON(trade))
 				if err := db.DeleteObject(trade.Hash, &lendingstate.LendingTrade{}); err != nil {
