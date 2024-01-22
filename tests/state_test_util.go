@@ -474,6 +474,6 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func vmTestBlockHash(n uint64) common.Hash {
+func vmTestBlockHash(n uint64, _ vm.StateDB, _ bool) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }

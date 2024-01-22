@@ -122,7 +122,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
-	getHash := func(num uint64) common.Hash {
+	getHash := func(num uint64, _ vm.StateDB, _ bool) common.Hash {
 		if pre.Env.BlockHashes == nil {
 			hashError = fmt.Errorf("getHash(%d) invoked, no blockhashes provided", num)
 			return common.Hash{}
