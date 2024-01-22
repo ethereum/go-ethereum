@@ -59,8 +59,8 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 // SendRequest implements request.requestServer.
 func (s *ApiServer) SendRequest(req request.Request) request.ID {
 	id := request.ID(atomic.AddUint64(&s.lastId, 1))
+	s.eventCallback(request.Event{Type: request.EvRequest, Data: request.RequestResponse{ID: id, Request: req}})
 	go func() {
-		s.eventCallback(request.Event{Type: request.EvRequest, Data: request.RequestResponse{ID: id, Request: req}})
 		var resp request.Response
 		switch data := req.(type) {
 		case sync.ReqUpdates:

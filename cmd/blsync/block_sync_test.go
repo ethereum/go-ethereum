@@ -103,13 +103,6 @@ func TestBlockSync(t *testing.T) {
 	expHeadBlock(5, testBlock2)
 }
 
-func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
-	if block == nil {
-		return types.HeadInfo{}
-	}
-	return types.HeadInfo{Slot: uint64(block.Slot), BlockRoot: beaconBlockHash(block)}
-}
-
 func blockHeader(block *capella.BeaconBlock) types.Header {
 	return types.Header{
 		Slot:          uint64(block.Slot),

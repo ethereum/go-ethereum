@@ -33,8 +33,8 @@ type beaconBlockSync struct {
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
 
-	lastHeadBlock *capella.BeaconBlock
-	headCh   chan headData
+	lastHeadInfo types.HeadInfo
+	headCh       chan headData
 }
 
 type headData struct {
@@ -55,7 +55,7 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
 		locked:       make(map[common.Hash]struct{}),
 		serverHeads:  make(map[request.Server]common.Hash),
-		headCh:  make(chan headData, 1),
+		headCh:       make(chan headData, 1),
 	}
 }
 
@@ -86,18 +86,22 @@ func (s *beaconBlockSync) Process(events []request.Event) {
 	if !ok {
 		return
 	}
-	finality, ok := s.headTracker.ValidatedFinality()	//TODO fetch directly if subscription does not deliver
+	finality, ok := s.headTracker.ValidatedFinality() //TODO fetch directly if subscription does not deliver
 	if !ok || head.Header.Epoch() != finality.Attested.Header.Epoch() {
 		return
 	}
 	validatedHead := head.Header.Hash()
 	headBlock, ok := s.recentBlocks.Get(validatedHead)
-	if !ok || headBlock == s.lastHeadBlock {
+	if !ok {
+		return
+	}
+	headInfo := blockHeadInfo(headBlock)
+	if headInfo == s.lastHeadInfo {
 		return
 	}
 	select {
 	case s.headCh <- headData{block: headBlock, update: finality}:
-		s.lastHeadBlock = headBlock
+		s.lastHeadInfo = headInfo
 	default:
 	}
 }
@@ -121,4 +125,11 @@ func (s *beaconBlockSync) MakeRequest(server request.Server) (request.Request, f
 		}
 	}
 	return nil, 0
+}
+
+func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
+	if block == nil {
+		return types.HeadInfo{}
+	}
+	return types.HeadInfo{Slot: uint64(block.Slot), BlockRoot: beaconBlockHash(block)}
 }

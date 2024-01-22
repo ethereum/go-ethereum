@@ -55,9 +55,9 @@ const (
 
 // requestServer can send requests in a non-blocking way and feed back events
 // through the event callback. When successfully sending a request it should
-// send back an EvRequest event. When finished, it should send back either
-// EvResponse or EvFail. Additionally, it may also send application-defined
-// events that the Modules can interpret.
+// send back an EvRequest event before returning from SendRequest. When finished,
+// it should send back either EvResponse or EvFail. Additionally, it may also
+// send application-defined events that the Modules can interpret.
 type requestServer interface {
 	Subscribe(eventCallback func(event Event))
 	SendRequest(request Request) ID
@@ -151,6 +151,11 @@ func (s *serverWithTimeout) subscribe(eventCallback func(event Event)) {
 	s.parent.Subscribe(s.eventCallback)
 }
 
+// sendRequest sends a request through the parent (requestServer).
+func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
+	return s.parent.SendRequest(request)
+}
+
 // eventCallback is called by parent (requestServer) event subscription.
 func (s *serverWithTimeout) eventCallback(event Event) {
 	s.lock.Lock()
@@ -159,6 +164,7 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	switch event.Type {
 	case EvRequest:
 		s.startTimeout(event.Data.(RequestResponse))
+		s.childEventCb(event)
 	case EvResponse, EvFail:
 		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
@@ -203,11 +209,6 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 		s.lock.Unlock()
 		childEventCb(Event{Type: EvTimeout, Data: reqData})
 	})
-}
-
-// sendRequest sends a request through the parent (requestServer).
-func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
-	return s.parent.SendRequest(request)
 }
 
 // stop stops all goroutines associated with the server.
@@ -315,9 +316,8 @@ func (s *serverWithLimits) eventCallback(event Event) {
 // sendRequest sends a request through the parent (serverWithTimeout).
 func (s *serverWithLimits) sendRequest(request Request) (reqId ID) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	s.pendingCount++
+	s.lock.Unlock()
 	return s.serverWithTimeout.sendRequest(request)
 }
 
