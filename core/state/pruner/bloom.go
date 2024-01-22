@@ -27,9 +27,7 @@ import (
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
-// stateBloomHasher is a wrapper around a byte blob to satisfy the interface API
-// requirements of the bloom library used. It's used to convert a trie hash or
-// contract code hash into a 64 bit mini hash.
+// stateBloomHasher is used to convert a trie hash or contract code hash into a 64 bit mini hash.
 func stateBloomHasher(f []byte) uint64 {
 	return binary.BigEndian.Uint64(f)
 }

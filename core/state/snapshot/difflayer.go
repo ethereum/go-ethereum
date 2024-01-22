@@ -124,17 +124,17 @@ type diffLayer struct {
 	lock sync.RWMutex
 }
 
+// destructBloomHasher is used to convert a destruct event into a 64 bit mini hash.
 func destructBloomHasher(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
 }
 
-// accountBloomHasher is a wrapper around a common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert an account
-// hash into a 64 bit mini hash.
+// accountBloomHasher is used to convert an account hash into a 64 bit mini hash.
 func accountBloomHasher(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
+// storageBloomHasher is used to convert an account hash and a storage hash into a 64 bit mini hash.
 func storageBloomHasher(h0, h1 common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h0[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
 		binary.BigEndian.Uint64(h1[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
