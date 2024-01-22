@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -24,8 +25,8 @@ var (
 	ErrPreMergeHeaderMustWithProof = errors.New("pre merge header must has accumulator proof")
 )
 
-//go:embed assets/merge_macc.bin
-var masterAccumulatorBytes []byte
+//go:embed assets/merge_macc.txt
+var masterAccumulatorHex string
 
 var zeroRecordBytes = make([]byte, 64)
 
@@ -240,6 +241,10 @@ func NewMasterAccumulator() (MasterAccumulator, error) {
 	var masterAcc = MasterAccumulator{
 		HistoricalEpochs: make([][]byte, 0),
 	}
-	err := masterAcc.UnmarshalSSZ(masterAccumulatorBytes)
+	masterAccumulatorBytes, err := hexutil.Decode(masterAccumulatorHex)
+	if err != nil {
+		return masterAcc, err
+	}
+	err = masterAcc.UnmarshalSSZ(masterAccumulatorBytes)
 	return masterAcc, err
 }
