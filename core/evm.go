@@ -36,6 +36,8 @@ type ChainContext interface {
 
 	// GetHeader returns the header corresponding to the hash/number argument pair.
 	GetHeader(common.Hash, uint64) *types.Header
+
+	Config() *params.ChainConfig
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
@@ -103,39 +105,52 @@ func GetHashFn(ref *types.Header, chain ChainContext) vm.GetHashFunc {
 			return common.Hash{}
 		}
 
-		// Use the cache if it is within 256 blocks from the head.
-		if n >= ref.Number.Uint64()-256 {
-			// If there's no hash cache yet, make one
-			if len(cache) == 0 {
-				cache = append(cache, ref.ParentHash)
-			}
-			if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
-				return cache[idx]
-			}
-			// No luck in the cache, but we can start iterating from the last element we already know
+		var eip2935Ancestor *types.Header
+
+		// If there's no hash cache yet, make one and fill
+		// it with all 256 hashes. We have to get all blocks
+		// since for eip2935 we need to query the 256th
+		// ancestor to find out if it had eip2935 enabled.
+		if len(cache) == 0 {
+			cache = append(cache, ref.ParentHash)
+
 			lastKnownHash := cache[len(cache)-1]
 			lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
+			limit := uint64(257)
+			if ref.Number.Uint64() < limit {
+				limit = ref.Number.Uint64()
+			}
 
-			for {
+			for ref.Number.Uint64()-lastKnownNumber < limit {
 				header := chain.GetHeader(lastKnownHash, lastKnownNumber)
 				if header == nil {
 					break
 				}
+				if lastKnownNumber == n {
+					eip2935Ancestor = header
+				}
 				cache = append(cache, header.ParentHash)
 				lastKnownHash = header.ParentHash
 				lastKnownNumber = header.Number.Uint64() - 1
-				if n == lastKnownNumber {
-					return lastKnownHash
-				}
-			}
-		} else {
-			if eip2935 {
-				var key common.Hash
-				binary.BigEndian.PutUint64(key[24:], n)
-				return statedb.GetState(params.HistoryStorageAddress, key)
 			}
 		}
 
+		// Check if the 256th ancestor had already activated eip 2935.
+		// If the ancestor is nil, then this is the case of a testnet
+		// that forked within 256 blocks of the genesis.
+		if eip2935Ancestor != nil && chain.Config().IsPrague(eip2935Ancestor.Number, eip2935Ancestor.Time) {
+			var key common.Hash
+			binary.BigEndian.PutUint64(key[24:], n)
+			return statedb.GetState(params.HistoryStorageAddress, key)
+		}
+
+		// if the 256th ancestor did not have eip2935 enabled, try
+		// to get the value from the cache.
+		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
+			return cache[idx]
+		}
+
+		// something went wrong while building the cache
 		return common.Hash{}
 	}
 }
