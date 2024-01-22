@@ -18,6 +18,8 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -34,6 +36,73 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/davecgh/go-spew/spew"
 )
+
+// This test checks calling a method that returns 'null'.
+func TestClientNullResponse(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+
+	client := DialInProc(server)
+	defer client.Close()
+
+	var result json.RawMessage
+	if err := client.Call(&result, "test_null"); err != nil {
+		t.Fatal(err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if !reflect.DeepEqual(result, json.RawMessage("null")) {
+		t.Errorf("Expected null, got %s", result)
+	}
+}
+
+func TestClientBatchRequest_len(t *testing.T) {
+	b, err := json.Marshal([]jsonrpcMessage{
+		{Version: "2.0", ID: json.RawMessage("1"), Method: "foo", Result: json.RawMessage(`"0x1"`)},
+		{Version: "2.0", ID: json.RawMessage("2"), Method: "bar", Result: json.RawMessage(`"0x2"`)},
+	})
+	if err != nil {
+		t.Fatal("failed to encode jsonrpc message:", err)
+	}
+	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_, err := rw.Write(b)
+		if err != nil {
+			t.Error("failed to write response:", err)
+		}
+	}))
+	t.Cleanup(s.Close)
+
+	client, err := Dial(s.URL)
+	if err != nil {
+		t.Fatal("failed to dial test server:", err)
+	}
+	defer client.Close()
+
+	t.Run("too-few", func(t *testing.T) {
+		batch := []BatchElem{
+			{Method: "foo"},
+			{Method: "bar"},
+			{Method: "baz"},
+		}
+		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+		defer cancelFn()
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
+			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+		}
+	})
+
+	t.Run("too-many", func(t *testing.T) {
+		batch := []BatchElem{
+			{Method: "foo"},
+		}
+		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
+		defer cancelFn()
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
+			t.Errorf("expected %q but got: %v", ErrBadResult, err)
+		}
+	})
+}
 
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()
