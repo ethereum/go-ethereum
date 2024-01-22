@@ -1287,7 +1287,7 @@ func TestFillBlobTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to encode computed sidecar: %v", err)
 			}
-			if bytes.Compare(have, want) != 0 {
+			if !bytes.Equal(have, want) {
 				t.Errorf("blob sidecar mismatch. Have: %s, want: %s", have, want)
 			}
 		})
