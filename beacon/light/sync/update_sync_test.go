@@ -170,9 +170,7 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	chain.ExpNextSyncPeriod(t, 15)
 
 	// invalid response to request 1, server can only deliver updates up to period 15 despite announced head
-	req1x := ts.Request(1)
-	req1x.Request = ReqUpdates{FirstPeriod: 10, Count: 5}
-	ts.RequestEvent(request.EvResponse, 1, testRespUpdate(req1x))
+	ts.RequestEvent(request.EvResponse, 1, testRespUpdate(ReqUpdates{FirstPeriod: 10, Count: 5}))
 	ts.ExpFail(testServer3)
 	ts.Run(5, nil, nil)
 	// expect no progress of chain head
@@ -197,9 +195,9 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	chain.ExpNextSyncPeriod(t, 17)
 }
 
-func testRespUpdate(request request.RequestWithID) request.Response {
+func testRespUpdate(request request.Request) request.Response {
 	var resp RespUpdates
-	req := request.Request.(ReqUpdates)
+	req := request.(ReqUpdates)
 	resp.Updates = make([]*types.LightClientUpdate, int(req.Count))
 	resp.Committees = make([]*types.SerializedSyncCommittee, int(req.Count))
 	period := req.FirstPeriod

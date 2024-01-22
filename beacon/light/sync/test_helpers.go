@@ -33,13 +33,18 @@ func (s *TestServer) Fail(desc string) {
 	s.ts.serverFail(s)
 }
 
+type requestWithID struct {
+	sid     request.ServerAndID
+	request request.Request
+}
+
 type TestScheduler struct {
 	t         *testing.T
 	module    request.Module
 	events    []request.Event
 	servers   []request.Server
 	allowance map[request.Server]int
-	sent      map[int]request.RequestWithID
+	sent      map[int]requestWithID
 	testIndex int
 	expFail   map[request.Server]int // expected Server.Fail calls during next Run
 	lastId    request.ID
@@ -51,7 +56,7 @@ func NewTestScheduler(t *testing.T, module request.Module) *TestScheduler {
 		module:    module,
 		allowance: make(map[request.Server]int),
 		expFail:   make(map[request.Server]int),
-		sent:      make(map[int]request.RequestWithID),
+		sent:      make(map[int]requestWithID),
 	}
 }
 
@@ -68,9 +73,9 @@ func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq req
 		ts.t.Errorf("Missing %d Server.Fail(s) from server %d in test case #%d", count, server.(*TestServer).ID, testIndex)
 	}
 
-	expReqWithID := request.RequestWithID{
-		ServerAndID: request.ServerAndID{Server: expServer, ID: ts.lastId + 1},
-		Request:     expReq,
+	expReqWithID := requestWithID{
+		sid:     request.ServerAndID{Server: expServer, ID: ts.lastId + 1},
+		request: expReq,
 	}
 	req, ok := ts.tryRequest(testIndex, ts.module.MakeRequest)
 	if expReq == nil {
@@ -88,8 +93,8 @@ func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq req
 	}
 }
 
-func (ts *TestScheduler) Request(testIndex int) request.RequestWithID {
-	return ts.sent[testIndex]
+func (ts *TestScheduler) Request(testIndex int) request.Request {
+	return ts.sent[testIndex].request
 }
 
 func (ts *TestScheduler) ServerEvent(evType *request.EventType, server request.Server, data any) {
@@ -108,10 +113,10 @@ func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, 
 	}
 	ts.events = append(ts.events, request.Event{
 		Type:   evType,
-		Server: req.ServerAndID.Server,
+		Server: req.sid.Server,
 		Data: request.RequestResponse{
-			ID:       req.ServerAndID.ID,
-			Request:  req.Request,
+			ID:       req.sid.ID,
+			Request:  req.request,
 			Response: resp,
 		},
 	})
@@ -153,7 +158,7 @@ func (ts *TestScheduler) serverFail(server request.Server) {
 	ts.expFail[server]--
 }
 
-func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request.Server) (request.Request, float32)) (request.RequestWithID, bool) {
+func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request.Server) (request.Request, float32)) (requestWithID, bool) {
 	var (
 		bestServer request.Server
 		bestReq    request.Request
@@ -169,13 +174,13 @@ func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request
 		}
 	}
 	if bestServer == nil {
-		return request.RequestWithID{}, false
+		return requestWithID{}, false
 	}
 	ts.allowance[bestServer]--
 	ts.lastId++
-	req := request.RequestWithID{
-		ServerAndID: request.ServerAndID{Server: bestServer, ID: ts.lastId},
-		Request:     bestReq,
+	req := requestWithID{
+		sid:     request.ServerAndID{Server: bestServer, ID: ts.lastId},
+		request: bestReq,
 	}
 	ts.sent[testIndex] = req
 	ts.RequestEvent(request.EvRequest, testIndex, nil)

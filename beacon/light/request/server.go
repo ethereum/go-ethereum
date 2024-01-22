@@ -39,8 +39,8 @@ var (
 )
 
 const (
-	softRequestTimeout = time.Second
-	hardRequestTimeout = time.Second * 10
+	softRequestTimeout = time.Second      // allow resending request to a different server but do not cancel yet
+	hardRequestTimeout = time.Second * 10 // cancel request
 )
 
 const (
@@ -54,7 +54,8 @@ const (
 )
 
 // requestServer can send requests in a non-blocking way and feed back events
-// through the event callback. After each request, it should send back either
+// through the event callback. When successfully sending a request it should
+// send back an EvRequest event. When finished, it should send back either
 // EvResponse or EvFail. Additionally, it may also send application-defined
 // events that the Modules can interpret.
 type requestServer interface {
@@ -157,34 +158,7 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 
 	switch event.Type {
 	case EvRequest:
-		id := event.Data.(RequestResponse).ID
-		s.timeouts[id] = s.clock.AfterFunc(softRequestTimeout, func() {
-			/*if s.testTimerResults != nil {
-				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-			}*/
-			s.lock.Lock()
-			if _, ok := s.timeouts[id]; !ok {
-				s.lock.Unlock()
-				return
-			}
-			s.timeouts[id] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
-				/*if s.testTimerResults != nil {
-					s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-				}*/
-				s.lock.Lock()
-				if _, ok := s.timeouts[id]; !ok {
-					s.lock.Unlock()
-					return
-				}
-				delete(s.timeouts, id)
-				childEventCb := s.childEventCb
-				s.lock.Unlock()
-				childEventCb(Event{Type: EvFail, Data: event.Data})
-			})
-			childEventCb := s.childEventCb
-			s.lock.Unlock()
-			childEventCb(Event{Type: EvTimeout, Data: event.Data})
-		})
+		s.startTimeout(event.Data.(RequestResponse))
 	case EvResponse, EvFail:
 		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
@@ -199,8 +173,39 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	}
 }
 
-// sendRequest sends a request through the parent (requestServer) and starts a
-// timer for request timeout.
+// startTimeout starts a timeout timer for the given request.
+func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
+	id := reqData.ID
+	s.timeouts[id] = s.clock.AfterFunc(softRequestTimeout, func() {
+		/*if s.testTimerResults != nil {
+			s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
+		}*/
+		s.lock.Lock()
+		if _, ok := s.timeouts[id]; !ok {
+			s.lock.Unlock()
+			return
+		}
+		s.timeouts[id] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
+			/*if s.testTimerResults != nil {
+				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
+			}*/
+			s.lock.Lock()
+			if _, ok := s.timeouts[id]; !ok {
+				s.lock.Unlock()
+				return
+			}
+			delete(s.timeouts, id)
+			childEventCb := s.childEventCb
+			s.lock.Unlock()
+			childEventCb(Event{Type: EvFail, Data: reqData})
+		})
+		childEventCb := s.childEventCb
+		s.lock.Unlock()
+		childEventCb(Event{Type: EvTimeout, Data: reqData})
+	})
+}
+
+// sendRequest sends a request through the parent (requestServer).
 func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
 	return s.parent.SendRequest(request)
 }

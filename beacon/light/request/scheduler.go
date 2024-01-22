@@ -25,29 +25,39 @@ import (
 )
 
 // Module represents a mechanism which is typically responsible for downloading
-// and updating a passive data structure.
-// Modules can start network requests through Tracker and receive request events
-// related to the sent requests that can signal a response, a failure or a timeout.
-// They also receive server-related events. Note that they do not directly interact
-// with servers but may keep track of certain parameters of registered servers,
-// based on the received server events. These server parameters may affect the
-// possible range of requests to be sent to a given server.
+// and updating a passive data structure. It does not directly interact with the
+// servers (except for reporting server side failures). It receives and processes
+// events, maintains its internal state and generates request candidates. It is
+// the Scheduler's responsibility to feed events to the modules, call Process as
+// long as there might be something to process and then generate request
+// candidates using MakeRequest and start the best possible requests.
 // Modules are called by Scheduler whenever a global trigger is fired. All events
-// fire the trigger. Modules themselves can also self-trigger, ensuring an
-// immediate next processing round after the target data structure has been
-// changed in a way that could make further actions possible either by the same
+// fire the trigger. Changing a target data structure also triggers a next
+// processing round as it could make further actions possible either by the same
 // or another Module.
 type Module interface {
-	// Process is a non-blocking function that is called on each Module whenever
-	// a processing round is triggered. It can start new requests through the
-	// received Tracker, process events and/or do other data processing tasks.
-	// Note that request events are only passed to the module that made the given
-	// request while server events are passed to every module.
+	// Process is a non-blocking function responsible for maintaining the target
+	// data structures(s) and the internal state of the module. This state
+	// typically consists of information about pending requests and registered
+	// servers and it is updated based on the received events.
+	// Process is always called after an event is received or after a target data
+	// structure has been changed.
 	//
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
 	Process([]Event)
+	// MakeRequest generates a request candidate based on the state of the target
+	// structure(s) and the internal state of the module. This candidate is
+	// typically the next obtainable item (or range of items) of the target
+	// structure that is assumed to be available at the given server and has not
+	// been requested yet (or has been requested but already timed out and should
+	// be resent).
+	// MakeRequest is always called after Process. Note that it is the Scheduler's
+	// job to select the best possible requests and actually send them. If a
+	// request has been sent, the module is notified through an EvRequest event
+	// which also immediately triggers a next processing round, allowing modules
+	// to send more requests if possible and necessary.
 	MakeRequest(Server) (Request, float32)
 }
 
@@ -78,7 +88,8 @@ type Scheduler struct {
 }
 
 type (
-	// Server identifies a server without allowing any direct interaction.
+	// Server identifies a server without allowing any direct interaction except
+	// for reporting a server side failure.
 	// Note: server interface is used by Scheduler and Tracker but not used by
 	// the modules that do not interact with them directly.
 	// In order to make module testing easier, Server interface is used in
@@ -93,12 +104,10 @@ type (
 		Server Server
 		ID     ID
 	}
-	RequestWithID struct {
-		ServerAndID
-		Request Request
-	}
 )
 
+// targetData represents a registered target data structure that increases its
+// ChangeCounter whenever it has been changed.
 type targetData interface {
 	ChangeCounter() uint64
 }
@@ -128,6 +137,9 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 	return s
 }
 
+// RegisterTarget registers a target data structure, ensuring that any changes
+// made to it trigger a new round of Module.Process calls, giving a chance to
+// modules to react to the changes.
 func (s *Scheduler) RegisterTarget(t targetData) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -192,19 +204,14 @@ func (s *Scheduler) Stop() {
 	<-stop
 }
 
-// syncLoop calls all modules in the order of their registration.
+// syncLoop is the main event loop responsible for event/data processing and
+// sending new requests.
 // A round of processing starts whenever the global trigger is fired. Triggers
 // fired during a processing round ensure that there is going to be a next round.
 func (s *Scheduler) syncLoop() {
 	for {
 		s.lock.Lock()
-		for {
-			s.processModules()
-			if !s.targetChanged() {
-				break
-			}
-		}
-		s.sendRequests()
+		s.processRound()
 		s.lock.Unlock()
 	loop:
 		for {
@@ -220,6 +227,8 @@ func (s *Scheduler) syncLoop() {
 	}
 }
 
+// targetChanged returns true if a registered target data structure has been
+// changed since the last call to this function.
 func (s *Scheduler) targetChanged() (changed bool) {
 	for target, counter := range s.targets {
 		if newCounter := target.ChangeCounter(); newCounter != counter {
@@ -230,17 +239,31 @@ func (s *Scheduler) targetChanged() (changed bool) {
 	return
 }
 
-// processModules runs an entire processing round, calling the Process functions
-// of all modules, passing all relevant events.
-func (s *Scheduler) processModules() {
-	serverEvents, requestEvents := s.filterEvents()
-	log.Debug("Processing modules", "server events", len(serverEvents))
-	for _, module := range s.modules {
-		log.Debug("Processing module", "name", s.names[module], "request events", len(requestEvents[module]))
-		module.Process(append(serverEvents, requestEvents[module]...))
+// processRound runs an entire processing round. It calls the Process functions
+// of all modules, passing all relevant events and repeating Process calls as
+// long as any changes have been made to the registered target data structures.
+// Once all events have been processed and a stable state has been achieved,
+// requests are generated and sent if necessary and possible.
+func (s *Scheduler) processRound() {
+	for {
+		serverEvents, requestEvents := s.filterEvents()
+		log.Debug("Processing modules", "server events", len(serverEvents))
+		for _, module := range s.modules {
+			log.Debug("Processing module", "name", s.names[module], "request events", len(requestEvents[module]))
+			module.Process(append(serverEvents, requestEvents[module]...))
+		}
+		if !s.targetChanged() {
+			break
+		}
 	}
+	s.sendRequests()
 }
 
+// sendRequests lets each module generate a request if necessary and sends it to
+// a suitable server if possible.
+// Note that if a request is sent, an EvRequest event will immediately trigger a
+// next processing round, thereby allowing modules to create any number of requests
+// in any suitable moment as long as there is a server that can accept them.
 func (s *Scheduler) sendRequests() {
 	servers := make(map[server]struct{})
 	for server := range s.servers {
@@ -262,7 +285,7 @@ func (s *Scheduler) sendRequests() {
 
 // tryRequest tries to generate request candidates for a given module and a given
 // set of servers, then selects the best candidate if there is one and sends the
-// request.
+// request to the server it was generated for.
 // The candidates are primarily ranked based on "request priority", a number that
 // Module.MakeRequest has returned along with the request candidate. This ranking
 // may or may not be used depending on the type of the request, identical requests
@@ -272,6 +295,8 @@ func (s *Scheduler) sendRequests() {
 // ranked based on "server priority" which is determined by the server. This value
 // is typically higher is the server is expected to respond quicker or with a
 // higher chance (typically a lower number of pending requests).
+// Note that tryRequest can also remove items from the set of available servers
+// if they are no longer able to accept requests in the current processing round.
 func (s *Scheduler) tryRequest(module Module, servers map[server]struct{}) bool {
 	var (
 		maxServerPriority, maxRequestPriority float32
@@ -303,8 +328,8 @@ func (s *Scheduler) tryRequest(module Module, servers map[server]struct{}) bool 
 	if bestServer == nil {
 		return false
 	}
-	id := ServerAndID{Server: bestServer, ID: bestServer.sendRequest(bestRequest)}
-	s.pending[id] = pendingRequest{request: bestRequest, module: module}
+	sid := ServerAndID{Server: bestServer, ID: bestServer.sendRequest(bestRequest)}
+	s.pending[sid] = pendingRequest{request: bestRequest, module: module}
 	return true
 }
 
@@ -348,39 +373,48 @@ func (s *Scheduler) filterEvents() (serverEvents []Event, requestEvents map[Modu
 			log.Error("Server interface type unknown for Scheduler")
 			continue
 		}
-		if event.Type == EvRegistered {
-			s.servers[server] = struct{}{}
+		if _, ok := s.servers[server]; !ok && event.Type != EvRegistered {
+			continue // before EvRegister or after EvUnregister, discard
 		}
-		if _, ok := s.servers[server]; !ok {
-			continue
-		}
+
 		if event.IsRequestEvent() {
 			sid, _, _ := event.RequestInfo()
-			if pr, ok := s.pending[sid]; ok {
-				requestEvents[pr.module] = append(requestEvents[pr.module], event)
-				if event.Type == EvResponse || event.Type == EvFail {
-					delete(s.pending, sid)
-				}
+			pending, ok := s.pending[sid]
+			if !ok {
+				continue // request already closed, ignore further events
 			}
-			return
-		}
-		if event.Type == EvUnregistered {
-			delete(s.servers, server)
-			for id, pending := range s.pending {
-				if id.Server != event.Server {
-					continue
-				}
-				requestEvents[pending.module] = append(requestEvents[pending.module], Event{
-					Type:   EvFail,
-					Server: event.Server,
-					Data: RequestResponse{
-						ID:      id.ID,
-						Request: pending.request,
-					},
-				})
+			if event.Type == EvResponse || event.Type == EvFail {
+				delete(s.pending, sid) // final event, close pending request
 			}
+			requestEvents[pending.module] = append(requestEvents[pending.module], event)
+		} else {
+			switch event.Type {
+			case EvRegistered:
+				s.servers[server] = struct{}{}
+			case EvUnregistered:
+				s.closePending(event.Server, requestEvents)
+				delete(s.servers, server)
+			}
+			serverEvents = append(serverEvents, event)
 		}
-		serverEvents = append(serverEvents, event)
 	}
 	return
+}
+
+// closePending closes all pending requests to the given server and adds an EvFail
+// event to properly finalize them
+func (s *Scheduler) closePending(server Server, requestEvents map[Module][]Event) {
+	for sid, pending := range s.pending {
+		if sid.Server == server {
+			requestEvents[pending.module] = append(requestEvents[pending.module], Event{
+				Type:   EvFail,
+				Server: server,
+				Data: RequestResponse{
+					ID:      sid.ID,
+					Request: pending.request,
+				},
+			})
+			delete(s.pending, sid)
+		}
+	}
 }
