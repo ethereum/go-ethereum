@@ -49,6 +49,12 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+
+	// Only used for eth_fillTransaction ing a
+	// blob transaction.
+	Blobs       []hexutil.Bytes `json:"blobs,omitempty"`
+	Commitments []hexutil.Bytes `json:"commitments,omitempty"`
+	Proofs      []hexutil.Bytes `json:"proofs,omitempty"`
 }
 
 // yParityValue returns the YParity value from JSON. For backwards-compatibility reasons,
@@ -142,6 +148,19 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+		if sidecar := itx.Sidecar; sidecar != nil {
+			if len(sidecar.Blobs) != len(sidecar.Commitments) && len(sidecar.Blobs) != len(sidecar.Proofs) {
+				return nil, errors.New("blob fields count mismatch")
+			}
+			enc.Blobs = make([]hexutil.Bytes, len(sidecar.Blobs))
+			enc.Commitments = make([]hexutil.Bytes, len(sidecar.Commitments))
+			enc.Proofs = make([]hexutil.Bytes, len(sidecar.Proofs))
+			for i, b := range sidecar.Blobs {
+				enc.Blobs[i] = b[:]
+				enc.Commitments[i] = sidecar.Commitments[i][:]
+				enc.Proofs[i] = sidecar.Proofs[i][:]
+			}
+		}
 	}
 	return json.Marshal(&enc)
 }
