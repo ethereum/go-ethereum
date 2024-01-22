@@ -17,7 +17,7 @@ ZK-Rollup adapts the Go Ethereum to run as Layer 2 Sequencer. The codebase is ba
 
 Another implement for storage trie, base on patricia merkle tree, has been induced. It is feasible to zk proving in the storage part. It is specified as a flag in gensis, set `config.scroll.useZktrie` to true for enabling it.
 
-Notice current the snapshot would be disabled by the zktrie implement.
+Notice that currently the snapshot would be disabled by the zktrie implement.
 
 ## Building the source
 
