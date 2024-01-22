@@ -152,19 +152,9 @@ func (h accountBloomHasher) Sum64() uint64 {
 	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
-// storageBloomHasher is a wrapper around a [2]common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert an account
-// hash into a 64 bit mini hash.
-type storageBloomHasher [2]common.Hash
-
-func (h storageBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h storageBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h storageBloomHasher) Reset()                            { panic("not implemented") }
-func (h storageBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h storageBloomHasher) Size() int                         { return 8 }
-func (h storageBloomHasher) Sum64() uint64 {
-	return binary.BigEndian.Uint64(h[0][bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
-		binary.BigEndian.Uint64(h[1][bloomStorageHasherOffset:bloomStorageHasherOffset+8])
+func storageBloomHasher(h0, h1 common.Hash) uint64 {
+	return binary.BigEndian.Uint64(h0[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
+		binary.BigEndian.Uint64(h1[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -240,7 +230,7 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	}
 	for accountHash, slots := range dl.storageData {
 		for storageHash := range slots {
-			dl.diffed.Add(storageBloomHasher{accountHash, storageHash})
+			dl.diffed.AddHash(storageBloomHasher(accountHash, storageHash))
 		}
 	}
 	// Calculate the current false positive rate and update the error rate meter.
@@ -372,7 +362,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
-	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
+	hit := dl.diffed.ContainsHash(storageBloomHasher(accountHash, storageHash))
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(accountHash))
 	}
