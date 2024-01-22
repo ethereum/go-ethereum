@@ -1,3 +1,5 @@
+`suave-execution-geth` is a minimal fork of geth which implements the [SUAVE Execution Namespace](suave-execution-geth). The namespace is turned on by default for http and ipc.
+
 ## Go Ethereum
 
 Official Golang execution layer implementation of the Ethereum protocol.
