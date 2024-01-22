@@ -124,31 +124,14 @@ type diffLayer struct {
 	lock sync.RWMutex
 }
 
-// destructBloomHasher is a wrapper around a common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert a destruct
-// event into a 64 bit mini hash.
-type destructBloomHasher common.Hash
-
-func (h destructBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h destructBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h destructBloomHasher) Reset()                            { panic("not implemented") }
-func (h destructBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h destructBloomHasher) Size() int                         { return 8 }
-func (h destructBloomHasher) Sum64() uint64 {
+func destructBloomHasher(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
 }
 
 // accountBloomHasher is a wrapper around a common.Hash to satisfy the interface
 // API requirements of the bloom library used. It's used to convert an account
 // hash into a 64 bit mini hash.
-type accountBloomHasher common.Hash
-
-func (h accountBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h accountBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h accountBloomHasher) Reset()                            { panic("not implemented") }
-func (h accountBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h accountBloomHasher) Size() int                         { return 8 }
-func (h accountBloomHasher) Sum64() uint64 {
+func accountBloomHasher(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
@@ -223,10 +206,10 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	}
 	// Iterate over all the accounts and storage slots and index them
 	for hash := range dl.destructSet {
-		dl.diffed.Add(destructBloomHasher(hash))
+		dl.diffed.AddHash(destructBloomHasher(hash))
 	}
 	for hash := range dl.accountData {
-		dl.diffed.Add(accountBloomHasher(hash))
+		dl.diffed.AddHash(accountBloomHasher(hash))
 	}
 	for accountHash, slots := range dl.storageData {
 		for storageHash := range slots {
@@ -291,9 +274,9 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	hit := dl.diffed.Contains(accountBloomHasher(hash))
+	hit := dl.diffed.ContainsHash(accountBloomHasher(hash))
 	if !hit {
-		hit = dl.diffed.Contains(destructBloomHasher(hash))
+		hit = dl.diffed.ContainsHash(destructBloomHasher(hash))
 	}
 	var origin *diskLayer
 	if !hit {
@@ -364,7 +347,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	}
 	hit := dl.diffed.ContainsHash(storageBloomHasher(accountHash, storageHash))
 	if !hit {
-		hit = dl.diffed.Contains(destructBloomHasher(accountHash))
+		hit = dl.diffed.ContainsHash(destructBloomHasher(accountHash))
 	}
 	var origin *diskLayer
 	if !hit {
