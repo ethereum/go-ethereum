@@ -3961,6 +3961,8 @@ var outputSyncingFormatter = function(result) {
     result.healedBytecodeBytes = utils.toDecimal(result.healedBytecodeBytes);
     result.healingTrienodes = utils.toDecimal(result.healingTrienodes);
     result.healingBytecode = utils.toDecimal(result.healingBytecode);
+    result.txIndexFinishedBlocks = utils.toDecimal(result.txIndexFinishedBlocks);
+    result.txIndexRemainingBlocks = utils.toDecimal(result.txIndexRemainingBlocks);
 
     return result;
 };

@@ -308,9 +308,25 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 	return b.eth.txPool.Get(hash)
 }
 
-func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
-	return tx, blockHash, blockNumber, index, nil
+// GetTransaction retrieves the lookup along with the transaction itself associate
+// with the given transaction hash.
+//
+// An error will be returned if the transaction is not found, and background
+// indexing for transactions is still in progress. The error is used to indicate the
+// scenario explicitly that the transaction might be reachable shortly.
+//
+// A null will be returned in the transaction is not found and background transaction
+// indexing is already finished. The transaction is not existent from the perspective
+// of node.
+func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+	lookup, tx, err := b.eth.blockchain.GetTransactionLookup(txHash)
+	if err != nil {
+		return false, nil, common.Hash{}, 0, 0, err
+	}
+	if lookup == nil || tx == nil {
+		return false, nil, common.Hash{}, 0, 0, nil
+	}
+	return true, tx, lookup.BlockHash, lookup.BlockIndex, lookup.Index, nil
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
@@ -338,7 +354,12 @@ func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 }
 
 func (b *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
-	return b.eth.Downloader().Progress()
+	prog := b.eth.Downloader().Progress()
+	if txProg, err := b.eth.blockchain.TxIndexProgress(); err == nil {
+		prog.TxIndexFinishedBlocks = txProg.Indexed
+		prog.TxIndexRemainingBlocks = txProg.Remaining
+	}
+	return prog
 }
 
 func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {

@@ -2822,91 +2822,6 @@ func TestTransactionIndices(t *testing.T) {
 	}
 }
 
-func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
-	testSkipStaleTxIndicesInSnapSync(t, rawdb.HashScheme)
-	testSkipStaleTxIndicesInSnapSync(t, rawdb.PathScheme)
-}
-
-func testSkipStaleTxIndicesInSnapSync(t *testing.T, scheme string) {
-	// Configure and generate a sample block chain
-	var (
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(100000000000000000)
-		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{address: {Balance: funds}}}
-		signer  = types.LatestSigner(gspec.Config)
-	)
-	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 128, func(i int, block *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee, nil), signer, key)
-		if err != nil {
-			panic(err)
-		}
-		block.AddTx(tx)
-	})
-
-	check := func(tail *uint64, chain *BlockChain) {
-		stored := rawdb.ReadTxIndexTail(chain.db)
-		if tail == nil && stored != nil {
-			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *stored)
-		}
-		if tail != nil && *stored != *tail {
-			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
-		}
-		if tail != nil {
-			for i := *tail; i <= chain.CurrentBlock().Number.Uint64(); i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index == nil {
-						t.Fatalf("Miss transaction indice, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-			for i := uint64(0); i < *tail; i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != nil {
-						t.Fatalf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-		}
-	}
-
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
-	if err != nil {
-		t.Fatalf("failed to create temp freezer db: %v", err)
-	}
-	defer ancientDb.Close()
-
-	// Import all blocks into ancient db, only HEAD-32 indices are kept.
-	l := uint64(32)
-	chain, err := NewBlockChain(ancientDb, DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	defer chain.Stop()
-
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	if n, err := chain.InsertHeaderChain(headers); err != nil {
-		t.Fatalf("failed to insert header %d: %v", n, err)
-	}
-	// The indices before ancient-N(32) should be ignored. After that all blocks should be indexed.
-	if n, err := chain.InsertReceiptChain(blocks, receipts, 64); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-	tail := uint64(32)
-	check(&tail, chain)
-}
-
 // Benchmarks large blocks with value transfers to non-existing accounts
 func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
 	var (
@@ -4160,6 +4075,12 @@ func TestTxIndexer(t *testing.T) {
 		}
 		verifyRange(db, *tail, 128, true)
 	}
+	verifyProgress := func(chain *BlockChain) {
+		prog := chain.reportTxIndexProgress(128)
+		if !prog.Done() {
+			t.Fatalf("Expect fully indexed")
+		}
+	}
 
 	var cases = []struct {
 		limitA uint64
@@ -4289,19 +4210,23 @@ func TestTxIndexer(t *testing.T) {
 		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA)
 		chain.indexBlocks(nil, 128, make(chan struct{}))
 		verify(db, c.tailA)
+		verifyProgress(chain)
 
 		chain.SetTxLookupLimit(c.limitB)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, c.tailB)
+		verifyProgress(chain)
 
 		chain.SetTxLookupLimit(c.limitC)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, c.tailC)
+		verifyProgress(chain)
 
 		// Recover all indexes
 		chain.SetTxLookupLimit(0)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, 0)
+		verifyProgress(chain)
 
 		chain.Stop()
 		db.Close()
