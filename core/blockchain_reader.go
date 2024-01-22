@@ -444,9 +444,3 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
-
-// SubscribeTxIndexEvent registers a subscription of bool where true means
-// transaction indexing has finished.
-func (bc *BlockChain) SubscribeTxIndexEvent(ch chan<- bool) event.Subscription {
-	return bc.scope.Track(bc.txIndexFeed.Subscribe(ch))
-}

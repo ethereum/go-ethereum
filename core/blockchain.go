@@ -244,7 +244,6 @@ type BlockChain struct {
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
-	txIndexFeed   event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -267,10 +266,12 @@ type BlockChain struct {
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 
 	wg            sync.WaitGroup
-	quit          chan struct{}             // shutdown signal, closed in Stop.
-	stopping      atomic.Bool               // false if chain is running, true when stopped
-	procInterrupt atomic.Bool               // interrupt signaler for block processing
-	txIndexProgCh chan chan TxIndexProgress // chan for querying the progress of transaction indexing
+	quit          chan struct{} // shutdown signal, closed in Stop.
+	stopping      atomic.Bool   // false if chain is running, true when stopped
+	procInterrupt atomic.Bool   // interrupt signaler for block processing
+
+	txIndexRunning bool                      // flag if the background tx indexer is activated
+	txIndexProgCh  chan chan TxIndexProgress // chan for querying the progress of transaction indexing
 
 	engine     consensus.Engine
 	validator  Validator // Block and state validator interface
@@ -487,6 +488,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Start tx indexer/unindexer if required.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
+		bc.txIndexRunning = true
 
 		bc.wg.Add(1)
 		go bc.maintainTxIndex()
@@ -2462,7 +2464,7 @@ func (bc *BlockChain) reportTxIndexProgress(head uint64) TxIndexProgress {
 		indexed = head - *tail + 1
 	}
 	// The value of indexed might be larger than total if some blocks need
-	// to unindexed, avoiding a negative remaining.
+	// to be unindexed, avoiding a negative remaining.
 	if indexed < total {
 		remaining = total - indexed
 	}
@@ -2472,8 +2474,12 @@ func (bc *BlockChain) reportTxIndexProgress(head uint64) TxIndexProgress {
 	}
 }
 
-// TxIndexProgress retrieves the tx indexing progress.
+// TxIndexProgress retrieves the tx indexing progress, or an error if the
+// background tx indexer is not activated or already stopped.
 func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
+	if !bc.txIndexRunning {
+		return TxIndexProgress{}, errors.New("tx indexer is not activated")
+	}
 	ch := make(chan TxIndexProgress, 1)
 	select {
 	case bc.txIndexProgCh <- ch:
@@ -2527,14 +2533,6 @@ func (bc *BlockChain) maintainTxIndex() {
 			lastHead = head.Block.NumberU64()
 		case <-done:
 			done = nil
-
-			// WARNING, the event will be fired for each signal once the
-			// transaction indexing is finished. Subscribers need to manage
-			// the event stream by themselves. It's recommended to unsubscribe
-			// once the event is received.
-			if bc.reportTxIndexProgress(lastHead).Done() {
-				bc.txIndexFeed.Send(true)
-			}
 		case ch := <-bc.txIndexProgCh:
 			ch <- bc.reportTxIndexProgress(lastHead)
 		case <-bc.quit:

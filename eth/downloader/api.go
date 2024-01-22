@@ -19,6 +19,7 @@ package downloader
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
@@ -57,25 +58,33 @@ func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *
 // new sync subscriptions and broadcasts sync status updates to the installed sync
 // subscriptions.
 //
-// The sync status pushed to subscriptions can a stream like:
+// The sync status pushed to subscriptions can be a stream like:
 // >>> {Syncing: true, Progress: {...}}
 // >>> {false}
 //
-// If the node is already synced up, then only a single event will be pushed {false}.
+// If the node is already synced up, then only a single event subscribers will
+// receive is {false}.
 func (api *DownloaderAPI) eventLoop() {
 	var (
 		sub               = api.mux.Subscribe(StartEvent{})
 		syncSubscriptions = make(map[chan interface{}]struct{})
-		txIndexCh         = make(chan bool, 1)
-		done              bool
-	)
-	txIndexSub := api.chain.SubscribeTxIndexEvent(txIndexCh)
-	defer func() {
-		if txIndexSub == nil {
-			return
+		checkInterval     = time.Second * 30
+		checkTimer        = time.NewTimer(checkInterval)
+
+		// status flags
+		started bool
+		done    bool
+
+		getProgress = func() ethereum.SyncProgress {
+			prog := api.d.Progress()
+			if txProg, err := api.chain.TxIndexProgress(); err == nil {
+				prog.TxIndexFinishedBlocks = txProg.Indexed
+				prog.TxIndexRemainingBlocks = txProg.Remaining
+			}
+			return prog
 		}
-		txIndexSub.Unsubscribe()
-	}()
+	)
+	defer checkTimer.Stop()
 
 	for {
 		select {
@@ -93,11 +102,7 @@ func (api *DownloaderAPI) eventLoop() {
 			}
 			switch event.Data.(type) {
 			case StartEvent:
-				prog := api.d.Progress()
-				if txProg, err := api.chain.TxIndexProgress(); err == nil {
-					prog.TxIndexFinishedBlocks = txProg.Indexed
-					prog.TxIndexRemainingBlocks = txProg.Remaining
-				}
+				prog := getProgress()
 				notification := &SyncingResult{
 					Syncing: true,
 					Status:  prog,
@@ -106,30 +111,22 @@ func (api *DownloaderAPI) eventLoop() {
 				for c := range syncSubscriptions {
 					c <- notification
 				}
+				started = true
 			}
-		case synced := <-txIndexCh:
-			if !synced {
+		case <-checkTimer.C:
+			if !started {
+				checkTimer.Reset(checkInterval)
 				continue
 			}
-			prog := api.d.Progress()
+			prog := getProgress()
 			if !prog.Done() {
-				continue
-			}
-			txProg, err := api.chain.TxIndexProgress()
-			if err != nil || !txProg.Done() {
+				checkTimer.Reset(checkInterval)
 				continue
 			}
 			for c := range syncSubscriptions {
 				c <- false
 			}
 			done = true
-
-			// Unsubscribe the tx indexing events as the whole
-			// state sync is already finished.
-			if txIndexSub != nil {
-				txIndexSub.Unsubscribe()
-				txIndexSub = nil
-			}
 		}
 	}
 }
