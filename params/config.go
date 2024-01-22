@@ -757,6 +757,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
+	case c.IsPrague(london, time):
+		return forks.Prague
 	case c.IsCancun(london, time):
 		return forks.Cancun
 	case c.IsShanghai(london, time):
