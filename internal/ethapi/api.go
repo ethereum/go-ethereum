@@ -1517,7 +1517,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			tmp := hexutil.Uint64(b.RPCGasCap())
 			args.Gas = &tmp
 		} else {
-			tmp := hexutil.Uint64(b.CurrentBlock().GasLimit)
+			tmp := hexutil.Uint64(math.MaxUint64 / 2)
 			args.Gas = &tmp
 		}
 	}
