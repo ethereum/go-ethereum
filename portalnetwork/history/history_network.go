@@ -2,10 +2,12 @@ package history
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -53,12 +55,20 @@ func (c *ContentKey) encode() []byte {
 type HistoryNetwork struct {
 	portalProtocol    *discover.PortalProtocol
 	masterAccumulator *MasterAccumulator
+	closeCtx          context.Context
+	closeFunc         context.CancelFunc
+	log               log.Logger
 }
 
 func NewHistoryNetwork(portalProtocol *discover.PortalProtocol, accu *MasterAccumulator) *HistoryNetwork {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &HistoryNetwork{
 		portalProtocol:    portalProtocol,
 		masterAccumulator: accu,
+		closeCtx:          ctx,
+		closeFunc:         cancel,
+		log:               log.New("sub-protocol", "history"),
 	}
 }
 
@@ -67,8 +77,13 @@ func (h *HistoryNetwork) Start() error {
 	if err != nil {
 		return err
 	}
-	go h.processContentLoop()
+	go h.processContentLoop(h.closeCtx)
 	return nil
+}
+
+func (h *HistoryNetwork) Stop() {
+	h.closeFunc()
+	h.portalProtocol.Stop()
 }
 
 // Currently doing 4 retries on lookups but only when the validation fails.
@@ -83,7 +98,7 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 
 	res, err := h.portalProtocol.Get(contentId)
 	// other error
-	if err != nil && err != storage.ErrContentNotFound {
+	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
 	}
 	// no error
@@ -455,14 +470,25 @@ func ToPortalReceipts(receipts []*types.Receipt) (*PortalReceipts, error) {
 	return &PortalReceipts{Receipts: res}, nil
 }
 
-func (h *HistoryNetwork) processContentLoop() {
+func (h *HistoryNetwork) processContentLoop(ctx context.Context) {
 	contentChan := h.portalProtocol.GetContent()
-	for contentElement := range contentChan {
-		err := h.validateContents(contentElement.ContentKeys, contentElement.Contents)
-		if err != nil {
-			continue
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case contentElement := <-contentChan:
+			err := h.validateContents(contentElement.ContentKeys, contentElement.Contents)
+			if err != nil {
+				h.log.Error("validate content failed", "err", err)
+				continue
+			}
+			gossippedNum, err := h.portalProtocol.NeighborhoodGossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
+			h.log.Trace("gossippedNum", "gossippedNum", gossippedNum)
+			if err != nil {
+				h.log.Error("gossip failed", "err", err)
+				continue
+			}
 		}
-		// TODO gossip the validate content
 	}
 }
 

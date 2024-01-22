@@ -37,6 +37,17 @@ const (
 	OfferRequestDatabase byte = 0x01
 )
 
+const (
+	ContentKeysLimit = 64
+	// OfferMessageOverhead overhead of content message is a result of 1byte for kind enum, and
+	// 4 bytes for offset in ssz serialization
+	OfferMessageOverhead = 5
+
+	// PerContentKeyOverhead each key in ContentKeysList has uint32 offset which results in 4 bytes per
+	// key overhead when serialized
+	PerContentKeyOverhead = 4
+)
+
 type ContentKV struct {
 	ContentKey []byte
 	Content    []byte

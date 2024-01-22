@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/rand"
 	"net"
 	"sort"
 	"time"
@@ -57,6 +58,20 @@ const (
 	defaultUTPWriteTimeout = 60 * time.Second
 
 	defaultUTPReadTimeout = 60 * time.Second
+
+	// These are the concurrent offers per Portal wire protocol that is running.
+	// Using the `offerQueue` allows for limiting the amount of offers send and
+	// thus how many streams can be started.
+	// TODO:
+	// More thought needs to go into this as it is currently on a per network
+	// basis. Keep it simple like that? Or limit it better at the stream transport
+	// level? In the latter case, this might still need to be checked/blocked at
+	// the very start of sending the offer, because blocking/waiting too long
+	// between the received accept message and actually starting the stream and
+	// sending data could give issues due to timeouts on the other side.
+	// And then there are still limits to be applied also for FindContent and the
+	// incoming directions.
+	concurrentOffers = 50
 )
 
 const (
@@ -90,6 +105,11 @@ type PersistOfferRequest struct {
 type OfferRequest struct {
 	Kind    byte
 	Request interface{}
+}
+
+type OfferRequestWithNode struct {
+	Request *OfferRequest
+	Node    *enode.Node
 }
 
 type PortalProtocolOption func(p *PortalProtocol)
@@ -142,6 +162,7 @@ type PortalProtocol struct {
 	toContentId    func(contentKey []byte) []byte
 
 	contentQueue chan *ContentElement
+	offerQueue   chan *OfferRequestWithNode
 }
 
 func defaultContentIdFunc(contentKey []byte) []byte {
@@ -175,6 +196,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		storage:        storage,
 		toContentId:    defaultContentIdFunc,
 		contentQueue:   contentQueue,
+		offerQueue:     make(chan *OfferRequestWithNode, concurrentOffers),
 	}
 
 	for _, opt := range opts {
@@ -194,7 +216,21 @@ func (p *PortalProtocol) Start() error {
 	p.DiscV5.RegisterTalkHandler(portalwire.UTPNetwork, p.handleUtpTalkRequest)
 
 	go p.table.loop()
+
+	for i := 0; i < concurrentOffers; i++ {
+		go p.offerWorker()
+	}
 	return nil
+}
+
+func (p *PortalProtocol) Stop() {
+	p.cancelCloseCtx()
+	p.table.close()
+	p.DiscV5.Close()
+	err := p.utp.Close()
+	if err != nil {
+		p.log.Error("failed to close utp listener", "err", err)
+	}
 }
 
 func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
@@ -865,7 +901,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 	}
 
 	if errors.Is(err, ContentNotFound) {
-		closestNodes := p.findNodesCloseToContent(contentId)
+		closestNodes := p.findNodesCloseToContent(contentId, portalFindnodesResultLimit)
 		for i, n := range closestNodes {
 			if n.ID() == id {
 				closestNodes = append(closestNodes[:i], closestNodes[i+1:]...)
@@ -1233,6 +1269,21 @@ func (p *PortalProtocol) lookupWorker(destNode *node, target enode.ID) ([]*node,
 	return nodes.entries, err
 }
 
+func (p *PortalProtocol) offerWorker() {
+	for {
+		select {
+		case <-p.closeCtx.Done():
+			return
+		case offerRequestWithNode := <-p.offerQueue:
+			p.log.Trace("offerWorker", "offerRequestWithNode", offerRequestWithNode)
+			_, err := p.offer(offerRequestWithNode.Node, offerRequestWithNode.Request)
+			if err != nil {
+				p.log.Error("failed to offer", "err", err)
+			}
+		}
+	}
+}
+
 func (p *PortalProtocol) truncateNodes(nodes []*enode.Node, maxSize int, enrOverhead int) [][]byte {
 	res := make([][]byte, 0)
 	totalSize := 0
@@ -1253,14 +1304,14 @@ func (p *PortalProtocol) truncateNodes(nodes []*enode.Node, maxSize int, enrOver
 	return res
 }
 
-func (p *PortalProtocol) findNodesCloseToContent(contentId []byte) []*enode.Node {
+func (p *PortalProtocol) findNodesCloseToContent(contentId []byte, limit int) []*enode.Node {
 	allNodes := p.table.Nodes()
 	sort.Slice(allNodes, func(i, j int) bool {
 		return enode.LogDist(allNodes[i].ID(), enode.ID(contentId)) < enode.LogDist(allNodes[j].ID(), enode.ID(contentId))
 	})
 
-	if len(allNodes) > portalFindnodesResultLimit {
-		allNodes = allNodes[:portalFindnodesResultLimit]
+	if len(allNodes) > limit {
+		allNodes = allNodes[:limit]
 	} else {
 		allNodes = allNodes[:]
 	}
@@ -1410,6 +1461,149 @@ func (p *PortalProtocol) GetContent() <-chan *ContentElement {
 	return p.contentQueue
 }
 
+func (p *PortalProtocol) NeighborhoodGossip(srcNodeId *enode.ID, contentKeys [][]byte, content [][]byte) (int, error) {
+	if len(content) == 0 {
+		return 0, errors.New("empty content")
+	}
+
+	contentList := make([]*ContentEntry, 0, portalwire.ContentKeysLimit)
+	for i := 0; i < len(content); i++ {
+		contentEntry := &ContentEntry{
+			ContentKey: contentKeys[i],
+			Content:    content[i],
+		}
+		contentList = append(contentList, contentEntry)
+	}
+
+	contentId := p.toContentId(contentKeys[0])
+	if contentId == nil {
+		return 0, ErrNilContentKey
+	}
+
+	// For selecting the closest nodes to whom to gossip the content a mixed
+	// approach is taken:
+	// 1. Select the closest neighbours in the routing table
+	// 2. Check if the radius is known for these these nodes and whether they are
+	// in range of the content to be offered.
+	// 3. If more than n (= 8) nodes are in range, offer these nodes the content
+	// (max nodes set at 8).
+	// 4. If less than n nodes are in range, do a node lookup, and offer the nodes
+	// returned from the lookup the content (max nodes set at 8)
+	//
+	// This should give a bigger rate of success and avoid the data being stopped
+	// in its propagation than when looking only for nodes in the own routing
+	// table, but at the same time avoid unnecessary node lookups.
+	// It might still cause issues in data getting propagated in a wider id range.
+	maxGossipNodes := 8
+
+	closestLocalNodes := p.findNodesCloseToContent(contentId, 16)
+
+	gossipNodes := make([]*enode.Node, 0)
+	for _, n := range closestLocalNodes {
+		radius, found := p.radiusCache.HasGet(nil, []byte(n.ID().String()))
+		if found {
+			nodeRadius := new(uint256.Int)
+			err := nodeRadius.UnmarshalSSZ(radius)
+			if err != nil {
+				return 0, err
+			}
+			if inRange(n.ID(), nodeRadius, contentId) {
+				if srcNodeId == nil {
+					gossipNodes = append(gossipNodes, n)
+				} else if n.ID() != *srcNodeId {
+					gossipNodes = append(gossipNodes, n)
+				}
+			}
+		}
+	}
+
+	if len(gossipNodes) >= maxGossipNodes {
+		numberOfGossipedNodes := min(len(gossipNodes), maxGossipNodes)
+		for _, n := range gossipNodes[:numberOfGossipedNodes] {
+			transientOfferRequest := &TransientOfferRequest{
+				Contents: contentList,
+			}
+
+			offerRequest := &OfferRequest{
+				Kind:    TransientOfferRequestKind,
+				Request: transientOfferRequest,
+			}
+
+			offerRequestWithNode := &OfferRequestWithNode{
+				Node:    n,
+				Request: offerRequest,
+			}
+			p.offerQueue <- offerRequestWithNode
+		}
+
+		return numberOfGossipedNodes, nil
+	} else {
+		closestNodes := p.Lookup(enode.ID(contentId))
+		numberOfGossipedNodes := min(len(closestNodes), maxGossipNodes)
+		// Note: opportunistically not checking if the radius of the node is known
+		// and thus if the node is in radius with the content. Reason is, these
+		// should really be the closest nodes in the DHT, and thus are most likely
+		// going to be in range of the requested content.
+		for _, n := range closestNodes[:numberOfGossipedNodes] {
+			transientOfferRequest := &TransientOfferRequest{
+				Contents: contentList,
+			}
+
+			offerRequest := &OfferRequest{
+				Kind:    TransientOfferRequestKind,
+				Request: transientOfferRequest,
+			}
+
+			offerRequestWithNode := &OfferRequestWithNode{
+				Node:    n,
+				Request: offerRequest,
+			}
+			p.offerQueue <- offerRequestWithNode
+		}
+
+		return numberOfGossipedNodes, nil
+	}
+}
+
+func (p *PortalProtocol) RandomGossip(srcNodeId *enode.ID, contentKeys [][]byte, content [][]byte) (int, error) {
+	if len(content) == 0 {
+		return 0, errors.New("empty content")
+	}
+
+	contentList := make([]*ContentEntry, 0, portalwire.ContentKeysLimit)
+	for i := 0; i < len(content); i++ {
+		contentEntry := &ContentEntry{
+			ContentKey: contentKeys[i],
+			Content:    content[i],
+		}
+		contentList = append(contentList, contentEntry)
+	}
+
+	maxGossipNodes := 4
+	nodes := RandomNodes(p.table, maxGossipNodes, func(node *enode.Node) bool {
+		return srcNodeId == nil || node.ID() != *srcNodeId
+	})
+
+	for _, n := range nodes {
+		transientOfferRequest := &TransientOfferRequest{
+			Contents: contentList,
+		}
+
+		offerRequest := &OfferRequest{
+			Kind:    TransientOfferRequestKind,
+			Request: transientOfferRequest,
+		}
+
+		offerRequestWithNode := &OfferRequestWithNode{
+			Node:    n,
+			Request: offerRequest,
+		}
+		p.offerQueue <- offerRequestWithNode
+	}
+
+	return len(nodes), nil
+}
+
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
 	distance := enode.LogDist(nodeId, enode.ID(contentId))
 	disBig := new(big.Int).SetInt64(int64(distance))
@@ -1467,5 +1661,33 @@ func getContentKeys(request *OfferRequest) [][]byte {
 		return contentKeys
 	} else {
 		return request.Request.(*PersistOfferRequest).ContentKeys
+	}
+}
+
+func RandomNodes(table *Table, maxCount int, pred func(node *enode.Node) bool) []*enode.Node {
+	maxAmount := maxCount
+	tableCount := table.len()
+	if maxAmount > tableCount {
+		maxAmount = tableCount
+	}
+
+	var result []*enode.Node
+	var seen = make(map[enode.ID]struct{})
+
+	for {
+		if len(result) >= maxAmount {
+			return result
+		}
+
+		b := table.buckets[rand.Intn(len(table.buckets))]
+		if len(b.entries) != 0 {
+			n := b.entries[rand.Intn(len(b.entries))]
+			if _, ok := seen[n.ID()]; !ok {
+				seen[n.ID()] = struct{}{}
+				if pred == nil || pred(&n.Node) {
+					result = append(result, &n.Node)
+				}
+			}
+		}
 	}
 }

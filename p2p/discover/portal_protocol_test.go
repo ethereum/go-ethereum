@@ -299,6 +299,50 @@ func TestPortalWireProtocol(t *testing.T) {
 	assert.Equal(t, testEntry1.Content, contentElement.Contents[0])
 	assert.Equal(t, testEntry2.ContentKey, contentElement.ContentKeys[1])
 	assert.Equal(t, testEntry2.Content, contentElement.Contents[1])
+
+	testGossipContentKeys := [][]byte{[]byte("test_gossip_content_keys"), []byte("test_gossip_content_keys2")}
+	testGossipContent := [][]byte{[]byte("test_gossip_content"), []byte("test_gossip_content2")}
+	gossip, err := node1.NeighborhoodGossip(nil, testGossipContentKeys, testGossipContent)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, gossip)
+
+	contentElement = <-node2.contentQueue
+	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
+	assert.Equal(t, testGossipContentKeys[0], contentElement.ContentKeys[0])
+	assert.Equal(t, testGossipContent[0], contentElement.Contents[0])
+	assert.Equal(t, testGossipContentKeys[1], contentElement.ContentKeys[1])
+	assert.Equal(t, testGossipContent[1], contentElement.Contents[1])
+
+	contentElement = <-node3.contentQueue
+	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
+	assert.Equal(t, testGossipContentKeys[0], contentElement.ContentKeys[0])
+	assert.Equal(t, testGossipContent[0], contentElement.Contents[0])
+	assert.Equal(t, testGossipContentKeys[1], contentElement.ContentKeys[1])
+	assert.Equal(t, testGossipContent[1], contentElement.Contents[1])
+
+	testRandGossipContentKeys := [][]byte{[]byte("test_rand_gossip_content_keys"), []byte("test_rand_gossip_content_keys2")}
+	testRandGossipContent := [][]byte{[]byte("test_rand_gossip_content"), []byte("test_rand_gossip_content2")}
+	randGossip, err := node1.RandomGossip(nil, testRandGossipContentKeys, testRandGossipContent)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, randGossip)
+
+	contentElement = <-node2.contentQueue
+	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
+	assert.Equal(t, testRandGossipContentKeys[0], contentElement.ContentKeys[0])
+	assert.Equal(t, testRandGossipContent[0], contentElement.Contents[0])
+	assert.Equal(t, testRandGossipContentKeys[1], contentElement.ContentKeys[1])
+	assert.Equal(t, testRandGossipContent[1], contentElement.Contents[1])
+
+	contentElement = <-node3.contentQueue
+	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
+	assert.Equal(t, testRandGossipContentKeys[0], contentElement.ContentKeys[0])
+	assert.Equal(t, testRandGossipContent[0], contentElement.Contents[0])
+	assert.Equal(t, testRandGossipContentKeys[1], contentElement.ContentKeys[1])
+	assert.Equal(t, testRandGossipContent[1], contentElement.Contents[1])
+
+	node1.Stop()
+	node2.Stop()
+	node3.Stop()
 }
 
 func TestCancel(t *testing.T) {
