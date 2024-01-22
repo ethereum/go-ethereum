@@ -68,7 +68,7 @@ func (api *DownloaderAPI) eventLoop() {
 	var (
 		sub               = api.mux.Subscribe(StartEvent{})
 		syncSubscriptions = make(map[chan interface{}]struct{})
-		checkInterval     = time.Second * 30
+		checkInterval     = time.Second * 60
 		checkTimer        = time.NewTimer(checkInterval)
 
 		// status flags
@@ -102,15 +102,6 @@ func (api *DownloaderAPI) eventLoop() {
 			}
 			switch event.Data.(type) {
 			case StartEvent:
-				prog := getProgress()
-				notification := &SyncingResult{
-					Syncing: true,
-					Status:  prog,
-				}
-				// broadcast
-				for c := range syncSubscriptions {
-					c <- notification
-				}
 				started = true
 			}
 		case <-checkTimer.C:
@@ -120,6 +111,13 @@ func (api *DownloaderAPI) eventLoop() {
 			}
 			prog := getProgress()
 			if !prog.Done() {
+				notification := &SyncingResult{
+					Syncing: true,
+					Status:  prog,
+				}
+				for c := range syncSubscriptions {
+					c <- notification
+				}
 				checkTimer.Reset(checkInterval)
 				continue
 			}
