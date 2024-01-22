@@ -1124,6 +1124,7 @@ mainloop:
 
 				if ok1 || ok2 {
 					delayFlag = false
+					break
 				}
 
 				for j := range deps[i] {
