@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -36,9 +38,10 @@ import (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
+	config   *params.ChainConfig    // Chain configuration options
+	bc       *BlockChain            // Canonical block chain
+	engine   consensus.Engine       // Consensus engine used for block rewards
+	chainCtx *StatelessChainContext // chain context shim for stateless verification mode
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -50,6 +53,25 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 	}
 }
 
+func NewStatelessStateProcessor(config *params.ChainConfig, chainCtx *StatelessChainContext, engine consensus.Engine) *StateProcessor {
+	return &StateProcessor{
+		config:   config,
+		chainCtx: chainCtx,
+		engine:   engine,
+		bc: &BlockChain{
+			chainConfig: config,
+			engine:      engine,
+		},
+	}
+}
+func (p *StateProcessor) ProcessStateless(witness *state.Witness, block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	return p.process(witness, block, statedb, cfg)
+}
+
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	return p.process(nil, block, statedb, cfg)
+}
+
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
@@ -57,7 +79,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) process(witness *state.Witness, block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -72,10 +94,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
-		context = NewEVMBlockContext(header, p.bc, nil)
-		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+		context vm.BlockContext
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
+	if witness != nil {
+		context = NewStatelessEVMBlockContext(witness, header, p.chainCtx, nil)
+	} else {
+		context = NewEVMBlockContext(header, p.bc, nil)
+	}
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
@@ -98,6 +126,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Number(), block.Time()) {
 		return nil, nil, 0, errors.New("withdrawals before shanghai")
 	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)
 
@@ -188,4 +217,27 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+}
+
+// StatelessChainContext implements a stateless chain context stub
+// which is used in place of a backing blockchain instance.
+type StatelessChainContext struct {
+	chaindb ethdb.Database
+	engine  consensus.Engine
+}
+
+func (s *StatelessChainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
+	//return rawdb.ReadHeader(s.chaindb, hash, number)
+	panic("not implemented")
+}
+
+func (s *StatelessChainContext) Engine() consensus.Engine {
+	return s.engine
+}
+
+func NewStatelessChainContext(chaindb ethdb.Database, engine consensus.Engine) *StatelessChainContext {
+	return &StatelessChainContext{
+		chaindb,
+		engine,
+	}
 }

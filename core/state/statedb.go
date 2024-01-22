@@ -138,6 +138,20 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	witness        *Witness
+	readPrefetcher *triePrefetcher
+}
+
+// NewWithWitnessRecording creates a new state from a given trie.  The state is configured to construct a stateless
+// block witness which is completed after Commit is called.
+func NewWithWitnessRecording(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+	sdb, err := New(root, db, snaps)
+	if err != nil {
+		return nil, err
+	}
+	sdb.witness = NewWitness(root)
+	return sdb, nil
 }
 
 // New creates a new state from a given trie.
@@ -177,11 +191,20 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 // commit phase, most of the needed data is already hot.
 func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.prefetcher != nil {
+		s.prefetcher.wait()
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
+	if s.readPrefetcher != nil {
+		s.readPrefetcher.wait()
+		s.readPrefetcher.close()
+		s.readPrefetcher = nil
+	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		if s.witness != nil {
+			s.readPrefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		}
 	}
 }
 
@@ -189,8 +212,14 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 // from the gathered metrics.
 func (s *StateDB) StopPrefetcher() {
 	if s.prefetcher != nil {
+		s.prefetcher.wait()
 		s.prefetcher.close()
 		s.prefetcher = nil
+	}
+	if s.readPrefetcher != nil {
+		s.readPrefetcher.wait()
+		s.readPrefetcher.close()
+		s.readPrefetcher = nil
 	}
 }
 
@@ -350,7 +379,8 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(hash)
+		res := stateObject.GetCommittedState(hash)
+		return res
 	}
 	return common.Hash{}
 }
@@ -604,9 +634,15 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			return nil
 		}
 	}
+
 	// Insert into the live set
 	obj := newObject(s, addr, data)
 	s.setStateObject(obj)
+	if s.witness != nil && s.snap != nil {
+		// when building witness with snap enabled, prefetch all read accounts to later be collected and
+		// included in the witness
+		s.readPrefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]})
+	}
 	return obj
 }
 
@@ -711,6 +747,9 @@ func (s *StateDB) Copy() *StateDB {
 		// miner to operate trie-backed only.
 		snaps: s.snaps,
 		snap:  s.snap,
+	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -866,6 +905,33 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	s.clearJournalAndRefund()
 }
 
+func (s *StateDB) collectReadStorageAccessLists() {
+	for _, obj := range s.stateObjects {
+		// load read storage slots from the finished trie in the prefetcher as these continue to be prefetched
+		// until commit.
+		tr := s.readPrefetcher.trie(obj.addrHash, obj.data.Root)
+		if tr == nil {
+			continue
+		}
+		accessList := tr.AccessList()
+		if len(accessList) > 0 {
+			s.witness.addAccessList(obj.addrHash, accessList)
+		}
+	}
+}
+
+func (s *StateDB) collectReadAccountsAccessLists() {
+	tr := s.readPrefetcher.trie(common.Hash{}, s.originalRoot)
+	if tr == nil {
+		// TODO: ensure this case is b/c of empty block
+		return
+	}
+	accessList := tr.AccessList()
+	if len(accessList) > 0 {
+		s.witness.addAccessList(common.Hash{}, accessList)
+	}
+}
+
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
@@ -873,20 +939,24 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
-	// If there was a trie prefetcher operating, it gets aborted and irrevocably
-	// modified after we start retrieving tries. Remove it from the statedb after
-	// this round of use.
-	//
-	// This is weird pre-byzantium since the first tx runs with a prefetcher and
-	// the remainder without, but pre-byzantium even the initial prefetcher is
-	// useless, so no sleep lost.
 	prefetcher := s.prefetcher
 	if s.prefetcher != nil {
 		defer func() {
+			// TODO: need to wait for read accounts to be resolved in prefetcher main trie?
+			s.prefetcher.wait()
 			s.prefetcher.close()
 			s.prefetcher = nil
 		}()
 	}
+	if s.readPrefetcher != nil {
+		// TODO: move read prefetcher logic into Commit?
+		s.readPrefetcher.wait()
+		s.collectReadStorageAccessLists()
+		s.collectReadAccountsAccessLists()
+		s.readPrefetcher.close()
+		s.readPrefetcher = nil
+	}
+
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
@@ -897,6 +967,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj.updateRoot()
 		}
 	}
+
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
@@ -906,16 +977,29 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+
+	// perform updates before deletions.  In the case where a full node
+	// has two children, one of them selfdestructs and makes the recipient
+	// another non-existing sibling, applying deletion before update would
+	// result in the unecessary premature collapse of the full node into a short node
+	// for the untouched third sibling.
+	var deletedObjects []*stateObject
 	for addr := range s.stateObjectsPending {
-		if obj := s.stateObjects[addr]; obj.deleted {
-			s.deleteStateObject(obj)
-			s.AccountDeleted += 1
-		} else {
+		if obj := s.stateObjects[addr]; !obj.deleted {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+			usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+		} else {
+			deletedObjects = append(deletedObjects, obj)
 		}
-		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:]))
 	}
+	for _, deletedObj := range deletedObjects {
+		s.deleteStateObject(deletedObj)
+		s.AccountDeleted += 1
+		usedAddrs = append(usedAddrs, common.CopyBytes(deletedObj.address[:])) // Copy needed for closure
+	}
+
 	if prefetcher != nil {
 		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
 	}
@@ -927,6 +1011,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
 	return s.trie.Hash()
+}
+
+// makes the statedb configure to build a stateless block witness
+// this must be called after initializing a statedb and before
+// starting prefetchers or applying state changes
+func (s *StateDB) EnableWitnessRecording() {
+	s.witness = NewWitness(s.originalRoot)
 }
 
 // SetTxContext sets the current transaction hash and index which are
@@ -1153,6 +1244,28 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 	return incomplete, nil
 }
 
+// Witness returns a block witness object being constructed or nil if the
+// StateDB instance is not configured to record stateless witnesses.
+func (s *StateDB) Witness() *Witness {
+	return s.witness
+}
+
+// ApplyWithdrawals credits the balance of each account that is the recipient
+// of a withdrawal.
+func (s *StateDB) ApplyWithdrawals(withdrawals types.Withdrawals) {
+	for _, w := range withdrawals {
+		// Convert amount from gwei to wei.
+		amount := new(big.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		s.AddBalance(w.Address, amount)
+	}
+
+	if s.witness != nil {
+		al := s.trie.AccessList()
+		s.witness.addAccessList(common.Hash{}, al)
+	}
+}
+
 // Commit writes the state to the underlying in-memory trie database.
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
@@ -1177,6 +1290,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		storageTrieNodesDeleted int
 		nodes                   = trienode.NewMergedNodeSet()
 		codeWriter              = s.db.DiskDB().NewBatch()
+		root                    common.Hash
+		set                     *trienode.NodeSet
 	)
 	// Handle all state deletions first
 	incomplete, err := s.handleDestruction(nodes)
@@ -1184,6 +1299,31 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		return common.Hash{}, err
 	}
 	// Handle all state updates afterwards
+	if s.witness != nil {
+		if s.snap == nil {
+			// if the snapshot is not in use, all read state values and their intermediate
+			// nodes are resolved in the statedb/object tries.
+			//
+			// we collect access lists after commit because there are circumstances where
+			// computation of a new trie root hash where a value has been deleted could
+			// collapse a parent branch node + sibling into a full node for the sibling.
+			// In this case, the sibling would only be read during root hash computation.
+			// TODO: verify the above assertion is the case.
+			for addr := range s.stateObjects {
+				obj := s.stateObjects[addr]
+				if _, ok := s.stateObjectsDirty[addr]; ok && !obj.deleted {
+					// collect dirty object access witness if/when we commit them
+					continue
+				}
+				if obj.trie != nil {
+					al := obj.trie.AccessList()
+					s.witness.addAccessList(obj.addrHash, al)
+				}
+			}
+			accessList := s.trie.AccessList()
+			s.witness.addAccessList(common.Hash{}, accessList)
+		}
+	}
 	for addr := range s.stateObjectsDirty {
 		obj := s.stateObjects[addr]
 		if obj.deleted {
@@ -1194,10 +1334,18 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 			obj.dirtyCode = false
 		}
+
 		// Write any storage changes in the state object to its storage trie
-		set, err := obj.commit()
+		set, accessList, err := obj.commit()
 		if err != nil {
 			return common.Hash{}, err
+		}
+
+		if s.witness != nil {
+			// storage trie nodes for writes accrue in the state object's trie instance
+			// storage trie nodes from read slots are accrued in the prefetcher and
+			// retrieved in IntermediateRoot
+			s.witness.addAccessList(obj.addrHash, accessList)
 		}
 		// Merge the dirty nodes of storage trie into global set. It is possible
 		// that the account was destructed and then resurrected in the same block.
@@ -1221,7 +1369,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	if metrics.EnabledExpensive {
 		start = time.Now()
 	}
-	root, set, err := s.trie.Commit(true)
+
+	if s.witness != nil {
+		var accessList map[string][]byte
+		root, set, accessList, err = s.trie.CommitAndObtainAccessList(true)
+		s.witness.addAccessList(common.Hash{}, accessList)
+	} else {
+		root, set, err = s.trie.Commit(true)
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1295,6 +1450,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 	s.stateObjectsDirty = make(map[common.Address]struct{})
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
+
 	return root, nil
 }
 

@@ -33,8 +33,9 @@ import (
 // thread-safe to use. However, callers need to ensure the thread-safety
 // of the referenced layer by themselves.
 type layerTree struct {
-	lock   sync.RWMutex
-	layers map[common.Hash]layer
+	lock      sync.RWMutex
+	layers    map[common.Hash]layer
+	stateless bool
 }
 
 // newLayerTree constructs the layerTree with the given head layer.

@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -43,6 +44,20 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 		config: config,
 		engine: engine,
 		bc:     blockchain,
+	}
+	return validator
+}
+
+// NewBlockStatelessBlockValidator returns a BlockValidator which is configured to validate stateless block witnesses
+// without the use of a full backing BlockChain
+func NewStatelessBlockValidator(config *params.ChainConfig, engine consensus.Engine) *BlockValidator {
+	validator := &BlockValidator{
+		config: config,
+		engine: engine,
+		bc: &BlockChain{
+			chainConfig: config,
+			engine:      engine,
+		},
 	}
 	return validator
 }
@@ -121,28 +136,30 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+// It returns the computed state root or an error.
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64, rootCheck bool) (root common.Hash, err error) {
 	header := block.Header()
 	if block.GasUsed() != usedGas {
-		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
+		return root, fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	rbloom := types.CreateBloom(receipts)
 	if rbloom != header.Bloom {
-		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
+		return root, fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
 	receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
-		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
+		return root, fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+	// Compute the state root and if enabled, check it against the
+	// received state root and throw an error if they don't match.
+	root = statedb.IntermediateRoot(v.config.IsEIP158(header.Number))
+	if rootCheck && header.Root != root {
+		return root, fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
-	return nil
+	return root, nil
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent. It aims

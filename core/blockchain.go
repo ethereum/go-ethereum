@@ -259,6 +259,17 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+
+	crossValidator *crossValidator
+}
+
+// NewBlockchainWithCrossValidator returns a Blockchain configured to cross-validate imported blocks against a single
+// remote stateless validator.  Stateless witnesses are constructed for each imported block and validated against the
+// remote endpoint.  If validation fails, they are dumped to the folder specified at witnessRecordingPath
+func NewBlockchainWithCrossValidator(endpoint string, witnessRecordingPath string, db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit)
+	bc.crossValidator = &crossValidator{witnessRecordingPath, endpoint}
+	return bc, err
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1343,7 +1354,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1352,6 +1363,27 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Make sure no inconsistent state is leaked during insertion
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
+	// Commit all cached state changes into underlying memory database.
+	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
+	if err != nil {
+		return err
+	}
+
+	// TODO: Need to check that we want to cross-validate on all the paths this hits
+	if bc.crossValidator != nil {
+		witness := statedb.Witness()
+		witness.Block = block
+		err := bc.crossValidator.CrossValidateBlock(bc.chainConfig, witness)
+		if err != nil {
+			log.Error("failed to cross validate block", "error", err)
+			if innerErr := state.DumpBlockWitnessToFile(bc.Config(), statedb.Witness(), "block-dump"); innerErr != nil {
+				log.Error("failed to store witness to file", "error", innerErr)
+			}
+			// TODO: return the error and stop importing the current chain.
+			// I'm leaving it like this so I can watch validation errors as
+			// the client follows the chain.
+		}
+	}
 	// Irrelevant of the canonical status, write the block itself to the database.
 	//
 	// Note all the components of block(td, hash->number map, header, body, receipts)
@@ -1360,15 +1392,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, state.Preimages())
+	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-	// Commit all cached state changes into underlying memory database.
-	root, err := state.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
-	if err != nil {
-		return err
-	}
+
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
@@ -1442,8 +1470,8 @@ func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, db *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+	if err := bc.writeBlockWithState(block, receipts, db); err != nil {
 		return NonStatTy, err
 	}
 	currentBlock := bc.CurrentBlock()
@@ -1561,6 +1589,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
 		lastCanon *types.Block
+		statedb   *state.StateDB
+		err       error
 	)
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
@@ -1736,7 +1766,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+
+		if bc.crossValidator != nil {
+			statedb, err = state.NewWithWitnessRecording(parent.Root, bc.stateCache, bc.snaps)
+		} else {
+			statedb, err = state.New(parent.Root, bc.stateCache, bc.snaps)
+		}
 		if err != nil {
 			return it.index, err
 		}
@@ -1774,7 +1809,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		ptime := time.Since(pstart)
 
 		vstart := time.Now()
-		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+		if _, err := bc.validator.ValidateState(block, statedb, receipts, usedGas, true); err != nil {
 			bc.reportBlock(block, receipts, err)
 			followupInterrupt.Store(true)
 			return it.index, err
@@ -1809,6 +1844,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
+
 		followupInterrupt.Store(true)
 		if err != nil {
 			return it.index, err

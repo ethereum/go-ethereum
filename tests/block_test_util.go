@@ -22,9 +22,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"math/big"
 	"os"
 	"reflect"
+
+	"github.com/ethereum/go-ethereum/eth"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -109,7 +112,15 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+	return t.run(false, snapshotter, scheme, tracer)
+}
+
+func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+	return t.run(true, snapshotter, scheme, tracer)
+}
+
+func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer vm.EVMLogger) error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -126,6 +137,14 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	} else {
 		tconf.HashDB = hashdb.Defaults
 	}
+	closeCh, port, err := utils.RunLocalServer(config, 0)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeCh <- struct{}{}
+	}()
+
 	// Commit genesis state
 	gspec := t.genesis(config)
 	triedb := triedb.NewDatabase(db, tconf)
@@ -144,14 +163,25 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true, TrieDirtyDisabled: true}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
-		Tracer: tracer,
-	}, nil, nil)
+	// TODO: create normal chain if not stateless mode
+	chain, err := core.NewBlockchainWithCrossValidator(
+		fmt.Sprintf("http://localhost:%d", port),
+		"",
+		db,
+		cache,
+		gspec,
+		nil,
+		engine,
+		vm.Config{
+			//Tracer: tracer,
+		},
+		nil,
+		nil)
 	if err != nil {
 		return err
 	}
@@ -160,11 +190,6 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	validBlocks, err := t.insertBlocks(chain)
 	if err != nil {
 		return err
-	}
-	// Import succeeded: regardless of whether the _test_ succeeds or not, schedule
-	// the post-check to run
-	if postCheck != nil {
-		defer postCheck(result, chain)
 	}
 	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
@@ -181,6 +206,28 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	if snapshotter {
 		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
 			return err
+		}
+	}
+
+	if stateless {
+		for _, blk := range validBlocks {
+			// TODO: set up test chassis to do verification on block import (in BlockChain) in addition to BuildProof
+			// (used by standalone witness execution path)
+			enc, err := eth.BuildProof(blk.BlockHeader.Number.Uint64(), chain)
+			if err != nil {
+				return fmt.Errorf("failed to build proof: %v", err)
+			}
+			witness, err := state.DecodeWitnessRLP(enc)
+			if err != nil {
+				return fmt.Errorf("error decoding witness: %v", err)
+			}
+			root, err := utils.StatelessExecute(os.Stdout, config, witness)
+			if err != nil {
+				return fmt.Errorf("verification execution error: %v", err)
+			}
+			if root != blk.BlockHeader.StateRoot {
+				return fmt.Errorf("state root mismatch (wanted: %x, got: %x)", blk.BlockHeader.StateRoot, root)
+			}
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
