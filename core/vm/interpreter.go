@@ -57,29 +57,29 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	var table *JumpTable
 	switch {
 	case evm.chainRules.IsCancun:
-		table = &cancunInstructionSet
+		table = cancunInstructionSet
 	case evm.chainRules.IsShanghai:
-		table = &shanghaiInstructionSet
+		table = shanghaiInstructionSet
 	case evm.chainRules.IsMerge:
-		table = &mergeInstructionSet
+		table = mergeInstructionSet
 	case evm.chainRules.IsLondon:
-		table = &londonInstructionSet
+		table = londonInstructionSet
 	case evm.chainRules.IsBerlin:
-		table = &berlinInstructionSet
+		table = berlinInstructionSet
 	case evm.chainRules.IsIstanbul:
-		table = &istanbulInstructionSet
+		table = istanbulInstructionSet
 	case evm.chainRules.IsConstantinople:
-		table = &constantinopleInstructionSet
+		table = constantinopleInstructionSet
 	case evm.chainRules.IsByzantium:
-		table = &byzantiumInstructionSet
+		table = byzantiumInstructionSet
 	case evm.chainRules.IsEIP158:
-		table = &spuriousDragonInstructionSet
+		table = spuriousDragonInstructionSet
 	case evm.chainRules.IsEIP150:
-		table = &tangerineWhistleInstructionSet
+		table = tangerineWhistleInstructionSet
 	case evm.chainRules.IsHomestead:
-		table = &homesteadInstructionSet
+		table = homesteadInstructionSet
 	default:
-		table = &frontierInstructionSet
+		table = frontierInstructionSet
 	}
 	var extraEips []int
 	if len(evm.Config.ExtraEips) > 0 {

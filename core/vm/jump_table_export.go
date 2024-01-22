@@ -24,7 +24,7 @@ import (
 
 // LookupInstructionSet returns the instruction set for the fork configured by
 // the rules.
-func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
+func LookupInstructionSet(rules params.Rules) (*JumpTable, error) {
 	switch {
 	case rules.IsVerkle:
 		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")

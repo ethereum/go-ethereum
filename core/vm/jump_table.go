@@ -62,7 +62,7 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-func validate(jt JumpTable) JumpTable {
+func validate(jt *JumpTable) *JumpTable {
 	for i, op := range jt {
 		if op == nil {
 			panic(fmt.Sprintf("op %#x is not set", i))
@@ -80,25 +80,25 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
-func newCancunInstructionSet() JumpTable {
+func newCancunInstructionSet() *JumpTable {
 	instructionSet := newShanghaiInstructionSet()
-	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
-	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
-	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
-	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
-	enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
+	enable4844(instructionSet) // EIP-4844 (BLOBHASH opcode)
+	enable7516(instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
+	enable1153(instructionSet) // EIP-1153 "Transient Storage"
+	enable5656(instructionSet) // EIP-5656 (MCOPY opcode)
+	enable6780(instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
 	return validate(instructionSet)
 }
 
-func newShanghaiInstructionSet() JumpTable {
+func newShanghaiInstructionSet() *JumpTable {
 	instructionSet := newMergeInstructionSet()
-	enable3855(&instructionSet) // PUSH0 instruction
-	enable3860(&instructionSet) // Limit and meter initcode
+	enable3855(instructionSet) // PUSH0 instruction
+	enable3860(instructionSet) // Limit and meter initcode
 
 	return validate(instructionSet)
 }
 
-func newMergeInstructionSet() JumpTable {
+func newMergeInstructionSet() *JumpTable {
 	instructionSet := newLondonInstructionSet()
 	instructionSet[PREVRANDAO] = &operation{
 		execute:     opRandom,
@@ -111,36 +111,36 @@ func newMergeInstructionSet() JumpTable {
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul, petersburg, berlin and london instructions.
-func newLondonInstructionSet() JumpTable {
+func newLondonInstructionSet() *JumpTable {
 	instructionSet := newBerlinInstructionSet()
-	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
-	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+	enable3529(instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
+	enable3198(instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return validate(instructionSet)
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul, petersburg and berlin instructions.
-func newBerlinInstructionSet() JumpTable {
+func newBerlinInstructionSet() *JumpTable {
 	instructionSet := newIstanbulInstructionSet()
-	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
+	enable2929(instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	return validate(instructionSet)
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul and petersburg instructions.
-func newIstanbulInstructionSet() JumpTable {
+func newIstanbulInstructionSet() *JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
-	enable1344(&instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
-	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
-	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
+	enable1344(instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
+	enable1884(instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
+	enable2200(instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
 
 	return validate(instructionSet)
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
 // byzantium and constantinople instructions.
-func newConstantinopleInstructionSet() JumpTable {
+func newConstantinopleInstructionSet() *JumpTable {
 	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = &operation{
 		execute:     opSHL,
@@ -179,7 +179,7 @@ func newConstantinopleInstructionSet() JumpTable {
 
 // newByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func newByzantiumInstructionSet() JumpTable {
+func newByzantiumInstructionSet() *JumpTable {
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = &operation{
 		execute:     opStaticCall,
@@ -214,14 +214,14 @@ func newByzantiumInstructionSet() JumpTable {
 }
 
 // EIP 158 a.k.a Spurious Dragon
-func newSpuriousDragonInstructionSet() JumpTable {
+func newSpuriousDragonInstructionSet() *JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return validate(instructionSet)
 }
 
 // EIP 150 a.k.a Tangerine Whistle
-func newTangerineWhistleInstructionSet() JumpTable {
+func newTangerineWhistleInstructionSet() *JumpTable {
 	instructionSet := newHomesteadInstructionSet()
 	instructionSet[BALANCE].constantGas = params.BalanceGasEIP150
 	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEIP150
@@ -235,7 +235,7 @@ func newTangerineWhistleInstructionSet() JumpTable {
 
 // newHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func newHomesteadInstructionSet() JumpTable {
+func newHomesteadInstructionSet() *JumpTable {
 	instructionSet := newFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = &operation{
 		execute:     opDelegateCall,
@@ -250,7 +250,7 @@ func newHomesteadInstructionSet() JumpTable {
 
 // newFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func newFrontierInstructionSet() JumpTable {
+func newFrontierInstructionSet() *JumpTable {
 	tbl := JumpTable{
 		STOP: {
 			execute:     opStop,
@@ -1061,7 +1061,7 @@ func newFrontierInstructionSet() JumpTable {
 		}
 	}
 
-	return validate(tbl)
+	return validate(&tbl)
 }
 
 func copyJumpTable(source *JumpTable) *JumpTable {
