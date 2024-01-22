@@ -202,6 +202,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 // ForkchoiceUpdatedV3 is equivalent to V2 with the addition of parent beacon block root in the payload attributes.
 func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if params != nil {
+		// TODO(matt): according to https://github.com/ethereum/execution-apis/pull/498,
+		// payload attributes that are invalid should return error
+		// engine.InvalidPayloadAttributes. Once hive updates this, we should update
+		// on our end.
 		if params.Withdrawals == nil {
 			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("missing withdrawals"))
 		}
