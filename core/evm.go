@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -89,40 +91,51 @@ func NewEVMTxContext(msg *Message) vm.TxContext {
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
-func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
+func GetHashFn(ref *types.Header, chain ChainContext) vm.GetHashFunc {
 	// Cache will initially contain [refHash.parent],
 	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
 	var cache []common.Hash
 
-	return func(n uint64) common.Hash {
+	return func(n uint64, statedb vm.StateDB, eip2935 bool) common.Hash {
 		if ref.Number.Uint64() <= n {
 			// This situation can happen if we're doing tracing and using
 			// block overrides.
 			return common.Hash{}
 		}
-		// If there's no hash cache yet, make one
-		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash)
-		}
-		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
-			return cache[idx]
-		}
-		// No luck in the cache, but we can start iterating from the last element we already know
-		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
 
-		for {
-			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
-			if header == nil {
-				break
+		// Use the cache if it is within 256 blocks from the head.
+		if n >= ref.Number.Uint64()-256 {
+			// If there's no hash cache yet, make one
+			if len(cache) == 0 {
+				cache = append(cache, ref.ParentHash)
 			}
-			cache = append(cache, header.ParentHash)
-			lastKnownHash = header.ParentHash
-			lastKnownNumber = header.Number.Uint64() - 1
-			if n == lastKnownNumber {
-				return lastKnownHash
+			if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
+				return cache[idx]
+			}
+			// No luck in the cache, but we can start iterating from the last element we already know
+			lastKnownHash := cache[len(cache)-1]
+			lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
+
+			for {
+				header := chain.GetHeader(lastKnownHash, lastKnownNumber)
+				if header == nil {
+					break
+				}
+				cache = append(cache, header.ParentHash)
+				lastKnownHash = header.ParentHash
+				lastKnownNumber = header.Number.Uint64() - 1
+				if n == lastKnownNumber {
+					return lastKnownHash
+				}
+			}
+		} else {
+			if eip2935 {
+				var key common.Hash
+				binary.BigEndian.PutUint64(key[24:], n)
+				return statedb.GetState(params.HistoryStorageAddress, key)
 			}
 		}
+
 		return common.Hash{}
 	}
 }

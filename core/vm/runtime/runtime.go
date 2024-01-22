@@ -50,7 +50,7 @@ type Config struct {
 	Random      *common.Hash
 
 	State     *state.StateDB
-	GetHashFn func(n uint64) common.Hash
+	GetHashFn vm.GetHashFunc
 }
 
 // sets defaults on the config
@@ -90,7 +90,7 @@ func setDefaults(cfg *Config) {
 		cfg.BlockNumber = new(big.Int)
 	}
 	if cfg.GetHashFn == nil {
-		cfg.GetHashFn = func(n uint64) common.Hash {
+		cfg.GetHashFn = func(n uint64, _ vm.StateDB, _ bool) common.Hash {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}

@@ -441,13 +441,17 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
-	if upper < 257 {
-		lower = 0
-	} else {
+	evm := interpreter.evm
+
+	// After Prague, the values preceding FORKNUM will be 0,
+	// as requested in EIP-2935. So it's fine to allow 0 as
+	// the lower bound.
+	if !evm.chainRules.IsPrague && upper >= 257 {
 		lower = upper - 256
 	}
+
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		num.SetBytes(evm.Context.GetHash(num64, evm.StateDB, evm.chainRules.IsPrague).Bytes())
 	} else {
 		num.Clear()
 	}

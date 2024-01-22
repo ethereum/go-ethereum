@@ -34,7 +34,7 @@ type (
 	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
-	GetHashFunc func(uint64) common.Hash
+	GetHashFunc func(uint64, StateDB, bool) common.Hash
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
