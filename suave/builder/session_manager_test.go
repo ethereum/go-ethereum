@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"math/big"
 	"testing"
@@ -21,7 +22,7 @@ func TestSessionManager_SessionTimeout(t *testing.T) {
 		SessionIdleTimeout: 500 * time.Millisecond,
 	})
 
-	id, err := mngr.NewSession()
+	id, err := mngr.NewSession(context.TODO())
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -30,12 +31,47 @@ func TestSessionManager_SessionTimeout(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSessionManager_MaxConcurrentSessions(t *testing.T) {
+	t.Parallel()
+
+	const d = time.Millisecond * 10
+
+	mngr, _ := newSessionManager(t, &Config{
+		MaxConcurrentSessions: 1,
+		SessionIdleTimeout:    d,
+	})
+
+	t.Run("SessionAvailable", func(t *testing.T) {
+		sess, err := mngr.NewSession(context.TODO())
+		require.NoError(t, err)
+		require.NotZero(t, sess)
+	})
+
+	t.Run("ContextExpired", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		sess, err := mngr.NewSession(ctx)
+		require.Zero(t, sess)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("SessionExpired", func(t *testing.T) {
+		time.Sleep(d) // Wait for the session to expire.
+
+		// We should be able to open a session again.
+		sess, err := mngr.NewSession(context.TODO())
+		require.NoError(t, err)
+		require.NotZero(t, sess)
+	})
+}
+
 func TestSessionManager_SessionRefresh(t *testing.T) {
 	mngr, _ := newSessionManager(t, &Config{
 		SessionIdleTimeout: 500 * time.Millisecond,
 	})
 
-	id, err := mngr.NewSession()
+	id, err := mngr.NewSession(context.TODO())
 	require.NoError(t, err)
 
 	// if we query the session under the idle timeout,
@@ -60,7 +96,7 @@ func TestSessionManager_StartSession(t *testing.T) {
 	// test that the session starts and it can simulate transactions
 	mngr, bMock := newSessionManager(t, &Config{})
 
-	id, err := mngr.NewSession()
+	id, err := mngr.NewSession(context.TODO())
 	require.NoError(t, err)
 
 	txn := bMock.state.newTransfer(t, common.Address{}, big.NewInt(1))
