@@ -6,13 +6,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// sessionManager is the backend that manages the session state of the builder API.
-type sessionManager interface {
+// SessionManager is the backend that manages the session state of the builder API.
+type SessionManager interface {
 	NewSession() (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
 }
 
-func NewServer(s sessionManager) *Server {
+func NewServer(s SessionManager) *Server {
 	api := &Server{
 		sessionMngr: s,
 	}
@@ -20,7 +20,7 @@ func NewServer(s sessionManager) *Server {
 }
 
 type Server struct {
-	sessionMngr sessionManager
+	sessionMngr SessionManager
 }
 
 func (s *Server) NewSession(ctx context.Context) (string, error) {
