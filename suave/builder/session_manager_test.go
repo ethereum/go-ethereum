@@ -34,7 +34,7 @@ func TestSessionManager_SessionTimeout(t *testing.T) {
 func TestSessionManager_MaxConcurrentSessions(t *testing.T) {
 	t.Parallel()
 
-	const d = time.Millisecond * 10
+	const d = time.Millisecond * 100
 
 	mngr, _ := newSessionManager(t, &Config{
 		MaxConcurrentSessions: 1,
