@@ -212,6 +212,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV3 must only be called for cancun payloads"))
 		}
 	}
+	// TODO(matt): the spec requires that fcu is applied when called on a valid
+	// hash, even if params are wrong. To do this we need to split up
+	// forkchoiceUpdate into a function that only updates the head and then a
+	// function that kicks off block construction.
 	return api.forkchoiceUpdated(update, params)
 }
 
