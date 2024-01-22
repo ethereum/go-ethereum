@@ -143,7 +143,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, ""); err != nil {
+	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
 
@@ -236,7 +236,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// check if Parallel EVM is enabled
 	// if enabled, use parallel state processor
 	if config.ParallelEVM.Enable {
-		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker, config.ParallelEVM.SpeculativeProcesses)
+		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	} else {
 		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	}

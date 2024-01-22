@@ -236,14 +236,13 @@ type BlockChain struct {
 	stopping      atomic.Bool    // false if chain is running, true when stopped
 	procInterrupt atomic.Bool    // interrupt signaler for block processing
 
-	engine                       consensus.Engine
-	validator                    Validator // Block and state validator interface
-	prefetcher                   Prefetcher
-	processor                    Processor // Block transaction processor interface
-	parallelProcessor            Processor // Parallel block transaction processor interface
-	parallelSpeculativeProcesses int       // Number of parallel speculative processes
-	forker                       *ForkChoice
-	vmConfig                     vm.Config
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor // Block transaction processor interface
+	parallelProcessor Processor // Parallel block transaction processor interface
+	forker            *ForkChoice
+	vmConfig          vm.Config
 
 	// Bor related changes
 	borReceiptsCache *lru.Cache[common.Hash, *types.Receipt] // Cache for the most recent bor receipt receipts per block
@@ -409,8 +408,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.
-	// BOR - commented out intentionally
-	// bc.engine.VerifyHeader(bc, bc.CurrentHeader())
+	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -483,7 +481,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 }
 
 // NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
-func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
 
 	if err != nil {
@@ -502,7 +500,6 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 	}
 
 	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
-	bc.parallelSpeculativeProcesses = numprocs
 
 	return bc, nil
 }
@@ -2141,6 +2138,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
+
+		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		if err != nil {
+			return it.index, err
+		}
+
+		// Enable prefetching to pull in trie node paths while processing transactions
+		statedb.StartPrefetcher("chain")
+		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
