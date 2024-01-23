@@ -124,18 +124,18 @@ type diffLayer struct {
 	lock sync.RWMutex
 }
 
-// destructBloomHasher is used to convert a destruct event into a 64 bit mini hash.
-func destructBloomHasher(h common.Hash) uint64 {
+// destructBloomHash is used to convert a destruct event into a 64 bit mini hash.
+func destructBloomHash(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
 }
 
-// accountBloomHasher is used to convert an account hash into a 64 bit mini hash.
-func accountBloomHasher(h common.Hash) uint64 {
+// accountBloomHash is used to convert an account hash into a 64 bit mini hash.
+func accountBloomHash(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
-// storageBloomHasher is used to convert an account hash and a storage hash into a 64 bit mini hash.
-func storageBloomHasher(h0, h1 common.Hash) uint64 {
+// storageBloomHash is used to convert an account hash and a storage hash into a 64 bit mini hash.
+func storageBloomHash(h0, h1 common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h0[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
 		binary.BigEndian.Uint64(h1[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
 }
@@ -206,14 +206,14 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	}
 	// Iterate over all the accounts and storage slots and index them
 	for hash := range dl.destructSet {
-		dl.diffed.AddHash(destructBloomHasher(hash))
+		dl.diffed.AddHash(destructBloomHash(hash))
 	}
 	for hash := range dl.accountData {
-		dl.diffed.AddHash(accountBloomHasher(hash))
+		dl.diffed.AddHash(accountBloomHash(hash))
 	}
 	for accountHash, slots := range dl.storageData {
 		for storageHash := range slots {
-			dl.diffed.AddHash(storageBloomHasher(accountHash, storageHash))
+			dl.diffed.AddHash(storageBloomHash(accountHash, storageHash))
 		}
 	}
 	// Calculate the current false positive rate and update the error rate meter.
@@ -274,9 +274,9 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	hit := dl.diffed.ContainsHash(accountBloomHasher(hash))
+	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
 	if !hit {
-		hit = dl.diffed.ContainsHash(destructBloomHasher(hash))
+		hit = dl.diffed.ContainsHash(destructBloomHash(hash))
 	}
 	var origin *diskLayer
 	if !hit {
@@ -345,9 +345,9 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
-	hit := dl.diffed.ContainsHash(storageBloomHasher(accountHash, storageHash))
+	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
-		hit = dl.diffed.ContainsHash(destructBloomHasher(accountHash))
+		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
 	}
 	var origin *diskLayer
 	if !hit {

@@ -27,8 +27,8 @@ import (
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
-// stateBloomHasher is used to convert a trie hash or contract code hash into a 64 bit mini hash.
-func stateBloomHasher(f []byte) uint64 {
+// stateBloomHash is used to convert a trie hash or contract code hash into a 64 bit mini hash.
+func stateBloomHash(f []byte) uint64 {
 	return binary.BigEndian.Uint64(f)
 }
 
@@ -106,10 +106,10 @@ func (bloom *stateBloom) Put(key []byte, value []byte) error {
 		if !isCode {
 			return errors.New("invalid entry")
 		}
-		bloom.bloom.AddHash(stateBloomHasher(codeKey))
+		bloom.bloom.AddHash(stateBloomHash(codeKey))
 		return nil
 	}
-	bloom.bloom.AddHash(stateBloomHasher(key))
+	bloom.bloom.AddHash(stateBloomHash(key))
 	return nil
 }
 
@@ -121,5 +121,5 @@ func (bloom *stateBloom) Delete(key []byte) error { panic("not supported") }
 // - If it says yes, the key may be contained
 // - If it says no, the key is definitely not contained.
 func (bloom *stateBloom) Contain(key []byte) bool {
-	return bloom.bloom.ContainsHash(stateBloomHasher(key))
+	return bloom.bloom.ContainsHash(stateBloomHash(key))
 }
