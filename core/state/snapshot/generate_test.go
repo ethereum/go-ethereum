@@ -30,13 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-<<<<<<< HEAD
-	"github.com/holiman/uint256"
-=======
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
->>>>>>> 0146f2e14f (all: remote the dependency from trie to triedb)
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
