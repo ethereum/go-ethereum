@@ -248,11 +248,7 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 }
 
 func (d *dummyChain) Config() *params.ChainConfig {
-	return nil
-}
-
-func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header {
-	return d.GetHeader(common.Hash{}, n)
+	return &params.ChainConfig{}
 }
 
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
@@ -325,8 +321,8 @@ func TestBlockhash(t *testing.T) {
 	if last.Uint64() != 744 {
 		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
 	}
-	if exp, got := 255, chain.counter; exp != got {
-		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
+	if exp, got := 256, chain.counter; exp != got {
+		t.Errorf("suboptimal; too many chain iteration, expected %d, got %d", exp, got)
 	}
 }
 
