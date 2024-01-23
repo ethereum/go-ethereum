@@ -374,7 +374,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		if api.localBlocks.has(id) {
 			return valid(&id), nil
 		}
-		// If the beacon chain is ran by a simulator, then transaction inserion,
+		// If the beacon chain is ran by a simulator, then transaction insertion,
 		// block insertion and block production will happen without any timing
 		// delay between them. This will cause flaky simulator executions due to
 		// the transaction pool running its internal reset operation on a back-

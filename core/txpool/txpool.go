@@ -200,7 +200,7 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 		resetDone = make(chan *types.Header)
 
 		resetForced bool       // Whether a forced reset was requested, only used in simulator mode
-		resetWaiter chan error // Channel waitinf on a forced reset, only used in simulator mode
+		resetWaiter chan error // Channel waiting on a forced reset, only used in simulator mode
 	)
 	var errc chan error
 	for errc == nil {
