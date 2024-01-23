@@ -202,6 +202,13 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 		resetForced bool       // Whether a forced reset was requested, only used in simulator mode
 		resetWaiter chan error // Channel waiting on a forced reset, only used in simulator mode
 	)
+	// Notify the live reset waiter to not block if the txpool is closed.
+	defer func() {
+		if resetWaiter != nil {
+			resetWaiter <- errors.New("pool already terminated")
+			resetWaiter = nil
+		}
+	}()
 	var errc chan error
 	for errc == nil {
 		// Something interesting might have happened, run a reset if there is
