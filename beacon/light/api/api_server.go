@@ -17,8 +17,6 @@
 package api
 
 import (
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
@@ -57,9 +55,7 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 }
 
 // SendRequest implements request.requestServer.
-func (s *ApiServer) SendRequest(req request.Request) request.ID {
-	id := request.ID(atomic.AddUint64(&s.lastId, 1))
-	s.eventCallback(request.Event{Type: request.EvRequest, Data: request.RequestResponse{ID: id, Request: req}})
+func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 	go func() {
 		var resp request.Response
 		switch data := req.(type) {
@@ -91,7 +87,6 @@ func (s *ApiServer) SendRequest(req request.Request) request.ID {
 			s.eventCallback(request.Event{Type: request.EvFail, Data: request.RequestResponse{ID: id, Request: req}})
 		}
 	}()
-	return id
 }
 
 // Unsubscribe implements request.requestServer.

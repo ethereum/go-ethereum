@@ -54,13 +54,12 @@ const (
 )
 
 // requestServer can send requests in a non-blocking way and feed back events
-// through the event callback. When successfully sending a request it should
-// send back an EvRequest event before returning from SendRequest. When finished,
-// it should send back either EvResponse or EvFail. Additionally, it may also
-// send application-defined events that the Modules can interpret.
+// through the event callback. After each request it should send back either
+// EvResponse or EvFail. Additionally, it may also send application-defined
+// events that the Modules can interpret.
 type requestServer interface {
-	Subscribe(eventCallback func(event Event))
-	SendRequest(request Request) ID
+	Subscribe(eventCallback func(Event))
+	SendRequest(ID, Request)
 	Unsubscribe()
 }
 
@@ -70,10 +69,10 @@ type requestServer interface {
 // limit the number of parallel in-flight requests and temporarily disable
 // new requests based on timeouts and response failures.
 type server interface {
-	subscribe(eventCallback func(event Event))
+	subscribe(eventCallback func(Event))
 	canRequestNow() (bool, float32)
-	sendRequest(request Request) ID
-	Fail(desc string)
+	sendRequest(Request) ID
+	Fail(string)
 	unsubscribe()
 }
 
@@ -122,17 +121,22 @@ type RequestResponse struct {
 	Response Response
 }
 
-// serverWithTimeout wraps a requestServer and implements timeouts. After
-// softRequestTimeout it sends an EvTimeout after which and EvResponse or an
-// EvFail will still follow (EvTimeout cannot follow the latter two).
-// After hardRequestTimeout it sends an EvFail and blocks any further events
-// related to the given request coming from the parent requestServer.
+// serverWithTimeout wraps a requestServer and introduces two new request event
+// types: EvRequest and EvTimeout. Whenever a request is successfully sent, an
+// EvRequest event is emitted first. The request's lifecycle is concluded if
+// EvResponse or EvFail emitted by the parent requestServer. If this does not
+// happen until softRequestTimeout then EvTimeout is emitted, after which the
+// final EvResponse or EvFail is still guaranteed to follow.
+// If the parent fails to send this final event for hardRequestTimeout then
+// serverWithTimeout emits EvFail and discards any further events from the
+// parent related to the given request.
 type serverWithTimeout struct {
 	parent       requestServer
 	lock         sync.Mutex
 	clock        mclock.Clock
 	childEventCb func(event Event)
 	timeouts     map[ID]mclock.Timer
+	lastID       ID
 }
 
 // init initializes serverWithTimeout
@@ -151,9 +155,18 @@ func (s *serverWithTimeout) subscribe(eventCallback func(event Event)) {
 	s.parent.Subscribe(s.eventCallback)
 }
 
-// sendRequest sends a request through the parent (requestServer).
+// sendRequest generated a new request ID, emits EvRequest, sets up the timeout
+// timer, then sends the request through the parent (requestServer).
 func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
-	return s.parent.SendRequest(request)
+	s.lock.Lock()
+	s.lastID++
+	id := s.lastID
+	reqData := RequestResponse{ID: id, Request: request}
+	s.childEventCb(Event{Type: EvRequest, Data: reqData})
+	s.startTimeout(reqData)
+	s.lock.Unlock()
+	s.parent.SendRequest(id, request)
+	return id
 }
 
 // eventCallback is called by parent (requestServer) event subscription.
@@ -162,15 +175,12 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	defer s.lock.Unlock()
 
 	switch event.Type {
-	case EvRequest:
-		s.startTimeout(event.Data.(RequestResponse))
-		s.childEventCb(event)
 	case EvResponse, EvFail:
 		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
 			// Note: if stopping the timer is unsuccessful then the resulting AfterFunc
 			// call will just do nothing
-			s.stopTimer(timer)
+			timer.Stop()
 			delete(s.timeouts, id)
 			s.childEventCb(event)
 		}
@@ -183,18 +193,12 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 	id := reqData.ID
 	s.timeouts[id] = s.clock.AfterFunc(softRequestTimeout, func() {
-		/*if s.testTimerResults != nil {
-			s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-		}*/
 		s.lock.Lock()
 		if _, ok := s.timeouts[id]; !ok {
 			s.lock.Unlock()
 			return
 		}
 		s.timeouts[id] = s.clock.AfterFunc(hardRequestTimeout-softRequestTimeout, func() {
-			/*if s.testTimerResults != nil {
-				s.testTimerResults = append(s.testTimerResults, true) // simulated timer finished
-			}*/
 			s.lock.Lock()
 			if _, ok := s.timeouts[id]; !ok {
 				s.lock.Unlock()
@@ -218,19 +222,11 @@ func (s *serverWithTimeout) unsubscribe() {
 
 	for _, timer := range s.timeouts {
 		if timer != nil {
-			s.stopTimer(timer)
+			timer.Stop()
 		}
 	}
 	s.childEventCb = nil
 	s.parent.Unsubscribe()
-}
-
-// stopTimer stops the given timer
-func (s *serverWithTimeout) stopTimer(timer mclock.Timer) {
-	timer.Stop()
-	/*if timer.Stop() && s.scheduler.testTimerResults != nil {
-		s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, false) // simulated timer stopped
-	}*/
 }
 
 // serverWithLimits wraps serverWithTimeout and implements server. It limits the
@@ -327,7 +323,7 @@ func (s *serverWithLimits) unsubscribe() {
 	defer s.lock.Unlock()
 
 	if s.delayTimer != nil {
-		s.stopTimer(s.delayTimer)
+		s.delayTimer.Stop()
 		s.delayTimer = nil
 	}
 	s.childEventCb = nil
@@ -336,7 +332,7 @@ func (s *serverWithLimits) unsubscribe() {
 
 // canRequest checks whether a new request can be started.
 func (s *serverWithLimits) canRequest() (bool, float32) {
-	if s.delayTimer != nil || s.pendingCount >= int(s.parallelLimit) {
+	if s.delayTimer != nil || s.pendingCount >= int(s.parallelLimit) || s.timeoutCount > 0 {
 		return false, 0
 	}
 	if s.parallelLimit < minParallelLimit {
@@ -375,7 +371,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 	if s.delayTimer != nil {
 		// Note: if stopping the timer is unsuccessful then the resulting AfterFunc
 		// call will just do nothing
-		s.stopTimer(s.delayTimer)
+		s.delayTimer.Stop()
 		s.delayTimer = nil
 	}
 
@@ -384,9 +380,6 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 	log.Debug("Server delay started", "length", delay)
 	s.delayTimer = s.clock.AfterFunc(delay, func() {
 		log.Debug("Server delay ended", "length", delay)
-		/*if s.scheduler.testTimerResults != nil {
-			s.scheduler.testTimerResults = append(s.scheduler.testTimerResults, true) // simulated timer finished
-		}*/
 		var sendCanRequestAgain bool
 		s.lock.Lock()
 		if s.delayTimer != nil && s.delayCounter == delayCounter { // do nothing if there is a new timer now

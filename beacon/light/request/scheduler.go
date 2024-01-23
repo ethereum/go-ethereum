@@ -83,8 +83,6 @@ type Scheduler struct {
 	stopCh    chan chan struct{}
 
 	triggerCh chan struct{} // restarts waiting sync loop
-	//	testWaitCh       chan struct{} // accepts sends when sync loop is waiting
-	//	testTimerResults []bool        // true is appended when simulated timer is processed; false when stopped
 }
 
 type (
