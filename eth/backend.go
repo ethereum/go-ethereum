@@ -414,45 +414,56 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.miner.SetEtherbase(etherbase)
 }
 
+// InitMiner initializes the miner without starting mining tasks
+func (s *Ethereum) InitMiner() (eb common.Address, err error) {
+	// Propagate the initial price point to the transaction pool
+	s.lock.RLock()
+	price := s.gasPrice
+	s.lock.RUnlock()
+	s.txPool.SetGasTip(price)
+
+	// Configure the local mining address
+	eb, err = s.Etherbase()
+	if err != nil {
+		log.Error("Cannot start mining without etherbase", "err", err)
+		return eb, fmt.Errorf("etherbase missing: %v", err)
+	}
+	var cli *clique.Clique
+	if c, ok := s.engine.(*clique.Clique); ok {
+		cli = c
+	} else if cl, ok := s.engine.(*beacon.Beacon); ok {
+		if c, ok := cl.InnerEngine().(*clique.Clique); ok {
+			cli = c
+		}
+	}
+	if cli != nil {
+		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+		if wallet == nil || err != nil {
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return eb, fmt.Errorf("signer missing: %v", err)
+		}
+		cli.Authorize(eb, wallet.SignData)
+	}
+
+	s.miner.SetEtherbase(eb)
+	// If mining is initialized, we can disable the transaction rejection mechanism
+	// introduced to speed sync times.
+	s.handler.enableSyncedFeatures()
+
+	return eb, nil
+}
+
 // StartMining starts the miner with the given number of CPU threads. If mining
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
 func (s *Ethereum) StartMining() error {
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
-		// Propagate the initial price point to the transaction pool
-		s.lock.RLock()
-		price := s.gasPrice
-		s.lock.RUnlock()
-		s.txPool.SetGasTip(price)
-
-		// Configure the local mining address
-		eb, err := s.Etherbase()
+		eb, err := s.InitMiner()
 		if err != nil {
-			log.Error("Cannot start mining without etherbase", "err", err)
-			return fmt.Errorf("etherbase missing: %v", err)
+			return err
 		}
-		var cli *clique.Clique
-		if c, ok := s.engine.(*clique.Clique); ok {
-			cli = c
-		} else if cl, ok := s.engine.(*beacon.Beacon); ok {
-			if c, ok := cl.InnerEngine().(*clique.Clique); ok {
-				cli = c
-			}
-		}
-		if cli != nil {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			cli.Authorize(eb, wallet.SignData)
-		}
-		// If mining is started, we can disable the transaction rejection mechanism
-		// introduced to speed sync times.
-		s.handler.enableSyncedFeatures()
-
-		go s.miner.Start()
+		go s.miner.Start(eb)
 	}
 	return nil
 }

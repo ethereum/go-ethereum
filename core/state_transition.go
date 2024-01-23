@@ -426,7 +426,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	var gasRefund uint64
-	if !rules.IsLondon {
+	if !rules.IsLondon && !rules.IsZkEvm {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		gasRefund = st.refundGas(params.RefundQuotient)
 	} else {

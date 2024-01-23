@@ -1,0 +1,11 @@
+{
+    "params" : {
+        "fork" : "ArrowGlacierToMergeAtDiffC0000",
+        "constantinopleForkBlock" : "0x00",
+        "byzantiumForkBlock" : "0x00",
+        "homesteadForkBlock" : "0x00",
+        "terminalTotalDifficulty" : "0x0C0000"
+    },
+    "accounts" : {
+    }
+}

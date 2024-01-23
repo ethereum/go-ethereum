@@ -17,11 +17,14 @@
 package eth
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 // MinerAPI provides an API to control the miner.
@@ -82,4 +85,69 @@ func (api *MinerAPI) SetEtherbase(etherbase common.Address) bool {
 // SetRecommitInterval updates the interval for miner sealing work recommitting.
 func (api *MinerAPI) SetRecommitInterval(interval int) {
 	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
+}
+
+// Init initializes the miner without starting mining tasks
+func (api *MinerAPI) Init() (common.Address, error) {
+	return api.e.InitMiner()
+}
+
+type SealBlockRequest struct {
+	Parent       common.Hash     `json:"parent"    gencodec:"required"`
+	Random       common.Hash     `json:"random"        gencodec:"required"`
+	Timestamp    hexutil.Uint64  `json:"timestamp"     gencodec:"required"`
+	Transactions []hexutil.Bytes `json:"transactions"  gencodec:"optional"`
+}
+
+func decodeTransactions(enc []hexutil.Bytes) ([]*types.Transaction, error) {
+	var txs = make([]*types.Transaction, len(enc))
+	for i, encTx := range enc {
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(encTx); err != nil {
+			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+		}
+		txs[i] = &tx
+	}
+	return txs, nil
+}
+
+// SealBlock mines and seals a block without changing the canonical chain
+// If `args.Transactions` is not nil then produces a block with only those transactions. If nil, then it consumes from the transaction pool.
+// Returns the block if successful.
+func (api *MinerAPI) SealBlock(args SealBlockRequest) (map[string]interface{}, error) {
+	var transactions []*types.Transaction
+
+	if args.Transactions != nil {
+		txs, err := decodeTransactions(args.Transactions)
+		if err != nil {
+			return nil, err
+		}
+		transactions = txs
+	}
+
+	block, err := api.e.Miner().SealBlockWith(args.Parent, args.Random, uint64(args.Timestamp), transactions)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ethapi.RPCMarshalBlock(block, true, true, api.e.APIBackend.ChainConfig()), nil
+}
+
+// SetHead updates the canonical chain and announces the block on the p2p layer
+func (api *MinerAPI) SetHead(hash common.Hash) (bool, error) {
+	block := api.e.BlockChain().GetBlockByHash(hash)
+
+	if block == nil {
+		return false, fmt.Errorf("block %s not found", hash.Hex())
+	}
+
+	if _, err := api.e.BlockChain().SetCanonical(block); err != nil {
+		return false, err
+	}
+
+	// Broadcast the block and announce chain insertion event
+	api.e.Miner().AnnounceBlock(block)
+
+	return true, nil
 }

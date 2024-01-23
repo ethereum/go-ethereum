@@ -1,0 +1,25 @@
+version: '3.9'
+
+networks:
+  default:
+    name: zkevm-geth
+
+services:
+  build:
+    build:
+      dockerfile: docker/retesteth/Dockerfile
+    command:
+      retesteth
+      -t GeneralStateTests
+      --
+      --clients zkevm
+      --filltests
+
+  test:
+    build:
+      dockerfile: docker/retesteth/Dockerfile-light
+    command:
+      retesteth
+      -t GeneralStateTests
+      --
+      --clients zkevm

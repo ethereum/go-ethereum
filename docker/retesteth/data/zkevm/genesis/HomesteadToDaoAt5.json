@@ -1,0 +1,8 @@
+{
+    "params" : {
+        "fork" : "HomesteadToDaoAt5",
+        "homesteadForkBlock" : "0x00"
+    },
+    "accounts" : {
+    }
+}

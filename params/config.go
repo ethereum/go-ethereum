@@ -155,6 +155,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
+		ZkEvmBlock:                    nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
@@ -205,6 +206,7 @@ var (
 		ArrowGlacierBlock:             nil,
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
+		ZkEvmBlock:                    nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
@@ -235,6 +237,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
+		ZkEvmBlock:                    nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
@@ -265,6 +268,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            big.NewInt(0),
+		ZkEvmBlock:                    big.NewInt(0),
 		ShanghaiTime:                  newUint64(0),
 		CancunTime:                    newUint64(0),
 		PragueTime:                    nil,
@@ -295,6 +299,7 @@ var (
 		ArrowGlacierBlock:             nil,
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
+		ZkEvmBlock:                    nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
@@ -343,6 +348,7 @@ type ChainConfig struct {
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
+	ZkEvmBlock          *big.Int `json:"zkEvmBlock,omitempty"`          // zkevm switch block (nil = no fork, 0 = already activated)
 
 	// Fork scheduling was switched from blocks to timestamps here
 
@@ -457,6 +463,11 @@ func (c *ChainConfig) Description() string {
 			banner += fmt.Sprintf(" - Merge netsplit block:       #%-8v\n", c.MergeNetsplitBlock)
 		}
 	}
+
+	if c.ZkEvmBlock != nil {
+		banner += fmt.Sprintf("\nzkEVM enabled at block: %-8v\n", c.ZkEvmBlock)
+	}
+
 	banner += "\n"
 
 	// Create a list of forks post-merge
@@ -554,6 +565,18 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 		return false
 	}
 	return parentTotalDiff.Cmp(c.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(c.TerminalTotalDifficulty) >= 0
+}
+
+// IsZkEvm returns whether num is either equal to or greater for zkevm specific behaviour.
+// zkevm inherits the `berlin` rules but selectively disables:
+// - EIP-2718: Typed Transaction Envelope
+//   - EIP-2930: Optional access lists
+//
+// In addition, zkevm enables these EIPs included in `london`:
+// - EIP-3541: Reject new contracts starting with the 0xEF byte
+// - EIP-3529: Reduction in refunds
+func (c *ChainConfig) IsZkEvm(num *big.Int) bool {
+	return isBlockForked(c.ZkEvmBlock, num)
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
@@ -882,6 +905,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
+	IsZkEvm                                                 bool
 	IsVerkle                                                bool
 }
 
@@ -904,6 +928,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
+		IsZkEvm:          c.IsZkEvm(num),
 		IsShanghai:       c.IsShanghai(num, timestamp),
 		IsCancun:         c.IsCancun(num, timestamp),
 		IsPrague:         c.IsPrague(num, timestamp),

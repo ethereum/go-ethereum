@@ -1,0 +1,16 @@
+name: test
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: eth-tests
+        run: docker compose run --no-TTY --rm test
