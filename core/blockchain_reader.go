@@ -397,16 +397,12 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
-// SetTxLookupLimit is responsible for updating the txlookup limit to the
-// original one stored in db if the new mismatches with the old one.
-func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
-	bc.txLookupLimit = limit
-}
-
-// TxLookupLimit retrieves the txlookup limit used by blockchain to prune
-// stale transaction indices.
-func (bc *BlockChain) TxLookupLimit() uint64 {
-	return bc.txLookupLimit
+// TxIndexProgress returns the transaction indexing progress.
+func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
+	if bc.txIndexer == nil {
+		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
+	}
+	return bc.txIndexer.txIndexProgress()
 }
 
 // TrieDB retrieves the low level trie database used for data storage.

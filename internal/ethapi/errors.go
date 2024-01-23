@@ -71,7 +71,7 @@ func (e *TxIndexingError) Error() string {
 // ErrorCode returns the JSON error code for a revert.
 // See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
 func (e *TxIndexingError) ErrorCode() int {
-	return 3 // TODO tbd
+	return -32000 // to be decided
 }
 
 // ErrorData returns the hex encoded revert reason.

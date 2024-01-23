@@ -1237,7 +1237,15 @@ func TestNilWithdrawals(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := api.ForkchoiceUpdatedV2(fcState, &test.blockParams)
+		var (
+			err      error
+			shanghai = genesis.Config.IsShanghai(genesis.Config.LondonBlock, test.blockParams.Timestamp)
+		)
+		if !shanghai {
+			_, err = api.ForkchoiceUpdatedV1(fcState, &test.blockParams)
+		} else {
+			_, err = api.ForkchoiceUpdatedV2(fcState, &test.blockParams)
+		}
 		if test.wantErr {
 			if err == nil {
 				t.Fatal("wanted error on fcuv2 with invalid withdrawals")
@@ -1254,14 +1262,19 @@ func TestNilWithdrawals(t *testing.T) {
 			Timestamp:    test.blockParams.Timestamp,
 			FeeRecipient: test.blockParams.SuggestedFeeRecipient,
 			Random:       test.blockParams.Random,
-			BeaconRoot:   test.blockParams.BeaconRoot,
 		}).Id()
 		execData, err := api.GetPayloadV2(payloadID)
 		if err != nil {
 			t.Fatalf("error getting payload, err=%v", err)
 		}
-		if status, err := api.NewPayloadV2(*execData.ExecutionPayload); err != nil {
-			t.Fatalf("error validating payload: %v", err)
+		var status engine.PayloadStatusV1
+		if !shanghai {
+			status, err = api.NewPayloadV1(*execData.ExecutionPayload)
+		} else {
+			status, err = api.NewPayloadV2(*execData.ExecutionPayload)
+		}
+		if err != nil {
+			t.Fatalf("error validating payload: %v", err.(*engine.EngineAPIError).ErrorData())
 		} else if status.Status != engine.VALID {
 			t.Fatalf("invalid payload")
 		}
@@ -1587,7 +1600,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash: parent.Hash(),
 	}
-	resp, err := api.ForkchoiceUpdatedV2(fcState, &blockParams)
+	resp, err := api.ForkchoiceUpdatedV3(fcState, &blockParams)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err.(*engine.EngineAPIError).ErrorData())
 	}

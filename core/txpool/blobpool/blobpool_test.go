@@ -500,17 +500,17 @@ func TestOpenDrops(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), big.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), uint256.NewInt(1000000))
 	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3)
-	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), big.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), uint256.NewInt(1000000))
 	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2)
-	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), big.NewInt(1000000))
-	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), big.NewInt(10000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), uint256.NewInt(1000000))
+	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), uint256.NewInt(10000000))
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -625,7 +625,7 @@ func TestOpenIndex(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(addr, big.NewInt(1_000_000_000))
+	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000))
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -725,9 +725,9 @@ func TestOpenHeap(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(addr1, big.NewInt(1_000_000_000))
-	statedb.AddBalance(addr2, big.NewInt(1_000_000_000))
-	statedb.AddBalance(addr3, big.NewInt(1_000_000_000))
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000))
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000))
+	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000))
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -805,9 +805,9 @@ func TestOpenCap(t *testing.T) {
 	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-		statedb.AddBalance(addr1, big.NewInt(1_000_000_000))
-		statedb.AddBalance(addr2, big.NewInt(1_000_000_000))
-		statedb.AddBalance(addr3, big.NewInt(1_000_000_000))
+		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000))
+		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000))
+		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000))
 		statedb.Commit(0, true)
 
 		chain := &testBlockChain{
@@ -1198,7 +1198,7 @@ func TestAdd(t *testing.T) {
 			addrs[acc] = crypto.PubkeyToAddress(keys[acc].PublicKey)
 
 			// Seed the state database with this acocunt
-			statedb.AddBalance(addrs[acc], new(big.Int).SetUint64(seed.balance))
+			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance))
 			statedb.SetNonce(addrs[acc], seed.nonce)
 
 			// Sign the seed transactions and store them in the data store

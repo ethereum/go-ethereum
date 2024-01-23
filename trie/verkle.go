@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -108,7 +107,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	for i := 0; i < len(balance)/2; i++ {
 		balance[len(balance)-i-1], balance[i] = balance[i], balance[len(balance)-i-1]
 	}
-	acc.Balance = new(big.Int).SetBytes(balance[:])
+	acc.Balance = new(uint256.Int).SetBytes32(balance[:])
 
 	// Decode codehash
 	acc.CodeHash = values[utils.CodeKeccakLeafKey]
