@@ -109,17 +109,22 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	depsMVFullWriteList [][]blockstm.WriteDescriptor
+	mvReadMapList       []map[blockstm.Key]blockstm.ReadDescriptor
 }
 
 // copy creates a deep copy of environment.
 func (env *environment) copy() *environment {
 	cpy := &environment{
-		signer:   env.signer,
-		state:    env.state.Copy(),
-		tcount:   env.tcount,
-		coinbase: env.coinbase,
-		header:   types.CopyHeader(env.header),
-		receipts: copyReceipts(env.receipts),
+		signer:              env.signer,
+		state:               env.state.Copy(),
+		tcount:              env.tcount,
+		coinbase:            env.coinbase,
+		header:              types.CopyHeader(env.header),
+		receipts:            copyReceipts(env.receipts),
+		depsMVFullWriteList: env.depsMVFullWriteList,
+		mvReadMapList:       env.mvReadMapList,
 	}
 
 	if env.gasPool != nil {
@@ -854,6 +859,9 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 
+	env.depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
+	env.mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
+
 	return env, nil
 }
 
@@ -903,35 +911,19 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 
 	var coalescedLogs []*types.Log
 
-	var depsMVReadList [][]blockstm.ReadDescriptor
-
-	var depsMVFullWriteList [][]blockstm.WriteDescriptor
-
-	var mvReadMapList []map[blockstm.Key]blockstm.ReadDescriptor
-
 	var deps map[int]map[int]bool
 
 	chDeps := make(chan blockstm.TxDep)
 
-	var count int
-
 	var depsWg sync.WaitGroup
 
-	EnableMVHashMap := w.chainConfig.Bor.IsParallelUniverse(env.header.Number)
+	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {
-		depsMVReadList = [][]blockstm.ReadDescriptor{}
-
-		depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
-
-		mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
-
 		deps = map[int]map[int]bool{}
 
 		chDeps = make(chan blockstm.TxDep)
-
-		count = 0
 
 		depsWg.Add(1)
 
@@ -1064,18 +1056,20 @@ mainloop:
 			env.tcount++
 
 			if EnableMVHashMap {
-				depsMVReadList = append(depsMVReadList, env.state.MVReadList())
-				depsMVFullWriteList = append(depsMVFullWriteList, env.state.MVFullWriteList())
-				mvReadMapList = append(mvReadMapList, env.state.MVReadMap())
+				env.depsMVFullWriteList = append(env.depsMVFullWriteList, env.state.MVFullWriteList())
+				env.mvReadMapList = append(env.mvReadMapList, env.state.MVReadMap())
+
+				if env.tcount > len(env.depsMVFullWriteList) {
+					log.Warn("blockstm - env.tcount > len(env.depsMVFullWriteList)", "env.tcount", env.tcount, "len(depsMVFullWriteList)", len(env.depsMVFullWriteList))
+				}
 
 				temp := blockstm.TxDep{
 					Index:         env.tcount - 1,
-					ReadList:      depsMVReadList[count],
-					FullWriteList: depsMVFullWriteList,
+					ReadList:      env.state.MVReadList(),
+					FullWriteList: env.depsMVFullWriteList,
 				}
 
 				chDeps <- temp
-				count++
 			}
 
 			txs.Shift()
@@ -1107,8 +1101,8 @@ mainloop:
 		tempVanity := env.header.Extra[:types.ExtraVanityLength]
 		tempSeal := env.header.Extra[len(env.header.Extra)-types.ExtraSealLength:]
 
-		if len(mvReadMapList) > 0 {
-			tempDeps := make([][]uint64, len(mvReadMapList))
+		if len(env.mvReadMapList) > 0 {
+			tempDeps := make([][]uint64, len(env.mvReadMapList))
 
 			for j := range deps[0] {
 				tempDeps[0] = append(tempDeps[0], uint64(j))
@@ -1116,14 +1110,15 @@ mainloop:
 
 			delayFlag := true
 
-			for i := 1; i <= len(mvReadMapList)-1; i++ {
-				reads := mvReadMapList[i-1]
+			for i := 1; i <= len(env.mvReadMapList)-1; i++ {
+				reads := env.mvReadMapList[i-1]
 
 				_, ok1 := reads[blockstm.NewSubpathKey(env.coinbase, state.BalancePath)]
 				_, ok2 := reads[blockstm.NewSubpathKey(common.HexToAddress(w.chainConfig.Bor.CalculateBurntContract(env.header.Number.Uint64())), state.BalancePath)]
 
 				if ok1 || ok2 {
 					delayFlag = false
+					break
 				}
 
 				for j := range deps[i] {

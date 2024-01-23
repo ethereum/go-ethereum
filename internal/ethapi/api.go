@@ -1264,12 +1264,31 @@ func doCallWithState(ctx context.Context, b Backend, args TransactionArgs, heade
 	return result, nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
+	var (
+		header *types.Header
+		err    error
+	)
+
+	// BOR: This is used by bor consensus to fetch data from genesis contracts for state-sync
+	// Fetch the state and header from blockNumberOrHash if it's coming from normal eth_call path.
+	if state == nil {
+		state, header, err = b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		if state == nil || err != nil {
+			return nil, err
+		}
+	} else {
+		// Fetch the header from the given blockNumberOrHash. Note that this path is only taken
+		// when we're doing a call from bor consensus to fetch data from genesis contracts. It's
+		// necessary to fetch header using header hash as we might be experiencing a reorg and there
+		// can be multiple headers with same number.
+		header, err = b.HeaderByHash(ctx, *blockNrOrHash.BlockHash)
+		if header == nil || err != nil {
+			log.Warn("Error fetching header on CallWithState", "err", err)
+			return nil, err
+		}
 	}
 
 	return doCall(ctx, b, args, state, header, overrides, blockOverrides, timeout, globalGasCap)
@@ -1327,7 +1346,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) CallWithState(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, state, overrides, blockOverrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}

@@ -456,8 +456,8 @@ func (b *Block) GetTxDependency() [][]uint64 {
 	return blockExtraData.TxDependency
 }
 
-func (h *Header) GetValidatorBytes(config *params.BorConfig) []byte {
-	if !config.IsParallelUniverse(h.Number) {
+func (h *Header) GetValidatorBytes(chainConfig *params.ChainConfig) []byte {
+	if !chainConfig.IsCancun(h.Number) {
 		return h.Extra[ExtraVanityLength : len(h.Extra)-ExtraSealLength]
 	}
 

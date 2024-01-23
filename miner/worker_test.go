@@ -909,7 +909,7 @@ func BenchmarkBorMining(b *testing.B) {
 }
 
 // uses core.NewParallelBlockChain to use the dependencies present in the block header
-// params.BorUnittestChainConfig contains the ParallelUniverseBlock ad big.NewInt(5), so the first 4 blocks will not have metadata.
+// params.BorUnittestChainConfig contains the NapoliBlock as big.NewInt(5), so the first 4 blocks will not have metadata.
 // nolint: gocognit
 func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 	chainConfig := params.BorUnittestChainConfig
