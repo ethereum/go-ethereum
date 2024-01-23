@@ -179,7 +179,7 @@ func (indexer *txIndexer) report(head uint64) TxIndexProgress {
 		tail      = rawdb.ReadTxIndexTail(indexer.db)
 	)
 	total := indexer.limit
-	if indexer.limit == 0 {
+	if indexer.limit == 0 || total > head {
 		total = head + 1 // genesis included
 	}
 	var indexed uint64
