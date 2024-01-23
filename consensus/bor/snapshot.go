@@ -15,8 +15,9 @@ import (
 
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
-	config   *params.BorConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache     // Cache of recent block signatures to speed up ecrecover
+	chainConfig *params.ChainConfig
+
+	sigcache *lru.ARCCache // Cache of recent block signatures to speed up ecrecover
 
 	Number       uint64                    `json:"number"`       // Block number where the snapshot was created
 	Hash         common.Hash               `json:"hash"`         // Block hash where the snapshot was created
@@ -28,14 +29,14 @@ type Snapshot struct {
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
 func newSnapshot(
-	config *params.BorConfig,
+	chainConfig *params.ChainConfig,
 	sigcache *lru.ARCCache,
 	number uint64,
 	hash common.Hash,
 	validators []*valset.Validator,
 ) *Snapshot {
 	snap := &Snapshot{
-		config:       config,
+		chainConfig:  chainConfig,
 		sigcache:     sigcache,
 		Number:       number,
 		Hash:         hash,
@@ -47,7 +48,7 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
+func loadSnapshot(chainConfig *params.ChainConfig, config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte("bor-"), hash[:]...))
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Dat
 
 	snap.ValidatorSet.UpdateValidatorMap()
 
-	snap.config = config
+	snap.chainConfig = chainConfig
 	snap.sigcache = sigcache
 
 	// update total voting power
@@ -85,7 +86,7 @@ func (s *Snapshot) store(db ethdb.Database) error {
 // copy creates a deep copy of the snapshot, though not the individual votes.
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:       s.config,
+		chainConfig:  s.chainConfig,
 		sigcache:     s.sigcache,
 		Number:       s.Number,
 		Hash:         s.Hash,
@@ -122,12 +123,12 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		number := header.Number.Uint64()
 
 		// Delete the oldest signer from the recent list to allow it signing again
-		if number >= s.config.CalculateSprint(number) {
-			delete(snap.Recents, number-s.config.CalculateSprint(number))
+		if number >= s.chainConfig.Bor.CalculateSprint(number) {
+			delete(snap.Recents, number-s.chainConfig.Bor.CalculateSprint(number))
 		}
 
 		// Resolve the authorization key and check against signers
-		signer, err := ecrecover(header, s.sigcache, s.config)
+		signer, err := ecrecover(header, s.sigcache, s.chainConfig.Bor)
 		if err != nil {
 			return nil, err
 		}
@@ -145,12 +146,12 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		snap.Recents[number] = signer
 
 		// change validator set and change proposer
-		if number > 0 && (number+1)%s.config.CalculateSprint(number) == 0 {
+		if number > 0 && (number+1)%s.chainConfig.Bor.CalculateSprint(number) == 0 {
 			if err := validateHeaderExtraField(header.Extra); err != nil {
 				return nil, err
 			}
 
-			validatorBytes := header.GetValidatorBytes(s.config)
+			validatorBytes := header.GetValidatorBytes(s.chainConfig)
 
 			// get validators from headers and use that for new validator set
 			newVals, _ := valset.ParseValidators(validatorBytes)

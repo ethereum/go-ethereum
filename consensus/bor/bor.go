@@ -353,7 +353,7 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 	isSprintEnd := IsSprintStart(number+1, c.config.CalculateSprint(number))
 
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
-	signersBytes := len(header.GetValidatorBytes(c.config))
+	signersBytes := len(header.GetValidatorBytes(c.chainConfig))
 
 	if !isSprintEnd && signersBytes != 0 {
 		return errExtraValidators
@@ -472,7 +472,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 
 		sort.Sort(valset.ValidatorsByAddress(newValidators))
 
-		headerVals, err := valset.ParseValidators(header.GetValidatorBytes(c.config))
+		headerVals, err := valset.ParseValidators(header.GetValidatorBytes(c.chainConfig))
 		if err != nil {
 			return err
 		}
@@ -490,7 +490,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 
 	// verify the validator list in the last sprint block
 	if IsSprintStart(number, c.config.CalculateSprint(number)) {
-		parentValidatorBytes := parent.GetValidatorBytes(c.config)
+		parentValidatorBytes := parent.GetValidatorBytes(c.chainConfig)
 		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
 
 		currentValidators := snap.ValidatorSet.Copy().Validators
@@ -521,7 +521,7 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 		val := valset.NewValidator(signer, 1000)
 		validatorset := valset.NewValidatorSet([]*valset.Validator{val})
 
-		snapshot := newSnapshot(c.config, c.signatures, number, hash, validatorset.Validators)
+		snapshot := newSnapshot(c.chainConfig, c.signatures, number, hash, validatorset.Validators)
 
 		return snapshot, nil
 	}
@@ -541,7 +541,7 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash); err == nil {
+			if s, err := loadSnapshot(c.chainConfig, c.config, c.signatures, c.db, hash); err == nil {
 				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 
 				snap = s
@@ -570,7 +570,7 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 				}
 
 				// new snap shot
-				snap = newSnapshot(c.config, c.signatures, number, hash, validators)
+				snap = newSnapshot(c.chainConfig, c.signatures, number, hash, validators)
 				if err := snap.store(c.db); err != nil {
 					return nil, err
 				}
@@ -742,7 +742,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 		// sort validator by address
 		sort.Sort(valset.ValidatorsByAddress(newValidators))
 
-		if c.config.IsParallelUniverse(header.Number) {
+		if c.chainConfig.IsCancun(header.Number) {
 			var tempValidatorBytes []byte
 
 			for _, validator := range newValidators {
@@ -766,7 +766,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 				header.Extra = append(header.Extra, validator.HeaderBytes()...)
 			}
 		}
-	} else if c.config.IsParallelUniverse(header.Number) {
+	} else if c.chainConfig.IsCancun(header.Number) {
 		blockExtraData := &types.BlockExtraData{
 			ValidatorBytes: nil,
 			TxDependency:   nil,
