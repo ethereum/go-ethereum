@@ -51,20 +51,8 @@ var (
 	emptyBlob          = kzg4844.Blob{}
 	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
 	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
-	emptyBlobVHash     = blobHash(emptyBlobCommit)
+	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 )
-
-func blobHash(commit kzg4844.Commitment) common.Hash {
-	hasher := sha256.New()
-	hasher.Write(commit[:])
-	hash := hasher.Sum(nil)
-
-	var vhash common.Hash
-	vhash[0] = params.BlobTxHashVersion
-	copy(vhash[1:], hash[1:])
-
-	return vhash
-}
 
 // Chain configuration with Cancun enabled.
 //
