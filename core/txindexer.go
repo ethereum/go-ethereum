@@ -217,5 +217,4 @@ func (indexer *txIndexer) close() {
 		<-ch
 	case <-indexer.closed:
 	}
-	return
 }
