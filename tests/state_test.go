@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/holiman/uint256"
 )
 
 func TestState(t *testing.T) {
@@ -61,14 +62,6 @@ func TestState(t *testing.T) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
-
-	// EIP-4844 tests need to be regenerated due to the data-to-blob rename
-	st.skipLoad(`^stEIP4844-blobtransactions/`)
-
-	// Expected failures:
-	// These EIP-4844 tests need to be regenerated.
-	st.fails(`stEIP4844-blobtransactions/opcodeBlobhashOutOfRange.json`, "test has incorrect state root")
-	st.fails(`stEIP4844-blobtransactions/opcodeBlobhBounds.json`, "test has incorrect state root")
 
 	// For Istanbul, older tests were moved into LegacyTests
 	for _, dir := range []string{
@@ -287,7 +280,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, msg.Value)
+				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return

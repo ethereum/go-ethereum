@@ -583,7 +583,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	txs[0].evictionBlobFeeJumps = txs[0].blobfeeJumps
 
 	for i := 1; i < len(txs); i++ {
-		// If there's no nonce gap, initialize the evicion thresholds as the
+		// If there's no nonce gap, initialize the eviction thresholds as the
 		// minimum between the cumulative thresholds and the current tx fees
 		if txs[i].nonce == txs[i-1].nonce+1 {
 			txs[i].evictionExecTip = txs[i-1].evictionExecTip
@@ -632,7 +632,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	// Ensure that there's no over-draft, this is expected to happen when some
 	// transactions get included without publishing on the network
 	var (
-		balance = uint256.MustFromBig(p.state.GetBalance(addr))
+		balance = p.state.GetBalance(addr)
 		spent   = p.spent[addr]
 	)
 	if spent.Cmp(balance) > 0 {
@@ -1355,7 +1355,7 @@ func (p *BlobPool) drop() {
 	p.stored -= uint64(drop.size)
 	delete(p.lookup, drop.hash)
 
-	// Remove the transaction from the pool's evicion heap:
+	// Remove the transaction from the pool's eviction heap:
 	//   - If the entire account was dropped, pop off the address
 	//   - Otherwise, if the new tail has better eviction caps, fix the heap
 	if last {

@@ -35,6 +35,7 @@ import (
 type Test struct {
 	Name string
 	Fn   func(*T)
+	Slow bool
 }
 
 // Result is the result of a test execution.
