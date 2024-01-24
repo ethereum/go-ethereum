@@ -305,6 +305,7 @@ func NewOrderTransactionByNonce(signer OrderSigner, txs map[common.Address]Order
 	heads := make(OrderTxByNonce, 0, len(txs))
 	for from, accTxs := range txs {
 		if len(accTxs) == 0 {
+			delete(txs, from)
 			continue
 		}
 		heads = append(heads, accTxs[0])
