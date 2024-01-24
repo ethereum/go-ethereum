@@ -8,7 +8,7 @@ import (
 
 // SessionManager is the backend that manages the session state of the builder API.
 type SessionManager interface {
-	NewSession() (string, error)
+	NewSession(context.Context) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
 }
 
@@ -24,7 +24,7 @@ type Server struct {
 }
 
 func (s *Server) NewSession(ctx context.Context) (string, error) {
-	return s.sessionMngr.NewSession()
+	return s.sessionMngr.NewSession(ctx)
 }
 
 func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {

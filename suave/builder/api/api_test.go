@@ -30,10 +30,10 @@ func TestAPI(t *testing.T) {
 
 type nullSessionManager struct{}
 
-func (n *nullSessionManager) NewSession() (string, error) {
-	return "1", nil
+func (nullSessionManager) NewSession(ctx context.Context) (string, error) {
+	return "1", ctx.Err()
 }
 
-func (n *nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
+func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
 	return &types.SimulateTransactionResult{Logs: []*types.SimulatedLog{}}, nil
 }
