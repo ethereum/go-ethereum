@@ -115,8 +115,7 @@ func blsync(ctx *cli.Context) error {
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 
 	// set up scheduler and sync modules
-	scheduler := request.NewScheduler(&mclock.System{})
-
+	scheduler := request.NewScheduler()
 	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	beaconBlockSync := newBeaconBlockSync(headTracker)
@@ -132,7 +131,7 @@ func blsync(ctx *cli.Context) error {
 	// register server(s)
 	for _, url := range ctx.StringSlice(utils.BeaconApiFlag.Name) {
 		beaconApi := api.NewBeaconLightApi(url, customHeader)
-		scheduler.RegisterServer(api.NewApiServer(beaconApi))
+		scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
 	}
 	// run until stopped
 	<-ctx.Done()

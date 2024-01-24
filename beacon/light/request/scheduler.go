@@ -20,7 +20,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -68,7 +67,6 @@ type Module interface {
 // allow new operations.
 type Scheduler struct {
 	lock    sync.Mutex
-	clock   mclock.Clock
 	modules []Module // first has highest priority
 	names   map[Module]string
 	servers map[server]struct{}
@@ -83,6 +81,9 @@ type Scheduler struct {
 	stopCh    chan chan struct{}
 
 	triggerCh chan struct{} // restarts waiting sync loop
+	// if trigger has already been fired then send to testWaitCh blocks until
+	// the triggered processing round is finished
+	testWaitCh chan struct{}
 }
 
 type (
@@ -118,9 +119,8 @@ type pendingRequest struct {
 }
 
 // NewScheduler creates a new Scheduler.
-func NewScheduler(clock mclock.Clock) *Scheduler {
+func NewScheduler() *Scheduler {
 	s := &Scheduler{
-		clock:   clock,
 		servers: make(map[server]struct{}),
 		names:   make(map[Module]string),
 		pending: make(map[ServerAndID]pendingRequest),
@@ -129,8 +129,8 @@ func NewScheduler(clock mclock.Clock) *Scheduler {
 		// Note: testWaitCh should not have capacity in order to ensure
 		// that after a trigger happens testWaitCh will block until the resulting
 		// processing round has been finished
-		triggerCh: make(chan struct{}, 1),
-		//testWaitCh: make(chan struct{}),
+		triggerCh:  make(chan struct{}, 1),
+		testWaitCh: make(chan struct{}),
 	}
 	return s
 }
@@ -157,11 +157,10 @@ func (s *Scheduler) RegisterModule(m Module, name string) {
 }
 
 // RegisterServer registers a new server.
-func (s *Scheduler) RegisterServer(rs requestServer) {
+func (s *Scheduler) RegisterServer(server server) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	server := newServer(rs, s.clock)
 	s.addEvent(Event{Type: EvRegistered, Server: server})
 	server.subscribe(func(event Event) {
 		event.Server = server
@@ -170,17 +169,12 @@ func (s *Scheduler) RegisterServer(rs requestServer) {
 }
 
 // UnregisterServer removes a registered server.
-func (s *Scheduler) UnregisterServer(rs requestServer) {
+func (s *Scheduler) UnregisterServer(server server) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for server := range s.servers {
-		if sl, ok := server.(*serverWithLimits); ok && sl.parent == rs {
-			server.unsubscribe()
-			s.addEvent(Event{Type: EvUnregistered, Server: server})
-			return
-		}
-	}
+	server.unsubscribe()
+	s.addEvent(Event{Type: EvUnregistered, Server: server})
 }
 
 // Start starts the scheduler. It should be called after registering all modules
@@ -191,15 +185,15 @@ func (s *Scheduler) Start() {
 
 // Stop stops the scheduler.
 func (s *Scheduler) Stop() {
+	stop := make(chan struct{})
+	s.stopCh <- stop
+	<-stop
 	s.lock.Lock()
 	for server := range s.servers {
 		server.unsubscribe()
 	}
 	s.servers = nil
 	s.lock.Unlock()
-	stop := make(chan struct{})
-	s.stopCh <- stop
-	<-stop
 }
 
 // syncLoop is the main event loop responsible for event/data processing and
@@ -219,7 +213,7 @@ func (s *Scheduler) syncLoop() {
 				return
 			case <-s.triggerCh:
 				break loop
-				//case <-s.testWaitCh:
+			case <-s.testWaitCh:
 			}
 		}
 	}
@@ -244,11 +238,11 @@ func (s *Scheduler) targetChanged() (changed bool) {
 // requests are generated and sent if necessary and possible.
 func (s *Scheduler) processRound() {
 	for {
-		serverEvents, requestEvents := s.filterEvents()
-		log.Debug("Processing modules", "server events", len(serverEvents))
+		filteredEvents := s.filterEvents()
+		log.Debug("Processing modules")
 		for _, module := range s.modules {
-			log.Debug("Processing module", "name", s.names[module], "request events", len(requestEvents[module]))
-			module.Process(append(serverEvents, requestEvents[module]...))
+			log.Debug("Processing module", "name", s.names[module], "events", len(filteredEvents[module]))
+			module.Process(filteredEvents[module])
 		}
 		if !s.targetChanged() {
 			break
@@ -358,13 +352,13 @@ func (s *Scheduler) addEvent(event Event) {
 // to the given server by adding a failed request event (EvFail), ensuring that
 // all requests get finalized and thereby allowing the module logic to be safe
 // and simple.
-func (s *Scheduler) filterEvents() (serverEvents []Event, requestEvents map[Module][]Event) {
+func (s *Scheduler) filterEvents() map[Module][]Event {
 	s.eventLock.Lock()
 	events := s.events
 	s.events = nil
 	s.eventLock.Unlock()
 
-	requestEvents = make(map[Module][]Event)
+	filteredEvents := make(map[Module][]Event)
 	for _, event := range events {
 		server, ok := event.Server.(server)
 		if !ok {
@@ -384,27 +378,29 @@ func (s *Scheduler) filterEvents() (serverEvents []Event, requestEvents map[Modu
 			if event.Type == EvResponse || event.Type == EvFail {
 				delete(s.pending, sid) // final event, close pending request
 			}
-			requestEvents[pending.module] = append(requestEvents[pending.module], event)
+			filteredEvents[pending.module] = append(filteredEvents[pending.module], event)
 		} else {
 			switch event.Type {
 			case EvRegistered:
 				s.servers[server] = struct{}{}
 			case EvUnregistered:
-				s.closePending(event.Server, requestEvents)
+				s.closePending(event.Server, filteredEvents)
 				delete(s.servers, server)
 			}
-			serverEvents = append(serverEvents, event)
+			for _, module := range s.modules {
+				filteredEvents[module] = append(filteredEvents[module], event)
+			}
 		}
 	}
-	return
+	return filteredEvents
 }
 
 // closePending closes all pending requests to the given server and adds an EvFail
 // event to properly finalize them
-func (s *Scheduler) closePending(server Server, requestEvents map[Module][]Event) {
+func (s *Scheduler) closePending(server Server, filteredEvents map[Module][]Event) {
 	for sid, pending := range s.pending {
 		if sid.Server == server {
-			requestEvents[pending.module] = append(requestEvents[pending.module], Event{
+			filteredEvents[pending.module] = append(filteredEvents[pending.module], Event{
 				Type:   EvFail,
 				Server: server,
 				Data: RequestResponse{

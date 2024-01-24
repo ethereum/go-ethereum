@@ -16,7 +16,7 @@ var testEventType = &EventType{Name: "testEvent"}
 func TestServerEvents(t *testing.T) {
 	rs := &testRequestServer{}
 	clock := &mclock.Simulated{}
-	srv := newServer(rs, clock)
+	srv := NewServer(rs, clock)
 	var lastEventType *EventType
 	srv.subscribe(func(event Event) { lastEventType = event.Type })
 	evTypeName := func(evType *EventType) string {
@@ -57,7 +57,7 @@ func TestServerEvents(t *testing.T) {
 
 func TestServerParallel(t *testing.T) {
 	rs := &testRequestServer{}
-	srv := newServer(rs, &mclock.Simulated{})
+	srv := NewServer(rs, &mclock.Simulated{})
 	srv.subscribe(func(event Event) {})
 
 	expSend := func(expSent int) {
@@ -91,7 +91,7 @@ func TestServerParallel(t *testing.T) {
 func TestServerFail(t *testing.T) {
 	rs := &testRequestServer{}
 	clock := &mclock.Simulated{}
-	srv := newServer(rs, clock)
+	srv := NewServer(rs, clock)
 	srv.subscribe(func(event Event) {})
 	expCanRequest := func(expCanRequest bool) {
 		if canRequest, _ := srv.canRequestNow(); canRequest != expCanRequest {

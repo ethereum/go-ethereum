@@ -76,8 +76,8 @@ type server interface {
 	unsubscribe()
 }
 
-// newServer wraps a requestServer and returns a server
-func newServer(rs requestServer, clock mclock.Clock) server {
+// NewServer wraps a requestServer and returns a server
+func NewServer(rs requestServer, clock mclock.Clock) server {
 	s := &serverWithLimits{}
 	s.parent = rs
 	s.serverWithTimeout.init(clock)
