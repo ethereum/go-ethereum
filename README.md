@@ -100,7 +100,6 @@ the main network, but with play-Ether only.
 ```shell
 $ geth --goerli console
 ```
-
 The `console` subcommand has the same meaning as above and is equally
 useful on the testnet too.
 
