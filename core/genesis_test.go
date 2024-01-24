@@ -32,14 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()
 	block.ExtraData = []byte{}
 	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, triedb.NewDatabase(db, nil)); err == nil {
+	if _, err := block.Commit(db, triedb.NewDatabase(db, &dbconfig.HashDefaults)); err == nil {
 		t.Fatal("Expected error on invalid clique config")
 	}
 }
@@ -189,7 +189,7 @@ func TestGenesisHashes(t *testing.T) {
 	} {
 		// Test via MustCommit
 		db := rawdb.NewMemoryDatabase()
-		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults)).Hash(); have != c.want {
+		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, &dbconfig.HashDefaults)).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
@@ -207,7 +207,7 @@ func TestGenesis_Commit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	genesisBlock := genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	genesisBlock := genesis.MustCommit(db, triedb.NewDatabase(db, &dbconfig.HashDefaults))
 
 	if genesis.Difficulty != nil {
 		t.Fatalf("assumption wrong")
@@ -259,9 +259,9 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 
 func newDbConfig(scheme string) *triedb.Config {
 	if scheme == rawdb.HashScheme {
-		return triedb.HashDefaults
+		return &dbconfig.HashDefaults
 	}
-	return &triedb.Config{PathDB: pathdb.Defaults}
+	return &dbconfig.PathDefaults
 }
 
 func TestVerkleGenesisCommit(t *testing.T) {
@@ -311,7 +311,10 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+
+	config := dbconfig.PathDefaults
+	config.IsVerkle = true
+	triedb := triedb.NewDatabase(db, &config)
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)

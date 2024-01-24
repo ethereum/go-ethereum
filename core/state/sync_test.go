@@ -28,8 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/holiman/uint256"
 )
 
@@ -44,14 +43,16 @@ type testAccount struct {
 // makeTestState create a sample test state to test node-wise reconstruction.
 func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, common.Hash, []*testAccount) {
 	// Create an empty state
-	config := &triedb.Config{Preimages: true}
+	var config triedb.Config
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		config = dbconfig.PathDefaults
 	} else {
-		config.HashDB = hashdb.Defaults
+		config = dbconfig.HashDefaults
 	}
+	config.Preimages = true
+
 	db := rawdb.NewMemoryDatabase()
-	nodeDb := triedb.NewDatabase(db, config)
+	nodeDb := triedb.NewDatabase(db, &config)
 	sdb := NewDatabaseWithNodeDB(db, nodeDb)
 	state, _ := New(types.EmptyRootHash, sdb, nil)
 
@@ -90,7 +91,9 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root common.Hash, accounts []*testAccount) {
 	var config triedb.Config
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		config = dbconfig.PathDefaults
+	} else {
+		config = dbconfig.HashDefaults
 	}
 	// Check root availability and state contents
 	state, err := New(root, NewDatabaseWithConfig(db, &config), nil)
@@ -115,11 +118,15 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 
 // checkStateConsistency checks that all data of a state root is present.
 func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) error {
-	config := &triedb.Config{Preimages: true}
+	var config triedb.Config
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		config = dbconfig.PathDefaults
+	} else {
+		config = dbconfig.HashDefaults
 	}
-	state, err := New(root, NewDatabaseWithConfig(db, config), nil)
+	config.Preimages = true
+
+	state, err := New(root, NewDatabaseWithConfig(db, &config), nil)
 	if err != nil {
 		return err
 	}
@@ -131,8 +138,8 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 
 // Tests that an empty state is not scheduled for syncing.
 func TestEmptyStateSync(t *testing.T) {
-	dbA := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	dbB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), &triedb.Config{PathDB: pathdb.Defaults})
+	dbA := triedb.NewDatabase(rawdb.NewMemoryDatabase(), &dbconfig.HashDefaults)
+	dbB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), &dbconfig.PathDefaults)
 
 	sync := NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, dbA.Scheme())
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
@@ -206,7 +213,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{code: codes[i]})
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -325,7 +332,7 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{code: codes[i]})
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -429,7 +436,7 @@ func testIterativeRandomStateSync(t *testing.T, count int, scheme string) {
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -522,7 +529,7 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -627,7 +634,7 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 		addedPaths  []string
 		addedHashes []common.Hash
 	)
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not available %x", srcRoot)
 	}

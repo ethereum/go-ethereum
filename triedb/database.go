@@ -22,28 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/state"
 )
-
-// Config defines all necessary options for database.
-type Config struct {
-	Preimages bool           // Flag whether the preimage of node key is recorded
-	IsVerkle  bool           // Flag whether the db is holding a verkle tree
-	HashDB    *hashdb.Config // Configs for hash-based scheme
-	PathDB    *pathdb.Config // Configs for experimental path-based scheme
-}
-
-// HashDefaults represents a config for using hash-based scheme with
-// default settings.
-var HashDefaults = &Config{
-	Preimages: false,
-	HashDB:    hashdb.Defaults,
-}
 
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
@@ -62,13 +46,17 @@ type backend interface {
 	// and dirty disk layer nodes, so both are merged into the second return.
 	Size() (common.StorageSize, common.StorageSize)
 
+	// NodeReader returns a node reader associated with the specific state.
+	// An error will be returned if the specified state is not available.
+	NodeReader(root common.Hash) (database.NodeReader, error)
+
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to
 	// the specified root.
 	//
 	// The passed in maps(nodes, states) will be retained to avoid copying
 	// everything. Therefore, these maps must not be changed afterwards.
-	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
+	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *state.Origin) error
 
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
@@ -91,9 +79,8 @@ type Database struct {
 // NewDatabase initializes the trie database with default settings, note
 // the legacy hash-based scheme is used by default.
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
-	// Sanitize the config and use the default one if it's not specified.
-	if config == nil {
-		config = HashDefaults
+	if err := config.sanitize(); err != nil {
+		log.Crit("Database config is invalid", "error", err)
 	}
 	var preimages *preimageStore
 	if config.Preimages {
@@ -104,34 +91,18 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		diskdb:    diskdb,
 		preimages: preimages,
 	}
-	if config.HashDB != nil && config.PathDB != nil {
-		log.Crit("Both 'hash' and 'path' mode are configured")
-	}
 	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB)
 	} else {
-		var resolver hashdb.ChildResolver
-		if config.IsVerkle {
-			// TODO define verkle resolver
-			log.Crit("Verkle node resolver is not defined")
-		} else {
-			resolver = trie.MerkleResolver{}
-		}
-		db.backend = hashdb.New(diskdb, config.HashDB, resolver)
+		db.backend = hashdb.New(diskdb, config.HashDB)
 	}
 	return db
 }
 
-// Reader returns a reader for accessing all trie nodes with provided state root.
-// An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	switch b := db.backend.(type) {
-	case *hashdb.Database:
-		return b.Reader(blockRoot)
-	case *pathdb.Database:
-		return b.Reader(blockRoot)
-	}
-	return nil, errors.New("unknown backend")
+// NodeReader returns a reader for accessing all trie nodes with provided state
+// root. An error will be returned if the requested state is not available.
+func (db *Database) NodeReader(blockRoot common.Hash) (database.NodeReader, error) {
+	return db.backend.NodeReader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -141,7 +112,7 @@ func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *state.Origin) error {
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
@@ -265,14 +236,7 @@ func (db *Database) Recover(target common.Hash) error {
 	if !ok {
 		return errors.New("not supported")
 	}
-	var loader triestate.TrieLoader
-	if db.config.IsVerkle {
-		// TODO define verkle loader
-		log.Crit("Verkle loader is not defined")
-	} else {
-		loader = trie.NewMerkleLoader(db)
-	}
-	return pdb.Recover(target, loader)
+	return pdb.Recover(target)
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be

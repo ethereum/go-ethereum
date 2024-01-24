@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 type mockBackend struct {
@@ -143,7 +144,7 @@ func createMiner(t *testing.T) *Miner {
 	}
 	// Create chainConfig
 	chainDB := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(chainDB, nil)
+	triedb := triedb.NewDatabase(chainDB, &dbconfig.HashDefaults)
 	genesis := minerTestGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, triedb, genesis)
 	if err != nil {

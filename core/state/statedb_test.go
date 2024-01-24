@@ -38,8 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/holiman/uint256"
 )
 
@@ -49,7 +48,7 @@ func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
 	var (
 		db  = rawdb.NewMemoryDatabase()
-		tdb = triedb.NewDatabase(db, nil)
+		tdb = triedb.NewDatabase(db, &dbconfig.HashDefaults)
 	)
 	state, _ := New(types.EmptyRootHash, NewDatabaseWithNodeDB(db, tdb), nil)
 
@@ -85,8 +84,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
 	transDb := rawdb.NewMemoryDatabase()
 	finalDb := rawdb.NewMemoryDatabase()
-	transNdb := triedb.NewDatabase(transDb, nil)
-	finalNdb := triedb.NewDatabase(finalDb, nil)
+	transNdb := triedb.NewDatabase(transDb, &dbconfig.HashDefaults)
+	finalNdb := triedb.NewDatabase(finalDb, &dbconfig.HashDefaults)
 	transState, _ := New(types.EmptyRootHash, NewDatabaseWithNodeDB(transDb, transNdb), nil)
 	finalState, _ := New(types.EmptyRootHash, NewDatabaseWithNodeDB(finalDb, finalNdb), nil)
 
@@ -803,14 +802,9 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		memDb = rawdb.NewMemoryDatabase()
 	)
 	if scheme == rawdb.PathScheme {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{PathDB: &pathdb.Config{
-			CleanCacheSize: 0,
-			DirtyCacheSize: 0,
-		}}) // disable caching
+		tdb = triedb.NewDatabase(memDb, &dbconfig.PathDefaults) // disable caching
 	} else {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
-			CleanCacheSize: 0,
-		}}) // disable caching
+		tdb = triedb.NewDatabase(memDb, &dbconfig.HashDefaults) // cache is disabled by default
 	}
 	db := NewDatabaseWithNodeDB(memDb, tdb)
 
@@ -1033,7 +1027,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 	// Create a state trie with many accounts and slots
 	var (
 		memdb    = rawdb.NewMemoryDatabase()
-		triedb   = triedb.NewDatabase(memdb, nil)
+		triedb   = triedb.NewDatabase(memdb, &dbconfig.HashDefaults)
 		statedb  = NewDatabaseWithNodeDB(memdb, triedb)
 		state, _ = New(types.EmptyRootHash, statedb, nil)
 	)
@@ -1105,7 +1099,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 func TestResetObject(t *testing.T) {
 	var (
 		disk     = rawdb.NewMemoryDatabase()
-		tdb      = triedb.NewDatabase(disk, nil)
+		tdb      = triedb.NewDatabase(disk, &dbconfig.HashDefaults)
 		db       = NewDatabaseWithNodeDB(disk, tdb)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
 		state, _ = New(types.EmptyRootHash, db, snaps)
@@ -1139,7 +1133,7 @@ func TestResetObject(t *testing.T) {
 func TestDeleteStorage(t *testing.T) {
 	var (
 		disk     = rawdb.NewMemoryDatabase()
-		tdb      = triedb.NewDatabase(disk, nil)
+		tdb      = triedb.NewDatabase(disk, &dbconfig.HashDefaults)
 		db       = NewDatabaseWithNodeDB(disk, tdb)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
 		state, _ = New(types.EmptyRootHash, db, snaps)

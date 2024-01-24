@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -86,7 +87,7 @@ func BenchmarkFilters(b *testing.B) {
 	// The test txs are not properly signed, can't simply create a chain
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
-	gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	gspec.MustCommit(db, triedb.NewDatabase(db, &dbconfig.HashDefaults))
 
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
@@ -181,7 +182,7 @@ func TestFilters(t *testing.T) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err = gspec.Commit(db, triedb.NewDatabase(db, &dbconfig.HashDefaults))
 	if err != nil {
 		t.Fatal(err)
 	}

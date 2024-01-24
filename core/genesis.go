@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/holiman/uint256"
 )
 
@@ -117,16 +117,16 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	// If a genesis-time verkle trie is requested, create a trie config
 	// with the verkle trie enabled so that the tree can be initialized
 	// as such.
-	var config *triedb.Config
+	var config triedb.Config
 	if isVerkle {
-		config = &triedb.Config{
-			PathDB:   pathdb.Defaults,
-			IsVerkle: true,
-		}
+		config = dbconfig.PathDefaults
+		config.IsVerkle = true
+	} else {
+		config = dbconfig.HashDefaults
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), config)
+	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &config)
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
 	if err != nil {
 		return common.Hash{}, err

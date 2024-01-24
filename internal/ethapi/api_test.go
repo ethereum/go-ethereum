@@ -441,6 +441,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 			TrieTimeLimit:     5 * time.Minute,
 			SnapshotLimit:     0,
 			TrieDirtyDisabled: true, // Archive mode
+			StateScheme:       rawdb.HashScheme,
 		}
 	)
 	accman, acc := newTestAccountManager(t)

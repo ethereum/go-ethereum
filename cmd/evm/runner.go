@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/urfave/cli/v2"
 )
 
@@ -148,10 +148,9 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{
-		Preimages: preimages,
-		HashDB:    hashdb.Defaults,
-	})
+	config := dbconfig.HashDefaults
+	config.Preimages = preimages
+	triedb := triedb.NewDatabase(db, &config)
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabaseWithNodeDB(db, triedb)

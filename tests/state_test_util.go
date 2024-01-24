@@ -40,8 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -444,13 +443,15 @@ type StateTestState struct {
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
-	tconf := &triedb.Config{Preimages: true}
+	var dbconf triedb.Config
 	if scheme == rawdb.HashScheme {
-		tconf.HashDB = hashdb.Defaults
+		dbconf = dbconfig.HashDefaults
 	} else {
-		tconf.PathDB = pathdb.Defaults
+		dbconf = dbconfig.PathDefaults
 	}
-	triedb := triedb.NewDatabase(db, tconf)
+	dbconf.Preimages = true
+
+	triedb := triedb.NewDatabase(db, &dbconf)
 	sdb := state.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {

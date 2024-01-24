@@ -22,7 +22,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/trie/testutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
@@ -66,8 +67,9 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 			if npath == nil && depth == index {
@@ -112,8 +114,9 @@ func BenchmarkPersist(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 		}
@@ -149,8 +152,9 @@ func BenchmarkJournal(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
 			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
 		}

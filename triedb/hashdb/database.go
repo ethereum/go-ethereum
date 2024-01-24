@@ -32,7 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/ethereum/go-ethereum/triedb/state"
 )
 
 var (
@@ -59,32 +60,42 @@ var (
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
 )
 
-// ChildResolver defines the required method to decode the provided
-// trie node and iterate the children on top.
-type ChildResolver interface {
-	ForEach(node []byte, onChild func(common.Hash))
-}
-
 // Config contains the settings for database.
 type Config struct {
-	CleanCacheSize int // Maximum memory allowance (in bytes) for caching clean nodes
+	// CleanCacheSize specifies the maximum memory allowance (in bytes)
+	// for caching clean nodes.
+	CleanCacheSize int
+
+	// ChildResolver defines the method to decode the provided trie node
+	// and iterate the hash children on top.
+	ChildResolver func(node []byte, onChild func(common.Hash))
 }
 
-// Defaults is the default setting for database if it's not specified.
-// Notably, clean cache is disabled explicitly,
-var Defaults = &Config{
-	// Explicitly set clean cache size to 0 to avoid creating fastcache,
-	// otherwise database must be closed when it's no longer needed to
-	// prevent memory leak.
-	CleanCacheSize: 0,
+// sanitize validates the provided config.
+func (config *Config) sanitize() error {
+	if config == nil {
+		return errors.New("hashdb config is nil")
+	}
+	if config.ChildResolver == nil {
+		return errors.New("node resolver is not configured")
+	}
+	return nil
+}
+
+// Copy returns a deep copied config object.
+func (config *Config) Copy() *Config {
+	return &Config{
+		CleanCacheSize: config.CleanCacheSize,
+		ChildResolver:  config.ChildResolver,
+	}
 }
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb   ethdb.Database // Persistent storage for matured trie nodes
-	resolver ChildResolver  // The handler to resolve children of nodes
+	diskdb ethdb.Database // Persistent storage for matured trie nodes
+	config *Config        // configuration used in hash db
 
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
@@ -123,27 +134,27 @@ var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
 // forChildren invokes the callback for all the tracked children of this node,
 // both the implicit ones from inside the node as well as the explicit ones
 // from outside the node.
-func (n *cachedNode) forChildren(resolver ChildResolver, onChild func(hash common.Hash)) {
+func (n *cachedNode) forChildren(resolver func(node []byte, onChild func(common.Hash)), onChild func(hash common.Hash)) {
 	for child := range n.external {
 		onChild(child)
 	}
-	resolver.ForEach(n.node, onChild)
+	resolver(n.node, onChild)
 }
 
 // New initializes the hash-based node database.
-func New(diskdb ethdb.Database, config *Config, resolver ChildResolver) *Database {
-	if config == nil {
-		config = Defaults
+func New(diskdb ethdb.Database, config *Config) *Database {
+	if err := config.sanitize(); err != nil {
+		log.Crit("Hash database config is invalid", "error", err)
 	}
 	var cleans *fastcache.Cache
 	if config.CleanCacheSize > 0 {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
 	return &Database{
-		diskdb:   diskdb,
-		resolver: resolver,
-		cleans:   cleans,
-		dirties:  make(map[common.Hash]*cachedNode),
+		diskdb:  diskdb,
+		config:  config,
+		cleans:  cleans,
+		dirties: make(map[common.Hash]*cachedNode),
 	}
 }
 
@@ -162,7 +173,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 		node:      node,
 		flushPrev: db.newest,
 	}
-	entry.forChildren(db.resolver, func(child common.Hash) {
+	entry.forChildren(db.config.ChildResolver, func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
 			c.parents++
 		}
@@ -315,7 +326,7 @@ func (db *Database) dereference(hash common.Hash) {
 			db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
 		// Dereference all children and delete the node
-		node.forChildren(db.resolver, func(child common.Hash) {
+		node.forChildren(db.config.ChildResolver, func(child common.Hash) {
 			db.dereference(child)
 		})
 		delete(db.dirties, hash)
@@ -464,7 +475,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 
 	// Dereference all children and delete the node
-	node.forChildren(db.resolver, func(child common.Hash) {
+	node.forChildren(db.config.ChildResolver, func(child common.Hash) {
 		if err == nil {
 			err = db.commit(child, batch, uncacher)
 		}
@@ -548,7 +559,7 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 
 // Update inserts the dirty nodes in provided nodeset into database and link the
 // account trie with multiple storage tries if necessary.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *state.Origin) error {
 	// Ensure the parent state is present and signal a warning if not.
 	if parent != types.EmptyRootHash {
 		if blob, _ := db.node(parent); len(blob) == 0 {
@@ -629,9 +640,9 @@ func (db *Database) Scheme() string {
 	return rawdb.HashScheme
 }
 
-// Reader retrieves a node reader belonging to the given state root.
+// NodeReader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}
