@@ -177,6 +177,8 @@ services:
     networks:
       l1_net:
         ipv4_address: '172.14.0.2'
+    ports:
+      - 9545:8545 # Expose RPC port to host as 9545
     volumes:
       - geth-data-l1-bootnode:/data
     profiles:
