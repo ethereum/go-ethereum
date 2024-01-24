@@ -459,11 +459,11 @@ func (s *Ethereum) InitMiner() (eb common.Address, err error) {
 func (s *Ethereum) StartMining() error {
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
-		eb, err := s.InitMiner()
+		_, err := s.InitMiner()
 		if err != nil {
 			return err
 		}
-		go s.miner.Start(eb)
+		go s.miner.Start()
 	}
 	return nil
 }
