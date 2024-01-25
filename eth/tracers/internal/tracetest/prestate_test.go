@@ -92,12 +92,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// Configure a blockchain with the given prestate
 			var (
-				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				origin, _ = signer.Sender(tx)
-				txContext = vm.TxContext{
-					Origin:   origin,
-					GasPrice: tx.GasPrice(),
-				}
+				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = vm.BlockContext{
 					CanTransfer: core.CanTransfer,
 					Transfer:    core.Transfer,
@@ -116,11 +111,11 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
-			msg, err := core.TransactionToMessage(tx, signer, nil)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if _, err = st.TransitionDb(); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)

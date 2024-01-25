@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// geth is a command-line client for Ethereum.
 package main
 
 import (

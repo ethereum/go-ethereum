@@ -344,11 +344,11 @@ func parseLink(e string) (*linkEntry, error) {
 		return nil, fmt.Errorf("wrong/missing scheme 'enrtree' in URL")
 	}
 	e = e[len(linkPrefix):]
-	pos := strings.IndexByte(e, '@')
-	if pos == -1 {
+
+	keystring, domain, found := strings.Cut(e, "@")
+	if !found {
 		return nil, entryError{"link", errNoPubkey}
 	}
-	keystring, domain := e[:pos], e[pos+1:]
 	keybytes, err := b32format.DecodeString(keystring)
 	if err != nil {
 		return nil, entryError{"link", errBadPubkey}
