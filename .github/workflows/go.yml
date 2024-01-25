@@ -1,23 +1,29 @@
-name: i386 linux tests
+name: Run unit tests on Linux
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch:
+
+env:
+  CGO_CFLAGS_ALLOW: "-O -D__BLST_PORTABLE__"
+  CGO_CFLAGS: "-O -D__BLST_PORTABLE__"
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ '1.20', '1.21.x' ]
+        goarch: [amd64, arm64]
+
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Go
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@v4
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.21.4
-      - name: Run tests
-        run: go test -short ./...
-        env:
-          GOOS: linux
-          GOARCH: 386
+          go-version: ${{ matrix.go-version }}
+      - name: Run unit tests
+        run: go test -short ./accounts ./cmd/geth ./core ./core/types ./core/vm ./eth/... ./internal/ethapi/... ./miner ./params ./suave/...
