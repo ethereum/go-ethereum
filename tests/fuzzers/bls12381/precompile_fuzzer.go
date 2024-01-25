@@ -19,6 +19,7 @@ package bls
 import (
 	"bytes"
 	"fmt"
+	"github.com/holiman/uint256"
 	"math/big"
 	"time"
 
@@ -63,10 +64,10 @@ func checkInput(id byte, inputLen int) bool {
 }
 
 var vmBlockCtx = vm.BlockContext{
-	CanTransfer: func(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+	CanTransfer: func(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 		return db.GetBalance(addr).Cmp(amount) >= 0
 	},
-	Transfer: func(vm.StateDB, common.Address, common.Address, *big.Int) {
+	Transfer: func(vm.StateDB, common.Address, common.Address, *uint256.Int) {
 		panic("transfer: not implemented")
 	},
 	GetHash: func(u uint64) common.Hash {
