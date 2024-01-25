@@ -366,9 +366,12 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 // SubscribeTransactions registers a subscription for new transaction events,
 // supporting feeding only newly seen or also resurrected transactions.
 func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
-	subs := make([]event.Subscription, len(p.subpools))
-	for i, subpool := range p.subpools {
-		subs[i] = subpool.SubscribeTransactions(ch, reorgs)
+	subs := make([]event.Subscription, 0, len(p.subpools))
+	for _, subpool := range p.subpools {
+		sub := subpool.SubscribeTransactions(ch, reorgs)
+		if sub != nil { // sub will be nil when subpool have been shut down
+			subs = append(subs, sub)
+		}
 	}
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }
