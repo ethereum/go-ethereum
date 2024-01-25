@@ -15,7 +15,7 @@
       "arrowGlacierBlock": 0,
       "grayGlacierBlock": 0,
       "clique": {
-        "period": 200,
+        "period": 2000,
         "epoch": 30000
       }
     },
