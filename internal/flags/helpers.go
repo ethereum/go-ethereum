@@ -115,7 +115,7 @@ func doMigrateFlags(ctx *cli.Context) {
 		for _, parent := range ctx.Lineage()[1:] {
 			if parent.IsSet(name) {
 				// When iterating across the lineage, we will be served both
-				// the 'canon' and alias formats of all commmands. In most cases,
+				// the 'canon' and alias formats of all commands. In most cases,
 				// it's fine to set it in the ctx multiple times (one for each
 				// name), however, the Slice-flags are not fine.
 				// The slice-flags accumulate, so if we set it once as
