@@ -1,0 +1,111 @@
+env:
+  - CGO_ENABLED=1
+builds:
+  - id: suave-execution-geth-darwin-amd64
+    binary: suave-execution-geth
+    main: ./cmd/geth
+    goarch:
+      - amd64
+    goos:
+      - darwin
+    env:
+      - CC=o64-clang
+      - CXX=o64-clang++
+    flags:
+      - -trimpath
+  - id: suave-execution-geth-darwin-arm64
+    binary: suave-execution-geth
+    main: ./cmd/geth
+    goarch:
+      - arm64
+    goos:
+      - darwin
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    flags:
+      - -trimpath
+  - id: suave-execution-geth-linux-amd64
+    binary: suave-execution-geth
+    main: ./cmd/geth
+    env:
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
+    goarch:
+      - amd64
+    goos:
+      - linux
+    flags:
+      - -trimpath
+    ldflags:
+      - -extldflags "-Wl,-z,stack-size=0x800000 --static"
+    tags:
+      - netgo
+      - osusergo
+  - id: suave-execution-geth-linux-arm64
+    binary: suave-execution-geth
+    main: ./cmd/geth
+    goarch:
+      - arm64
+    goos:
+      - linux
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    flags:
+      - -trimpath
+    ldflags:
+      - -extldflags "-Wl,-z,stack-size=0x800000 --static"
+    tags:
+      - netgo
+      - osusergo
+  - id: suave-execution-geth-windows-amd64
+    binary: suave-execution-geth
+    main: ./cmd/geth
+    goarch:
+      - amd64
+    goos:
+      - windows
+    env:
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    flags:
+      - -trimpath
+      - -buildmode=exe
+
+archives:
+  - id: w/version
+    builds:
+      - suave-execution-geth-darwin-amd64
+      - suave-execution-geth-darwin-arm64
+      - suave-execution-geth-linux-amd64
+      - suave-execution-geth-linux-arm64
+      - suave-execution-geth-windows-amd64
+    name_template: "suave-execution-geth_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    format: zip
+    files:
+      - none*
+
+dockers:
+  - dockerfile: ./Dockerfile.suave
+    use: buildx
+    goarch: amd64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/amd64
+    image_templates:
+      - "flashbots/suave-execution-geth:{{ .ShortCommit }}"
+      - "flashbots/suave-execution-geth:{{ .Tag }}"
+      - "flashbots/suave-execution-geth:latest"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  draft: true
+  header: |
+    # 🚀 Features
+    # 🎄 Enhancements
+    # 🐞 Notable bug fixes
+    # 🎠 Community
