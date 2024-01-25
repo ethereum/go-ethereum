@@ -1,8 +1,9 @@
 #!/bin/sh
 set -exu
 
+GETH_BIN_PATH=${GETH_BIN_PATH:-geth}
 GENESIS_L1_PATH=${GENESIS_L1_PATH:-/genesis.json}
-VERBOSITY=3
+VERBOSITY=${VERBOSITY:-3}
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
 GETH_KEYSTORE_DIR="$GETH_DATA_DIR/keystore"
@@ -16,7 +17,7 @@ if [ ! -d "$GETH_KEYSTORE_DIR" ] && [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "$GETH_KEYSTORE_DIR missing, running account import"
 	echo -n "pwd" > "$GETH_DATA_DIR"/password
 	echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
-	geth --verbosity="$VERBOSITY" \
+	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
 		--nousb \
 		account import \
 		--datadir="$GETH_DATA_DIR" \
@@ -30,7 +31,7 @@ fi
 if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 	echo "$GETH_CHAINDATA_DIR missing, running init"
 	echo "Initializing genesis."
-	geth --verbosity="$VERBOSITY" \
+	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
 		--nousb \
 		--state.scheme=path \
 		--db.engine=pebble \
@@ -42,6 +43,19 @@ fi
 
 # Obtain assigned container IP for p2p
 NODE_IP=${NODE_IP:-$(hostname -i)}
+echo "NODE_IP is set to: $NODE_IP"
+
+PUBLIC_NODE_IP=${PUBLIC_NODE_IP:-""}
+echo "EXTERNAL_NODE_IP is set to: $PUBLIC_NODE_IP"
+
+# Set NAT_FLAG based on whether PUBLIC_NODE_IP is empty or not
+if [ -n "$PUBLIC_NODE_IP" ]; then
+    NAT_FLAG="--nat=extip:$PUBLIC_NODE_IP"
+else
+    NAT_FLAG="--nat=none"
+fi
+
+# (Optional) Echo the values for verification
 
 if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	echo "Starting bootnode"
@@ -49,7 +63,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	# Generate boot.key
 	echo "$BOOT_KEY" > $GETH_DATA_DIR/boot.key
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
@@ -78,17 +92,19 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
         	--pprof.port=60601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
-		--nat extip:$NODE_IP \
+		"$NAT_FLAG" \
 		--txpool.accountqueue=512 \
 		--rpc.allow-unprotected-txs
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
+ 	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
+  	GETH_PORT="${GETH_PORT:-30311}"
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
-		--port 30311 \
+		--port="$GETH_PORT" \
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
@@ -124,15 +140,17 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--nat extip:$NODE_IP
+		"$NAT_FLAG"
 
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	echo "Starting member node"
+	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
+	GETH_PORT="${GETH_PORT:-30311}"
 
-	exec geth \
+	exec "$GETH_BIN_PATH" \
 		--verbosity="$VERBOSITY" \
 		--datadir="$GETH_DATA_DIR" \
-		--port 30311 \
+		--port="$GETH_PORT" \
 		--syncmode=full \
 		--gcmode=full \
 		--state.scheme=path \
@@ -162,7 +180,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--nat extip:$NODE_IP
+		"$NAT_FLAG"
 else
 	echo "Invalid GETH_NODE_TYPE specified"
 fi
