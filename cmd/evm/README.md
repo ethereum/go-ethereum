@@ -26,7 +26,7 @@ which can
 
 ### Specification
 
-The idea is to specify the behaviour of this binary very _strict_, so that other
+The idea is to specify the behaviour of this binary very _strictly_, so that other
 node implementors can build replicas based on their own state-machines, and the
 state generators can swap between a \`geth\`-based implementation and a \`parityvm\`-based
 implementation.
