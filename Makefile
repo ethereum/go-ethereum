@@ -14,7 +14,7 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-#? all: Build all packages and executables, include abidump, abigen, bootnode, clef, devp2p, ethkey, evm, geth, p2psim, rlpdump
+#? all: Build all packages and executables
 all:
 	$(GORUN) build/ci.go install
 
