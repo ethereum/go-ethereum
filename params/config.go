@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -81,6 +82,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  newUint64(1696000704),
+		CancunTime:                    newUint64(1707305664),
 		Ethash:                        new(EthashConfig),
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
@@ -105,6 +107,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            big.NewInt(1735371),
 		ShanghaiTime:                  newUint64(1677557088),
+		CancunTime:                    newUint64(1706655072),
 		Ethash:                        new(EthashConfig),
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
@@ -746,6 +749,23 @@ func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
 func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
+}
+
+// LatestFork returns the latest time-based fork that would be active for the given time.
+func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
+	// Assume last non-time-based fork has passed.
+	london := c.LondonBlock
+
+	switch {
+	case c.IsPrague(london, time):
+		return forks.Prague
+	case c.IsCancun(london, time):
+		return forks.Cancun
+	case c.IsShanghai(london, time):
+		return forks.Shanghai
+	default:
+		return forks.Paris
+	}
 }
 
 // isForkBlockIncompatible returns true if a fork scheduled at block s1 cannot be

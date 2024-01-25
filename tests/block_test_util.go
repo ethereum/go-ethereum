@@ -328,7 +328,7 @@ func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
 	for addr, acct := range t.json.Post {
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(addr)
-		balance2 := statedb.GetBalance(addr)
+		balance2 := statedb.GetBalance(addr).ToBig()
 		nonce2 := statedb.GetNonce(addr)
 		if !bytes.Equal(code2, acct.Code) {
 			return fmt.Errorf("account code mismatch for addr: %s want: %v have: %s", addr, acct.Code, hex.EncodeToString(code2))

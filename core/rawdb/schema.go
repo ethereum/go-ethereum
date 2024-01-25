@@ -80,6 +80,8 @@ var (
 	txIndexTailKey = []byte("TransactionIndexTail")
 
 	// fastTxLookupLimitKey tracks the transaction lookup limit during fast sync.
+	// This flag is deprecated, it's kept to avoid reporting errors when inspect
+	// database.
 	fastTxLookupLimitKey = []byte("FastTransactionLookupLimit")
 
 	// badBlockKey tracks the list of bad blocks seen by local

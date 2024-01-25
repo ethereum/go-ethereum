@@ -17,9 +17,8 @@
 package state
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -103,13 +102,13 @@ type (
 	selfDestructChange struct {
 		account     *common.Address
 		prev        bool // whether account had already self-destructed
-		prevbalance *big.Int
+		prevbalance *uint256.Int
 	}
 
 	// Changes to individual accounts.
 	balanceChange struct {
 		account *common.Address
-		prev    *big.Int
+		prev    *uint256.Int
 	}
 	nonceChange struct {
 		account *common.Address
