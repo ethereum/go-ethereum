@@ -419,7 +419,7 @@ func (pool *LegacyPool) Close() error {
 }
 
 // Reset implements txpool.SubPool, allowing the legacy pool's internal state to be
-// kept in sync with the main transacion pool's internal state.
+// kept in sync with the main transaction pool's internal state.
 func (pool *LegacyPool) Reset(oldHead, newHead *types.Header) {
 	wait := pool.requestReset(oldHead, newHead)
 	<-wait
@@ -914,7 +914,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Depending
-// on the local flag, full pricing contraints will or will not be applied.
+// on the local flag, full pricing constraints will or will not be applied.
 //
 // If sync is set, the method will block until all internal maintenance related
 // to the add is finished. Only use this during tests for determinism!

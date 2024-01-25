@@ -694,7 +694,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
 
 	if block == nil {
-		// This should never happen. In practice, previsouly currentBlock
+		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
@@ -719,7 +719,7 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
 
 	if block == nil {
-		// This should never happen. In practice, previsouly currentBlock
+		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
@@ -2055,7 +2055,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// The chain importer is starting and stopping trie prefetchers. If a bad
 		// block or other error is hit however, an early return may not properly
 		// terminate the background threads. This defer ensures that we clean up
-		// and dangling prefetcher, without defering each and holding on live refs.
+		// and dangling prefetcher, without deferring each and holding on live refs.
 		if activeState != nil {
 			activeState.StopPrefetcher()
 		}

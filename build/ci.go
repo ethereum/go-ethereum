@@ -145,7 +145,7 @@ var (
 	//
 	// This version is fine to be old and full of security holes, we just use it
 	// to build the latest Go. Don't change it. If it ever becomes insufficient,
-	// we need to switch over to a recursive builder to jumpt across supported
+	// we need to switch over to a recursive builder to jump across supported
 	// versions.
 	gobootVersion = "1.19.6"
 )
