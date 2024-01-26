@@ -12,7 +12,7 @@ env:
   CGO_CFLAGS: "-O -D__BLST_PORTABLE__"
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
