@@ -17,12 +17,19 @@
 package state
 
 import (
+	"fmt"
 	"maps"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
+
+type revision struct {
+	id           int
+	journalIndex int
+}
 
 // journalEntry is a modification entry in the state change journal that can be
 // reverted on demand.
@@ -43,6 +50,9 @@ type journalEntry interface {
 type journal struct {
 	entries []journalEntry         // Current changes tracked by the journal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
+
+	validRevisions []revision
+	nextRevisionId int
 }
 
 // newJournal creates a new initialized journal.
@@ -50,6 +60,40 @@ func newJournal() *journal {
 	return &journal{
 		dirties: make(map[common.Address]int),
 	}
+}
+
+// Reset clears the journal, after this operation the journal can be used
+// anew. It is semantically similar to calling 'newJournal', but the underlying
+// slices can be reused
+func (j *journal) Reset() {
+	j.entries = j.entries[:0]
+	j.validRevisions = j.validRevisions[:0]
+	j.dirties = make(map[common.Address]int)
+	j.nextRevisionId = 0
+}
+
+// Snapshot returns an identifier for the current revision of the state.
+func (j *journal) Snapshot() int {
+	id := j.nextRevisionId
+	j.nextRevisionId++
+	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
+	return id
+}
+
+// RevertToSnapshot reverts all state changes made since the given revision.
+func (j *journal) RevertToSnapshot(revid int, s *StateDB) {
+	// Find the snapshot in the stack of valid snapshots.
+	idx := sort.Search(len(j.validRevisions), func(i int) bool {
+		return j.validRevisions[i].id >= revid
+	})
+	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
+	}
+	snapshot := j.validRevisions[idx].journalIndex
+
+	// Replay the journal to undo changes and remove invalidated snapshots
+	j.revert(s, snapshot)
+	j.validRevisions = j.validRevisions[:idx]
 }
 
 // append inserts a new modification entry to the end of the change journal.
