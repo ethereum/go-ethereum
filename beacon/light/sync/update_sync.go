@@ -66,7 +66,7 @@ func (s *CheckpointInit) Process(events []request.Event) {
 			s.locked = request.ServerAndID{}
 		}
 		if resp != nil {
-			if checkpoint, ok := resp.(*types.BootstrapData); ok && checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
+			if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
 				s.chain.CheckpointInit(*checkpoint)
 				s.initialized = true
 				return
@@ -93,7 +93,7 @@ type ForwardUpdateSync struct {
 	chain          committeeChain
 	rangeLock      rangeLock
 	lockedIDs      map[request.ServerAndID]struct{}
-	processQueue   []request.Event
+	processQueue   []updateResponse
 	nextSyncPeriod map[request.Server]uint64
 }
 
@@ -147,37 +147,27 @@ func (r rangeLock) firstUnlocked(start, maxCount uint64) (first, count uint64) {
 
 // lockRange locks the range belonging to the given update request, unless the
 // same request has already been locked
-func (s *ForwardUpdateSync) lockRange(sid request.ServerAndID, req request.Request) {
+func (s *ForwardUpdateSync) lockRange(sid request.ServerAndID, req ReqUpdates) {
 	if _, ok := s.lockedIDs[sid]; ok {
 		return
 	}
 	s.lockedIDs[sid] = struct{}{}
-	r := req.(ReqUpdates)
-	s.rangeLock.lock(r.FirstPeriod, r.Count, 1)
+	s.rangeLock.lock(req.FirstPeriod, req.Count, 1)
 }
 
 // unlockRange unlocks the range belonging to the given update request, unless
 // same request has already been unlocked
-func (s *ForwardUpdateSync) unlockRange(sid request.ServerAndID, req request.Request) {
+func (s *ForwardUpdateSync) unlockRange(sid request.ServerAndID, req ReqUpdates) {
 	if _, ok := s.lockedIDs[sid]; !ok {
 		return
 	}
 	delete(s.lockedIDs, sid)
-	r := req.(ReqUpdates)
-	s.rangeLock.lock(r.FirstPeriod, r.Count, -1)
+	s.rangeLock.lock(req.FirstPeriod, req.Count, -1)
 }
 
 // verifyRange returns true if the number of updates and the individual update
 // periods in the response match the requested section.
-func (s *ForwardUpdateSync) verifyRange(req request.Request, resp request.Response) bool {
-	request, ok := req.(ReqUpdates)
-	if !ok {
-		return false
-	}
-	response, ok := resp.(RespUpdates)
-	if !ok {
-		return false
-	}
+func (s *ForwardUpdateSync) verifyRange(request ReqUpdates, response RespUpdates) bool {
 	if uint64(len(response.Updates)) != request.Count || uint64(len(response.Committees)) != request.Count {
 		return false
 	}
@@ -189,41 +179,19 @@ func (s *ForwardUpdateSync) verifyRange(req request.Request, resp request.Respon
 	return true
 }
 
-// processResponse adds the fetched updates and committees to the committee chain.
-// Returns true in case of full or partial success.
-func (s *ForwardUpdateSync) processResponse(event request.Event) (success bool) {
-	_, _, resp := event.RequestInfo()
-	response, ok := resp.(RespUpdates)
-	if !ok {
-		return false
-	}
-	for i, update := range response.Updates {
-		if err := s.chain.InsertUpdate(update, response.Committees[i]); err != nil {
-			if err == light.ErrInvalidPeriod {
-				// there is a gap in the update periods; stop processing without
-				// failing and try again next time
-				return
-			}
-			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
-				event.Server.Fail("invalid update received")
-			} else {
-				log.Error("Unexpected InsertUpdate error", "error", err)
-			}
-			return
-		}
-		success = true
-	}
-	return
+type updateResponse struct {
+	sid      request.ServerAndID
+	request  ReqUpdates
+	response RespUpdates
 }
 
 // updateResponseList implements sort.Sort and sorts update request/response events by FirstPeriod.
-type updateResponseList []request.Event
+type updateResponseList []updateResponse
 
 func (u updateResponseList) Len() int      { return len(u) }
 func (u updateResponseList) Swap(i, j int) { u[i], u[j] = u[j], u[i] }
 func (u updateResponseList) Less(i, j int) bool {
-	return u[i].Data.(request.RequestResponse).Request.(ReqUpdates).FirstPeriod <
-		u[j].Data.(request.RequestResponse).Request.(ReqUpdates).FirstPeriod
+	return u[i].request.FirstPeriod < u[j].request.FirstPeriod
 }
 
 func (s *ForwardUpdateSync) Process(events []request.Event) {
@@ -231,18 +199,23 @@ func (s *ForwardUpdateSync) Process(events []request.Event) {
 		switch event.Type {
 		case request.EvRequest:
 			sid, req, _ := event.RequestInfo()
-			s.lockRange(sid, req)
+			s.lockRange(sid, req.(ReqUpdates))
 		case request.EvResponse, request.EvFail, request.EvTimeout:
-			sid, req, resp := event.RequestInfo()
-			if event.Type == request.EvResponse && !s.verifyRange(req, resp) {
-				event.Server.Fail("invalid update range")
-				resp = nil
+			sid, rq, rs := event.RequestInfo()
+			req := rq.(ReqUpdates)
+			var queued bool
+			if event.Type == request.EvResponse {
+				resp := rs.(RespUpdates)
+				if s.verifyRange(req, resp) {
+					// there is a response with a valid format; put it in the process queue
+					s.processQueue = append(s.processQueue, updateResponse{sid: sid, request: req, response: resp})
+					s.lockRange(sid, req)
+					queued = true
+				} else {
+					event.Server.Fail("invalid update range")
+				}
 			}
-			if resp != nil {
-				// there is a response with a valid format; put it in the process queue
-				s.processQueue = append(s.processQueue, event)
-				s.lockRange(sid, req)
-			} else {
+			if !queued {
 				s.unlockRange(sid, req)
 			}
 		case EvNewSignedHead:
@@ -256,17 +229,38 @@ func (s *ForwardUpdateSync) Process(events []request.Event) {
 	// try processing ordered list of available responses
 	sort.Sort(updateResponseList(s.processQueue))
 	for s.processQueue != nil {
-		event := s.processQueue[0]
-		if !s.processResponse(event) {
+		u := s.processQueue[0]
+		if !s.processResponse(u) {
 			return
 		}
-		sid, req, _ := event.RequestInfo()
-		s.unlockRange(sid, req)
+		s.unlockRange(u.sid, u.request)
 		s.processQueue = s.processQueue[1:]
 		if len(s.processQueue) == 0 {
 			s.processQueue = nil
 		}
 	}
+}
+
+// processResponse adds the fetched updates and committees to the committee chain.
+// Returns true in case of full or partial success.
+func (s *ForwardUpdateSync) processResponse(u updateResponse) (success bool) {
+	for i, update := range u.response.Updates {
+		if err := s.chain.InsertUpdate(update, u.response.Committees[i]); err != nil {
+			if err == light.ErrInvalidPeriod {
+				// there is a gap in the update periods; stop processing without
+				// failing and try again next time
+				return
+			}
+			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
+				u.sid.Server.Fail("invalid update received")
+			} else {
+				log.Error("Unexpected InsertUpdate error", "error", err)
+			}
+			return
+		}
+		success = true
+	}
+	return
 }
 
 func (s *ForwardUpdateSync) MakeRequest(server request.Server) (request.Request, float32) {

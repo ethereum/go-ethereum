@@ -360,11 +360,7 @@ func (s *Scheduler) filterEvents() map[Module][]Event {
 
 	filteredEvents := make(map[Module][]Event)
 	for _, event := range events {
-		server, ok := event.Server.(server)
-		if !ok {
-			log.Error("Server interface type unknown for Scheduler")
-			continue
-		}
+		server := event.Server.(server)
 		if _, ok := s.servers[server]; !ok && event.Type != EvRegistered {
 			continue // before EvRegister or after EvUnregister, discard
 		}

@@ -70,8 +70,7 @@ func (s *beaconBlockSync) Process(events []request.Event) {
 			_, req, resp := event.RequestInfo()
 			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
 			if resp != nil {
-				block := resp.(*capella.BeaconBlock)
-				s.recentBlocks.Add(blockRoot, block)
+				s.recentBlocks.Add(blockRoot, resp.(*capella.BeaconBlock))
 			}
 			delete(s.locked, blockRoot)
 		case sync.EvNewHead:
