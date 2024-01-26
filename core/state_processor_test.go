@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 
 	//"fmt"
@@ -539,6 +540,135 @@ func TestProcessVerkle(t *testing.T) {
 		}
 		if b.GasUsed() != blockGasUsagesExpected[i] {
 			t.Fatalf("expected block #%d txs to use %d, got %d\n", b.NumberU64(), blockGasUsagesExpected[i], b.GasUsed())
+		}
+	}
+}
+
+func TestProcessVerkleiInvalidContractCreation(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69420),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		bcdb     = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb    = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec    = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   1,
+				},
+			},
+		}
+	)
+	// Verkle trees use the snapshot, which must be enabled before the
+	// data is saved into the tree+database.
+	genesis := gspec.MustCommit(bcdb)
+
+	// Commit the genesis block to the block-generation database as it
+	// is now independent of the blockchain database.
+	gspec.MustCommit(gendb)
+
+	// Create two blocks that reproduce what is happening on kaustinen.
+	// - The first block contains two failing contract creation transactions, that write to storage before they revert.
+	// - The second block contains a single failing contract creation transaction, that fails right off the bat.
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 2, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+
+		if i == 0 {
+			var tx1, tx2, tx3 types.Transaction
+			// SSTORE at slot 105 and reverts
+			tx1payload := common.Hex2Bytes("f8d48084479c2c18830186a08080b8806000602955bda3f9600060ca55600060695523b360006039551983576000601255b0620c2fde2c592ac2600060bc55e0ac6000606455a63e22600060e655eb607e605c5360a2605d5360c7605e53601d605f5360eb606053606b606153608e60625360816063536079606453601e60655360fc60665360b7606753608b60685383021e7ca0cc20c65a97d2e526b8ec0f4266e8b01bdcde43b9aeb59d8bfb44e8eb8119c109a07a8e751813ae1b2ce734960dbc39a4f954917d7822a2c5d1dca18b06c584131f")
+			if err := tx1.UnmarshalBinary(tx1payload); err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(&tx1)
+
+			// SSTORE at slot 133 and reverts
+			tx2payload := common.Hex2Bytes("02f8db83010f2c01843b9aca0084479c2c18830186a08080b88060006085553fad6000600a55600060565555600060b55506600060cf557f1b8b38183e7bd1bdfaa7123c5a4976e54cce0e42049d841411978fd3595e25c66019527f0538943712953cf08900aae40222a40b2d5a4ac8075ad8cf0870e2be307edbb96039527f9f3174ff85024747041ae7a611acffb987c513c088d90ab288aec080a0cd6ac65ce2cb0a912371f6b5a551ba8caffc22ec55ad4d3cb53de41d05eb77b6a02e0dfe8513dfa6ec7bfd7eda6f5c0dac21b39b982436045e128cec46cfd3f960")
+			if err := tx2.UnmarshalBinary(tx2payload); err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(&tx2)
+
+			// this one is a simple transfer that succeeds, necessary to get the correct nonce in the other block.
+			tx3payload := common.Hex2Bytes("f8e80184479c2c18830186a094bbbbde4ca27f83fc18aa108170547ff57675936a80b8807ff71f7c15faadb969a76a5f54a81a0117e1e743cb7f24e378eda28442ea4c6eb6604a527fb5409e5718d44e23bfffac926e5ea726067f772772e7e19446acba0c853f62f5606a526020608a536088608b536039608c536004608d5360af608e537f7f7675d9f210e0a61564e6d11e7cd75f5bc9009ac9f6b94a0fc63035441a83021e7ba04a4a172d81ebb02847829b76a387ac09749c8b65668083699abe20c887fb9efca07c5b1a990702ec7b31a5e8e3935cd9a77649f8c25a84131229e24ab61aec6093")
+			if err := tx3.UnmarshalBinary(tx3payload); err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(&tx3)
+		} else {
+			var tx types.Transaction
+			// immediately reverts
+			txpayload := common.Hex2Bytes("01f8d683010f2c028443ad7d0e830186a08080b880b00e7fa3c849dce891cce5fae8a4c46cbb313d6aec0c0ffe7863e05fb7b22d4807674c6055527ffbfcb0938f3e18f7937aa8fa95d880afebd5c4cec0d85186095832d03c85cf8a60755260ab60955360cf6096536066609753606e60985360fa609953609e609a53608e609b536024609c5360f6609d536072609e5360a4609fc080a08fc6f7101f292ff1fb0de8ac69c2d320fbb23bfe61cf327173786ea5daee6e37a044c42d91838ef06646294bf4f9835588aee66243b16a66a2da37641fae4c045f")
+			if err := tx.UnmarshalBinary(txpayload); err != nil {
+				t.Fatal(err)
+			}
+			gen.AddTx(&tx)
+		}
+	})
+
+	// Check that values 0x29 and 0x05 are found in the storage (and that they lead
+	// to no update, since the contract creation code reverted)
+	for _, stemStateDiff := range statediff[0] {
+		// Check that the value 0x85, which is overflowing the account header,
+		// is present.
+		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("a10042195481d30478251625e1ccef0e2174dc4e083e81d2566d880373f791")) {
+			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
+				if suffixDiff.Suffix != 133 {
+					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+				}
+			}
+		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("b24fa84f214459af17d6e3f604811f252cac93146f02d67d7811bbcdfa448b")) {
+			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
+				if suffixDiff.Suffix != 105 && suffixDiff.Suffix != 0 && suffixDiff.Suffix != 2 && suffixDiff.Suffix != 3 {
+					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+				}
+			}
+		} else {
+			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
+				if suffixDiff.Suffix > 4 {
+					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+				}
+			}
+		}
+	}
+
+	// Check that no account has a value above 4 in the 2nd block as no storage nor
+	// code should make it to the witness.
+	for _, stemStateDiff := range statediff[1] {
+		for _, suffixDiff := range stemStateDiff.SuffixDiffs {
+			if suffixDiff.Suffix > 4 {
+				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+			}
 		}
 	}
 }
