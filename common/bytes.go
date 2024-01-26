@@ -76,14 +76,24 @@ func Bytes2Hex(d []byte) string {
 }
 
 // Hex2Bytes returns the bytes represented by the hexadecimal string str.
+// The string must not be prefixed with `0x`.
+// It panics if str contains a non-hex char.
 func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		panic("error decoding string: " + err.Error())
+	}
 	return h
 }
 
 // Hex2BytesFixed returns bytes of a specified fixed length flen.
+// The string must not be prefixed with `0x`.
+// It panics if str contains a non-hex char.
 func Hex2BytesFixed(str string, flen int) []byte {
-	h, _ := hex.DecodeString(str)
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		panic("error decoding string: " + err.Error())
+	}
 	if len(h) == flen {
 		return h
 	}
