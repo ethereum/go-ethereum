@@ -347,7 +347,10 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	cs := uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20()))
 	if interpreter.evm.chainRules.IsPrague {
 		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, trieUtils.CodeSizeLeafKey)
-		scope.Contract.UseGas(statelessGas)
+		if !scope.Contract.UseGas(statelessGas) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 	}
 	slot.SetUint64(cs)
 	return nil, nil
@@ -374,7 +377,11 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	contractAddr := scope.Contract.Address()
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	if interpreter.evm.chainRules.IsPrague {
-		scope.Contract.UseGas(touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], copyOffset, nonPaddedCopyLength, uint64(len(scope.Contract.Code)), interpreter.evm.Accesses))
+		statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], copyOffset, nonPaddedCopyLength, uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
+		if !scope.Contract.UseGas(statelessGas) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 	}
 	scope.Memory.Set(memOffset.Uint64(), uint64(len(paddedCodeCopy)), paddedCodeCopy)
 	return nil, nil
@@ -433,8 +440,11 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 			self: AccountRef(addr),
 		}
 		paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-		gas := touchCodeChunksRangeOnReadAndChargeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), interpreter.evm.Accesses)
-		scope.Contract.UseGas(gas)
+		statelessGas := touchCodeChunksRangeOnReadAndChargeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), interpreter.evm.Accesses)
+		if !scope.Contract.UseGas(statelessGas) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 		scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 	} else {
 		codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
@@ -964,7 +974,10 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
 			statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
-			scope.Contract.UseGas(statelessGas)
+			if !scope.Contract.UseGas(statelessGas) {
+				scope.Contract.Gas = 0
+				return nil, ErrOutOfGas
+			}
 		}
 	} else {
 		scope.Stack.push(integer.Clear())
@@ -990,7 +1003,10 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		if interpreter.evm.chainRules.IsPrague {
 			contractAddr := scope.Contract.Address()
 			statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], uint64(startMin), uint64(pushByteSize), uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
-			scope.Contract.UseGas(statelessGas)
+			if !scope.Contract.UseGas(statelessGas) {
+				scope.Contract.Gas = 0
+				return nil, ErrOutOfGas
+			}
 		}
 
 		integer := new(uint256.Int)
