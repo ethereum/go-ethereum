@@ -1673,7 +1673,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// The chain importer is starting and stopping trie prefetchers. If a bad
 		// block or other error is hit however, an early return may not properly
 		// terminate the background threads. This defer ensures that we clean up
-		// and dangling prefetcher, without defering each and holding on live refs.
+		// and dangling prefetcher, without deferring each and holding on live refs.
 		if activeState != nil {
 			activeState.StopPrefetcher()
 		}
