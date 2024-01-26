@@ -120,14 +120,15 @@ func (r Ring) Bytes() (b []byte) {
 	return
 }
 
-func PadTo32Bytes(in []byte) (out []byte) {
-	out = append(out, in...)
-	for {
-		if len(out) == 32 {
-			return
-		}
-		out = append([]byte{0}, out...)
+func PadTo32Bytes(in []byte) []byte {
+	padded := make([]byte, 32)
+	if len(in) >= 32 {
+		copy(padded, in)
+	} else {
+		copy(padded[32-len(in):], in)
 	}
+
+	return padded
 }
 
 // converts the signature to a byte array
