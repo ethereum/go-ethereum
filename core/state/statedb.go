@@ -23,7 +23,6 @@ import (
 	"maps"
 	"math/big"
 	"slices"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,11 +45,6 @@ import (
 
 // TriesInMemory represents the number of layers that are kept in RAM.
 const TriesInMemory = 128
-
-type revision struct {
-	id           int
-	journalIndex int
-}
 
 type mutationType int
 
@@ -142,9 +136,7 @@ type StateDB struct {
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	journal        *journal
-	validRevisions []revision
-	nextRevisionId int
+	journal *journal
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads         time.Duration
@@ -687,8 +679,6 @@ func (s *StateDB) Copy() *StateDB {
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
 		journal:              s.journal.copy(),
-		validRevisions:       slices.Clone(s.validRevisions),
-		nextRevisionId:       s.nextRevisionId,
 
 		// In order for the block producer to be able to use and make additions
 		// to the snapshot tree, we need to copy that as well. Otherwise, any
@@ -727,26 +717,12 @@ func (s *StateDB) Copy() *StateDB {
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	id := s.nextRevisionId
-	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
-	return id
+	return s.journal.Snapshot()
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
-	// Find the snapshot in the stack of valid snapshots.
-	idx := sort.Search(len(s.validRevisions), func(i int) bool {
-		return s.validRevisions[i].id >= revid
-	})
-	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
-		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
-	}
-	snapshot := s.validRevisions[idx].journalIndex
-
-	// Replay the journal to undo changes and remove invalidated snapshots
-	s.journal.revert(s, snapshot)
-	s.validRevisions = s.validRevisions[:idx]
+	s.journal.RevertToSnapshot(revid, s)
 }
 
 // GetRefund returns the current value of the refund counter.
@@ -910,11 +886,8 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 }
 
 func (s *StateDB) clearJournalAndRefund() {
-	if len(s.journal.entries) > 0 {
-		s.journal = newJournal()
-		s.refund = 0
-	}
-	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
+	s.journal.Reset()
+	s.refund = 0
 }
 
 // fastDeleteStorage is the function that efficiently deletes the storage trie
