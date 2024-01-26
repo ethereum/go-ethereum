@@ -100,6 +100,91 @@ func (j *journal) copy() *journal {
 	}
 }
 
+func (j *journal) JournalAccessListAddAccount(addr common.Address) {
+	j.append(accessListAddAccountChange{&addr})
+}
+
+func (j *journal) JournalAccessListAddSlot(addr common.Address, slot common.Hash) {
+	j.append(accessListAddSlotChange{
+		address: &addr,
+		slot:    &slot,
+	})
+}
+
+func (j *journal) JournalLog(txHash common.Hash) {
+	j.append(addLogChange{txhash: txHash})
+}
+
+func (j *journal) JournalAddPreimage(hash common.Hash) {
+	j.append(addPreimageChange{hash: hash})
+}
+
+func (j *journal) JournalCreate(addr common.Address) {
+	j.append(createObjectChange{account: &addr})
+}
+
+func (j *journal) JournalDestruct(addr common.Address, previouslyDestructed bool, prevBalance *uint256.Int) {
+	j.append(selfDestructChange{
+		account:     &addr,
+		prev:        previouslyDestructed,
+		prevbalance: prevBalance.Clone(),
+	})
+}
+
+func (j *journal) JournalSetState(addr common.Address, key, prev, origin common.Hash) {
+	j.append(storageChange{
+		account:   &addr,
+		key:       key,
+		prevvalue: prev,
+		origvalue: origin,
+	})
+}
+
+func (j *journal) JournalSetTransientState(addr common.Address, key, prev common.Hash) {
+	j.append(transientStorageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+}
+
+func (j *journal) JournalRefundChange(previous uint64) {
+	j.append(refundChange{prev: previous})
+}
+
+func (j *journal) JournalBalanceChange(addr common.Address, previous *uint256.Int) {
+	j.append(balanceChange{
+		account: &addr,
+		prev:    previous.Clone(),
+	})
+}
+
+func (j *journal) JournalSetCode(address common.Address, prevcode, prevHash []byte) {
+	j.append(codeChange{
+		account:  &address,
+		prevhash: prevHash,
+		prevcode: prevcode,
+	})
+}
+
+func (j *journal) JournalNonceChange(address common.Address, prev uint64) {
+	j.append(nonceChange{
+		account: &address,
+		prev:    prev,
+	})
+}
+
+func (j *journal) JournalTouch(address common.Address) {
+	j.append(touchChange{
+		account: &address,
+	})
+	if address == ripemd {
+		// Explicitly put it in the dirty-cache, which is otherwise generated from
+		// flattened journals.
+		j.dirty(address)
+	}
+}
+
 type (
 	// Changes to the account trie.
 	createObjectChange struct {
