@@ -18,8 +18,8 @@ package catalyst
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -192,15 +193,15 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 
 	// Mark the payload as canon
 	if isCancun {
-		txes, err := decodeTransactions(payload.Transactions)
-		if err != nil {
-			return err
-		}
 		blobHashes := make([]common.Hash, 0)
-		for _, tx := range txes {
-			blobHashes = append(blobHashes, tx.BlobHashes()...)
+		if envelope.BlobsBundle != nil {
+			hasher := sha256.New()
+			for _, commit := range envelope.BlobsBundle.Commitments {
+				c := kzg4844.Commitment(commit[:])
+				blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
+			}
 		}
-		if _, err = c.engineAPI.NewPayloadV3(*payload, []common.Hash{}, &common.Hash{}); err != nil {
+		if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
 			return err
 		}
 	} else {
@@ -318,16 +319,4 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 			Version:   "1.0",
 		},
 	})
-}
-
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
-	for i, encTx := range enc {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	return txs, nil
 }
