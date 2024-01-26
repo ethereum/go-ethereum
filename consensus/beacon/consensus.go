@@ -363,11 +363,6 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeKeccakLeafKey)
 		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeSizeLeafKey)
 	}
-	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.VersionLeafKey)
-	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.BalanceLeafKey)
-	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.NonceLeafKey)
-	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.CodeKeccakLeafKey)
-	state.Witness().TouchAddressOnWriteAndComputeGas(header.Coinbase[:], uint256.Int{}, utils.CodeSizeLeafKey)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and

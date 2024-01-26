@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -476,6 +478,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+
+		// add the coinbase to the witness iff the fee is greater than 0
+		if rules.IsPrague && fee.Sign() != 0 {
+			st.evm.Accesses.TouchAddressOnWriteAndComputeGas(st.evm.Context.Coinbase[:], uint256.Int{}, utils.VersionLeafKey)
+			st.evm.Accesses.TouchAddressOnWriteAndComputeGas(st.evm.Context.Coinbase[:], uint256.Int{}, utils.BalanceLeafKey)
+			st.evm.Accesses.TouchAddressOnWriteAndComputeGas(st.evm.Context.Coinbase[:], uint256.Int{}, utils.NonceLeafKey)
+			st.evm.Accesses.TouchAddressOnWriteAndComputeGas(st.evm.Context.Coinbase[:], uint256.Int{}, utils.CodeKeccakLeafKey)
+			st.evm.Accesses.TouchAddressOnWriteAndComputeGas(st.evm.Context.Coinbase[:], uint256.Int{}, utils.CodeSizeLeafKey)
+		}
 	}
 
 	return &ExecutionResult{
