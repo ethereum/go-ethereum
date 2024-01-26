@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -497,6 +499,13 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
+func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) common.Hash {
+	var pnum common.Hash
+	binary.BigEndian.PutUint64(pnum[24:], number)
+	witness.TouchAddressOnReadAndComputeGas(params.HistoryStorageAddress[:], *uint256.NewInt(number / 256), byte(number&0xFF))
+	return statedb.GetState(params.HistoryStorageAddress, pnum)
+}
+
 func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	num := scope.Stack.peek()
 	num64, overflow := num.Uint64WithOverflow()
@@ -504,6 +513,26 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
+
+	evm := interpreter.evm
+	bnum := evm.Context.BlockNumber.Uint64()
+	// if Prague is active, check if we are past the 256th block so that
+	// reading from the contract can be activated (EIP 2935).
+	if evm.chainRules.IsPrague && bnum > 256 {
+		if getBlockHashFromContract(bnum-256, evm.StateDB, evm.Accesses) != (common.Hash{}) {
+			// EIP-2935 case: get the block number from the fork, as we are 256 blocks
+			// after the fork activation.
+
+			num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
+			return nil, nil
+		}
+
+		// if the 256th ancestor didn't have its hash stored in the
+		// history contract, then we are within 256 blocks of the
+		// fork activation, and the former behavior should be retained.
+		// Fall through the legacy use case.
+	}
+
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {

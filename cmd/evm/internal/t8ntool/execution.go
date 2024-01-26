@@ -88,6 +88,7 @@ type stEnv struct {
 	ExcessBlobGas       *uint64                             `json:"excessBlobGas,omitempty"`
 	ParentExcessBlobGas *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed   *uint64                             `json:"parentBlobGasUsed,omitempty"`
+	ParentHash          *common.Hash                        `json:"parentHash,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -181,6 +182,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock != nil &&
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
+	}
+	if chainConfig.IsPrague(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp) {
+		core.ProcessParentBlockHash(statedb, pre.Env.Number-1, *pre.Env.ParentHash)
 	}
 	var blobGasUsed uint64
 	for i, tx := range txs {

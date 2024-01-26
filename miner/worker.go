@@ -920,6 +920,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
+	if w.chainConfig.IsPrague(header.Number, header.Time) {
+		core.ProcessParentBlockHash(env.state, header.Number.Uint64()-1, header.ParentHash)
+	}
 	return env, nil
 }
 
