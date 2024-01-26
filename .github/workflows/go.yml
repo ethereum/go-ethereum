@@ -43,4 +43,4 @@ jobs:
         with:
           go-version: 1.21.1
       - name: Test
-        run: go test ./... -timeout=10h
+        run: go test ./... -timeout=20m
