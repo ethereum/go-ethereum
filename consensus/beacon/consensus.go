@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
 
 // Proof-of-stake protocol constants.
@@ -355,8 +356,8 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Withdrawals processing.
 	for _, w := range withdrawals {
 		// Convert amount from gwei to wei.
-		amount := new(big.Int).SetUint64(w.Amount)
-		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		amount := new(uint256.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount)
 	}
 	// No block reward which is issued by consensus layer instead.

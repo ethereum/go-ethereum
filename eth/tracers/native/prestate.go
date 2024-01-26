@@ -195,7 +195,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		}
 		modified := false
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
-		newBalance := t.env.StateDB.GetBalance(addr)
+		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
@@ -279,7 +279,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	}
 
 	t.pre[addr] = &account{
-		Balance: t.env.StateDB.GetBalance(addr),
+		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
 		Storage: make(map[common.Hash]common.Hash),
