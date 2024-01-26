@@ -372,6 +372,12 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetCode",
 			fn: func(a testAction, s *StateDB) {
+				// SetCode can only be performed in case the addr does
+				// not already hold code
+				if c := s.GetCode(addr); len(c) > 0 {
+					// no-op
+					return
+				}
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
 				binary.BigEndian.PutUint64(code[8:], uint64(a.args[1]))
