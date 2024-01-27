@@ -228,7 +228,7 @@ func (p *PortalAPI) RoutingTableInfo() *RoutingTableInfo {
 	}
 }
 
-func (p *PortalAPI) AddEnr(enr string) (bool, error) {
+func (p *PortalAPI) HistoryAddEnr(enr string) (bool, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return false, err
@@ -252,7 +252,7 @@ func (p *PortalAPI) AddEnrs(enrs []string) bool {
 	return true
 }
 
-func (p *PortalAPI) GetEnr(nodeId string) (string, error) {
+func (p *PortalAPI) HistoryGetEnr(nodeId string) (string, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return "", err
@@ -270,7 +270,7 @@ func (p *PortalAPI) GetEnr(nodeId string) (string, error) {
 	return n.String(), nil
 }
 
-func (p *PortalAPI) DeleteEnr(nodeId string) (bool, error) {
+func (p *PortalAPI) HistoryDeleteEnr(nodeId string) (bool, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return false, err
@@ -285,7 +285,7 @@ func (p *PortalAPI) DeleteEnr(nodeId string) (bool, error) {
 	return true, nil
 }
 
-func (p *PortalAPI) LookupEnr(nodeId string) (string, error) {
+func (p *PortalAPI) HistoryLookupEnr(nodeId string) (string, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return "", err
@@ -422,7 +422,7 @@ func (p *PortalAPI) Offer(enr string, contentKey string, contentValue string) (s
 	return hexutil.Encode(accept), nil
 }
 
-func (p *PortalAPI) RecursiveFindNodes(nodeId string) ([]string, error) {
+func (p *PortalAPI) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
 	findNodes := p.portalProtocol.Lookup(enode.HexID(nodeId))
 
 	enrs := make([]string, 0, len(findNodes))
