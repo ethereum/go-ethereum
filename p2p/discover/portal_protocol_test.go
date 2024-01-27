@@ -392,11 +392,11 @@ func TestContentLookup(t *testing.T) {
 	err = node3.storage.Put(contentId, content)
 	assert.NoError(t, err)
 
-	res, err := node1.ContentLookup(contentKey)
+	res, _, err := node1.ContentLookup(contentKey)
 	assert.NoError(t, err)
 	assert.Equal(t, res, content)
 
-	res, err = node1.ContentLookup([]byte{0x2, 0x4})
+	res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
 	assert.Equal(t, ContentNotFound, err)
 	assert.Nil(t, res)
 }

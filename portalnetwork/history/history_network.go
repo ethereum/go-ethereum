@@ -114,7 +114,7 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 	// no content in local storage
 	for retries := 0; retries < requestRetries; retries++ {
 		// TODO log the err and continue
-		content, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
 			continue
 		}
@@ -165,7 +165,7 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	// no content in local storage
 
 	for retries := 0; retries < requestRetries; retries++ {
-		content, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
 			continue
 		}
@@ -215,7 +215,7 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	// no content in local storage
 
 	for retries := 0; retries < requestRetries; retries++ {
-		content, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
 			continue
 		}
@@ -245,7 +245,7 @@ func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulato
 		return epochAccu, err
 	}
 	for retries := 0; retries < requestRetries; retries++ {
-		content, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
 			continue
 		}

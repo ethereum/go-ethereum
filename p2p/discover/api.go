@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 )
 
@@ -431,4 +432,56 @@ func (p *PortalAPI) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
 	}
 
 	return enrs, nil
+}
+
+func (p *PortalAPI) HistoryRecursiveFindContent(contentKeyHex string) (*ContentInfo, error) {
+	contentKey, err := hexutil.Decode(contentKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContentInfo{
+		Content:     hexutil.Encode(content),
+		UtpTransfer: utpTransfer,
+	}, err
+}
+
+func (p *PortalAPI) HistoryLocalContent(contentKeyHex string) (string, error) {
+	contentKey, err := hexutil.Decode(contentKeyHex)
+	if err != nil {
+		return "", err
+	}
+	contentId := p.portalProtocol.ToContentId(contentKey)
+	content, err := p.portalProtocol.Get(contentId)
+	if errors.Is(err, storage.ErrContentNotFound) {
+		return "0x", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return hexutil.Encode(content), nil
+}
+
+func (p *PortalAPI) HistoryStore(contentKeyHex string, contextHex string) (bool, error) {
+	contentKey, err := hexutil.Decode(contentKeyHex)
+	if err != nil {
+		return false, err
+	}
+	contentId := p.portalProtocol.ToContentId(contentKey)
+	if !p.portalProtocol.InRange(contentId) {
+		return false, nil
+	}
+	content, err := hexutil.Decode(contextHex)
+	if err != nil {
+		return false, err
+	}
+	err = p.portalProtocol.Put(contentId, content)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -112,6 +112,11 @@ type OfferRequestWithNode struct {
 	Node    *enode.Node
 }
 
+type ContentInfoRes struct {
+	Content     []byte
+	UtpTransfer bool
+}
+
 type PortalProtocolOption func(p *PortalProtocol)
 
 type PortalProtocolConfig struct {
@@ -1402,22 +1407,23 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 	return nodes
 }
 
-func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, error) {
+func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, bool, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	resChan := make(chan []byte, 1)
+	resChan := make(chan *ContentInfoRes, 1)
 	defer close(resChan)
 	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
 		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
 	}).run()
 
 	if len(resChan) > 0 {
-		return <-resChan, nil
+		res := <-resChan
+		return res.Content, res.UtpTransfer, nil
 	}
-	return nil, ContentNotFound
+	return nil, false, ContentNotFound
 }
 
-func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- []byte) ([]*node, error) {
+func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *ContentInfoRes) ([]*node, error) {
 	wrapedNode := make([]*node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
@@ -1429,7 +1435,13 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)
 		}
-		resChan <- content
+		res := &ContentInfoRes{
+			Content: content,
+		}
+		if flag == portalwire.ContentConnIdSelector {
+			res.UtpTransfer = true
+		}
+		resChan <- res
 		return wrapedNode, err
 	case portalwire.ContentEnrsSelector:
 		nodes, ok := content.([]*enode.Node)
