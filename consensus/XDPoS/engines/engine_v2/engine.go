@@ -1088,8 +1088,10 @@ func (x *XDPoS_v2) allowedToSend(chain consensus.ChainReader, blockHeader *types
 // Periodlly execution(Attached to engine initialisation during "new"). Used for pool cleaning etc
 func (x *XDPoS_v2) periodicJob() {
 	go func() {
+		ticker := time.NewTicker(utils.PeriodicJobPeriod * time.Second)
+		defer ticker.Stop()
 		for {
-			<-time.After(utils.PeriodicJobPeriod * time.Second)
+			<-ticker.C
 			x.hygieneVotePool()
 			x.hygieneTimeoutPool()
 		}
