@@ -28,7 +28,7 @@ func genBytes(length int) []byte {
 
 func TestBasicStorage(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -39,7 +39,7 @@ func TestBasicStorage(t *testing.T) {
 	_, err = storage.Get(contentId)
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
-	pt := storage.Put(contentId, content)
+	pt := storage.put(contentId, content)
 	assert.NoError(t, pt.Err())
 
 	val, err := storage.Get(contentId)
@@ -64,7 +64,7 @@ func TestBasicStorage(t *testing.T) {
 
 func TestDBSize(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := NewContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -73,17 +73,17 @@ func TestDBSize(t *testing.T) {
 
 	size1, err := storage.Size()
 	assert.NoError(t, err)
-	putResult := storage.Put(uint256.NewInt(1).Bytes(), genBytes(numBytes))
+	putResult := storage.put(uint256.NewInt(1).Bytes(), genBytes(numBytes))
 	assert.Nil(t, putResult.Err())
 
 	size2, err := storage.Size()
 	assert.NoError(t, err)
-	putResult = storage.Put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
+	putResult = storage.put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
 	assert.NoError(t, putResult.Err())
 
 	size3, err := storage.Size()
 	assert.NoError(t, err)
-	putResult = storage.Put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
+	putResult = storage.put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
 	assert.NoError(t, putResult.Err())
 
 	size4, err := storage.Size()
@@ -125,7 +125,7 @@ func TestDBPruning(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -136,29 +136,29 @@ func TestDBPruning(t *testing.T) {
 
 	numBytes := 10_000
 	// test with private put method
-	pt1 := storage.Put(uint256.NewInt(1).Bytes(), genBytes(numBytes))
+	pt1 := storage.put(uint256.NewInt(1).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt1.Err())
-	pt2 := storage.Put(thirdFurthest.Bytes(), genBytes(numBytes))
+	pt2 := storage.put(thirdFurthest.Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt2.Err())
-	pt3 := storage.Put(uint256.NewInt(3).Bytes(), genBytes(numBytes))
+	pt3 := storage.put(uint256.NewInt(3).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt3.Err())
-	pt4 := storage.Put(uint256.NewInt(10).Bytes(), genBytes(numBytes))
+	pt4 := storage.put(uint256.NewInt(10).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt4.Err())
-	pt5 := storage.Put(uint256.NewInt(5).Bytes(), genBytes(numBytes))
+	pt5 := storage.put(uint256.NewInt(5).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt5.Err())
-	pt6 := storage.Put(uint256.NewInt(11).Bytes(), genBytes(numBytes))
+	pt6 := storage.put(uint256.NewInt(11).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt6.Err())
-	pt7 := storage.Put(furthestElement.Bytes(), genBytes(4000))
+	pt7 := storage.put(furthestElement.Bytes(), genBytes(4000))
 	assert.NoError(t, pt7.Err())
-	pt8 := storage.Put(secondFurthest.Bytes(), genBytes(3000))
+	pt8 := storage.put(secondFurthest.Bytes(), genBytes(3000))
 	assert.NoError(t, pt8.Err())
-	pt9 := storage.Put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
+	pt9 := storage.put(uint256.NewInt(2).Bytes(), genBytes(numBytes))
 	assert.NoError(t, pt9.Err())
 
 	res, _ := storage.GetLargestDistance()
 
 	assert.Equal(t, res, uint256.NewInt(40))
-	pt10 := storage.Put(uint256.NewInt(4).Bytes(), genBytes(12000))
+	pt10 := storage.put(uint256.NewInt(4).Bytes(), genBytes(12000))
 	assert.NoError(t, pt10.Err())
 
 	assert.False(t, pt1.Pruned())
@@ -192,7 +192,7 @@ func TestGetLargestDistance(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -200,13 +200,13 @@ func TestGetLargestDistance(t *testing.T) {
 	furthestElement := uint256.NewInt(40)
 	secondFurthest := uint256.NewInt(30)
 
-	pt7 := storage.Put(furthestElement.Bytes(), genBytes(2000))
+	pt7 := storage.put(furthestElement.Bytes(), genBytes(2000))
 	assert.NoError(t, pt7.Err())
 
 	val, err := storage.Get(furthestElement.Bytes())
 	assert.NoError(t, err)
 	assert.NotNil(t, val)
-	pt8 := storage.Put(secondFurthest.Bytes(), genBytes(2000))
+	pt8 := storage.put(secondFurthest.Bytes(), genBytes(2000))
 	assert.NoError(t, pt8.Err())
 	res, err := storage.GetLargestDistance()
 	assert.NoError(t, err)
@@ -217,7 +217,7 @@ func TestSimpleForcePruning(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := NewContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -226,13 +226,13 @@ func TestSimpleForcePruning(t *testing.T) {
 	secondFurthest := uint256.NewInt(30)
 	third := uint256.NewInt(10)
 
-	pt1 := storage.Put(furthestElement.Bytes(), genBytes(2000))
+	pt1 := storage.put(furthestElement.Bytes(), genBytes(2000))
 	assert.NoError(t, pt1.Err())
 
-	pt2 := storage.Put(secondFurthest.Bytes(), genBytes(2000))
+	pt2 := storage.put(secondFurthest.Bytes(), genBytes(2000))
 	assert.NoError(t, pt2.Err())
 
-	pt3 := storage.Put(third.Bytes(), genBytes(2000))
+	pt3 := storage.put(third.Bytes(), genBytes(2000))
 	assert.NoError(t, pt3.Err())
 	res, err := storage.GetLargestDistance()
 	assert.NoError(t, err)
@@ -261,7 +261,7 @@ func TestForcePruning(t *testing.T) {
 	nodeId := uint256.MustFromHex("0x30994892f3e4889d99deb5340050510d1842778acc7a7948adffa475fed51d6e").Bytes()
 	content := genBytes(1000)
 
-	storage, err := NewContentStorage(startCap, enode.ID(nodeId), nodeDataDir)
+	storage, err := newContentStorage(startCap, enode.ID(nodeId), nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -273,7 +273,7 @@ func TestForcePruning(t *testing.T) {
 	putCount := 0
 	// id < maxUint256 - remainder
 	for id.Cmp(uint256.NewInt(0).Sub(maxUint256, remainder)) == -1 {
-		res := storage.Put(id.Bytes(), content)
+		res := storage.put(id.Bytes(), content)
 		assert.NoError(t, res.Err())
 		id = id.Add(id, increment)
 		putCount++

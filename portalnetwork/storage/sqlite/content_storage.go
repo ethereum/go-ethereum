@@ -40,6 +40,8 @@ var (
 	maxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 )
 
+var _ storage.ContentStorage = &ContentStorage{}
+
 type ContentStorage struct {
 	nodeId                 enode.ID
 	nodeDataDir            string
@@ -73,7 +75,11 @@ func greater(a, b []byte) int {
 	return bytes.Compare(a, b)
 }
 
-func NewContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataDir string) (*ContentStorage, error) {
+func NewContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataDir string) (storage.ContentStorage, error) {
+	return newContentStorage(storageCapacityInBytes, nodeId, nodeDataDir)
+}
+
+func newContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataDir string) (*ContentStorage, error) {
 	// avoid repeated register in tests
 	registered := false
 	drives := sql.Drivers()
@@ -156,8 +162,13 @@ func newPutResultWithErr(err error) PutResult {
 	}
 }
 
+func (p *ContentStorage) Put(contentId []byte, content []byte) error {
+	res := p.put(contentId, content)
+	return res.Err()
+}
+
 // Put saves the contentId and content
-func (p *ContentStorage) Put(contentId []byte, content []byte) PutResult {
+func (p *ContentStorage) put(contentId []byte, content []byte) PutResult {
 	_, err := p.putStmt.Exec(contentId, content)
 	if err != nil {
 		return newPutResultWithErr(err)
