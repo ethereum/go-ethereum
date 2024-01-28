@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -142,7 +143,7 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 	}
 	for addr, account := range *ga {
 		if account.Balance != nil {
-			statedb.AddBalance(addr, account.Balance)
+			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance))
 		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
@@ -163,7 +164,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	}
 	for addr, account := range *ga {
 		if account.Balance != nil {
-			statedb.AddBalance(addr, account.Balance)
+			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance))
 		}
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)

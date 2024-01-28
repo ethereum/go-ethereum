@@ -228,24 +228,6 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
-	if op.mode == downloader.SnapSync {
-		// Before launch the snap sync, we have to ensure user uses the same
-		// txlookup limit.
-		// The main concern here is: during the snap sync Geth won't index the
-		// block(generate tx indices) before the HEAD-limit. But if user changes
-		// the limit in the next snap sync(e.g. user kill Geth manually and
-		// restart) then it will be hard for Geth to figure out the oldest block
-		// has been indexed. So here for the user-experience wise, it's non-optimal
-		// that user can't change limit during the snap sync. If changed, Geth
-		// will just blindly use the original one.
-		limit := h.chain.TxLookupLimit()
-		if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
-			rawdb.WriteFastTxLookupLimit(h.database, limit)
-		} else if *stored != limit {
-			h.chain.SetTxLookupLimit(*stored)
-			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
-		}
-	}
 	// Run the sync cycle, and disable snap sync if we're past the pivot block
 	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.Config().TerminalTotalDifficulty, op.mode)
 	if err != nil {

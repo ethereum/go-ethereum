@@ -322,7 +322,7 @@ func (e *Ethereum) APIs() []rpc.API {
 			Service:   NewMinerAPI(e),
 		}, {
 			Namespace: "eth",
-			Service:   downloader.NewDownloaderAPI(e.handler.downloader, e.eventMux),
+			Service:   downloader.NewDownloaderAPI(e.handler.downloader, e.blockchain, e.eventMux),
 		}, {
 			Namespace: "admin",
 			Service:   NewAdminAPI(e),

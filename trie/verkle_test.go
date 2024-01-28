@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	"math/big"
 	"reflect"
 	"testing"
 
@@ -27,18 +26,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 var (
 	accounts = map[common.Address]*types.StateAccount{
 		{1}: {
 			Nonce:    100,
-			Balance:  big.NewInt(100),
+			Balance:  uint256.NewInt(100),
 			CodeHash: common.Hash{0x1}.Bytes(),
 		},
 		{2}: {
 			Nonce:    200,
-			Balance:  big.NewInt(200),
+			Balance:  uint256.NewInt(200),
 			CodeHash: common.Hash{0x2}.Bytes(),
 		},
 	}

@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
 
 // So we can deterministically seed different blockchains
@@ -2722,191 +2723,6 @@ func testReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T, scheme strin
 	}
 }
 
-func TestTransactionIndices(t *testing.T) {
-	// Configure and generate a sample block chain
-	var (
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(100000000000000000)
-		gspec   = &Genesis{
-			Config:  params.TestChainConfig,
-			Alloc:   GenesisAlloc{address: {Balance: funds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
-		signer = types.LatestSigner(gspec.Config)
-	)
-	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 128, func(i int, block *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee, nil), signer, key)
-		if err != nil {
-			panic(err)
-		}
-		block.AddTx(tx)
-	})
-
-	check := func(tail *uint64, chain *BlockChain) {
-		stored := rawdb.ReadTxIndexTail(chain.db)
-		if tail == nil && stored != nil {
-			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *stored)
-		}
-		if tail != nil && *stored != *tail {
-			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
-		}
-		if tail != nil {
-			for i := *tail; i <= chain.CurrentBlock().Number.Uint64(); i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index == nil {
-						t.Fatalf("Miss transaction indice, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-			for i := uint64(0); i < *tail; i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != nil {
-						t.Fatalf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-		}
-	}
-	// Init block chain with external ancients, check all needed indices has been indexed.
-	limit := []uint64{0, 32, 64, 128}
-	for _, l := range limit {
-		frdir := t.TempDir()
-		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
-
-		l := l
-		chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
-		if err != nil {
-			t.Fatalf("failed to create tester chain: %v", err)
-		}
-		chain.indexBlocks(rawdb.ReadTxIndexTail(ancientDb), 128, make(chan struct{}))
-
-		var tail uint64
-		if l != 0 {
-			tail = uint64(128) - l + 1
-		}
-		check(&tail, chain)
-		chain.Stop()
-		ancientDb.Close()
-		os.RemoveAll(frdir)
-	}
-
-	// Reconstruct a block chain which only reserves HEAD-64 tx indices
-	ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
-	defer ancientDb.Close()
-
-	rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
-	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
-	for _, l := range limit {
-		l := l
-		chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
-		if err != nil {
-			t.Fatalf("failed to create tester chain: %v", err)
-		}
-		var tail uint64
-		if l != 0 {
-			tail = uint64(128) - l + 1
-		}
-		chain.indexBlocks(rawdb.ReadTxIndexTail(ancientDb), 128, make(chan struct{}))
-		check(&tail, chain)
-		chain.Stop()
-	}
-}
-
-func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
-	testSkipStaleTxIndicesInSnapSync(t, rawdb.HashScheme)
-	testSkipStaleTxIndicesInSnapSync(t, rawdb.PathScheme)
-}
-
-func testSkipStaleTxIndicesInSnapSync(t *testing.T, scheme string) {
-	// Configure and generate a sample block chain
-	var (
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(100000000000000000)
-		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{address: {Balance: funds}}}
-		signer  = types.LatestSigner(gspec.Config)
-	)
-	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 128, func(i int, block *BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee, nil), signer, key)
-		if err != nil {
-			panic(err)
-		}
-		block.AddTx(tx)
-	})
-
-	check := func(tail *uint64, chain *BlockChain) {
-		stored := rawdb.ReadTxIndexTail(chain.db)
-		if tail == nil && stored != nil {
-			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *stored)
-		}
-		if tail != nil && *stored != *tail {
-			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
-		}
-		if tail != nil {
-			for i := *tail; i <= chain.CurrentBlock().Number.Uint64(); i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index == nil {
-						t.Fatalf("Miss transaction indice, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-			for i := uint64(0); i < *tail; i++ {
-				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
-				if block.Transactions().Len() == 0 {
-					continue
-				}
-				for _, tx := range block.Transactions() {
-					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != nil {
-						t.Fatalf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
-					}
-				}
-			}
-		}
-	}
-
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
-	if err != nil {
-		t.Fatalf("failed to create temp freezer db: %v", err)
-	}
-	defer ancientDb.Close()
-
-	// Import all blocks into ancient db, only HEAD-32 indices are kept.
-	l := uint64(32)
-	chain, err := NewBlockChain(ancientDb, DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	defer chain.Stop()
-
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	if n, err := chain.InsertHeaderChain(headers); err != nil {
-		t.Fatalf("failed to insert header %d: %v", n, err)
-	}
-	// The indices before ancient-N(32) should be ignored. After that all blocks should be indexed.
-	if n, err := chain.InsertReceiptChain(blocks, receipts, 64); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-	tail := uint64(32)
-	check(&tail, chain)
-}
-
 // Benchmarks large blocks with value transfers to non-existing accounts
 func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
 	var (
@@ -3652,7 +3468,7 @@ func testInitThenFailCreateContract(t *testing.T, scheme string) {
 	defer chain.Stop()
 
 	statedb, _ := chain.State()
-	if got, exp := statedb.GetBalance(aa), big.NewInt(100000); got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(aa), uint256.NewInt(100000); got.Cmp(exp) != 0 {
 		t.Fatalf("Genesis err, got %v exp %v", got, exp)
 	}
 	// First block tries to create, but fails
@@ -3662,7 +3478,7 @@ func testInitThenFailCreateContract(t *testing.T, scheme string) {
 			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
 		statedb, _ = chain.State()
-		if got, exp := statedb.GetBalance(aa), big.NewInt(100000); got.Cmp(exp) != 0 {
+		if got, exp := statedb.GetBalance(aa), uint256.NewInt(100000); got.Cmp(exp) != 0 {
 			t.Fatalf("block %d: got %v exp %v", block.NumberU64(), got, exp)
 		}
 	}
@@ -3848,17 +3664,17 @@ func testEIP1559Transition(t *testing.T, scheme string) {
 	state, _ := chain.State()
 
 	// 3: Ensure that miner received only the tx's tip.
-	actual := state.GetBalance(block.Coinbase())
+	actual := state.GetBalance(block.Coinbase()).ToBig()
 	expected := new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].GasTipCap().Uint64()),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr1).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -3888,17 +3704,17 @@ func testEIP1559Transition(t *testing.T, scheme string) {
 	effectiveTip := block.Transactions()[0].GasTipCap().Uint64() - block.BaseFee().Uint64()
 
 	// 6+5: Ensure that miner received only the tx's effective tip.
-	actual = state.GetBalance(block.Coinbase())
+	actual = state.GetBalance(block.Coinbase()).ToBig()
 	expected = new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*effectiveTip),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (effectiveTip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr2))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr2).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (effectiveTip + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -4100,212 +3916,6 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 			}
 		}
 		chain.Stop()
-	}
-}
-
-// TestTxIndexer tests the tx indexes are updated correctly.
-func TestTxIndexer(t *testing.T) {
-	var (
-		testBankKey, _  = crypto.GenerateKey()
-		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-		testBankFunds   = big.NewInt(1000000000000000000)
-
-		gspec = &Genesis{
-			Config:  params.TestChainConfig,
-			Alloc:   GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
-		engine = ethash.NewFaker()
-		nonce  = uint64(0)
-	)
-	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, 128, func(i int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("0xdeadbeef"), big.NewInt(1000), params.TxGas, big.NewInt(10*params.InitialBaseFee), nil), types.HomesteadSigner{}, testBankKey)
-		gen.AddTx(tx)
-		nonce += 1
-	})
-
-	// verifyIndexes checks if the transaction indexes are present or not
-	// of the specified block.
-	verifyIndexes := func(db ethdb.Database, number uint64, exist bool) {
-		if number == 0 {
-			return
-		}
-		block := blocks[number-1]
-		for _, tx := range block.Transactions() {
-			lookup := rawdb.ReadTxLookupEntry(db, tx.Hash())
-			if exist && lookup == nil {
-				t.Fatalf("missing %d %x", number, tx.Hash().Hex())
-			}
-			if !exist && lookup != nil {
-				t.Fatalf("unexpected %d %x", number, tx.Hash().Hex())
-			}
-		}
-	}
-	// verifyRange runs verifyIndexes for a range of blocks, from and to are included.
-	verifyRange := func(db ethdb.Database, from, to uint64, exist bool) {
-		for number := from; number <= to; number += 1 {
-			verifyIndexes(db, number, exist)
-		}
-	}
-	verify := func(db ethdb.Database, expTail uint64) {
-		tail := rawdb.ReadTxIndexTail(db)
-		if tail == nil {
-			t.Fatal("Failed to write tx index tail")
-		}
-		if *tail != expTail {
-			t.Fatalf("Unexpected tx index tail, want %v, got %d", expTail, *tail)
-		}
-		if *tail != 0 {
-			verifyRange(db, 0, *tail-1, false)
-		}
-		verifyRange(db, *tail, 128, true)
-	}
-
-	var cases = []struct {
-		limitA uint64
-		tailA  uint64
-		limitB uint64
-		tailB  uint64
-		limitC uint64
-		tailC  uint64
-	}{
-		{
-			// LimitA: 0
-			// TailA:  0
-			//
-			// all blocks are indexed
-			limitA: 0,
-			tailA:  0,
-
-			// LimitB: 1
-			// TailB:  128
-			//
-			// block-128 is indexed
-			limitB: 1,
-			tailB:  128,
-
-			// LimitB: 64
-			// TailB:  65
-			//
-			// block [65, 128] are indexed
-			limitC: 64,
-			tailC:  65,
-		},
-		{
-			// LimitA: 64
-			// TailA:  65
-			//
-			// block [65, 128] are indexed
-			limitA: 64,
-			tailA:  65,
-
-			// LimitB: 1
-			// TailB:  128
-			//
-			// block-128 is indexed
-			limitB: 1,
-			tailB:  128,
-
-			// LimitB: 64
-			// TailB:  65
-			//
-			// block [65, 128] are indexed
-			limitC: 64,
-			tailC:  65,
-		},
-		{
-			// LimitA: 127
-			// TailA:  2
-			//
-			// block [2, 128] are indexed
-			limitA: 127,
-			tailA:  2,
-
-			// LimitB: 1
-			// TailB:  128
-			//
-			// block-128 is indexed
-			limitB: 1,
-			tailB:  128,
-
-			// LimitB: 64
-			// TailB:  65
-			//
-			// block [65, 128] are indexed
-			limitC: 64,
-			tailC:  65,
-		},
-		{
-			// LimitA: 128
-			// TailA:  1
-			//
-			// block [2, 128] are indexed
-			limitA: 128,
-			tailA:  1,
-
-			// LimitB: 1
-			// TailB:  128
-			//
-			// block-128 is indexed
-			limitB: 1,
-			tailB:  128,
-
-			// LimitB: 64
-			// TailB:  65
-			//
-			// block [65, 128] are indexed
-			limitC: 64,
-			tailC:  65,
-		},
-		{
-			// LimitA: 129
-			// TailA:  0
-			//
-			// block [0, 128] are indexed
-			limitA: 129,
-			tailA:  0,
-
-			// LimitB: 1
-			// TailB:  128
-			//
-			// block-128 is indexed
-			limitB: 1,
-			tailB:  128,
-
-			// LimitB: 64
-			// TailB:  65
-			//
-			// block [65, 128] are indexed
-			limitC: 64,
-			tailC:  65,
-		},
-	}
-	for _, c := range cases {
-		frdir := t.TempDir()
-		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
-
-		// Index the initial blocks from ancient store
-		chain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, &c.limitA)
-		chain.indexBlocks(nil, 128, make(chan struct{}))
-		verify(db, c.tailA)
-
-		chain.SetTxLookupLimit(c.limitB)
-		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
-		verify(db, c.tailB)
-
-		chain.SetTxLookupLimit(c.limitC)
-		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
-		verify(db, c.tailC)
-
-		// Recover all indexes
-		chain.SetTxLookupLimit(0)
-		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
-		verify(db, 0)
-
-		chain.Stop()
-		db.Close()
-		os.RemoveAll(frdir)
 	}
 }
 
@@ -4703,14 +4313,14 @@ func TestEIP3651(t *testing.T) {
 	state, _ := chain.State()
 
 	// 3: Ensure that miner received only the tx's tip.
-	actual := state.GetBalance(block.Coinbase())
+	actual := state.GetBalance(block.Coinbase()).ToBig()
 	expected := new(big.Int).SetUint64(block.GasUsed() * block.Transactions()[0].GasTipCap().Uint64())
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr1).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
