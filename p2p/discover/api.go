@@ -10,6 +10,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// json-rpc spec
+// https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/ethereum/portal-network-specs/assembled-spec/jsonrpc/openrpc.json&uiSchema%5BappBar%5D%5Bui:splitView%5D=false&uiSchema%5BappBar%5D%5Bui:input%5D=false&uiSchema%5BappBar%5D%5Bui:examplesDropdown%5D=false
 type DiscV5API struct {
 	DiscV5 *UDPv5
 }
@@ -214,7 +216,7 @@ func (p *PortalAPI) NodeInfo() *NodeInfo {
 	}
 }
 
-func (p *PortalAPI) RoutingTableInfo() *RoutingTableInfo {
+func (p *PortalAPI) HistoryRoutingTableInfo() *RoutingTableInfo {
 	n := p.portalProtocol.localNode.Node()
 
 	closestNodes := p.portalProtocol.table.Nodes()
@@ -279,7 +281,7 @@ func (p *PortalAPI) HistoryDeleteEnr(nodeId string) (bool, error) {
 
 	n := p.portalProtocol.table.getNode(id)
 	if n == nil {
-		return false, errors.New("record not in local routing table")
+		return false, nil
 	}
 
 	p.portalProtocol.table.delete(wrapNode(n))
@@ -301,7 +303,7 @@ func (p *PortalAPI) HistoryLookupEnr(nodeId string) (string, error) {
 	return enr.String(), nil
 }
 
-func (p *PortalAPI) Ping(enr string) (*PortalPongResp, error) {
+func (p *PortalAPI) HistoryPing(enr string) (*PortalPongResp, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -330,7 +332,7 @@ func (p *PortalAPI) Ping(enr string) (*PortalPongResp, error) {
 	}, nil
 }
 
-func (p *PortalAPI) FindNodes(enr string, distances []uint) ([]string, error) {
+func (p *PortalAPI) HistoryFindNodes(enr string, distances []uint) ([]string, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -348,7 +350,7 @@ func (p *PortalAPI) FindNodes(enr string, distances []uint) ([]string, error) {
 	return enrs, nil
 }
 
-func (p *PortalAPI) FindContent(enr string, contentKey string) (interface{}, error) {
+func (p *PortalAPI) HistoryFindContent(enr string, contentKey string) (interface{}, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -387,7 +389,7 @@ func (p *PortalAPI) FindContent(enr string, contentKey string) (interface{}, err
 	}
 }
 
-func (p *PortalAPI) Offer(enr string, contentKey string, contentValue string) (string, error) {
+func (p *PortalAPI) HistoryOffer(enr string, contentKey string, contentValue string) (string, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return "", err
@@ -440,6 +442,12 @@ func (p *PortalAPI) HistoryRecursiveFindContent(contentKeyHex string) (*ContentI
 		return nil, err
 	}
 	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey)
+	if errors.Is(err, storage.ErrContentNotFound) {
+		return &ContentInfo{
+			Content:     "0x",
+			UtpTransfer: false,
+		}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -484,4 +492,14 @@ func (p *PortalAPI) HistoryStore(contentKeyHex string, contextHex string) (bool,
 		return false, err
 	}
 	return true, nil
+}
+
+// TODO
+func (p *PortalAPI) HistoryGossip() {
+
+}
+
+// TODO
+func (p *PortalAPI) HistoryTraceRecursiveFindContent(contentKeyHex string) {
+
 }
