@@ -588,17 +588,16 @@ func (XDCX *XDCX) GetEmptyTradingState() (*tradingstate.TradingStateDB, error) {
 func (XDCx *XDCX) GetStateCache() tradingstate.Database {
 	return XDCx.StateCache
 }
+
 func (XDCx *XDCX) HasTradingState(block *types.Block, author common.Address) bool {
 	root, err := XDCx.GetTradingStateRoot(block, author)
 	if err != nil {
 		return false
 	}
 	_, err = XDCx.StateCache.OpenTrie(root)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
+
 func (XDCx *XDCX) GetTriegc() *prque.Prque {
 	return XDCx.Triegc
 }

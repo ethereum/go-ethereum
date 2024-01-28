@@ -41,10 +41,7 @@ func IsResignedRelayer(relayer common.Address, statedb *state.StateDB) bool {
 	slot := RelayerMappingSlot["RESIGN_REQUESTS"]
 	locBig := GetLocMappingAtKey(relayer.Hash(), slot)
 	locHash := common.BigToHash(locBig)
-	if statedb.GetState(common.HexToAddress(common.RelayerRegistrationSMC), locHash) != (common.Hash{}) {
-		return true
-	}
-	return false
+	return statedb.GetState(common.HexToAddress(common.RelayerRegistrationSMC), locHash) != (common.Hash{})
 }
 
 func GetBaseTokenLength(relayer common.Address, statedb *state.StateDB) uint64 {
