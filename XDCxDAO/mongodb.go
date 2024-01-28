@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -12,8 +15,6 @@ import (
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	lru "github.com/hashicorp/golang-lru"
-	"strings"
-	"time"
 )
 
 const (
@@ -873,15 +874,15 @@ func (db *MongoDatabase) Sync() error {
 }
 
 func (db *MongoDatabase) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return db.NewIterator(prefix, start)
+	panic("NewIterator from XDCxDAO mongodb is not supported")
 }
 
 func (db *MongoDatabase) Stat(property string) (string, error) {
-	return db.Stat(property)
+	return "", errNotSupported
 }
 
 func (db *MongoDatabase) Compact(start []byte, limit []byte) error {
-	return db.Compact(start, limit)
+	return errNotSupported
 }
 
 func (db *MongoDatabase) NewBatch() ethdb.Batch {
