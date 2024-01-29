@@ -88,7 +88,14 @@ type StateDB interface {
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
+	// RevertToSnapshot reverts all state changes made since the given revision.
 	RevertToSnapshot(int)
+
+	// DiscardSnapshot removes the snapshot with the given id; after calling this
+	// method, it is no longer possible to revert to that particular snapshot, the
+	// changes are considered part of the parent scope.
+	DiscardSnapshot(int)
+	// Snapshot returns an identifier for the current scope of the state.
 	Snapshot() int
 
 	AddLog(*types.Log)

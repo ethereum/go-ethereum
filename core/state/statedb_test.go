@@ -55,7 +55,7 @@ func TestUpdateLeaks(t *testing.T) {
 		sdb = NewDatabase(tdb, nil)
 	)
 	state, _ := New(types.EmptyRootHash, sdb)
-
+	state.Snapshot()
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
 		addr := common.BytesToAddress([]byte{i})
@@ -111,7 +111,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 	// Write modifications to trie.
 	transState.IntermediateRoot(false)
-
+	transState.journal.snapshot()
 	// Overwrite all the data with new values in the transient database.
 	for i := byte(0); i < 255; i++ {
 		modify(transState, common.Address{i}, i, 99)
@@ -364,6 +364,12 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetStorage",
 			fn: func(a testAction, s *StateDB) {
+				contractHash := s.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				if emptyCode {
+					// no-op
+					return
+				}
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -374,11 +380,25 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetCode",
 			fn: func(a testAction, s *StateDB) {
-				// SetCode can only be performed in case the addr does
-				// not already hold code
+				// SetCode cannot be performed if the addr already has code
 				if c := s.GetCode(addr); len(c) > 0 {
 					// no-op
 					return
+				}
+				// SetCode cannot be performed if the addr has just selfdestructed
+				if obj := s.getStateObject(addr); obj != nil {
+					if obj.selfDestructed {
+						// If it's selfdestructed, we cannot create into it
+						return
+					}
+				}
+				// SetCode requires the contract to be account + contract to be created first
+				if obj := s.getStateObject(addr); obj == nil {
+					s.createObject(addr)
+				}
+				obj := s.getStateObject(addr)
+				if !obj.newContract {
+					s.CreateContract(addr)
 				}
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
@@ -405,6 +425,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
 				storageRoot := s.GetStorageRoot(addr)
 				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == types.EmptyRootHash
+
+				if obj := s.getStateObject(addr); obj != nil {
+					if obj.selfDestructed {
+						// If it's selfdestructed, we cannot create into it
+						return
+					}
+				}
 				if s.GetNonce(addr) == 0 && emptyCode && emptyStorage {
 					s.CreateContract(addr)
 					// We also set some code here, to prevent the
@@ -419,6 +446,15 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SelfDestruct",
 			fn: func(a testAction, s *StateDB) {
+				obj := s.getStateObject(addr)
+				// SelfDestruct requires the object to first exist
+				if obj == nil {
+					s.createObject(addr)
+				}
+				obj = s.getStateObject(addr)
+				if !obj.newContract {
+					s.CreateContract(addr)
+				}
 				s.SelfDestruct(addr)
 			},
 		},
@@ -440,15 +476,6 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
-			name: "AddPreimage",
-			fn: func(a testAction, s *StateDB) {
-				preimage := []byte{1}
-				hash := common.BytesToHash(preimage)
-				s.AddPreimage(hash, preimage)
-			},
-			args: make([]int64, 1),
-		},
-		{
 			name: "AddAddressToAccessList",
 			fn: func(a testAction, s *StateDB) {
 				s.AddAddressToAccessList(addr)
@@ -465,6 +492,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetTransientState",
 			fn: func(a testAction, s *StateDB) {
+				contractHash := s.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				if emptyCode {
+					// no-op
+					return
+				}
+
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -690,8 +724,8 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 				}
 				return out.String()
 			}
-			haveK := getKeys(state.journal.dirtyAccounts())
-			wantK := getKeys(checkstate.journal.dirtyAccounts())
+			haveK := getKeys(have)
+			wantK := getKeys(want)
 			return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", haveK, wantK)
 		}
 	}
@@ -1124,17 +1158,12 @@ func TestStateDBAccessList(t *testing.T) {
 
 	// Make a copy
 	stateCopy1 := state.Copy()
-	if exp, got := 4, state.journal.(*linearJournal).length(); exp != got {
-		t.Fatalf("linearJournal length mismatch: have %d, want %d", got, exp)
-	}
 
 	// same again, should cause no linearJournal entries
 	state.AddSlotToAccessList(addr("bb"), slot("01"))
 	state.AddSlotToAccessList(addr("bb"), slot("02"))
 	state.AddAddressToAccessList(addr("aa"))
-	if exp, got := 4, state.journal.(*linearJournal).length(); exp != got {
-		t.Fatalf("linearJournal length mismatch: have %d, want %d", got, exp)
-	}
+
 	// some new ones
 	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
 	push(state.journal.snapshot())                    // journal id 5
@@ -1143,9 +1172,6 @@ func TestStateDBAccessList(t *testing.T) {
 	state.AddAddressToAccessList(addr("cc"))          // 7
 	push(state.journal.snapshot())                    // journal id 7
 	state.AddSlotToAccessList(addr("cc"), slot("01")) // 8
-	if exp, got := 8, state.journal.(*linearJournal).length(); exp != got {
-		t.Fatalf("linearJournal length mismatch: have %d, want %d", got, exp)
-	}
 
 	verifyAddrs("aa", "bb", "cc")
 	verifySlots("aa", "01")
@@ -1275,9 +1301,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 	addr := common.Address{}
 	revision := state.journal.snapshot()
 	state.SetTransientState(addr, key, value)
-	if exp, got := 1, state.journal.(*linearJournal).length(); exp != got {
-		t.Fatalf("linearJournal length mismatch: have %d, want %d", got, exp)
-	}
+
 	// the retrieved value should equal what was set
 	if got := state.GetTransientState(addr, key); got != value {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, value)

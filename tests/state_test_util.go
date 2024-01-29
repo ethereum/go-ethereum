@@ -309,6 +309,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 		return st, common.Hash{}, 0, err
 	}
+	st.StateDB.DiscardSnapshot(snapshot)
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
 	// - the coinbase self-destructed, or
