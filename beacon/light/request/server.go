@@ -18,7 +18,6 @@ package request
 
 import (
 	"math"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -28,7 +27,6 @@ import (
 
 var (
 	// request events
-	EvRequest  = &EventType{Name: "request", requestEvent: true}  // data: RequestResponse; sent by Scheduler
 	EvResponse = &EventType{Name: "response", requestEvent: true} // data: RequestResponse; sent by requestServer
 	EvFail     = &EventType{Name: "fail", requestEvent: true}     // data: RequestResponse; sent by requestServer
 	EvTimeout  = &EventType{Name: "timeout", requestEvent: true}  // data: RequestResponse; sent by serverWithTimeout
@@ -70,9 +68,9 @@ type requestServer interface {
 // new requests based on timeouts and response failures.
 type server interface {
 	subscribe(eventCallback func(Event))
-	canRequestNow() (bool, float32)
+	canRequestNow() bool
 	sendRequest(Request) ID
-	Fail(string)
+	fail(string)
 	unsubscribe()
 }
 
@@ -121,7 +119,7 @@ type RequestResponse struct {
 	Response Response
 }
 
-// serverWithTimeout wraps a requestServer and introduces two new request event
+//TODO serverWithTimeout wraps a requestServer and introduces two new request event
 // types: EvRequest and EvTimeout. Whenever a request is successfully sent, an
 // EvRequest event is emitted first. The request's lifecycle is concluded if
 // EvResponse or EvFail emitted by the parent requestServer. If this does not
@@ -161,9 +159,7 @@ func (s *serverWithTimeout) sendRequest(request Request) (reqId ID) {
 	s.lock.Lock()
 	s.lastID++
 	id := s.lastID
-	reqData := RequestResponse{ID: id, Request: request}
-	s.childEventCb(Event{Type: EvRequest, Data: reqData})
-	s.startTimeout(reqData)
+	s.startTimeout(RequestResponse{ID: id, Request: request})
 	s.lock.Unlock()
 	s.parent.SendRequest(id, request)
 	return id
@@ -293,12 +289,12 @@ func (s *serverWithLimits) eventCallback(event Event) {
 			s.parallelLimit += parallelAdjustUp
 		}
 		s.pendingCount--
-		if canRequest, _ := s.canRequest(); canRequest {
+		if s.canRequest() {
 			sendCanRequestAgain = s.sendEvent
 			s.sendEvent = false
 		}
 		if event.Type == EvFail {
-			s.fail("failed request")
+			s.failLocked("failed request")
 		}
 	}
 	childEventCb := s.childEventCb
@@ -331,14 +327,14 @@ func (s *serverWithLimits) unsubscribe() {
 }
 
 // canRequest checks whether a new request can be started.
-func (s *serverWithLimits) canRequest() (bool, float32) {
+func (s *serverWithLimits) canRequest() bool {
 	if s.delayTimer != nil || s.pendingCount >= int(s.parallelLimit) || s.timeoutCount > 0 {
-		return false, 0
+		return false
 	}
 	if s.parallelLimit < minParallelLimit {
 		s.parallelLimit = minParallelLimit
 	}
-	return true, -(float32(s.pendingCount) + rand.Float32()) / s.parallelLimit
+	return true
 }
 
 // canRequestNow checks whether a new request can be started, according to the
@@ -349,10 +345,10 @@ func (s *serverWithLimits) canRequest() (bool, float32) {
 // set of servers.
 // If it returns false then it is guaranteed that an EvCanRequestAgain will be
 // sent whenever the server becomes available for requesting again.
-func (s *serverWithLimits) canRequestNow() (bool, float32) {
+func (s *serverWithLimits) canRequestNow() bool {
 	var sendCanRequestAgain bool
 	s.lock.Lock()
-	canRequest, priority := s.canRequest()
+	canRequest := s.canRequest()
 	if canRequest {
 		sendCanRequestAgain = s.sendEvent
 		s.sendEvent = false
@@ -362,7 +358,7 @@ func (s *serverWithLimits) canRequestNow() (bool, float32) {
 	if sendCanRequestAgain {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}
-	return canRequest, priority
+	return canRequest
 }
 
 // delay sets the delay timer to the given duration, disabling new requests for
@@ -384,7 +380,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 		s.lock.Lock()
 		if s.delayTimer != nil && s.delayCounter == delayCounter { // do nothing if there is a new timer now
 			s.delayTimer = nil
-			if canRequest, _ := s.canRequest(); canRequest {
+			if s.canRequest() {
 				sendCanRequestAgain = s.sendEvent
 				s.sendEvent = false
 			}
@@ -399,15 +395,15 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 
 // fail reports that a response from the server was found invalid by the processing
 // Module, disabling new requests for a dynamically adjused time period.
-func (s *serverWithLimits) Fail(desc string) {
+func (s *serverWithLimits) fail(desc string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.fail(desc)
+	s.failLocked(desc)
 }
 
-// fail calculates the dynamic failure delay and applies it.
-func (s *serverWithLimits) fail(desc string) {
+// failLocked calculates the dynamic failure delay and applies it.
+func (s *serverWithLimits) failLocked(desc string) {
 	log.Debug("Server error", "description", desc)
 	s.failureDelay *= 2
 	now := s.clock.Now()

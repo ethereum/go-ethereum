@@ -29,7 +29,7 @@ import (
 // to the validated and prefetch heads.
 type beaconBlockSync struct {
 	recentBlocks *lru.Cache[common.Hash, *capella.BeaconBlock]
-	locked       map[common.Hash]struct{}
+	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
 
@@ -53,34 +53,42 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	return &beaconBlockSync{
 		headTracker:  headTracker,
 		recentBlocks: lru.NewCache[common.Hash, *capella.BeaconBlock](10),
-		locked:       make(map[common.Hash]struct{}),
+		locked:       make(map[common.Hash]request.ServerAndID),
 		serverHeads:  make(map[request.Server]common.Hash),
 		headCh:       make(chan headData, 1),
 	}
 }
 
-func (s *beaconBlockSync) Process(events []request.Event) {
+func (s *beaconBlockSync) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		switch event.Type {
-		case request.EvRequest:
-			_, req, _ := event.RequestInfo()
-			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
-			s.locked[blockRoot] = struct{}{}
 		case request.EvResponse, request.EvFail, request.EvTimeout:
-			_, req, resp := event.RequestInfo()
+			sid, req, resp := event.RequestInfo()
 			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
 			if resp != nil {
 				s.recentBlocks.Add(blockRoot, resp.(*capella.BeaconBlock))
 			}
-			delete(s.locked, blockRoot)
+			if s.locked[blockRoot] == sid {
+				delete(s.locked, blockRoot)
+			}
 		case sync.EvNewHead:
 			s.serverHeads[event.Server] = event.Data.(types.HeadInfo).BlockRoot
 		case request.EvUnregistered:
 			delete(s.serverHeads, event.Server)
 		}
 	}
+	s.updateValidatedHead()
+	// request validated head block if unavailable and not yet requested
+	if vh, ok := s.headTracker.ValidatedHead(); ok {
+		s.tryRequestBlock(requester, vh.Header.Hash(), false)
+	}
+	// request prefetch head if the given server has announced it
+	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
+		s.tryRequestBlock(requester, prefetchHead, true)
+	}
+}
 
-	// send validated head block
+func (s *beaconBlockSync) updateValidatedHead() {
 	head, ok := s.headTracker.ValidatedHead()
 	if !ok {
 		return
@@ -105,27 +113,22 @@ func (s *beaconBlockSync) Process(events []request.Event) {
 	}
 }
 
-func (s *beaconBlockSync) MakeRequest(server request.Server) (request.Request, float32) {
-	// request validated head block if unavailable and not yet requested
-	if vh, ok := s.headTracker.ValidatedHead(); ok {
-		validatedHead := vh.Header.Hash()
-		if _, ok := s.recentBlocks.Get(validatedHead); !ok {
-			if _, ok := s.locked[validatedHead]; !ok {
-				return sync.ReqBeaconBlock(validatedHead), 1
-			}
-		}
+func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot common.Hash, needSameHead bool) {
+	if _, ok := s.recentBlocks.Get(blockRoot); ok {
+		return
 	}
-	// request prefetch head if the given server has announced it
-	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) && prefetchHead == s.serverHeads[server] {
-		if _, ok := s.recentBlocks.Get(prefetchHead); !ok {
-			if _, ok := s.locked[prefetchHead]; !ok {
-				return sync.ReqBeaconBlock(prefetchHead), 0
-			}
-		}
+	if _, ok := s.locked[blockRoot]; ok {
+		return
 	}
-	return nil, 0
+	for _, server := range requester.CanSendTo() {
+		if needSameHead && (s.serverHeads[server] != blockRoot) {
+			continue
+		}
+		id := requester.Send(server, sync.ReqBeaconBlock(blockRoot))
+		s.locked[blockRoot] = request.ServerAndID{Server: server, ID: id}
+		return
+	}
 }
-
 func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
 	if block == nil {
 		return types.HeadInfo{}

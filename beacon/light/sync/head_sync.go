@@ -67,7 +67,7 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	return s
 }
 
-func (s *HeadSync) Process(events []request.Event) {
+func (s *HeadSync) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		switch event.Type {
 		case EvNewHead:
@@ -88,10 +88,6 @@ func (s *HeadSync) Process(events []request.Event) {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
 		s.processUnvalidated()
 	}
-}
-
-func (s *HeadSync) MakeRequest(server request.Server) (request.Request, float32) {
-	return nil, 0
 }
 
 // newSignedHead handles received signed head; either validates it if the chain

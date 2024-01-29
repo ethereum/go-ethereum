@@ -17,21 +17,13 @@
 package sync
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
-
-type TestServer struct {
-	ts *TestScheduler
-	ID int
-}
-
-func (s *TestServer) Fail(desc string) {
-	s.ts.serverFail(s)
-}
 
 type requestWithID struct {
 	sid     request.ServerAndID
@@ -44,7 +36,7 @@ type TestScheduler struct {
 	events    []request.Event
 	servers   []request.Server
 	allowance map[request.Server]int
-	sent      map[int]requestWithID
+	sent      map[int][]requestWithID
 	testIndex int
 	expFail   map[request.Server]int // expected Server.Fail calls during next Run
 	lastId    request.ID
@@ -56,13 +48,26 @@ func NewTestScheduler(t *testing.T, module request.Module) *TestScheduler {
 		module:    module,
 		allowance: make(map[request.Server]int),
 		expFail:   make(map[request.Server]int),
-		sent:      make(map[int]requestWithID),
+		sent:      make(map[int][]requestWithID),
 	}
 }
 
-func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq request.Request) {
+func (ts *TestScheduler) Run(testIndex int, exp ...any) {
+	expReqs := make([]requestWithID, len(exp)/2)
+	id := ts.lastId
+	for i := range expReqs {
+		id++
+		expReqs[i] = requestWithID{
+			sid:     request.ServerAndID{Server: exp[i*2].(request.Server), ID: id},
+			request: exp[i*2+1].(request.Request),
+		}
+	}
+	if len(expReqs) == 0 {
+		expReqs = nil
+	}
+
 	ts.testIndex = testIndex
-	ts.module.Process(ts.events)
+	ts.module.Process(ts, ts.events)
 	ts.events = nil
 
 	for server, count := range ts.expFail {
@@ -70,31 +75,47 @@ func (ts *TestScheduler) Run(testIndex int, expServer request.Server, expReq req
 		if count == 0 {
 			continue
 		}
-		ts.t.Errorf("Missing %d Server.Fail(s) from server %d in test case #%d", count, server.(*TestServer).ID, testIndex)
+		ts.t.Errorf("Missing %d Server.Fail(s) from server %s in test case #%d", count, server.(string), testIndex)
 	}
 
-	expReqWithID := requestWithID{
-		sid:     request.ServerAndID{Server: expServer, ID: ts.lastId + 1},
-		request: expReq,
-	}
-	req, ok := ts.tryRequest(testIndex, ts.module.MakeRequest)
-	if expReq == nil {
-		if ok {
-			ts.t.Errorf("Unexpected request in test case #%d (expected none, got %v)", testIndex, req)
-		}
-		return
-	}
-	if !ok {
-		ts.t.Errorf("Missing request in test case #%d (expected %v, got none)", testIndex, expReqWithID)
-		return
-	}
-	if req != expReqWithID {
-		ts.t.Errorf("Wrong request in test case #%d (expected %v, got %v)", testIndex, expReqWithID, req)
+	if !reflect.DeepEqual(ts.sent[testIndex], expReqs) {
+		ts.t.Errorf("Wrong sent requests in test case #%d (expected %v, got %v)", testIndex, expReqs, ts.sent[testIndex])
 	}
 }
 
-func (ts *TestScheduler) Request(testIndex int) request.Request {
-	return ts.sent[testIndex].request
+func (ts *TestScheduler) CanSendTo() (cs []request.Server) {
+	for _, server := range ts.servers {
+		if ts.allowance[server] > 0 {
+			cs = append(cs, server)
+		}
+	}
+	return
+}
+
+func (ts *TestScheduler) Send(server request.Server, req request.Request) request.ID {
+	ts.lastId++
+	ts.sent[ts.testIndex] = append(ts.sent[ts.testIndex], requestWithID{
+		sid:     request.ServerAndID{Server: server, ID: ts.lastId},
+		request: req,
+	})
+	ts.allowance[server]--
+	return ts.lastId
+}
+
+func (ts *TestScheduler) Fail(server request.Server, desc string) {
+	if ts.expFail[server] == 0 {
+		ts.t.Errorf("Unexpected Fail from server %s in test case #%d: %s", server.(string), ts.testIndex, desc)
+		return
+	}
+	ts.expFail[server]--
+}
+
+func (ts *TestScheduler) Request(testIndex, reqIndex int) requestWithID {
+	if len(ts.sent[testIndex]) < reqIndex {
+		ts.t.Errorf("Missing request from test case %d index %d", testIndex, reqIndex)
+		return requestWithID{}
+	}
+	return ts.sent[testIndex][reqIndex-1]
 }
 
 func (ts *TestScheduler) ServerEvent(evType *request.EventType, server request.Server, data any) {
@@ -105,10 +126,8 @@ func (ts *TestScheduler) ServerEvent(evType *request.EventType, server request.S
 	})
 }
 
-func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, resp request.Response) {
-	req, ok := ts.sent[testIndex]
-	if !ok {
-		ts.t.Errorf("Missing request from test case %v", testIndex)
+func (ts *TestScheduler) RequestEvent(evType *request.EventType, req requestWithID, resp request.Response) {
+	if req.request == nil {
 		return
 	}
 	ts.events = append(ts.events, request.Event{
@@ -123,7 +142,6 @@ func (ts *TestScheduler) RequestEvent(evType *request.EventType, testIndex int, 
 }
 
 func (ts *TestScheduler) AddServer(server request.Server, allowance int) {
-	server.(*TestServer).ts = ts
 	ts.servers = append(ts.servers, server)
 	ts.allowance[server] = allowance
 	ts.ServerEvent(request.EvRegistered, server, nil)
@@ -148,43 +166,6 @@ func (ts *TestScheduler) AddAllowance(server request.Server, allowance int) {
 
 func (ts *TestScheduler) ExpFail(server request.Server) {
 	ts.expFail[server]++
-}
-
-func (ts *TestScheduler) serverFail(server request.Server) {
-	if ts.expFail[server] == 0 {
-		ts.t.Errorf("Unexpected Server.Fail from server %d in test case #%d", server.(*TestServer).ID, ts.testIndex)
-		return
-	}
-	ts.expFail[server]--
-}
-
-func (ts *TestScheduler) tryRequest(testIndex int, requestFn func(server request.Server) (request.Request, float32)) (requestWithID, bool) {
-	var (
-		bestServer request.Server
-		bestReq    request.Request
-		bestPri    float32
-	)
-	for _, server := range ts.servers {
-		if ts.allowance[server] == 0 {
-			continue
-		}
-		req, pri := requestFn(server)
-		if req != nil && (bestReq == nil || pri > bestPri) {
-			bestServer, bestReq, bestPri = server, req, pri
-		}
-	}
-	if bestServer == nil {
-		return requestWithID{}, false
-	}
-	ts.allowance[bestServer]--
-	ts.lastId++
-	req := requestWithID{
-		sid:     request.ServerAndID{Server: bestServer, ID: ts.lastId},
-		request: bestReq,
-	}
-	ts.sent[testIndex] = req
-	ts.RequestEvent(request.EvRequest, testIndex, nil)
-	return req, true
 }
 
 type TestCommitteeChain struct {

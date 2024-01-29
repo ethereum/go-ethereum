@@ -24,10 +24,10 @@ import (
 )
 
 var (
-	testServer1 = &TestServer{ID: 1}
-	testServer2 = &TestServer{ID: 2}
-	testServer3 = &TestServer{ID: 3}
-	testServer4 = &TestServer{ID: 4}
+	testServer1 = "testServer1"
+	testServer2 = "testServer2"
+	testServer3 = "testServer3"
+	testServer4 = "testServer4"
 
 	testHead0 = types.HeadInfo{}
 	testHead1 = types.HeadInfo{Slot: 123, BlockRoot: common.Hash{1}}
@@ -52,12 +52,12 @@ func TestValidatedHead(t *testing.T) {
 
 	ts.AddServer(testServer1, 1)
 	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead1)
-	ts.Run(1, nil, nil)
+	ts.Run(1)
 	// announced head should be queued because of uninitialized chain
 	ht.ExpValidated(t, 1, nil)
 
 	chain.SetNextSyncPeriod(0) // initialize chain
-	ts.Run(2, nil, nil)
+	ts.Run(2)
 	// expect previously queued head to be validated
 	ht.ExpValidated(t, 2, []types.SignedHeader{testSHead1})
 
@@ -65,34 +65,34 @@ func TestValidatedHead(t *testing.T) {
 	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead2)
 	ts.AddServer(testServer2, 1)
 	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead2)
-	ts.Run(3, nil, nil)
+	ts.Run(3)
 	// expect both head announcements to be validated instantly
 	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead2, testSHead2})
 
 	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead3)
 	ts.AddServer(testServer3, 1)
 	ts.ServerEvent(EvNewSignedHead, testServer3, testSHead4)
-	ts.Run(4, nil, nil)
+	ts.Run(4)
 	// future period annonced heads should be queued
 	ht.ExpValidated(t, 4, nil)
 
 	chain.SetNextSyncPeriod(2)
-	ts.Run(5, nil, nil)
+	ts.Run(5)
 	// testSHead3 can be validated now but not testSHead4
 	ht.ExpValidated(t, 5, []types.SignedHeader{testSHead3})
 
 	// server 3 disconnected without proving period 3, its announced head should be dropped
 	ts.RemoveServer(testServer3)
-	ts.Run(6, nil, nil)
+	ts.Run(6)
 	ht.ExpValidated(t, 6, nil)
 
 	chain.SetNextSyncPeriod(3)
-	ts.Run(7, nil, nil)
+	ts.Run(7)
 	// testSHead4 could be validated now but it's not queued by any registered server
 	ht.ExpValidated(t, 7, nil)
 
 	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead4)
-	ts.Run(8, nil, nil)
+	ts.Run(8)
 	// now testSHead4 should be validated
 	ht.ExpValidated(t, 8, []types.SignedHeader{testSHead4})
 }
@@ -107,45 +107,45 @@ func TestPrefetchHead(t *testing.T) {
 
 	ts.AddServer(testServer1, 1)
 	ts.ServerEvent(EvNewHead, testServer1, testHead1)
-	ts.Run(1, nil, nil)
+	ts.Run(1)
 	ht.ExpPrefetch(t, 1, testHead1) // s1: h1
 
 	ts.AddServer(testServer2, 1)
 	ts.ServerEvent(EvNewHead, testServer2, testHead2)
-	ts.Run(2, nil, nil)
+	ts.Run(2)
 	ht.ExpPrefetch(t, 2, testHead2) // s1: h1, s2: h2
 
 	ts.ServerEvent(EvNewHead, testServer1, testHead2)
-	ts.Run(3, nil, nil)
+	ts.Run(3)
 	ht.ExpPrefetch(t, 3, testHead2) // s1: h2, s2: h2
 
 	ts.AddServer(testServer3, 1)
 	ts.ServerEvent(EvNewHead, testServer3, testHead3)
-	ts.Run(4, nil, nil)
+	ts.Run(4)
 	ht.ExpPrefetch(t, 4, testHead2) // s1: h2, s2: h2, s3: h3
 
 	ts.AddServer(testServer4, 1)
 	ts.ServerEvent(EvNewHead, testServer4, testHead4)
-	ts.Run(5, nil, nil)
+	ts.Run(5)
 	ht.ExpPrefetch(t, 5, testHead2) // s1: h2, s2: h2, s3: h3, s4: h4
 
 	ts.ServerEvent(EvNewHead, testServer2, testHead3)
-	ts.Run(6, nil, nil)
+	ts.Run(6)
 	ht.ExpPrefetch(t, 6, testHead3) // s1: h2, s2: h3, s3: h3, s4: h4
 
 	ts.RemoveServer(testServer3)
-	ts.Run(7, nil, nil)
+	ts.Run(7)
 	ht.ExpPrefetch(t, 7, testHead4) // s1: h2, s2: h3, s4: h4
 
 	ts.RemoveServer(testServer1)
-	ts.Run(8, nil, nil)
+	ts.Run(8)
 	ht.ExpPrefetch(t, 8, testHead4) // s2: h3, s4: h4
 
 	ts.RemoveServer(testServer4)
-	ts.Run(9, nil, nil)
+	ts.Run(9)
 	ht.ExpPrefetch(t, 9, testHead3) // s2: h3
 
 	ts.RemoveServer(testServer2)
-	ts.Run(10, nil, nil)
+	ts.Run(10)
 	ht.ExpPrefetch(t, 10, testHead0) // no servers registered
 }

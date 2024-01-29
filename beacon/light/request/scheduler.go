@@ -17,7 +17,6 @@
 package request
 
 import (
-	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -45,19 +44,13 @@ type Module interface {
 	// Note: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
-	Process([]Event)
-	// MakeRequest generates a request candidate based on the state of the target
-	// structure(s) and the internal state of the module. This candidate is
-	// typically the next obtainable item (or range of items) of the target
-	// structure that is assumed to be available at the given server and has not
-	// been requested yet (or has been requested but already timed out and should
-	// be resent).
-	// MakeRequest is always called after Process. Note that it is the Scheduler's
-	// job to select the best possible requests and actually send them. If a
-	// request has been sent, the module is notified through an EvRequest event
-	// which also immediately triggers a next processing round, allowing modules
-	// to send more requests if possible and necessary.
-	MakeRequest(Server) (Request, float32)
+	Process(Requester, []Event)
+}
+
+type Requester interface {
+	CanSendTo() []Server
+	Send(Server, Request) ID
+	Fail(Server, string)
 }
 
 // Scheduler is a modular network data retrieval framework that coordinates multiple
@@ -72,7 +65,10 @@ type Scheduler struct {
 	servers map[server]struct{}
 	targets map[targetData]uint64
 
-	pending map[ServerAndID]pendingRequest
+	requesterLock sync.RWMutex
+	serverOrder   []server
+	pending       map[ServerAndID]pendingRequest
+
 	// eventLock guards access to the events list. Note that eventLock can be
 	// locked either while lock is locked or unlocked but lock cannot be locked
 	// while eventLock is locked.
@@ -87,15 +83,12 @@ type Scheduler struct {
 }
 
 type (
-	// Server identifies a server without allowing any direct interaction except
-	// for reporting a server side failure.
+	// Server identifies a server without allowing any direct interaction.
 	// Note: server interface is used by Scheduler and Tracker but not used by
 	// the modules that do not interact with them directly.
 	// In order to make module testing easier, Server interface is used in
 	// events and modules.
-	Server interface {
-		Fail(desc string)
-	}
+	Server      any
 	Request     any
 	Response    any
 	ID          uint64
@@ -238,91 +231,16 @@ func (s *Scheduler) targetChanged() (changed bool) {
 // requests are generated and sent if necessary and possible.
 func (s *Scheduler) processRound() {
 	for {
-		filteredEvents := s.filterEvents()
 		log.Debug("Processing modules")
+		filteredEvents := s.filterEvents()
 		for _, module := range s.modules {
 			log.Debug("Processing module", "name", s.names[module], "events", len(filteredEvents[module]))
-			module.Process(filteredEvents[module])
+			module.Process(requester{s, module}, filteredEvents[module])
 		}
 		if !s.targetChanged() {
 			break
 		}
 	}
-	s.sendRequests()
-}
-
-// sendRequests lets each module generate a request if necessary and sends it to
-// a suitable server if possible.
-// Note that if a request is sent, an EvRequest event will immediately trigger a
-// next processing round, thereby allowing modules to create any number of requests
-// in any suitable moment as long as there is a server that can accept them.
-func (s *Scheduler) sendRequests() {
-	servers := make(map[server]struct{})
-	for server := range s.servers {
-		if ok, _ := server.canRequestNow(); ok {
-			servers[server] = struct{}{}
-		}
-	}
-	log.Debug("Generating request candidates", "servers", len(servers))
-
-	for _, module := range s.modules {
-		if len(servers) == 0 {
-			return
-		}
-		if s.tryRequest(module, servers) {
-			log.Debug("Sent request", "module", s.names[module])
-		}
-	}
-}
-
-// tryRequest tries to generate request candidates for a given module and a given
-// set of servers, then selects the best candidate if there is one and sends the
-// request to the server it was generated for.
-// The candidates are primarily ranked based on "request priority", a number that
-// Module.MakeRequest has returned along with the request candidate. This ranking
-// may or may not be used depending on the type of the request, identical requests
-// typically have the same priority while multiple item requests may have a
-// priority based on the number of items requested.
-// If there are multiple candidates with identical request priority then they are
-// ranked based on "server priority" which is determined by the server. This value
-// is typically higher is the server is expected to respond quicker or with a
-// higher chance (typically a lower number of pending requests).
-// Note that tryRequest can also remove items from the set of available servers
-// if they are no longer able to accept requests in the current processing round.
-func (s *Scheduler) tryRequest(module Module, servers map[server]struct{}) bool {
-	var (
-		maxServerPriority, maxRequestPriority float32
-		bestServer                            server
-		bestRequest                           Request
-	)
-	maxServerPriority, maxRequestPriority = -math.MaxFloat32, -math.MaxFloat32
-	serverCount := len(servers)
-	var removed, candidates int
-	for server := range servers {
-		canRequest, serverPriority := server.canRequestNow()
-		if !canRequest {
-			delete(servers, server)
-			removed++
-			continue
-		}
-		request, requestPriority := module.MakeRequest(server)
-		if request != nil {
-			candidates++
-		}
-		if request == nil || requestPriority < maxRequestPriority ||
-			(requestPriority == maxRequestPriority && serverPriority <= maxServerPriority) {
-			continue
-		}
-		maxServerPriority, maxRequestPriority = serverPriority, requestPriority
-		bestServer, bestRequest = server, request
-	}
-	log.Debug("Request attempt", "serverCount", serverCount, "removedServers", removed, "requestCandidates", candidates)
-	if bestServer == nil {
-		return false
-	}
-	sid := ServerAndID{Server: bestServer, ID: bestServer.sendRequest(bestRequest)}
-	s.pending[sid] = pendingRequest{request: bestRequest, module: module}
-	return true
 }
 
 // Trigger starts a new processing round. If fired during processing, it ensures
@@ -358,6 +276,9 @@ func (s *Scheduler) filterEvents() map[Module][]Event {
 	s.events = nil
 	s.eventLock.Unlock()
 
+	s.requesterLock.Lock()
+	defer s.requesterLock.Unlock()
+
 	filteredEvents := make(map[Module][]Event)
 	for _, event := range events {
 		server := event.Server.(server)
@@ -379,9 +300,19 @@ func (s *Scheduler) filterEvents() map[Module][]Event {
 			switch event.Type {
 			case EvRegistered:
 				s.servers[server] = struct{}{}
+				s.serverOrder = append(s.serverOrder, nil)
+				copy(s.serverOrder[1:], s.serverOrder[:len(s.serverOrder)-1])
+				s.serverOrder[0] = server
 			case EvUnregistered:
 				s.closePending(event.Server, filteredEvents)
 				delete(s.servers, server)
+				for i, srv := range s.serverOrder {
+					if srv == server {
+						copy(s.serverOrder[i:len(s.serverOrder)-1], s.serverOrder[i+1:])
+						s.serverOrder = s.serverOrder[:len(s.serverOrder)-1]
+						break
+					}
+				}
 			}
 			for _, module := range s.modules {
 				filteredEvents[module] = append(filteredEvents[module], event)
@@ -407,4 +338,45 @@ func (s *Scheduler) closePending(server Server, filteredEvents map[Module][]Even
 			delete(s.pending, sid)
 		}
 	}
+}
+
+type requester struct {
+	*Scheduler
+	module Module
+}
+
+func (s requester) CanSendTo() []Server {
+	s.requesterLock.RLock()
+	defer s.requesterLock.RUnlock()
+
+	list := make([]Server, 0, len(s.serverOrder))
+	for _, server := range s.serverOrder {
+		if server.canRequestNow() {
+			list = append(list, server)
+		}
+	}
+	return list
+}
+
+func (s requester) Send(srv Server, req Request) ID {
+	s.requesterLock.Lock()
+	defer s.requesterLock.Unlock()
+
+	server := srv.(server)
+	id := server.sendRequest(req)
+	sid := ServerAndID{Server: srv, ID: id}
+	s.pending[sid] = pendingRequest{request: req, module: s.module}
+	for i, ss := range s.serverOrder {
+		if ss == server {
+			copy(s.serverOrder[i:len(s.serverOrder)-1], s.serverOrder[i+1:])
+			s.serverOrder[len(s.serverOrder)-1] = server
+			return id
+		}
+	}
+	log.Error("Target server not found in ordered list of registered servers")
+	return id
+}
+
+func (s requester) Fail(srv Server, desc string) {
+	srv.(server).fail(desc)
 }

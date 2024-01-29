@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	testServer1 = &sync.TestServer{ID: 1}
-	testServer2 = &sync.TestServer{ID: 2}
+	testServer1 = "testServer1"
+	testServer2 = "testServer2"
 
 	testBlock1 = &capella.BeaconBlock{Slot: 123}
 	testBlock2 = &capella.BeaconBlock{Slot: 124}
@@ -57,7 +57,7 @@ func TestBlockSync(t *testing.T) {
 	}
 
 	// no block requests expected until head tracker knows about a head
-	ts.Run(1, nil, nil)
+	ts.Run(1)
 	expHeadBlock(1, nil)
 
 	// set block 1 as prefetch head, announced by server 2
@@ -68,15 +68,15 @@ func TestBlockSync(t *testing.T) {
 	ts.Run(2, testServer2, sync.ReqBeaconBlock(head1.BlockRoot))
 
 	// valid response
-	ts.RequestEvent(request.EvResponse, 2, testBlock1)
+	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testBlock1)
 	ts.AddAllowance(testServer2, 1)
-	ts.Run(3, nil, nil)
+	ts.Run(3)
 	// head block still not expected as the fetched block is not the validated head yet
 	expHeadBlock(3, nil)
 
 	// set as validated head, expect no further requests but block 1 set as head block
 	ht.validated.Header = blockHeader(testBlock1)
-	ts.Run(4, nil, nil)
+	ts.Run(4)
 	expHeadBlock(4, testBlock1)
 
 	// set block 2 as prefetch head, announced by server 1
@@ -87,8 +87,8 @@ func TestBlockSync(t *testing.T) {
 	ts.Run(5, testServer1, sync.ReqBeaconBlock(head2.BlockRoot))
 
 	// req2 fails, no further requests expected because server 2 has not announced it
-	ts.RequestEvent(request.EvFail, 5, nil)
-	ts.Run(6, nil, nil)
+	ts.RequestEvent(request.EvFail, ts.Request(5, 1), nil)
+	ts.Run(6)
 
 	// set as validated head before retrieving block; now it's assumed to be available from server 2 too
 	ht.validated.Header = blockHeader(testBlock2)
@@ -98,8 +98,8 @@ func TestBlockSync(t *testing.T) {
 	expHeadBlock(4, nil)
 
 	// valid response, now head block should be block 2 immediately as it is already validated
-	ts.RequestEvent(request.EvResponse, 7, testBlock2)
-	ts.Run(8, nil, nil)
+	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
+	ts.Run(8)
 	expHeadBlock(5, testBlock2)
 }
 
