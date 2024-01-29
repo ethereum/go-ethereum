@@ -78,7 +78,7 @@ func NewMongoDatabase(session *mgo.Session, dbName string, mongoURL string, repl
 }
 
 func (db *MongoDatabase) IsEmptyKey(key []byte) bool {
-	return key == nil || len(key) == 0 || bytes.Equal(key, db.emptyKey)
+	return len(key) == 0 || bytes.Equal(key, db.emptyKey)
 }
 
 func (db *MongoDatabase) getCacheKey(key []byte) string {
