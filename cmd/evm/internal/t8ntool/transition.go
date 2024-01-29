@@ -188,7 +188,7 @@ func Transition(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	// Dump the excution result
+	// Dump the execution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)
@@ -280,7 +280,7 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	if addr == nil {
 		return
 	}
-	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
+	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
 		storage = make(map[common.Hash]common.Hash)

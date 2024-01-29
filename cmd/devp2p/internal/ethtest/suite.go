@@ -76,9 +76,9 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		// test transactions
+		{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "TestTransaction", Fn: s.TestTransaction},
 		{Name: "TestInvalidTxs", Fn: s.TestInvalidTxs},
-		{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest},
 		{Name: "TestNewPooledTxs", Fn: s.TestNewPooledTxs},
 		{Name: "TestBlobViolations", Fn: s.TestBlobViolations},
 	}
