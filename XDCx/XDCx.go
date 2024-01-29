@@ -207,19 +207,11 @@ func (XDCx *XDCX) ProcessOrderPending(header *types.Header, coinbase common.Addr
 				S: common.BigToHash(S),
 			},
 		}
-		cancel := false
-		if order.Status == tradingstate.OrderStatusCancelled {
-			cancel = true
-		}
 
 		log.Info("Process order pending", "orderPending", order, "BaseToken", order.BaseToken.Hex(), "QuoteToken", order.QuoteToken)
 		originalOrder := &tradingstate.OrderItem{}
 		*originalOrder = *order
 		originalOrder.Quantity = tradingstate.CloneBigInt(order.Quantity)
-
-		if cancel {
-			order.Status = tradingstate.OrderStatusCancelled
-		}
 
 		newTrades, newRejectedOrders, err := XDCx.CommitOrder(header, coinbase, chain, statedb, XDCXstatedb, tradingstate.GetTradingOrderBookHash(order.BaseToken, order.QuoteToken), order)
 

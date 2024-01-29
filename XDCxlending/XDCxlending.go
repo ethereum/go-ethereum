@@ -144,19 +144,11 @@ func (l *Lending) ProcessOrderPending(header *types.Header, coinbase common.Addr
 				S: common.BigToHash(S),
 			},
 		}
-		cancel := false
-		if order.Status == lendingstate.LendingStatusCancelled {
-			cancel = true
-		}
 
 		log.Info("Process order pending", "orderPending", order, "LendingToken", order.LendingToken.Hex(), "CollateralToken", order.CollateralToken)
 		originalOrder := &lendingstate.LendingItem{}
 		*originalOrder = *order
 		originalOrder.Quantity = lendingstate.CloneBigInt(order.Quantity)
-
-		if cancel {
-			order.Status = lendingstate.LendingStatusCancelled
-		}
 
 		newTrades, newRejectedOrders, err := l.CommitOrder(header, coinbase, chain, statedb, lendingStatedb, tradingStateDb, lendingstate.GetLendingOrderBookHash(order.LendingToken, order.Term), order)
 		for _, reject := range newRejectedOrders {
