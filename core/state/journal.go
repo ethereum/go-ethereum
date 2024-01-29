@@ -93,7 +93,6 @@ func (j *linearJournal) snapshot() int {
 	return id
 }
 
-// revertToSnapshot reverts all state changes made since the given revision.
 func (j *linearJournal) revertToSnapshot(revid int, s *StateDB) {
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(j.validRevisions), func(i int) bool {
@@ -107,6 +106,13 @@ func (j *linearJournal) revertToSnapshot(revid int, s *StateDB) {
 	// Replay the linearJournal to undo changes and remove invalidated snapshots
 	j.revert(s, snapshot)
 	j.validRevisions = j.validRevisions[:idx]
+}
+
+// DiscardSnapshot removes the snapshot with the given id; after calling this
+// method, it is no longer possible to revert to that particular snapshot, the
+// changes are considered part of the parent scope.
+func (j *linearJournal) DiscardSnapshot(id int) {
+	//
 }
 
 // append inserts a new modification entry to the end of the change linearJournal.
@@ -168,11 +174,11 @@ func (j *linearJournal) createObject(addr common.Address) {
 	j.append(createObjectChange{account: addr})
 }
 
-func (j *linearJournal) createContract(addr common.Address) {
+func (j *linearJournal) createContract(addr common.Address, account *types.StateAccount) {
 	j.append(createContractChange{account: addr})
 }
 
-func (j *linearJournal) destruct(addr common.Address) {
+func (j *linearJournal) destruct(addr common.Address, account *types.StateAccount) {
 	j.append(selfDestructChange{account: addr})
 }
 
@@ -197,25 +203,25 @@ func (j *linearJournal) refundChange(previous uint64) {
 	j.append(refundChange{prev: previous})
 }
 
-func (j *linearJournal) balanceChange(addr common.Address, previous *uint256.Int) {
+func (j *linearJournal) balanceChange(addr common.Address, account *types.StateAccount, destructed, newContract bool) {
 	j.append(balanceChange{
 		account: addr,
-		prev:    previous.Clone(),
+		prev:    account.Balance.Clone(),
 	})
 }
 
-func (j *linearJournal) setCode(address common.Address) {
+func (j *linearJournal) setCode(address common.Address, account *types.StateAccount) {
 	j.append(codeChange{account: address})
 }
 
-func (j *linearJournal) nonceChange(address common.Address, prev uint64) {
+func (j *linearJournal) nonceChange(address common.Address, account *types.StateAccount, destructed, newContract bool) {
 	j.append(nonceChange{
 		account: address,
-		prev:    prev,
+		prev:    account.Nonce,
 	})
 }
 
-func (j *linearJournal) touchChange(address common.Address) {
+func (j *linearJournal) touchChange(address common.Address, account *types.StateAccount, destructed, newContract bool) {
 	j.append(touchChange{
 		account: address,
 	})

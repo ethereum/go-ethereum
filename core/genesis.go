@@ -152,6 +152,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 	if err != nil {
 		return common.Hash{}, err
 	}
+
 	for addr, account := range *ga {
 		if account.Balance != nil {
 			// This is not actually logged via tracer because OnGenesisBlock

@@ -180,7 +180,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		mutations:            make(map[common.Address]*mutation),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
-		journal:              newLinearJournal(),
+		journal:              newSparseJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
@@ -500,7 +500,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
 	if !stateObject.selfDestructed {
-		s.journal.destruct(addr)
+		s.journal.destruct(addr, &stateObject.data)
 		stateObject.markSelfdestructed()
 	}
 }
@@ -638,7 +638,7 @@ func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
 	if !obj.newContract {
 		obj.newContract = true
-		s.journal.createContract(addr)
+		s.journal.createContract(addr, &obj.data)
 	}
 }
 
@@ -705,6 +705,13 @@ func (s *StateDB) Copy() *StateDB {
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
 	return s.journal.snapshot()
+}
+
+// DiscardSnapshot removes the snapshot with the given id; after calling this
+// method, it is no longer possible to revert to that particular snapshot, the
+// changes are considered part of the parent scope.
+func (s *StateDB) DiscardSnapshot(id int) {
+	s.journal.DiscardSnapshot(id)
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
