@@ -63,10 +63,6 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 			if updates, committees, err := s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count); err == nil {
 				resp = sync.RespUpdates{Updates: updates, Committees: committees}
 			}
-		/*case sync.ReqOptimisticHead:
-		if signedHead, err := s.api.GetOptimisticHeadUpdate(); err == nil {
-			resp = signedHead
-		}*/ //TODO ???
 		case sync.ReqHeader:
 			if header, err := s.api.GetHeader(common.Hash(data)); err == nil {
 				resp = header

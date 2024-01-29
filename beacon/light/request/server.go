@@ -119,12 +119,11 @@ type RequestResponse struct {
 	Response Response
 }
 
-//TODO serverWithTimeout wraps a requestServer and introduces two new request event
-// types: EvRequest and EvTimeout. Whenever a request is successfully sent, an
-// EvRequest event is emitted first. The request's lifecycle is concluded if
-// EvResponse or EvFail emitted by the parent requestServer. If this does not
-// happen until softRequestTimeout then EvTimeout is emitted, after which the
-// final EvResponse or EvFail is still guaranteed to follow.
+// serverWithTimeout wraps a requestServer and introduces timeouts.
+// The request's lifecycle is concluded if EvResponse or EvFail emitted by the
+// parent requestServer. If this does not happen until softRequestTimeout then
+// EvTimeout is emitted, after which the final EvResponse or EvFail is still
+// guaranteed to follow.
 // If the parent fails to send this final event for hardRequestTimeout then
 // serverWithTimeout emits EvFail and discards any further events from the
 // parent related to the given request.
@@ -340,9 +339,6 @@ func (s *serverWithLimits) canRequest() bool {
 // canRequestNow checks whether a new request can be started, according to the
 // current in-flight request count and parallelLimit, and also the failure delay
 // timer.
-// If a new request is allowed then it also returns a priority value that can be
-// used to select the least overloaded server from an otherwise equally suitable
-// set of servers.
 // If it returns false then it is guaranteed that an EvCanRequestAgain will be
 // sent whenever the server becomes available for requesting again.
 func (s *serverWithLimits) canRequestNow() bool {

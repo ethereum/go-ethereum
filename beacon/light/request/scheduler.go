@@ -24,20 +24,21 @@ import (
 
 // Module represents a mechanism which is typically responsible for downloading
 // and updating a passive data structure. It does not directly interact with the
-// servers (except for reporting server side failures). It receives and processes
-// events, maintains its internal state and generates request candidates. It is
-// the Scheduler's responsibility to feed events to the modules, call Process as
-// long as there might be something to process and then generate request
+// servers. It can start requests using the Requester interface, maintain its
+// internal state by receiving and processing Events and update its target data
+// structure based on the obtained data.
+// It is the Scheduler's responsibility to feed events to the modules, call
+// Process as long as there might be something to process and then generate request
 // candidates using MakeRequest and start the best possible requests.
 // Modules are called by Scheduler whenever a global trigger is fired. All events
 // fire the trigger. Changing a target data structure also triggers a next
 // processing round as it could make further actions possible either by the same
 // or another Module.
 type Module interface {
-	// Process is a non-blocking function responsible for maintaining the target
-	// data structures(s) and the internal state of the module. This state
-	// typically consists of information about pending requests and registered
-	// servers and it is updated based on the received events.
+	// Process is a non-blocking function responsible for starting requests,
+	// processing events and updating the target data structures(s) and the
+	// internal state of the module. Module state typically consists of information
+	// about pending requests and registered servers.
 	// Process is always called after an event is received or after a target data
 	// structure has been changed.
 	//
@@ -47,6 +48,10 @@ type Module interface {
 	Process(Requester, []Event)
 }
 
+// Requester allows Modules to obtain the list of momentarily available servers,
+// start new requests and report server failure when a response has been proven
+// to be invalid in the processing phase.
+// Note that all Requester functions should be safe to call from Module.Process.
 type Requester interface {
 	CanSendTo() []Server
 	Send(Server, Request) ID
@@ -340,11 +345,18 @@ func (s *Scheduler) closePending(server Server, filteredEvents map[Module][]Even
 	}
 }
 
+// requester implements Requester. Note that while requester basically wraps
+// Scheduler (with the added information of the currently processed Module), all
+// functions are safe to call from Module.Process which is running while
+// the Scheduler.lock mutex is held.
 type requester struct {
 	*Scheduler
 	module Module
 }
 
+// CanSendTo returns the list of currently available servers. It also returns
+// them in an order of least to most recently used, ensuring a round-robin usage
+// of suitable servers if the module always chooses the first suitable one.
 func (s requester) CanSendTo() []Server {
 	s.requesterLock.RLock()
 	defer s.requesterLock.RUnlock()
@@ -358,6 +370,8 @@ func (s requester) CanSendTo() []Server {
 	return list
 }
 
+// Send sends a request and adds an entry to Scheduler.pending map, ensuring that
+// related request events will be delivered to the sender Module.
 func (s requester) Send(srv Server, req Request) ID {
 	s.requesterLock.Lock()
 	defer s.requesterLock.Unlock()
@@ -377,6 +391,11 @@ func (s requester) Send(srv Server, req Request) ID {
 	return id
 }
 
+// Fail should be called when a server delivers invalid or useless information.
+// Calling Fail disables the given server for a period that is initially short
+// but is exponentially growing if it happens frequently. This results in a
+// somewhat fault tolerant operation that avoids hammering servers with requests
+// that they cannot serve but still gives them a chance periodically.
 func (s requester) Fail(srv Server, desc string) {
 	srv.(server).fail(desc)
 }

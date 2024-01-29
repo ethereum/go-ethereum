@@ -84,7 +84,7 @@ func TestUpdateSyncParallel(t *testing.T) {
 	// valid response to request 1; expect 8 periods synced and a new request started
 	ts.RequestEvent(request.EvResponse, ts.Request(1, 1), testRespUpdate(ts.Request(1, 1)))
 	ts.AddAllowance(testServer1, 1)
-	ts.Run(7, testServer1, ReqUpdates{FirstPeriod: 48, Count: 8})
+	ts.Run(2, testServer1, ReqUpdates{FirstPeriod: 48, Count: 8})
 	chain.ExpNextSyncPeriod(t, 8)
 
 	// valid response to requests 4 and 5
@@ -92,7 +92,7 @@ func TestUpdateSyncParallel(t *testing.T) {
 	ts.RequestEvent(request.EvResponse, ts.Request(1, 5), testRespUpdate(ts.Request(1, 5)))
 	ts.AddAllowance(testServer2, 2)
 	// expect 2 more requests but no sync progress (responses 4 and 5 cannot be added before 2 and 3)
-	ts.Run(8,
+	ts.Run(3,
 		testServer2, ReqUpdates{FirstPeriod: 56, Count: 8},
 		testServer2, ReqUpdates{FirstPeriod: 64, Count: 8})
 	chain.ExpNextSyncPeriod(t, 8)
@@ -101,15 +101,15 @@ func TestUpdateSyncParallel(t *testing.T) {
 	ts.RequestEvent(request.EvTimeout, ts.Request(1, 2), nil)
 	ts.RequestEvent(request.EvTimeout, ts.Request(1, 3), nil)
 	// no allowance, no more requests
-	ts.Run(10)
+	ts.Run(4)
 
 	// valid response to requests 6 and 8 and 9
 	ts.RequestEvent(request.EvResponse, ts.Request(1, 6), testRespUpdate(ts.Request(1, 6)))
-	ts.RequestEvent(request.EvResponse, ts.Request(8, 1), testRespUpdate(ts.Request(8, 1)))
-	ts.RequestEvent(request.EvResponse, ts.Request(8, 2), testRespUpdate(ts.Request(8, 2)))
+	ts.RequestEvent(request.EvResponse, ts.Request(3, 1), testRespUpdate(ts.Request(3, 1)))
+	ts.RequestEvent(request.EvResponse, ts.Request(3, 2), testRespUpdate(ts.Request(3, 2)))
 	ts.AddAllowance(testServer2, 3)
 	// server 2 can now resend requests 2 and 3 (timed out by server 1) and also send a new one
-	ts.Run(11,
+	ts.Run(5,
 		testServer2, ReqUpdates{FirstPeriod: 8, Count: 8},
 		testServer2, ReqUpdates{FirstPeriod: 16, Count: 8},
 		testServer2, ReqUpdates{FirstPeriod: 72, Count: 8})
@@ -118,14 +118,14 @@ func TestUpdateSyncParallel(t *testing.T) {
 	ts.RequestEvent(request.EvResponse, ts.Request(1, 2), testRespUpdate(ts.Request(1, 2)))
 	ts.AddAllowance(testServer1, 1)
 	// expect sync progress and one new request
-	ts.Run(14, testServer1, ReqUpdates{FirstPeriod: 80, Count: 8})
+	ts.Run(6, testServer1, ReqUpdates{FirstPeriod: 80, Count: 8})
 	chain.ExpNextSyncPeriod(t, 16)
 
 	// server 2 answers requests 11 and 12 (resends of requests 2 and 3)
-	ts.RequestEvent(request.EvResponse, ts.Request(11, 1), testRespUpdate(ts.Request(11, 1)))
-	ts.RequestEvent(request.EvResponse, ts.Request(11, 2), testRespUpdate(ts.Request(11, 2)))
+	ts.RequestEvent(request.EvResponse, ts.Request(5, 1), testRespUpdate(ts.Request(5, 1)))
+	ts.RequestEvent(request.EvResponse, ts.Request(5, 2), testRespUpdate(ts.Request(5, 2)))
 	ts.AddAllowance(testServer2, 2)
-	ts.Run(15,
+	ts.Run(7,
 		testServer2, ReqUpdates{FirstPeriod: 88, Count: 8},
 		testServer2, ReqUpdates{FirstPeriod: 96, Count: 4})
 	// finally the gap is filled, update can process responses up to req6
@@ -133,12 +133,12 @@ func TestUpdateSyncParallel(t *testing.T) {
 
 	// all remaining requests are answered
 	ts.RequestEvent(request.EvResponse, ts.Request(1, 3), testRespUpdate(ts.Request(1, 3)))
+	ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testRespUpdate(ts.Request(2, 1)))
+	ts.RequestEvent(request.EvResponse, ts.Request(5, 3), testRespUpdate(ts.Request(5, 3)))
+	ts.RequestEvent(request.EvResponse, ts.Request(6, 1), testRespUpdate(ts.Request(6, 1)))
 	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testRespUpdate(ts.Request(7, 1)))
-	ts.RequestEvent(request.EvResponse, ts.Request(11, 3), testRespUpdate(ts.Request(11, 3)))
-	ts.RequestEvent(request.EvResponse, ts.Request(14, 1), testRespUpdate(ts.Request(14, 1)))
-	ts.RequestEvent(request.EvResponse, ts.Request(15, 1), testRespUpdate(ts.Request(15, 1)))
-	ts.RequestEvent(request.EvResponse, ts.Request(15, 2), testRespUpdate(ts.Request(15, 2)))
-	ts.Run(17)
+	ts.RequestEvent(request.EvResponse, ts.Request(7, 2), testRespUpdate(ts.Request(7, 2)))
+	ts.Run(8)
 	// expect chain to be fully synced
 	chain.ExpNextSyncPeriod(t, 100)
 }

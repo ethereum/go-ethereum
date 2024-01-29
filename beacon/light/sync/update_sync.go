@@ -52,6 +52,7 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 	}
 }
 
+// Process implements request.Module.
 func (s *CheckpointInit) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		if !event.IsRequestEvent() {
@@ -180,6 +181,9 @@ func (s *ForwardUpdateSync) verifyRange(request ReqUpdates, response RespUpdates
 	return true
 }
 
+// updateResponse is a response that has passed initial verification and has been
+// queued for processing. Note that an update response cannot be processed until
+// the previous updates have also been added to the chain.
 type updateResponse struct {
 	sid      request.ServerAndID
 	request  ReqUpdates
@@ -195,6 +199,7 @@ func (u updateResponseList) Less(i, j int) bool {
 	return u[i].request.FirstPeriod < u[j].request.FirstPeriod
 }
 
+// Process implements request.Module.
 func (s *ForwardUpdateSync) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		switch event.Type {

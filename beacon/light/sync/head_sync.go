@@ -67,6 +67,7 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	return s
 }
 
+// Process implements request.Module.
 func (s *HeadSync) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		switch event.Type {

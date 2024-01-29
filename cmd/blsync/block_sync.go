@@ -59,6 +59,7 @@ func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	}
 }
 
+// Process implements request.Module.
 func (s *beaconBlockSync) Process(requester request.Requester, events []request.Event) {
 	for _, event := range events {
 		switch event.Type {
