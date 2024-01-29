@@ -2209,10 +2209,9 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	for _, tx := range diffs {
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}
-	// Reset the tx lookup cache in case some indexes are removed.
-	if len(diffs) > 0 {
-		bc.txLookupCache.Purge()
-	}
+	// Reset the tx lookup cache in case to clear stale txlookups.
+	bc.txLookupCache.Purge()
+
 	// Delete all hash markers that are not part of the new canonical chain.
 	// Because the reorg function does not handle new chain head, all hash
 	// markers greater than or equal to new chain head should be deleted.
