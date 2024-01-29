@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
+// nolint
 func main() {
 	var (
 		listenAddr  = flag.String("addr", ":30301", "listen address")
@@ -215,7 +216,7 @@ func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *
 	return extaddr
 }
 
-// Implemented separate function so that there are minimal conflicts during upstream merge
+// Implemented separate functions so that there are minimal conflicts during upstream merge
 func PrintNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
 	printNotice(nodeKey, addr)
 }
