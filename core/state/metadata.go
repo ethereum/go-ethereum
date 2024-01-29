@@ -48,7 +48,7 @@ const (
 	// BalanceDecreaseDaoAccount is ether taken from a DAO account to be moved to the refund contract.
 	BalanceDecreaseDaoAccount BalanceChangeReason = 9
 
-	// BalanceChangeTransfer is ether transfered via a call.
+	// BalanceChangeTransfer is ether transferred via a call.
 	// it is a decrease for the sender and an increase for the recipient.
 	BalanceChangeTransfer BalanceChangeReason = 10
 	// BalanceChangeTouchAccount is a transfer of zero value. It is only there to

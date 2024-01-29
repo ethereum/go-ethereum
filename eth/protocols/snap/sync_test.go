@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 )
@@ -1510,7 +1511,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
+			Balance:  uint256.NewInt(i),
 			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(i),
 		})
@@ -1561,7 +1562,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	for i := 0; i < len(boundaries); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    uint64(0),
-			Balance:  big.NewInt(int64(i)),
+			Balance:  uint256.NewInt(uint64(i)),
 			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(uint64(i)),
 		})
@@ -1573,7 +1574,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 	for i := uint64(1); i <= uint64(n); i++ {
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
+			Balance:  uint256.NewInt(i),
 			Root:     types.EmptyRootHash,
 			CodeHash: getCodeHash(i),
 		})
@@ -1617,7 +1618,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
+			Balance:  uint256.NewInt(i),
 			Root:     stRoot,
 			CodeHash: codehash,
 		})
@@ -1683,7 +1684,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
-			Balance:  big.NewInt(int64(i)),
+			Balance:  uint256.NewInt(i),
 			Root:     stRoot,
 			CodeHash: codehash,
 		})

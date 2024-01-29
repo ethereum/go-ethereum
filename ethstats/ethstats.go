@@ -792,7 +792,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		}
 
 		sync := fullBackend.SyncProgress()
-		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = !sync.Done()
 
 		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
@@ -801,7 +801,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		}
 	} else {
 		sync := s.backend.SyncProgress()
-		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		syncing = !sync.Done()
 	}
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")

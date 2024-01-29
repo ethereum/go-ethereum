@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,29 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package forks
 
-import (
-	"math/big"
+// Fork is a numerical identifier of specific network upgrades (forks).
+type Fork int
 
-	"github.com/holiman/uint256"
-)
-
-// Common big integers often used
-var (
-	Big1   = big.NewInt(1)
-	Big2   = big.NewInt(2)
-	Big3   = big.NewInt(3)
-	Big0   = big.NewInt(0)
-	Big32  = big.NewInt(32)
-	Big256 = big.NewInt(256)
-	Big257 = big.NewInt(257)
-
-	U2560 = uint256.NewInt(0)
+const (
+	Frontier = iota
+	FrontierThawing
+	Homestead
+	DAO
+	TangerineWhistle
+	SpuriousDragon
+	Byzantium
+	Constantinople
+	Petersburg
+	Istanbul
+	MuirGlacier
+	Berlin
+	London
+	ArrowGlacier
+	GrayGlacier
+	Paris
+	Shanghai
+	Cancun
+	Prague
 )
