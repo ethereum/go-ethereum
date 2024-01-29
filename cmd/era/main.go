@@ -121,10 +121,7 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("error reading block %d: %w", num, err)
 	}
 	// Convert block to JSON and print.
-	val, err := ethapi.RPCMarshalBlock(block, ctx.Bool(txsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
-	if err != nil {
-		return fmt.Errorf("error marshaling json: %w", err)
-	}
+	val := ethapi.RPCMarshalBlock(block, ctx.Bool(txsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
 	b, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		return fmt.Errorf("error marshaling json: %w", err)
