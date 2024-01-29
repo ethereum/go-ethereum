@@ -206,6 +206,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
+			evm.StateDB.DiscardSnapshot(snapshot)
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -242,9 +243,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			gas = 0
 		}
-		// TODO: consider clearing up unused snapshots:
-		//} else {
-		//	evm.StateDB.DiscardSnapshot(snapshot)
+	} else {
+		evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -298,6 +298,8 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 			gas = 0
 		}
+	} else {
+		evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -344,6 +346,8 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			}
 			gas = 0
 		}
+	} else {
+		evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -403,6 +407,8 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 			gas = 0
 		}
+	} else {
+		evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
 }
@@ -514,6 +520,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
+	} else {
+		evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, address, contract.Gas, err
 }
