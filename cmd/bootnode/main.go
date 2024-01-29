@@ -15,7 +15,8 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // bootnode runs a bootstrap node for the Ethereum Discovery Protocol.
-package main
+// Keep package as bootnode during upstram merge.
+package bootnode
 
 import (
 	"crypto/ecdsa"
@@ -212,4 +213,13 @@ func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *
 	}()
 
 	return extaddr
+}
+
+// Implemented separate function so that there are minimal conflicts during upstream merge
+func PrintNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
+	printNotice(nodeKey, addr)
+}
+
+func DoPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *net.UDPAddr {
+	return doPortMapping(natm, ln, addr)
 }
