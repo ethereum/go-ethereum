@@ -2,17 +2,18 @@ package lendingstate
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"math/big"
-	"math/rand"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestLendingItem_VerifyLendingSide(t *testing.T) {
@@ -103,6 +104,27 @@ func TestLendingItem_VerifyLendingType(t *testing.T) {
 			}
 			if err := l.VerifyLendingType(); (err != nil) != tt.wantErr {
 				t.Errorf("VerifyLendingType() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLendingItem_VerifyExtraData(t *testing.T) {
+	tests := []struct {
+		name    string
+		fields  *LendingItem
+		wantErr bool
+	}{
+		{"within the limit", &LendingItem{ExtraData: "123"}, false},
+		{"within the limit", &LendingItem{ExtraData: "This is a string specifically designed to exceed 201 bytes in length. It contains enough characters, including spaces and punctuation, to ensure that its total size goes beyond the specified limit for demonstration purposes."}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &LendingItem{
+				ExtraData: tt.fields.ExtraData,
+			}
+			if err := l.VerifyLendingExtraData(); (err != nil) != tt.wantErr {
+				t.Errorf("VerifyLendingExtraData() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
