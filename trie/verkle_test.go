@@ -313,8 +313,8 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commitment().Bytes())
 
 	t.Logf("%d", len(proof.ExtStatus))
-	if len(proof.ExtStatus) != 5 {
-		t.Fatalf("invalid number of declared stems: %d != 5", len(proof.ExtStatus))
+	if len(proof.ExtStatus) != 6 {
+		t.Fatalf("invalid number of declared stems: %d != 6", len(proof.ExtStatus))
 	}
 }
 
