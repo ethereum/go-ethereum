@@ -81,7 +81,7 @@ func (args *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, infiniteGas bool) error {
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
@@ -106,6 +106,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	if args.To == nil && len(args.data()) == 0 {
 		return errors.New(`contract creation without any data provided`)
+	}
+	// Assign a very high gas limit for cases where an accurate gas limit is not critical,
+	// but need to ensure that gas is sufficient.
+	if infiniteGas {
+		tmp := hexutil.Uint64(math.MaxUint64 / 2)
+		args.Gas = &tmp
 	}
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
