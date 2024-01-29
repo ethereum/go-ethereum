@@ -248,7 +248,7 @@ func (l *LendingItem) VerifyCollateral(state *state.StateDB) error {
 		return fmt.Errorf("invalid collateral %s", l.CollateralToken.Hex())
 	}
 	validCollateral := false
-	collateralList, _ := GetCollaterals(state, l.Relayer, l.LendingToken, l.Term)
+	collateralList := GetCollaterals(state, l.Relayer, l.LendingToken, l.Term)
 	for _, collateral := range collateralList {
 		if l.CollateralToken.String() == collateral.String() {
 			validCollateral = true
