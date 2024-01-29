@@ -568,35 +568,3 @@ func GenerateMultiRingParams(numRing int, ringSize int, s int) (rings []Ring, pr
 	}
 	return rings, privkeys, m, nil
 }
-
-func TestRingSignature() (bool, []byte) {
-	/*for i := 14; i < 15; i++ {
-	for j := 14; j < 15; j++ {
-		for k := 0; k <= j; k++ {*/
-	numRing := 1
-	ringSize := 10
-	s := 9
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
-	ringSignature, err := Sign(m, rings, privkeys, s)
-	if err != nil {
-		log.Error("Failed to create Ring signature")
-		return false, []byte{}
-	}
-
-	sig, err := ringSignature.Serialize()
-	if err != nil {
-		return false, []byte{}
-	}
-
-	deserializedSig, err := Deserialize(sig)
-	if err != nil {
-		return false, []byte{}
-	}
-	verified := Verify(deserializedSig, false)
-	if !verified {
-		log.Error("Failed to verify Ring signature")
-		return false, []byte{}
-	}
-
-	return true, []byte{}
-}
