@@ -385,6 +385,10 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		preState := statedb.Copy()
 		fmt.Println("prestate", preState.GetTrie().(*trie.VerkleTrie).ToDot())
 
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			ProcessParentBlockHash(statedb, b.header.Number.Uint64()-1, b.header.ParentHash)
+		}
+
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
