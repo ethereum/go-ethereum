@@ -418,7 +418,14 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			vtrpost = post.Overlay()
 			okpost = true
 		default:
-			panic("invalid tree type")
+			// This should only happen for the first block of the
+			// conversion, when the previous tree is a merkle tree.
+			//  Logically, the "previous" verkle tree is an empty tree.
+			okpre = true
+			vtrpre = trie.NewVerkleTrie(verkle.New(), state.Database().TrieDB(), utils.NewPointCache(), false)
+			post := state.GetTrie().(*trie.TransitionTrie)
+			vtrpost = post.Overlay()
+			okpost = true
 		}
 		if okpre && okpost {
 			if len(keys) > 0 {
