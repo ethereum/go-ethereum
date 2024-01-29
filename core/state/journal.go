@@ -160,10 +160,6 @@ func (j *journal) JournalLog(txHash common.Hash) {
 	j.append(addLogChange{txhash: txHash})
 }
 
-func (j *journal) JournalAddPreimage(hash common.Hash) {
-	j.append(addPreimageChange{hash: hash})
-}
-
 func (j *journal) JournalCreate(addr common.Address) {
 	j.append(createObjectChange{account: &addr})
 }
@@ -264,9 +260,6 @@ type (
 	}
 	addLogChange struct {
 		txhash common.Hash
-	}
-	addPreimageChange struct {
-		hash common.Hash
 	}
 	touchChange struct {
 		account *common.Address
@@ -453,20 +446,6 @@ func (ch addLogChange) dirtied() *common.Address {
 func (ch addLogChange) copy() journalEntry {
 	return addLogChange{
 		txhash: ch.txhash,
-	}
-}
-
-func (ch addPreimageChange) revert(s *StateDB) {
-	delete(s.preimages, ch.hash)
-}
-
-func (ch addPreimageChange) dirtied() *common.Address {
-	return nil
-}
-
-func (ch addPreimageChange) copy() journalEntry {
-	return addPreimageChange{
-		hash: ch.hash,
 	}
 }
 
