@@ -336,7 +336,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			if evm.Config.Tracer != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
 			}
-
 			gas = 0
 		}
 	}
