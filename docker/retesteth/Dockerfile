@@ -28,7 +28,8 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 ADD . .
-RUN go run build/ci.go install ./cmd/evm && cp build/bin/evm /target
+RUN go run build/ci.go install ./cmd/evm
+RUN cp build/bin/evm /target
 
 FROM alpine:3.15
 ENV ETHEREUM_TEST_PATH="/tests"
