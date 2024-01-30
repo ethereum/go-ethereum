@@ -7,6 +7,7 @@ VERBOSITY=${VERBOSITY:-3}
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
 GETH_KEYSTORE_DIR="$GETH_DATA_DIR/keystore"
+GETH_PASSWORD=${GETH_PASSWORD:-"pwd"}
 CHAIN_ID=$(cat "$GENESIS_L1_PATH" | jq -r .config.chainId)
 RPC_PORT="${RPC_PORT:-8545}"
 WS_PORT="${WS_PORT:-8546}"
@@ -15,7 +16,7 @@ WS_PORT="${WS_PORT:-8546}"
 if [ ! -d "$GETH_KEYSTORE_DIR" ] && [ "$GETH_NODE_TYPE" = "signer" ]; then
 
 	echo "$GETH_KEYSTORE_DIR missing, running account import"
-	echo -n "pwd" > "$GETH_DATA_DIR"/password
+	echo -n "$GETH_PASSWORD" > "$GETH_DATA_DIR"/password
 	echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
 	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
 		--nousb \
