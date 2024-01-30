@@ -92,6 +92,7 @@ type StateDB interface {
 	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
 	TxIndex() int
 	Preimages() map[common.Hash][]byte
+	SetEVM(evm *EVM)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
