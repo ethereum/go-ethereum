@@ -16,7 +16,7 @@ jobs:
 
     - name: Login to ghcr.io
       env:
-        PAT: ${{ secrets.GITHUB_TOKEN }}
+        PAT: ${{ secrets.GH_TOKEN }}
       run: printf "$PAT" | docker login --username _ --password-stdin ghcr.io
 
     - name: Build and push Docker images
