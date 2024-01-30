@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/bootnode"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
@@ -213,33 +214,25 @@ func (b *BootnodeCommand) Run(args []string) int {
 	}
 
 	conn, err := net.ListenUDP("udp", addr)
-
 	if err != nil {
 		b.UI.Error(fmt.Sprintf("failed to listen udp addr '%s': %v", b.listenAddr, err))
 		return 1
 	}
-
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-		}
-
-		if ext, err := natm.ExternalIP(); err == nil {
-			// nolint: govet
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
-		}
-	}
-
-	n := enode.NewV4(&nodeKey.PublicKey, addr.IP, addr.Port, addr.Port)
-	b.UI.Info(n.String())
-
-	if b.dryRun {
-		return 0
-	}
+	defer conn.Close()
 
 	db, _ := enode.OpenDB("")
 	ln := enode.NewLocalNode(db, nodeKey)
+
+	listenerAddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil {
+		natAddr := bootnode.DoPortMapping(natm, ln, listenerAddr)
+		if natAddr != nil {
+			listenerAddr = natAddr
+		}
+	}
+
+	bootnode.PrintNotice(&nodeKey.PublicKey, *listenerAddr)
+
 	cfg := discover.Config{
 		PrivateKey: nodeKey,
 		Log:        log.Root(),
