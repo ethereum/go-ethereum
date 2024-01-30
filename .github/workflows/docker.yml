@@ -2,8 +2,8 @@ name: Docker
 on:
   workflow_dispatch:
   push:
-    tags:
-      - v*
+    branches:
+      - master
 
 jobs:
   build:
