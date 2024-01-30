@@ -133,7 +133,6 @@ func (s *HeadSync) processUnvalidated() {
 
 // setServerHead processes non-validated server head announcements and updates
 // the prefetch head if necessary.
-// TODO report server failure if a server announces many heads that do not become validated soon.
 func (s *HeadSync) setServerHead(server request.Server, head types.HeadInfo) bool {
 	if oldHead, ok := s.serverHeads[server]; ok {
 		if head == oldHead {

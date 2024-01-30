@@ -154,7 +154,6 @@ func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error
 // equals update.NextSyncCommitteeRoot).
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
-// TODO handle valid partial results
 func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error) {
 	resp, err := api.httpGetf("/eth/v1/beacon/light_client/updates?start_period=%d&count=%d", firstPeriod, count)
 	if err != nil {
