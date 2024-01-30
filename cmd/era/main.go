@@ -79,7 +79,7 @@ var (
 	verifyCommand = &cli.Command{
 		Name:      "verify",
 		ArgsUsage: "<expected>",
-		Usage:     "verifies each era against expected accumulator root",
+		Usage:     "verifies each era1 against expected accumulator root",
 		Action:    verify,
 	}
 )
@@ -112,7 +112,7 @@ func block(ctx *cli.Context) error {
 	}
 	e, err := open(ctx, num/uint64(ctx.Int(eraSizeFlag.Name)))
 	if err != nil {
-		return fmt.Errorf("error opening era: %w", err)
+		return fmt.Errorf("error opening era1: %w", err)
 	}
 	defer e.Close()
 	// Read block with number.
@@ -260,16 +260,18 @@ func checkAccumulator(e *era.Era) error {
 	if err != nil {
 		return fmt.Errorf("error making era iterator: %w", err)
 	}
-	// Starting at epoch 0, iterate through all available era1 files and
-	// check the following:
-	//   * the block index is constructed correctly
-	//   * the starting total difficulty value is correct
-	//   * the accumulator is correct by recomputing it locally,
-	//     which verifies the blocks are all correct (via hash)
-	//   * the receipts root matches the value in the block
+	// To fully verify an era the following attributes must be checked:
+	//   1) the block index is constructed correctly
+	//   2) the tx root matches the value in the block
+	//   3) the receipts root matches the value in the block
+	//   4) the starting total difficulty value is correct
+	//   5) the accumulator is correct by recomputing it locally, which verifies
+	//      the blocks are all correct (via hash)
+	//
+	// The attributes 1), 2), and 3) are checked for each block. 4) and 5) require
+	// accumulation accross the entire set and are verified at the end.
 	for it.Next() {
-		// next() walks the block index, so we're able to
-		// implicitly verify it.
+		// 1) next() walks the block index, so we're able to implicitly verify it.
 		if it.Error() != nil {
 			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
@@ -277,12 +279,12 @@ func checkAccumulator(e *era.Era) error {
 		if it.Error() != nil {
 			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
+		// 2) recompute tx root and verify against header.
 		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 		if tr != block.TxHash() {
 			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
 		}
-		// Calculate receipt root from receipt list and check
-		// value against block.
+		// 3) recompute receipt root and check value against block.
 		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
@@ -291,6 +293,7 @@ func checkAccumulator(e *era.Era) error {
 		td.Add(td, block.Difficulty())
 		tds = append(tds, new(big.Int).Set(td))
 	}
+	// 4+5) Verify accumulator and total difficulty.
 	got, err := era.ComputeAccumulator(hashes, tds)
 	if err != nil {
 		return fmt.Errorf("error computing accumulator: %w", err)
