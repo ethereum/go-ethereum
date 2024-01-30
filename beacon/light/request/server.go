@@ -49,6 +49,8 @@ const (
 	defaultParallelLimit = 3                      // parallelLimit initial value
 	minFailureDelay      = time.Millisecond * 100 // minimum disable time in case of request failure
 	maxFailureDelay      = time.Minute            // maximum disable time in case of request failure
+	maxServerEventBuffer = 5                      // server event allowance buffer limit
+	maxServerEventRate   = time.Second            // server event allowance buffer recharge rate
 )
 
 // requestServer can send requests in a non-blocking way and feed back events
@@ -226,13 +228,11 @@ func (s *serverWithTimeout) unsubscribe() {
 
 // serverWithLimits wraps serverWithTimeout and implements server. It limits the
 // number of parallel in-flight requests and prevents sending new requests when a
-// pending one has already timed out. It also implements a failure delay mechanism
-// that adds an exponentially growing delay each time a request fails (wrong answer
-// or hard timeout). This makes the syncing mechanism less brittle as temporary
-// failures of the server might happen sometimes, but still avoids hammering a
-// non-functional server with requests.
-//
-// TODO protect against excessive server events
+// pending one has already timed out. Server events are also rate limited.
+// It also implements a failure delay mechanism that adds an exponentially growing
+// delay each time a request fails (wrong answer or hard timeout). This makes the
+// syncing mechanism less brittle as temporary failures of the server might happen
+// sometimes, but still avoids hammering a non-functional server with requests.
 type serverWithLimits struct {
 	serverWithTimeout
 	lock                       sync.Mutex
@@ -245,12 +245,15 @@ type serverWithLimits struct {
 	delayCounter               int
 	failureDelayEnd            mclock.AbsTime
 	failureDelay               float64
+	serverEventBuffer          int
+	eventBufferUpdated         mclock.AbsTime
 }
 
 // init initializes serverWithLimits
 func (s *serverWithLimits) init() {
 	s.softTimeouts = make(map[ID]struct{})
 	s.parallelLimit = defaultParallelLimit
+	s.serverEventBuffer = maxServerEventBuffer
 }
 
 // subscribe subscribes to events which include parent (serverWithTimeout) events
@@ -267,6 +270,7 @@ func (s *serverWithLimits) subscribe(eventCallback func(event Event)) {
 func (s *serverWithLimits) eventCallback(event Event) {
 	s.lock.Lock()
 	var sendCanRequestAgain bool
+	passEvent := true
 	switch event.Type {
 	case EvTimeout:
 		id := event.Data.(RequestResponse).ID
@@ -295,10 +299,31 @@ func (s *serverWithLimits) eventCallback(event Event) {
 		if event.Type == EvFail {
 			s.failLocked("failed request")
 		}
+	default:
+		// server event; check rate limit
+		if s.serverEventBuffer < maxServerEventBuffer {
+			now := s.clock.Now()
+			sinceUpdate := time.Duration(now - s.eventBufferUpdated)
+			if sinceUpdate >= maxServerEventRate*time.Duration(maxServerEventBuffer-s.serverEventBuffer) {
+				s.serverEventBuffer = maxServerEventBuffer
+				s.eventBufferUpdated = now
+			} else {
+				addBuffer := int(sinceUpdate / maxServerEventRate)
+				s.serverEventBuffer += addBuffer
+				s.eventBufferUpdated += mclock.AbsTime(maxServerEventRate * time.Duration(addBuffer))
+			}
+		}
+		if s.serverEventBuffer > 0 {
+			s.serverEventBuffer--
+		} else {
+			passEvent = false
+		}
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()
-	childEventCb(event)
+	if passEvent {
+		childEventCb(event)
+	}
 	if sendCanRequestAgain {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}

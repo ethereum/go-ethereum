@@ -36,7 +36,6 @@ func TestServerEvents(t *testing.T) {
 	expEvent(testEventType)
 	// send request, soft timeout, then valid response
 	srv.sendRequest(testRequest)
-	expEvent(EvRequest)
 	clock.WaitForTimers(1)
 	clock.Run(softRequestTimeout)
 	expEvent(EvTimeout)
@@ -44,7 +43,6 @@ func TestServerEvents(t *testing.T) {
 	expEvent(EvResponse)
 	// send request, hard timeout (response after hard timeout should be ignored)
 	srv.sendRequest(testRequest)
-	expEvent(EvRequest)
 	clock.WaitForTimers(1)
 	clock.Run(softRequestTimeout)
 	expEvent(EvTimeout)
@@ -63,7 +61,7 @@ func TestServerParallel(t *testing.T) {
 	expSend := func(expSent int) {
 		var sent int
 		for sent <= expSent {
-			if ok, _ := srv.canRequestNow(); !ok {
+			if !srv.canRequestNow() {
 				break
 			}
 			sent++
@@ -94,7 +92,7 @@ func TestServerFail(t *testing.T) {
 	srv := NewServer(rs, clock)
 	srv.subscribe(func(event Event) {})
 	expCanRequest := func(expCanRequest bool) {
-		if canRequest, _ := srv.canRequestNow(); canRequest != expCanRequest {
+		if canRequest := srv.canRequestNow(); canRequest != expCanRequest {
 			t.Errorf("Wrong result for canRequestNow (expected %v, got %v)", expCanRequest, canRequest)
 		}
 	}
@@ -108,7 +106,7 @@ func TestServerFail(t *testing.T) {
 	rs.eventCb(Event{Type: EvResponse, Data: RequestResponse{ID: 1, Request: testRequest, Response: testResponse}})
 	expCanRequest(true)
 	// explicit server.Fail
-	srv.Fail("")
+	srv.fail("")
 	clock.WaitForTimers(1)
 	expCanRequest(false) // cannot request for a while after a failure
 	clock.Run(minFailureDelay)
@@ -123,6 +121,32 @@ func TestServerFail(t *testing.T) {
 	clock.Run(minFailureDelay)
 	expCanRequest(true)
 	srv.unsubscribe()
+}
+
+func TestServerEventRateLimit(t *testing.T) {
+	rs := &testRequestServer{}
+	clock := &mclock.Simulated{}
+	srv := NewServer(rs, clock)
+	var eventCount int
+	srv.subscribe(func(event Event) {
+		if !event.IsRequestEvent() {
+			eventCount++
+		}
+	})
+	expEvents := func(send, expAllowed int) {
+		eventCount = 0
+		for sent := 0; sent < send; sent++ {
+			rs.eventCb(Event{Type: testEventType})
+		}
+		if eventCount != expAllowed {
+			t.Errorf("Wrong number of server events passing rate limitation (sent %d, expected %d, got %d)", send, expAllowed, eventCount)
+		}
+	}
+	expEvents(maxServerEventBuffer+5, maxServerEventBuffer)
+	clock.Run(maxServerEventRate)
+	expEvents(5, 1)
+	clock.Run(maxServerEventRate * maxServerEventBuffer * 2)
+	expEvents(maxServerEventBuffer+5, maxServerEventBuffer)
 }
 
 type testRequestServer struct {

@@ -28,17 +28,11 @@ func TestEventFilter(t *testing.T) {
 	})
 	// let module1 send a request
 	srv.canRequest = 1
-	module1.reqc = testRequest
+	module1.sendReq = testRequest
 	s.Trigger()
-	// first triggered round sends the request, no events yet
+	// in first triggered round module1 sends the request, no events yet
 	s.testWaitCh <- struct{}{}
 	module1.expProcess(t, nil)
-	module2.expProcess(t, nil)
-	// next round triggered by EvRequest; only module1 should receive it
-	s.testWaitCh <- struct{}{}
-	module1.expProcess(t, []Event{
-		Event{Type: EvRequest, Server: srv, Data: RequestResponse{ID: 1, Request: testRequest}},
-	})
 	module2.expProcess(t, nil)
 	// server emits EvTimeout; only module1 should receive it
 	srv.eventCb(Event{Type: EvTimeout, Data: RequestResponse{ID: 1, Request: testRequest}})
@@ -80,32 +74,32 @@ func (s *testServer) subscribe(eventCb func(Event)) {
 	s.eventCb = eventCb
 }
 
-func (s *testServer) canRequestNow() (bool, float32) {
-	return s.canRequest > 0, 0
+func (s *testServer) canRequestNow() bool {
+	return s.canRequest > 0
 }
 
 func (s *testServer) sendRequest(req Request) ID {
 	s.canRequest--
 	s.lastID++
-	s.eventCb(Event{Type: EvRequest, Data: RequestResponse{ID: s.lastID, Request: req}})
 	return s.lastID
 }
 
-func (s *testServer) Fail(string)  {}
+func (s *testServer) fail(string)  {}
 func (s *testServer) unsubscribe() {}
 
 type testModule struct {
 	name      string
 	processed [][]Event
-	reqc      Request // request candidate
+	sendReq   Request
 }
 
-func (m *testModule) Process(events []Event) {
+func (m *testModule) Process(requester Requester, events []Event) {
 	m.processed = append(m.processed, events)
-}
-
-func (m *testModule) MakeRequest(Server) (Request, float32) {
-	return m.reqc, 0
+	if m.sendReq != nil {
+		if cs := requester.CanSendTo(); len(cs) > 0 {
+			requester.Send(cs[0], m.sendReq)
+		}
+	}
 }
 
 func (m *testModule) expProcess(t *testing.T, expEvents []Event) {
