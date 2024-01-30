@@ -18,9 +18,9 @@ package utils
 
 import (
 	"encoding/binary"
-	"sync"
 
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
@@ -31,6 +31,8 @@ const (
 	NonceLeafKey      = 2
 	CodeKeccakLeafKey = 3
 	CodeSizeLeafKey   = 4
+
+	maxPointCacheByteSize = 100 << 20
 )
 
 var (
@@ -47,28 +49,26 @@ var (
 )
 
 type PointCache struct {
-	cache map[string]*verkle.Point
-	lock  sync.RWMutex
+	cache *lru.Cache[string, *verkle.Point]
 }
 
 func NewPointCache() *PointCache {
+	// Each verkle.Point is 96 bytes.
+	verklePointSize := 96
+	capacity := maxPointCacheByteSize / verklePointSize
 	return &PointCache{
-		cache: make(map[string]*verkle.Point),
+		cache: lru.NewCache[string, *verkle.Point](capacity),
 	}
 }
 
 func (pc *PointCache) GetTreeKeyHeader(addr []byte) *verkle.Point {
-	pc.lock.RLock()
-	point, ok := pc.cache[string(addr)]
-	pc.lock.RUnlock()
+	point, ok := pc.cache.Get(string(addr))
 	if ok {
 		return point
 	}
 
 	point = EvaluateAddressPoint(addr)
-	pc.lock.Lock()
-	pc.cache[string(addr)] = point
-	pc.lock.Unlock()
+	pc.cache.Add(string(addr), point)
 	return point
 }
 
