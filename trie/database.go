@@ -58,7 +58,7 @@ type backend interface {
 	//
 	// For hash scheme, there is no differentiation between diff layer nodes
 	// and dirty disk layer nodes, so both are merged into the second return.
-	Size() (common.StorageSize, common.StorageSize)
+	Size() (common.StorageSize, common.StorageSize, common.StorageSize)
 
 	// Update performs a state transition by committing dirty nodes contained
 	// in the given set in order to update state from the specified parent to
@@ -149,19 +149,21 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.backend.Commit(root, report)
 }
 
-// Size returns the storage size of diff layer nodes above the persistent disk
-// layer, the dirty nodes buffered within the disk layer, and the size of cached
-// preimages.
-func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize) {
+// Size returns the sizes of:
+// - the diff layer nodes above the persistent disk layer,
+// - the mutable dirty nodes buffered within the disk layer,
+// - the immutable nodes in the disk layer,
+// - the cached preimages.
+func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize, common.StorageSize) {
 	var (
-		diffs, nodes common.StorageSize
-		preimages    common.StorageSize
+		diffs, nodes, nodesImmutable common.StorageSize
+		preimages                    common.StorageSize
 	)
-	diffs, nodes = db.backend.Size()
+	diffs, nodes, nodesImmutable = db.backend.Size()
 	if db.preimages != nil {
 		preimages = db.preimages.size()
 	}
-	return diffs, nodes, preimages
+	return diffs, nodes, nodesImmutable, preimages
 }
 
 // Initialized returns an indicator if the state data is already initialized

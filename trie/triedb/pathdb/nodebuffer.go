@@ -18,6 +18,8 @@ package pathdb
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -29,6 +31,176 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
+var _ trienodebuffer = &asyncnodebuffer{}
+
+// asyncnodebuffer implement trienodebuffer interface, and async flush nodebuffer
+// to disk. It includes two nodebuffer, the mutable and immutable nodebuffer. The
+// mutable nodebuffer that up to the size limit switches the immutable, and the new
+// mutable nodebuffer can continue to be committed nodes. Retrieves node will access
+// mutable nodebuffer firstly, then immutable nodebuffer.
+type asyncnodebuffer struct {
+	mu         sync.RWMutex // Lock used to protect current and background switch
+	current    *nodebuffer  // mutable nodebuffer is used to write and read nodes
+	background *nodebuffer  // immutable nodebuffer is readonly and async flush to disk
+}
+
+// newAsyncNodeBuffer initializes the async node buffer with the provided nodes.
+func newAsyncNodeBuffer(limit int, nodes map[common.Hash]map[string]*trienode.Node, layers uint64) *asyncnodebuffer {
+	return &asyncnodebuffer{
+		current:    newNodeBuffer(limit, nodes, layers),
+		background: newNodeBuffer(limit, nil, 0),
+	}
+}
+
+// node retrieves the trie node with given node info, retrieves the current, then background.
+func (a *asyncnodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	node, err := a.current.node(owner, path, hash)
+	if err != nil {
+		return nil, err
+	}
+	if node == nil {
+		return a.background.node(owner, path, hash)
+	}
+	return node, nil
+}
+
+// commit merges the dirty nodes into the current nodebuffer. This operation
+// won't take the ownership of the nodes map which belongs to the bottom-most
+// diff layer. It will just hold the node references from the given map which
+// are safe to copy.
+func (a *asyncnodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) trienodebuffer {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if err := a.current.commit(nodes); err != nil {
+		log.Warn("Failed to commit trie nodes", "error", err)
+	}
+	return a
+}
+
+// revert is the reverse operation of commit. It also merges the provided nodes
+// into the nodebuffer, the difference is that the provided node set should
+// revert the changes made by the last state transition.
+func (a *asyncnodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	newBuf, err := a.current.merge(a.background)
+	if err != nil {
+		log.Warn("[BUG] failed to merge node cache under revert async node buffer", "error", err)
+		return err
+	}
+	a.current = newBuf
+	a.background.reset()
+	return a.current.revert(db, nodes)
+}
+
+// setSize sets the nodebuffer size limit.
+func (a *asyncnodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	newBuf, err := a.current.merge(a.background)
+	if err != nil {
+		log.Warn("[BUG] failed to merge node cache under revert async node buffer", "error", err)
+		return err
+	}
+	a.current = newBuf
+	a.background.reset()
+	a.current.setSize(size, db, clean, id)
+	a.background.size = uint64(size)
+	return nil
+}
+
+// reset cleans up the disk cache.
+func (a *asyncnodebuffer) reset() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.current.reset()
+	a.background.reset()
+}
+
+// empty returns an indicator if nodebuffer contains any state transition inside.
+func (a *asyncnodebuffer) empty() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.current.empty() && a.background.empty()
+}
+
+// flush persists the immutable dirty trie node into the disk. If the configured
+// memory threshold is reached, switch the mutable nodebuffer to immutable, if the
+// previous immutable nodebuffer flushing to disk immediately return. Note, all
+// data belongs the same nodebuffer must be written atomically.
+func (a *asyncnodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if force {
+		for {
+			if a.background.immutable.Load() {
+				time.Sleep(time.Duration(DefaultBackgroundFlushInterval) * time.Second)
+				log.Info("waiting background memory table flush to disk for force flush node buffer")
+				continue
+			}
+			a.current.immutable.Store(true)
+			return a.current.flush(db, clean, id, true)
+		}
+	}
+
+	if a.current.size < a.current.limit {
+		return nil
+	}
+
+	// background flush doing
+	if a.background.immutable.Load() {
+		return nil
+	}
+	// immutable the current nodebuffer, ready for switching
+	a.current.immutable.Store(true)
+	a.current, a.background = a.background, a.current
+
+	go func(persistId uint64) {
+		for {
+			err := a.background.flush(db, clean, persistId, true)
+			if err == nil {
+				log.Debug("succeed to flush background nodecahce to disk", "state_id", persistId)
+				return
+			}
+			log.Error("failed to flush background nodecahce to disk", "state_id", persistId, "error", err)
+		}
+	}(id)
+	return nil
+}
+
+func (a *asyncnodebuffer) getAllNodes() map[common.Hash]map[string]*trienode.Node {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	cached, err := a.current.merge(a.background)
+	if err != nil {
+		log.Crit("[BUG] failed to merge nodecache under revert asyncnodebuffer", "error", err)
+	}
+	return cached.nodes
+}
+
+func (a *asyncnodebuffer) getLayers() uint64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.current.layers + a.background.layers
+}
+
+func (a *asyncnodebuffer) getSize() (uint64, uint64) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.current.size, a.background.size
+}
+
 // nodebuffer is a collection of modified trie nodes to aggregate the disk
 // write. The content of the nodebuffer must be checked before diving into
 // disk (since it basically is not-yet-written data).
@@ -37,6 +209,9 @@ type nodebuffer struct {
 	size   uint64                                    // The size of aggregated writes
 	limit  uint64                                    // The maximum memory allowance in bytes
 	nodes  map[common.Hash]map[string]*trienode.Node // The dirty node set, mapped by owner and path
+	// If this is set to true, then this nodebuffer is immutable and any write-operations to it will exit with error.
+	// If this is set to true, then some other thread is performing a flush in the background, and thus nonblock the write/read-operations.
+	immutable atomic.Bool // The flag equal true, readonly wait to flush nodes to disk background
 }
 
 // newNodeBuffer initializes the node buffer with the provided nodes.
@@ -50,12 +225,14 @@ func newNodeBuffer(limit int, nodes map[common.Hash]map[string]*trienode.Node, l
 			size += uint64(len(n.Blob) + len(path))
 		}
 	}
-	return &nodebuffer{
+	nb := &nodebuffer{
 		layers: layers,
 		nodes:  nodes,
 		size:   size,
 		limit:  uint64(limit),
 	}
+	nb.immutable.Store(false)
+	return nb
 }
 
 // node retrieves the trie node with given node info.
@@ -80,7 +257,11 @@ func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*tr
 // the ownership of the nodes map which belongs to the bottom-most diff layer.
 // It will just hold the node references from the given map which are safe to
 // copy.
-func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *nodebuffer {
+func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) error {
+	if b.immutable.Load() {
+		return errWriteImmutable
+	}
+
 	var (
 		delta         int64
 		overwrite     int64
@@ -118,13 +299,17 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 	b.layers++
 	gcNodesMeter.Mark(overwrite)
 	gcBytesMeter.Mark(overwriteSize)
-	return b
+	return nil
 }
 
 // revert is the reverse operation of commit. It also merges the provided nodes
 // into the nodebuffer, the difference is that the provided node set should
 // revert the changes made by the last state transition.
 func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error {
+	if b.immutable.Load() {
+		return errRevertImmutable
+	}
+
 	// Short circuit if no embedded state transition to revert.
 	if b.layers == 0 {
 		return errStateUnrecoverable
@@ -187,6 +372,7 @@ func (b *nodebuffer) updateSize(delta int64) {
 
 // reset cleans up the disk cache.
 func (b *nodebuffer) reset() {
+	b.immutable.Store(false)
 	b.layers = 0
 	b.size = 0
 	b.nodes = make(map[common.Hash]map[string]*trienode.Node)
@@ -200,13 +386,73 @@ func (b *nodebuffer) empty() bool {
 // setSize sets the buffer size to the provided number, and invokes a flush
 // operation if the current memory usage exceeds the new limit.
 func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
+	if b.immutable.Load() {
+		return errWriteImmutable
+	}
+
 	b.limit = uint64(size)
 	return b.flush(db, clean, id, false)
+}
+
+// merge returns a new nodebuffer instances that include `b` and `nb` nodes.
+func (b *nodebuffer) merge(nb *nodebuffer) (*nodebuffer, error) {
+	if b == nil && nb == nil {
+		return nil, nil
+	}
+	if b == nil || b.empty() {
+		res := copyNodeBuffer(nb)
+		res.immutable.Store(false)
+		return nb, nil
+	}
+	if nb == nil || nb.empty() {
+		res := copyNodeBuffer(b)
+		res.immutable.Store(false)
+		return b, nil
+	}
+	if b.immutable.Load() == nb.immutable.Load() {
+		return nil, errIncompatibleMerge
+	}
+
+	var (
+		immutable *nodebuffer
+		mutable   *nodebuffer
+	)
+	if b.immutable.Load() {
+		immutable = b
+		mutable = nb
+	} else {
+		immutable = nb
+		mutable = b
+	}
+
+	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	for acc, subTree := range immutable.nodes {
+		if _, ok := nodes[acc]; !ok {
+			nodes[acc] = make(map[string]*trienode.Node)
+		}
+		for path, node := range subTree {
+			nodes[acc][path] = node
+		}
+	}
+
+	for acc, subTree := range mutable.nodes {
+		if _, ok := nodes[acc]; !ok {
+			nodes[acc] = make(map[string]*trienode.Node)
+		}
+		for path, node := range subTree {
+			nodes[acc][path] = node
+		}
+	}
+	return newNodeBuffer(int(mutable.limit), nodes, immutable.layers+mutable.layers), nil
 }
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
 func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
+	if !b.immutable.Load() {
+		return errFlushMutable
+	}
+
 	if b.size <= b.limit && !force {
 		return nil
 	}
@@ -272,4 +518,23 @@ func cacheKey(owner common.Hash, path []byte) []byte {
 		return path
 	}
 	return append(owner.Bytes(), path...)
+}
+
+// copyNodeBuffer returns a new instance nodebuffer that copy the data of 'n'.
+func copyNodeBuffer(n *nodebuffer) *nodebuffer {
+	if n == nil {
+		return nil
+	}
+	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	for acc, subTree := range n.nodes {
+		if _, ok := nodes[acc]; !ok {
+			nodes[acc] = make(map[string]*trienode.Node)
+		}
+		for path, node := range subTree {
+			nodes[acc][path] = node
+		}
+	}
+	nb := newNodeBuffer(int(n.limit), nodes, n.layers)
+	nb.immutable.Store(n.immutable.Load())
+	return nb
 }
