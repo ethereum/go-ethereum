@@ -22,7 +22,6 @@ them using your favourite package manager. Once the dependencies are installed, 
 ```shell
 make geth
 ```
-
 or, to build the full suite of utilities:
 
 ```shell
