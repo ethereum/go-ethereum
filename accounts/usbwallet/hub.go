@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/usb"
+	usb "github.com/holiman/go-hidapi"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -170,7 +170,7 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	infos, err := usb.Enumerate(hub.vendorID, 0)
+	infos, err := usb.EnumerateHid(hub.vendorID, 0)
 	if err != nil {
 		failcount := hub.enumFails.Add(1)
 		if runtime.GOOS == "linux" {
