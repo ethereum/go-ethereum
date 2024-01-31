@@ -1809,7 +1809,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 
 		// The traced section of block import.
-		res, err := bc.processBlock(block, statedb, &followupInterrupt, start, setHead)
+		res, err := bc.processBlock(block, statedb, start, setHead)
 		followupInterrupt.Store(true)
 		if err != nil {
 			return it.index, err
