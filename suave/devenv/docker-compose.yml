@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   suave-mevm:
-    build: flashbots/suave-geth:latest
+    image: flashbots/suave-geth:latest
     command:
       - --dev
       - --dev.gaslimit=30000000
