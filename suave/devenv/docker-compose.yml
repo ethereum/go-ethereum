@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  suave-mevm:
+    build: flashbots/suave-geth:latest
+    command:
+      - --dev
+      - --dev.gaslimit=30000000
+      - --http
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.vhosts=*
+      - --http.corsdomain=*
+      - --ws
+      - --ws.origins=*
+      - --ws.addr=0.0.0.0
+      - --datadir=/data
+      - --keystore=/keystore/keystore
+      - --unlock=0xB5fEAfbDD752ad52Afb7e1bD2E40432A485bBB7F
+      - --password=/keystore/password.txt
+    depends_on:
+      - suave-enabled-chain
+    volumes:
+      - ./suave-ex-node:/keystore
+    ports:
+      - 8545:8545
+      - 8546:8546
+  suave-enabled-chain:
+    image: flashbots/suave-geth:latest
+    command:
+      - --dev
+      - --dev.gaslimit=30000000
+      - --http
+      - --ws
+    ports:
+      - 8555:8545
