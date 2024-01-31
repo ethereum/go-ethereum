@@ -1809,8 +1809,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 
 		// The traced section of block import.
-		err, stop, res := bc.processBlock(block, statedb, &followupInterrupt, start, setHead)
-		if err != nil || stop {
+		res, err := bc.processBlock(block, statedb, &followupInterrupt, start, setHead)
+		followupInterrupt.Store(true)
+		if err != nil {
 			return it.index, err
 		}
 		// Report the import stats before returning the various results
@@ -1887,7 +1888,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, followupInterrupt *atomic.Bool, start time.Time, setHead bool) (blockEndErr error, _ bool, _ *blockProcessingResult) {
+func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), bc.chainConfig)
@@ -1901,16 +1902,14 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, f
 	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 	if err != nil {
 		bc.reportBlock(block, receipts, err)
-		followupInterrupt.Store(true)
-		return err, true, nil
+		return nil, err
 	}
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 		bc.reportBlock(block, receipts, err)
-		followupInterrupt.Store(true)
-		return err, true, nil
+		return nil, err
 	}
 	vtime := time.Since(vstart)
 	proctime := time.Since(start) // processing + validation
@@ -1942,9 +1941,8 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, f
 	} else {
 		status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 	}
-	followupInterrupt.Store(true)
 	if err != nil {
-		return err, true, &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}
+		return nil, err
 	}
 	// Update the metrics touched during block commit
 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
@@ -1955,7 +1953,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, f
 	blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	blockInsertTimer.UpdateSince(start)
 
-	return nil, false, &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}
+	return &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}, nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor
