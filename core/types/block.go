@@ -89,6 +89,18 @@ type Header struct {
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
 	// Included for Ethereum compatibility in Scroll SDK
 	WithdrawalsHash *common.Hash `json:"withdrawalsRoot" rlp:"optional"`
+
+	// BlobGasUsed was added by EIP-4844 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	BlobGasUsed *uint64 `json:"blobGasUsed" rlp:"optional"`
+
+	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
+
+	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
