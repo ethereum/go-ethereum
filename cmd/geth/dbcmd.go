@@ -102,10 +102,11 @@ Remove blockchain and state databases`,
 		ArgsUsage: "<blocknum> <jobnum>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
-			utils.SyncModeFlag,
 		},
-		Usage:       "Inspect the MPT tree of the account and contract.",
-		Description: `This commands iterates the entrie WorldState.`,
+		Usage: "Print detailed trie information about the structure of account trie and storage tries.",
+		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
+the latest block number will be used by default. 'jobnum' indicates the number of coroutines concurrently traversing
+the account and storage trie.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -320,8 +321,8 @@ func inspectTrie(ctx *cli.Context) error {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
 
-	if ctx.NArg() > 3 {
-		return fmt.Errorf("Max 3 arguments: %v", ctx.Command.ArgsUsage)
+	if ctx.NArg() > 2 {
+		return fmt.Errorf("excessive number of arguments: %v", ctx.Command.ArgsUsage)
 	}
 
 	var (
@@ -337,67 +338,65 @@ func inspectTrie(ctx *cli.Context) error {
 	defer db.Close()
 
 	var headerBlockHash common.Hash
-	if ctx.NArg() >= 1 {
-		if ctx.Args().Get(0) == "latest" {
-			headerHash := rawdb.ReadHeadHeaderHash(db)
-			blockNumber = *(rawdb.ReadHeaderNumber(db, headerHash))
-		} else if ctx.Args().Get(0) == "snapshot" {
-			trieRootHash = rawdb.ReadSnapshotRoot(db)
-			blockNumber = math.MaxUint64
-		} else {
-			var err error
-			blockNumber, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to Parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
-			}
-		}
-
-		if ctx.NArg() == 1 {
-			jobnum = 1000
-		} else {
-			var err error
-			jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to Parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
-			}
-		}
-
-		if blockNumber != math.MaxUint64 {
-			headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
-			if headerBlockHash == (common.Hash{}) {
-				return fmt.Errorf("ReadHeadBlockHash empry hash")
-			}
-			blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
-			trieRootHash = blockHeader.Root
-		}
-		if (trieRootHash == common.Hash{}) {
-			log.Error("Empty root hash")
-		}
-		fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
-
-		dbScheme := rawdb.ReadStateScheme(db)
-		var config *trie.Config
-		if dbScheme == rawdb.PathScheme {
-			config = &trie.Config{
-				PathDB: pathdb.ReadOnly,
-			}
-		} else if dbScheme == rawdb.HashScheme {
-			config = trie.HashDefaults
-		}
-
-		triedb := trie.NewDatabase(db, config)
-		theTrie, err := trie.New(trie.TrieID(trieRootHash), triedb)
+	if ctx.Args().Get(0) == "latest" {
+		headerHash := rawdb.ReadHeadHeaderHash(db)
+		blockNumber = *(rawdb.ReadHeaderNumber(db, headerHash))
+	} else if ctx.Args().Get(0) == "snapshot" {
+		trieRootHash = rawdb.ReadSnapshotRoot(db)
+		blockNumber = math.MaxUint64
+	} else {
+		var err error
+		blockNumber, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
 		if err != nil {
-			fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
-			return err
+			return fmt.Errorf("failed to parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
 		}
-		theInspect, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
-		if err != nil {
-			return err
-		}
-		theInspect.Run()
-		theInspect.DisplayResult()
 	}
+
+	if ctx.NArg() == 1 {
+		jobnum = 1000
+	} else {
+		var err error
+		jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to Parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
+		}
+	}
+
+	if blockNumber != math.MaxUint64 {
+		headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
+		if headerBlockHash == (common.Hash{}) {
+			return fmt.Errorf("canonical hash for block %d not found", blockNumber)
+		}
+		blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
+		trieRootHash = blockHeader.Root
+	}
+	if (trieRootHash == common.Hash{}) {
+		log.Error("Empty root hash")
+	}
+	fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
+
+	dbScheme := rawdb.ReadStateScheme(db)
+	var config *trie.Config
+	if dbScheme == rawdb.PathScheme {
+		config = &trie.Config{
+			PathDB: pathdb.ReadOnly,
+		}
+	} else if dbScheme == rawdb.HashScheme {
+		config = trie.HashDefaults
+	}
+
+	triedb := trie.NewDatabase(db, config)
+	theTrie, err := trie.New(trie.TrieID(trieRootHash), triedb)
+	if err != nil {
+		fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
+		return err
+	}
+	theInspect, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
+	if err != nil {
+		return err
+	}
+	theInspect.Run()
+	theInspect.DisplayResult()
 	return nil
 }
 

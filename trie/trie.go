@@ -625,7 +625,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 
 // resolveWithoutTrack loads node from the underlying store with the given node hash
 // and path prefix.
-func (t *Trie) resloveWithoutTrack(n node, prefix []byte) (node, error) {
+func (t *Trie) resolveWithoutTrack(n node, prefix []byte) (node, error) {
 	if n, ok := n.(hashNode); ok {
 		blob, err := t.reader.node(prefix, common.BytesToHash(n))
 		if err != nil {
