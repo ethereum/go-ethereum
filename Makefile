@@ -37,6 +37,15 @@ devtools:
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
 
+devnet-up:
+	docker-compose -f ./suave/devenv/docker-compose.yml up -d --build
+
+devnet-down:
+	docker-compose -f ./suave/devenv/docker-compose.yml down
+
+fmt-contracts:
+	cd suave && forge fmt
+
 release:
 	docker run \
 		--rm \
