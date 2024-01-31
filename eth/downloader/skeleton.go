@@ -161,7 +161,7 @@ type backfiller interface {
 	// on initial startup.
 	//
 	// The method should return the last block header that has been successfully
-	// backfilled, or nil if the backfiller was not resumed.
+	// backfilled (in the current or a previous run), falling back to the genesis.
 	suspend() *types.Header
 
 	// resume requests the backfiller to start running fill or snap sync based on
@@ -382,14 +382,17 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			if filled := s.filler.suspend(); filled != nil {
-				// If something was filled, try to delete stale sync helpers. If
-				// unsuccessful, warn the user, but not much else we can do (it's
-				// a programming error, just let users report an issue and don't
-				// choke in the meantime).
-				if err := s.cleanStales(filled); err != nil {
-					log.Error("Failed to clean stale beacon headers", "err", err)
-				}
+			filled := s.filler.suspend()
+			if filled == nil {
+				log.Error("Latest filled block is not available")
+				return
+			}
+			// If something was filled, try to delete stale sync helpers. If
+			// unsuccessful, warn the user, but not much else we can do (it's
+			// a programming error, just let users report an issue and don't
+			// choke in the meantime).
+			if err := s.cleanStales(filled); err != nil {
+				log.Error("Failed to clean stale beacon headers", "err", err)
 			}
 		}()
 		// Wait for the suspend to finish, consuming head events in the meantime
@@ -1138,7 +1141,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		// The skeleton chain is partially consumed, set the new tail as filled+1.
 		tail := rawdb.ReadSkeletonHeader(s.db, number+1)
 		if tail.ParentHash != filled.Hash() {
-			return fmt.Errorf("filled header is discontinuous with subchain: %d %s", number, filled.Hash())
+			return fmt.Errorf("filled header is discontinuous with subchain: %d %s, please file an issue", number, filled.Hash())
 		}
 		start, end = s.progress.Subchains[0].Tail, number+1 // remove headers in [tail, filled]
 		s.progress.Subchains[0].Tail = tail.Number.Uint64()
