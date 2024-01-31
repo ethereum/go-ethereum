@@ -26,7 +26,7 @@ services:
       - 8545:8545
       - 8546:8546
   suave-enabled-chain:
-    image: flashbots/suave-geth:latest
+    build: ../..
     command:
       - --dev
       - --dev.gaslimit=30000000
