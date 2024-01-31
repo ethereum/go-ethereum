@@ -342,7 +342,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if !genesis.Config.IsPrague(big.NewInt(0), genesis.Timestamp) && header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
+	notverkle := genesis == nil || genesis.Config == nil || genesis.Config.PragueTime == nil || !genesis.Config.IsPrague(big.NewInt(0), genesis.Timestamp)
+	if notverkle && header.Root != types.EmptyRootHash && !rawdb.HasLegacyTrieNode(db, header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
