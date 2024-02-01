@@ -19,13 +19,13 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -104,17 +104,21 @@ func (f *chainFreezer) readBlock(db ethdb.KeyValueReader, tag string) uint64 {
 // freezeThreshold returns the threshold for chain freezing. It's determined
 // by formula: max(finality, HEAD-params.FullImmutabilityThreshold).
 func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) {
-	final, head := f.readBlock(db, finalizedBlock), f.readBlock(db, headBlock)
+	var (
+		head      = f.readBlock(db, headBlock)
+		final     = f.readBlock(db, finalizedBlock)
+		headLimit uint64
+	)
 	if head > params.FullImmutabilityThreshold {
-		head -= params.FullImmutabilityThreshold
+		headLimit = head - params.FullImmutabilityThreshold
 	}
-	if final == 0 && head == 0 {
+	if final == 0 && headLimit == 0 {
 		return 0, errors.New("freezing threshold is not available")
 	}
-	if final > head {
+	if final > headLimit {
 		return final, nil
 	}
-	return head, nil
+	return headLimit, nil
 }
 
 // freeze is a background thread that periodically checks the blockchain for any
