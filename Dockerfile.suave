@@ -2,6 +2,7 @@ FROM debian:bullseye
 LABEL "org.opencontainers.image.source"="https://github.com/flashbots/suave-execution-geth"
 
 COPY ./suave-execution-geth /bin/
+COPY ./suave-execution-geth /bin/geth
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["suave-execution-geth"]
