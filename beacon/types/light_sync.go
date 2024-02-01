@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
@@ -180,4 +181,12 @@ func (u *FinalityUpdate) Validate() error {
 		return err
 	}
 	return merkle.VerifyProof(u.Attested.StateRoot, params.StateIndexFinalBlock, u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
+}
+
+// ChainHeadEvent returns an authenticated execution payload associated with the
+// latest accepted head of the beacon chain, along with the hash of the latest
+// finalized execution block.
+type ChainHeadEvent struct {
+	HeadBlock *engine.ExecutableData
+	Finalized common.Hash
 }

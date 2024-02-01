@@ -17,20 +17,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/beacon/light"
-	"github.com/ethereum/go-ethereum/beacon/light/api"
-	"github.com/ethereum/go-ethereum/beacon/light/request"
-	"github.com/ethereum/go-ethereum/beacon/light/sync"
+	"github.com/ethereum/go-ethereum/beacon/blsync"
+	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -72,7 +70,7 @@ func main() {
 		verbosityFlag,
 		vmoduleFlag,
 	}
-	app.Action = blsync
+	app.Action = sync
 
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -80,7 +78,7 @@ func main() {
 	}
 }
 
-func blsync(ctx *cli.Context) error {
+func sync(ctx *cli.Context) error {
 	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	output := io.Writer(os.Stderr)
 	if usecolor {
@@ -89,53 +87,39 @@ func blsync(ctx *cli.Context) error {
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
-	if !ctx.IsSet(utils.BeaconApiFlag.Name) {
-		utils.Fatalf("Beacon node light client API URL not specified")
-	}
-	var (
-		chainConfig  = makeChainConfig(ctx)
-		customHeader = make(map[string]string)
-	)
-
-	for _, s := range ctx.StringSlice(utils.BeaconApiHeaderFlag.Name) {
-		kv := strings.Split(s, ":")
-		if len(kv) != 2 {
-			utils.Fatalf("Invalid custom API header entry: %s", s)
-		}
-		customHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
-	}
-
-	// create data structures
-	var (
-		db             = memorydb.New()
-		threshold      = ctx.Int(utils.BeaconThresholdFlag.Name)
-		committeeChain = light.NewCommitteeChain(db, chainConfig.ChainConfig, threshold, !ctx.Bool(utils.BeaconNoFilterFlag.Name))
-		headTracker    = light.NewHeadTracker(committeeChain, threshold)
-	)
-	headSync := sync.NewHeadSync(headTracker, committeeChain)
-
-	// set up scheduler and sync modules
-	scheduler := request.NewScheduler()
-	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
-	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	beaconBlockSync := newBeaconBlockSync(headTracker)
-	scheduler.RegisterTarget(headTracker)
-	scheduler.RegisterTarget(committeeChain)
-	scheduler.RegisterModule(checkpointInit, "checkpointInit")
-	scheduler.RegisterModule(forwardSync, "forwardSync")
-	scheduler.RegisterModule(headSync, "headSync")
-	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
-	go updateEngineApi(makeRPCClient(ctx), beaconBlockSync.headCh)
-	// start
-	scheduler.Start()
-	// register server(s)
-	for _, url := range ctx.StringSlice(utils.BeaconApiFlag.Name) {
-		beaconApi := api.NewBeaconLightApi(url, customHeader)
-		scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
-	}
+	headCh := make(chan types.ChainHeadEvent, 1)
+	client := blsync.NewClient(ctx)
+	sub := client.SubscribeChainHeadEvent(headCh)
+	go updateEngineApi(makeRPCClient(ctx), headCh)
+	client.Start()
 	// run until stopped
 	<-ctx.Done()
-	scheduler.Stop()
-	close(beaconBlockSync.headCh)
+	client.Stop()
+	sub.Unsubscribe()
+	close(headCh)
 	return nil
+}
+
+func makeRPCClient(ctx *cli.Context) *rpc.Client {
+	if !ctx.IsSet(utils.BlsyncApiFlag.Name) {
+		log.Warn("No engine API target specified, performing a dry run")
+		return nil
+	}
+	if !ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
+		utils.Fatalf("JWT secret parameter missing") //TODO use default if datadir is specified
+	}
+
+	engineApiUrl, jwtFileName := ctx.String(utils.BlsyncApiFlag.Name), ctx.String(utils.BlsyncJWTSecretFlag.Name)
+	var jwtSecret [32]byte
+	if jwt, err := node.ObtainJWTSecret(jwtFileName); err == nil {
+		copy(jwtSecret[:], jwt)
+	} else {
+		utils.Fatalf("Error loading or generating JWT secret: %v", err)
+	}
+	auth := node.NewJWTAuth(jwtSecret)
+	cl, err := rpc.DialOptions(context.Background(), engineApiUrl, rpc.WithHTTPAuth(auth))
+	if err != nil {
+		utils.Fatalf("Could not create RPC client: %v", err)
+	}
+	return cl
 }

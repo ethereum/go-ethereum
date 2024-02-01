@@ -14,18 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package blsync
 
 import (
-	"context"
-
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -115,28 +110,4 @@ func makeChainConfig(ctx *cli.Context) lightClientConfig {
 		}
 	}
 	return config
-}
-
-func makeRPCClient(ctx *cli.Context) *rpc.Client {
-	if !ctx.IsSet(utils.BlsyncApiFlag.Name) {
-		log.Warn("No engine API target specified, performing a dry run")
-		return nil
-	}
-	if !ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
-		utils.Fatalf("JWT secret parameter missing") //TODO use default if datadir is specified
-	}
-
-	engineApiUrl, jwtFileName := ctx.String(utils.BlsyncApiFlag.Name), ctx.String(utils.BlsyncJWTSecretFlag.Name)
-	var jwtSecret [32]byte
-	if jwt, err := node.ObtainJWTSecret(jwtFileName); err == nil {
-		copy(jwtSecret[:], jwt)
-	} else {
-		utils.Fatalf("Error loading or generating JWT secret: %v", err)
-	}
-	auth := node.NewJWTAuth(jwtSecret)
-	cl, err := rpc.DialOptions(context.Background(), engineApiUrl, rpc.WithHTTPAuth(auth))
-	if err != nil {
-		utils.Fatalf("Could not create RPC client: %v", err)
-	}
-	return cl
 }
