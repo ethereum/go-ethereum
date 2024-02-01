@@ -41,7 +41,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
 	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
+		signer = NewLondonSignerWithEIP4844(config.ChainID)
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
@@ -64,7 +64,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
 		if config.LondonBlock != nil {
-			return NewLondonSigner(config.ChainID)
+			return NewLondonSignerWithEIP4844(config.ChainID)
 		}
 		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
@@ -87,7 +87,7 @@ func LatestSignerForChainID(chainID *big.Int) Signer {
 	if chainID == nil {
 		return HomesteadSigner{}
 	}
-	return NewLondonSigner(chainID)
+	return NewLondonSignerWithEIP4844(chainID)
 }
 
 // SignTx signs the transaction using the given signer and private key.
@@ -168,6 +168,75 @@ type Signer interface {
 
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
+}
+
+type londonSignerWithEIP4844 struct{ londonSigner }
+
+// NewLondonSignerWithEIP4844 returns a signer that accepts
+// - EIP-4844 blob transactions
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+func NewLondonSignerWithEIP4844(chainId *big.Int) Signer {
+	return londonSignerWithEIP4844{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
+}
+
+func (s londonSignerWithEIP4844) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != BlobTxType {
+		return s.londonSigner.Sender(tx)
+	}
+	V, R, S := tx.RawSignatureValues()
+	// Blob txs are defined to use 0 and 1 as their recovery
+	// id, add 27 to become equivalent to unprotected Homestead signatures.
+	V = new(big.Int).Add(V, big.NewInt(27))
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
+	}
+	return recoverPlain(s.Hash(tx), R, S, V, true)
+}
+
+func (s londonSignerWithEIP4844) Equal(s2 Signer) bool {
+	x, ok := s2.(londonSignerWithEIP4844)
+	return ok && x.chainId.Cmp(s.chainId) == 0
+}
+
+func (s londonSignerWithEIP4844) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	txdata, ok := tx.inner.(*BlobTx)
+	if !ok {
+		return s.londonSigner.SignatureValues(tx, sig)
+	}
+	// Check that chain ID of tx matches the signer. We also accept ID zero here,
+	// because it indicates that the chain ID was not specified in the tx.
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.ToBig().Cmp(s.chainId) != 0 {
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
+	}
+	R, S, _ = decodeSignature(sig)
+	V = big.NewInt(int64(sig[64]))
+	return R, S, V, nil
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s londonSignerWithEIP4844) Hash(tx *Transaction) common.Hash {
+	if tx.Type() != BlobTxType {
+		return s.londonSigner.Hash(tx)
+	}
+	return prefixedRlpHash(
+		tx.Type(),
+		[]interface{}{
+			s.chainId,
+			tx.Nonce(),
+			tx.GasTipCap(),
+			tx.GasFeeCap(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			tx.AccessList(),
+			tx.BlobGasFeeCap(),
+			tx.BlobHashes(),
+		})
 }
 
 type londonSigner struct{ eip2930Signer }

@@ -42,6 +42,22 @@ func IntSize(x uint64) int {
 	return 1 + intsize(x)
 }
 
+// BytesSize returns the encoded size of a byte slice.
+func BytesSize(b []byte) uint64 {
+	switch {
+	case len(b) == 0:
+		return 1
+	case len(b) == 1:
+		if b[0] <= 0x7f {
+			return 1
+		} else {
+			return 2
+		}
+	default:
+		return uint64(headsize(uint64(len(b))) + len(b))
+	}
+}
+
 // Split returns the content of first RLP value and any
 // bytes after the value as subslices of b.
 func Split(b []byte) (k Kind, content, rest []byte, err error) {

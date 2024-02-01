@@ -61,9 +61,12 @@ type Receipt struct {
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
 	// They are stored in the chain database.
-	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
-	ContractAddress common.Address `json:"contractAddress"`
-	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
+	ContractAddress   common.Address `json:"contractAddress"`
+	GasUsed           uint64         `json:"gasUsed" gencodec:"required"`
+	EffectiveGasPrice *big.Int       `json:"effectiveGasPrice"` // required, but tag omitted for backwards compatibility
+	BlobGasUsed       uint64         `json:"blobGasUsed,omitempty"`
+	BlobGasPrice      *big.Int       `json:"blobGasPrice,omitempty"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
@@ -84,6 +87,7 @@ type receiptMarshaling struct {
 	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
 	GasUsed           hexutil.Uint64
+	EffectiveGasPrice *hexutil.Big
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
 	L1Fee             *hexutil.Big
@@ -203,18 +207,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		if err != nil {
 			return err
 		}
-		if len(b) == 0 {
-			return errEmptyTypedReceipt
-		}
-		r.Type = b[0]
-		if r.Type == AccessListTxType || r.Type == DynamicFeeTxType || r.Type == L1MessageTxType {
-			var dec receiptRLP
-			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
-				return err
-			}
-			return r.setFromRLP(dec)
-		}
-		return ErrTxTypeNotSupported
+		return r.decodeTyped(b)
 	default:
 		return rlp.ErrExpectedList
 	}
@@ -243,7 +236,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errEmptyTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType, L1MessageTxType:
+	case DynamicFeeTxType, AccessListTxType, BlobTxType, L1MessageTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -434,6 +427,9 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 		rlp.Encode(w, data)
 	case DynamicFeeTxType:
 		w.WriteByte(DynamicFeeTxType)
+		rlp.Encode(w, data)
+	case BlobTxType:
+		w.WriteByte(BlobTxType)
 		rlp.Encode(w, data)
 	case L1MessageTxType:
 		w.WriteByte(L1MessageTxType)
