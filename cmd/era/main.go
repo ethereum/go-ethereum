@@ -269,7 +269,7 @@ func checkAccumulator(e *era.Era) error {
 	//      the blocks are all correct (via hash)
 	//
 	// The attributes 1), 2), and 3) are checked for each block. 4) and 5) require
-	// accumulation accross the entire set and are verified at the end.
+	// accumulation across the entire set and are verified at the end.
 	for it.Next() {
 		// 1) next() walks the block index, so we're able to implicitly verify it.
 		if it.Error() != nil {

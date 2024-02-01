@@ -90,7 +90,7 @@ func TestDecode(t *testing.T) {
 		{ // basic valid decoding
 			have: "ffff000000000000",
 		},
-		{ // basic valid decoding
+		{ // basic invalid decoding
 			have: "ffff000000000001",
 			err:  fmt.Errorf("reserved bytes are non-zero"),
 		},
