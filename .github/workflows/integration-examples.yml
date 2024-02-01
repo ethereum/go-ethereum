@@ -1,0 +1,42 @@
+name: Integration examples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  suapp-examples:
+    name: Devenv
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21
+        id: go
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Run dev environment
+        run: docker-compose -f ./suave/devenv/docker-compose.yml up -d --build
+
+      - name: Check out suapp-examples
+        uses: actions/checkout@v2
+        with:
+          repository: flashbots/suapp-examples
+          path: suapp-examples
+      
+      - name: Build suapp-examples
+        run: |
+          cd suapp-examples
+          forge build
+
+      - name: Run suapp-examples
+        run: |
+          cd suapp-examples
+          make run-integration
