@@ -259,7 +259,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 							break
 						}
 					}
-					// We are about to exit on error. Print database metdata beore exiting
+					// We are about to exit on error. Print database metadata before exiting
 					printChainMetadata(db)
 
 					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
@@ -669,7 +669,7 @@ func printChainMetadata(db ethdb.KeyValueStore) {
 	fmt.Fprintf(os.Stderr, "\n\n")
 }
 
-// ReadChainMetadata returns a set of key/value pairs that contains informatin
+// ReadChainMetadata returns a set of key/value pairs that contains information
 // about the database chain status. This can be used for diagnostic purposes
 // when investigating the state of the node.
 func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {

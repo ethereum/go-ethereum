@@ -121,34 +121,23 @@ func (mv *MVHashMap) Write(k Key, v Version, data interface{}) {
 		return
 	})
 
-	cells.rw.RLock()
-	ci, ok := cells.tm.Get(v.TxnIndex)
-	cells.rw.RUnlock()
-
-	if ok {
+	cells.rw.Lock()
+	if ci, ok := cells.tm.Get(v.TxnIndex); !ok {
+		cells.tm.Put(v.TxnIndex, &WriteCell{
+			flag:        FlagDone,
+			incarnation: v.Incarnation,
+			data:        data,
+		})
+	} else {
 		if ci.(*WriteCell).incarnation > v.Incarnation {
 			panic(fmt.Errorf("existing transaction value does not have lower incarnation: %v, %v",
 				k, v.TxnIndex))
 		}
-
 		ci.(*WriteCell).flag = FlagDone
 		ci.(*WriteCell).incarnation = v.Incarnation
 		ci.(*WriteCell).data = data
-	} else {
-		cells.rw.Lock()
-		if ci, ok = cells.tm.Get(v.TxnIndex); !ok {
-			cells.tm.Put(v.TxnIndex, &WriteCell{
-				flag:        FlagDone,
-				incarnation: v.Incarnation,
-				data:        data,
-			})
-		} else {
-			ci.(*WriteCell).flag = FlagDone
-			ci.(*WriteCell).incarnation = v.Incarnation
-			ci.(*WriteCell).data = data
-		}
-		cells.rw.Unlock()
 	}
+	cells.rw.Unlock()
 }
 
 func (mv *MVHashMap) ReadStorage(k Key, fallBack func() any) any {
@@ -166,13 +155,13 @@ func (mv *MVHashMap) MarkEstimate(k Key, txIdx int) {
 		panic(fmt.Errorf("path must already exist"))
 	})
 
-	cells.rw.RLock()
+	cells.rw.Lock()
 	if ci, ok := cells.tm.Get(txIdx); !ok {
 		panic(fmt.Sprintf("should not happen - cell should be present for path. TxIdx: %v, path, %x, cells keys: %v", txIdx, k, cells.tm.Keys()))
 	} else {
 		ci.(*WriteCell).flag = FlagEstimate
 	}
-	cells.rw.RUnlock()
+	cells.rw.Unlock()
 }
 
 func (mv *MVHashMap) Delete(k Key, txIdx int) {
@@ -233,8 +222,8 @@ func (mv *MVHashMap) Read(k Key, txIdx int) (res MVReadResult) {
 	}
 
 	cells.rw.RLock()
+
 	fk, fv := cells.tm.Floor(txIdx - 1)
-	cells.rw.RUnlock()
 
 	if fk != nil && fv != nil {
 		c := fv.(*WriteCell)
@@ -252,6 +241,8 @@ func (mv *MVHashMap) Read(k Key, txIdx int) (res MVReadResult) {
 			panic(fmt.Errorf("should not happen - unknown flag value"))
 		}
 	}
+
+	cells.rw.RUnlock()
 
 	return
 }

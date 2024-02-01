@@ -191,7 +191,7 @@ func isValidChain(currentHeader *types.Header, chain []*types.Header, doExist bo
 	pastChain, _ := splitChain(current, chain)
 
 	// Iterate over the chain and validate against the last milestone
-	// It will handle all cases when the incoming chain has atleast one milestone
+	// It will handle all cases when the incoming chain has at least one milestone
 	for i := len(pastChain) - 1; i >= 0; i-- {
 		if pastChain[i].Number.Uint64() == number {
 			res := pastChain[i].Hash() == hash
@@ -205,7 +205,7 @@ func isValidChain(currentHeader *types.Header, chain []*types.Header, doExist bo
 
 // FIXME: remoteHeader is not used
 func isValidPeer(fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error), doExist bool, number uint64, hash common.Hash) (bool, error) {
-	// Check for availaibility of the last milestone block.
+	// Check for availability of the last milestone block.
 	// This can be also be empty if our heimdall is not responding
 	// or we're running without it.
 	if !doExist {

@@ -80,7 +80,7 @@ const ttlLimit = time.Minute
 
 // tuningConfidenceCap is the number of active peers above which to stop detuning
 // the confidence number. The idea here is that once we hone in on the capacity
-// of a meaningful number of peers, adding one more should ot have a significant
+// of a meaningful number of peers, adding one more should not have a significant
 // impact on things, so just ron with the originals.
 const tuningConfidenceCap = 10
 

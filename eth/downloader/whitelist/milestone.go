@@ -290,7 +290,7 @@ func (m *milestone) enqueueFutureMilestone(key uint64, hash common.Hash) {
 		return
 	}
 
-	log.Debug("Enqueing new future milestone", "endBlockNumber", key, "futureMilestoneHash", hash)
+	log.Debug("Enqueuing new future milestone", "endBlockNumber", key, "futureMilestoneHash", hash)
 
 	m.FutureMilestoneList[key] = hash
 	m.FutureMilestoneOrder = append(m.FutureMilestoneOrder, key)

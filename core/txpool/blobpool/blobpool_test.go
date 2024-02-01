@@ -593,9 +593,9 @@ func TestOpenDrops(t *testing.T) {
 	verifyPoolInternals(t, pool)
 }
 
-// Tests that transactions loaded from disk are indexed corrently.
+// Tests that transactions loaded from disk are indexed correctly.
 //
-//   - 1. Transactions must be groupped by sender, sorted by nonce
+//   - 1. Transactions must be grouped by sender, sorted by nonce
 //   - 2. Eviction thresholds are calculated correctly for the sequences
 //   - 3. Balance usage of an account is totals across all transactions
 func TestOpenIndex(t *testing.T) {
@@ -1208,7 +1208,7 @@ func TestAdd(t *testing.T) {
 			keys[acc], _ = crypto.GenerateKey()
 			addrs[acc] = crypto.PubkeyToAddress(keys[acc].PublicKey)
 
-			// Seed the state database with this acocunt
+			// Seed the state database with this account
 			statedb.AddBalance(addrs[acc], new(big.Int).SetUint64(seed.balance))
 			statedb.SetNonce(addrs[acc], seed.nonce)
 

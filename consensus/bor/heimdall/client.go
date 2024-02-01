@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"time"
 
@@ -420,7 +421,7 @@ func makeURL(urlString, rawPath, rawQuery string) (*url.URL, error) {
 		return nil, err
 	}
 
-	u.Path = rawPath
+	u.Path = path.Join(u.Path, rawPath)
 	u.RawQuery = rawQuery
 
 	return u, err

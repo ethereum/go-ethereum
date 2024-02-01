@@ -256,8 +256,8 @@ func TestFetchShutdown(t *testing.T) {
 
 	// Expect this to fail due to timeout
 	_, err = client.FetchCheckpoint(ctx, -1)
-	require.Equal(t, "context deadline exceeded", err.Error(), "expect the function error to be a context deadline exeeded error")
-	require.Equal(t, "context deadline exceeded", ctx.Err().Error(), "expect the ctx error to be a context deadline exeeded error")
+	require.Equal(t, "context deadline exceeded", err.Error(), "expect the function error to be a context deadline exceeded error")
+	require.Equal(t, "context deadline exceeded", ctx.Err().Error(), "expect the ctx error to be a context deadline exceeded error")
 
 	cancel()
 
@@ -346,7 +346,7 @@ func TestContext(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			// Expect this to never occur, throw explicit error
-			errCh <- errors.New("unexpectecd call to `ctx.Done()`")
+			errCh <- errors.New("unexpected call to `ctx.Done()`")
 		case <-time.After(2 * time.Second):
 			// Case for safely exiting the tests
 			errCh <- nil
@@ -399,7 +399,7 @@ func TestSpanURL(t *testing.T) {
 	const expected = "http://bor0/bor/span/1"
 
 	if url.String() != expected {
-		t.Fatalf("expected URL %q, got %q", url.String(), expected)
+		t.Fatalf("expected URL %q, got %q", expected, url.String())
 	}
 }
 
@@ -414,6 +414,6 @@ func TestStateSyncURL(t *testing.T) {
 	const expected = "http://bor0/clerk/event-record/list?from-id=10&to-time=100&limit=50"
 
 	if url.String() != expected {
-		t.Fatalf("expected URL %q, got %q", url.String(), expected)
+		t.Fatalf("expected URL %q, got %q", expected, url.String())
 	}
 }

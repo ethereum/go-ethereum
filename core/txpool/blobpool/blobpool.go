@@ -458,7 +458,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	item := new(blobTx)
 	if err := rlp.DecodeBytes(blob, item); err != nil {
 		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever unprobable case, recover gracefully
+		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
@@ -468,7 +468,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	sender, err := p.signer.Sender(item.Tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
-		// restarts. For that ever unprobable case, recover gracefully by ignoring
+		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", item.Tx.Hash(), "err", err)
 		return err
@@ -708,7 +708,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // offload removes a tracked blob transaction from the pool and moves it into the
 // limbo for tracking until finality.
 //
-// The method may log errors for various unexpcted scenarios but will not return
+// The method may log errors for various unexpected scenarios but will not return
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
@@ -735,7 +735,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 }
 
 // Reset implements txpool.SubPool, allowing the blob pool's internal state to be
-// kept in sync with the main transacion pool's internal state.
+// kept in sync with the main transaction pool's internal state.
 func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
 	p.lock.Lock()
@@ -939,7 +939,7 @@ func (p *BlobPool) reinject(addr common.Address, tx *types.Transaction) {
 		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
 		return
 	}
-	// Update the indixes and metrics
+	// Update the indexes and metrics
 	meta := newBlobTxMeta(id, p.store.Size(id), tx)
 
 	if _, ok := p.index[addr]; !ok {
@@ -959,7 +959,7 @@ func (p *BlobPool) reinject(addr common.Address, tx *types.Transaction) {
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
-// to be kept in sync with the main transacion pool's gas requirements.
+// to be kept in sync with the main transaction pool's gas requirements.
 func (p *BlobPool) SetGasTip(tip *big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -1153,7 +1153,7 @@ func (p *BlobPool) Get(hash common.Hash) *txpool.Transaction {
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
@@ -1163,7 +1163,7 @@ func (p *BlobPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error
 }
 
 // Add inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction, blobs []kzg4844.Blob, commits []kzg4844.Commitment, proofs []kzg4844.Proof) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled form the network, so this method will act as the overload

@@ -302,7 +302,7 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 }
 
 // ProcessCode injects the received data for requested item. Note it can
-// happpen that the single response commits two pending requests(e.g.
+// happen that the single response commits two pending requests(e.g.
 // there are two requests one for code and one for node but the hash
 // is same). In this case the second response for the same hash will
 // be treated as "non-requested" item or "already-processed" item but

@@ -57,7 +57,7 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	return newFrontierInstructionSet(), nil
 }
 
-// Stack returns the mininum and maximum stack requirements.
+// Stack returns the minimum and maximum stack requirements.
 func (op *operation) Stack() (int, int) {
 	return op.minStack, op.maxStack
 }

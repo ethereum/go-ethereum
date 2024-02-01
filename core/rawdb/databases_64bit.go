@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 )
 
-// Pebble is unsuported on 32bit architecture
+// Pebble is unsupported on 32bit architecture
 const PebbleEnabled = true
 
 // NewPebbleDBDatabase creates a persistent key-value database without a freezer

@@ -94,7 +94,7 @@ func (c *Command) extractFlags(args []string) error {
 
 		log.Warn("Config set via config file will be overridden by cli flags")
 
-		// Initialse a flagset based on the config created above
+		// Initialise a flagset based on the config created above
 		flags := c.Flags(cfg)
 
 		// Check for explicit cli args
