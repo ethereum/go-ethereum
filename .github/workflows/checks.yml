@@ -26,3 +26,19 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Run unit tests
         run: go test -short ./accounts ./cmd/geth ./core ./core/types ./core/vm ./eth/... ./internal/ethapi/... ./miner ./params ./suave/...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.21
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: make geth
