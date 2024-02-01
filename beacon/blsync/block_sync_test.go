@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
@@ -32,27 +33,49 @@ var (
 	testServer1 = "testServer1"
 	testServer2 = "testServer2"
 
-	testBlock1 = &capella.BeaconBlock{Slot: 123}
-	testBlock2 = &capella.BeaconBlock{Slot: 124}
+	testBlock1 = &capella.BeaconBlock{
+		Slot: 123,
+		Body: capella.BeaconBlockBody{
+			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 456},
+		},
+	}
+	testBlock2 = &capella.BeaconBlock{
+		Slot: 124,
+		Body: capella.BeaconBlockBody{
+			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 457},
+		},
+	}
 )
+
+func init() {
+	eb1, _ := getExecBlock(testBlock1)
+	testBlock1.Body.ExecutionPayload.BlockHash = tree.Root(eb1.Hash())
+	eb2, _ := getExecBlock(testBlock2)
+	testBlock2.Body.ExecutionPayload.BlockHash = tree.Root(eb2.Hash())
+}
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
-	blockSync := newBeaconBlockSync(ht)
+	eventFeed := new(event.Feed)
+	blockSync := newBeaconBlockSync(ht, eventFeed)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	eventFeed.Subscribe(headCh)
 	ts := sync.NewTestScheduler(t, blockSync)
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)
 
 	expHeadBlock := func(tci int, expHead *capella.BeaconBlock) {
-		expInfo := blockHeadInfo(expHead)
-		var head headData
+		var expNumber, headNumber uint64
+		if expHead != nil {
+			expNumber = uint64(expHead.Body.ExecutionPayload.BlockNumber)
+		}
 		select {
-		case head = <-blockSync.headCh:
+		case event := <-headCh:
+			headNumber = event.HeadBlock.Number
 		default:
 		}
-		headInfo := blockHeadInfo(head.block)
-		if headInfo != expInfo {
-			t.Errorf("Wrong head block in test case #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, expInfo.Slot, expInfo.BlockRoot, headInfo.Slot, headInfo.BlockRoot)
+		if headNumber != expNumber {
+			t.Errorf("Wrong head block in test case #%d (expected block number %d, got %d)", tci, expNumber, headNumber)
 		}
 	}
 
@@ -130,6 +153,7 @@ func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	return types.FinalityUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Finalized:     types.HeaderWithExecProof{PayloadHeader: &capella.ExecutionPayloadHeader{}},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, h.validated.Header != (types.Header{})

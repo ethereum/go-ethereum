@@ -87,7 +87,7 @@ func sync(ctx *cli.Context) error {
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
-	headCh := make(chan types.ChainHeadEvent, 1)
+	headCh := make(chan types.ChainHeadEvent, 16)
 	client := blsync.NewClient(ctx)
 	sub := client.SubscribeChainHeadEvent(headCh)
 	go updateEngineApi(makeRPCClient(ctx), headCh)

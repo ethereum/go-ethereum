@@ -166,7 +166,7 @@ func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
 	}
 	execBlock := ctypes.NewBlockWithHeader(execHeader).WithBody(txs, nil).WithWithdrawals(withdrawals)
 	if execBlockHash := execBlock.Hash(); execBlockHash != common.Hash(payload.BlockHash) {
-		return nil, fmt.Errorf("Sanity check failed, payload hash does not match (expected %x, got %x)", common.Hash(payload.BlockHash), execBlockHash)
+		return execBlock, fmt.Errorf("Sanity check failed, payload hash does not match (expected %x, got %x)", common.Hash(payload.BlockHash), execBlockHash)
 	}
 	return execBlock, nil
 }

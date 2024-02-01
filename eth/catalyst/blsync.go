@@ -46,7 +46,7 @@ func NewBlsync(client Client, eth *eth.Ethereum) *Blsync {
 	return &Blsync{
 		engine: newConsensusAPIWithoutHeartbeat(eth),
 		client: client,
-		headCh: make(chan types.ChainHeadEvent, 1),
+		headCh: make(chan types.ChainHeadEvent, 16),
 		quitCh: make(chan struct{}),
 	}
 }
