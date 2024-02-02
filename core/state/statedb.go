@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -60,7 +61,9 @@ type StateLogger interface {
 	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
 	OnLog(log *types.Log)
 	// OnNewAccount is called when a new account is created.
-	OnNewAccount(addr common.Address)
+	// Reset indicates an account existed at that address
+	// which will be replaced.
+	OnNewAccount(addr common.Address, reset bool)
 }
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -309,12 +312,12 @@ func (s *StateDB) Empty(addr common.Address) bool {
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalance(addr common.Address) *big.Int {
+func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
 	}
-	return common.Big0
+	return common.U2560
 }
 
 // GetNonce retrieves the nonce from the given address or 0 if object not found
@@ -402,44 +405,44 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, checkPrecompile bool, reason BalanceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr, checkPrecompile)
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, checkPrecompile bool, reason BalanceChangeReason) {
+	stateObject := s.getOrNewStateObjectWithCheckPrecompiles(addr, checkPrecompile)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, reason)
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason BalanceChangeReason) {
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount, reason)
 	}
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason BalanceChangeReason) {
-	stateObject := s.GetOrNewStateObject(addr)
+func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason BalanceChangeReason) {
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount, reason)
 	}
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, value)
 	}
@@ -460,7 +463,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	if _, ok := s.stateObjectsDestruct[addr]; !ok {
 		s.stateObjectsDestruct[addr] = nil
 	}
-	stateObject := s.GetOrNewStateObject(addr)
+	stateObject := s.getOrNewStateObject(addr)
 	for k, v := range storage {
 		stateObject.SetState(k, v)
 	}
@@ -477,8 +480,8 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		return
 	}
 	var (
-		prev = new(big.Int).Set(stateObject.Balance())
-		n    = new(big.Int)
+		prev = new(uint256.Int).Set(stateObject.Balance())
+		n    = new(uint256.Int)
 	)
 	s.journal.append(selfDestructChange{
 		account:     &addr,
@@ -486,7 +489,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prevbalance: prev,
 	})
 	if s.logger != nil && prev.Sign() > 0 {
-		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
+		s.logger.OnBalanceChange(addr, prev.ToBig(), n.ToBig(), BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()
 	stateObject.data.Balance = n
@@ -650,12 +653,12 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
-// GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
-	return s.getOrNewStateObject(addr, false)
+// getOrNewStateObject retrieves a state object or create a new state object if nil.
+func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
+	return s.getOrNewStateObjectWithCheckPrecompiles(addr, false)
 }
 
-func (s *StateDB) getOrNewStateObject(addr common.Address, checkPrecompile bool) *stateObject {
+func (s *StateDB) getOrNewStateObjectWithCheckPrecompiles(addr common.Address, checkPrecompile bool) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr, checkPrecompile)
@@ -668,6 +671,17 @@ func (s *StateDB) getOrNewStateObject(addr common.Address, checkPrecompile bool)
 func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
+	if s.logger != nil {
+		if checkPrecompile {
+			// Precompiled contracts are touched during a call.
+			// Make sure we avoid emitting a new account event for them.
+			if _, ok := s.precompiles[addr]; !ok {
+				s.logger.OnNewAccount(addr, prev != nil)
+			}
+		} else {
+			s.logger.OnNewAccount(addr, prev != nil)
+		}
+	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
@@ -697,18 +711,6 @@ func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newob
 		delete(s.storages, prev.addrHash)
 		delete(s.accountsOrigin, prev.address)
 		delete(s.storagesOrigin, prev.address)
-	}
-
-	if s.logger != nil {
-		if checkPrecompile {
-			// Precompiled contracts are touched during a call.
-			// Make sure we avoid emitting a new account event for them.
-			if _, ok := s.precompiles[addr]; !ok {
-				s.logger.OnNewAccount(addr)
-			}
-		} else {
-			s.logger.OnNewAccount(addr)
-		}
 	}
 
 	s.setStateObject(newobj)
@@ -889,7 +891,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 			// If ether was sent to account post-selfdestruct it is burnt.
 			if bal := obj.Balance(); bal.Sign() != 0 && s.logger != nil {
-				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
+				s.logger.OnBalanceChange(obj.address, bal.ToBig(), new(big.Int), BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct

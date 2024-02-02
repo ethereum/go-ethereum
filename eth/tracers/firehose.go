@@ -668,7 +668,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	for _, addr := range sortedKeys(alloc) {
 		account := alloc[addr]
 
-		f.OnNewAccount(addr)
+		f.OnNewAccount(addr, false)
 
 		if account.Balance != nil && account.Balance.Sign() != 0 {
 			activeCall := f.callStack.Peek()
@@ -840,7 +840,7 @@ func (f *Firehose) OnLog(l *types.Log) {
 	f.transactionLogIndex++
 }
 
-func (f *Firehose) OnNewAccount(a common.Address) {
+func (f *Firehose) OnNewAccount(a common.Address, previousDataExists bool) {
 	f.ensureInBlockOrTrx()
 	if f.transaction == nil {
 		// We receive OnNewAccount on finalization of the block which means there is no
@@ -854,6 +854,11 @@ func (f *Firehose) OnNewAccount(a common.Address) {
 		f.blockOrdinal.Next()
 		return
 	}
+
+	// Known Firehose issue: The current Firehose instrumentation emits multiple
+	// time the same `OnNewAccount` event for the same account when such account
+	// exists in the past. For now, do nothing and keep the legacy behavior.
+	_ = previousDataExists
 
 	accountCreation := &pbeth.AccountCreation{
 		Account: a.Bytes(),

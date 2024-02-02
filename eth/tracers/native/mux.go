@@ -159,9 +159,9 @@ func (t *muxTracer) OnLog(log *types.Log) {
 	}
 }
 
-func (t *muxTracer) OnNewAccount(a common.Address) {
+func (t *muxTracer) OnNewAccount(a common.Address, reset bool) {
 	for _, t := range t.tracers {
-		t.OnNewAccount(a)
+		t.OnNewAccount(a, reset)
 	}
 }
 

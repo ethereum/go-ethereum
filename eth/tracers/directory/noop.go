@@ -86,7 +86,7 @@ func (*NoopTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 
 func (*NoopTracer) OnLog(log *types.Log) {}
 
-func (*NoopTracer) OnNewAccount(a common.Address) {}
+func (*NoopTracer) OnNewAccount(a common.Address, reset bool) {}
 
 // GetResult returns an empty json object.
 func (t *NoopTracer) GetResult() (json.RawMessage, error) {
