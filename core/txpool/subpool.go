@@ -44,11 +44,17 @@ type LazyTransaction struct {
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still
 // maintained by the transaction pool.
+//
+// Note, the method will *not* cache the retrieved transaction if the original
+// pool has not cached it. The idea being, that if the tx was too big to insert
+// originally, silently saving it will cause more trouble down the line (and
+// indeed seems to have caused a memory bloat in the original implementation
+// which did just that).
 func (ltx *LazyTransaction) Resolve() *types.Transaction {
-	if ltx.Tx == nil {
-		ltx.Tx = ltx.Pool.Get(ltx.Hash)
+	if ltx.Tx != nil {
+		return ltx.Tx
 	}
-	return ltx.Tx
+	return ltx.Pool.Get(ltx.Hash)
 }
 
 // LazyResolver is a minimal interface needed for a transaction pool to satisfy
