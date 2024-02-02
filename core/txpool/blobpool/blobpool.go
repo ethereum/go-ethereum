@@ -1238,6 +1238,22 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
+		switch {
+		case errors.Is(err, txpool.ErrUnderpriced):
+			addUnderpricedMeter.Mark(1)
+		case errors.Is(err, core.ErrNonceTooLow):
+			addStaleMeter.Mark(1)
+		case errors.Is(err, core.ErrNonceTooHigh):
+			addGappedMeter.Mark(1)
+		case errors.Is(err, core.ErrInsufficientFunds):
+			addOverdraftedMeter.Mark(1)
+		case errors.Is(err, txpool.ErrAccountLimitExceeded):
+			addOvercappedMeter.Mark(1)
+		case errors.Is(err, txpool.ErrReplaceUnderpriced):
+			addNoreplaceMeter.Mark(1)
+		default:
+			addInvalidMeter.Mark(1)
+		}
 		return err
 	}
 	// If the address is not yet known, request exclusivity to track the account
@@ -1245,6 +1261,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
 		if err := p.reserve(from, true); err != nil {
+			addNonExclusiveMeter.Mark(1)
 			return err
 		}
 		defer func() {
@@ -1364,6 +1381,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}
 	p.updateStorageMetrics()
 
+	addValidMeter.Mark(1)
 	return nil
 }
 

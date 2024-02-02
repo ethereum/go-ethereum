@@ -90,4 +90,16 @@ var (
 	dropOverflownMeter   = metrics.NewRegisteredMeter("blobpool/drop/overflown", nil)   // Global disk cap exceeded, neutral-ish
 	dropUnderpricedMeter = metrics.NewRegisteredMeter("blobpool/drop/underpriced", nil) // Gas tip changed, neutral
 	dropReplacedMeter    = metrics.NewRegisteredMeter("blobpool/drop/replaced", nil)    // Transaction replaced, neutral
+
+	// The below metrics track various outcomes of transactions being added to
+	// the pool.
+	addInvalidMeter      = metrics.NewRegisteredMeter("blobpool/add/invalid", nil)      // Invalid transaction, reject, neutral
+	addUnderpricedMeter  = metrics.NewRegisteredMeter("blobpool/add/underpriced", nil)  // Gas tip too low, neutral
+	addStaleMeter        = metrics.NewRegisteredMeter("blobpool/add/stale", nil)        // Nonce already filled, reject, bad-ish
+	addGappedMeter       = metrics.NewRegisteredMeter("blobpool/add/gapped", nil)       // Nonce gapped, reject, bad-ish
+	addOverdraftedMeter  = metrics.NewRegisteredMeter("blobpool/add/overdrafted", nil)  // Balance exceeded, reject, netural
+	addOvercappedMeter   = metrics.NewRegisteredMeter("blobpool/add/overcapped", nil)   // Per-account cap exceeded, reject, neutral
+	addNoreplaceMeter    = metrics.NewRegisteredMeter("blobpool/add/noreplace", nil)    // Replacement fees or tips too low, neutral
+	addNonExclusiveMeter = metrics.NewRegisteredMeter("blobpool/add/nonexclusive", nil) // Plain transaction from same account exists, reject, neutral
+	addValidMeter        = metrics.NewRegisteredMeter("blobpool/add/valid", nil)        // Valid transaction, add, neutral
 )
