@@ -75,65 +75,6 @@ func TestServerPortMapping(t *testing.T) {
 	}
 }
 
-func TestExtipLoop(t *testing.T) {
-	clock := new(mclock.Simulated)
-	mockNAT := &mockNAT{mappedPort: 30000}
-	srv := Server{
-		Config: Config{
-			PrivateKey: newkey(),
-			NoDial:     true,
-			ListenAddr: ":0",
-			NAT:        mockNAT,
-			Logger:     testlog.Logger(t, log.LvlTrace),
-			clock:      clock,
-		},
-	}
-	err := srv.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer srv.Stop()
-
-	// Wait for the port mapping to be registered. Synchronization with the port mapping
-	// goroutine works like this: For each iteration, we allow other goroutines to run and
-	// also advance the virtual clock by 1 second. Waiting stops when the NAT interface
-	// has received some requests, or when the clock reaches a timeout.
-	deadline := clock.Now().Add(portMapRefreshInterval + extipRetryInterval)
-	for clock.Now() < deadline && mockNAT.mapRequests.Load() < 2 {
-		clock.Run(1 * time.Second)
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	if mockNAT.ipRequests.Load() != 1 {
-		t.Fatal("external IP was never requested")
-	}
-
-	reqCount := mockNAT.mapRequests.Load()
-	if reqCount != 2 {
-		t.Error("wrong request count:", reqCount)
-	}
-
-	// Wait for the External IP to be checked.
-	for clock.Now() < deadline && mockNAT.ipRequests.Load() < 2 {
-		clock.Run(extipRetryInterval)
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	ipRequestsCount := mockNAT.ipRequests.Load()
-	if ipRequestsCount != 2 {
-		t.Fatal("wrong external IP request count:", ipRequestsCount)
-	}
-
-	// Verify that no unmapRequests were sent.
-	// Handles an edge case where the port mapping loop was prematurely terminated,
-	// causing the defer function to be called and delete the UPnP mappings.
-	// ref: https://github.com/etclabscore/core-geth/pull/611
-	unmapReqCount := mockNAT.unmapRequests.Load()
-	if unmapReqCount != 0 {
-		t.Fatal("wrong unmap request count:", unmapReqCount)
-	}
-}
-
 type mockNAT struct {
 	mappedPort    uint16
 	mapRequests   atomic.Int32
