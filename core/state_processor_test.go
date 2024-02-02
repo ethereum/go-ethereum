@@ -653,6 +653,14 @@ func TestProcessVerkleiInvalidContractCreation(t *testing.T) {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
+		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+			// BLOCKHASH contract stem
+			if len(stemStateDiff.SuffixDiffs) > 1 {
+				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
+			}
+			if stemStateDiff.SuffixDiffs[0].Suffix != 64 {
+				t.Fatalf("invalid suffix diff value found for BLOCKHASH contract: %d != 64", stemStateDiff.SuffixDiffs[0].Suffix)
+			}
 		} else {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix > 4 {
@@ -666,7 +674,15 @@ func TestProcessVerkleiInvalidContractCreation(t *testing.T) {
 	// code should make it to the witness.
 	for _, stemStateDiff := range statediff[1] {
 		for _, suffixDiff := range stemStateDiff.SuffixDiffs {
-			if suffixDiff.Suffix > 4 {
+			if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+				// BLOCKHASH contract stem
+				if len(stemStateDiff.SuffixDiffs) > 1 {
+					t.Fatalf("invalid suffix diff count found for BLOCKHASH contract at block #2: %d != 1", len(stemStateDiff.SuffixDiffs))
+				}
+				if stemStateDiff.SuffixDiffs[0].Suffix != 65 {
+					t.Fatalf("invalid suffix diff value found for BLOCKHASH contract at block #2: %d != 65", stemStateDiff.SuffixDiffs[0].Suffix)
+				}
+			} else if suffixDiff.Suffix > 4 {
 				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 			}
 		}
