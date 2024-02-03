@@ -544,7 +544,7 @@ func TestProcessVerkle(t *testing.T) {
 	}
 }
 
-func TestProcessVerkleiInvalidContractCreation(t *testing.T) {
+func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(69420),
@@ -681,6 +681,12 @@ func TestProcessVerkleiInvalidContractCreation(t *testing.T) {
 				}
 				if stemStateDiff.SuffixDiffs[0].Suffix != 65 {
 					t.Fatalf("invalid suffix diff value found for BLOCKHASH contract at block #2: %d != 65", stemStateDiff.SuffixDiffs[0].Suffix)
+				}
+				if stemStateDiff.SuffixDiffs[0].NewValue == nil {
+					t.Fatalf("missing post state value for BLOCKHASH contract at block #2")
+				}
+				if *stemStateDiff.SuffixDiffs[0].NewValue != common.HexToHash("53abcdfb284720ea59efe923d3dc774bbb7e787d829599f8ec7a81d344dd3d17") {
+					t.Fatalf("invalid post state value for BLOCKHASH contract at block #2: %x != ", (*stemStateDiff.SuffixDiffs[0].NewValue)[:])
 				}
 			} else if suffixDiff.Suffix > 4 {
 				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
