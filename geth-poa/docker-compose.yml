@@ -46,7 +46,7 @@ services:
   sl-node1-keystore:
     build: 
       context: ..
-      dockerfile: geth-poa/Node1Dockerfile
+      dockerfile: geth-poa/SignerNode1Dockerfile
     environment:
       - GETH_NODE_TYPE=signer
       - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
@@ -129,7 +129,7 @@ services:
   sl-node2-keystore:
     build: 
       context: ..
-      dockerfile: geth-poa/Node2Dockerfile
+      dockerfile: geth-poa/SignerNode2Dockerfile
     environment:
       - GETH_NODE_TYPE=signer
       - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301

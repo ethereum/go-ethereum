@@ -19,7 +19,7 @@ COPY geth-poa/genesis-keystore.json /genesis.json
 
 COPY geth-poa/entrypoint.sh /entrypoint.sh
 
-COPY geth-poa/node2/keystore /data/keystore
+COPY geth-poa/signer-node2/keystore /data/keystore
 
 RUN chmod +x /entrypoint.sh
 
