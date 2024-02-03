@@ -9,17 +9,21 @@ up-dev:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
 	DD_KEY=nil docker compose --profile settlement up -d --build
 
+up-dev-keystore:
+	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
+	DD_KEY=nil docker compose --profile settlement-keystore up -d --build
+
 up-dev-local-l1:
 	@if [ ! -f .env ]; then echo "Error: .env file not found. Please populate the .env file before running this command."; exit 1; fi
 	DD_KEY=nil docker compose --profile settlement --profile local_l1 up -d
 
 down:
-	docker compose --profile settlement --profile prod_agents --profile local_l1 down
+	docker compose --profile settlement --profile settlement-keystore --profile prod_agents --profile local_l1 down
 
 clean-dbs:
 	@read -p "WARNING: This command will wipe all persistent disk data relevant to the containers. Press enter to continue or Ctrl+C to cancel." _ 
-	-docker compose --profile settlement --profile local_l1 down --rmi all --volumes
-	-docker compose --profile settlement --profile local_l1 rm -fv
+	-docker compose --profile settlement --profile local_l1 --profile settlement-keystore down --rmi all --volumes
+	-docker compose --profile settlement --profile local_l1 --profile settlement-keystore rm -fv
 	docker image prune -f
 
 pull-image:
