@@ -11,21 +11,33 @@ MEV_COMMIT_GETH_PASSWORD=${MEV_COMMIT_GETH_PASSWORD:-"pwd"}
 CHAIN_ID=$(cat "$GENESIS_L1_PATH" | jq -r .config.chainId)
 RPC_PORT="${RPC_PORT:-8545}"
 WS_PORT="${WS_PORT:-8546}"
+BLOCK_SIGNER_PRIVATE_KEY=${BLOCK_SIGNER_PRIVATE_KEY:-""}
 
 # Generate signer key if needed
-if [ ! -d "$GETH_KEYSTORE_DIR" ] && [ "$GETH_NODE_TYPE" = "signer" ]; then
-
-	echo "$GETH_KEYSTORE_DIR missing, running account import"
-	echo -n "$MEV_COMMIT_GETH_PASSWORD" > "$GETH_DATA_DIR"/password
-	echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
-	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
-		--nousb \
-		account import \
-		--datadir="$GETH_DATA_DIR" \
-		--password="$GETH_DATA_DIR"/password \
-		"$GETH_DATA_DIR"/block-signer-key
-else
-	echo "$GETH_KEYSTORE_DIR exists."
+if [ "$GETH_NODE_TYPE" = "signer" ]; then
+	if [ ! -f "$GETH_DATA_DIR/password" ]; then
+		echo -n "$MEV_COMMIT_GETH_PASSWORD" > "$GETH_DATA_DIR"/password
+	fi
+	if [ ! -d "$GETH_KEYSTORE_DIR" ]; then
+		if [ -n "$BLOCK_SIGNER_PRIVATE_KEY" ]; then
+			echo "$GETH_KEYSTORE_DIR missing, running account import"
+			echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
+			"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
+				--nousb \
+				account import \
+				--datadir="$GETH_DATA_DIR" \
+				--password="$GETH_DATA_DIR"/password \
+				"$GETH_DATA_DIR"/block-signer-key
+		fi
+	else
+		echo "$GETH_KEYSTORE_DIR exists."
+		if [ -z "$BLOCK_SIGNER_PRIVATE_KEY" ]; then
+			GETH_ACCOUNT_LIST=$("$GETH_BIN_PATH" --verbosity="$VERBOSITY" account list --datadir "$GETH_DATA_DIR")
+			BLOCK_SIGNER_ADDRESS_WITHOUT_PREFIX=$(echo "$GETH_ACCOUNT_LIST" | grep -oE '[0-9a-fA-F]{40}$')
+			BLOCK_SIGNER_ADDRESS="0x$BLOCK_SIGNER_ADDRESS_WITHOUT_PREFIX"
+			echo "Block signer address with 0x prefix: $BLOCK_SIGNER_ADDRESS"
+		fi
+	fi
 fi
 
 # Init geth if needed
