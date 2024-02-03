@@ -5,10 +5,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -17,21 +17,24 @@ import (
 )
 
 func main() {
-	privateKey, err := crypto.GenerateKey()
-	if err != nil {
-		panic(err)
+	var privateKey *ecdsa.PrivateKey
+	var err error
+	privateKeyHex := os.Getenv("HIVE_CLIENT_PRIVATE_KEY")
+	if privateKeyHex != "" {
+		keyBytes, err := hexutil.Decode("0x" + privateKeyHex)
+		if err != nil {
+			panic(err)
+		}
+		privateKey, err = crypto.ToECDSA(keyBytes)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		privateKey, err = crypto.GenerateKey()
+		if err != nil {
+			panic(err)
+		}
 	}
-
-	// testStr := "enr:-Iq4QM89fOvgXRfNo429L4vD_qn3GEAQqelOQzMAJCBZs7oZZ3t6F07P-J2iNUMtyeDcvTzBqP4lJD0EllJdht7GOYqGAY1GIhc5gmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQM0MbiqlCBmJu-8T2tC4z9KqlcyB6HkdRsASowWTVrQAoN1ZHCCIyg"
-
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// record := new(enr.Record)
-	// err = rlp.DecodeBytes([]byte(testStr), record)
-	// if err != nil {
-	// 	panic(err)
-	// }
 
 	config := discover.DefaultPortalProtocolConfig()
 
@@ -43,6 +46,12 @@ func main() {
 			panic(err)
 		}
 		config.BootstrapNodes = append(config.BootstrapNodes, bootNode)
+	}
+
+	udpPort := os.Getenv("UDP_PORT")
+
+	if udpPort != "" {
+		config.ListenAddr = ":" + udpPort
 	}
 	nodeId := enode.PubkeyToIDV4(&privateKey.PublicKey)
 	contentStorage, err := sqlite.NewContentStorage(1000*1000*1000, nodeId, "./")
@@ -70,13 +79,18 @@ func main() {
 	server.RegisterName("discv5", disv5)
 	server.RegisterName("portal", portal)
 
+	tcpPort := os.Getenv("TCP_PORT")
+
+	if tcpPort == "" {
+		tcpPort = "8545"
+	}
+
 	httpServer := &http.Server{
-		Addr:    ":8545",
+		Addr:    ":" + tcpPort,
 		Handler: server,
 	}
-	fmt.Printf("before http")
+
 	httpServer.ListenAndServe()
-	fmt.Printf("success")
 }
 
 func ReadKeyFromFile(name string) (*ecdsa.PrivateKey, error) {

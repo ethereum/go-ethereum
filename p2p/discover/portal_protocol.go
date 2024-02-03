@@ -133,7 +133,7 @@ func DefaultPortalProtocolConfig() *PortalProtocolConfig {
 	nodeRadius, _ := uint256.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	return &PortalProtocolConfig{
 		BootstrapNodes:  make([]*enode.Node, 0),
-		ListenAddr:      ":9000",
+		ListenAddr:      ":9009",
 		NetRestrict:     nil,
 		NodeRadius:      nodeRadius,
 		RadiusCacheSize: 32 * 1024 * 1024,
@@ -374,6 +374,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 
 	if err != nil {
+		p.log.Error("ping error:", err)
 		p.replaceNode(node)
 		return nil, err
 	}

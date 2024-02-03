@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"math/big"
+	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -41,6 +43,7 @@ var (
 )
 
 var _ storage.ContentStorage = &ContentStorage{}
+var once sync.Once
 
 type ContentStorage struct {
 	nodeId                 enode.ID
@@ -81,14 +84,7 @@ func NewContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataD
 
 func newContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataDir string) (*ContentStorage, error) {
 	// avoid repeated register in tests
-	registered := false
-	drives := sql.Drivers()
-	for _, v := range drives {
-		if v == "sqlite3_custom" {
-			registered = true
-		}
-	}
-	if !registered {
+	once.Do(func() {
 		sql.Register("sqlite3_custom", &sqlite3.SQLiteDriver{
 			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
 				if err := conn.RegisterFunc("xor", xor, false); err != nil {
@@ -100,8 +96,11 @@ func newContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataD
 				return nil
 			},
 		})
-	}
+	})
 
+	if err := createDir(nodeDataDir); err != nil {
+		return nil, err
+	}
 	sqlDb, err := sql.Open("sqlite3_custom", path.Join(nodeDataDir, sqliteName))
 
 	if err != nil {
@@ -126,6 +125,24 @@ func newContentStorage(storageCapacityInBytes uint64, nodeId enode.ID, nodeDataD
 	// Check whether we already have data, and use it to set radius
 
 	return portalStorage, err
+}
+
+func createDir(dir string) error {
+	stat, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(dir, 0755)
+			if err != nil {
+				return err
+			}
+		}
+		return err
+	}
+
+	if !stat.IsDir() {
+		return errors.New("node dir should be a dir")
+	}
+	return nil
 }
 
 // Get the content according to the contentId
