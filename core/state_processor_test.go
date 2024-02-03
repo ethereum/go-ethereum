@@ -661,6 +661,13 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 			if stemStateDiff.SuffixDiffs[0].Suffix != 64 {
 				t.Fatalf("invalid suffix diff value found for BLOCKHASH contract: %d != 64", stemStateDiff.SuffixDiffs[0].Suffix)
 			}
+			// check that the "current value" is nil and that the new value isn't.
+			if stemStateDiff.SuffixDiffs[0].CurrentValue != nil {
+				t.Fatalf("non-nil current value in BLOCKHASH contract insert: %x", stemStateDiff.SuffixDiffs[0].CurrentValue)
+			}
+			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
+				t.Fatalf("nil new value in BLOCKHASH contract insert")
+			}
 		} else {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix > 4 {
