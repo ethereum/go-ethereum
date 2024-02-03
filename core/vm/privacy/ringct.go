@@ -176,6 +176,20 @@ func (r *RingSignature) Serialize() ([]byte, error) {
 }
 
 func computeSignatureSize(numRing int, ringSize int) int {
+	const MaxInt = int(^uint(0) >> 1)
+
+	if numRing < 0 || ringSize < 0 {
+		return -1
+	}
+
+	// Calculate term and check for overflow
+
+	term := numRing * ringSize * 65
+
+	if term < 0 || term < numRing || term < ringSize {
+		return -1
+	}
+
 	return 8 + 8 + 32 + 32 + numRing*ringSize*32 + numRing*ringSize*33 + numRing*33
 }
 
@@ -200,7 +214,7 @@ func Deserialize(r []byte) (*RingSignature, error) {
 	sig.NumRing = size_int
 
 	if len(r) != computeSignatureSize(sig.NumRing, sig.Size) {
-		return nil, errors.New("incorrect ring size")
+		return nil, fmt.Errorf("incorrect ring size, len r: %d, sig.NumRing: %d sig.Size: %d", len(r), sig.NumRing, sig.Size)
 	}
 
 	m := r[offset : offset+32]
