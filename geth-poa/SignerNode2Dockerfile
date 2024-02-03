@@ -15,7 +15,7 @@ RUN apk add --no-cache jq
 
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
-COPY geth-poa/genesis-keystore.json /genesis.json
+COPY geth-poa/genesis.json /genesis.json
 
 COPY geth-poa/entrypoint.sh /entrypoint.sh
 
