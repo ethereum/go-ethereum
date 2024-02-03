@@ -13,11 +13,11 @@ import (
 // XOF defines the interface to hash functions that
 // support arbitrary-length output.
 type XOF interface {
-	// Write absorbs more data into the hash's state. It panics if called
+	// Writer absorbs more data into the hash's state. It panics if called
 	// after Read.
 	io.Writer
 
-	// Read reads more output from the hash. It returns io.EOF if the limit
+	// Reader reads more output from the hash. It returns io.EOF if the limit
 	// has been reached.
 	io.Reader
 
