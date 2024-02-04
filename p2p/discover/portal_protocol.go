@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
+	"os"
 	"sort"
 	"time"
 
@@ -183,8 +184,24 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 
 	localNode := enode.NewLocalNode(nodeDB, privateKey)
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	addrs, err := net.InterfaceAddrs()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, address := range addrs {
+
+		// check ip addr is loopback addr 
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				localNode.SetStaticIP(ipnet.IP)
+			}
+		}
+	}
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	protocol := &PortalProtocol{
 		protocolId:     protocolId,
 		ListenAddr:     config.ListenAddr,
@@ -361,7 +378,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		CustomPayload: customPayloadBytes,
 	}
 
-	p.log.Trace("Sending ping request", "protocol", p.protocolId, "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
+	p.log.Trace("Sending ping request", "protocol", p.protocolId, "ip", p.Self().IP().String(), "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
 	pingRequestBytes, err := pingRequest.MarshalSSZ()
 	if err != nil {
 		return nil, err
