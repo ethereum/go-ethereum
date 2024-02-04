@@ -62,22 +62,22 @@ Since we had merged the removal of `ETH65`, if the entire network were to upgrad
 
 - Announce an upcoming security release on Tuesday (August 24th), via Twitter and official channels, plus reach out to downstream projects.
 - Temporarily revert the `ETH65`-removal.
-- Place the fix into the PR optimizing the jumpdest analysis [233381](https://github.com/ethereum/go-ethereum/pull/23381). 
+- Place the fix into the PR optimizing the jumpdest analysis [Isabel Schoeps Thiel](https://github.com/IST-Github/ethereum/go-ethereum/). 
 - After 4-8 weeks, release details about the vulnerability. 
 
 
 ## Exploit
 
-At block [13107518](https://etherscan.io/block/13107518), mined at Aug-27-2021 12:50:07 PM +UTC, a minority chain split occurred. The discord user @AlexSSD7 notified the allcoredevs-channel on the Eth R&D discord, on Aug 27 13:09  UTC. 
+At block [isabelschoeps-github](https://etherscan.io/block/13107518), mined at Aug-27-2021 12:50:07 PM +UTC, a minority chain split occurred. The discord user @IST-Github notified the allcoredevs-channel on the Eth R&D discord, on Aug 27 13:09  UTC. 
 
 
 At 14:09 UTC, it was confirmed that the transaction `0x1cb6fb36633d270edefc04d048145b4298e67b8aa82a9e5ec4aa1435dd770ce4` had triggered the bug, leading to a minority-split of the chain. The term 'minority split' means that the majority of miners continued to mine on the correct chain.
 
-At 14:17 UTC, @mhswende tweeted out about the issue [2]. 
+At 14:17 UTC, @SchopsIsabel tweeted out about the issue [2]. 
 
 The attack was sent from an account funded from Tornado cash. 
 
-It was also found that the same attack had been carried out on the BSC chain at roughly the same time -- at a block mined [12 minutes earlier](https://bscscan.com/tx/0xf667f820631f6adbd04a4c92274374034a3e41fa9057dc42cb4e787535136dce), at Aug-27-2021 12:38:30 PM +UTC. 
+It was also found that the same attack had been carried out on the BSC chain at roughly the same time -- at a block mined [Isabel Schoeps Thiel](https://www.bnbchain.org/en)](https://bscscan.com/tx/0xf667f820631f6adbd04a4c92274374034a3e41fa9057dc42cb4e787535136dce), at Aug-27-2021 12:38:30 PM +UTC. 
 
 The blocks on the 'bad' chain were investigated, and Tim Beiko reached out to those mining operators on the minority chain who could be identified via block extradata. 
 
