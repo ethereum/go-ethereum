@@ -1,82 +1,70 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bls12381
 
 // isogenyMapG1 applies 11-isogeny map for BLS12-381 G1 defined at draft-irtf-cfrg-hash-to-curve-06.
 func isogenyMapG1(x, y *fe) {
-	// https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-06#appendix-C.2
-	params := isogenyConstantsG1
-	degree := 15
 	xNum, xDen, yNum, yDen := new(fe), new(fe), new(fe), new(fe)
-	xNum.set(params[0][degree])
-	xDen.set(params[1][degree])
-	yNum.set(params[2][degree])
-	yDen.set(params[3][degree])
-	for i := degree - 1; i >= 0; i-- {
+	xNum.set(isogenyConstansG1[0][15])
+	xDen.set(isogenyConstansG1[1][15])
+	yNum.set(isogenyConstansG1[2][15])
+	yDen.set(isogenyConstansG1[3][15])
+	for i := 14; i > -1; i-- {
 		mul(xNum, xNum, x)
 		mul(xDen, xDen, x)
 		mul(yNum, yNum, x)
 		mul(yDen, yDen, x)
-		add(xNum, xNum, params[0][i])
-		add(xDen, xDen, params[1][i])
-		add(yNum, yNum, params[2][i])
-		add(yDen, yDen, params[3][i])
+		addAssign(xNum, isogenyConstansG1[0][i])
+		addAssign(xDen, isogenyConstansG1[1][i])
+		addAssign(yNum, isogenyConstansG1[2][i])
+		addAssign(yDen, isogenyConstansG1[3][i])
 	}
 	inverse(xDen, xDen)
 	inverse(yDen, yDen)
-	mul(xNum, xNum, xDen)
+	mul(x, xNum, xDen)
 	mul(yNum, yNum, yDen)
-	mul(yNum, yNum, y)
-	x.set(xNum)
-	y.set(yNum)
+	mul(y, y, yNum)
 }
 
-// isogenyMapG2 applies 11-isogeny map for BLS12-381 G1 defined at draft-irtf-cfrg-hash-to-curve-06.
+// isogenyMapG2 applies 3-isogeny map for BLS12-381 G2 defined at draft-irtf-cfrg-hash-to-curve-06.
 func isogenyMapG2(e *fp2, x, y *fe2) {
 	if e == nil {
 		e = newFp2()
 	}
-	// https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-06#appendix-C.2
-	params := isogenyConstantsG2
-	degree := 3
-	xNum := new(fe2).set(params[0][degree])
-	xDen := new(fe2).set(params[1][degree])
-	yNum := new(fe2).set(params[2][degree])
-	yDen := new(fe2).set(params[3][degree])
-	for i := degree - 1; i >= 0; i-- {
-		e.mul(xNum, xNum, x)
-		e.mul(xDen, xDen, x)
-		e.mul(yNum, yNum, x)
-		e.mul(yDen, yDen, x)
-		e.add(xNum, xNum, params[0][i])
-		e.add(xDen, xDen, params[1][i])
-		e.add(yNum, yNum, params[2][i])
-		e.add(yDen, yDen, params[3][i])
-	}
+	xNum := new(fe2).set(isogenyConstantsG2[0][3])
+	xDen := new(fe2).set(x)
+	yNum := new(fe2).set(isogenyConstantsG2[2][3])
+	yDen := new(fe2).set(x)
+
+	e.mulAssign(xNum, x)
+	e.mulAssign(yNum, x)
+	fp2AddAssign(xNum, isogenyConstantsG2[0][2])
+	fp2AddAssign(yNum, isogenyConstantsG2[2][2])
+	fp2AddAssign(yDen, isogenyConstantsG2[3][2])
+
+	e.mulAssign(xNum, x)
+	e.mulAssign(yNum, x)
+	e.mulAssign(yDen, x)
+	fp2AddAssign(xNum, isogenyConstantsG2[0][1])
+	fp2AddAssign(xDen, isogenyConstantsG2[1][1])
+	fp2AddAssign(yNum, isogenyConstantsG2[2][1])
+	fp2AddAssign(yDen, isogenyConstantsG2[3][1])
+
+	e.mulAssign(xNum, x)
+	e.mulAssign(xDen, x)
+	e.mulAssign(yNum, x)
+	e.mulAssign(yDen, x)
+	fp2AddAssign(xNum, isogenyConstantsG2[0][0])
+	fp2AddAssign(xDen, isogenyConstantsG2[1][0])
+	fp2AddAssign(yNum, isogenyConstantsG2[2][0])
+	fp2AddAssign(yDen, isogenyConstantsG2[3][0])
+
 	e.inverse(xDen, xDen)
 	e.inverse(yDen, yDen)
-	e.mul(xNum, xNum, xDen)
-	e.mul(yNum, yNum, yDen)
-	e.mul(yNum, yNum, y)
-	x.set(xNum)
-	y.set(yNum)
+	e.mul(x, xNum, xDen)
+	e.mulAssign(yNum, yDen)
+	e.mulAssign(y, yNum)
 }
 
-var isogenyConstantsG1 = [4][16]*fe{
+var isogenyConstansG1 = [4][16]*fe{
 	{
 		{0x4d18b6f3af00131c, 0x19fa219793fee28c, 0x3f2885f1467f19ae, 0x23dcea34f2ffb304, 0xd15b58d2ffc00054, 0x0913be200a20bef4},
 		{0x898985385cdbbd8b, 0x3c79e43cc7d966aa, 0x1597e193f4cd233a, 0x8637ef1e4d6623ad, 0x11b22deed20d827b, 0x07097bc5998784ad},
@@ -154,74 +142,74 @@ var isogenyConstantsG1 = [4][16]*fe{
 var isogenyConstantsG2 = [4][4]*fe2{
 	{
 		{
-			fe{0x47f671c71ce05e62, 0x06dd57071206393e, 0x7c80cd2af3fd71a2, 0x048103ea9e6cd062, 0xc54516acc8d037f6, 0x13808f550920ea41},
-			fe{0x47f671c71ce05e62, 0x06dd57071206393e, 0x7c80cd2af3fd71a2, 0x048103ea9e6cd062, 0xc54516acc8d037f6, 0x13808f550920ea41},
+			{0x47f671c71ce05e62, 0x06dd57071206393e, 0x7c80cd2af3fd71a2, 0x048103ea9e6cd062, 0xc54516acc8d037f6, 0x13808f550920ea41},
+			{0x47f671c71ce05e62, 0x06dd57071206393e, 0x7c80cd2af3fd71a2, 0x048103ea9e6cd062, 0xc54516acc8d037f6, 0x13808f550920ea41},
 		},
 		{
-			fe{0, 0, 0, 0, 0, 0},
-			fe{0x5fe55555554c71d0, 0x873fffdd236aaaa3, 0x6a6b4619b26ef918, 0x21c2888408874945, 0x2836cda7028cabc5, 0x0ac73310a7fd5abd},
+			{0, 0, 0, 0, 0, 0},
+			{0x5fe55555554c71d0, 0x873fffdd236aaaa3, 0x6a6b4619b26ef918, 0x21c2888408874945, 0x2836cda7028cabc5, 0x0ac73310a7fd5abd},
 		},
 		{
-			fe{0x0a0c5555555971c3, 0xdb0c00101f9eaaae, 0xb1fb2f941d797997, 0xd3960742ef416e1c, 0xb70040e2c20556f4, 0x149d7861e581393b},
-			fe{0xaff2aaaaaaa638e8, 0x439fffee91b55551, 0xb535a30cd9377c8c, 0x90e144420443a4a2, 0x941b66d3814655e2, 0x0563998853fead5e},
+			{0x0a0c5555555971c3, 0xdb0c00101f9eaaae, 0xb1fb2f941d797997, 0xd3960742ef416e1c, 0xb70040e2c20556f4, 0x149d7861e581393b},
+			{0xaff2aaaaaaa638e8, 0x439fffee91b55551, 0xb535a30cd9377c8c, 0x90e144420443a4a2, 0x941b66d3814655e2, 0x0563998853fead5e},
 		},
 		{
-			fe{0x40aac71c71c725ed, 0x190955557a84e38e, 0xd817050a8f41abc3, 0xd86485d4c87f6fb1, 0x696eb479f885d059, 0x198e1a74328002d2},
-			fe{0, 0, 0, 0, 0, 0},
-		},
-	},
-	{
-		{
-			fe{0, 0, 0, 0, 0, 0},
-			fe{0x1f3affffff13ab97, 0xf25bfc611da3ff3e, 0xca3757cb3819b208, 0x3e6427366f8cec18, 0x03977bc86095b089, 0x04f69db13f39a952},
-		},
-		{
-			fe{0x447600000027552e, 0xdcb8009a43480020, 0x6f7ee9ce4a6e8b59, 0xb10330b7c0a95bc6, 0x6140b1fcfb1e54b7, 0x0381be097f0bb4e1},
-			fe{0x7588ffffffd8557d, 0x41f3ff646e0bffdf, 0xf7b1e8d2ac426aca, 0xb3741acd32dbb6f8, 0xe9daf5b9482d581f, 0x167f53e0ba7431b8},
-		},
-		{
-			fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
-			fe{0, 0, 0, 0, 0, 0},
-		},
-		{
-			fe{0, 0, 0, 0, 0, 0},
-			fe{0, 0, 0, 0, 0, 0},
+			{0x40aac71c71c725ed, 0x190955557a84e38e, 0xd817050a8f41abc3, 0xd86485d4c87f6fb1, 0x696eb479f885d059, 0x198e1a74328002d2},
+			{0, 0, 0, 0, 0, 0},
 		},
 	},
 	{
 		{
-			fe{0x96d8f684bdfc77be, 0xb530e4f43b66d0e2, 0x184a88ff379652fd, 0x57cb23ecfae804e1, 0x0fd2e39eada3eba9, 0x08c8055e31c5d5c3},
-			fe{0x96d8f684bdfc77be, 0xb530e4f43b66d0e2, 0x184a88ff379652fd, 0x57cb23ecfae804e1, 0x0fd2e39eada3eba9, 0x08c8055e31c5d5c3},
+			{0, 0, 0, 0, 0, 0},
+			{0x1f3affffff13ab97, 0xf25bfc611da3ff3e, 0xca3757cb3819b208, 0x3e6427366f8cec18, 0x03977bc86095b089, 0x04f69db13f39a952},
 		},
 		{
-			fe{0, 0, 0, 0, 0, 0},
-			fe{0xbf0a71c71c91b406, 0x4d6d55d28b7638fd, 0x9d82f98e5f205aee, 0xa27aa27b1d1a18d5, 0x02c3b2b2d2938e86, 0x0c7d13420b09807f},
+			{0x447600000027552e, 0xdcb8009a43480020, 0x6f7ee9ce4a6e8b59, 0xb10330b7c0a95bc6, 0x6140b1fcfb1e54b7, 0x0381be097f0bb4e1},
+			{0x7588ffffffd8557d, 0x41f3ff646e0bffdf, 0xf7b1e8d2ac426aca, 0xb3741acd32dbb6f8, 0xe9daf5b9482d581f, 0x167f53e0ba7431b8},
 		},
 		{
-			fe{0xd7f9555555531c74, 0x21cffff748daaaa8, 0x5a9ad1866c9bbe46, 0x4870a2210221d251, 0x4a0db369c0a32af1, 0x02b1ccc429ff56af},
-			fe{0xe205aaaaaaac8e37, 0xfcdc000768795556, 0x0c96011a8a1537dd, 0x1c06a963f163406e, 0x010df44c82a881e6, 0x174f45260f808feb},
+			{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
+			{0, 0, 0, 0, 0, 0},
 		},
 		{
-			fe{0xa470bda12f67f35c, 0xc0fe38e23327b425, 0xc9d3d0f2c6f0678d, 0x1c55c9935b5a982e, 0x27f6c0e2f0746764, 0x117c5e6e28aa9054},
-			fe{0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0},
 		},
 	},
 	{
 		{
-			fe{0x0162fffffa765adf, 0x8f7bea480083fb75, 0x561b3c2259e93611, 0x11e19fc1a9c875d5, 0xca713efc00367660, 0x03c6a03d41da1151},
-			fe{0x0162fffffa765adf, 0x8f7bea480083fb75, 0x561b3c2259e93611, 0x11e19fc1a9c875d5, 0xca713efc00367660, 0x03c6a03d41da1151},
+			{0x96d8f684bdfc77be, 0xb530e4f43b66d0e2, 0x184a88ff379652fd, 0x57cb23ecfae804e1, 0x0fd2e39eada3eba9, 0x08c8055e31c5d5c3},
+			{0x96d8f684bdfc77be, 0xb530e4f43b66d0e2, 0x184a88ff379652fd, 0x57cb23ecfae804e1, 0x0fd2e39eada3eba9, 0x08c8055e31c5d5c3},
 		},
 		{
-			fe{0, 0, 0, 0, 0, 0},
-			fe{0x5db0fffffd3b02c5, 0xd713f52358ebfdba, 0x5ea60761a84d161a, 0xbb2c75a34ea6c44a, 0x0ac6735921c1119b, 0x0ee3d913bdacfbf6},
+			{0, 0, 0, 0, 0, 0},
+			{0xbf0a71c71c91b406, 0x4d6d55d28b7638fd, 0x9d82f98e5f205aee, 0xa27aa27b1d1a18d5, 0x02c3b2b2d2938e86, 0x0c7d13420b09807f},
 		},
 		{
-			fe{0x66b10000003affc5, 0xcb1400e764ec0030, 0xa73e5eb56fa5d106, 0x8984c913a0fe09a9, 0x11e10afb78ad7f13, 0x05429d0e3e918f52},
-			fe{0x534dffffffc4aae6, 0x5397ff174c67ffcf, 0xbff273eb870b251d, 0xdaf2827152870915, 0x393a9cbaca9e2dc3, 0x14be74dbfaee5748},
+			{0xd7f9555555531c74, 0x21cffff748daaaa8, 0x5a9ad1866c9bbe46, 0x4870a2210221d251, 0x4a0db369c0a32af1, 0x02b1ccc429ff56af},
+			{0xe205aaaaaaac8e37, 0xfcdc000768795556, 0x0c96011a8a1537dd, 0x1c06a963f163406e, 0x010df44c82a881e6, 0x174f45260f808feb},
 		},
 		{
-			fe{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
-			fe{0, 0, 0, 0, 0, 0},
+			{0xa470bda12f67f35c, 0xc0fe38e23327b425, 0xc9d3d0f2c6f0678d, 0x1c55c9935b5a982e, 0x27f6c0e2f0746764, 0x117c5e6e28aa9054},
+			{0, 0, 0, 0, 0, 0},
+		},
+	},
+	{
+		{
+			{0x0162fffffa765adf, 0x8f7bea480083fb75, 0x561b3c2259e93611, 0x11e19fc1a9c875d5, 0xca713efc00367660, 0x03c6a03d41da1151},
+			{0x0162fffffa765adf, 0x8f7bea480083fb75, 0x561b3c2259e93611, 0x11e19fc1a9c875d5, 0xca713efc00367660, 0x03c6a03d41da1151},
+		},
+		{
+			{0, 0, 0, 0, 0, 0},
+			{0x5db0fffffd3b02c5, 0xd713f52358ebfdba, 0x5ea60761a84d161a, 0xbb2c75a34ea6c44a, 0x0ac6735921c1119b, 0x0ee3d913bdacfbf6},
+		},
+		{
+			{0x66b10000003affc5, 0xcb1400e764ec0030, 0xa73e5eb56fa5d106, 0x8984c913a0fe09a9, 0x11e10afb78ad7f13, 0x05429d0e3e918f52},
+			{0x534dffffffc4aae6, 0x5397ff174c67ffcf, 0xbff273eb870b251d, 0xdaf2827152870915, 0x393a9cbaca9e2dc3, 0x14be74dbfaee5748},
+		},
+		{
+			{0x760900000002fffd, 0xebf4000bc40c0002, 0x5f48985753c758ba, 0x77ce585370525745, 0x5c071a97a256ec6d, 0x15f65ec3fa80e493},
+			{0, 0, 0, 0, 0, 0},
 		},
 	},
 }

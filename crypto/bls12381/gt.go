@@ -1,19 +1,3 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bls12381
 
 import (
@@ -29,6 +13,7 @@ type GT struct {
 	fp12 *fp12
 }
 
+// Set copies given value into the destination
 func (e *E) Set(e2 *E) *E {
 	return e.set(e2)
 }
@@ -57,7 +42,7 @@ func NewGT() *GT {
 
 // Q returns group order in big.Int.
 func (g *GT) Q() *big.Int {
-	return new(big.Int).Set(q)
+	return new(big.Int).Set(qBig)
 }
 
 // FromBytes expects 576 byte input and returns target group element
@@ -81,7 +66,7 @@ func (g *GT) ToBytes(e *E) []byte {
 // IsValid checks whether given target group element is in correct subgroup.
 func (g *GT) IsValid(e *E) bool {
 	r := g.New()
-	g.fp12.exp(r, e, q)
+	g.fp12.exp(r, e, qBig)
 	return r.isOne()
 }
 
@@ -92,12 +77,12 @@ func (g *GT) New() *E {
 
 // Add adds two field element `a` and `b` and assigns the result to the element in first argument.
 func (g *GT) Add(c, a, b *E) {
-	g.fp12.add(c, a, b)
+	fp12Add(c, a, b)
 }
 
 // Sub subtracts two field element `a` and `b`, and assigns the result to the element in first argument.
 func (g *GT) Sub(c, a, b *E) {
-	g.fp12.sub(c, a, b)
+	fp12Sub(c, a, b)
 }
 
 // Mul multiplies two field element `a` and `b` and assigns the result to the element in first argument.
@@ -107,7 +92,8 @@ func (g *GT) Mul(c, a, b *E) {
 
 // Square squares an element `a` and assigns the result to the element in first argument.
 func (g *GT) Square(c, a *E) {
-	g.fp12.cyclotomicSquare(c, a)
+	c.set(a)
+	g.fp12.cyclotomicSquare(c)
 }
 
 // Exp exponents an element `a` by a scalar `s` and assigns the result to the element in first argument.

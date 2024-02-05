@@ -1,23 +1,7 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bls12381
 
 // swuMapG1 is implementation of Simplified Shallue-van de Woestijne-Ulas Method
-// follows the implementation at draft-irtf-cfrg-hash-to-curve-06.
+// follows the implmentation at draft-irtf-cfrg-hash-to-curve-06.
 func swuMapG1(u *fe) (*fe, *fe) {
 	var params = swuParamsForG1
 	var tv [4]*fe
@@ -79,19 +63,19 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 	e.mul(tv[0], tv[0], params.z)
 	e.square(tv[1], tv[0])
 	x1 := e.new()
-	e.add(x1, tv[0], tv[1])
+	fp2Add(x1, tv[0], tv[1])
 	e.inverse(x1, x1)
 	e1 := x1.isZero()
-	e.add(x1, x1, e.one())
+	fp2Add(x1, x1, e.one())
 	if e1 {
 		x1.set(params.zInv)
 	}
 	e.mul(x1, x1, params.minusBOverA)
 	gx1 := e.new()
 	e.square(gx1, x1)
-	e.add(gx1, gx1, params.a)
+	fp2Add(gx1, gx1, params.a)
 	e.mul(gx1, gx1, x1)
-	e.add(gx1, gx1, params.b)
+	fp2Add(gx1, gx1, params.b)
 	x2 := e.new()
 	e.mul(x2, tv[0], x1)
 	e.mul(tv[1], tv[0], tv[1])
@@ -107,9 +91,9 @@ func swuMapG2(e *fp2, u *fe2) (*fe2, *fe2) {
 		y2.set(gx2)
 	}
 	y := e.new()
-	e.sqrt(y, y2)
+	e.sqrtBLST(y, y2)
 	if y.sign() != u.sign() {
-		e.neg(y, y)
+		fp2Neg(y, y)
 	}
 	return x, y
 }
