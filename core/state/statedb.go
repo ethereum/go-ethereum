@@ -125,9 +125,6 @@ type StateDB struct {
 	// Preimages occurred seen by VM in the scope of block.
 	preimages map[common.Hash][]byte
 
-	// Enabled precompile contracts
-	precompiles map[common.Address]struct{}
-
 	// Per-transaction access list
 	accessList *accessList
 
@@ -184,7 +181,6 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
-		precompiles:          make(map[common.Address]struct{}),
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
@@ -668,11 +664,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
 	if s.logger != nil {
-		// Precompiled contracts are touched during a call.
-		// Make sure we avoid emitting a new account event for them.
-		if _, ok := s.precompiles[addr]; !ok {
-			s.logger.OnNewAccount(addr, prev != nil)
-		}
+		s.logger.OnNewAccount(addr, prev != nil)
 	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
@@ -1387,14 +1379,6 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	}
 	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()
-}
-
-// PrepareBlock prepares the statedb for execution of a block. It tracks
-// the addresses of enabled precompiles for debugging purposes.
-func (s *StateDB) PrepareBlock(precompiles []common.Address) {
-	for _, addr := range precompiles {
-		s.precompiles[addr] = struct{}{}
-	}
 }
 
 // AddAddressToAccessList adds the given address to the access list
