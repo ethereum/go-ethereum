@@ -45,6 +45,9 @@ var expensiveEnablerFlags = []string{"metrics.expensive"}
 // expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
 var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
 
+// configFlag is the CLI flag name to use to start node by providing a toml based config
+var configFlag = "config"
+
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
@@ -65,8 +68,19 @@ func init() {
 			}
 		}
 	}
-	for _, arg := range os.Args {
+
+	var configFile string
+
+	for i, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
+
+		// check for existence of `config` flag
+		if flag == configFlag && i < len(os.Args)-1 {
+			configFile = strings.TrimLeft(os.Args[i+1], "-") // find the value of flag
+		} else if len(flag) > 6 && flag[:6] == configFlag {
+			// Checks for `=` separated flag (e.g. config=path)
+			configFile = strings.TrimLeft(flag[6:], "=")
+		}
 
 		for _, enabler := range enablerFlags {
 			if !Enabled && flag == enabler {
@@ -81,9 +95,11 @@ func init() {
 			}
 		}
 	}
+
+	// Update the global metrics value, if they're provided in the config file
+	updateMetricsFromConfig(configFile)
 }
 
-// nolint : unused
 func updateMetricsFromConfig(path string) {
 	// Don't act upon any errors here. They're already taken into
 	// consideration when the toml config file will be parsed in the cli.
