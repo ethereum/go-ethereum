@@ -22,8 +22,7 @@ Ethereum smart contracts have a schema that defines its functions and return typ
 Geth includes a source code generator called `abigen` that can convert Ethereum ABI definitions into easy to use, type-safe Go packages. With a valid Go development environment set up and the go-ethereum repository checked out correctly, `abigen` can be built as follows:
 
 ```sh
-$ cd $GOPATH/src/github.com/ethereum/go-ethereum
-$ go build ./cmd/abigen
+go install github.com/ethereum/go-ethereum/cmd/abigen@latest
 ```
 
 ### Generating the bindings {#generating-bindings}
