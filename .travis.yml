@@ -171,6 +171,7 @@ jobs:
           echo "Force deploy xdc-$i"
           aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
         done
+        aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager;
 
   - stage: (Devnet) Send Deployment Notification
     if: branch = dev-upgrade AND type = push AND tag IS blank

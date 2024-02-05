@@ -435,7 +435,7 @@ func (pool *LendingPool) validateNewLending(cloneStateDb *state.StateDB, cloneLe
 			return ErrInvalidLendingCollateral
 		}
 		validCollateral := false
-		collateralList, _ := lendingstate.GetCollaterals(cloneStateDb, tx.RelayerAddress(), tx.LendingToken(), tx.Term())
+		collateralList := lendingstate.GetCollaterals(cloneStateDb, tx.RelayerAddress(), tx.LendingToken(), tx.Term())
 		for _, collateral := range collateralList {
 			if tx.CollateralToken().String() == collateral.String() {
 				validCollateral = true

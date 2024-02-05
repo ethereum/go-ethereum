@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 	"sync"
 	"testing"
@@ -220,7 +219,7 @@ func expectMsgs(rw p2p.MsgReadWriter, exps []Expect) error {
 			}
 			return err
 		}
-		actualContent, err := ioutil.ReadAll(msg.Payload)
+		actualContent, err := io.ReadAll(msg.Payload)
 		if err != nil {
 			return err
 		}

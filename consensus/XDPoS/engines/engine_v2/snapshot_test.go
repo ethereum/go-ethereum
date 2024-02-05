@@ -2,7 +2,7 @@ package engine_v2
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -24,7 +24,7 @@ func TestGetMasterNodes(t *testing.T) {
 
 func TestStoreLoadSnapshot(t *testing.T) {
 	snap := newSnapshot(1, common.Hash{0x1}, nil)
-	dir, err := ioutil.TempDir("", "snapshot-test")
+	dir, err := os.MkdirTemp("", "snapshot-test")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}

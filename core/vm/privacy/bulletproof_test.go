@@ -4,11 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestInnerProductProveLen1(t *testing.T) {
@@ -409,7 +410,7 @@ func parseTestData(filePath string) MultiRangeProof {
 
 	defer jsonFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	byteValue, _ := io.ReadAll(jsonFile)
 
 	// we initialize our Users array
 	// var result map[string]interface{}
@@ -448,7 +449,8 @@ func parseTestData(filePath string) MultiRangeProof {
 	return proof
 }
 
-/**
+/*
+*
 Utils for parsing data from json
 */
 func MapBigI(list []string, f func(string) *big.Int) []*big.Int {

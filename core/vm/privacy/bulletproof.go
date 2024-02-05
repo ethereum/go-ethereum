@@ -274,7 +274,9 @@ func GenerateNewParams(G, H []ECPoint, x *big.Int, L, R, P ECPoint) ([]ECPoint, 
 	return Gprime, Hprime, Pprime
 }
 
-/* Inner Product Argument
+/*
+	Inner Product Argument
+
 Proves that <a,b>=c
 This is a building block for BulletProofs
 */
@@ -323,7 +325,7 @@ func InnerProductProveSub(proof InnerProdArg, G, H []ECPoint, a []*big.Int, b []
 	return InnerProductProveSub(proof, Gprime, Hprime, aprime, bprime, u, Pprime)
 }
 
-//rpresult.IPP = InnerProductProve(left, right, that, P, EC.U, EC.BPG, HPrime)
+// rpresult.IPP = InnerProductProve(left, right, that, P, EC.U, EC.BPG, HPrime)
 func InnerProductProve(a []*big.Int, b []*big.Int, c *big.Int, P, U ECPoint, G, H []ECPoint) InnerProdArg {
 	loglen := int(math.Log2(float64(len(a))))
 
@@ -353,7 +355,9 @@ func InnerProductProve(a []*big.Int, b []*big.Int, c *big.Int, P, U ECPoint, G, 
 	return InnerProductProveSub(runningProof, G, H, a, b, ux, Pprime)
 }
 
-/* Inner Product Verify
+/*
+	Inner Product Verify
+
 Given a inner product proof, verifies the correctness of the proof
 Since we're using the Fiat-Shamir transform, we need to verify all x hash computations,
 all g' and h' computations
@@ -416,11 +420,7 @@ func InnerProductVerify(c *big.Int, P, U ECPoint, G, H []ECPoint, ipp InnerProdA
 	Pcalc3 := ux.Mult(ccalc)
 	Pcalc := Pcalc1.Add(Pcalc2).Add(Pcalc3)
 
-	if !Pprime.Equal(Pcalc) {
-		return false
-	}
-
-	return true
+	return Pprime.Equal(Pcalc)
 }
 
 /* Inner Product Verify Fast
@@ -961,11 +961,14 @@ MultiRangeProof Prove
 Takes in a list of values and provides an aggregate
 range proof for all the values.
 changes:
- all values are concatenated
- r(x) is computed differently
- tau_x calculation is different
- delta calculation is different
+
+	all values are concatenated
+	r(x) is computed differently
+	tau_x calculation is different
+	delta calculation is different
+
 {(g, h \in G, \textbf{V} \in G^m ; \textbf{v, \gamma} \in Z_p^m) :
+
 	V_j = h^{\gamma_j}g^{v_j} \wedge v_j \in [0, 2^n - 1] \forall j \in [1, m]}
 */
 var bitsPerValue = 64

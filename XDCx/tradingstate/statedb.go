@@ -539,7 +539,10 @@ func (s *TradingStateDB) Finalise() {
 	for addr, stateObject := range s.stateExhangeObjects {
 		if _, isDirty := s.stateExhangeObjectsDirty[addr]; isDirty {
 			// Write any storage changes in the state object to its storage trie.
-			stateObject.updateAsksRoot(s.db)
+			err := stateObject.updateAsksRoot(s.db)
+			if err != nil {
+				log.Warn("Finalise updateAsksRoot", "err", err, "addr", addr, "stateObject", *stateObject)
+			}
 			stateObject.updateBidsRoot(s.db)
 			stateObject.updateOrdersRoot(s.db)
 			stateObject.updateLiquidationPriceRoot(s.db)
@@ -713,7 +716,10 @@ func (self *TradingStateDB) RemoveLiquidationPrice(orderBook common.Hash, price 
 	lendingBookState.subVolume(One)
 	liquidationPriceState.subVolume(One)
 	if liquidationPriceState.Volume().Sign() == 0 {
-		orderbookState.getLiquidationPriceTrie(self.db).TryDelete(priceHash[:])
+		err := orderbookState.getLiquidationPriceTrie(self.db).TryDelete(priceHash[:])
+		if err != nil {
+			log.Warn("RemoveLiquidationPrice getLiquidationPriceTrie.TryDelete", "err", err, "priceHash", priceHash[:])
+		}
 	}
 	orderbookState.subLendingCount(One)
 	self.journal = append(self.journal, removeLiquidationPrice{

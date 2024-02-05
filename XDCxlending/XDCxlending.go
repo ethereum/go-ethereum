@@ -144,19 +144,11 @@ func (l *Lending) ProcessOrderPending(header *types.Header, coinbase common.Addr
 				S: common.BigToHash(S),
 			},
 		}
-		cancel := false
-		if order.Status == lendingstate.LendingStatusCancelled {
-			cancel = true
-		}
 
 		log.Info("Process order pending", "orderPending", order, "LendingToken", order.LendingToken.Hex(), "CollateralToken", order.CollateralToken)
 		originalOrder := &lendingstate.LendingItem{}
 		*originalOrder = *order
 		originalOrder.Quantity = lendingstate.CloneBigInt(order.Quantity)
-
-		if cancel {
-			order.Status = lendingstate.LendingStatusCancelled
-		}
 
 		newTrades, newRejectedOrders, err := l.CommitOrder(header, coinbase, chain, statedb, lendingStatedb, tradingStateDb, lendingstate.GetLendingOrderBookHash(order.LendingToken, order.Term), order)
 		for _, reject := range newRejectedOrders {
@@ -764,7 +756,7 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 				continue
 			}
 			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingItemHistoryItem)
-			lendingItemHistory, _ := cacheAtTxHash[lendingstate.GetLendingItemHistoryKey(item.LendingToken, item.CollateralToken, item.Hash)]
+			lendingItemHistory := cacheAtTxHash[lendingstate.GetLendingItemHistoryKey(item.LendingToken, item.CollateralToken, item.Hash)]
 			if (lendingItemHistory == lendingstate.LendingItemHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove item due to empty lendingItemHistory", "item", lendingstate.ToJSON(item))
 				if err := db.DeleteObject(item.Hash, &lendingstate.LendingItem{}); err != nil {
@@ -797,7 +789,7 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 				continue
 			}
 			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingTradeHistoryItem)
-			lendingTradeHistoryItem, _ := cacheAtTxHash[trade.Hash]
+			lendingTradeHistoryItem := cacheAtTxHash[trade.Hash]
 			if (lendingTradeHistoryItem == lendingstate.LendingTradeHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove trade due to empty LendingTradeHistory", "trade", lendingstate.ToJSON(trade))
 				if err := db.DeleteObject(trade.Hash, &lendingstate.LendingTrade{}); err != nil {

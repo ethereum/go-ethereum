@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"os"
@@ -51,7 +50,7 @@ func upload(ctx *cli.Context) {
 
 	if len(args) != 1 {
 		if fromStdin {
-			tmp, err := ioutil.TempFile("", "swarm-stdin")
+			tmp, err := os.CreateTemp("", "swarm-stdin")
 			if err != nil {
 				utils.Fatalf("error create tempfile: %s", err)
 			}

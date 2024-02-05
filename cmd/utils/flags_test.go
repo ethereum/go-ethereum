@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,13 +17,13 @@ func TestWalkMatch(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	test1Dir, _ := ioutil.TempDir(dir, "test1")
-	test2Dir, _ := ioutil.TempDir(dir, "test2")
-	err = ioutil.WriteFile(filepath.Join(test1Dir, "test1.ldb"), []byte("hello"), os.ModePerm)
+	test1Dir, _ := os.MkdirTemp(dir, "test1")
+	test2Dir, _ := os.MkdirTemp(dir, "test2")
+	err = os.WriteFile(filepath.Join(test1Dir, "test1.ldb"), []byte("hello"), os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = ioutil.WriteFile(filepath.Join(test2Dir, "test2.abc"), []byte("hello"), os.ModePerm)
+	err = os.WriteFile(filepath.Join(test2Dir, "test2.abc"), []byte("hello"), os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -32,7 +32,6 @@ import (
 var (
 	// ErrInvalidLengdingSig invalidate signer
 	ErrInvalidLengdingSig = errors.New("invalid transaction v, r, s values")
-	errNoSignerLengding   = errors.New("missing signing methods")
 )
 
 const (
@@ -86,50 +85,32 @@ type lendingtxdata struct {
 
 // IsCreatedLending check if tx is cancelled transaction
 func (tx *LendingTransaction) IsCreatedLending() bool {
-	if (tx.IsLoTypeLending() || tx.IsMoTypeLending()) && tx.Status() == LendingStatusNew {
-		return true
-	}
-	return false
+	return (tx.IsLoTypeLending() || tx.IsMoTypeLending()) && tx.Status() == LendingStatusNew
 }
 
 // IsCancelledLending check if tx is cancelled transaction
 func (tx *LendingTransaction) IsCancelledLending() bool {
-	if tx.Status() == LendingStatusCancelled {
-		return true
-	}
-	return false
+	return tx.Status() == LendingStatusCancelled
 }
 
 // IsRepayLending check if tx is repay lending transaction
 func (tx *LendingTransaction) IsRepayLending() bool {
-	if tx.Type() == LendingRePay {
-		return true
-	}
-	return false
+	return tx.Type() == LendingRePay
 }
 
 // IsTopupLending check if tx is repay lending transaction
 func (tx *LendingTransaction) IsTopupLending() bool {
-	if tx.Type() == LendingTopup {
-		return true
-	}
-	return false
+	return tx.Type() == LendingTopup
 }
 
 // IsMoTypeLending check if tx type is MO lending
 func (tx *LendingTransaction) IsMoTypeLending() bool {
-	if tx.Type() == LendingTypeMo {
-		return true
-	}
-	return false
+	return tx.Type() == LendingTypeMo
 }
 
 // IsLoTypeLending check if tx type is LO lending
 func (tx *LendingTransaction) IsLoTypeLending() bool {
-	if tx.Type() == LendingTypeLo {
-		return true
-	}
-	return false
+	return tx.Type() == LendingTypeLo
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -363,7 +344,7 @@ func (s *LendingTxByNonce) Pop() interface{} {
 	return x
 }
 
-//LendingTransactionByNonce sort transaction by nonce
+// LendingTransactionByNonce sort transaction by nonce
 type LendingTransactionByNonce struct {
 	txs    map[common.Address]LendingTransactions
 	heads  LendingTxByNonce

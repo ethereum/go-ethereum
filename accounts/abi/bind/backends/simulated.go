@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"sync"
@@ -76,7 +75,7 @@ type SimulatedBackend struct {
 func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Account, hash []byte) ([]byte, error), error) {
 	veryLightScryptN := 2
 	veryLightScryptP := 1
-	dir, _ := ioutil.TempDir("", "eth-SimulateWalletAddressAndSignFn-test")
+	dir, _ := os.MkdirTemp("", "eth-SimulateWalletAddressAndSignFn-test")
 
 	new := func(kd string) *keystore.KeyStore {
 		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)

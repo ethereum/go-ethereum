@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -100,7 +99,7 @@ func main() {
 		}
 	} else {
 		// Otherwise load up the ABI, optional bytecode and type name from the parameters
-		abi, err := ioutil.ReadFile(*abiFlag)
+		abi, err := os.ReadFile(*abiFlag)
 		if err != nil {
 			fmt.Printf("Failed to read input ABI: %v\n", err)
 			os.Exit(-1)
@@ -109,7 +108,7 @@ func main() {
 
 		bin := []byte{}
 		if *binFlag != "" {
-			if bin, err = ioutil.ReadFile(*binFlag); err != nil {
+			if bin, err = os.ReadFile(*binFlag); err != nil {
 				fmt.Printf("Failed to read input bytecode: %v\n", err)
 				os.Exit(-1)
 			}
@@ -133,7 +132,7 @@ func main() {
 		fmt.Printf("%s\n", code)
 		return
 	}
-	if err := ioutil.WriteFile(*outFlag, []byte(code), 0600); err != nil {
+	if err := os.WriteFile(*outFlag, []byte(code), 0600); err != nil {
 		fmt.Printf("Failed to write ABI binding: %v\n", err)
 		os.Exit(-1)
 	}

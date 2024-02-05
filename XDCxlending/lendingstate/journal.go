@@ -17,8 +17,10 @@
 package lendingstate
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"math/big"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 type journalEntry interface {
@@ -76,7 +78,10 @@ type (
 )
 
 func (ch insertOrder) undo(s *LendingStateDB) {
-	s.CancelLendingOrder(ch.orderBook, ch.order)
+	err := s.CancelLendingOrder(ch.orderBook, ch.order)
+	if err != nil {
+		log.Warn("undo CancelLendingOrder", "err", err, "ch.orderBook", ch.orderBook, "ch.order", *ch.order)
+	}
 }
 func (ch cancelOrder) undo(s *LendingStateDB) {
 	s.InsertLendingItem(ch.orderBook, ch.orderId, ch.order)

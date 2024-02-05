@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build linux || darwin || freebsd
 // +build linux darwin freebsd
 
 package fuse
@@ -22,7 +23,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -136,7 +136,7 @@ func compareGeneratedFileWithFileInMount(t *testing.T, files map[string]fileInfo
 			t.Fatalf("file %v Permission mismatch source (-rwx------) vs destination(%v)", fname, dfinfo.Mode().Perm())
 		}
 
-		fileContents, err := ioutil.ReadFile(filepath.Join(mountDir, fname))
+		fileContents, err := os.ReadFile(filepath.Join(mountDir, fname))
 		if err != nil {
 			t.Fatalf("Could not readfile %v : %v", fname, err)
 		}
@@ -195,8 +195,8 @@ type testAPI struct {
 
 func (ta *testAPI) mountListAndUnmount(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "fuse-source")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "fuse-dest")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "fuse-source")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "fuse-dest")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["2.txt"] = fileInfo{0711, 333, 444, getRandomBtes(10)}
@@ -233,44 +233,44 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T) {
 func (ta *testAPI) maxMounts(t *testing.T) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "max-upload1")
+	uploadDir1, _ := os.MkdirTemp(os.TempDir(), "max-upload1")
 	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
-	mount1, _ := ioutil.TempDir(os.TempDir(), "max-mount1")
+	mount1, _ := os.MkdirTemp(os.TempDir(), "max-mount1")
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash1, mount1)
 	defer swarmfs1.Stop()
 
 	files["2.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "max-upload2")
+	uploadDir2, _ := os.MkdirTemp(os.TempDir(), "max-upload2")
 	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
-	mount2, _ := ioutil.TempDir(os.TempDir(), "max-mount2")
+	mount2, _ := os.MkdirTemp(os.TempDir(), "max-mount2")
 	swarmfs2 := mountDir(t, ta.api, files, bzzHash2, mount2)
 	defer swarmfs2.Stop()
 
 	files["3.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir3, _ := ioutil.TempDir(os.TempDir(), "max-upload3")
+	uploadDir3, _ := os.MkdirTemp(os.TempDir(), "max-upload3")
 	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir3)
-	mount3, _ := ioutil.TempDir(os.TempDir(), "max-mount3")
+	mount3, _ := os.MkdirTemp(os.TempDir(), "max-mount3")
 	swarmfs3 := mountDir(t, ta.api, files, bzzHash3, mount3)
 	defer swarmfs3.Stop()
 
 	files["4.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir4, _ := ioutil.TempDir(os.TempDir(), "max-upload4")
+	uploadDir4, _ := os.MkdirTemp(os.TempDir(), "max-upload4")
 	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir4)
-	mount4, _ := ioutil.TempDir(os.TempDir(), "max-mount4")
+	mount4, _ := os.MkdirTemp(os.TempDir(), "max-mount4")
 	swarmfs4 := mountDir(t, ta.api, files, bzzHash4, mount4)
 	defer swarmfs4.Stop()
 
 	files["5.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir5, _ := ioutil.TempDir(os.TempDir(), "max-upload5")
+	uploadDir5, _ := os.MkdirTemp(os.TempDir(), "max-upload5")
 	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir5)
-	mount5, _ := ioutil.TempDir(os.TempDir(), "max-mount5")
+	mount5, _ := os.MkdirTemp(os.TempDir(), "max-mount5")
 	swarmfs5 := mountDir(t, ta.api, files, bzzHash5, mount5)
 	defer swarmfs5.Stop()
 
 	files["6.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir6, _ := ioutil.TempDir(os.TempDir(), "max-upload6")
+	uploadDir6, _ := os.MkdirTemp(os.TempDir(), "max-upload6")
 	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir6)
-	mount6, _ := ioutil.TempDir(os.TempDir(), "max-mount6")
+	mount6, _ := os.MkdirTemp(os.TempDir(), "max-mount6")
 
 	os.RemoveAll(mount6)
 	os.MkdirAll(mount6, 0777)
@@ -284,15 +284,15 @@ func (ta *testAPI) maxMounts(t *testing.T) {
 func (ta *testAPI) remount(t *testing.T) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "re-upload1")
+	uploadDir1, _ := os.MkdirTemp(os.TempDir(), "re-upload1")
 	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
-	testMountDir1, _ := ioutil.TempDir(os.TempDir(), "re-mount1")
+	testMountDir1, _ := os.MkdirTemp(os.TempDir(), "re-mount1")
 	swarmfs := mountDir(t, ta.api, files, bzzHash1, testMountDir1)
 	defer swarmfs.Stop()
 
-	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "re-upload2")
+	uploadDir2, _ := os.MkdirTemp(os.TempDir(), "re-upload2")
 	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
-	testMountDir2, _ := ioutil.TempDir(os.TempDir(), "re-mount2")
+	testMountDir2, _ := os.MkdirTemp(os.TempDir(), "re-mount2")
 
 	// try mounting the same hash second time
 	os.RemoveAll(testMountDir2)
@@ -317,8 +317,8 @@ func (ta *testAPI) remount(t *testing.T) {
 
 func (ta *testAPI) unmount(t *testing.T) {
 	files := make(map[string]fileInfo)
-	uploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
+	uploadDir, _ := os.MkdirTemp(os.TempDir(), "ex-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "ex-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir)
@@ -338,8 +338,8 @@ func (ta *testAPI) unmount(t *testing.T) {
 
 func (ta *testAPI) unmountWhenResourceBusy(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "ex-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "ex-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
@@ -367,8 +367,8 @@ func (ta *testAPI) unmountWhenResourceBusy(t *testing.T) {
 
 func (ta *testAPI) seekInMultiChunkFile(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "seek-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "seek-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "seek-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "seek-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10240)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
@@ -394,8 +394,8 @@ func (ta *testAPI) seekInMultiChunkFile(t *testing.T) {
 
 func (ta *testAPI) createNewFile(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "create-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "create-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "create-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "create-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -431,8 +431,8 @@ func (ta *testAPI) createNewFile(t *testing.T) {
 
 func (ta *testAPI) createNewFileInsideDirectory(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "createinsidedir-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "createinsidedir-mount")
 
 	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
@@ -467,8 +467,8 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T) {
 
 func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "createinsidenewdir-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "createinsidenewdir-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
@@ -504,8 +504,8 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T) {
 
 func (ta *testAPI) removeExistingFile(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "remove-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "remove-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -532,8 +532,8 @@ func (ta *testAPI) removeExistingFile(t *testing.T) {
 
 func (ta *testAPI) removeExistingFileInsideDir(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "remove-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "remove-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["one/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -561,8 +561,8 @@ func (ta *testAPI) removeExistingFileInsideDir(t *testing.T) {
 func (ta *testAPI) removeNewlyAddedFile(t *testing.T) {
 
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "removenew-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "removenew-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "removenew-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "removenew-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -605,8 +605,8 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T) {
 
 func (ta *testAPI) addNewFileAndModifyContents(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "modifyfile-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "modifyfile-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -675,8 +675,8 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T) {
 
 func (ta *testAPI) removeEmptyDir(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "rmdir-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "rmdir-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -699,8 +699,8 @@ func (ta *testAPI) removeEmptyDir(t *testing.T) {
 
 func (ta *testAPI) removeDirWhichHasFiles(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "rmdir-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "rmdir-mount")
 
 	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["two/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -728,8 +728,8 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T) {
 
 func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "rmsubdir-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "rmsubdir-mount")
 
 	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["two/three/2.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
@@ -764,8 +764,8 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T) {
 
 func (ta *testAPI) appendFileContentsToEnd(t *testing.T) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-upload")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-mount")
+	testUploadDir, _ := os.MkdirTemp(os.TempDir(), "appendlargefile-upload")
+	testMountDir, _ := os.MkdirTemp(os.TempDir(), "appendlargefile-mount")
 
 	line1 := make([]byte, 10)
 	rand.Read(line1)
@@ -802,7 +802,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T) {
 }
 
 func TestFUSE(t *testing.T) {
-	datadir, err := ioutil.TempDir("", "fuse")
+	datadir, err := os.MkdirTemp("", "fuse")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}

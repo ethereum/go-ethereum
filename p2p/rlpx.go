@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	mrand "math/rand"
 	"net"
 	"sync"
@@ -606,7 +605,7 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 		if msg.Size > maxUint24 {
 			return errPlainMessageTooLarge
 		}
-		payload, _ := ioutil.ReadAll(msg.Payload)
+		payload, _ := io.ReadAll(msg.Payload)
 		payload = snappy.Encode(nil, payload)
 
 		msg.Payload = bytes.NewReader(payload)
@@ -700,7 +699,7 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 
 	// if snappy is enabled, verify and decompress message
 	if rw.snappy {
-		payload, err := ioutil.ReadAll(msg.Payload)
+		payload, err := io.ReadAll(msg.Payload)
 		if err != nil {
 			return msg, err
 		}

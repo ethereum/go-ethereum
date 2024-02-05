@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"sync"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -57,7 +58,7 @@ func NewBatchDatabaseWithEncode(datadir string, cacheLimit int) *BatchDatabase {
 }
 
 func (db *BatchDatabase) IsEmptyKey(key []byte) bool {
-	return key == nil || len(key) == 0 || bytes.Equal(key, db.emptyKey)
+	return len(key) == 0 || bytes.Equal(key, db.emptyKey)
 }
 
 func (db *BatchDatabase) getCacheKey(key []byte) string {
@@ -171,13 +172,13 @@ func (db *BatchDatabase) Sync() error {
 }
 
 func (db *BatchDatabase) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return db.NewIterator(prefix, start)
+	panic("NewIterator from XDCxDAO leveldb is not supported")
 }
 
 func (db *BatchDatabase) Stat(property string) (string, error) {
-	return db.Stat(property)
+	return "", errNotSupported
 }
 
 func (db *BatchDatabase) Compact(start []byte, limit []byte) error {
-	return db.Compact(start, limit)
+	return errNotSupported
 }

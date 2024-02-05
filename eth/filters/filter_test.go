@@ -18,11 +18,11 @@ package filters
 
 import (
 	"context"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -43,7 +43,7 @@ func makeReceipt(addr common.Address) *types.Receipt {
 }
 
 func BenchmarkFilters(b *testing.B) {
-	dir, err := ioutil.TempDir("", "filtertest")
+	dir, err := os.MkdirTemp("", "filtertest")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func BenchmarkFilters(b *testing.B) {
 }
 
 func TestFilters(t *testing.T) {
-	dir, err := ioutil.TempDir("", "filtertest")
+	dir, err := os.MkdirTemp("", "filtertest")
 	if err != nil {
 		t.Fatal(err)
 	}

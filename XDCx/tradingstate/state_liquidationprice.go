@@ -118,7 +118,11 @@ func (self *liquidationPriceState) updateTrie(db Database) Trie {
 			self.setError(tr.TryDelete(lendingId[:]))
 			continue
 		}
-		stateObject.updateRoot(db)
+		err := stateObject.updateRoot(db)
+		if err != nil {
+			log.Warn("updateTrie updateRoot", "err", err)
+		}
+
 		// Encoding []byte cannot fail, ok to ignore the error.
 		v, _ := rlp.EncodeToBytes(stateObject)
 		self.setError(tr.TryUpdate(lendingId[:], v))

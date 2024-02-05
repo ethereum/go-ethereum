@@ -2,10 +2,11 @@ package XDCx
 
 import (
 	"encoding/json"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"math/big"
 	"strconv"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 
@@ -303,7 +304,10 @@ func (XDCx *XDCX) processOrderList(coinbase common.Address, chain consensus.Chai
 		}
 		if tradedQuantity.Sign() > 0 {
 			quantityToTrade = tradingstate.Sub(quantityToTrade, tradedQuantity)
-			tradingStateDB.SubAmountOrderItem(orderBook, orderId, price, tradedQuantity, side)
+			err := tradingStateDB.SubAmountOrderItem(orderBook, orderId, price, tradedQuantity, side)
+			if err != nil {
+				log.Warn("processOrderList SubAmountOrderItem", "err", err, "orderBook", orderBook, "orderId", orderId, "price", *price, "tradedQuantity", *tradedQuantity, "side", side)
+			}
 			tradingStateDB.SetLastPrice(orderBook, price)
 			log.Debug("Update quantity for orderId", "orderId", orderId.Hex())
 			log.Debug("TRADE", "orderBook", orderBook, "Taker price", price, "maker price", order.Price, "Amount", tradedQuantity, "orderId", orderId, "side", side)
@@ -589,11 +593,22 @@ func DoSettleBalance(coinbase common.Address, takerOrder, makerOrder *tradingsta
 	masternodeOwner := statedb.GetOwner(coinbase)
 	statedb.AddBalance(masternodeOwner, matchingFee)
 
-	tradingstate.SetTokenBalance(takerOrder.UserAddress, newTakerInTotal, settleBalance.Taker.InToken, statedb)
-	tradingstate.SetTokenBalance(takerOrder.UserAddress, newTakerOutTotal, settleBalance.Taker.OutToken, statedb)
-
-	tradingstate.SetTokenBalance(makerOrder.UserAddress, newMakerInTotal, settleBalance.Maker.InToken, statedb)
-	tradingstate.SetTokenBalance(makerOrder.UserAddress, newMakerOutTotal, settleBalance.Maker.OutToken, statedb)
+	err = tradingstate.SetTokenBalance(takerOrder.UserAddress, newTakerInTotal, settleBalance.Taker.InToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "takerOder.UserAddress", takerOrder.UserAddress, "newTakerInTotal", *newTakerInTotal, "settleBalance.Taker.InToken", settleBalance.Taker.InToken)
+	}
+	err = tradingstate.SetTokenBalance(takerOrder.UserAddress, newTakerOutTotal, settleBalance.Taker.OutToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "takerOrder.UserAddress", takerOrder.UserAddress, "newTakerOutTotal", *newTakerOutTotal, "settleBalance.Taker.OutToken", settleBalance.Taker.OutToken)
+	}
+	err = tradingstate.SetTokenBalance(makerOrder.UserAddress, newMakerInTotal, settleBalance.Maker.InToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "makerOrder.UserAddress", makerOrder.UserAddress, "newMakerInTotal", *newMakerInTotal, "settleBalance.Maker.InToken", settleBalance.Maker.InToken)
+	}
+	err = tradingstate.SetTokenBalance(makerOrder.UserAddress, newMakerOutTotal, settleBalance.Maker.OutToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "makerOrder.UserAddress", makerOrder.UserAddress, "newMakerOutTotal", *newMakerOutTotal, "settleBalance.Maker.OutToken", settleBalance.Maker.OutToken)
+	}
 
 	// add balance for relayers
 	//log.Debug("ApplyXDCXMatchedTransaction settle fee for relayers",
@@ -602,8 +617,14 @@ func DoSettleBalance(coinbase common.Address, takerOrder, makerOrder *tradingsta
 	//	"makerRelayerOwner", makerExOwner,
 	//	"makerFeeToken", quoteToken, "makerFee", settleBalanceResult[makerAddr][XDCx.Fee].(*big.Int))
 	// takerFee
-	tradingstate.SetTokenBalance(takerExOwner, newTakerFee, makerOrder.QuoteToken, statedb)
-	tradingstate.SetTokenBalance(makerExOwner, newMakerFee, makerOrder.QuoteToken, statedb)
+	err = tradingstate.SetTokenBalance(takerExOwner, newTakerFee, makerOrder.QuoteToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "takerExOwner", takerExOwner, "newTakerFee", *newTakerFee, "makerOrder.QuoteToken", makerOrder.QuoteToken)
+	}
+	err = tradingstate.SetTokenBalance(makerExOwner, newMakerFee, makerOrder.QuoteToken, statedb)
+	if err != nil {
+		log.Warn("DoSettleBalance SetTokenBalance", "err", err, "makerExOwner", makerExOwner, "newMakerFee", *newMakerFee, "makerOrder.QuoteToken", makerOrder.QuoteToken)
+	}
 	return nil
 }
 
@@ -652,7 +673,10 @@ func (XDCx *XDCX) ProcessCancelOrder(header *types.Header, tradingStateDB *tradi
 		return err, false
 	}
 	// relayers pay XDC for masternode
-	tradingstate.SubRelayerFee(originOrder.ExchangeAddress, common.RelayerCancelFee, statedb)
+	err = tradingstate.SubRelayerFee(originOrder.ExchangeAddress, common.RelayerCancelFee, statedb)
+	if err != nil {
+		log.Warn("ProcessCancelOrder SubRelayerFee", "err", err, "originOrder.ExchangeAddress", originOrder.ExchangeAddress, "common.RelayerCancelFee", *common.RelayerCancelFee)
+	}
 	masternodeOwner := statedb.GetOwner(coinbase)
 	// relayers pay XDC for masternode
 	statedb.AddBalance(masternodeOwner, common.RelayerCancelFee)
@@ -661,12 +685,24 @@ func (XDCx *XDCX) ProcessCancelOrder(header *types.Header, tradingStateDB *tradi
 	switch originOrder.Side {
 	case tradingstate.Ask:
 		// users pay token (which they have) for relayer
-		tradingstate.SubTokenBalance(originOrder.UserAddress, tokenCancelFee, originOrder.BaseToken, statedb)
-		tradingstate.AddTokenBalance(relayerOwner, tokenCancelFee, originOrder.BaseToken, statedb)
+		err := tradingstate.SubTokenBalance(originOrder.UserAddress, tokenCancelFee, originOrder.BaseToken, statedb)
+		if err != nil {
+			log.Warn("ProcessCancelOrder SubTokenBalance", "err", err, "originOrder.UserAddress", originOrder.UserAddress, "tokenCancelFee", *tokenCancelFee, "originOrder.BaseToken", originOrder.BaseToken)
+		}
+		err = tradingstate.AddTokenBalance(relayerOwner, tokenCancelFee, originOrder.BaseToken, statedb)
+		if err != nil {
+			log.Warn("ProcessCancelOrder AddTokenBalance", "err", err, "relayerOwner", relayerOwner, "tokenCancelFee", *tokenCancelFee, "originOrder.BaseToken", originOrder.BaseToken)
+		}
 	case tradingstate.Bid:
 		// users pay token (which they have) for relayer
-		tradingstate.SubTokenBalance(originOrder.UserAddress, tokenCancelFee, originOrder.QuoteToken, statedb)
-		tradingstate.AddTokenBalance(relayerOwner, tokenCancelFee, originOrder.QuoteToken, statedb)
+		err := tradingstate.SubTokenBalance(originOrder.UserAddress, tokenCancelFee, originOrder.QuoteToken, statedb)
+		if err != nil {
+			log.Warn("ProcessCancelOrder SubTokenBalance", "err", err, "originOrder.UserAddress", originOrder.UserAddress, "tokenCancelFee", *tokenCancelFee, "originOrder.QuoteToken", originOrder.QuoteToken)
+		}
+		err = tradingstate.AddTokenBalance(relayerOwner, tokenCancelFee, originOrder.QuoteToken, statedb)
+		if err != nil {
+			log.Warn("ProcessCancelOrder AddTokenBalance", "err", err, "relayerOwner", relayerOwner, "tokenCancelFee", *tokenCancelFee, "originOrder.QuoteToken", originOrder.QuoteToken)
+		}
 	default:
 	}
 	// update cancel fee

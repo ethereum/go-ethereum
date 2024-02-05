@@ -53,3 +53,4 @@ go.sum
 cicd/devnet/terraform/.terraform*
 cicd/devnet/tmp
 .env
+cicd/devnet/terraform/node-config.json

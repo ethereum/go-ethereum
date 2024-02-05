@@ -30,7 +30,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"sync"
@@ -160,7 +159,7 @@ func (self *Chequebook) setBalanceFromBlockChain() {
 // LoadChequebook loads a chequebook from disk (file path).
 func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, checkBalance bool) (self *Chequebook, err error) {
 	var data []byte
-	data, err = ioutil.ReadFile(path)
+	data, err = os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -230,7 +229,7 @@ func (self *Chequebook) Save() (err error) {
 	}
 	self.log.Trace("Saving chequebook to disk", self.path)
 
-	return ioutil.WriteFile(self.path, data, os.ModePerm)
+	return os.WriteFile(self.path, data, os.ModePerm)
 }
 
 // Stop quits the autodeposit go routine to terminate

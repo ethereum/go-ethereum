@@ -28,7 +28,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -483,7 +482,7 @@ func sendFilesLoop() {
 			fmt.Println("Quit command received")
 			return
 		}
-		b, err := ioutil.ReadFile(s)
+		b, err := os.ReadFile(s)
 		if err != nil {
 			fmt.Printf(">>> Error: %s \n", err)
 		} else {
@@ -513,7 +512,7 @@ func fileReaderLoop() {
 			fmt.Println("Quit command received")
 			return
 		}
-		raw, err := ioutil.ReadFile(s)
+		raw, err := os.ReadFile(s)
 		if err != nil {
 			fmt.Printf(">>> Error: %s \n", err)
 		} else {
@@ -670,7 +669,7 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage, show bool) {
 	//}
 
 	fullpath := filepath.Join(dir, name)
-	err := ioutil.WriteFile(fullpath, env.Data, 0644)
+	err := os.WriteFile(fullpath, env.Data, 0644)
 	if err != nil {
 		fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
 	} else if show {

@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -89,7 +88,7 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 		}
 	}()
 
-	tmpdir, err := ioutil.TempDir("", "swarm-test")
+	tmpdir, err := os.MkdirTemp("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
 	}

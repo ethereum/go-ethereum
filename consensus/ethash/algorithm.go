@@ -156,12 +156,16 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	defer close(done)
 
 	go func() {
+		waitDuration := 3 * time.Second
+		timer := time.NewTimer(waitDuration)
+		defer timer.Stop()
 		for {
 			select {
 			case <-done:
 				return
-			case <-time.After(3 * time.Second):
+			case <-timer.C:
 				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
+				timer.Reset(waitDuration)
 			}
 		}
 	}()

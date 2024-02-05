@@ -95,8 +95,14 @@ func NewMongoDBEngine(cfg *Config) *XDCxDAO.MongoDatabase {
 }
 
 func New(cfg *Config) *XDCX {
-	tokenDecimalCache, _ := lru.New(defaultCacheLimit)
-	orderCache, _ := lru.New(tradingstate.OrderCacheLimit)
+	tokenDecimalCache, err := lru.New(defaultCacheLimit)
+	if err != nil {
+		log.Warn("[XDCx-New] fail to create new lru for token decimal", "error", err)
+	}
+	orderCache, err := lru.New(tradingstate.OrderCacheLimit)
+	if err != nil {
+		log.Warn("[XDCx-New] fail to create new lru for order", "error", err)
+	}
 	XDCX := &XDCX{
 		orderNonce:        make(map[common.Address]*big.Int),
 		Triegc:            prque.New(),
@@ -121,7 +127,10 @@ func New(cfg *Config) *XDCX {
 
 // Overflow returns an indication if the message queue is full.
 func (XDCx *XDCX) Overflow() bool {
-	val, _ := XDCx.settings.Load(overflowIdx)
+	val, ok := XDCx.settings.Load(overflowIdx)
+	if !ok {
+		log.Warn("[XDCx-Overflow] fail to load overflow index")
+	}
 	return val.(bool)
 }
 
@@ -198,19 +207,11 @@ func (XDCx *XDCX) ProcessOrderPending(header *types.Header, coinbase common.Addr
 				S: common.BigToHash(S),
 			},
 		}
-		cancel := false
-		if order.Status == tradingstate.OrderStatusCancelled {
-			cancel = true
-		}
 
 		log.Info("Process order pending", "orderPending", order, "BaseToken", order.BaseToken.Hex(), "QuoteToken", order.QuoteToken)
 		originalOrder := &tradingstate.OrderItem{}
 		*originalOrder = *order
 		originalOrder.Quantity = tradingstate.CloneBigInt(order.Quantity)
-
-		if cancel {
-			order.Status = tradingstate.OrderStatusCancelled
-		}
 
 		newTrades, newRejectedOrders, err := XDCx.CommitOrder(header, coinbase, chain, statedb, XDCXstatedb, tradingstate.GetTradingOrderBookHash(order.BaseToken, order.QuoteToken), order)
 
@@ -579,17 +580,16 @@ func (XDCX *XDCX) GetEmptyTradingState() (*tradingstate.TradingStateDB, error) {
 func (XDCx *XDCX) GetStateCache() tradingstate.Database {
 	return XDCx.StateCache
 }
+
 func (XDCx *XDCX) HasTradingState(block *types.Block, author common.Address) bool {
 	root, err := XDCx.GetTradingStateRoot(block, author)
 	if err != nil {
 		return false
 	}
 	_, err = XDCx.StateCache.OpenTrie(root)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
+
 func (XDCx *XDCX) GetTriegc() *prque.Prque {
 	return XDCx.Triegc
 }
@@ -639,7 +639,7 @@ func (XDCx *XDCX) RollbackReorgTxMatch(txhash common.Hash) error {
 				continue
 			}
 			orderCacheAtTxHash := c.(map[common.Hash]tradingstate.OrderHistoryItem)
-			orderHistoryItem, _ := orderCacheAtTxHash[tradingstate.GetOrderHistoryKey(order.BaseToken, order.QuoteToken, order.Hash)]
+			orderHistoryItem := orderCacheAtTxHash[tradingstate.GetOrderHistoryKey(order.BaseToken, order.QuoteToken, order.Hash)]
 			if (orderHistoryItem == tradingstate.OrderHistoryItem{}) {
 				log.Debug("XDCx reorg: remove order due to empty orderHistory", "order", tradingstate.ToJSON(order))
 				if err := db.DeleteObject(order.Hash, &tradingstate.OrderItem{}); err != nil {

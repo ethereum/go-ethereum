@@ -18,11 +18,12 @@ package lendingstate
 
 import (
 	"fmt"
+	"io"
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	"io"
-	"math/big"
 )
 
 type lendingExchangeState struct {
@@ -181,8 +182,10 @@ func (self *lendingExchangeState) getLiquidationTimeTrie(db Database) Trie {
 	return self.liquidationTimeTrie
 }
 
-/**
-  Get State
+/*
+*
+
+	Get State
 */
 func (self *lendingExchangeState) getBorrowingOrderList(db Database, rate common.Hash) (stateOrderList *itemListState) {
 	// Prefer 'live' objects.
@@ -299,8 +302,10 @@ func (self *lendingExchangeState) getLendingTrade(db Database, tradeId common.Ha
 	return obj
 }
 
-/**
-  Update Trie
+/*
+*
+
+	Update Trie
 */
 func (self *lendingExchangeState) updateLendingTimeTrie(db Database) Trie {
 	tr := self.getLendingItemTrie(db)
@@ -344,7 +349,10 @@ func (self *lendingExchangeState) updateBorrowingTrie(db Database) Trie {
 				self.setError(tr.TryDelete(rate[:]))
 				continue
 			}
-			orderList.updateRoot(db)
+			err := orderList.updateRoot(db)
+			if err != nil {
+				log.Warn("updateBorrowingTrie updateRoot", "err", err, "rate", rate, "orderList", *orderList)
+			}
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ := rlp.EncodeToBytes(orderList)
 			self.setError(tr.TryUpdate(rate[:], v))
@@ -362,7 +370,10 @@ func (self *lendingExchangeState) updateInvestingTrie(db Database) Trie {
 				self.setError(tr.TryDelete(rate[:]))
 				continue
 			}
-			orderList.updateRoot(db)
+			err := orderList.updateRoot(db)
+			if err != nil {
+				log.Warn("updateInvestingTrie updateRoot", "err", err, "rate", rate, "orderList", *orderList)
+			}
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ := rlp.EncodeToBytes(orderList)
 			self.setError(tr.TryUpdate(rate[:], v))
@@ -380,7 +391,10 @@ func (self *lendingExchangeState) updateLiquidationTimeTrie(db Database) Trie {
 				self.setError(tr.TryDelete(time[:]))
 				continue
 			}
-			itemList.updateRoot(db)
+			err := itemList.updateRoot(db)
+			if err != nil {
+				log.Warn("updateLiquidationTimeTrie updateRoot", "err", err, "time", time, "itemList", *itemList)
+			}
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ := rlp.EncodeToBytes(itemList)
 			self.setError(tr.TryUpdate(time[:], v))
@@ -513,8 +527,10 @@ func (self *lendingExchangeState) CommitLiquidationTimeTrie(db Database) error {
 	return err
 }
 
-/**
-  Get Trie Data
+/*
+*
+
+	Get Trie Data
 */
 func (self *lendingExchangeState) getBestInvestingInterest(db Database) common.Hash {
 	trie := self.getInvestingTrie(db)

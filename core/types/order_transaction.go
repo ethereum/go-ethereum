@@ -32,7 +32,6 @@ import (
 var (
 	// ErrInvalidOrderSig invalidate signer
 	ErrInvalidOrderSig = errors.New("invalid transaction v, r, s values")
-	errNoSignerOrder   = errors.New("missing signing methods")
 )
 
 const (
@@ -77,26 +76,17 @@ type ordertxdata struct {
 
 // IsCancelledOrder check if tx is cancelled transaction
 func (tx *OrderTransaction) IsCancelledOrder() bool {
-	if tx.Status() == OrderStatusCancelled {
-		return true
-	}
-	return false
+	return tx.Status() == OrderStatusCancelled
 }
 
 // IsMoTypeOrder check if tx type is MO Order
 func (tx *OrderTransaction) IsMoTypeOrder() bool {
-	if tx.Type() == OrderTypeMo {
-		return true
-	}
-	return false
+	return tx.Type() == OrderTypeMo
 }
 
 // IsLoTypeOrder check if tx type is LO Order
 func (tx *OrderTransaction) IsLoTypeOrder() bool {
-	if tx.Type() == OrderTypeLo {
-		return true
-	}
-	return false
+	return tx.Type() == OrderTypeLo
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -166,7 +156,6 @@ func (tx *OrderTransaction) WithSignature(signer OrderSigner, sig []byte) (*Orde
 
 // ImportSignature make order tx with specific signature
 func (tx *OrderTransaction) ImportSignature(V, R, S *big.Int) *OrderTransaction {
-
 	if V != nil {
 		tx.data.V = V
 	}
@@ -304,6 +293,10 @@ func NewOrderTransactionByNonce(signer OrderSigner, txs map[common.Address]Order
 	// Initialize a price based heap with the head transactions
 	heads := make(OrderTxByNonce, 0, len(txs))
 	for from, accTxs := range txs {
+		if len(accTxs) == 0 {
+			delete(txs, from)
+			continue
+		}
 		heads = append(heads, accTxs[0])
 		// Ensure the sender address is from the signer
 		acc, _ := OrderSender(signer, accTxs[0])

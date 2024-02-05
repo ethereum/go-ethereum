@@ -56,15 +56,17 @@ data "aws_ecs_task_definition" "devnet_ecs_task_definition" {
   task_definition = aws_ecs_task_definition.devnet_task_definition_group[each.key].family
 }
 
+# ECS cluster
 resource "aws_ecs_cluster" "devnet_ecs_cluster" {
-  name = "devnet-xdcnode-cluster"
-  tags = {
+  name    = "devnet-xdcnode-cluster"
+  tags    = {
     Name        = "TfDevnetEcsCluster"
   }
 }
 
+
 resource "aws_ecs_service" "devnet_ecs_service" {
-  for_each = var.devnetNodeKeys
+  for_each             = var.enableFixedIp ? {} : var.devnetNodeKeys
   name                 = "ecs-service-${each.key}"
   cluster              = aws_ecs_cluster.devnet_ecs_cluster.id
   task_definition      = "${aws_ecs_task_definition.devnet_task_definition_group[each.key].family}:${max(aws_ecs_task_definition.devnet_task_definition_group[each.key].revision, data.aws_ecs_task_definition.devnet_ecs_task_definition[each.key].revision)}"

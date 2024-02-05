@@ -19,7 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/core/asm"
@@ -39,7 +39,7 @@ func disasmCmd(ctx *cli.Context) error {
 	}
 
 	fn := ctx.Args().First()
-	in, err := ioutil.ReadFile(fn)
+	in, err := os.ReadFile(fn)
 	if err != nil {
 		return err
 	}
