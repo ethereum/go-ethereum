@@ -378,7 +378,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 	contractAddr := scope.Contract.Address()
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(scope.Contract.Code, uint64CodeOffset, length.Uint64())
-	if interpreter.evm.chainRules.IsPrague {
+	if interpreter.evm.chainRules.IsPrague && !scope.Contract.IsDeployment {
 		statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], copyOffset, nonPaddedCopyLength, uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
@@ -998,7 +998,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 
-		if interpreter.evm.chainRules.IsPrague && *pc%31 == 0 {
+		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsPrague && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
@@ -1029,7 +1029,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			endMin = startMin + pushByteSize
 		}
 
-		if interpreter.evm.chainRules.IsPrague {
+		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsPrague {
 			contractAddr := scope.Contract.Address()
 			statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], uint64(startMin), uint64(pushByteSize), uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
 			if !scope.Contract.UseGas(statelessGas) {

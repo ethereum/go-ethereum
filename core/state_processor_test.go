@@ -484,7 +484,7 @@ func TestProcessVerkle(t *testing.T) {
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
 	contractCreationCost := intrinsicContractCreationGas + uint64(7700 /* creation */ +2939 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(7000 /* creation */ +315944 /* execution costs */)
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(7000 /* creation */ +299744 /* execution costs */)
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
@@ -697,6 +697,99 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				}
 			} else if suffixDiff.Suffix > 4 {
 				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+			}
+		}
+	}
+}
+
+func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		bcdb     = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb    = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec    = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	// Verkle trees use the snapshot, which must be enabled before the
+	// data is saved into the tree+database.
+	genesis := gspec.MustCommit(bcdb)
+
+	// Commit the genesis block to the block-generation database as it
+	// is now independent of the blockchain database.
+	gspec.MustCommit(gendb)
+
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 1, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		var tx types.Transaction
+		// a transaction that does some PUSH1n but returns a 0-sized contract
+		txpayload := common.Hex2Bytes("02f8db83010f2d03843b9aca008444cf6a05830186a08080b8807fdfbbb59f2371a76485ce557fd0de00c298d3ede52a3eab56d35af674eb49ec5860335260826053536001605453604c60555360f3605653606060575360446058536096605953600c605a5360df605b5360f3605c5360fb605d53600c605e53609a605f53607f60605360fe606153603d60625360f4606353604b60645360cac001a0486b6dc55b8a311568b7239a2cae1d77e7446dba71df61eaafd53f73820a138fa010bd48a45e56133ac4c5645142c2ea48950d40eb35050e9510b6bad9e15c5865")
+		if err := tx.UnmarshalBinary(txpayload); err != nil {
+			t.Fatal(err)
+		}
+		gen.AddTx(&tx)
+	})
+
+	for _, stemStateDiff := range statediff[0] {
+		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+			// BLOCKHASH contract stem
+			if len(stemStateDiff.SuffixDiffs) > 1 {
+				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
+			}
+			if stemStateDiff.SuffixDiffs[0].Suffix != 64 {
+				t.Fatalf("invalid suffix diff value found for BLOCKHASH contract: %d != 64", stemStateDiff.SuffixDiffs[0].Suffix)
+			}
+			// check that the "current value" is nil and that the new value isn't.
+			if stemStateDiff.SuffixDiffs[0].CurrentValue != nil {
+				t.Fatalf("non-nil current value in BLOCKHASH contract insert: %x", stemStateDiff.SuffixDiffs[0].CurrentValue)
+			}
+			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
+				t.Fatalf("nil new value in BLOCKHASH contract insert")
+			}
+		} else {
+			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
+				if suffixDiff.Suffix > 4 {
+					// if d8898012c484fb48610ecb7963886339207dab004bce968b007b616ffa18e0 shows up, it means that the PUSHn
+					// in the transaction above added entries into the witness, when they should not have since they are
+					// part of a contract deployment.
+					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
+				}
 			}
 		}
 	}

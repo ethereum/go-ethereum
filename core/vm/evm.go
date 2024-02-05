@@ -530,6 +530,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if err == nil && evm.chainRules.IsPrague {
+		if len(ret) > 0 {
+			touchCodeChunksRangeOnReadAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), evm.Accesses)
+		}
 		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:])) {
 			evm.StateDB.RevertToSnapshot(snapshot)
 			err = ErrOutOfGas
