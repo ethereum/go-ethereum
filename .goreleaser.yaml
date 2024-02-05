@@ -95,9 +95,33 @@ dockers:
     build_flag_templates:
       - --platform=linux/amd64
     image_templates:
-      - "flashbots/suave-execution-geth:{{ .ShortCommit }}"
-      - "flashbots/suave-execution-geth:{{ .Tag }}"
-      - "flashbots/suave-execution-geth:latest"
+      - "flashbots/suave-execution-geth:{{ .ShortCommit }}-amd64"
+      - "flashbots/suave-execution-geth:{{ .Tag }}-amd64"
+      - "flashbots/suave-execution-geth:latest-amd64"
+  - dockerfile: ./Dockerfile.suave
+    use: buildx
+    goarch: arm64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/arm64
+    image_templates:
+      - "flashbots/suave-execution-geth:{{ .ShortCommit }}-arm64"
+      - "flashbots/suave-execution-geth:{{ .Tag }}-arm64"
+      - "flashbots/suave-execution-geth:latest-arm64"
+
+docker_manifests:
+  - name_template: "flashbots/suave-execution-geth:{{ .ShortCommit }}"
+    image_templates:
+      - "flashbots/suave-execution-geth:{{ .ShortCommit }}-amd64"
+      - "flashbots/suave-execution-geth:{{ .ShortCommit }}-arm64"
+  - name_template: "flashbots/suave-execution-geth:{{ .Tag }}"
+    image_templates:
+      - "flashbots/suave-execution-geth:{{ .Tag }}-amd64"
+      - "flashbots/suave-execution-geth:{{ .Tag }}-arm64"
+  - name_template: "flashbots/suave-execution-geth:latest"
+    image_templates:
+      - "flashbots/suave-execution-geth:latest-amd64"
+      - "flashbots/suave-execution-geth:latest-arm64"
 
 checksum:
   name_template: "checksums.txt"
