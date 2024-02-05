@@ -194,7 +194,7 @@ type BlockchainLogger interface {
 	// `td` is the total difficulty prior to `block`.
 	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, chainConfig *params.ChainConfig)
 	OnBlockEnd(err error)
-	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
+	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc, chainConfig *params.ChainConfig)
 	OnBeaconBlockRootStart(root common.Hash)
 	OnBeaconBlockRootEnd()
 }
@@ -462,7 +462,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 				return nil, fmt.Errorf("live blockchain tracer requires genesis alloc to be set")
 			}
 
-			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc, bc.chainConfig)
 		}
 	}
 

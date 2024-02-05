@@ -96,7 +96,7 @@ func (p *Printer) OnBlockEnd(err error) {
 	fmt.Printf("OnBlockEnd: err=%v\n", err)
 }
 
-func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc, chainConfig *params.ChainConfig) {
 	fmt.Printf("OnGenesisBlock: b=%v, allocLength=%d\n", b.NumberU64(), len(alloc))
 }
 

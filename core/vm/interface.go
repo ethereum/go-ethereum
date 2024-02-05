@@ -31,7 +31,7 @@ type StateDB interface {
 	CreateAccount(common.Address)
 
 	SubBalance(common.Address, *uint256.Int, state.BalanceChangeReason)
-	AddBalance(common.Address, *uint256.Int, bool, state.BalanceChangeReason)
+	AddBalance(common.Address, *uint256.Int, state.BalanceChangeReason)
 	GetBalance(common.Address) *uint256.Int
 
 	GetNonce(common.Address) uint64

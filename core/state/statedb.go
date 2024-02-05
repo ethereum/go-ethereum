@@ -405,8 +405,8 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, checkPrecompile bool, reason BalanceChangeReason) {
-	stateObject := s.getOrNewStateObjectWithCheckPrecompiles(addr, checkPrecompile)
+func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason BalanceChangeReason) {
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, reason)
 	}
@@ -655,32 +655,20 @@ func (s *StateDB) setStateObject(object *stateObject) {
 
 // getOrNewStateObject retrieves a state object or create a new state object if nil.
 func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
-	return s.getOrNewStateObjectWithCheckPrecompiles(addr, false)
-}
-
-func (s *StateDB) getOrNewStateObjectWithCheckPrecompiles(addr common.Address, checkPrecompile bool) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		stateObject, _ = s.createObject(addr, checkPrecompile)
+		stateObject, _ = s.createObject(addr)
 	}
 	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
 	if s.logger != nil {
-		if checkPrecompile {
-			// Precompiled contracts are touched during a call.
-			// Make sure we avoid emitting a new account event for them.
-			if _, ok := s.precompiles[addr]; !ok {
-				s.logger.OnNewAccount(addr, prev != nil)
-			}
-		} else {
-			s.logger.OnNewAccount(addr, prev != nil)
-		}
+		s.logger.OnNewAccount(addr, prev != nil)
 	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
@@ -731,7 +719,7 @@ func (s *StateDB) createObject(addr common.Address, checkPrecompile bool) (newob
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	newObj, prev := s.createObject(addr, false)
+	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}

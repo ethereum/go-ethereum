@@ -589,10 +589,10 @@ func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, heade
 		r.Sub(r, hNum)
 		r.Mul(r, blockReward)
 		r.Div(r, u256_8)
-		stateDB.AddBalance(uncle.Coinbase, r, false, state.BalanceIncreaseRewardMineUncle)
+		stateDB.AddBalance(uncle.Coinbase, r, state.BalanceIncreaseRewardMineUncle)
 
 		r.Div(blockReward, u256_32)
 		reward.Add(reward, r)
 	}
-	stateDB.AddBalance(header.Coinbase, reward, false, state.BalanceIncreaseRewardMineBlock)
+	stateDB.AddBalance(header.Coinbase, reward, state.BalanceIncreaseRewardMineBlock)
 }
