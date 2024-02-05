@@ -45,11 +45,5 @@
       "0x3fab184622dc19b6109349b94811493bf2a45362": {
         "balance": "10000000000000000000000"
       }
-    },
-    "number": "0x0",
-    "gasUsed": "0x0",
-    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "baseFeePerGas": "0x3b9aca00",
-    "excessBlobGas": null,
-    "blobGasUsed": null
+    }
   }
