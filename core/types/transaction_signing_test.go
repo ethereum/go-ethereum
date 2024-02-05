@@ -43,7 +43,7 @@ func TestEIP155Signing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if from != addr {
-		t.Errorf("exected from and address to be equal. Got %x want %x", from, addr)
+		t.Errorf("expected from and address to be equal. Got %x want %x", from, addr)
 	}
 }
 

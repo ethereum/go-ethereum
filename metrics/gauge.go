@@ -74,7 +74,7 @@ func (g *StandardGauge) Update(v int64) {
 	g.value.Store(v)
 }
 
-// Update updates the gauge's value if v is larger then the current valie.
+// Update updates the gauge's value if v is larger then the current value.
 func (g *StandardGauge) UpdateIfGt(v int64) {
 	for {
 		exist := g.value.Load()

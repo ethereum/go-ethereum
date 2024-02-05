@@ -386,6 +386,8 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 
 	if len(fails) > 0 {
 		log.Warn("Dropping invalidated blob transactions", "ids", fails)
+		dropInvalidMeter.Mark(int64(len(fails)))
+
 		for _, id := range fails {
 			if err := p.store.Delete(id); err != nil {
 				p.Close()
@@ -456,7 +458,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(blob, tx); err != nil {
 		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever unprobable case, recover gracefully
+		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
@@ -467,11 +469,17 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	}
 
 	meta := newBlobTxMeta(id, size, tx)
-
+	if _, exists := p.lookup[meta.hash]; exists {
+		// This path is only possible after a crash, where deleted items are not
+		// removed via the normal shutdown-startup procedure and thus may get
+		// partially resurrected.
+		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", tx.Hash())
+		return errors.New("duplicate blob entry")
+	}
 	sender, err := p.signer.Sender(tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
-		// restarts. For that ever unprobable case, recover gracefully by ignoring
+		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
 		return err
@@ -537,8 +545,10 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 		if gapped {
 			log.Warn("Dropping dangling blob transactions", "from", addr, "missing", next, "drop", nonces, "ids", ids)
+			dropDanglingMeter.Mark(int64(len(ids)))
 		} else {
 			log.Trace("Dropping filled blob transactions", "from", addr, "filled", nonces, "ids", ids)
+			dropFilledMeter.Mark(int64(len(ids)))
 		}
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
@@ -569,6 +579,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			txs = txs[1:]
 		}
 		log.Trace("Dropping overlapped blob transactions", "from", addr, "overlapped", nonces, "ids", ids, "left", len(txs))
+		dropOverlappedMeter.Mark(int64(len(ids)))
+
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -600,10 +612,30 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			}
 			continue
 		}
-		// Sanity check that there's no double nonce. This case would be a coding
-		// error, but better know about it
+		// Sanity check that there's no double nonce. This case would generally
+		// be a coding error, so better know about it.
+		//
+		// Also, Billy behind the blobpool does not journal deletes. A process
+		// crash would result in previously deleted entities being resurrected.
+		// That could potentially cause a duplicate nonce to appear.
 		if txs[i].nonce == txs[i-1].nonce {
-			log.Error("Duplicate nonce blob transaction", "from", addr, "nonce", txs[i].nonce)
+			id := p.lookup[txs[i].hash]
+
+			log.Error("Dropping repeat nonce blob transaction", "from", addr, "nonce", txs[i].nonce, "id", id)
+			dropRepeatedMeter.Mark(1)
+
+			p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
+			p.stored -= uint64(txs[i].size)
+			delete(p.lookup, txs[i].hash)
+
+			if err := p.store.Delete(id); err != nil {
+				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+			}
+			txs = append(txs[:i], txs[i+1:]...)
+			p.index[addr] = txs
+
+			i--
+			continue
 		}
 		// Otherwise if there's a nonce gap evict all later transactions
 		var (
@@ -621,6 +653,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		txs = txs[:i]
 
 		log.Error("Dropping gapped blob transactions", "from", addr, "missing", txs[i-1].nonce+1, "drop", nonces, "ids", ids)
+		dropGappedMeter.Mark(int64(len(ids)))
+
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -665,6 +699,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			p.index[addr] = txs
 		}
 		log.Warn("Dropping overdrafted blob transactions", "from", addr, "balance", balance, "spent", spent, "drop", nonces, "ids", ids)
+		dropOverdraftedMeter.Mark(int64(len(ids)))
+
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -695,6 +731,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		p.index[addr] = txs
 
 		log.Warn("Dropping overcapped blob transactions", "from", addr, "kept", len(txs), "drop", nonces, "ids", ids)
+		dropOvercappedMeter.Mark(int64(len(ids)))
+
 		for _, id := range ids {
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
@@ -711,7 +749,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // offload removes a tracked blob transaction from the pool and moves it into the
 // limbo for tracking until finality.
 //
-// The method may log errors for various unexpcted scenarios but will not return
+// The method may log errors for various unexpected scenarios but will not return
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
@@ -952,7 +990,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 		return err
 	}
 
-	// Update the indixes and metrics
+	// Update the indices and metrics
 	meta := newBlobTxMeta(id, p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserve(addr, true); err != nil {
@@ -1019,6 +1057,8 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 					}
 					// Clear out the transactions from the data store
 					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
+					dropUnderpricedMeter.Mark(int64(len(ids)))
+
 					for _, id := range ids {
 						if err := p.store.Delete(id); err != nil {
 							log.Error("Failed to delete dropped transaction", "id", id, "err", err)
@@ -1161,7 +1201,7 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
@@ -1181,7 +1221,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 }
 
 // Add inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled form the network, so this method will act as the overload
@@ -1198,6 +1238,22 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
+		switch {
+		case errors.Is(err, txpool.ErrUnderpriced):
+			addUnderpricedMeter.Mark(1)
+		case errors.Is(err, core.ErrNonceTooLow):
+			addStaleMeter.Mark(1)
+		case errors.Is(err, core.ErrNonceTooHigh):
+			addGappedMeter.Mark(1)
+		case errors.Is(err, core.ErrInsufficientFunds):
+			addOverdraftedMeter.Mark(1)
+		case errors.Is(err, txpool.ErrAccountLimitExceeded):
+			addOvercappedMeter.Mark(1)
+		case errors.Is(err, txpool.ErrReplaceUnderpriced):
+			addNoreplaceMeter.Mark(1)
+		default:
+			addInvalidMeter.Mark(1)
+		}
 		return err
 	}
 	// If the address is not yet known, request exclusivity to track the account
@@ -1205,6 +1261,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
 		if err := p.reserve(from, true); err != nil {
+			addNonExclusiveMeter.Mark(1)
 			return err
 		}
 		defer func() {
@@ -1244,6 +1301,8 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}
 	if len(p.index[from]) > offset {
 		// Transaction replaces a previously queued one
+		dropReplacedMeter.Mark(1)
+
 		prev := p.index[from][offset]
 		if err := p.store.Delete(prev.id); err != nil {
 			// Shitty situation, but try to recover gracefully instead of going boom
@@ -1322,6 +1381,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}
 	p.updateStorageMetrics()
 
+	addValidMeter.Mark(1)
 	return nil
 }
 
@@ -1371,7 +1431,9 @@ func (p *BlobPool) drop() {
 		}
 	}
 	// Remove the transaction from the data store
-	log.Warn("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
+	log.Debug("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
+	dropOverflownMeter.Mark(1)
+
 	if err := p.store.Delete(drop.id); err != nil {
 		log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
 	}
