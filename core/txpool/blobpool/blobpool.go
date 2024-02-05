@@ -458,7 +458,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(blob, tx); err != nil {
 		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever unprobable case, recover gracefully
+		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
@@ -479,7 +479,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	sender, err := p.signer.Sender(tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
-		// restarts. For that ever unprobable case, recover gracefully by ignoring
+		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
 		return err
@@ -749,7 +749,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // offload removes a tracked blob transaction from the pool and moves it into the
 // limbo for tracking until finality.
 //
-// The method may log errors for various unexpcted scenarios but will not return
+// The method may log errors for various unexpected scenarios but will not return
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
@@ -1201,7 +1201,7 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
@@ -1221,7 +1221,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 }
 
 // Add inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restictions).
+// consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled form the network, so this method will act as the overload
