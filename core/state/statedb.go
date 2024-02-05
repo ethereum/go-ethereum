@@ -881,7 +881,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			obj.deleted = true
 
 			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 && s.logger != nil {
+			if bal := obj.Balance(); s.logger != nil && obj.selfDestructed && bal.Sign() != 0 {
 				s.logger.OnBalanceChange(obj.address, bal.ToBig(), new(big.Int), BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
