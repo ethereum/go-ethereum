@@ -17,7 +17,7 @@ Ethereum smart contracts have a schema that defines its functions and return typ
 
 To demonstrate the binding generator a contract is required. The contract `Storage.sol` implements two very simple functions: `store` updates a user-defined `uint256` to the contract's storage, and `retrieve` displays the value stored in the contract to the user. The Solidity code is as follows:
 
-```js
+```solidity
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity >0.7.0 < 0.9.0;
