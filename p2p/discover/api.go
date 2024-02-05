@@ -38,7 +38,7 @@ type DiscV5PongResp struct {
 }
 
 type PortalPongResp struct {
-	EnrSeq     uint64 `json:"enrSeq"`
+	EnrSeq     uint32 `json:"enrSeq"`
 	DataRadius string `json:"dataRadius"`
 }
 
@@ -327,7 +327,7 @@ func (p *PortalAPI) HistoryPing(enr string) (*PortalPongResp, error) {
 	}
 
 	return &PortalPongResp{
-		EnrSeq:     pong.EnrSeq,
+		EnrSeq:     uint32(pong.EnrSeq),
 		DataRadius: nodeRadius.Hex(),
 	}, nil
 }

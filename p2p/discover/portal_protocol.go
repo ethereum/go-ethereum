@@ -84,6 +84,12 @@ var ErrNilContentKey = errors.New("content key cannot be nil")
 
 var ContentNotFound = storage.ErrContentNotFound
 
+type clientTag string
+
+func (c clientTag) ENRKey() string { return "c" }
+
+const tag clientTag = "shisui"
+
 type ContentElement struct {
 	Node        enode.ID
 	ContentKeys [][]byte
@@ -184,6 +190,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 
 	localNode := enode.NewLocalNode(nodeDB, privateKey)
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	localNode.Set(tag)
 	addrs, err := net.InterfaceAddrs()
 
 	if err != nil {
@@ -191,8 +198,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 	}
 
 	for _, address := range addrs {
-
-		// check ip addr is loopback addr 
+		// check ip addr is loopback addr
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
 				localNode.SetStaticIP(ipnet.IP)
@@ -395,6 +401,8 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		p.replaceNode(node)
 		return nil, err
 	}
+
+	p.log.Trace("Reveice ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
 
 	return p.processPong(node, talkResp)
 }
@@ -755,7 +763,7 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	p.log.Error("handleTalkRequest", "id", id, "addr", addr)
+	p.log.Trace("handleTalkRequest", "id", id, "addr", addr)
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
