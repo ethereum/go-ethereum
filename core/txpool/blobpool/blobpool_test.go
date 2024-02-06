@@ -520,7 +520,7 @@ func TestOpenDrops(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -635,7 +635,7 @@ func TestOpenIndex(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -737,7 +737,7 @@ func TestOpenHeap(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -817,7 +817,7 @@ func TestOpenCap(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage, Datacap: datacap}, chain)
-		if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -1219,7 +1219,7 @@ func TestAdd(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain)
-		if err := pool.Init(big.NewInt(1), chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)

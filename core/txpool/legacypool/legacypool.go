@@ -288,12 +288,12 @@ func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings. The internal
 // goroutines will be spun up and the pool deemed operational afterwards.
-func (pool *LegacyPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.AddressReserver) error {
+func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.AddressReserver) error {
 	// Set the address reserver to request exclusive access to pooled accounts
 	pool.reserve = reserve
 
 	// Set the basic pool parameters
-	pool.gasTip.Store(uint256.MustFromBig(gasTip))
+	pool.gasTip.Store(uint256.NewInt(gasTip))
 
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available(might occur when node is not
@@ -434,11 +434,11 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	old := pool.gasTip.Load()
-	pool.gasTip.Store(uint256.MustFromBig(tip))
+	newTip := uint256.MustFromBig(tip)
+	pool.gasTip.Store(newTip)
 
 	// If the min miner fee increased, remove transactions below the new threshold
-	if uint256.MustFromBig(tip).Cmp(old) > 0 {
+	if old := pool.gasTip.Load(); newTip.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
 		drop := pool.all.RemotesBelowTip(tip)
 		for _, tx := range drop {
@@ -446,7 +446,7 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 		}
 		pool.priced.Removed(len(drop))
 	}
-	log.Info("Legacy pool tip threshold updated", "tip", tip)
+	log.Info("Legacy pool tip threshold updated", "tip", newTip)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
