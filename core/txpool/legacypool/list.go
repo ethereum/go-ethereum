@@ -326,11 +326,15 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		l.subTotalCost([]*types.Transaction{old})
 	}
 	// Add new tx cost to totalcost
-	l.totalcost.Add(l.totalcost, uint256.MustFromBig(tx.Cost()))
+	cost, overflow := uint256.FromBig(tx.Cost())
+	if overflow {
+		return false, nil
+	}
+	l.totalcost.Add(l.totalcost, cost)
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	if cost := uint256.MustFromBig(tx.Cost()); l.costcap.Cmp(cost) < 0 {
+	if l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
