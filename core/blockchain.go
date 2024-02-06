@@ -190,9 +190,10 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 type BlockchainLogger interface {
 	vm.EVMLogger
 	state.StateLogger
+	OnBlockchainInit(chainConfig *params.ChainConfig)
 	// OnBlockStart is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, chainConfig *params.ChainConfig)
+	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
 	OnBlockEnd(err error)
 	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
 	OnBeaconBlockRootStart(root common.Hash)
@@ -500,6 +501,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			bc.SetHead(compat.RewindToBlock)
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
+	}
+	if bc.logger != nil {
+		bc.logger.OnBlockchainInit(chainConfig)
 	}
 	// Start tx indexer/unindexer if required.
 	if txLookupLimit != nil {
@@ -1804,7 +1808,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil {
-				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), bc.chainConfig)
+				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
 				bc.logger.OnBlockEnd(nil)
 			}
 
@@ -1933,7 +1937,7 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), bc.chainConfig)
+		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()

@@ -662,6 +662,9 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
+	if s.logger != nil {
+		s.logger.OnNewAccount(addr, prev != nil)
+	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
@@ -869,7 +872,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			obj.deleted = true
 
 			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 && s.logger != nil {
+			if bal := obj.Balance(); s.logger != nil && obj.selfDestructed && bal.Sign() != 0 {
 				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
