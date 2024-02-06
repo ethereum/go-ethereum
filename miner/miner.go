@@ -197,6 +197,11 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
+func (miner *Miner) SetGasTip(tip *big.Int) error {
+	miner.worker.setGasTip(tip)
+	return nil
+}
+
 // SetRecommitInterval sets the interval for sealing work resubmitting.
 func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 	miner.worker.setRecommitInterval(interval)
