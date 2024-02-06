@@ -184,7 +184,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		misc.ApplyDAOHardFork(statedb)
 	}
 	if chainConfig.IsPrague(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp) {
-		core.ProcessParentBlockHash(statedb, pre.Env.Number-1, *pre.Env.ParentHash)
+		// insert all parent hashes in the contract
+		for i := pre.Env.Number - 1; i > 0 && i >= pre.Env.Number-257; i-- {
+			core.ProcessParentBlockHash(statedb, i, pre.Env.BlockHashes[math.HexOrDecimal64(i)])
+		}
 	}
 	var blobGasUsed uint64
 	for i, tx := range txs {

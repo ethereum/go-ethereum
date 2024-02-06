@@ -386,7 +386,12 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		fmt.Println("prestate", preState.GetTrie().(*trie.VerkleTrie).ToDot())
 
 		if config.IsPrague(b.header.Number, b.header.Time) {
-			ProcessParentBlockHash(statedb, b.header.Number.Uint64()-1, b.header.ParentHash)
+			if !config.IsPrague(b.parent.Number(), b.parent.Time()) {
+				// Transition case: insert all 256 ancestors
+				InsertBlockHashHistoryAtEip2935Fork(statedb, b.header.Number.Uint64()-1, b.header.ParentHash, chainreader)
+			} else {
+				ProcessParentBlockHash(statedb, b.header.Number.Uint64()-1, b.header.ParentHash)
+			}
 		}
 
 		// Mutate the state and block according to any hard-fork specs

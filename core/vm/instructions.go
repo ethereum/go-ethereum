@@ -515,22 +515,10 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 
 	evm := interpreter.evm
-	bnum := evm.Context.BlockNumber.Uint64()
-	// if Prague is active, check if we are past the 256th block so that
-	// reading from the contract can be activated (EIP 2935).
-	if evm.chainRules.IsPrague && bnum > 256 {
-		if getBlockHashFromContract(bnum-256, evm.StateDB, evm.Accesses) != (common.Hash{}) {
-			// EIP-2935 case: get the block number from the fork, as we are 256 blocks
-			// after the fork activation.
-
-			num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
-			return nil, nil
-		}
-
-		// if the 256th ancestor didn't have its hash stored in the
-		// history contract, then we are within 256 blocks of the
-		// fork activation, and the former behavior should be retained.
-		// Fall through the legacy use case.
+	// if Prague is active, read it from the history contract (EIP 2935).
+	if evm.chainRules.IsPrague {
+		num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
+		return nil, nil
 	}
 
 	var upper, lower uint64
