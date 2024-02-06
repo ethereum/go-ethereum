@@ -61,7 +61,7 @@ type (
 		Nonce Nonce
 	}
 
-	// Whoareyou contains the handshake challenge.
+	// WHOAREYOU contains the handshake challenge.
 	Whoareyou struct {
 		ChallengeData []byte   // Encoded challenge
 		Nonce         Nonce    // Nonce of request packet
