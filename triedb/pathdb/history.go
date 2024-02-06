@@ -66,7 +66,7 @@ import (
 const (
 	accountIndexSize = common.AddressLength + 13 // The length of encoded account index
 	slotIndexSize    = common.HashLength + 5     // The length of encoded slot index
-	historyMetaSize  = 9 + 2*common.HashLength   // The length of fixed size part of meta object
+	historyMetaSize  = 9 + 2*common.HashLength   // The length of encoded history meta
 
 	stateHistoryVersion = uint8(0) // initial version of state history structure.
 )
@@ -192,23 +192,19 @@ func (i *slotIndex) decode(blob []byte) {
 
 // meta describes the meta data of state history object.
 type meta struct {
-	version    uint8            // version tag of history object
-	parent     common.Hash      // prev-state root before the state transition
-	root       common.Hash      // post-state root after the state transition
-	block      uint64           // associated block number
-	incomplete []common.Address // list of address whose storage set is incomplete
+	version uint8       // version tag of history object
+	parent  common.Hash // prev-state root before the state transition
+	root    common.Hash // post-state root after the state transition
+	block   uint64      // associated block number
 }
 
 // encode packs the meta object into byte stream.
 func (m *meta) encode() []byte {
-	buf := make([]byte, historyMetaSize+len(m.incomplete)*common.AddressLength)
+	buf := make([]byte, historyMetaSize)
 	buf[0] = m.version
 	copy(buf[1:1+common.HashLength], m.parent.Bytes())
 	copy(buf[1+common.HashLength:1+2*common.HashLength], m.root.Bytes())
 	binary.BigEndian.PutUint64(buf[1+2*common.HashLength:historyMetaSize], m.block)
-	for i, h := range m.incomplete {
-		copy(buf[i*common.AddressLength+historyMetaSize:], h.Bytes())
-	}
 	return buf[:]
 }
 
@@ -219,20 +215,13 @@ func (m *meta) decode(blob []byte) error {
 	}
 	switch blob[0] {
 	case stateHistoryVersion:
-		if len(blob) < historyMetaSize {
+		if len(blob) != historyMetaSize {
 			return fmt.Errorf("invalid state history meta, len: %d", len(blob))
-		}
-		if (len(blob)-historyMetaSize)%common.AddressLength != 0 {
-			return fmt.Errorf("corrupted state history meta, len: %d", len(blob))
 		}
 		m.version = blob[0]
 		m.parent = common.BytesToHash(blob[1 : 1+common.HashLength])
 		m.root = common.BytesToHash(blob[1+common.HashLength : 1+2*common.HashLength])
 		m.block = binary.BigEndian.Uint64(blob[1+2*common.HashLength : historyMetaSize])
-		for pos := historyMetaSize; pos < len(blob); {
-			m.incomplete = append(m.incomplete, common.BytesToAddress(blob[pos:pos+common.AddressLength]))
-			pos += common.AddressLength
-		}
 		return nil
 	default:
 		return fmt.Errorf("unknown version %d", blob[0])
@@ -257,7 +246,6 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 	var (
 		accountList []common.Address
 		storageList = make(map[common.Address][]common.Hash)
-		incomplete  []common.Address
 	)
 	for addr := range states.Accounts {
 		accountList = append(accountList, addr)
@@ -272,18 +260,12 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
 	}
-	for addr := range states.Incomplete {
-		incomplete = append(incomplete, addr)
-	}
-	slices.SortFunc(incomplete, common.Address.Cmp)
-
 	return &history{
 		meta: &meta{
-			version:    stateHistoryVersion,
-			parent:     parent,
-			root:       root,
-			block:      block,
-			incomplete: incomplete,
+			version: stateHistoryVersion,
+			parent:  parent,
+			root:    root,
+			block:   block,
 		},
 		accounts:    states.Accounts,
 		accountList: accountList,
