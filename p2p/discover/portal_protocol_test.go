@@ -47,7 +47,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	}
 
 	contentQueue := make(chan *ContentElement, 50)
-	portalProtocol, err := NewPortalProtocol(conf, portalwire.HistoryNetwork, newkey(), &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), newkey(), &MockStorage{db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +75,11 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Second)
 
-	node1Addr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8777")
-	node2Addr, _ := utp.ResolveUTPAddr("utp", "127.0.0.1:8778")
+	udpAddrStr1 := fmt.Sprintf("%s:%d", node1.localNode.Node().IP(), node1.localNode.Node().UDP())
+	udpAddrStr2 := fmt.Sprintf("%s:%d", node2.localNode.Node().IP(), node2.localNode.Node().UDP())
+
+	node1Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr1)
+	node2Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr2)
 
 	cid := uint32(12)
 	cliSendMsgWithCid := "there are connection id : 12!"

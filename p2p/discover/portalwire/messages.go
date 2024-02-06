@@ -2,18 +2,6 @@ package portalwire
 
 //go:generate sszgen --path p2p/discover/portalwire/messages.go --exclude-objs BlockHeaderProof,PortalReceipts
 
-// Protocol IDs for the portal protocol.
-const (
-	StateNetwork             = "0x500a"
-	HistoryNetwork           = "0x500b"
-	TxGossipNetwork          = "0x500c"
-	HeaderGossipNetwork      = "0x500d"
-	CanonicalIndicesNetwork  = "0x500e"
-	BeaconLightClientNetwork = "0x501a"
-	UTPNetwork               = "0x757470"
-	Rendezvous               = "0x72656e"
-)
-
 // Message codes for the portal protocol.
 const (
 	PING        byte = 0x00
@@ -48,6 +36,18 @@ const (
 	// PerContentKeyOverhead each key in ContentKeysList has uint32 offset which results in 4 bytes per
 	// key overhead when serialized
 	PerContentKeyOverhead = 4
+)
+
+// Protocol IDs for the portal protocol.
+var (
+	StateNetwork             = []byte{0x50, 0x0a}
+	HistoryNetwork           = []byte{0x50, 0x0b}
+	TxGossipNetwork          = []byte{0x50, 0x0c}
+	HeaderGossipNetwork      = []byte{0x50, 0x0d}
+	CanonicalIndicesNetwork  = []byte{0x50, 0x0e}
+	BeaconLightClientNetwork = []byte{0x50, 0x1a}
+	UTPNetwork               = []byte{0x75, 0x74, 0x70}
+	Rendezvous               = []byte{0x72, 0x65, 0x6e}
 )
 
 type ContentKV struct {

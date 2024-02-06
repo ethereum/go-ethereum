@@ -241,7 +241,7 @@ func (p *PortalProtocol) Start() error {
 	}
 
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
-	p.DiscV5.RegisterTalkHandler(portalwire.UTPNetwork, p.handleUtpTalkRequest)
+	p.DiscV5.RegisterTalkHandler(string(portalwire.UTPNetwork), p.handleUtpTalkRequest)
 
 	go p.table.loop()
 
@@ -307,7 +307,7 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 			}
 
 			p.log.Trace("send to target data", "ip", target.IP().String(), "port", target.UDP(), "bufLength", len(buf))
-			_, err := p.DiscV5.TalkRequest(target, portalwire.UTPNetwork, buf)
+			_, err := p.DiscV5.TalkRequest(target, string(portalwire.UTPNetwork), buf)
 			return len(buf), err
 		})
 

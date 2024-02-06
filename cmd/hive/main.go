@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage/sqlite"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -61,7 +62,7 @@ func main() {
 
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config, "history", privateKey, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(config, string(portalwire.HistoryNetwork), privateKey, contentStorage, contentQueue)
 
 	if err != nil {
 		panic(err)

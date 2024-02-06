@@ -1,13 +1,13 @@
-FROM golang:1.20.13 as builder
+FROM --platform=linux/amd64 golang:1.20.13 as builder
 
 WORKDIR /app
 
 COPY . .
-
+RUN go env -w  GOPROXY=https://goproxy.cn,direct
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build ./cmd/hive/main.go
 
 
-FROM ubuntu:22.04
+FROM  --platform=linux/amd64 ubuntu:22.04
 
 COPY --from=builder /app/main /usr/local/bin/app
 

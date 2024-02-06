@@ -353,7 +353,7 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 		panic("couldn't generate key: " + err.Error())
 	}
 
-	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.HistoryNetwork, key, &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.HistoryNetwork), key, &MockStorage{db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}
