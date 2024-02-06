@@ -172,13 +172,16 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64, logger EVMLogger) (ret []byte, remainingGas uint64, err error) {
 	if dp, ok := p.(DynamicGasPrecompiledContract); ok {
 		return dp.RunAndCalculateGas(evm, sender, callingContract, input, suppliedGas)
 	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
+	}
+	if logger != nil {
+		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, GasChangeCallPrecompiledContract)
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(evm, sender, input)

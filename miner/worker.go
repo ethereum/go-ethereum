@@ -99,7 +99,7 @@ type environment struct {
 func (env *environment) copy() *environment {
 	cpy := &environment{
 		signer:   env.signer,
-		state:    env.state.Copy(),
+		state:    env.state.Copy().(vm.StateDB),
 		tcount:   env.tcount,
 		coinbase: env.coinbase,
 		header:   types.CopyHeader(env.header),
@@ -343,7 +343,7 @@ func (w *worker) pending() (*types.Block, vm.StateDB) {
 	if w.snapshotState == nil {
 		return nil, nil
 	}
-	return w.snapshotBlock, w.snapshotState.Copy()
+	return w.snapshotBlock, w.snapshotState.Copy().(vm.StateDB)
 }
 
 // pendingBlock returns pending block. The returned block can be nil in case the
@@ -738,7 +738,7 @@ func (w *worker) updateSnapshot(env *environment) {
 		trie.NewStackTrie(nil),
 	)
 	w.snapshotReceipts = copyReceipts(env.receipts)
-	w.snapshotState = env.state.Copy()
+	w.snapshotState = env.state.Copy().(vm.StateDB)
 }
 
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
@@ -784,7 +784,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
@@ -976,7 +976,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if header.ParentBeaconRoot != nil {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
+		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state, nil)
 	}
 	return env, nil
 }

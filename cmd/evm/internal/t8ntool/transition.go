@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -135,9 +136,21 @@ func Transition(ctx *cli.Context) error {
 			prevFile = traceFile
 			return logger.NewJSONLogger(logConfig, traceFile), nil
 		}
-	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
-			return nil, nil
+	} else if ctx.IsSet(TraceTracerFlag.Name) {
+		var config json.RawMessage
+		if ctx.IsSet(TraceTracerConfigFlag.Name) {
+			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
+		}
+		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			if err != nil {
+				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			tracer, err := directory.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			if err != nil {
+				return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+			}
+			return &traceWriter{tracer, traceFile}, nil
 		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in

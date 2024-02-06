@@ -681,7 +681,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	// Set infinite balance to the fake caller account.
 	from := stateDB.(*state.StateDB).GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256)
+	from.SetBalance(math.MaxBig256, state.BalanceChangeUnspecified)
 
 	// Execute the call.
 	msg := &core.Message{
