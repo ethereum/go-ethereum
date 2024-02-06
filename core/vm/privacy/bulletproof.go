@@ -830,7 +830,7 @@ func (ipp *InnerProdArg) Deserialize(proof []byte, numChallenges int) error {
 	if len(proof) <= (offset + 32*numChallenges) {
 		return errors.New("input data too short")
 	}
-	for i := 0; i < int(numChallenges); i++ {
+	for i := 0; i < numChallenges; i++ {
 		ipp.Challenges = append(ipp.Challenges, new(big.Int).SetBytes(proof[offset:offset+32]))
 		offset += 32
 	}
