@@ -100,7 +100,7 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
 	)
-	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
+	ProcessBeaconBlockRoot(root, vmenv, b.statedb, nil)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -406,6 +406,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
+
 	triedb := trie.NewDatabase(db, trie.HashDefaults)
 	defer triedb.Close()
 	_, err := genesis.Commit(db, triedb)

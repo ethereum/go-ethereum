@@ -201,7 +201,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		}
 
 		// Perform read-only call.
-		st.SetBalance(testBankAddress, math.MaxBig256)
+		st.SetBalance(testBankAddress, math.MaxBig256, state.BalanceChangeUnspecified)
 		msg := &core.Message{
 			From:              testBankAddress,
 			To:                &testContractAddr,
