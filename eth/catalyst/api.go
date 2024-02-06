@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -550,7 +551,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
 	if err != nil {
-		log.Warn("Invalid NewPayload params", "params", params, "error", err)
+		log.Warn("Invalid NewPayload params", "params", spew.Sdump(params), "error", err)
 		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
