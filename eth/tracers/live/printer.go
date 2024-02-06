@@ -84,7 +84,7 @@ func (p *Printer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	fmt.Printf("CaptureTxEnd: receipt=%s\n", buf)
 }
 
-func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
+func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header) {
 	if finalized != nil && safe != nil {
 		fmt.Printf("OnBlockStart: b=%v, td=%v, finalized=%v, safe=%v\n", b.NumberU64(), td, finalized.Number.Uint64(), safe.Number.Uint64())
 	} else {
@@ -94,6 +94,10 @@ func (p *Printer) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *typ
 
 func (p *Printer) OnBlockEnd(err error) {
 	fmt.Printf("OnBlockEnd: err=%v\n", err)
+}
+
+func (p *Printer) OnBlockchainInit(chainConfig *params.ChainConfig) {
+	fmt.Printf("OnBlockchainInit: chainConfig=%v\n", chainConfig)
 }
 
 func (p *Printer) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
