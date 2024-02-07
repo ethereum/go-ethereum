@@ -74,7 +74,7 @@ func NewSessionManager(blockchain blockchain, config *Config) *SessionManager {
 }
 
 // NewSession creates a new builder session and returns the session id
-func (s *SessionManager) NewSession(ctx context.Context) (string, error) {
+func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArgs) (string, error) {
 	// Wait for session to become available
 	select {
 	case <-s.sem:

@@ -19,7 +19,7 @@ func TestAPI(t *testing.T) {
 
 	c := NewClientFromRPC(rpc.DialInProc(srv))
 
-	res0, err := c.NewSession(context.Background())
+	res0, err := c.NewSession(context.Background(), nil)
 	require.NoError(t, err)
 	require.Equal(t, res0, "1")
 
@@ -30,7 +30,7 @@ func TestAPI(t *testing.T) {
 
 type nullSessionManager struct{}
 
-func (nullSessionManager) NewSession(ctx context.Context) (string, error) {
+func (nullSessionManager) NewSession(ctx context.Context, args *BuildBlockArgs) (string, error) {
 	return "1", ctx.Err()
 }
 

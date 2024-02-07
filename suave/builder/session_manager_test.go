@@ -22,7 +22,7 @@ func TestSessionManager_SessionTimeout(t *testing.T) {
 		SessionIdleTimeout: 500 * time.Millisecond,
 	})
 
-	id, err := mngr.NewSession(context.TODO())
+	id, err := mngr.NewSession(context.TODO(), nil)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -42,7 +42,7 @@ func TestSessionManager_MaxConcurrentSessions(t *testing.T) {
 	})
 
 	t.Run("SessionAvailable", func(t *testing.T) {
-		sess, err := mngr.NewSession(context.TODO())
+		sess, err := mngr.NewSession(context.TODO(), nil)
 		require.NoError(t, err)
 		require.NotZero(t, sess)
 	})
@@ -53,7 +53,7 @@ func TestSessionManager_MaxConcurrentSessions(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		sess, err := mngr.NewSession(ctx)
+		sess, err := mngr.NewSession(ctx, nil)
 		require.Zero(t, sess)
 		require.ErrorIs(t, err, context.Canceled)
 	})
@@ -62,7 +62,7 @@ func TestSessionManager_MaxConcurrentSessions(t *testing.T) {
 		time.Sleep(d) // Wait for the session to expire.
 
 		// We should be able to open a session again.
-		sess, err := mngr.NewSession(context.TODO())
+		sess, err := mngr.NewSession(context.TODO(), nil)
 		require.NoError(t, err)
 		require.NotZero(t, sess)
 	})
@@ -73,7 +73,7 @@ func TestSessionManager_SessionRefresh(t *testing.T) {
 		SessionIdleTimeout: 500 * time.Millisecond,
 	})
 
-	id, err := mngr.NewSession(context.TODO())
+	id, err := mngr.NewSession(context.TODO(), nil)
 	require.NoError(t, err)
 
 	// if we query the session under the idle timeout,
@@ -98,7 +98,7 @@ func TestSessionManager_StartSession(t *testing.T) {
 	// test that the session starts and it can simulate transactions
 	mngr, bMock := newSessionManager(t, &Config{})
 
-	id, err := mngr.NewSession(context.TODO())
+	id, err := mngr.NewSession(context.TODO(), nil)
 	require.NoError(t, err)
 
 	txn := bMock.state.newTransfer(t, common.Address{}, big.NewInt(1))

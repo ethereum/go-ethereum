@@ -29,9 +29,9 @@ func NewClientFromRPC(rpc rpcClient) *APIClient {
 	return &APIClient{rpc: rpc}
 }
 
-func (a *APIClient) NewSession(ctx context.Context) (string, error) {
+func (a *APIClient) NewSession(ctx context.Context, args *BuildBlockArgs) (string, error) {
 	var id string
-	err := a.rpc.CallContext(ctx, &id, "suavex_newSession")
+	err := a.rpc.CallContext(ctx, &id, "suavex_newSession", args)
 	return id, err
 }
 

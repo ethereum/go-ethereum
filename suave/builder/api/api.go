@@ -16,8 +16,21 @@ type Bundle struct {
 	RefundPercent   *int               `json:"percent,omitempty"`
 }
 
+type BuildBlockArgs struct {
+	Slot           uint64
+	ProposerPubkey []byte
+	Parent         common.Hash
+	Timestamp      uint64
+	FeeRecipient   common.Address
+	GasLimit       uint64
+	Random         common.Hash
+	Withdrawals    []*types.Withdrawal
+	Extra          []byte
+	FillPending    bool
+}
+
 type API interface {
-	NewSession(ctx context.Context) (string, error)
+	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
 	AddBundle(ctx context.Context, sessionId string, bundle Bundle) error
 }

@@ -8,7 +8,7 @@ import (
 
 // SessionManager is the backend that manages the session state of the builder API.
 type SessionManager interface {
-	NewSession(context.Context) (string, error)
+	NewSession(context.Context, *BuildBlockArgs) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
 	AddBundle(sessionId string, bundle Bundle) error
 }
@@ -24,8 +24,8 @@ type Server struct {
 	sessionMngr SessionManager
 }
 
-func (s *Server) NewSession(ctx context.Context) (string, error) {
-	return s.sessionMngr.NewSession(ctx)
+func (s *Server) NewSession(ctx context.Context, args *BuildBlockArgs) (string, error) {
+	return s.sessionMngr.NewSession(ctx, args)
 }
 
 func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
@@ -39,7 +39,7 @@ func (s *Server) AddBundle(ctx context.Context, sessionId string, bundle Bundle)
 type MockServer struct {
 }
 
-func (s *MockServer) NewSession(ctx context.Context) (string, error) {
+func (s *MockServer) NewSession(ctx context.Context, args *BuildBlockArgs) (string, error) {
 	return "", nil
 }
 
