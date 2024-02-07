@@ -66,7 +66,7 @@ func TestHTTPErrorResponseWithPut(t *testing.T) {
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
-	body := make([]rune, maxRequestContentLength+1)
+	body := make([]rune, defaultBodyLimit+1)
 	confirmRequestValidationCode(t,
 		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
@@ -106,7 +106,7 @@ func TestHTTPResponseWithEmptyGet(t *testing.T) {
 
 // This checks that maxRequestContentLength is not applied to the response of a request.
 func TestHTTPRespBodyUnlimited(t *testing.T) {
-	const respLength = maxRequestContentLength * 3
+	const respLength = defaultBodyLimit * 3
 
 	s := NewServer()
 	defer s.Stop()
