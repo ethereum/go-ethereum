@@ -93,7 +93,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
+	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
 }
 
 // newObject creates a state object.
@@ -408,7 +408,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 func (s *stateObject) AddBalance(amount *uint256.Int) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		if s.empty() {
 			s.touch()
 		}
@@ -420,7 +420,7 @@ func (s *stateObject) AddBalance(amount *uint256.Int) {
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
 func (s *stateObject) SubBalance(amount *uint256.Int) {
-	if amount.Sign() == 0 {
+	if amount.IsZero() {
 		return
 	}
 	s.SetBalance(new(uint256.Int).Sub(s.Balance(), amount))
