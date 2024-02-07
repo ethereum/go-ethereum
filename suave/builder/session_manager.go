@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/suave/builder/api"
 	"github.com/google/uuid"
 )
 
@@ -160,6 +161,14 @@ func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction)
 		return nil, err
 	}
 	return builder.AddTransaction(tx)
+}
+
+func (s *SessionManager) AddBundle(sessionId string, bundle api.Bundle) error {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return err
+	}
+	return builder.AddBundle(bundle)
 }
 
 // CalcBaseFee calculates the basefee of the header.

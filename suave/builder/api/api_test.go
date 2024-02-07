@@ -37,3 +37,7 @@ func (nullSessionManager) NewSession(ctx context.Context) (string, error) {
 func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
 	return &types.SimulateTransactionResult{Logs: []*types.SimulatedLog{}}, nil
 }
+
+func (nullSessionManager) AddBundle(sessionId string, bundle Bundle) error {
+	return nil
+}

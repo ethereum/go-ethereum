@@ -10,6 +10,7 @@ import (
 type SessionManager interface {
 	NewSession(context.Context) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
+	AddBundle(sessionId string, bundle Bundle) error
 }
 
 func NewServer(s SessionManager) *Server {
@@ -31,6 +32,10 @@ func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types
 	return s.sessionMngr.AddTransaction(sessionId, tx)
 }
 
+func (s *Server) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
+	return s.sessionMngr.AddBundle(sessionId, bundle)
+}
+
 type MockServer struct {
 }
 
@@ -40,4 +45,8 @@ func (s *MockServer) NewSession(ctx context.Context) (string, error) {
 
 func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
 	return &types.SimulateTransactionResult{}, nil
+}
+
+func (s *MockServer) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
+	return nil
 }
