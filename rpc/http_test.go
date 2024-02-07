@@ -40,11 +40,13 @@ func confirmStatusCode(t *testing.T, got, want int) {
 
 func confirmRequestValidationCode(t *testing.T, method, contentType, body string, expectedStatusCode int) {
 	t.Helper()
+
+	s := NewServer()
 	request := httptest.NewRequest(method, "http://url.com", strings.NewReader(body))
 	if len(contentType) > 0 {
 		request.Header.Set("Content-Type", contentType)
 	}
-	code, err := validateRequest(request)
+	code, err := s.validateRequest(request)
 	if code == 0 {
 		if err != nil {
 			t.Errorf("validation: got error %v, expected nil", err)
