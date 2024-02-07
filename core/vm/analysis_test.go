@@ -17,9 +17,12 @@
 package vm
 
 import (
+	"crypto/rand"
+	_ "embed"
 	"math/bits"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -71,6 +74,34 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	}
 	bench.StopTimer()
 }
+
+func BenchmarkJumpdestAnalysis_rand(b *testing.B) {
+	code := make([]byte, analysisCodeSize)
+	rand.Read(code)
+
+	bv := codeBitmap(code)
+	b.SetBytes(int64(len(code)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		codeBitmapInternal(code, bv)
+	}
+}
+
+var (
+	//go:embed testdata/weth9.bytecode
+	hexCodeWETH9 string
+	codeWETH9    = common.FromHex(hexCodeWETH9)
+)
+
+func BenchmarkJumpdestAnalysis_weth9(b *testing.B) {
+	bv := codeBitmap(codeWETH9)
+	b.SetBytes(int64(len(codeWETH9)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		codeBitmapInternal(codeWETH9, bv)
+	}
+}
+
 func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, analysisCodeSize)
