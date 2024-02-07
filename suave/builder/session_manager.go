@@ -171,6 +171,14 @@ func (s *SessionManager) AddBundle(sessionId string, bundle api.Bundle) error {
 	return builder.AddBundle(bundle)
 }
 
+func (s *SessionManager) BuildBlock(sessionId string) error {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return err
+	}
+	return builder.BuildBlock()
+}
+
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.

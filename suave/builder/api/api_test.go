@@ -41,3 +41,7 @@ func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction
 func (nullSessionManager) AddBundle(sessionId string, bundle Bundle) error {
 	return nil
 }
+
+func (nullSessionManager) BuildBlock(sessionId string) error {
+	return nil
+}

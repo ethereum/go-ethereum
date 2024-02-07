@@ -11,6 +11,7 @@ type SessionManager interface {
 	NewSession(context.Context, *BuildBlockArgs) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
 	AddBundle(sessionId string, bundle Bundle) error
+	BuildBlock(sessionId string) error
 }
 
 func NewServer(s SessionManager) *Server {
@@ -36,6 +37,10 @@ func (s *Server) AddBundle(ctx context.Context, sessionId string, bundle Bundle)
 	return s.sessionMngr.AddBundle(sessionId, bundle)
 }
 
+func (s *Server) BuildBlock(ctx context.Context, sessionId string) error {
+	return s.sessionMngr.BuildBlock(sessionId)
+}
+
 type MockServer struct {
 }
 
@@ -48,5 +53,9 @@ func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *t
 }
 
 func (s *MockServer) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
+	return nil
+}
+
+func (s *MockServer) BuildBlock(ctx context.Context) error {
 	return nil
 }

@@ -1,9 +1,13 @@
 package builder
 
 import (
+	"fmt"
 	"math/big"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -14,20 +18,31 @@ import (
 )
 
 type builder struct {
-	config   *builderConfig
-	txns     []*types.Transaction
-	receipts []*types.Receipt
-	state    *state.StateDB
-	gasPool  *core.GasPool
-	gasUsed  *uint64
-	signer   types.Signer
+	config             *builderConfig
+	txns               []*types.Transaction
+	receipts           []*types.Receipt
+	state              *state.StateDB
+	gasPool            *core.GasPool
+	gasUsed            *uint64
+	signer             types.Signer
+	args               api.BuildBlockArgs
+	coinbasePreBalance *big.Int
+	engine             consensus.Engine
 }
 
 type builderConfig struct {
-	preState *state.StateDB
-	header   *types.Header
-	config   *params.ChainConfig
-	context  core.ChainContext
+	preState    *state.StateDB
+	header      *types.Header
+	config      *params.ChainConfig
+	context     core.ChainContext
+	chainReader consensus.ChainHeaderReader
+
+	// newpayloadTimeout is the maximum timeout allowance for creating payload.
+	// The default value is 2 seconds but node operator can set it to arbitrary
+	// large value. A large timeout allowance may cause Geth to fail creating
+	// a non-empty payload within the specified time and eventually miss the slot
+	// in case there are some computation expensive transactions in txpool.
+	newpayloadTimeout time.Duration
 }
 
 func newBuilder(config *builderConfig) *builder {
@@ -35,11 +50,12 @@ func newBuilder(config *builderConfig) *builder {
 	var gasUsed uint64
 
 	return &builder{
-		config:  config,
-		state:   config.preState.Copy(),
-		gasPool: &gp,
-		gasUsed: &gasUsed,
-		signer:  types.MakeSigner(config.config, config.header.Number, config.header.Time),
+		config:             config,
+		state:              config.preState.Copy(),
+		gasPool:            &gp,
+		gasUsed:            &gasUsed,
+		signer:             types.MakeSigner(config.config, config.header.Number, config.header.Time),
+		coinbasePreBalance: config.preState.GetBalance(config.header.Coinbase),
 	}
 }
 
@@ -170,4 +186,90 @@ func (b *builder) AddTransaction(txn *types.Transaction) (*types.SimulateTransac
 	}
 
 	return result, nil
+}
+
+func (b *builder) commitPendingTxs() error {
+	interrupt := new(atomic.Int32)
+	timer := time.AfterFunc(b.config.newpayloadTimeout, func() {
+		interrupt.Store(commitInterruptTimeout)
+	})
+	defer timer.Stop()
+	if err := b.fillTransactions(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *builder) fillTransactions() error {
+	// Split the pending transactions into locals and remotes
+	// Fill the block with all available pending transactions.
+	pending := w.eth.TxPool().Pending(true)
+	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
+	for _, account := range w.eth.TxPool().Locals() {
+		if txs := remoteTxs[account]; len(txs) > 0 {
+			delete(remoteTxs, account)
+			localTxs[account] = txs
+		}
+	}
+	if len(localTxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
+		if err := b.commitTransactions(env, txs, interrupt); err != nil {
+			return err
+		}
+	}
+	if len(remoteTxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
+		if err := w.commitTransactions(env, txs, interrupt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *builder) BuildBlock() error {
+	if b.args.FillPending {
+		if err := b.commitPendingTxs(); err != nil {
+			return err
+		}
+	}
+
+	// create ephemeral addr and private key for payment txn
+	ephemeralPrivKey, err := crypto.GenerateKey()
+	if err != nil {
+		return err
+	}
+	ephemeralAddr := crypto.PubkeyToAddress(ephemeralPrivKey.PublicKey)
+
+	// Assume static 28000 gas transfers for both mev-share and proposer payments
+	refundTransferCost := new(big.Int).Mul(big.NewInt(28000), b.config.header.BaseFee)
+
+	profitPost := b.state.GetBalance(b.config.header.Coinbase)
+	proposerProfit := new(big.Int).Set(profitPost) // = post-pre-transfer_cost
+	proposerProfit = proposerProfit.Sub(profitPost, b.coinbasePreBalance)
+	proposerProfit = proposerProfit.Sub(proposerProfit, refundTransferCost)
+
+	currNonce := b.state.GetNonce(ephemeralAddr)
+	paymentTx, err := types.SignTx(types.NewTx(&types.LegacyTx{
+		Nonce:    currNonce,
+		To:       &b.args.FeeRecipient,
+		Value:    proposerProfit,
+		Gas:      28000,
+		GasPrice: b.config.header.BaseFee,
+	}), b.signer, ephemeralPrivKey)
+	if err != nil {
+		return fmt.Errorf("could not sign proposer payment: %w", err)
+	}
+
+	// commit payment txn
+	if _, err := b.AddTransaction(paymentTx); err != nil {
+		return err
+	}
+
+	block, err := b.engine.FinalizeAndAssemble(b.config.chainReader, b.config.header, b.state, b.txns, []*types.Header{}, b.receipts, b.args.Withdrawals)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("-- block --", block)
+	return nil
 }
