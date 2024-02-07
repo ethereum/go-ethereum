@@ -42,6 +42,9 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
+// CallStackPrecompileAddress is the default address for this precompiled contract.
+var CallStackPrecompileAddress = common.BytesToAddress([]byte{0x20})
+
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
 var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
