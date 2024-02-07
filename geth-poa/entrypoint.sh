@@ -94,7 +94,9 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--netrestrict $NET_RESTRICT \
 		"$NAT_FLAG" \
 		--txpool.accountqueue=512 \
-		--rpc.allow-unprotected-txs
+		--rpc.allow-unprotected-txs \
+		--miner.gasprice=1000000000 \
+		--gpo.maxprice=500000000000 \
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	echo "Starting signer node"
@@ -140,6 +142,8 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
+		--miner.gasprice=1000000000 \
+		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
 
 elif [ "$GETH_NODE_TYPE" = "member" ]; then
@@ -180,6 +184,8 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
+		--miner.gasprice=1000000000 \
+		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
 else
 	echo "Invalid GETH_NODE_TYPE specified"
