@@ -18,11 +18,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const (
-	// defaultTriedbcacheSize default triedb cache size in hash scheme. To prevent memory leaks.
-	defaultTriedbcacheSize = 1024 * 1024 * 1024
-)
-
 type Inspector struct {
 	trie           *Trie // traverse trie
 	db             *Database
@@ -38,7 +33,7 @@ type Inspector struct {
 }
 
 type trieTreeStat struct {
-	is_account_trie    bool
+	isAccountTrie      bool
 	theNodeStatByLevel [15]nodeStat
 	totalNodeStat      nodeStat
 }
@@ -72,16 +67,8 @@ func (trieStat *trieTreeStat) AtomicAdd(theNode node, height uint32) {
 	}
 }
 
-type stringWriter struct {
-	builder strings.Builder
-}
-
-func (sw stringWriter) Write(p []byte) (n int, err error) {
-	return sw.builder.Write(p)
-}
-
 func (trieStat *trieTreeStat) Display(ownerAddress string, treeType string) string {
-	sw := stringWriter{}
+	sw := new(strings.Builder)
 	table := tablewriter.NewWriter(sw)
 	table.SetHeader([]string{"-", "Level", "ShortNodeCnt", "FullNodeCnt", "ValueNodeCnt"})
 	if ownerAddress == "" {
@@ -104,7 +91,7 @@ func (trieStat *trieTreeStat) Display(ownerAddress string, treeType string) stri
 		{"Total", "-", fmt.Sprintf("%d", trieStat.totalNodeStat.ShortNodeCnt.Load()), fmt.Sprintf("%d", trieStat.totalNodeStat.FullNodeCnt.Load()), fmt.Sprintf("%d", trieStat.totalNodeStat.ValueNodeCnt.Load())},
 	})
 	table.Render()
-	return sw.builder.String()
+	return sw.String()
 }
 
 // NewInspector return an inspector obj
@@ -136,7 +123,7 @@ func NewInspector(tr *Trie, db *Database, stateRootHash common.Hash, blocknum ui
 // Run statistics, external call
 func (inspect *Inspector) Run() {
 	accountTrieStat := &trieTreeStat{
-		is_account_trie: true,
+		isAccountTrie: true,
 	}
 
 	if _, ok := inspect.result[""]; !ok {
@@ -144,20 +131,15 @@ func (inspect *Inspector) Run() {
 	}
 	log.Info("Find Account Trie Tree", "rootHash: ", inspect.trie.Hash().String(), "BlockNum: ", inspect.blocknum)
 
-	inspect.ConcurrentTraversal(inspect.trie, accountTrieStat, inspect.root, 0, []byte{})
+	inspect.concurrentTraversal(inspect.trie, accountTrieStat, inspect.root, 0, []byte{})
 	inspect.wg.Wait()
 }
 
-func (inspect *Inspector) SubConcurrentTraversal(theTrie *Trie, theTrieTreeStat *trieTreeStat, theNode node, height uint32, path []byte) {
-	inspect.ConcurrentTraversal(theTrie, theTrieTreeStat, theNode, height, path)
-	inspect.wg.Done()
-}
-
-func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *trieTreeStat, theNode node, height uint32, path []byte) {
+func (inspect *Inspector) concurrentTraversal(theTrie *Trie, theTrieTreeStat *trieTreeStat, theNode node, height uint32, path []byte) {
 	// print process progress
-	total_num := atomic.AddUint64(&inspect.totalNum, 1)
-	if total_num%100000 == 0 {
-		fmt.Printf("Complete progress: %v, go routines Num: %v\n", total_num, runtime.NumGoroutine())
+	totalNum := atomic.AddUint64(&inspect.totalNum, 1)
+	if totalNum%100000 == 0 {
+		fmt.Printf("Complete progress: %v, go routines Num: %v\n", totalNum, runtime.NumGoroutine())
 	}
 
 	// nil node
@@ -167,7 +149,7 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *tr
 
 	switch current := (theNode).(type) {
 	case *shortNode:
-		inspect.ConcurrentTraversal(theTrie, theTrieTreeStat, current.Val, height, append(path, current.Key...))
+		inspect.concurrentTraversal(theTrie, theTrieTreeStat, current.Val, height, append(path, current.Key...))
 	case *fullNode:
 		for idx, child := range current.Children {
 			if child == nil {
@@ -178,9 +160,12 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *tr
 				inspect.wg.Add(1)
 				dst := make([]byte, len(childPath))
 				copy(dst, childPath)
-				go inspect.SubConcurrentTraversal(theTrie, theTrieTreeStat, child, height+1, dst)
+				go func() {
+					inspect.concurrentTraversal(theTrie, theTrieTreeStat, theNode, height, path)
+					inspect.wg.Done()
+				}()
 			} else {
-				inspect.ConcurrentTraversal(theTrie, theTrieTreeStat, child, height+1, childPath)
+				inspect.concurrentTraversal(theTrie, theTrieTreeStat, child, height+1, childPath)
 			}
 		}
 	case hashNode:
@@ -189,7 +174,7 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *tr
 			fmt.Printf("Resolve HashNode error: %v, TrieRoot: %v, Height: %v, Path: %v\n", err, theTrie.Hash().String(), height+1, path)
 			return
 		}
-		inspect.ConcurrentTraversal(theTrie, theTrieTreeStat, n, height, path)
+		inspect.concurrentTraversal(theTrie, theTrieTreeStat, n, height, path)
 		return
 	case valueNode:
 		if !hasTerm(path) {
@@ -213,7 +198,7 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *tr
 		}
 		contractTrie.tracer.reset()
 		trieStat := &trieTreeStat{
-			is_account_trie: false,
+			isAccountTrie: false,
 		}
 
 		inspect.statLock.Lock()
@@ -224,7 +209,10 @@ func (inspect *Inspector) ConcurrentTraversal(theTrie *Trie, theTrieTreeStat *tr
 
 		// log.Info("Find Contract Trie Tree, rootHash: ", contractTrie.Hash().String(), "")
 		inspect.wg.Add(1)
-		go inspect.SubConcurrentTraversal(contractTrie, trieStat, contractTrie.root, 0, []byte{})
+		go func() {
+			inspect.concurrentTraversal(contractTrie, trieStat, contractTrie.root, 0, []byte{})
+			inspect.wg.Done()
+		}()
 	default:
 		panic(errors.New("invalid node type for traverse"))
 	}
@@ -239,12 +227,12 @@ func (inspect *Inspector) DisplayResult() {
 	}
 	fmt.Printf(inspect.result[""].Display("", "AccountTrie"))
 
-	type SortedTrie struct {
+	type sortedTrie struct {
 		totalNum     uint64
 		ownerAddress string
 	}
 	// display contract trie
-	var sortedTriesByNums []SortedTrie
+	var sortedTriesByNums []sortedTrie
 	var totalContactsNodeStat nodeStat
 	var contractTrieCnt uint64 = 0
 
@@ -257,7 +245,7 @@ func (inspect *Inspector) DisplayResult() {
 		totalContactsNodeStat.FullNodeCnt.Add(stat.totalNodeStat.FullNodeCnt.Load())
 		totalContactsNodeStat.ValueNodeCnt.Add(stat.totalNodeStat.ValueNodeCnt.Load())
 		totalNodeCnt := stat.totalNodeStat.ShortNodeCnt.Load() + stat.totalNodeStat.ValueNodeCnt.Load() + stat.totalNodeStat.FullNodeCnt.Load()
-		sortedTriesByNums = append(sortedTriesByNums, SortedTrie{totalNum: totalNodeCnt, ownerAddress: ownerAddress})
+		sortedTriesByNums = append(sortedTriesByNums, sortedTrie{totalNum: totalNodeCnt, ownerAddress: ownerAddress})
 	}
 	sort.Slice(sortedTriesByNums, func(i, j int) bool {
 		return sortedTriesByNums[i].totalNum > sortedTriesByNums[j].totalNum
