@@ -193,7 +193,11 @@ type BlockchainLogger interface {
 	OnBlockchainInit(chainConfig *params.ChainConfig)
 	// OnBlockStart is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header)
+	// `skip` indicates processing of this previously known block
+	// will be skipped. OnBlockStart and OnBlockEnd will be emitted to
+	// convey how chain is progressing. E.g. known blocks will be skipped
+	// when node is started after a crash.
+	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, skip bool)
 	OnBlockEnd(err error)
 	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
 	OnBeaconBlockRootStart(root common.Hash)
@@ -1808,7 +1812,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil {
-				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
+				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), true)
 				bc.logger.OnBlockEnd(nil)
 			}
 
@@ -1937,7 +1941,7 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock())
+		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), false)
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
