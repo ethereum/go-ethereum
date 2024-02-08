@@ -319,12 +319,12 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) er
 		for i, b := range args.Blobs {
 			c, err := kzg4844.BlobToCommitment(b)
 			if err != nil {
-				return err
+				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
 			p, err := kzg4844.ComputeBlobProof(b, c)
 			if err != nil {
-				return err
+				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 			}
 			proofs[i] = p
 		}
