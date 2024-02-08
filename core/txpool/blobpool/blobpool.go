@@ -456,7 +456,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(blob, tx); err != nil {
 		// This path is impossible unless the disk data representation changes
-		// across restarts. For that ever unprobable case, recover gracefully
+		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
@@ -471,7 +471,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	sender, err := p.signer.Sender(tx)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
-		// restarts. For that ever unprobable case, recover gracefully by ignoring
+		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
 		return err
@@ -711,7 +711,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // offload removes a tracked blob transaction from the pool and moves it into the
 // limbo for tracking until finality.
 //
-// The method may log errors for various unexpcted scenarios but will not return
+// The method may log errors for various unexpected scenarios but will not return
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
@@ -738,7 +738,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 }
 
 // Reset implements txpool.SubPool, allowing the blob pool's internal state to be
-// kept in sync with the main transacion pool's internal state.
+// kept in sync with the main transaction pool's internal state.
 func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
 	p.lock.Lock()
@@ -972,7 +972,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 }
 
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
-// to be kept in sync with the main transacion pool's gas requirements.
+// to be kept in sync with the main transaction pool's gas requirements.
 func (p *BlobPool) SetGasTip(tip *big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()

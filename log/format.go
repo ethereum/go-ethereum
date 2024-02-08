@@ -55,7 +55,7 @@ var stackEnabled atomic.Bool
 // should append the log locations too when printing entries.
 var locationEnabled atomic.Bool
 
-// locationLength is the maxmimum path length encountered, which all logs are
+// locationLength is the maximum path length encountered, which all logs are
 // padded to to aid in alignment.
 var locationLength atomic.Uint32
 

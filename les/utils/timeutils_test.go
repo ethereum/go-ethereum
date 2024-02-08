@@ -42,6 +42,6 @@ func TestUpdateTimer(t *testing.T) {
 	}
 	timer = NewUpdateTimer(sim, 0)
 	if updated := timer.Update(func(diff time.Duration) bool { return true }); !updated {
-		t.Fatalf("Doesn't update the clock without threshold limitaion")
+		t.Fatalf("Doesn't update the clock without threshold limitation")
 	}
 }

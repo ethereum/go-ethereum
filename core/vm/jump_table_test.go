@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestJumpTableCopy tests that deep copy is necessery to prevent modify shared jump table
+// TestJumpTableCopy tests that deep copy is necessary to prevent modify shared jump table
 func TestJumpTableCopy(t *testing.T) {
 	t.Parallel()
 

@@ -92,7 +92,7 @@ func setupMiner(t *testing.T, n int, genesis *core.Genesis) ([]*node.Node, []*et
 		// Start the node and wait until it's up
 		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
 		if err != nil {
-			t.Fatal("Error occured while initialising miner", "error", err)
+			t.Fatal("Error occurred while initialising miner", "error", err)
 		}
 
 		for stack.Server().NodeInfo().Ports.Listener == 0 {

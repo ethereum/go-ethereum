@@ -195,7 +195,7 @@ on log level.
 
 # Error Handling
 
-Becasuse log15 allows you to step around the type system, there are a few ways you can specify
+Because log15 allows you to step around the type system, there are a few ways you can specify
 invalid arguments to the logging functions. You could, for example, wrap something that is not
 a zero-argument function with log.Lazy or pass a context key that is not a string. Since logging libraries
 are typically the mechanism by which errors are reported, it would be onerous for the logging functions

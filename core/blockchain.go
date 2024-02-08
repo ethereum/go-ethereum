@@ -451,7 +451,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// The first thing the node will do is reconstruct the verification data for
 	// the head block (ethash cache or clique voting snapshot). Might as well do
 	// it in advance.
-	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
+	// BOR - commented out intentionally
+	// bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
@@ -2111,7 +2112,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// The chain importer is starting and stopping trie prefetchers. If a bad
 		// block or other error is hit however, an early return may not properly
 		// terminate the background threads. This defer ensures that we clean up
-		// and dangling prefetcher, without defering each and holding on live refs.
+		// and dangling prefetcher, without deferring each and holding on live refs.
 		if activeState != nil {
 			activeState.StopPrefetcher()
 		}
@@ -2197,15 +2198,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-		if err != nil {
-			return it.index, err
-		}
-
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
-		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
@@ -2763,6 +2755,12 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
+	// Reset the tx lookup cache in case to clear stale txlookups.
+	// This is done before writing any new chain data to avoid the
+	// weird scenario that canonical chain is changed while the
+	// stale lookups are still cached.
+	bc.txLookupCache.Purge()
+
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.
 	for i := len(newChain) - 1; i >= 1; i-- {
@@ -2777,11 +2775,13 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
-	indexesBatch := bc.db.NewBatch()
-	for _, tx := range types.HashDifference(deletedTxs, addedTxs) {
+	var (
+		indexesBatch = bc.db.NewBatch()
+		diffs        = types.HashDifference(deletedTxs, addedTxs)
+	)
+	for _, tx := range diffs {
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}
-
 	// Delete all hash markers that are not part of the new canonical chain.
 	// Because the reorg function does not handle new chain head, all hash
 	// markers greater than or equal to new chain head should be deleted.

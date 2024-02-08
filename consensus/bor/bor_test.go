@@ -41,12 +41,6 @@ func TestGenesisContractChange(t *testing.T) {
 						"balance": "0x1000",
 					},
 				},
-				"6": map[string]interface{}{
-					addr0.Hex(): map[string]interface{}{
-						"code":    hexutil.Bytes{0x1, 0x4},
-						"balance": "0x2000",
-					},
-				},
 			},
 		},
 	}
@@ -93,35 +87,24 @@ func TestGenesisContractChange(t *testing.T) {
 
 	root := genesis.Root()
 
-	// code does not change, balance remains 0
+	// code does not change
 	root, statedb = addBlock(root, 1)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
 
-	// code changes 1st time, balance remains 0
+	// code changes 1st time
 	root, statedb = addBlock(root, 2)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
 
-	// code same as 1st change, balance remains 0
+	// code same as 1st change
 	root, statedb = addBlock(root, 3)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
+
+	// code changes 2nd time
+	_, statedb = addBlock(root, 4)
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
+
+	// make sure balance change DOES NOT take effect
 	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
-
-	// code changes 2nd time, balance updates to 4096
-	root, statedb = addBlock(root, 4)
-	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
-
-	// code same as 2nd change, balance remains 4096
-	root, statedb = addBlock(root, 5)
-	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
-
-	// code changes 3rd time, balance remains 4096
-	_, statedb = addBlock(root, 6)
-	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x4})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
 }
 
 func TestEncodeSigHeaderJaipur(t *testing.T) {

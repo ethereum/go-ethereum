@@ -299,7 +299,7 @@ func TestForkWithBlockTime(t *testing.T) {
 			// Iterate over all the nodes and start mining
 			for _, node := range nodes {
 				if err := node.StartMining(); err != nil {
-					t.Fatal("Error occured while starting miner", "node", node, "error", err)
+					t.Fatal("Error occurred while starting miner", "node", node, "error", err)
 				}
 			}
 			var wg sync.WaitGroup
@@ -333,22 +333,22 @@ func TestForkWithBlockTime(t *testing.T) {
 
 			author0, err := nodes[0].Engine().Author(blockHeaderVal0)
 			if err != nil {
-				t.Error("Error occured while fetching author", "err", err)
+				t.Error("Error occurred while fetching author", "err", err)
 			}
 			author1, err := nodes[1].Engine().Author(blockHeaderVal1)
 			if err != nil {
-				t.Error("Error occured while fetching author", "err", err)
+				t.Error("Error occurred while fetching author", "err", err)
 			}
 			assert.Equal(t, author0, author1)
 
 			// After the end of sprint
 			author2, err := nodes[0].Engine().Author(blockHeaders[0])
 			if err != nil {
-				t.Error("Error occured while fetching author", "err", err)
+				t.Error("Error occurred while fetching author", "err", err)
 			}
 			author3, err := nodes[1].Engine().Author(blockHeaders[1])
 			if err != nil {
-				t.Error("Error occured while fetching author", "err", err)
+				t.Error("Error occurred while fetching author", "err", err)
 			}
 
 			if test.forkExpected {
