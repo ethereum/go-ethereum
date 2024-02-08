@@ -91,8 +91,5 @@ func (t *noop) OnLog(l *types.Log) {
 
 }
 
-func (t *noop) OnNewAccount(a common.Address, reset bool) {
-}
-
 func (t *noop) OnGasChange(old, new uint64, reason vm.GasChangeReason) {
 }
