@@ -237,7 +237,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
 					stTrie, err := trie.New(id, ndb)
 					if err != nil {
-						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
+						t.Fatalf("failed to retrieve storage trie for path %x: %v", node.syncPath[1], err)
 					}
 					data, _, err := stTrie.GetNode(node.syncPath[1])
 					if err != nil {
