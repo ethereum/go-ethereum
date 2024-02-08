@@ -512,7 +512,7 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactions
 
 	var depsWg sync.WaitGroup
 
-	EnableMVHashMap := w.chainConfig.Bor.IsParallelUniverse(env.header.Number)
+	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {
