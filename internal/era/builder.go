@@ -49,7 +49,7 @@ import (
 //	CompressedBody     = { type: [0x04, 0x00], data: snappyFramed(rlp(body)) }
 //	CompressedReceipts = { type: [0x05, 0x00], data: snappyFramed(rlp(receipts)) }
 //	TotalDifficulty    = { type: [0x06, 0x00], data: uint256(header.total_difficulty) }
-//	Accumulator        = { type: [0x07, 0x00], data: accumulator-root }
+//	AccumulatorRoot    = { type: [0x07, 0x00], data: accumulator-root }
 //	BlockIndex         = { type: [0x32, 0x66], data: block-index }
 //
 // Accumulator is computed by constructing an SSZ list of header-records of length at most
@@ -64,8 +64,8 @@ import (
 //	block-index := starting-number | index | index | index ... | count
 //
 // starting-number is the first block number in the archive. Every index is a
-// defined relative to index's location in the file. The total number of block
-// entries in the file is recorded in count.
+// defined relative to beginning of the record. The total number of block
+// entries in the file is recorded with count.
 //
 // Due to the accumulator size limit of 8192, the maximum number of blocks in
 // an Era1 batch is also 8192.
@@ -115,12 +115,14 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
 	// Write Era1 version entry before first block.
 	if b.startNum == nil {
-		if err := writeVersion(b.w); err != nil {
+		n, err := b.w.Write(TypeVersion, nil)
+		if err != nil {
 			return err
 		}
-		n := number
-		b.startNum = &n
+		startNum := number
+		b.startNum = &startNum
 		b.startTd = new(big.Int).Sub(td, difficulty)
+		b.written += n
 	}
 	if len(b.indexes) >= MaxEra1Size {
 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1Size)
@@ -169,7 +171,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("error writing accumulator: %w", err)
 	}
 	// Get beginning of index entry to calculate block relative offset.
-	base := int64(b.written + (3 * 8)) // skip e2store header (type, length) and start block
+	base := int64(b.written)
 
 	// Construct block index. Detailed format described in Builder
 	// documentation, but it is essentially encoded as:
@@ -186,7 +188,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	// relative offset, the corresponding block can be quickly read by
 	// performing a seek relative to the current position.
 	for i, offset := range b.indexes {
-		relative := int64(offset) - (base + int64(i)*8)
+		relative := int64(offset) - base
 		binary.LittleEndian.PutUint64(index[8+i*8:], uint64(relative))
 	}
 	binary.LittleEndian.PutUint64(index[8+count*8:], uint64(count))
@@ -219,10 +221,4 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 		return fmt.Errorf("error writing e2store entry: %w", err)
 	}
 	return nil
-}
-
-// writeVersion writes a version entry to e2store.
-func writeVersion(w *e2store.Writer) error {
-	_, err := w.Write(TypeVersion, nil)
-	return err
 }
