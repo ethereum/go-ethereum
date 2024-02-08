@@ -991,12 +991,10 @@ func TestSignTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
-		TransactionArgs: TransactionArgs{
-			From:  &b.acc.Address,
-			To:    &to,
-			Value: (*hexutil.Big)(big.NewInt(1)),
-		},
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:  &b.acc.Address,
+		To:    &to,
+		Value: (*hexutil.Big)(big.NewInt(1)),
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1031,13 +1029,11 @@ func TestSignBlobTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
-		TransactionArgs: TransactionArgs{
-			From:       &b.acc.Address,
-			To:         &to,
-			Value:      (*hexutil.Big)(big.NewInt(1)),
-			BlobHashes: []common.Hash{{0x01, 0x22}},
-		},
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{{0x01, 0x22}},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1067,13 +1063,11 @@ func TestSendBlobTransaction(t *testing.T) {
 		b.SetPoS()
 	})
 	api := NewTransactionAPI(b, nil)
-	res, err := api.FillTransaction(context.Background(), BlobTransactionArgs{
-		TransactionArgs: TransactionArgs{
-			From:       &b.acc.Address,
-			To:         &to,
-			Value:      (*hexutil.Big)(big.NewInt(1)),
-			BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
-		},
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:       &b.acc.Address,
+		To:         &to,
+		Value:      (*hexutil.Big)(big.NewInt(1)),
+		BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1112,18 +1106,16 @@ func TestFillBlobTransaction(t *testing.T) {
 	}
 	suite := []struct {
 		name string
-		args BlobTransactionArgs
+		args TransactionArgs
 		err  string
 		want *result
 	}{
 		{
 			name: "TestInvalidParamsCombination1",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:   &b.acc.Address,
+				To:     &to,
+				Value:  (*hexutil.Big)(big.NewInt(1)),
 				Blobs:  []kzg4844.Blob{{}},
 				Proofs: []kzg4844.Proof{{}},
 			},
@@ -1131,12 +1123,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestInvalidParamsCombination2",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}},
 				Commitments: []kzg4844.Commitment{{}},
 			},
@@ -1144,12 +1134,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestInvalidParamsCount1",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}, {}},
@@ -1158,12 +1146,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestInvalidParamsCount2",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}, {}},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}},
@@ -1172,12 +1158,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestInvalidProofVerification",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}, {}},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}, {}},
@@ -1186,12 +1170,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestGenerateBlobHashes",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{emptyBlob},
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
@@ -1207,13 +1189,11 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestValidBlobHashes",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:       &b.acc.Address,
-					To:         &to,
-					Value:      (*hexutil.Big)(big.NewInt(1)),
-					BlobHashes: []common.Hash{emptyBlobHash},
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes:  []common.Hash{emptyBlobHash},
 				Blobs:       []kzg4844.Blob{emptyBlob},
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
@@ -1229,13 +1209,11 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestInvalidBlobHashes",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:       &b.acc.Address,
-					To:         &to,
-					Value:      (*hexutil.Big)(big.NewInt(1)),
-					BlobHashes: []common.Hash{{0x01, 0x22}},
-				},
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes:  []common.Hash{{0x01, 0x22}},
 				Blobs:       []kzg4844.Blob{emptyBlob},
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
@@ -1244,12 +1222,10 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 		{
 			name: "TestGenerateBlobProofs",
-			args: BlobTransactionArgs{
-				TransactionArgs: TransactionArgs{
-					From:  &b.acc.Address,
-					To:    &to,
-					Value: (*hexutil.Big)(big.NewInt(1)),
-				},
+			args: TransactionArgs{
+				From:  &b.acc.Address,
+				To:    &to,
+				Value: (*hexutil.Big)(big.NewInt(1)),
 				Blobs: []kzg4844.Blob{emptyBlob},
 			},
 			want: &result{
