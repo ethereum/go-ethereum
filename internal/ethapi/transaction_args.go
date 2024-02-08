@@ -119,9 +119,6 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 
 	// BlobTx fields
-	if args.BlobHashes != nil && args.To == nil {
-		return errors.New(`blob transactions cannot have the form of a create transaction`)
-	}
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
@@ -130,8 +127,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 
 	// create check
-	if args.To == nil && len(args.data()) == 0 {
-		return errors.New(`contract creation without any data provided`)
+	if args.To == nil {
+		if args.BlobHashes != nil {
+			return errors.New(`missing "to" in blob transaction`)
+		}
+		if len(args.data()) == 0 {
+			return errors.New(`contract creation without any data provided`)
+		}
 	}
 
 	// Estimate the gas usage if necessary.
@@ -289,7 +291,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) er
 
 	// Passing blobs is not allowed in all contexts, only in specific methods.
 	if !args.blobSidecarAllowed {
-		return errors.New("'blobs' is not supported for this RPC method")
+		return errors.New(`"blobs" is not supported for this RPC method`)
 	}
 
 	n := len(args.Blobs)
