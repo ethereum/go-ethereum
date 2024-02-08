@@ -39,4 +39,9 @@ NODE1_PRIVATE_KEY=0xpk1
 NODE2_PRIVATE_KEY=0xpk2
 ```
 
+Or if you will use keystore to store private keys, you will need to submit password in .env file:
+```
+MEV_COMMIT_GETH_PASSWORD=primev
+```
+
 To get a standard starter .env file from primev internal development, [click here.](https://www.notion.so/Private-keys-and-env-for-settlement-layer-245a4f3f4fe040a7b72a6be91131d9c2?pvs=4), populate only the `NODE1_PRIVATE_KEY` and `NODE2_PRIVATE_KEY` fields.
