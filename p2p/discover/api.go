@@ -27,8 +27,8 @@ type NodeInfo struct {
 }
 
 type RoutingTableInfo struct {
-	Buckets     []string `json:"buckets"`
-	LocalNodeId string   `json:"localNodeId"`
+	Buckets     [][]string `json:"buckets"`
+	LocalNodeId string     `json:"localNodeId"`
 }
 
 type DiscV5PongResp struct {
@@ -64,14 +64,8 @@ func (d *DiscV5API) NodeInfo() *NodeInfo {
 func (d *DiscV5API) RoutingTableInfo() *RoutingTableInfo {
 	n := d.DiscV5.LocalNode().Node()
 
-	closestNodes := d.DiscV5.AllNodes()
-	buckets := make([]string, len(closestNodes))
-	for _, e := range closestNodes {
-		buckets = append(buckets, e.ID().String())
-	}
-
 	return &RoutingTableInfo{
-		Buckets:     buckets,
+		Buckets:     d.DiscV5.RoutingTableInfo(),
 		LocalNodeId: n.ID().String(),
 	}
 }
@@ -219,14 +213,8 @@ func (p *PortalAPI) NodeInfo() *NodeInfo {
 func (p *PortalAPI) HistoryRoutingTableInfo() *RoutingTableInfo {
 	n := p.portalProtocol.localNode.Node()
 
-	closestNodes := p.portalProtocol.table.Nodes()
-	buckets := make([]string, len(closestNodes))
-	for _, e := range closestNodes {
-		buckets = append(buckets, e.ID().String())
-	}
-
 	return &RoutingTableInfo{
-		Buckets:     buckets,
+		Buckets:     p.portalProtocol.RoutingTableInfo(),
 		LocalNodeId: n.ID().String(),
 	}
 }

@@ -268,6 +268,20 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 	return nodes
 }
 
+func (t *UDPv5) RoutingTableInfo() [][]string {
+	t.tab.mutex.Lock()
+	defer t.tab.mutex.Unlock()
+	nodes := make([][]string, 0)
+	for _, b := range &t.tab.buckets {
+		bucketNodes := make([]string, 0)
+		for _, n := range b.entries {
+			bucketNodes = append(bucketNodes, unwrapNode(n).ID().String())
+		}
+		nodes = append(nodes, bucketNodes)
+	}
+	return nodes
+}
+
 // LocalNode returns the current local Node running the
 // protocol.
 func (t *UDPv5) LocalNode() *enode.LocalNode {

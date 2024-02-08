@@ -260,6 +260,20 @@ func (p *PortalProtocol) Stop() {
 		p.log.Error("failed to close utp listener", "err", err)
 	}
 }
+func (p *PortalProtocol) RoutingTableInfo() [][]string {
+	p.table.mutex.Lock()
+	defer p.table.mutex.Unlock()
+	nodes := make([][]string, 0)
+	for _, b := range &p.table.buckets {
+		bucketNodes := make([]string, 0)
+		for _, n := range b.entries {
+			bucketNodes = append(bucketNodes, unwrapNode(n).ID().String())
+		}
+		nodes = append(nodes, bucketNodes)
+	}
+	p.log.Trace("rouingTableInfo nodes:", nodes)
+	return nodes
+}
 
 func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	listenAddr := p.ListenAddr
