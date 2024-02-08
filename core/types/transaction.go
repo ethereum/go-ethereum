@@ -424,26 +424,6 @@ func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
 	return tx.BlobGasFeeCap().Cmp(other)
 }
 
-// WithBlobTxSidecar returns a copy of tx with the blob sidecar.
-func (tx *Transaction) WithBlobTxSidecar(sidecar *BlobTxSidecar) *Transaction {
-	blobtx, ok := tx.inner.(*BlobTx)
-	if !ok {
-		return tx
-	}
-	cpy := &Transaction{
-		inner: blobtx.withSidecar(sidecar),
-		time:  tx.time,
-	}
-	// Note: tx.size cache not carried over because the sidecar was not included in size!
-	if h := tx.hash.Load(); h != nil {
-		cpy.hash.Store(h)
-	}
-	if f := tx.from.Load(); f != nil {
-		cpy.from.Store(f)
-	}
-	return cpy
-}
-
 // WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
 func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	blobtx, ok := tx.inner.(*BlobTx)
