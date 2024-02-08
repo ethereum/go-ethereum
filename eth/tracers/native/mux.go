@@ -159,12 +159,6 @@ func (t *muxTracer) OnLog(log *types.Log) {
 	}
 }
 
-func (t *muxTracer) OnNewAccount(a common.Address, reset bool) {
-	for _, t := range t.tracers {
-		t.OnNewAccount(a, reset)
-	}
-}
-
 // GetResult returns an empty json object.
 func (t *muxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)
