@@ -447,6 +447,9 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			// calculate L[j][idx] = s[j][idx]*G + c[idx]*Ring[j][idx]
 			px, py := curve.ScalarMult(rings[j][idx].X, rings[j][idx].Y, PadTo32Bytes(C[idx].Bytes())) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(PadTo32Bytes(S[j][idx].Bytes()))                            // sx, sy = s[n-1]*G
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return nil, errors.New("Could not create ring signature")
+			}
 			l_x, l_y := curve.Add(sx, sy, px, py)
 			L[j][idx] = &ecdsa.PublicKey{curve, l_x, l_y}
 			lT := append(PadTo32Bytes(l_x.Bytes()), PadTo32Bytes(l_y.Bytes())...)
@@ -456,6 +459,9 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			px, py = curve.ScalarMult(images[j].X, images[j].Y, C[idx].Bytes()) // px, py = c_i*I
 			hx, hy := HashPoint(rings[j][idx])
 			sx, sy = curve.ScalarMult(hx, hy, S[j][idx].Bytes()) // sx, sy = s[n-1]*H_p(P_i)
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return nil, errors.New("Could not create ring signature")
+			}
 			r_x, r_y := curve.Add(sx, sy, px, py)
 			R[j][idx] = &ecdsa.PublicKey{curve, r_x, r_y}
 			rT := append(PadTo32Bytes(r_x.Bytes()), PadTo32Bytes(r_y.Bytes())...)
@@ -516,6 +522,9 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 			// calculate L[i][j] = s[i][j]*G + c[j]*Ring[i][j]
 			px, py := curve.ScalarMult(rings[i][j].X, rings[i][j].Y, C[j].Bytes()) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(S[i][j].Bytes())                        // sx, sy = s[i]*G
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return false
+			}
 			l_x, l_y := curve.Add(sx, sy, px, py)
 			lT := append(PadTo32Bytes(l_x.Bytes()), PadTo32Bytes(l_y.Bytes())...)
 			//log.Info("L[i][j]", "i", i, "j", j, "L", common.Bytes2Hex(lT))
@@ -527,6 +536,9 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 			//log.Info("H[i][j]", "i", i, "j", j, "x.input", common.Bytes2Hex(rings[i][j].X.Bytes()), "y.input", common.Bytes2Hex(rings[i][j].Y.Bytes()))
 			//log.Info("H[i][j]", "i", i, "j", j, "x", common.Bytes2Hex(hx.Bytes()), "y", common.Bytes2Hex(hy.Bytes()))
 			sx, sy = curve.ScalarMult(hx, hy, S[i][j].Bytes()) // sx, sy = s[i]*H_p(P[i])
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return false
+			}
 			r_x, r_y := curve.Add(sx, sy, px, py)
 			rT := append(PadTo32Bytes(r_x.Bytes()), PadTo32Bytes(r_y.Bytes())...)
 			//log.Info("R[i][j]", "i", i, "j", j, "L", common.Bytes2Hex(rT))
