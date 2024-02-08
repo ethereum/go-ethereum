@@ -63,7 +63,7 @@ func (t *noop) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Ad
 func (t *noop) CaptureTxEnd(receipt *types.Receipt, err error) {
 }
 
-func (t *noop) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header) {
+func (t *noop) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, skip bool) {
 }
 
 func (t *noop) OnBlockEnd(err error) {
@@ -89,9 +89,6 @@ func (t *noop) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 
 func (t *noop) OnLog(l *types.Log) {
 
-}
-
-func (t *noop) OnNewAccount(a common.Address, reset bool) {
 }
 
 func (t *noop) OnGasChange(old, new uint64, reason vm.GasChangeReason) {

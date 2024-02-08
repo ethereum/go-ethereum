@@ -59,10 +59,6 @@ type StateLogger interface {
 	OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
 	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
 	OnLog(log *types.Log)
-	// OnNewAccount is called when a new account is created.
-	// Reset indicates an account existed at that address
-	// which will be replaced.
-	OnNewAccount(addr common.Address, reset bool)
 }
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -662,9 +658,6 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
-	if s.logger != nil {
-		s.logger.OnNewAccount(addr, prev != nil)
-	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
