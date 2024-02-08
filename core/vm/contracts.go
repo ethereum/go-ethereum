@@ -984,12 +984,12 @@ func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
 	if err != nil {
 		return nil, err
 	}
-	copy(pointBytes[:48], xBytes)
-	copy(pointBytes[48:], yBytes)
+	copy(pointBytes[:48], xBytes[:])
+	copy(pointBytes[48:], yBytes[:])
 
 	p := new(bls12381.G1Affine)
-	p.SetBytes(pointBytes)
-	return p, nil
+	_, err = p.SetBytes(pointBytes)
+	return p, err
 }
 
 // decodePointG2 given encoded (x, y) coordinates in 256 bytes returns a valid G2 Point.
@@ -1014,30 +1014,30 @@ func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
 	if err != nil {
 		return nil, err
 	}
-	copy(pointBytes[:48], x1Bytes)
-	copy(pointBytes[48:96], x0Bytes)
-	copy(pointBytes[96:144], y1Bytes)
-	copy(pointBytes[144:192], y0Bytes)
+	copy(pointBytes[:48], x1Bytes[:])
+	copy(pointBytes[48:96], x0Bytes[:])
+	copy(pointBytes[96:144], y1Bytes[:])
+	copy(pointBytes[144:192], y0Bytes[:])
 	p := new(bls12381.G2Affine)
-	p.SetBytes(pointBytes)
-	return p, nil
+	_, err = p.SetBytes(pointBytes)
+	return p, err
 }
 
 // decodeBLS12381FieldElement decodes BLS12-381 elliptic curve field element.
 // Removes top 16 bytes of 64 byte input.
-func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
+func decodeBLS12381FieldElement(in []byte) ([48]byte, error) {
+	var res [48]byte
 	if len(in) != 64 {
-		return nil, errors.New("invalid field element length")
+		return res, errors.New("invalid field element length")
 	}
 	// check top bytes
 	for i := 0; i < 16; i++ {
 		if in[i] != byte(0x00) {
-			return nil, errBLS12381InvalidFieldElementTopBytes
+			return res, errBLS12381InvalidFieldElementTopBytes
 		}
 	}
-	out := make([]byte, 48)
-	copy(out[:], in[16:])
-	return out, nil
+	copy(res[:], in[16:])
+	return res, nil
 }
 
 // encodePointG1 encodes a point into 128 bytes.
@@ -1094,10 +1094,13 @@ func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	elem := new(fp.Element).SetBytes(fe)
+	elem, err := fp.BigEndian.Element(&fe)
+	if err != nil {
+		return nil, err
+	}
 
 	// Compute mapping
-	r := bls12381.MapToG1(*elem)
+	r := bls12381.MapToG1(elem)
 	if err != nil {
 		return nil, err
 	}
@@ -1123,27 +1126,27 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	}
 
 	// Decode input field element
-	fe := make([]byte, 96)
 	c0, err := decodeBLS12381FieldElement(input[:64])
 	if err != nil {
 		return nil, err
 	}
-	copy(fe[48:], c0)
 	c1, err := decodeBLS12381FieldElement(input[64:])
 	if err != nil {
 		return nil, err
 	}
-	copy(fe[:48], c1)
 
-	// TODO rework once https://github.com/Consensys/gnark-crypto/issues/483 is solved
+	elem0, err := fp.BigEndian.Element(&c0)
+	if err != nil {
+		return nil, err
+	}
 
-	s0 := new(big.Int).SetBytes(c0)
-	s1 := new(big.Int).SetBytes(c1)
-
-	elem := new(bls12381.E2).SetString(s0.String(), s1.String())
+	elem1, err := fp.BigEndian.Element(&c1)
+	if err != nil {
+		return nil, err
+	}
 
 	// Compute mapping
-	r := bls12381.MapToG2(*elem)
+	r := bls12381.MapToG2(bls12381.E2{A0: elem0, A1: elem1})
 	if err != nil {
 		return nil, err
 	}
