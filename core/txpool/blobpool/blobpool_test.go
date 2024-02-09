@@ -1248,13 +1248,8 @@ func TestAdd(t *testing.T) {
 			keys[acc], _ = crypto.GenerateKey()
 			addrs[acc] = crypto.PubkeyToAddress(keys[acc].PublicKey)
 
-<<<<<<< HEAD
-			// Seed the state database with this acocunt
-			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance), state.BalanceChangeUnspecified)
-=======
 			// Seed the state database with this account
-			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance))
->>>>>>> master
+			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance), state.BalanceChangeUnspecified)
 			statedb.SetNonce(addrs[acc], seed.nonce)
 
 			// Sign the seed transactions and store them in the data store
