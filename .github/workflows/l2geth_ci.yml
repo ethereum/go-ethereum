@@ -69,15 +69,31 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.20.x
+        go-version: 1.18.x
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@latest
     - name: Checkout code
       uses: actions/checkout@v2
     - run: goimports -local github.com/scroll-tech/go-ethereum/ -w .
+    # If there are any diffs from goimports, fail.
+    - name: Verify no changes from goimports
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          exit 1
+        fi
+  go-mod-tidy-lint:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.20.x
+    - name: Checkout code
+      uses: actions/checkout@v2
     - run: go mod tidy
-    # If there are any diffs from goimports or go mod tidy, fail.
-    - name: Verify no changes from goimports and go mod tidy
+    # If there are any diffs from go mod tidy, fail.
+    - name: Verify no changes from go mod tidy
       run: |
         if [ -n "$(git status --porcelain)" ]; then
           exit 1
