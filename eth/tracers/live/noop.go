@@ -8,12 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
-	directory.LiveDirectory.Register("noop", newNoopTracer)
+	live.Directory.Register("noop", newNoopTracer)
 }
 
 // noop is a no-op live tracer. It's there to

@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
 	"github.com/ethereum/go-ethereum/lib/flags"
 	"github.com/ethereum/go-ethereum/lib/version"
@@ -181,7 +181,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	if ctx.IsSet(utils.VMTraceFlag.Name) {
 		if name := ctx.String(utils.VMTraceFlag.Name); name != "" {
-			t, err := directory.LiveDirectory.New(name)
+			t, err := live.Directory.New(name)
 			if err != nil {
 				utils.Fatalf("Failed to create tracer %q: %v", name, err)
 			}
