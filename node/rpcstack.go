@@ -56,6 +56,7 @@ type rpcEndpointConfig struct {
 	jwtSecret              []byte // optional JWT secret
 	batchItemLimit         int
 	batchResponseSizeLimit int
+	httpBodyLimit          int
 }
 
 type rpcHandler struct {
@@ -304,6 +305,9 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
 	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
+	if config.httpBodyLimit > 0 {
+		srv.SetHTTPBodyLimit(config.httpBodyLimit)
+	}
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
@@ -336,6 +340,9 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
 	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
+	if config.httpBodyLimit > 0 {
+		srv.SetHTTPBodyLimit(config.httpBodyLimit)
+	}
 	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
