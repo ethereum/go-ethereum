@@ -513,6 +513,11 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	for j := 0; j < ringsize; j++ {
 		var l []byte
 		for i := 0; i < numRing; i++ {
+			// Validate S[i][j] and C[j]
+			if !isValidScalar(S[i][j], curve) || !isValidScalar(C[j], curve) {
+				return false // Or handle the error as required
+			}
+
 			// calculate L[i][j] = s[i][j]*G + c[j]*Ring[i][j]
 			px, py := curve.ScalarMult(rings[i][j].X, rings[i][j].Y, C[j].Bytes()) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(S[i][j].Bytes())                        // sx, sy = s[i]*G
@@ -524,6 +529,11 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 			// calculate R_i = s[i][j]*H_p(Ring[i][j]) + c[j]*I[j]
 			px, py = curve.ScalarMult(image[i].X, image[i].Y, C[j].Bytes()) // px, py = c[i]*I
 			hx, hy := HashPoint(rings[i][j])
+
+			// Validate S[i][j], hx, and hy
+			if !isValidScalar(S[i][j], curve) || !isValidScalar(hx, curve) || !isValidScalar(hy, curve) {
+				return false // Or handle the error as required
+			}
 			//log.Info("H[i][j]", "i", i, "j", j, "x.input", common.Bytes2Hex(rings[i][j].X.Bytes()), "y.input", common.Bytes2Hex(rings[i][j].Y.Bytes()))
 			//log.Info("H[i][j]", "i", i, "j", j, "x", common.Bytes2Hex(hx.Bytes()), "y", common.Bytes2Hex(hy.Bytes()))
 			sx, sy = curve.ScalarMult(hx, hy, S[i][j].Bytes()) // sx, sy = s[i]*H_p(P[i])
@@ -547,6 +557,10 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	}
 
 	return bytes.Equal(sig.C.Bytes(), C[ringsize].Bytes())
+}
+
+func isValidScalar(scalar *big.Int, curve elliptic.Curve) bool {
+	return scalar.Sign() >= 0 && scalar.Cmp(curve.Params().N) < 0
 }
 
 func Link(sig_a *RingSignature, sig_b *RingSignature) bool {

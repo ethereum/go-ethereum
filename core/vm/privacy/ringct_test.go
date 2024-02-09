@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -126,4 +128,47 @@ func TestPadTo32Bytes(t *testing.T) {
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:39]), arr[7:39]), "Test PadTo32Bytes shorter than 32 bytes #8")
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:40]), arr[8:40]), "Test PadTo32Bytes shorter than 32 bytes #9")
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:41]), arr[9:41]), "Test PadTo32Bytes shorter than 32 bytes #10")
+}
+
+func TestCurveScalarMult(t *testing.T) {
+	curve := crypto.S256()
+
+	x, y := curve.ScalarBaseMult(curve.Params().N.Bytes())
+	if x == nil && y == nil {
+		fmt.Println("Scalar multiplication with base point returns nil when scalar is the scalar field")
+	}
+
+	x2, y2 := curve.ScalarMult(new(big.Int).SetUint64(uint64(100)), new(big.Int).SetUint64(uint64(2)), curve.Params().N.Bytes())
+	if x2 == nil && y2 == nil {
+		fmt.Println("Scalar multiplication with a point (not necessarily on curve) returns nil when scalar is the scalar field")
+	}
+}
+
+func TestNilPointerDereferencePanic(t *testing.T) {
+	numRing := 5
+	ringSize := 10
+	s := 7
+	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+
+	ringSig, err := Sign(m, rings, privkeys, s)
+	if err != nil {
+		fmt.Println("Failed to set up")
+	}
+
+	ringSig.S[0][0] = curve.Params().N // change one sig to the scalar field
+
+	sig, err := ringSig.Serialize()
+	if err != nil {
+		t.Error("Failed to Serialize input Ring signature")
+	}
+
+	deserializedSig, err := Deserialize(sig)
+	if err != nil {
+		t.Error("Failed to Deserialize Ring signature")
+	}
+
+	verified := Verify(deserializedSig, false)
+	if verified {
+		t.Error("Should failed to verify Ring signature as the signature is invalid")
+	}
 }
