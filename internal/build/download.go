@@ -40,7 +40,7 @@ func MustLoadChecksums(file string) *ChecksumDB {
 	if err != nil {
 		log.Fatal("can't load checksum file: " + err.Error())
 	}
-	return &ChecksumDB{strings.Split(string(content), "\n")}
+	return &ChecksumDB{strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")}
 }
 
 // Verify checks whether the given file is valid according to the checksum database.

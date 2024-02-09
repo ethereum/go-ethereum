@@ -64,6 +64,7 @@ func (api *MinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 	api.e.lock.Unlock()
 
 	api.e.txPool.SetGasTip((*big.Int)(&gasPrice))
+	api.e.Miner().SetGasTip((*big.Int)(&gasPrice))
 	return true
 }
 

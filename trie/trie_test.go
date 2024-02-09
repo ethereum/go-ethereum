@@ -333,7 +333,7 @@ func TestLargeValue(t *testing.T) {
 	trie.Hash()
 }
 
-// TestRandomCases tests som cases that were found via random fuzzing
+// TestRandomCases tests some cases that were found via random fuzzing
 func TestRandomCases(t *testing.T) {
 	var rt = []randTestStep{
 		{op: 6, key: common.Hex2Bytes(""), value: common.Hex2Bytes("")},                                                                                                 // step 0
