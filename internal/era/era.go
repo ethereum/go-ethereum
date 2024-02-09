@@ -221,9 +221,10 @@ func (e *Era) Count() uint64 {
 // is the absolute block number desired.
 func (e *Era) readOffset(n uint64) (int64, error) {
 	var (
-		firstIndex  = -8 - int64(e.m.count)*8               // size of count - index entries
-		indexOffset = int64(n-e.m.start) * 8                // desired index * size of indexes
-		offOffset   = e.m.length + firstIndex + indexOffset // offset of block offset
+		blockIndexRecordOffset = e.m.length - 24 - int64(e.m.count)*8 // skips start, count, and header
+		firstIndex             = blockIndexRecordOffset + 16          // first index after header / start-num
+		indexOffset            = int64(n-e.m.start) * 8               // desired index * size of indexes
+		offOffset              = firstIndex + indexOffset             // offset of block offset
 	)
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -231,10 +232,10 @@ func (e *Era) readOffset(n uint64) (int64, error) {
 	if _, err := e.f.ReadAt(e.buf[:], offOffset); err != nil {
 		return 0, err
 	}
-	// Since the block offset is relative from its location + size of index
-	// value (8), we need to add it to it's offset to get the block's
-	// absolute offset.
-	return offOffset + 8 + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
+	// Since the block offset is relative from the start of the block index record
+	// we need to add the record offset to it's offset to get the block's absolute
+	// offset.
+	return blockIndexRecordOffset + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
 }
 
 // newReader returns a snappy.Reader for the e2store entry value at off.

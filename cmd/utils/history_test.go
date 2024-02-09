@@ -134,7 +134,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 			for j := 0; it.Next(); j++ {
 				n := i*int(step) + j
 				if it.Error() != nil {
-					t.Fatalf("error reading block entry %d: %v", n, err)
+					t.Fatalf("error reading block entry %d: %v", n, it.Error())
 				}
 				block, receipts, err := it.BlockAndReceipts()
 				if err != nil {
