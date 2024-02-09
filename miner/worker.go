@@ -920,7 +920,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
 	// create and add empty mvHashMap in statedb
-	if EnableMVHashMap {
+	if EnableMVHashMap && w.IsRunning() {
 		deps = map[int]map[int]bool{}
 
 		chDeps = make(chan blockstm.TxDep)
@@ -956,7 +956,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 mainloop:
 	for {
 		if interruptCtx != nil {
-			if EnableMVHashMap {
+			if EnableMVHashMap && w.IsRunning() {
 				env.state.AddEmptyMVHashMap()
 			}
 
@@ -1055,7 +1055,7 @@ mainloop:
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 
-			if EnableMVHashMap {
+			if EnableMVHashMap && w.IsRunning() {
 				env.depsMVFullWriteList = append(env.depsMVFullWriteList, env.state.MVFullWriteList())
 				env.mvReadMapList = append(env.mvReadMapList, env.state.MVReadMap())
 
@@ -1085,7 +1085,7 @@ mainloop:
 			txs.Pop()
 		}
 
-		if EnableMVHashMap {
+		if EnableMVHashMap && w.IsRunning() {
 			env.state.ClearReadMap()
 			env.state.ClearWriteMap()
 		}
