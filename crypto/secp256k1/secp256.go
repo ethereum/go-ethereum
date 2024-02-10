@@ -1,18 +1,9 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// Copyright 2015 Jeffrey Wilcke, Felix Lange, Gustav Simonsson. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be found in
+// the LICENSE file.
+
+//go:build !gofuzz && cgo
+// +build !gofuzz,cgo
 
 // Package secp256k1 wraps the bitcoin secp256k1 C library.
 package secp256k1
@@ -20,12 +11,24 @@ package secp256k1
 /*
 #cgo CFLAGS: -I./libsecp256k1
 #cgo CFLAGS: -I./libsecp256k1/src/
+
+#ifdef __SIZEOF_INT128__
+#  define HAVE___INT128
+#  define USE_FIELD_5X52
+#  define USE_SCALAR_4X64
+#else
+#  define USE_FIELD_10X26
+#  define USE_SCALAR_8X32
+#endif
+
+#ifndef NDEBUG
+#  define NDEBUG
+#endif
+
+#define USE_ENDOMORPHISM
 #define USE_NUM_NONE
-#define USE_FIELD_10X26
 #define USE_FIELD_INV_BUILTIN
-#define USE_SCALAR_8X32
 #define USE_SCALAR_INV_BUILTIN
-#define NDEBUG
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
 #include "ext.h"
@@ -98,7 +101,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	return sig, nil
 }
 
-// RecoverPubkey returns the the public key of the signer.
+// RecoverPubkey returns the public key of the signer.
 // msg must be the 32-byte hash of the message to be signed.
 // sig must be a 65-byte compact ECDSA signature containing the
 // recovery id as the last element.

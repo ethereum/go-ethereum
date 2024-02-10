@@ -13,6 +13,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
+
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
@@ -259,6 +261,10 @@ func Deserialize(r []byte) (*RingSignature, error) {
 
 	sig.SerializedRing = r
 
+	if !Verify(sig, false) {
+		return nil, errors.New("failed to deserialize, invalid ring signature")
+	}
+
 	return sig, nil
 }
 
@@ -357,7 +363,8 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 	for i := 0; i < numRing; i++ {
 		pubkeys[i] = &privkeys[i].PublicKey
 	}
-	curve := pubkeys[0].Curve
+	//cast to BitCurve used in go-eth since elliptic.Curve.Add() and elliptic.Curve.ScalarMult() is deprecated
+	curve := pubkeys[0].Curve.(*secp256k1.BitCurve)
 	sig := new(RingSignature)
 	sig.Size = ringsize
 	sig.NumRing = numRing
@@ -504,8 +511,23 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	S := sig.S
 	C := make([]*big.Int, ringsize+1)
 	C[0] = sig.C
-	curve := sig.Curve
+	//cast to BitCurve used in go-eth since elliptic.Curve.Add() and elliptic.Curve.ScalarMult() is deprecated
+	curve := sig.Curve.(*secp256k1.BitCurve)
 	image := sig.I
+
+	//check on curve
+	for i := 0; i < numRing; i++ {
+		onCurve := curve.IsOnCurve(image[i].X, image[i].Y)
+		if !onCurve {
+			return false
+		}
+		for j := 0; j < ringsize; j++ {
+			onCurve := curve.IsOnCurve(rings[i][j].X, rings[i][j].Y)
+			if !onCurve {
+				return false
+			}
+		}
+	}
 
 	// calculate c[i+1] = H(m, s[i]*G + c[i]*P[i])
 	// and c[0] = H)(m, s[n-1]*G + c[n-1]*P[n-1]) where n is the ring size

@@ -9,6 +9,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
 )
 
 func TestSign(t *testing.T) {
@@ -128,6 +130,104 @@ func TestPadTo32Bytes(t *testing.T) {
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:39]), arr[7:39]), "Test PadTo32Bytes shorter than 32 bytes #8")
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:40]), arr[8:40]), "Test PadTo32Bytes shorter than 32 bytes #9")
 	assert.True(t, bytes.Equal(PadTo32Bytes(arr[10:41]), arr[9:41]), "Test PadTo32Bytes shorter than 32 bytes #10")
+}
+
+func TestCurveAddNegative(t *testing.T) {
+	curve := crypto.S256().(*secp256k1.BitCurve)
+
+	x1, y1 := curve.ScalarBaseMult(new(big.Int).SetUint64(uint64(2)).Bytes())
+	fmt.Printf("Point(%x, %x)\n", x1, y1)
+
+	x2 := x1
+	y2 := new(big.Int).Neg(y1) // negative of point (x1,y1)
+
+	x3, y3 := curve.Add(x1, y1, x2, y2)
+	fmt.Printf("Output is Point(%x, %x)\n", x3, y3)
+
+	x0 := new(big.Int).SetUint64(uint64(0))
+	y0 := new(big.Int).SetUint64(uint64(0)) // infinity
+
+	if (x3.Cmp(x0) == 0) && (y3.Cmp(y0) == 0) {
+		// fmt.Printf("Correct, add negative of self should yield (0,0)")
+	} else {
+		t.Error("Incorrect, add negative of self did not yield (0,0)")
+	}
+}
+
+func TestCurveAddZero(t *testing.T) {
+	// curve := crypto.S256()
+	curve := crypto.S256().(*secp256k1.BitCurve)
+
+	x1, y1 := curve.ScalarBaseMult(new(big.Int).SetUint64(uint64(1)).Bytes())
+	fmt.Printf("Point(%x, %x)\n", x1, y1)
+
+	x0 := new(big.Int).SetUint64(uint64(0))
+	y0 := new(big.Int).SetUint64(uint64(0)) // infinity
+	fmt.Printf("Is point (%d,%d) on the curve: %t \n", x0, y0, curve.IsOnCurve(x0, y0))
+
+	x2, y2 := curve.Add(x1, y1, x0, y0)
+	fmt.Printf("Output is Point(%x, %x)\n", x2, y2)
+
+	if (x1.Cmp(x2) == 0) && (y1.Cmp(y2) == 0) {
+		// fmt.Printf("Correct, Point on curve is the same after Zero addition\n")
+	} else {
+		t.Error("Incorrect, Point on curve changed after Zero addition\n")
+	}
+}
+
+func TestOnCurveVerify(t *testing.T) {
+	numRing := 5
+	ringSize := 10
+	s := 5
+	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	ringSignature, err := Sign(m, rings, privkeys, s)
+	if err != nil {
+		t.Error("Failed to create Ring signature")
+	}
+
+	valid := Verify(ringSignature, false)
+	if !valid {
+		t.Error("Incorrect, unmodified ringSignature should be valid")
+	}
+
+	ringsModified := ringSignature.Ring
+	ringsModified[0][0].X = big.NewInt(1)
+	ringsModified[0][0].Y = big.NewInt(1)
+	valid = Verify(ringSignature, false)
+	if valid {
+		t.Error("Incorrect, modified ringSignature should be invalid")
+	}
+}
+
+func TestOnCurveDeserialize(t *testing.T) {
+	numRing := 5
+	ringSize := 10
+	s := 5
+	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	ringSignature, err := Sign(m, rings, privkeys, s)
+	if err != nil {
+		t.Error("Failed to create Ring signature")
+	}
+
+	sig, err := ringSignature.Serialize()
+	if err != nil {
+		t.Error("Failed to Serialize input Ring signature")
+	}
+	_, err = Deserialize(sig)
+	if err != nil {
+		t.Error("Failed to Deserialize")
+	}
+
+	ringsModified := ringSignature.Ring
+	ringsModified[0][0].X = big.NewInt(1)
+	ringsModified[0][0].Y = big.NewInt(1)
+
+	sig, err = ringSignature.Serialize()
+	if err != nil {
+		t.Error("Failed to Serialize input Ring signature")
+	}
+	_, err = Deserialize(sig)
+	assert.EqualError(t, err, "failed to deserialize, invalid ring signature")
 }
 
 func TestCurveScalarMult(t *testing.T) {
