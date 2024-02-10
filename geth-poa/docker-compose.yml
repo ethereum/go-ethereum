@@ -223,6 +223,7 @@ services:
       - 60604:60601
     volumes:
       - geth-data-node3:/data
+      - geth-data-backup:/backup
     profiles:
       - settlement
     labels:
@@ -340,6 +341,7 @@ volumes:
   geth-data-node1:
   geth-data-node2:
   geth-data-node3:
+  geth-data-backup:
   geth-data-l1-bootnode:
   geth-data-l1-first-signer:
   geth-data-l1-second-signer:

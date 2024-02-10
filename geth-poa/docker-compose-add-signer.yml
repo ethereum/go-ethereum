@@ -1,0 +1,57 @@
+version: '3'
+services:
+  sl-node-signer:
+    build: 
+      context: ..
+      dockerfile: geth-poa/Dockerfile
+    environment:
+      - GETH_NODE_TYPE=signer
+      - BLOCK_SIGNER_ADDRESS=${SIGNER_NODE_ADDRESS}
+      - BLOCK_SIGNER_PRIVATE_KEY=${SIGNER_NODE_PRIVATE_KEY}
+      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
+      - NET_RESTRICT=172.29.0.0/16
+    networks:
+      primev_net:
+        ipv4_address: ${SIGNER_NODE_IP}
+    ports:
+      - ${SIGNER_NODE_PORT}:60601
+    volumes:
+      - geth-data-signer-node:/data
+    profiles:
+      - settlement
+    labels:
+      com.datadoghq.ad.check_names: '["openmetrics"]'
+      com.datadoghq.ad.init_configs: '[{}]'
+      com.datadoghq.ad.instances: |
+        [
+          {
+            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
+            "namespace": "geth-poa",
+            "metrics": [
+              "txpool*",
+              "trie*",
+              "system*",
+              "state*",
+              "rpc*",
+              "p2p*",
+              "eth*",
+              "chain*",
+              "clique*"
+              "vm*"
+            ]
+          }
+        ]
+
+networks:
+  primev_net:
+    external: true
+  l1_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.14.0.0/16
+
+volumes:
+  geth-data-signer-node:
+
