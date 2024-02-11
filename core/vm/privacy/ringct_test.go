@@ -231,7 +231,7 @@ func TestOnCurveDeserialize(t *testing.T) {
 }
 
 func TestCurveScalarMult(t *testing.T) {
-	curve := crypto.S256()
+	curve := crypto.S256().(*secp256k1.BitCurve)
 
 	x, y := curve.ScalarBaseMult(curve.Params().N.Bytes())
 	if x == nil && y == nil {
@@ -262,13 +262,7 @@ func TestNilPointerDereferencePanic(t *testing.T) {
 		t.Error("Failed to Serialize input Ring signature")
 	}
 
-	deserializedSig, err := Deserialize(sig)
-	if err != nil {
-		t.Error("Failed to Deserialize Ring signature")
-	}
-
-	verified := Verify(deserializedSig, false)
-	if verified {
-		t.Error("Should failed to verify Ring signature as the signature is invalid")
-	}
+	_ , err = Deserialize(sig)
+	// Should failed to verify Ring signature as the signature is invalid
+	assert.EqualError(t, err, "failed to deserialize, invalid ring signature")
 }
