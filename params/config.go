@@ -388,7 +388,7 @@ func (v *V2) UpdateConfig(round uint64) {
 		}
 	}
 	// update to current config
-	log.Warn("[updateV2Config] Update config", "index", index, "round", round, "SwitchRound", v.AllConfigs[index].SwitchRound)
+	log.Info("[updateV2Config] Update config", "index", index, "round", round, "SwitchRound", v.AllConfigs[index].SwitchRound)
 	v.CurrentConfig = v.AllConfigs[index]
 }
 
