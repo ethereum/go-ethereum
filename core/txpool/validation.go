@@ -209,7 +209,7 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	}
 	// Ensure the transactor has enough funds to cover the transaction costs
 	var (
-		balance = opts.State.GetBalance(from)
+		balance = opts.State.GetBalance(from).ToBig()
 		cost    = tx.Cost()
 	)
 	if balance.Cmp(cost) < 0 {
