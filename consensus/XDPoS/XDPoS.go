@@ -451,6 +451,9 @@ func (x *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (
 	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
 	case params.ConsensusEngineVersion2:
 		sp, err := x.EngineV2.GetSnapshot(chain, header)
+		if err != nil {
+			return nil, err
+		}
 		return &utils.PublicApiSnapshot{
 			Number:  sp.Number,
 			Hash:    sp.Hash,
@@ -458,6 +461,9 @@ func (x *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (
 		}, err
 	default: // Default "v1"
 		sp, err := x.EngineV1.GetSnapshot(chain, header)
+		if err != nil {
+			return nil, err
+		}
 		// Convert to a standard PublicApiSnapshot type, otherwise it's a breaking change to API
 		return &utils.PublicApiSnapshot{
 			Number:  sp.Number,

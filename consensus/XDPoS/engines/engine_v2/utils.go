@@ -161,6 +161,9 @@ func (x *XDPoS_v2) GetRoundNumber(header *types.Header) (types.Round, error) {
 
 func (x *XDPoS_v2) GetSignersFromSnapshot(chain consensus.ChainReader, header *types.Header) ([]common.Address, error) {
 	snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
+	if err != nil {
+		return nil, err
+	}
 	return snap.NextEpochMasterNodes, err
 }
 
