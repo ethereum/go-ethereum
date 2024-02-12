@@ -1869,6 +1869,8 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	args.blobSidecarAllowed = true
+
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}

@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -131,14 +132,16 @@ func (args *SendTxArgs) data() []byte {
 }
 
 // ToTransaction converts the arguments to a transaction.
-func (args *SendTxArgs) ToTransaction() *types.Transaction {
+func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 	// Add the To-field, if specified
 	var to *common.Address
 	if args.To != nil {
 		dstAddr := args.To.Address()
 		to = &dstAddr
 	}
-
+	if err := args.validateTxSidecar(); err != nil {
+		return nil, err
+	}
 	var data types.TxData
 	switch {
 	case args.BlobHashes != nil:
@@ -204,7 +207,78 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			Data:     args.data(),
 		}
 	}
-	return types.NewTx(data)
+
+	return types.NewTx(data), nil
+}
+
+// validateTxSidecar validates blob data, if present
+func (args *SendTxArgs) validateTxSidecar() error {
+	// No blobs, we're done.
+	if args.Blobs == nil {
+		return nil
+	}
+
+	n := len(args.Blobs)
+	// Assume user provides either only blobs (w/o hashes), or
+	// blobs together with commitments and proofs.
+	if args.Commitments == nil && args.Proofs != nil {
+		return errors.New(`blob proofs provided while commitments were not`)
+	} else if args.Commitments != nil && args.Proofs == nil {
+		return errors.New(`blob commitments provided while proofs were not`)
+	}
+
+	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	if args.Commitments != nil && len(args.Commitments) != n {
+		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+	}
+	if args.Proofs != nil && len(args.Proofs) != n {
+		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) != n {
+		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
+	}
+
+	if args.Commitments == nil {
+		// Generate commitment and proof.
+		commitments := make([]kzg4844.Commitment, n)
+		proofs := make([]kzg4844.Proof, n)
+		for i, b := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(b)
+			if err != nil {
+				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
+			}
+			commitments[i] = c
+			p, err := kzg4844.ComputeBlobProof(b, c)
+			if err != nil {
+				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+			}
+			proofs[i] = p
+		}
+		args.Commitments = commitments
+		args.Proofs = proofs
+	} else {
+		for i, b := range args.Blobs {
+			if err := kzg4844.VerifyBlobProof(b, args.Commitments[i], args.Proofs[i]); err != nil {
+				return fmt.Errorf("failed to verify blob proof: %v", err)
+			}
+		}
+	}
+
+	hashes := make([]common.Hash, n)
+	hasher := sha256.New()
+	for i, c := range args.Commitments {
+		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
+	}
+	if args.BlobHashes != nil {
+		for i, h := range hashes {
+			if h != args.BlobHashes[i] {
+				return fmt.Errorf("blob hash verification failed (have=%s, want=%s)", args.BlobHashes[i], h)
+			}
+		}
+	} else {
+		args.BlobHashes = hashes
+	}
+	return nil
 }
 
 type SigFormat struct {

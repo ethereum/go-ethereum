@@ -20,8 +20,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/holiman/uint256"
 )
 
 func TestIsPrimitive(t *testing.T) {
@@ -83,7 +86,9 @@ func TestTxArgs(t *testing.T) {
 		if err := json.Unmarshal(d2, &txArgs2); err != nil {
 			t.Fatal(err)
 		}
-		if have, want := txArgs.ToTransaction().Hash(), txArgs2.ToTransaction().Hash(); have != want {
+		tx1, _ := txArgs.ToTransaction()
+		tx2, _ := txArgs2.ToTransaction()
+		if have, want := tx1.Hash(), tx2.Hash(); have != want {
 			t.Errorf("test %d: have %v, want %v", i, have, want)
 		}
 	}
@@ -97,4 +102,40 @@ func TestTxArgs(t *testing.T) {
 				> tx={"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","gas":"0x124f8","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","value":"0x0","nonce":"0x0","input":"0x","accessList":[],"maxFeePerBlobGas":"0x3b9aca00","blobVersionedHashes":["0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014"]}
 				> eth.signTransaction(tx)
 	*/
+}
+
+func TestBlobTxs(t *testing.T) {
+	blob := kzg4844.Blob{0x1}
+	committment, err := kzg4844.BlobToCommitment(blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := kzg4844.ComputeBlobProof(blob, committment)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hash := kzg4844.CalcBlobHashV1(sha256.New(), &committment)
+	b := &types.BlobTx{
+		ChainID:    uint256.NewInt(6),
+		Nonce:      8,
+		GasTipCap:  uint256.NewInt(500),
+		GasFeeCap:  uint256.NewInt(600),
+		Gas:        21000,
+		BlobFeeCap: uint256.NewInt(700),
+		BlobHashes: []common.Hash{hash},
+		Value:      uint256.NewInt(100),
+		Sidecar: &types.BlobTxSidecar{
+			Blobs:       []kzg4844.Blob{blob},
+			Commitments: []kzg4844.Commitment{committment},
+			Proofs:      []kzg4844.Proof{proof},
+		},
+	}
+	tx := types.NewTx(b)
+	data, err := json.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("tx %v", string(data))
+
 }
