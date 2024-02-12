@@ -493,35 +493,56 @@ import (
 	"log"
 	"math/big"
 
+	"github.com/dlm/eth-play/storage"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func main() {
-	// Generate a new random account and a funded simulator
-	key, _ := crypto.GenerateKey()
-	auth := bind.NewKeyedTransactor(key)
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		log.Fatalf("generating key: %v", err)
+	}
 
-	sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+	// Since we are using a simulated backend, we will get the chain id
+	// from the same place that the simulated backend gets it.
+	chainID := params.AllDevChainProtocolChanges.ChainID
 
-	// instantiate contract
-	store, err := NewStorage(common.HexToAddress("0x21e6fc92f93c8a1bb41e2be64b4e1f88a54d3576"), sim)
+	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a Storage contract: %v", err)
+		log.Fatalf("making transactor: %v", err)
 	}
-	// Create an authorized transactor and call the store function
-	auth, err := bind.NewStorageTransactor(strings.NewReader(key), "strong_password")
+
+	sim := simulated.NewBackend(map[common.Address]core.GenesisAccount{
+		auth.From: {Balance: big.NewInt(9e18)},
+	})
+
+	_, tx, store, err := storage.DeployStorage(auth, sim.Client())
 	if err != nil {
-		log.Fatalf("Failed to create authorized transactor: %v", err)
+		log.Fatalf("deploying smart contract: %v", err)
 	}
-	// Call the store() function
-	tx, err := store.Store(auth, big.NewInt(420))
+
+	fmt.Printf("Deploy pending: 0x%x\n", tx.Hash())
+
+	sim.Commit()
+
+	tx, err = store.Store(auth, big.NewInt(420))
 	if err != nil {
-		log.Fatalf("Failed to update value: %v", err)
+		log.Fatalf("calling store method: %v", err)
 	}
-	fmt.Printf("Update pending: 0x%x\n", tx.Hash())
+	fmt.Printf("State update pending: 0x%x\n", tx.Hash())
+
+	sim.Commit()
+
+	val, err := store.Retrieve(nil)
+	if err != nil {
+		log.Fatalf("calling retrieve method: %v", err)
+	}
+	fmt.Printf("Value: %v\n", val)
 }
 ```
 
