@@ -483,7 +483,7 @@ After which whenever the Solidity contract is modified, instead of needing to re
 
 ## Blockchain simulator {#blockchain-simulator}
 
-Being able to deploy and access deployed Ethereum contracts from native Go code is a powerful feature. However, using public testnets as a backend does not lend itself well to _automated unit testing_. Therefore, Geth also implements a _simulated blockchain_ that can be set as a backend to native contracts the same way as a live RPC backend, using the command `backends.NewSimulatedBackend(genesisAccounts)`. The code snippet below shows how this can be used as a backend in a Go application.
+Being able to deploy and access deployed Ethereum contracts from native Go code is a powerful feature. However, using public testnets as a backend does not lend itself well to _automated unit testing_. Therefore, Geth also implements a _simulated blockchain_ that can be set as a backend to native contracts the same way as a live RPC backend, using the command `simulated.NewBackend(map[common.Address]core.GenesisAccount)`. The code snippet below shows how this can be used as a backend in a Go application.
 
 ```go
 package main
