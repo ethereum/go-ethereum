@@ -16,7 +16,13 @@
 
 package apitypes
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 func TestIsPrimitive(t *testing.T) {
 	t.Parallel()
@@ -38,4 +44,57 @@ func TestIsPrimitive(t *testing.T) {
 			t.Errorf("test %d: expected '%v' to not be a valid primitive", i, tc)
 		}
 	}
+}
+
+func TestTxArgs(t *testing.T) {
+	for i, tc := range []struct {
+		data     []byte
+		want     common.Hash
+		wantType uint8
+	}{
+		{
+			data:     []byte(`{"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","accessList":[],"blobVersionedHashes":["0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014"],"chainId":"0x7","gas":"0x124f8","gasPrice":"0x693d4ca8","input":"0x","maxFeePerBlobGas":"0x3b9aca00","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","nonce":"0x0","r":"0x2a922afc784d07e98012da29f2f37cae1f73eda78aa8805d3df6ee5dbb41ec1","s":"0x4f1f75ae6bcdf4970b4f305da1a15d8c5ddb21f555444beab77c9af2baab14","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","type":"0x1","v":"0x0","value":"0x0","yParity":"0x0"}`),
+			want:     common.HexToHash("0x7d53234acc11ac5b5948632c901a944694e228795782f511887d36fd76ff15c4"),
+			wantType: types.BlobTxType,
+		},
+		{
+			// on input, we don't read the type, but infer the type from the arguments present
+			data:     []byte(`{"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","accessList":[],"chainId":"0x7","gas":"0x124f8","gasPrice":"0x693d4ca8","input":"0x","maxFeePerBlobGas":"0x3b9aca00","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","nonce":"0x0","r":"0x2a922afc784d07e98012da29f2f37cae1f73eda78aa8805d3df6ee5dbb41ec1","s":"0x4f1f75ae6bcdf4970b4f305da1a15d8c5ddb21f555444beab77c9af2baab14","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","type":"0x12","v":"0x0","value":"0x0","yParity":"0x0"}`),
+			want:     common.HexToHash("0x7919e2b0b9b543cb87a137b6ff66491ec7ae937cb88d3c29db4d9b28073dce53"),
+			wantType: types.DynamicFeeTxType,
+		},
+	} {
+
+		var txArgs SendTxArgs
+		if err := json.Unmarshal(tc.data, &txArgs); err != nil {
+			t.Fatal(err)
+		}
+		if have := txArgs.ToTransaction().Type(); have != tc.wantType {
+			t.Errorf("test %d, have type %d, want type %d", i, have, tc.wantType)
+		}
+		if have := txArgs.ToTransaction().Hash(); have != tc.want {
+			t.Errorf("test %d: have %v, want %v", i, have, tc.want)
+		}
+		d2, err := json.Marshal(txArgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var txArgs2 SendTxArgs
+		if err := json.Unmarshal(d2, &txArgs2); err != nil {
+			t.Fatal(err)
+		}
+		if have, want := txArgs.ToTransaction().Hash(), txArgs2.ToTransaction().Hash(); have != want {
+			t.Errorf("test %d: have %v, want %v", i, have, want)
+		}
+	}
+	/*
+		End to end testing:
+
+			$ go run ./cmd/clef --advanced --suppress-bootwarn
+
+			$ go run ./cmd/geth --nodiscover --maxpeers 0 --signer /home/user/.clef/clef.ipc console
+
+				> tx={"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","gas":"0x124f8","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","value":"0x0","nonce":"0x0","input":"0x","accessList":[],"maxFeePerBlobGas":"0x3b9aca00","blobVersionedHashes":["0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014"]}
+				> eth.signTransaction(tx)
+	*/
 }
