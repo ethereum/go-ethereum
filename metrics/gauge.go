@@ -2,12 +2,12 @@ package metrics
 
 import "sync/atomic"
 
-// gaugeSnapshot contains a readonly int64.
+// GaugeSnapshot contains a readonly int64.
 type GaugeSnapshot interface {
 	Value() int64
 }
 
-// Gauges hold an int64 value that can be set arbitrarily.
+// Gauge holds an int64 value that can be set arbitrarily.
 type Gauge interface {
 	Snapshot() GaugeSnapshot
 	Update(int64)

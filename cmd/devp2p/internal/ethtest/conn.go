@@ -166,7 +166,7 @@ func (c *Conn) ReadEth() (any, error) {
 		case eth.TransactionsMsg:
 			msg = new(eth.TransactionsPacket)
 		case eth.NewPooledTransactionHashesMsg:
-			msg = new(eth.NewPooledTransactionHashesPacket68)
+			msg = new(eth.NewPooledTransactionHashesPacket)
 		case eth.GetPooledTransactionsMsg:
 			msg = new(eth.GetPooledTransactionsPacket)
 		case eth.PooledTransactionsMsg:
