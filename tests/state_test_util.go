@@ -196,11 +196,9 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 // Run executes a specific subtest and verifies the post-state and logs
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, snaps *snapshot.Tree, state *state.StateDB)) (result error) {
 	triedb, snaps, statedb, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
-
 	// Invoke the callback at the end of function for further analysis.
 	defer func() {
 		postCheck(result, snaps, statedb)
-
 		if triedb != nil {
 			triedb.Close()
 		}
@@ -208,6 +206,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 			snaps.Release()
 		}
 	}()
+
 	checkedErr := t.checkError(subtest, err)
 	if checkedErr != nil {
 		return checkedErr
@@ -244,7 +243,6 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// generate.go:generate(). This goroutine cannot exit until the abort-stats
 	//  can be delivered, either via a call to Journal or e.g Disable.
 	triedb, snaps, statedb = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
-
 	defer func() {
 		if err != nil {
 			triedb.Close()
