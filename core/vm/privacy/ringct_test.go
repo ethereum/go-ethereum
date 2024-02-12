@@ -87,6 +87,66 @@ func TestDeserialize(t *testing.T) {
 	_, err = Deserialize(sig)
 	assert.EqualError(t, err, "incorrect ring size, len r: 3804, sig.NumRing: 5 sig.Size: 56759212534490939")
 }
+
+func TestVerify1(t *testing.T) {
+	numRing := 5
+	ringSize := 10
+	s := 7
+
+	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	if err != nil {
+		t.Error("fail to generate rings")
+	}
+
+	ringSignature, err := Sign(m, rings, privkeys, s)
+	if err != nil {
+		t.Error("fail to create ring signature")
+	}
+
+	sig, err := ringSignature.Serialize()
+	if err != nil {
+		t.Error("fail to serialize input ring signature")
+	}
+
+	deserializedSig, err := Deserialize(sig)
+	if err != nil {
+		t.Error("fail to deserialize ring signature")
+	}
+
+	assert.True(t, Verify(deserializedSig, false), "Verify should return true")
+}
+
+func TestVerify2(t *testing.T) {
+	numRing := 5
+	ringSize := 10
+	s := 7
+
+	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	if err != nil {
+		t.Error("fail to generate rings")
+	}
+
+	ringSignature, err := Sign(m, rings, privkeys, s)
+	if err != nil {
+		t.Error("fail to create ring signature")
+	}
+
+	// change one sig to the scalar field
+	ringSignature.S[0][0] = curve.Params().N
+
+	sig, err := ringSignature.Serialize()
+	if err != nil {
+		t.Error("fail to serialize input ring signature")
+	}
+
+	deserializedSig, err := Deserialize(sig)
+	if err != nil {
+		t.Error("fail to deserialize ring signature")
+	}
+
+	assert.False(t, Verify(deserializedSig, false), "TestNilPointerDereferencePanic should return false")
+}
+
 func TestPadTo32Bytes(t *testing.T) {
 	arr := [44]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34}
 
