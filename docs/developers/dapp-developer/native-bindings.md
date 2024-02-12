@@ -504,7 +504,7 @@ import (
 func main() {
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		log.Fatalf("generating key: %v", err)
+		log.Fatalf("Failed to generate key: %v", err)
 	}
 
 	// Since we are using a simulated backend, we will get the chain id
@@ -513,7 +513,7 @@ func main() {
 
 	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 	if err != nil {
-		log.Fatalf("making transactor: %v", err)
+		log.Fatalf("Failed to make transactor: %v", err)
 	}
 
 	sim := simulated.NewBackend(map[common.Address]core.GenesisAccount{
@@ -522,7 +522,7 @@ func main() {
 
 	_, tx, store, err := DeployStorage(auth, sim.Client())
 	if err != nil {
-		log.Fatalf("deploying smart contract: %v", err)
+		log.Fatalf("Failed to deploy smart contract: %v", err)
 	}
 
 	fmt.Printf("Deploy pending: 0x%x\n", tx.Hash())
@@ -531,7 +531,7 @@ func main() {
 
 	tx, err = store.Store(auth, big.NewInt(420))
 	if err != nil {
-		log.Fatalf("calling store method: %v", err)
+		log.Fatalf("Failed to call store method: %v", err)
 	}
 	fmt.Printf("State update pending: 0x%x\n", tx.Hash())
 
@@ -539,7 +539,7 @@ func main() {
 
 	val, err := store.Retrieve(nil)
 	if err != nil {
-		log.Fatalf("calling retrieve method: %v", err)
+		log.Fatalf("Failed to call retrieve method: %v", err)
 	}
 	fmt.Printf("Value: %v\n", val)
 }
