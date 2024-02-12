@@ -191,9 +191,9 @@ type Body struct {
 //   - We do not copy body data on access because it does not affect the caches, and also
 //     because it would be too expensive.
 type Block struct {
-	header       *Header
+	Header_       *Header
 	uncles       []*Header
-	transactions Transactions
+	Txs Transactions
 	withdrawals  Withdrawals
 
 	// caches
@@ -221,28 +221,28 @@ type extblock struct {
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
-	b := &Block{header: CopyHeader(header)}
+	b := &Block{Header_: CopyHeader(header)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = EmptyTxsHash
+		b.Header_.TxHash = EmptyTxsHash
 	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
+		b.Header_.TxHash = DeriveSha(Transactions(txs), hasher)
+		b.Txs = make(Transactions, len(txs))
+		copy(b.Txs, txs)
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyReceiptsHash
+		b.Header_.ReceiptHash = EmptyReceiptsHash
 	} else {
-		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
-		b.header.Bloom = CreateBloom(receipts)
+		b.Header_.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
+		b.Header_.Bloom = CreateBloom(receipts)
 	}
 
 	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
+		b.Header_.UncleHash = EmptyUncleHash
 	} else {
-		b.header.UncleHash = CalcUncleHash(uncles)
+		b.Header_.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
 			b.uncles[i] = CopyHeader(uncles[i])
@@ -261,12 +261,12 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	b := NewBlock(header, txs, uncles, receipts, hasher)
 
 	if withdrawals == nil {
-		b.header.WithdrawalsHash = nil
+		b.Header_.WithdrawalsHash = nil
 	} else if len(withdrawals) == 0 {
-		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
+		b.Header_.WithdrawalsHash = &EmptyWithdrawalsHash
 	} else {
 		h := DeriveSha(Withdrawals(withdrawals), hasher)
-		b.header.WithdrawalsHash = &h
+		b.Header_.WithdrawalsHash = &h
 	}
 
 	return b.WithWithdrawals(withdrawals)
@@ -314,7 +314,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
+	b.Header_, b.uncles, b.Txs, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
 	b.size.Store(rlp.ListSize(size))
 	return nil
 }
@@ -322,8 +322,8 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes a block as RLP.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &extblock{
-		Header:      b.header,
-		Txs:         b.transactions,
+		Header:      b.Header_,
+		Txs:         b.Txs,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
 	})
@@ -332,18 +332,18 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.Txs, b.uncles, b.withdrawals}
 }
 
 // Accessors for body data. These do not return a copy because the content
 // of the body slices does not affect the cached hash/size in block.
 
 func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
+func (b *Block) Transactions() Transactions { return b.Txs }
 func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
-	for _, transaction := range b.transactions {
+	for _, transaction := range b.Txs {
 		if transaction.Hash() == hash {
 			return transaction
 		}
@@ -353,52 +353,52 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 
 // Header returns the block header (as a copy).
 func (b *Block) Header() *Header {
-	return CopyHeader(b.header)
+	return CopyHeader(b.Header_)
 }
 
 // Header value accessors. These do copy!
 
-func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number) }
-func (b *Block) GasLimit() uint64     { return b.header.GasLimit }
-func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
-func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() uint64         { return b.header.Time }
+func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.Header_.Number) }
+func (b *Block) GasLimit() uint64     { return b.Header_.GasLimit }
+func (b *Block) GasUsed() uint64      { return b.Header_.GasUsed }
+func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.Header_.Difficulty) }
+func (b *Block) Time() uint64         { return b.Header_.Time }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom() Bloom             { return b.header.Bloom }
-func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Root() common.Hash        { return b.header.Root }
-func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
-func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
-func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
-func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
-func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) NumberU64() uint64        { return b.Header_.Number.Uint64() }
+func (b *Block) MixDigest() common.Hash   { return b.Header_.MixDigest }
+func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.Header_.Nonce[:]) }
+func (b *Block) Bloom() Bloom             { return b.Header_.Bloom }
+func (b *Block) Coinbase() common.Address { return b.Header_.Coinbase }
+func (b *Block) Root() common.Hash        { return b.Header_.Root }
+func (b *Block) ParentHash() common.Hash  { return b.Header_.ParentHash }
+func (b *Block) TxHash() common.Hash      { return b.Header_.TxHash }
+func (b *Block) ReceiptHash() common.Hash { return b.Header_.ReceiptHash }
+func (b *Block) UncleHash() common.Hash   { return b.Header_.UncleHash }
+func (b *Block) Extra() []byte            { return common.CopyBytes(b.Header_.Extra) }
 
 func (b *Block) BaseFee() *big.Int {
-	if b.header.BaseFee == nil {
+	if b.Header_.BaseFee == nil {
 		return nil
 	}
-	return new(big.Int).Set(b.header.BaseFee)
+	return new(big.Int).Set(b.Header_.BaseFee)
 }
 
-func (b *Block) BeaconRoot() *common.Hash { return b.header.ParentBeaconRoot }
+func (b *Block) BeaconRoot() *common.Hash { return b.Header_.ParentBeaconRoot }
 
 func (b *Block) ExcessBlobGas() *uint64 {
 	var excessBlobGas *uint64
-	if b.header.ExcessBlobGas != nil {
+	if b.Header_.ExcessBlobGas != nil {
 		excessBlobGas = new(uint64)
-		*excessBlobGas = *b.header.ExcessBlobGas
+		*excessBlobGas = *b.Header_.ExcessBlobGas
 	}
 	return excessBlobGas
 }
 
 func (b *Block) BlobGasUsed() *uint64 {
 	var blobGasUsed *uint64
-	if b.header.BlobGasUsed != nil {
+	if b.Header_.BlobGasUsed != nil {
 		blobGasUsed = new(uint64)
-		*blobGasUsed = *b.header.BlobGasUsed
+		*blobGasUsed = *b.Header_.BlobGasUsed
 	}
 	return blobGasUsed
 }
@@ -418,7 +418,7 @@ func (b *Block) Size() uint64 {
 // SanityCheck can be used to prevent that unbounded fields are
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
-	return b.header.SanityCheck()
+	return b.Header_.SanityCheck()
 }
 
 type writeCounter uint64
@@ -439,15 +439,15 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 // header data is copied, changes to header and to the field values
 // will not affect the block.
 func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: CopyHeader(header)}
+	return &Block{Header_: CopyHeader(header)}
 }
 
 // WithSeal returns a new block with the data from b but the header replaced with
 // the sealed one.
 func (b *Block) WithSeal(header *Header) *Block {
 	return &Block{
-		header:       CopyHeader(header),
-		transactions: b.transactions,
+		Header_:       CopyHeader(header),
+		Txs: b.Txs,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
 	}
@@ -456,12 +456,12 @@ func (b *Block) WithSeal(header *Header) *Block {
 // WithBody returns a copy of the block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
-		header:       b.header,
-		transactions: make([]*Transaction, len(transactions)),
+		Header_:       b.Header_,
+		Txs: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
 		withdrawals:  b.withdrawals,
 	}
-	copy(block.transactions, transactions)
+	copy(block.Txs, transactions)
 	for i := range uncles {
 		block.uncles[i] = CopyHeader(uncles[i])
 	}
@@ -471,8 +471,8 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 // WithWithdrawals returns a copy of the block containing the given withdrawals.
 func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 	block := &Block{
-		header:       b.header,
-		transactions: b.transactions,
+		Header_:       b.Header_,
+		Txs: b.Txs,
 		uncles:       b.uncles,
 	}
 	if withdrawals != nil {
@@ -488,7 +488,7 @@ func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	v := b.header.Hash()
+	v := b.Header_.Hash()
 	b.hash.Store(v)
 	return v
 }
