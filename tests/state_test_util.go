@@ -232,7 +232,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 }
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (*triedb.Database, *snapshot.Tree, *state.StateDB, common.Hash, error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (triedb *triedb.Database, snaps *snapshot.Tree, statedb *state.StateDB, root common.Hash, err error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
 		return nil, nil, nil, common.Hash{}, UnsupportedForkError{subtest.Fork}
@@ -243,7 +243,16 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// MakePreState invokes snapshot.New, which will start a goroutine to
 	// generate.go:generate(). This goroutine cannot exit until the abort-stats
 	//  can be delivered, either via a call to Journal or e.g Disable.
-	triedb, snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	triedb, snaps, statedb = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+
+	defer func() {
+		if err != nil {
+			triedb.Close()
+			if snaps != nil {
+				snaps.Disable()
+			}
+		}
+	}()
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -257,10 +266,6 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
-		triedb.Close()
-		if snaps != nil {
-			snaps.Disable()
-		}
 		return nil, nil, nil, common.Hash{}, err
 	}
 
@@ -271,10 +276,6 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		// Here, we just do this shortcut smaller fix, since state tests do not
 		// utilize those codepaths
 		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
-			triedb.Close()
-			if snaps != nil {
-				snaps.Disable()
-			}
 			return nil, nil, nil, common.Hash{}, errors.New("blob gas exceeds maximum")
 		}
 	}
@@ -284,18 +285,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
-			triedb.Close()
-			if snaps != nil {
-				snaps.Disable()
-			}
 			return nil, nil, nil, common.Hash{}, err
 		}
 
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-			triedb.Close()
-			if snaps != nil {
-				snaps.Disable()
-			}
 			return nil, nil, nil, common.Hash{}, err
 		}
 	}
@@ -335,7 +328,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	statedb.AddBalance(block.Coinbase(), new(uint256.Int))
 
 	// Commit state mutations into database.
-	root, _ := statedb.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
+	root, _ = statedb.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
 	return triedb, snaps, statedb, root, err
 }
 
