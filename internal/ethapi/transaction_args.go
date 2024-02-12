@@ -97,7 +97,7 @@ func (args *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if err := args.setBlobTxSidecar(ctx, b); err != nil {
+	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
 	if err := args.setFeeDefaults(ctx, b); err != nil {
@@ -285,7 +285,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 }
 
 // setBlobTxSidecar adds the blob tx
-func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil
