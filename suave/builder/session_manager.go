@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/suave/builder/api"
 	"github.com/google/uuid"
@@ -40,7 +41,7 @@ type Config struct {
 
 type SessionManager struct {
 	sem           chan struct{}
-	sessions      map[string]*builder
+	sessions      map[string]*miner.Builder
 	sessionTimers map[string]*time.Timer
 	sessionsLock  sync.RWMutex
 	blockchain    blockchain
@@ -65,7 +66,7 @@ func NewSessionManager(blockchain blockchain, config *Config) *SessionManager {
 
 	s := &SessionManager{
 		sem:           sem,
-		sessions:      make(map[string]*builder),
+		sessions:      make(map[string]*miner.Builder),
 		sessionTimers: make(map[string]*time.Timer),
 		blockchain:    blockchain,
 		config:        config,
@@ -84,41 +85,22 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 		return "", ctx.Err()
 	}
 
-	parent := s.blockchain.CurrentHeader()
-	chainConfig := s.blockchain.Config()
-
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasLimit, s.config.GasCeil),
-		Time:       1000,             // TODO: fix this
-		Coinbase:   common.Address{}, // TODO: fix this
-		Difficulty: big.NewInt(1),
+	builderCfg := &miner.BuilderConfig{
+		ChainConfig: s.blockchain.Config(),
+		Engine:      s.blockchain.Engine(),
+		// TODO
 	}
 
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if chainConfig.IsLondon(header.Number) {
-		header.BaseFee = CalcBaseFee(chainConfig, parent)
-		if !chainConfig.IsLondon(parent.Number) {
-			parentGasLimit := parent.GasLimit * chainConfig.ElasticityMultiplier()
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, s.config.GasCeil)
-		}
-	}
-
-	stateRef, err := s.blockchain.StateAt(parent.Root)
-	if err != nil {
-		return "", err
-	}
-
-	cfg := &builderConfig{
-		preState: stateRef,
-		header:   header,
-		config:   s.blockchain.Config(),
-		context:  s.blockchain,
+	builderArgs := &miner.BuilderArgs{
+		ParentHash: args.Parent,
 	}
 
 	id := uuid.New().String()[:7]
-	s.sessions[id] = newBuilder(cfg)
+	session, err := miner.NewBuilder(builderCfg, builderArgs)
+	if err != nil {
+		return "", err
+	}
+	s.sessions[id] = session
 
 	// start session timer
 	s.sessionTimers[id] = time.AfterFunc(s.config.SessionIdleTimeout, func() {
@@ -140,7 +122,7 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 	return id, nil
 }
 
-func (s *SessionManager) getSession(sessionId string) (*builder, error) {
+func (s *SessionManager) getSession(sessionId string) (*miner.Builder, error) {
 	s.sessionsLock.RLock()
 	defer s.sessionsLock.RUnlock()
 
@@ -168,7 +150,7 @@ func (s *SessionManager) AddBundle(sessionId string, bundle api.Bundle) error {
 	if err != nil {
 		return err
 	}
-	return builder.AddBundle(bundle)
+	return builder.AddBundle(nil) // TODO: Use api.Bundle type
 }
 
 func (s *SessionManager) BuildBlock(sessionId string) error {
@@ -176,7 +158,8 @@ func (s *SessionManager) BuildBlock(sessionId string) error {
 	if err != nil {
 		return err
 	}
-	return builder.BuildBlock()
+	_, err = builder.BuildBlock() // TODO: Return more info
+	return err
 }
 
 // CalcBaseFee calculates the basefee of the header.
