@@ -244,9 +244,8 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.Blobs = sidecar.Blobs
 		args.Commitments = sidecar.Commitments
 		args.Proofs = sidecar.Proofs
-		// TODO verify consistency between blobs/committments/proofs
 	}
-
+	
 	var res signTransactionResult
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
