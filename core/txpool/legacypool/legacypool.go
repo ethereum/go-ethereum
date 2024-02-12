@@ -434,11 +434,13 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	newTip := uint256.MustFromBig(tip)
+	var (
+		newTip = uint256.MustFromBig(tip)
+		old    = pool.gasTip.Load()
+	)
 	pool.gasTip.Store(newTip)
-
 	// If the min miner fee increased, remove transactions below the new threshold
-	if old := pool.gasTip.Load(); newTip.Cmp(old) > 0 {
+	if newTip.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
 		drop := pool.all.RemotesBelowTip(tip)
 		for _, tx := range drop {
