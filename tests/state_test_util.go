@@ -240,6 +240,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmconfig.ExtraEips = eips
 
 	block := t.genesis(config).ToBlock()
+	// MakePreState invokes snapshot.New, which will start a goroutine to
+	// generate.go:generate(). This goroutine cannot exit until the abort-stats
+	//  can be delivered, either via a call to Journal or e.g Disable.
 	triedb, snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
 
 	var baseFee *big.Int
@@ -255,7 +258,25 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
 		triedb.Close()
+		if snaps != nil {
+			snaps.Disable()
+		}
 		return nil, nil, nil, common.Hash{}, err
+	}
+
+	{ // Blob transactions may be present after the Cancun fork.
+		// In production,
+		// - the header is verified against the max in eip4844.go:VerifyEIP4844Header
+		// - the block body is verified against the header in block_validator.go:ValidateBody
+		// Here, we just do this shortcut smaller fix, since state tests do not
+		// utilize those codepaths
+		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+			triedb.Close()
+			if snaps != nil {
+				snaps.Disable()
+			}
+			return nil, nil, nil, common.Hash{}, errors.New("blob gas exceeds maximum")
+		}
 	}
 
 	// Try to recover tx with current signer
@@ -264,11 +285,17 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
 			triedb.Close()
+			if snaps != nil {
+				snaps.Disable()
+			}
 			return nil, nil, nil, common.Hash{}, err
 		}
 
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
 			triedb.Close()
+			if snaps != nil {
+				snaps.Disable()
+			}
 			return nil, nil, nil, common.Hash{}, err
 		}
 	}
@@ -291,17 +318,6 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
-
-	{ // Blob transactions may be present after the Cancun fork.
-		// In production,
-		// - the header is verified against the max in eip4844.go:VerifyEIP4844Header
-		// - the block body is verified against the header in block_validator.go:ValidateBody
-		// Here, we just do this shortcut smaller fix, since state tests do not
-		// utilize those codepaths
-		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
-			return nil, nil, nil, common.Hash{}, errors.New("blob gas exceeds maximum")
-		}
-	}
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()
