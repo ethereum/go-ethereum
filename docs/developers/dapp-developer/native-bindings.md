@@ -493,7 +493,6 @@ import (
 	"log"
 	"math/big"
 
-	"github.com/dlm/eth-play/storage"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -521,7 +520,7 @@ func main() {
 		auth.From: {Balance: big.NewInt(9e18)},
 	})
 
-	_, tx, store, err := storage.DeployStorage(auth, sim.Client())
+	_, tx, store, err := DeployStorage(auth, sim.Client())
 	if err != nil {
 		log.Fatalf("deploying smart contract: %v", err)
 	}
