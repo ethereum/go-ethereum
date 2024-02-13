@@ -483,7 +483,7 @@ After which whenever the Solidity contract is modified, instead of needing to re
 
 ## Blockchain simulator {#blockchain-simulator}
 
-Being able to deploy and access deployed Ethereum contracts from native Go code is a powerful feature. However, using public testnets as a backend does not lend itself well to _automated unit testing_. Therefore, Geth also implements a _simulated blockchain_ that can be set as a backend to native contracts the same way as a live RPC backend, using the command `backends.NewSimulatedBackend(genesisAccounts)`. The code snippet below shows how this can be used as a backend in a Go application.
+Being able to deploy and access deployed Ethereum contracts from native Go code is a powerful feature. However, using public testnets as a backend does not lend itself well to _automated unit testing_. Therefore, Geth also implements a _simulated blockchain_ that can be set as a backend to native contracts the same way as a live RPC backend, using the command `simulated.NewBackend(map[common.Address]core.GenesisAccount)`. The code snippet below shows how this can be used as a backend in a Go application.
 
 ```go
 package main
@@ -494,34 +494,54 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func main() {
-	// Generate a new random account and a funded simulator
-	key, _ := crypto.GenerateKey()
-	auth := bind.NewKeyedTransactor(key)
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		log.Fatalf("Failed to generate key: %v", err)
+	}
 
-	sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+	// Since we are using a simulated backend, we will get the chain id
+	// from the same place that the simulated backend gets it.
+	chainID := params.AllDevChainProtocolChanges.ChainID
 
-	// instantiate contract
-	store, err := NewStorage(common.HexToAddress("0x21e6fc92f93c8a1bb41e2be64b4e1f88a54d3576"), sim)
+	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a Storage contract: %v", err)
+		log.Fatalf("Failed to make transactor: %v", err)
 	}
-	// Create an authorized transactor and call the store function
-	auth, err := bind.NewStorageTransactor(strings.NewReader(key), "strong_password")
+
+	sim := simulated.NewBackend(map[common.Address]core.GenesisAccount{
+		auth.From: {Balance: big.NewInt(9e18)},
+	})
+
+	_, tx, store, err := DeployStorage(auth, sim.Client())
 	if err != nil {
-		log.Fatalf("Failed to create authorized transactor: %v", err)
+		log.Fatalf("Failed to deploy smart contract: %v", err)
 	}
-	// Call the store() function
-	tx, err := store.Store(auth, big.NewInt(420))
+
+	fmt.Printf("Deploy pending: 0x%x\n", tx.Hash())
+
+	sim.Commit()
+
+	tx, err = store.Store(auth, big.NewInt(420))
 	if err != nil {
-		log.Fatalf("Failed to update value: %v", err)
+		log.Fatalf("Failed to call store method: %v", err)
 	}
-	fmt.Printf("Update pending: 0x%x\n", tx.Hash())
+	fmt.Printf("State update pending: 0x%x\n", tx.Hash())
+
+	sim.Commit()
+
+	val, err := store.Retrieve(nil)
+	if err != nil {
+		log.Fatalf("Failed to call retrieve method: %v", err)
+	}
+	fmt.Printf("Value: %v\n", val)
 }
 ```
 
