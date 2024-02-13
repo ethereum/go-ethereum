@@ -342,7 +342,7 @@ func (p *BlobPool) Filter(tx *types.Transaction) bool {
 // Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings.
-func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.AddressReserver) error {
+func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.AddressReserver) error {
 	p.reserve = reserve
 
 	var (
@@ -420,7 +420,7 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 
-	p.SetGasTip(gasTip)
+	p.SetGasTip(new(big.Int).SetUint64(gasTip))
 
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
