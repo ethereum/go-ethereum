@@ -489,5 +489,6 @@ func (st *StateTestState) Close() {
 		// Need to call Disable here to quit the snapshot generator goroutine.
 		st.Snapshots.Disable()
 		st.Snapshots.Release()
+		st.Snapshots = nil
 	}
 }
