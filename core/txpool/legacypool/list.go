@@ -160,12 +160,11 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 	// Otherwise gather and drop the highest nonce'd transactions
 	var drops types.Transactions
 
-	sort.Sort(*m.index)
 	for size := len(m.items); size > threshold; size-- {
-		drops = append(drops, m.items[(*m.index)[size-1]])
-		delete(m.items, (*m.index)[size-1])
+		dropIdx := m.index.Pop().(uint64)
+		drops = append(drops, m.items[dropIdx])
+		delete(m.items, dropIdx)
 	}
-	*m.index = (*m.index)[:threshold]
 
 	// If we had a cache, shift the back
 	m.cacheMu.Lock()
