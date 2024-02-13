@@ -305,7 +305,7 @@ type ExecutionPayloadBodyV1 struct {
 }
 
 // Client identifiers to support ClientVersionV1.
-var (
+const (
 	ClientCode = "GE"
 	ClientName = "go-ethereum"
 )
