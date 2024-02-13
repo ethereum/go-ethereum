@@ -483,8 +483,17 @@ func (p *PortalAPI) HistoryStore(contentKeyHex string, contextHex string) (bool,
 }
 
 // TODO
-func (p *PortalAPI) HistoryGossip() {
-
+func (p *PortalAPI) HistoryGossip(contentKeyHex, contentHex string) (int, error) {
+	contentKey, err := hexutil.Decode(contentKeyHex)
+	if err != nil {
+		return 0, err
+	}
+	content, err := hexutil.Decode(contentHex)
+	if err != nil {
+		return 0, err
+	}
+	id := p.portalProtocol.Self().ID()
+	return p.portalProtocol.NeighborhoodGossip(&id, [][]byte{contentKey}, [][]byte{content})
 }
 
 // TODO

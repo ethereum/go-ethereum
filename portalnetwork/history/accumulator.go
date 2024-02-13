@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/ethereum/go-ethereum/rlp"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
@@ -48,13 +47,14 @@ func (e *epoch) add(header types.Header) error {
 	blockHash := header.Hash().Bytes()
 	difficulty := uint256.MustFromBig(header.Difficulty)
 	e.difficulty = uint256.NewInt(0).Add(e.difficulty, difficulty)
-	// big-endian
-	difficultyBytes := e.difficulty.Bytes32()
-	utils.ReverseBytesInPlace(difficultyBytes[:])
 
+	difficultyBytes, err := e.difficulty.MarshalSSZ()
+	if err != nil {
+		return err
+	}
 	record := HeaderRecord{
 		BlockHash:       blockHash,
-		TotalDifficulty: difficultyBytes[:],
+		TotalDifficulty: difficultyBytes,
 	}
 	sszBytes, err := record.MarshalSSZ()
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var maxUint256 = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
@@ -18,8 +19,8 @@ var maxUint256 = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffff
 // we remove the message type here
 func TestPingMessage(t *testing.T) {
 	dataRadius := maxUint256.Sub(maxUint256, uint256.NewInt(1))
-
-	reverseBytes := ReverseBytes(dataRadius.Bytes())
+	reverseBytes, err := dataRadius.MarshalSSZ()
+	require.NoError(t, err)
 	customData := &PingPongCustomData{
 		Radius: reverseBytes,
 	}
@@ -39,7 +40,8 @@ func TestPingMessage(t *testing.T) {
 
 func TestPongMessage(t *testing.T) {
 	dataRadius := maxUint256.Div(maxUint256, uint256.NewInt(2))
-	reverseBytes := ReverseBytes(dataRadius.Bytes())
+	reverseBytes, err := dataRadius.MarshalSSZ()
+	require.NoError(t, err)
 	customData := &PingPongCustomData{
 		Radius: reverseBytes,
 	}
@@ -176,13 +178,4 @@ func TestOfferAndAcceptMessage(t *testing.T) {
 	// data, err = accept.MarshalSSZ()
 	// assert.NoError(t, err)
 	// assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
-}
-
-func ReverseBytes(src []byte) []byte {
-	lenth := len(src)
-	dst := make([]byte, lenth)
-	for i := 0; i < len(src); i++ {
-		dst[lenth-1-i] = src[i]
-	}
-	return dst
 }

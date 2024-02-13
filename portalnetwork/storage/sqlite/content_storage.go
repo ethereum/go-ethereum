@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
-	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/holiman/uint256"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
@@ -312,11 +311,15 @@ func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	res := uint256.NewInt(0)
+	err = res.UnmarshalSSZ(distance)
+
+	return res, err
 	// reverse the distance, because big.SetBytes is big-endian
-	utils.ReverseBytesInPlace(distance)
-	bigNum := new(big.Int).SetBytes(distance)
-	res := uint256.MustFromBig(bigNum)
-	return res, nil
+	// utils.ReverseBytesInPlace(distance)
+	// bigNum := new(big.Int).SetBytes(distance)
+	// res := uint256.MustFromBig(bigNum)
+	// return res, nil
 }
 
 // EstimateNewRadius calculates an estimated new radius based on the current radius, used size, and storage capacity.

@@ -4,17 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVerifyHeaderWithProofs(t *testing.T) {
@@ -68,8 +67,10 @@ func TestUpdate(t *testing.T) {
 		copy(tmp, epochAcc.HeaderRecords[i])
 		newEpochAcc.currentEpoch.records = append(newEpochAcc.currentEpoch.records, tmp)
 	}
+	startDifficulty := uint256.NewInt(0)
+	err = startDifficulty.UnmarshalSSZ(epochAcc.HeaderRecords[epochRecordIndex][32:])
 
-	startDifficulty := bytesToUint256(epochAcc.HeaderRecords[epochRecordIndex][32:])
+	require.NoError(t, err)
 
 	newEpochAcc.currentEpoch.difficulty = startDifficulty
 
@@ -143,9 +144,4 @@ func getHeader(number uint64) (*types.Header, error) {
 	head := &types.Header{}
 	err = rlp.Decode(reader, head)
 	return head, err
-}
-
-func bytesToUint256(input []byte) *uint256.Int {
-	res := utils.ReverseBytes(input)
-	return uint256.MustFromBig(big.NewInt(0).SetBytes(res))
 }
