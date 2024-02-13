@@ -210,6 +210,14 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	}
 }
 
+// wait instructs all subfetchers to finish their tasks
+// and stop receiving new requests.
+func (p *triePrefetcher) wait() {
+	for _, fetcher := range p.fetchers {
+		fetcher.wait()
+	}
+}
+
 // wait waits for the subfetcher to finish it's task. It is safe to call wait multiple
 // times but it is not thread safe.
 func (sf *subfetcher) wait() {
