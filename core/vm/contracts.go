@@ -688,11 +688,16 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 	}
 
 	// Compute r = p_0 + p_1
-	r := new(bls12381.G1Affine)
-	r.Add(p0, p1)
+	//r := new(bls12381.G1Affine)
+	//r.Add(p0, p1)
+
+	r := new(bls12381.G1Jac)
+	r.FromAffine(p0)
+	r.AddMixed(p1)
+	p0.FromJacobian(r)
 
 	// Encode the G1 point result into 128 bytes
-	return encodePointG1(r), nil
+	return encodePointG1(p0), nil
 }
 
 // bls12381G1Mul implements EIP-2537 G1Mul precompile.
@@ -973,23 +978,22 @@ func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
 	if len(in) != 128 {
 		return nil, errors.New("invalid g1 point length")
 	}
-	pointBytes := make([]byte, 96)
 	// decode x
-	xBytes, err := decodeBLS12381FieldElement(in[:64])
+	x, err := decodeBLS12381FieldElement(in[:64])
 	if err != nil {
 		return nil, err
 	}
 	// decode y
-	yBytes, err := decodeBLS12381FieldElement(in[64:])
+	y, err := decodeBLS12381FieldElement(in[64:])
 	if err != nil {
 		return nil, err
 	}
-	copy(pointBytes[:48], xBytes[:])
-	copy(pointBytes[48:], yBytes[:])
+	elem := bls12381.G1Affine{X: x, Y: y}
+	if !elem.IsInSubGroup() {
+		return nil, errors.New("invalid point: subgroup check failed")
+	}
 
-	p := new(bls12381.G1Affine)
-	_, err = p.SetBytes(pointBytes)
-	return p, err
+	return &elem, nil
 }
 
 // decodePointG2 given encoded (x, y) coordinates in 256 bytes returns a valid G2 Point.
@@ -997,79 +1001,65 @@ func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
 	if len(in) != 256 {
 		return nil, errors.New("invalid g2 point length")
 	}
-	pointBytes := make([]byte, 192)
-	x0Bytes, err := decodeBLS12381FieldElement(in[:64])
+	x0, err := decodeBLS12381FieldElement(in[:64])
 	if err != nil {
 		return nil, err
 	}
-	x1Bytes, err := decodeBLS12381FieldElement(in[64:128])
+	x1, err := decodeBLS12381FieldElement(in[64:128])
 	if err != nil {
 		return nil, err
 	}
-	y0Bytes, err := decodeBLS12381FieldElement(in[128:192])
+	y0, err := decodeBLS12381FieldElement(in[128:192])
 	if err != nil {
 		return nil, err
 	}
-	y1Bytes, err := decodeBLS12381FieldElement(in[192:])
+	y1, err := decodeBLS12381FieldElement(in[192:])
 	if err != nil {
 		return nil, err
 	}
-	copy(pointBytes[:48], x1Bytes[:])
-	copy(pointBytes[48:96], x0Bytes[:])
-	copy(pointBytes[96:144], y1Bytes[:])
-	copy(pointBytes[144:192], y0Bytes[:])
-	p := new(bls12381.G2Affine)
-	_, err = p.SetBytes(pointBytes)
-	return p, err
+
+	p := bls12381.G2Affine{X: bls12381.E2{A0: x0, A1: x1}, Y: bls12381.E2{A0: y0, A1: y1}}
+	if !p.IsInSubGroup() {
+		return nil, errors.New("invalid point: subgroup check failed")
+	}
+	return &p, err
 }
 
 // decodeBLS12381FieldElement decodes BLS12-381 elliptic curve field element.
 // Removes top 16 bytes of 64 byte input.
-func decodeBLS12381FieldElement(in []byte) ([48]byte, error) {
-	var res [48]byte
+func decodeBLS12381FieldElement(in []byte) (fp.Element, error) {
 	if len(in) != 64 {
-		return res, errors.New("invalid field element length")
+		return fp.Element{}, errors.New("invalid field element length")
 	}
 	// check top bytes
 	for i := 0; i < 16; i++ {
 		if in[i] != byte(0x00) {
-			return res, errBLS12381InvalidFieldElementTopBytes
+			return fp.Element{}, errBLS12381InvalidFieldElementTopBytes
 		}
 	}
+	var res [48]byte
 	copy(res[:], in[16:])
-	return res, nil
+
+	return fp.BigEndian.Element(&res)
 }
 
 // encodePointG1 encodes a point into 128 bytes.
 func encodePointG1(p *bls12381.G1Affine) []byte {
-	outRaw := p.RawBytes()
-	if p.IsInfinity() {
-		// gnark sets a weird byte if the point is at infinity, remove it
-		outRaw[0] = 0
-	}
 	out := make([]byte, 128)
-	// encode x
-	copy(out[16:], outRaw[:48])
-	// encode y
-	copy(out[64+16:], outRaw[48:])
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:]), p.X)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[64+16:]), p.Y)
 	return out
 }
 
 // encodePointG2 encodes a point into 256 bytes.
 func encodePointG2(p *bls12381.G2Affine) []byte {
-	// outRaw is 192 bytes
-	outRaw := p.RawBytes()
-	if p.IsInfinity() {
-		// gnark sets a weird byte if the point is at infinity, remove it
-		outRaw[0] = 0
-	}
 	out := make([]byte, 256)
 	// encode x
-	copy(out[16:16+48], outRaw[48:96])
-	copy(out[80:80+48], outRaw[:48])
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:16+48]), p.X.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[80:80+48]), p.X.A1)
 	// encode y
-	copy(out[144:144+48], outRaw[144:])
-	copy(out[208:208+48], outRaw[96:144])
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[144:144+48]), p.Y.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[208:208+48]), p.Y.A1)
 	return out
 }
 
@@ -1094,13 +1084,9 @@ func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	elem, err := fp.BigEndian.Element(&fe)
-	if err != nil {
-		return nil, err
-	}
 
 	// Compute mapping
-	r := bls12381.MapToG1(elem)
+	r := bls12381.MapToG1(fe)
 	if err != nil {
 		return nil, err
 	}
@@ -1135,18 +1121,8 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	elem0, err := fp.BigEndian.Element(&c0)
-	if err != nil {
-		return nil, err
-	}
-
-	elem1, err := fp.BigEndian.Element(&c1)
-	if err != nil {
-		return nil, err
-	}
-
 	// Compute mapping
-	r := bls12381.MapToG2(bls12381.E2{A0: elem0, A1: elem1})
+	r := bls12381.MapToG2(bls12381.E2{A0: c0, A1: c1})
 	if err != nil {
 		return nil, err
 	}
