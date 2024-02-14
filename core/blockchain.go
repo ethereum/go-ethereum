@@ -1382,6 +1382,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			// TODO: return the error and stop importing the current chain.
 			// I'm leaving it like this so I can watch validation errors as
 			// the client follows the chain.
+		} else {
+			log.Info("successfully cross-validated block", "number", witness.Block.NumberU64(), "hash", witness.Block.Hash())
 		}
 	}
 	// Irrelevant of the canonical status, write the block itself to the database.

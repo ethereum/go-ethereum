@@ -26,9 +26,10 @@ type crossValidator struct {
 // TODO: differentiate between errors from witness verification (maybe consensus
 // failure) and anything else.
 func (c *crossValidator) CrossValidateBlock(chainConfig *params.ChainConfig, witness *state.Witness) error {
-	// encode the witness to RLP, zeroing-out the block state root before sending
-	// it for cross validation to make it impossible for a cross-validator to
-	// produce a correct validation result without computing it.
+	// encode the witness to RLP, zeroing-out the block state root before encoding.
+	// this is to make it impossible for a cross-validator to
+	// produce a correct post-state root without executing the
+	// witness themselves.
 	enc, _ := witness.EncodeRLP()
 
 	// TODO: implement retry if endpoint can't be reached
@@ -55,7 +56,6 @@ func (c *crossValidator) CrossValidateBlock(chainConfig *params.ChainConfig, wit
 	if bytes.Compare(body, witness.Block.Header().Root[:]) != 0 {
 		if errInner := state.DumpBlockWitnessToFile(chainConfig, witness, c.witnessRecordingPath); errInner != nil {
 			log.Error("failed to dump block to file", "error", errInner)
-			panic("should not happen")
 		}
 		return err
 	}
