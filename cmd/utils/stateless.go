@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"io"
 	"net"
 	"net/http"
@@ -25,7 +25,7 @@ func StatelessExecute(logOutput io.Writer, chainCfg *params.ChainConfig, witness
 	}
 	_, prestateRoot := rawdb.ReadAccountTrieNode(rawDb, nil)
 
-	db, err := state.New(prestateRoot, state.NewDatabaseWithConfig(rawDb, trie.PathDefaults), nil)
+	db, err := state.New(prestateRoot, state.NewDatabaseWithConfig(rawDb, triedb.PathDefaults), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -49,8 +49,9 @@ func StatelessExecute(logOutput io.Writer, chainCfg *params.ChainConfig, witness
 	return root, nil
 }
 
-// RunLocalServer runs an http server at the specified port (or 0 to use a random port).
-// The server provides a POST endpoint /verify_block which takes input as an RLP-encoded
+// RunLocalServer runs an http server on the local address at the specified
+// port (or 0 to use a random port).
+// The server provides a POST endpoint /verify_block which takes input as an octet-stream RLP-encoded
 // block witness proof in the body, executes the block proof and returns the computed state root.
 func RunLocalServer(chainConfig *params.ChainConfig, port int) (closeChan chan<- struct{}, actualPort int, err error) {
 	mux := http.NewServeMux()

@@ -1255,8 +1255,8 @@ func (s *StateDB) Witness() *Witness {
 func (s *StateDB) ApplyWithdrawals(withdrawals types.Withdrawals) {
 	for _, w := range withdrawals {
 		// Convert amount from gwei to wei.
-		amount := new(big.Int).SetUint64(w.Amount)
-		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		amount := new(uint256.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		s.AddBalance(w.Address, amount)
 	}
 

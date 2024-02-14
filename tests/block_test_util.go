@@ -112,15 +112,15 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
-	return t.run(false, snapshotter, scheme, tracer)
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(false, snapshotter, scheme, tracer, postCheck)
 }
 
-func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
-	return t.run(true, snapshotter, scheme, tracer)
+func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(true, snapshotter, scheme, tracer, postCheck)
 }
 
-func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer vm.EVMLogger) error {
+func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -190,6 +190,11 @@ func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer 
 	validBlocks, err := t.insertBlocks(chain)
 	if err != nil {
 		return err
+	}
+	// Import succeeded: regardless of whether the _test_ succeeds or not, schedule
+	// the post-check to run
+	if postCheck != nil {
+		defer postCheck(result, chain)
 	}
 	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 	"os"
 	"os/signal"
@@ -9,7 +10,14 @@ import (
 )
 
 func server(ctx *cli.Context) error {
-	chainConfig := loadChainConfig(ctx.String(ChainConfigFlag.Name))
+	var chainConfig *params.ChainConfig
+	if chainConfigFlagVal := ctx.String(ChainConfigFlag.Name); chainConfigFlagVal != "" {
+		chainConfig = loadChainConfig(ctx.String(ChainConfigFlag.Name))
+	} else {
+		// TODO: instead of assuming mainnet configuration in absence of chain config
+		// val, accept known chain configurations via network preset flag.
+		chainConfig = params.MainnetChainConfig
+	}
 	closeCh, _, err := utils.RunLocalServer(chainConfig, 8080)
 	if err != nil {
 		return err

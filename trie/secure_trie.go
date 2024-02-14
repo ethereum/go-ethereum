@@ -220,13 +220,11 @@ func (t *StateTrie) AccessList() map[string][]byte {
 func (t *StateTrie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		if t.preimages != nil {
-			preimages := make(map[common.Hash][]byte)
-			for hk, key := range t.secKeyCache {
-				preimages[common.BytesToHash([]byte(hk))] = key
-			}
-			t.preimages.insertPreimage(preimages)
+		preimages := make(map[common.Hash][]byte)
+		for hk, key := range t.secKeyCache {
+			preimages[common.BytesToHash([]byte(hk))] = key
 		}
+		t.db.InsertPreimage(preimages)
 		t.secKeyCache = make(map[string][]byte)
 	}
 	// Commit the trie and return its modified nodeset.

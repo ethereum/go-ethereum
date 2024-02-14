@@ -81,7 +81,7 @@ var (
 		Usage:       "",
 		ArgsUsage:   "server --chain-config /path/to/chain-config.json",
 		Flags:       []cli.Flag{ChainConfigFlag},
-		Description: `Runs an HTTP server which provides an API endpoint for stateless block verification`,
+		Description: `Runs an HTTP server (temporarily hard-coded to listen on the local address at port 8080) which provides an API endpoint for stateless block verification`,
 	}
 )
 

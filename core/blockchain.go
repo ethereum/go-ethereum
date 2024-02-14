@@ -268,7 +268,7 @@ type BlockChain struct {
 // remote endpoint.  If validation fails, they are dumped to the folder specified at witnessRecordingPath
 func NewBlockchainWithCrossValidator(endpoint string, witnessRecordingPath string, db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit)
-	bc.crossValidator = &crossValidator{witnessRecordingPath, endpoint}
+	bc.crossValidator = &crossValidator{endpoint, witnessRecordingPath}
 	return bc, err
 }
 
