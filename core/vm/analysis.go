@@ -138,21 +138,29 @@ func (bv bitVec) codeBitVec(code []byte) bitVec {
 			continue // continue if the OpCode is not PUSH1..32
 		}
 		numBytes := op - 0x5f // number of data bytes pushed
-
-		// set bits
-		mask := masks[numBytes] // optimization for: (1 << numBytes) - 1
-		shift := uint8(pc+1) % 32
-
+		shift := uint8((pc + 1) % 32)
 		i := (pc + 1) / 32
-		bv[i+1] = mask >> (32 - shift)
-		bv[i] |= mask << shift
 
-		pc += uint64(numBytes + 1)
+		switch numBytes {
+		case 1:
+			bv[i] |= 1 << shift
+			pc += 2
+		case 32:
+			a := masks[numBytes] << shift
+			bv[i] |= uint32(a)
+			bv[i+1] = uint32(^a)
+			pc += 33
+		default:
+			a := masks[numBytes] << shift
+			bv[i] |= uint32(a)
+			bv[i+1] = uint32(a >> 32)
+			pc += uint64(numBytes + 1)
+		}
 	}
 	return bv
 }
 
-var masks = [256]uint32{
+var masks = [256]uint64{
 	1:  0b00000000_00000000_00000000_00000001,
 	2:  0b00000000_00000000_00000000_00000011,
 	3:  0b00000000_00000000_00000000_00000111,
