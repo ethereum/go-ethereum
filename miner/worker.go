@@ -937,7 +937,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Set the extra field.
 	if len(w.extra) != 0 {
-		header.Extra = w.extra
+		if len(genParams.extra) != 0 {
+			header.Extra = genParams.extra
+		} else {
+			header.Extra = w.extra
+		}
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
