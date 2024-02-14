@@ -1,6 +1,7 @@
 package live
 
 import (
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +23,7 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer() (core.BlockchainLogger, error) {
+func newNoopTracer(_ json.RawMessage) (core.BlockchainLogger, error) {
 	return &noop{}, nil
 }
 
