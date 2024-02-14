@@ -138,6 +138,7 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
 		utils.VMTraceFlag,
+		utils.VMTraceConfigFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
 		utils.NoCompactionFlag,
