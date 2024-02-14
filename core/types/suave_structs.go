@@ -15,6 +15,7 @@ type BuildBlockArgs struct {
 	GasLimit       uint64
 	Random         common.Hash
 	Withdrawals    []*Withdrawal
+	ParentBeaconBlockRoot common.Hash
 	Extra          []byte
 	BeaconRoot     common.Hash
 	FillPending    bool
