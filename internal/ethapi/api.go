@@ -530,7 +530,7 @@ func (s *PersonalAccountAPI) SignTransaction(ctx context.Context, args Transacti
 //
 // The key used to calculate the signature is decrypted with the given password.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
+// https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-personal#personal-sign
 func (s *PersonalAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
@@ -558,7 +558,7 @@ func (s *PersonalAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr 
 // Note, the signature must conform to the secp256k1 curve R, S and V values, where
 // the V value must be 27 or 28 for legacy reasons.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
+// https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-personal#personal-ecrecover
 func (s *PersonalAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != crypto.SignatureLength {
 		return common.Address{}, fmt.Errorf("signature must be %d bytes long", crypto.SignatureLength)
@@ -1812,13 +1812,14 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
 func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	args.blobSidecarAllowed = true
+
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
 	tx := args.toTransaction()
-	// TODO(s1na): fill in blob proofs, commitments
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err

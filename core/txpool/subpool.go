@@ -86,7 +86,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip *big.Int, head *types.Header, reserve AddressReserver) error
+	Init(gasTip uint64, head *types.Header, reserve AddressReserver) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.

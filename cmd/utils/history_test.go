@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -134,7 +135,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 			for j := 0; it.Next(); j++ {
 				n := i*int(step) + j
 				if it.Error() != nil {
-					t.Fatalf("error reading block entry %d: %v", n, err)
+					t.Fatalf("error reading block entry %d: %v", n, it.Error())
 				}
 				block, receipts, err := it.BlockAndReceipts()
 				if err != nil {
@@ -170,7 +171,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		db2.Close()
 	})
 
-	genesis.MustCommit(db2, trie.NewDatabase(db, trie.HashDefaults))
+	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
 	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
