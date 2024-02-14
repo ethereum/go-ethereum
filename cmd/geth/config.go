@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -182,7 +183,11 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	if ctx.IsSet(utils.VMTraceFlag.Name) {
 		if name := ctx.String(utils.VMTraceFlag.Name); name != "" {
-			t, err := live.Directory.New(name)
+			var config string
+			if ctx.IsSet(utils.VMTraceConfigFlag.Name) {
+				config = ctx.String(utils.VMTraceConfigFlag.Name)
+			}
+			t, err := live.Directory.New(name, json.RawMessage(config))
 			if err != nil {
 				utils.Fatalf("Failed to create tracer %q: %v", name, err)
 			}
