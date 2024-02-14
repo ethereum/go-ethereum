@@ -42,10 +42,10 @@ func fuzz(data []byte, debugging bool) {
 	var (
 		input   = bytes.NewReader(data)
 		spongeA = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbA     = NewDatabase(rawdb.NewDatabase(spongeA), nil)
+		dbA     = newTestDatabase(rawdb.NewDatabase(spongeA), rawdb.HashScheme)
 		trieA   = NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbB     = NewDatabase(rawdb.NewDatabase(spongeB), nil)
+		dbB     = newTestDatabase(rawdb.NewDatabase(spongeB), rawdb.HashScheme)
 
 		options = NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
@@ -87,10 +87,10 @@ func fuzz(data []byte, debugging bool) {
 		panic(err)
 	}
 	if nodes != nil {
-		dbA.Update(rootA, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
+		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false)
+	dbA.Commit(rootA)
 
 	// Stacktrie requires sorted insertion
 	slices.SortFunc(vals, (*kv).cmp)
