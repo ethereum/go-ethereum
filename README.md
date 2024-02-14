@@ -40,7 +40,7 @@ After adding a page, you will also need to list it in `/src/data/documentation-l
 
 #### Adding notes to a doc
 
-Notes in documentation pages are highlighted boxes (color depend on the current set dark/light theme). To add a note, wrap the note text in `<Note>` tage as follows:
+Notes in documentation pages are highlighted boxes (color depend on the current set dark/light theme). To add a note, wrap the note text in `<Note>` tag as follows:
 
 ```markdown
 <Note>text to include in note</Note>
