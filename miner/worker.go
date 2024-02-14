@@ -1291,6 +1291,7 @@ func (w *worker) buildBlockFromTxs(ctx context.Context, args *types.BuildBlockAr
 		random:      args.Random,
 		extra:       args.Extra,
 		withdrawals: args.Withdrawals,
+		beaconRoot:  &args.ParentBeaconBlockRoot,
 		// noUncle:     true,
 		noTxs: false,
 	}
@@ -1339,6 +1340,7 @@ func (w *worker) buildBlockFromBundles(ctx context.Context, args *types.BuildBlo
 		random:      args.Random,
 		extra:       args.Extra,
 		withdrawals: args.Withdrawals,
+		beaconRoot:  &args.ParentBeaconBlockRoot,
 		// noUncle:     true,
 		noTxs: false,
 	}
