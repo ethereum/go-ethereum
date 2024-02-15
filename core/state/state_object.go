@@ -194,6 +194,13 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		err   error
 		value common.Hash
 	)
+
+	if s.db.witness != nil && s.db.snap != nil && s.origin != nil {
+		// when building a witness with snapshot enabled, prefetch all read slots to be collected
+		// and included in the witness when the block root hash is committed (intermediateroot/commit?)
+		s.db.readPrefetcher.prefetch(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]})
+	}
+
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
@@ -217,6 +224,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			return common.Hash{}
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
+		//fmt.Printf("trie access list is %v\n", tr.AccessList())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -379,11 +387,11 @@ func (s *stateObject) updateRoot() {
 // commit obtains a set of dirty storage trie nodes and updates the account data.
 // The returned set can be nil if nothing to commit. This function assumes all
 // storage mutations have already been flushed into trie by updateRoot.
-func (s *stateObject) commit() (*trienode.NodeSet, error) {
+func (s *stateObject) commit() (*trienode.NodeSet, map[string][]byte, error) {
 	// Short circuit if trie is not even loaded, don't bother with committing anything
 	if s.trie == nil {
 		s.origin = s.data.Copy()
-		return nil, nil
+		return nil, nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
 	if metrics.EnabledExpensive {
@@ -392,15 +400,15 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
-	root, nodes, err := s.trie.Commit(false)
+	root, nodes, accessList, err := s.trie.CommitAndObtainAccessList(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.data.Root = root
 
 	// Update original account data after commit
 	s.origin = s.data.Copy()
-	return nodes, nil
+	return nodes, accessList, nil
 }
 
 // AddBalance adds amount to s's balance.

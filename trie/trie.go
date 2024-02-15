@@ -107,7 +107,7 @@ func NewEmpty(db database.Database) *Trie {
 }
 
 // MustNodeIterator is a wrapper of NodeIterator and will omit any encountered
-// error but just print out an error message.
+// error but just printg out an error message.
 func (t *Trie) MustNodeIterator(start []byte) NodeIterator {
 	it, err := t.NodeIterator(start)
 	if err != nil {
@@ -581,6 +581,10 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
+// TODO: for resolveAndTrack, differentiate between hash node resolve failure in stateless
+// vs normal execution.  In normal mode, it represents an error with database
+// consistency.  In stateless execution, it means that the witness is incomplete.
+
 // resolveAndTrack loads node from the underlying store with the given node hash
 // and path prefix and also tracks the loaded node blob in tracer treated as the
 // node's original value. The rlp-encoded blob is preferred to be loaded from
@@ -602,6 +606,22 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
+func (t *Trie) AccessList() map[string][]byte {
+	return t.tracer.accessList
+}
+
+func (t *Trie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
+	accessList := t.tracer.accessList
+	// Commit will reset the tracer accessList, so after this
+	// operation, we have full ownership of the map (hence: no need to
+	// deep-copy or even copy).
+	rootHash, nodes, err := t.Commit(collectLeaf)
+	if err != nil {
+		return rootHash, nodes, nil, err
+	}
+	return rootHash, nodes, accessList, err
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
@@ -609,8 +629,8 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
-	defer t.tracer.reset()
 	defer func() {
+		t.tracer.reset()
 		t.committed = true
 	}()
 	// Trie is empty and can be classified into two types of situations:

@@ -319,6 +319,18 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// EncodeRLPWithZeroRoot encodes a block (with header state root set to 0x00...0) to RLP
+func (b *Block) EncodeRLPWithZeroRoot(w io.Writer) error {
+	old := b.header.Root
+	b.header.Root = common.Hash{}
+	err := b.EncodeRLP(w)
+	b.header.Root = old
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // EncodeRLP serializes a block as RLP.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &extblock{

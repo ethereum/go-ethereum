@@ -20,7 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"os"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -442,4 +447,48 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+func BuildProof(number uint64, bc *core.BlockChain) ([]byte, error) {
+	if number == 0 {
+		panic("cannot build genesis block proof")
+	}
+	parent := bc.GetBlockByNumber(number - 1)
+	db, err := bc.StateAt(parent.Header().Root)
+	if err != nil {
+		return nil, err
+	}
+	db.EnableWitnessRecording()
+	db.StartPrefetcher("apidebug")
+	block := bc.GetBlockByNumber(number)
+
+	logconfig := &logger.Config{
+		EnableMemory:     false,
+		DisableStack:     false,
+		DisableStorage:   false,
+		EnableReturnData: true,
+		Debug:            true,
+	}
+	tracer := logger.NewJSONLogger(logconfig, os.Stdout)
+	_ = tracer
+
+	stateProcessor := core.NewStateProcessor(bc.Config(), bc, bc.Engine())
+	_, _, _, err = stateProcessor.Process(block, db, vm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	if _, err = db.Commit(block.NumberU64(), true); err != nil {
+		return nil, err
+	}
+	proof := db.Witness()
+	proof.Block = block
+	enc, err := proof.EncodeRLP()
+	if err != nil {
+		return nil, err
+	}
+	return enc, nil
+}
+
+func (api *DebugAPI) BuildProof(num rpc.BlockNumber) ([]byte, error) {
+	return BuildProof(uint64(num), api.eth.blockchain)
 }

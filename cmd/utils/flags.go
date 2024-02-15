@@ -910,6 +910,18 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	}
 )
 
+var CrossValidationEndpointFlag = &cli.StringFlag{
+	Name:  "crossvalidation.endpoint",
+	Usage: "http endpoint(s) to cross validate blocks against.  Formatted as a comma-separated list of URLs",
+	Value: "",
+}
+var WitnessRecordingPathFlag = &cli.StringFlag{
+	Name:  "crossvalidation.badblockdir",
+	Usage: "location to store rlp-encoded block witnesses that do not pass cross validation",
+	// TODO: default to some directory under the datadir
+	Value: "",
+}
+
 var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
@@ -1842,6 +1854,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
 		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
 	}
+	cfg.CrossValidationEndpoint = ctx.String(CrossValidationEndpointFlag.Name)
+	cfg.WitnessRecordingPath = ctx.String(WitnessRecordingPathFlag.Name)
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if

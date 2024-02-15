@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -33,7 +34,7 @@ type Validator interface {
 
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.
-	ValidateState(block *types.Block, state *state.StateDB, receipts types.Receipts, usedGas uint64) error
+	ValidateState(block *types.Block, state *state.StateDB, receipts types.Receipts, usedGas uint64, rootCheck bool) (common.Hash, error)
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.

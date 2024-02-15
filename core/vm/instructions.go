@@ -342,7 +342,13 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	address := slot.Bytes20()
+	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(address)))
+	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+		code := interpreter.evm.StateDB.GetCode(address)
+		codeHash := interpreter.evm.StateDB.GetCodeHash(address)
+		witness.AddCode(codeHash, code)
+	}
 	return nil, nil
 }
 
@@ -380,6 +386,10 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = 0xffffffffffffffff
 	}
 	addr := common.Address(a.Bytes20())
+	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+		witness.AddCode(interpreter.evm.StateDB.GetCodeHash(addr), interpreter.evm.StateDB.GetCode(addr))
+	}
+
 	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
@@ -418,6 +428,10 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
+		_ = interpreter.evm.StateDB.GetCode(address) // ensure the account leaf is fetched and included in the witness
+		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+			witness.AddCodeHash(interpreter.evm.StateDB.GetCodeHash(address))
+		}
 		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
 	}
 	return nil, nil
@@ -444,7 +458,13 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		lower = upper - 256
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		res := interpreter.evm.Context.GetHash(num64).Bytes()
+		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+			var bh common.Hash
+			copy(bh[:], res[:])
+			witness.AddBlockHash(bh, num64)
+		}
+		num.SetBytes(res[:])
 	} else {
 		num.Clear()
 	}
