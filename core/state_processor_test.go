@@ -927,3 +927,98 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 		t.Fatalf("codeHash.NewValue must be nil")
 	}
 }
+
+func TestProcessVerkleBalanceOpcode(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	// Verkle trees use the snapshot, which must be enabled before the
+	// data is saved into the tree+database.
+	genesis := gspec.MustCommit(bcdb)
+
+	// Commit the genesis block to the block-generation database as it
+	// is now independent of the blockchain database.
+	gspec.MustCommit(gendb)
+
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 1, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		txData := []byte{
+			0x73,                                                                                                                   // PUSH20
+			0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
+			0x31, // BALANCE
+		}
+		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 100_000, big.NewInt(875000000), txData), signer, testKey)
+		gen.AddTx(tx)
+	})
+
+	account2BalanceTreeKey := utils.GetTreeKeyBalance(account2[:])
+
+	var stateDiffIdx = -1
+	for i, stemStateDiff := range statediff[0] {
+		if bytes.Equal(stemStateDiff.Stem[:], account2BalanceTreeKey[:31]) {
+			stateDiffIdx = i
+			break
+		}
+	}
+	if stateDiffIdx == -1 {
+		t.Fatalf("no state diff found for stem")
+	}
+
+	var zero [32]byte
+	balanceStateDiff := statediff[0][stateDiffIdx].SuffixDiffs[0]
+	if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+		t.Fatalf("invalid suffix diff")
+	}
+	if balanceStateDiff.CurrentValue == nil {
+		t.Fatalf("invalid current value")
+	}
+	if *balanceStateDiff.CurrentValue == zero {
+		t.Fatalf("invalid current value")
+	}
+	if balanceStateDiff.NewValue != nil {
+		t.Fatalf("invalid new value")
+	}
+}
