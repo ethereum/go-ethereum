@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -38,10 +39,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func TestState(t *testing.T) {
-	t.Parallel()
-
-	st := new(testMatcher)
+func initMatcher(st *testMatcher) {
 	// Long tests:
 	st.slow(`^stAttackTest/ContractCreationSpam`)
 	st.slow(`^stBadOpcode/badOpcodes`)
@@ -60,72 +58,102 @@ func TestState(t *testing.T) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
+}
 
-	// For Istanbul, older tests were moved into LegacyTests
+func TestState(t *testing.T) {
+	t.Parallel()
+
+	st := new(testMatcher)
+	initMatcher(st)
 	for _, dir := range []string{
 		filepath.Join(baseDir, "EIPTests", "StateTests"),
 		stateTestDir,
-		legacyStateTestDir,
 		benchmarksDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
-			if runtime.GOARCH == "386" && runtime.GOOS == "windows" && rand.Int63()%2 == 0 {
-				t.Skip("test (randomly) skipped on 32-bit windows")
-				return
-			}
-			for _, subtest := range test.Subtests() {
-				subtest := subtest
-				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+			execStateTest(t, st, test)
+		})
+	}
+}
 
-				t.Run(key+"/hash/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, state *StateTestState) {
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
+// TestLegacyState tests some older tests, which were moved to the folder
+// 'LegacyTests' for the Istanbul fork.
+func TestLegacyState(t *testing.T) {
+	st := new(testMatcher)
+	initMatcher(st)
+	st.walk(t, legacyStateTestDir, func(t *testing.T, name string, test *StateTest) {
+		execStateTest(t, st, test)
+	})
+}
+
+// TestExecutionSpecState runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecState(t *testing.T) {
+	if !common.FileExist(executionSpecStateTestDir) {
+		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
+	}
+	st := new(testMatcher)
+
+	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
+		execStateTest(t, st, test)
+	})
+}
+
+func execStateTest(t *testing.T, st *testMatcher, test *StateTest) {
+	if runtime.GOARCH == "386" && runtime.GOOS == "windows" && rand.Int63()%2 == 0 {
+		t.Skip("test (randomly) skipped on 32-bit windows")
+		return
+	}
+	for _, subtest := range test.Subtests() {
+		subtest := subtest
+		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+
+		t.Run(key+"/hash/trie", func(t *testing.T) {
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, state *StateTestState) {
+					result = st.checkFailure(t, err)
 				})
-				t.Run(key+"/hash/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, state *StateTestState) {
-							if state.Snapshots != nil && state.StateDB != nil {
-								if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
-									result = err
-									return
-								}
-							}
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
+				return result
+			})
+		})
+		t.Run(key+"/hash/snap", func(t *testing.T) {
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, state *StateTestState) {
+					if state.Snapshots != nil && state.StateDB != nil {
+						if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
+							result = err
+							return
+						}
+					}
+					result = st.checkFailure(t, err)
 				})
-				t.Run(key+"/path/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, state *StateTestState) {
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
+				return result
+			})
+		})
+		t.Run(key+"/path/trie", func(t *testing.T) {
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, state *StateTestState) {
+					result = st.checkFailure(t, err)
 				})
-				t.Run(key+"/path/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						var result error
-						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, state *StateTestState) {
-							if state.Snapshots != nil && state.StateDB != nil {
-								if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
-									result = err
-									return
-								}
-							}
-							result = st.checkFailure(t, err)
-						})
-						return result
-					})
+				return result
+			})
+		})
+		t.Run(key+"/path/snap", func(t *testing.T) {
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, state *StateTestState) {
+					if state.Snapshots != nil && state.StateDB != nil {
+						if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
+							result = err
+							return
+						}
+					}
+					result = st.checkFailure(t, err)
 				})
-			}
+				return result
+			})
 		})
 	}
 }
