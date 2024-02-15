@@ -12,6 +12,7 @@ import (
 )
 
 func TestBuilder_AddTxn_Simple(t *testing.T) {
+	t.Parallel()
 	config, backend := newMockBuilderConfig(t)
 
 	builder, err := NewBuilder(config, &BuilderArgs{})
@@ -33,6 +34,7 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
+	t.Parallel()
 	config, backend := newMockBuilderConfig(t)
 
 	builder, err := NewBuilder(config, &BuilderArgs{})
@@ -53,11 +55,8 @@ func TestBuilder_FillTransactions(t *testing.T) {
 	require.Equal(t, tx2.Hash(), builder.env.receipts[1].TxHash)
 }
 
-func TestBuilder_Bundle(t *testing.T) {
-	t.Skip("TODO")
-}
-
 func TestBuilder_BuildBlock(t *testing.T) {
+	t.Parallel()
 	t.Skip("TODO")
 
 	config, backend := newMockBuilderConfig(t)
