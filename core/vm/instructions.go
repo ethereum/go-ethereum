@@ -518,7 +518,8 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.readOnly {
+	// if scope is an account with no code (EOA delegation through EIP-5806) sstore is protected
+	if interpreter.readOnly || scope.Contract.CodeHash == (common.Hash{}) {
 		return nil, ErrWriteProtection
 	}
 	loc := scope.Stack.pop()
