@@ -93,8 +93,8 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		Difficulty:  (*big.Int)(test.Context.Difficulty),
 		GasLimit:    uint64(test.Context.GasLimit),
 	}
-	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
-	defer triedb.Close()
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
 	tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
@@ -102,12 +102,12 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to create call tracer: %v", err)
 	}
 
-	statedb.SetLogger(tracer)
+	state.StateDB.SetLogger(tracer)
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
+	evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer})
 	tracer.CaptureTxStart(evm, tx, msg.From)
 	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 	if err != nil {

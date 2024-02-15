@@ -79,8 +79,8 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),
 	}
-	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
-	defer triedb.Close()
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
+	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
 	tracer := logger.NewStructLogger(&logger.Config{
@@ -89,7 +89,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -98,13 +98,13 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		snap := statedb.Snapshot()
+		snap := state.StateDB.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		_, err = st.TransitionDb()
 		if err != nil {
 			b.Fatal(err)
 		}
-		statedb.RevertToSnapshot(snap)
+		state.StateDB.RevertToSnapshot(snap)
 		if have, want := len(tracer.StructLogs()), 244752; have != want {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}

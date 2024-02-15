@@ -135,21 +135,21 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 					GasLimit:    uint64(test.Context.GasLimit),
 					BaseFee:     test.Genesis.BaseFee,
 				}
-				triedb, _, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
-			triedb.Close()
+			state.Close()
 
 			tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
 
-			statedb.SetLogger(tracer)
+			state.StateDB.SetLogger(tracer)
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer})
 			tracer.CaptureTxStart(evm, tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
@@ -241,8 +241,8 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
-	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
-	defer triedb.Close()
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+	defer state.Close()
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -251,8 +251,8 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
-		evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
-		snap := statedb.Snapshot()
+		evm := vm.NewEVM(context, txContext, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer})
+		snap := state.StateDB.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if _, err = st.TransitionDb(); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
@@ -260,7 +260,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
 		}
-		statedb.RevertToSnapshot(snap)
+		state.StateDB.RevertToSnapshot(snap)
 	}
 }
 
@@ -369,7 +369,7 @@ func TestInternals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(),
+			state := tests.MakePreState(rawdb.NewMemoryDatabase(),
 				core.GenesisAlloc{
 					to: core.GenesisAccount{
 						Code: tc.code,
@@ -378,8 +378,8 @@ func TestInternals(t *testing.T) {
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false, rawdb.HashScheme)
-			defer triedb.Close()
-			statedb.SetLogger(tc.tracer)
+			defer state.Close()
+			state.StateDB.SetLogger(tc.tracer)
 			tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
 				To:       &to,
 				Value:    big.NewInt(0),
@@ -393,7 +393,7 @@ func TestInternals(t *testing.T) {
 				Origin:   origin,
 				GasPrice: tx.GasPrice(),
 			}
-			evm := vm.NewEVM(context, txContext, statedb, config, vm.Config{Tracer: tc.tracer})
+			evm := vm.NewEVM(context, txContext, state.StateDB, config, vm.Config{Tracer: tc.tracer})
 			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
