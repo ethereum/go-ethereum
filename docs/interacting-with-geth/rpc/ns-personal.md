@@ -208,7 +208,7 @@ curl --data '{"id": 2, "jsonrpc": "2.0", "method": "account_signTransaction", "p
 
 ## Methods without replacements
 
-There are a few methods that were available in the `personal` namepsace that have been deprecated without replacements. These are:
+There are a few methods that were available in the `personal` namespace that have been deprecated without replacements. These are:
 
 ### personal_unlockAccount
 

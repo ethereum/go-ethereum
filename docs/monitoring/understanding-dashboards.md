@@ -132,7 +132,7 @@ The transaction processing panel tracks the time taken to complete the various t
 - **executable discard**: rate that valid transactions are dropped from the transaction pool, e.g. because it is already known.
 - **executable replace**: rate that valid transactions are replaced with a new one from same sender with same nonce but higher gas
 - **executable ratelimit**: rate that valid transactions are dropped due to rate-limiting
-- **executable nofunds**: rate that valid transations are dropped due to running out of ETH to pay gas
+- **executable nofunds**: rate that valid transactions are dropped due to running out of ETH to pay gas
 - **gapped discard**: rate that queued transactions are discarded from the transaction pool
 - **gapped replace**: rate that queued transactions are replaced with a new one from same sender with same nonce but higher gas
 - **gapped ratelimit**: rate that queued transactions are dropped due to rate limiting

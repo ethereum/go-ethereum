@@ -50,7 +50,7 @@ _For readability purposes, we'll remove the WARNING printout, user confirmation 
 
 ## Remote interactions {#remote-interactions}
 
-This tutorial will use Clef with Geth on the Goerli testnet. The accounts used will be in the Goerli keystore with the path `~/go-ethereum/goerli-data/keystore`. The tutorial assumes there are two accounts in this keystore. Instructions for creating accounts can be found on the [Account managament page](/docs/fundamentals/account-management). Note that Clef can also interact with hardware wallets, although that is not demonstrated here.
+This tutorial will use Clef with Geth on the Goerli testnet. The accounts used will be in the Goerli keystore with the path `~/go-ethereum/goerli-data/keystore`. The tutorial assumes there are two accounts in this keystore. Instructions for creating accounts can be found on the [Account management page](/docs/fundamentals/account-management). Note that Clef can also interact with hardware wallets, although that is not demonstrated here.
 
 Clef should be started before Geth, otherwise Geth will complain that it cannot find a Clef instance to connect to. Clef should be started with the correct `chainid` for Goerli. Clef itself does not connect to a blockchain, but the `chainID` parameter is included in the data that is aggregated to form a signature. Clef also needs a path to the correct keystore passed to the `--keystore` command. A custom path to the config directory can also be provided. This is where the `ipc` file will be saved which is needed to connect Clef to Geth:
 
