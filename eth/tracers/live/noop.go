@@ -61,11 +61,13 @@ func (t *noop) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Ad
 func (t *noop) CaptureTxEnd(receipt *types.Receipt, err error) {
 }
 
-func (t *noop) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, skip bool) {
+func (t *noop) OnBlockStart(ev core.BlockEvent) {
 }
 
 func (t *noop) OnBlockEnd(err error) {
 }
+
+func (t *noop) OnSkippedBlock(ev core.BlockEvent) {}
 
 func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
 }
