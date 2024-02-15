@@ -71,7 +71,7 @@ func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
 			return true
 		}
 	}
-	return false
+	return true
 }
 
 // getNodeArg handles the common case of a single node descriptor argument.
