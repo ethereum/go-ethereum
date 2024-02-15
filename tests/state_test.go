@@ -32,8 +32,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -82,7 +80,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/hash/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, state *StateTestState) {
 							result = st.checkFailure(t, err)
 						})
 						return result
@@ -91,9 +89,9 @@ func TestState(t *testing.T) {
 				t.Run(key+"/hash/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							if snaps != nil && state != nil {
-								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
+						test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, state *StateTestState) {
+							if state.Snapshots != nil && state.StateDB != nil {
+								if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
 									result = err
 									return
 								}
@@ -106,7 +104,7 @@ func TestState(t *testing.T) {
 				t.Run(key+"/path/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
+						test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, state *StateTestState) {
 							result = st.checkFailure(t, err)
 						})
 						return result
@@ -115,9 +113,9 @@ func TestState(t *testing.T) {
 				t.Run(key+"/path/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						var result error
-						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, snaps *snapshot.Tree, state *state.StateDB) {
-							if snaps != nil && state != nil {
-								if _, err := snaps.Journal(state.IntermediateRoot(false)); err != nil {
+						test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, state *StateTestState) {
+							if state.Snapshots != nil && state.StateDB != nil {
+								if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
 									result = err
 									return
 								}
@@ -222,8 +220,8 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
-			triedb, _, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false, rawdb.HashScheme)
-			defer triedb.Close()
+			state := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false, rawdb.HashScheme)
+			defer state.Close()
 
 			var baseFee *big.Int
 			if rules.IsLondon {
@@ -261,7 +259,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 			context.GetHash = vmTestBlockHash
 			context.BaseFee = baseFee
-			evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+			evm := vm.NewEVM(context, txContext, state.StateDB, config, vmconfig)
 
 			// Create "contract" for sender to cache code analysis.
 			sender := vm.NewContract(vm.AccountRef(msg.From), vm.AccountRef(msg.From),
@@ -274,8 +272,8 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				snapshot := statedb.Snapshot()
-				statedb.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+				snapshot := state.StateDB.Snapshot()
+				state.StateDB.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 				b.StartTimer()
 				start := time.Now()
 
@@ -288,10 +286,10 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 				b.StopTimer()
 				elapsed += uint64(time.Since(start))
-				refund += statedb.GetRefund()
+				refund += state.StateDB.GetRefund()
 				gasUsed += msg.GasLimit - leftOverGas
 
-				statedb.RevertToSnapshot(snapshot)
+				state.StateDB.RevertToSnapshot(snapshot)
 			}
 			if elapsed < 1 {
 				elapsed = 1

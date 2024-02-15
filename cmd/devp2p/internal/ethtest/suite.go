@@ -762,7 +762,7 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 	from, nonce := s.chain.GetSender(5)
 	for i := 0; i < count; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, blobs%2)
+		blobdata := make([]byte, blobs%3)
 		for i := range blobdata {
 			blobdata[i] = discriminator
 			blobs -= 1

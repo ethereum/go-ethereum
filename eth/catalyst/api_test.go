@@ -1663,3 +1663,26 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 		t.Fatalf("incorrect root stored: want %s, got %s", *blockParams.BeaconRoot, root)
 	}
 }
+
+// TestGetClientVersion verifies the expected version info is returned.
+func TestGetClientVersion(t *testing.T) {
+	genesis, preMergeBlocks := generateMergeChain(10, false)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	info := engine.ClientVersionV1{
+		Code:    "TT",
+		Name:    "test",
+		Version: "1.1.1",
+		Commit:  "0x12345678",
+	}
+	infos := api.GetClientVersionV1(info)
+	if len(infos) != 1 {
+		t.Fatalf("expected only one returned client version, got %d", len(infos))
+	}
+	info = infos[0]
+	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta {
+		t.Fatalf("client info does match expected, got %s", info.String())
+	}
+}
