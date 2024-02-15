@@ -38,7 +38,6 @@ var (
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
-	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	deliveryMissMeter metrics.Meter
@@ -71,16 +70,14 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	}
 	return p
 }
-func (p *triePrefetcher) wait() {
-	for _, fetcher := range p.fetchers {
-		fetcher.wait()
-	}
-}
 
-// close iterates over all the subfetchers, aborts any that were left spinning
-// and reports the stats to the metrics subsystem.
+// close iterates over all the subfetchers, waits on any that were left spinning
+// and reports the stats to the metrics subsystem.  close should not be called
+// more than once on a triePrefetcher instance.
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
+		fetcher.wait() // safe to do multiple times
+
 		if metrics.Enabled {
 			if fetcher.root == p.root {
 				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
@@ -103,34 +100,10 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	// Clear out all fetchers (will crash on a second call, deliberate)
-	p.fetchers = nil
-}
-
-// copy creates a deep-but-inactive copy of the trie prefetcher. Any trie data
-// already loaded will be copied over, but no goroutines will be started. This
-// is mostly used in the miner which creates a copy of it's actively mutated
-// state to be sealed while it may further mutate the state.
-func (p *triePrefetcher) copy() *triePrefetcher {
-	copy := &triePrefetcher{
-		db:      p.db,
-		root:    p.root,
-		fetches: make(map[string]Trie), // Active prefetchers use the fetches map
-
-		deliveryMissMeter: p.deliveryMissMeter,
-		accountLoadMeter:  p.accountLoadMeter,
-		accountDupMeter:   p.accountDupMeter,
-		accountSkipMeter:  p.accountSkipMeter,
-		accountWasteMeter: p.accountWasteMeter,
-		storageLoadMeter:  p.storageLoadMeter,
-		storageDupMeter:   p.storageDupMeter,
-		storageSkipMeter:  p.storageSkipMeter,
-		storageWasteMeter: p.storageWasteMeter,
-	}
-	return copy
 }
 
 // prefetch schedules a batch of trie items to prefetch.
+//
 // prefetch is called from two locations:
 //  1. Finalize of the state-objects storage roots. This happens at the end
 //     of every transaction, meaning that if several transactions touches
@@ -138,12 +111,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 //     repeated.
 //  2. Finalize of the main account trie. This happens only once per block.
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
-	// If the prefetcher is an inactive one, bail out
-	if p.fetches != nil {
-		return
-	}
-
-	// Active fetcher, schedule the retrievals
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
@@ -156,18 +123,8 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
 // have it.
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
-	// If the prefetcher is inactive, return from existing deep copies
-	id := p.trieID(owner, root)
-	if p.fetches != nil {
-		trie := p.fetches[id]
-		if trie == nil {
-			p.deliveryMissMeter.Mark(1)
-			return nil
-		}
-		return p.db.CopyTrie(trie)
-	}
-	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
-	fetcher := p.fetchers[id]
+	// Bail if no trie was prefetched for this root
+	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
 		p.deliveryMissMeter.Mark(1)
 		return nil

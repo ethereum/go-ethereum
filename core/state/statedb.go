@@ -62,6 +62,7 @@ type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
 	trie       Trie
+	witness    *Witness
 	hasher     crypto.KeccakState
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
@@ -138,9 +139,6 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
-
-	witness        *Witness
-	readPrefetcher *triePrefetcher
 }
 
 // NewWithWitnessRecording creates a new state from a given trie.  The state is configured to construct a stateless
@@ -191,20 +189,11 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 // commit phase, most of the needed data is already hot.
 func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.prefetcher != nil {
-		s.prefetcher.wait()
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-	if s.readPrefetcher != nil {
-		s.readPrefetcher.wait()
-		s.readPrefetcher.close()
-		s.readPrefetcher = nil
-	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
-		if s.witness != nil {
-			s.readPrefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
-		}
 	}
 }
 
@@ -212,14 +201,8 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 // from the gathered metrics.
 func (s *StateDB) StopPrefetcher() {
 	if s.prefetcher != nil {
-		s.prefetcher.wait()
 		s.prefetcher.close()
 		s.prefetcher = nil
-	}
-	if s.readPrefetcher != nil {
-		s.readPrefetcher.wait()
-		s.readPrefetcher.close()
-		s.readPrefetcher = nil
 	}
 }
 
@@ -601,6 +584,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			s.SnapshotAccountReads += time.Since(start)
 		}
 		if err == nil {
+			// If witness building is enabled, prefetch any trie paths loaded directly
+			// via the snapshots
+			if s.prefetcher != nil && s.witness != nil {
+				s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]})
+			}
 			if acc == nil {
 				return nil
 			}
@@ -634,15 +622,9 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			return nil
 		}
 	}
-
 	// Insert into the live set
 	obj := newObject(s, addr, data)
 	s.setStateObject(obj)
-	if s.witness != nil && s.snap != nil {
-		// when building witness with snap enabled, prefetch all read accounts to later be collected and
-		// included in the witness
-		s.readPrefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]})
-	}
 	return obj
 }
 
@@ -719,7 +701,10 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 }
 
 // Copy creates a deep, independent copy of the state.
-// Snapshots of the copied state cannot be applied to the copy.
+//
+// Note:
+//   - Snapshots of the copied state cannot be applied to the copy.
+//   - Pre-fetchers will not be copied nor active in the copy.
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
@@ -816,12 +801,6 @@ func (s *StateDB) Copy() *StateDB {
 	state.accessList = s.accessList.Copy()
 	state.transientStorage = s.transientStorage.Copy()
 
-	// If there's a prefetcher running, make an inactive copy of it that can
-	// only access data but does not actively preload (since the user will not
-	// know that they need to explicitly terminate an active copy).
-	if s.prefetcher != nil {
-		state.prefetcher = s.prefetcher.copy()
-	}
 	return state
 }
 
@@ -909,7 +888,7 @@ func (s *StateDB) collectReadStorageAccessLists() {
 	for _, obj := range s.stateObjects {
 		// load read storage slots from the finished trie in the prefetcher as these continue to be prefetched
 		// until commit.
-		tr := s.readPrefetcher.trie(obj.addrHash, obj.data.Root)
+		tr := s.prefetcher.trie(obj.addrHash, obj.data.Root)
 		if tr == nil {
 			continue
 		}
@@ -921,7 +900,7 @@ func (s *StateDB) collectReadStorageAccessLists() {
 }
 
 func (s *StateDB) collectReadAccountsAccessLists() {
-	tr := s.readPrefetcher.trie(common.Hash{}, s.originalRoot)
+	tr := s.prefetcher.trie(common.Hash{}, s.originalRoot)
 	if tr == nil {
 		// TODO: ensure this case is b/c of empty block
 		return
@@ -942,21 +921,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	prefetcher := s.prefetcher
 	if s.prefetcher != nil {
 		defer func() {
-			// TODO: need to wait for read accounts to be resolved in prefetcher main trie?
-			s.prefetcher.wait()
 			s.prefetcher.close()
+			if s.witness != nil {
+				// TODO: move read prefetcher logic into Commit?
+				s.collectReadStorageAccessLists()
+				s.collectReadAccountsAccessLists()
+			}
 			s.prefetcher = nil
 		}()
 	}
-	if s.readPrefetcher != nil {
-		// TODO: move read prefetcher logic into Commit?
-		s.readPrefetcher.wait()
-		s.collectReadStorageAccessLists()
-		s.collectReadAccountsAccessLists()
-		s.readPrefetcher.close()
-		s.readPrefetcher = nil
-	}
-
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
