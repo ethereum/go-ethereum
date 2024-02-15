@@ -401,10 +401,12 @@ func touchCodeChunksRangeOnReadAndChargeGas(contractAddr []byte, startPC, size u
 		return 0
 	}
 
-	// endPC is the last PC that must be touched.
-	endPC := startPC + size - 1
-	if startPC+size > codeLen {
+	endPC := startPC + size
+	if endPC > codeLen {
 		endPC = codeLen
+	}
+	if endPC > 0 {
+		endPC -= 1 // endPC is the last bytecode that will be touched.
 	}
 
 	var statelessGasCharged uint64
