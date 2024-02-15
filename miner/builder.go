@@ -1,13 +1,24 @@
 package miner
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
+	denebBuilder "github.com/attestantio/go-builder-client/api/deneb"
+	builderV1 "github.com/attestantio/go-builder-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/flashbots/go-boost-utils/ssz"
+	"github.com/holiman/uint256"
 )
 
 type BuilderConfig struct {
@@ -19,15 +30,18 @@ type BuilderConfig struct {
 }
 
 type BuilderArgs struct {
-	ParentHash   common.Hash
-	FeeRecipient common.Address
-	Extra        []byte
+	ParentHash     common.Hash
+	FeeRecipient   common.Address
+	ProposerPubkey []byte
+	Extra          []byte
+	Slot           uint64
 }
 
 type Builder struct {
-	env  *environment
-	wrk  *worker
-	args *BuilderArgs
+	env   *environment
+	wrk   *worker
+	args  *BuilderArgs
+	block *types.Block
 }
 
 func NewBuilder(config *BuilderConfig, args *BuilderArgs) (*Builder, error) {
@@ -94,7 +108,67 @@ func (b *Builder) BuildBlock() (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.block = block
 	return block, nil
+}
+
+func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+	work := b.env
+
+	if b.block == nil {
+		return nil, fmt.Errorf("block not built")
+	}
+
+	envelope := engine.BlockToExecutableData(b.block, totalFees(b.block, work.receipts), work.sidecars)
+	payload, err := executableDataToDenebExecutionPayload(envelope.ExecutionPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	value, overflow := uint256.FromBig(envelope.BlockValue)
+	if overflow {
+		return nil, fmt.Errorf("block value %v overflows", *envelope.BlockValue)
+	}
+	var proposerPubkey [48]byte
+	copy(proposerPubkey[:], b.args.ProposerPubkey)
+
+	blockBidMsg := builderV1.BidTrace{
+		Slot:                 b.args.Slot,
+		ParentHash:           phase0.Hash32(payload.ParentHash),
+		BlockHash:            phase0.Hash32(payload.BlockHash),
+		BuilderPubkey:        builderPubKey,
+		ProposerPubkey:       phase0.BLSPubKey(proposerPubkey),
+		ProposerFeeRecipient: bellatrix.ExecutionAddress(b.args.FeeRecipient),
+		GasLimit:             envelope.ExecutionPayload.GasLimit,
+		GasUsed:              envelope.ExecutionPayload.GasUsed,
+		Value:                value,
+	}
+
+	genesisForkVersion := phase0.Version{0x00, 0x00, 0x10, 0x20}
+	builderSigningDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, genesisForkVersion, phase0.Root{})
+
+	root, err := ssz.ComputeSigningRoot(&blockBidMsg, builderSigningDomain)
+	if err != nil {
+		return nil, err
+	}
+
+	bidRequest := SubmitBlockRequest{
+		Root: phase0.Root(root),
+		SubmitBlockRequest: denebBuilder.SubmitBlockRequest{
+			Message:          &blockBidMsg,
+			ExecutionPayload: payload,
+			Signature:        phase0.BLSSignature{},
+			BlobsBundle:      &denebBuilder.BlobsBundle{},
+		},
+	}
+	return &bidRequest, nil
+}
+
+// SubmitBlockRequest is an extension of the builder.SubmitBlockRequest with the root
+// of the bid that needs to be signed
+type SubmitBlockRequest struct {
+	denebBuilder.SubmitBlockRequest
+	Root phase0.Root
 }
 
 func receiptToSimResult(receipt *types.Receipt) *types.SimulateTransactionResult {
@@ -110,4 +184,44 @@ func receiptToSimResult(receipt *types.Receipt) *types.SimulateTransactionResult
 		})
 	}
 	return result
+}
+
+func executableDataToDenebExecutionPayload(data *engine.ExecutableData) (*deneb.ExecutionPayload, error) {
+	transactionData := make([]bellatrix.Transaction, len(data.Transactions))
+	for i, tx := range data.Transactions {
+		transactionData[i] = bellatrix.Transaction(tx)
+	}
+
+	withdrawalData := make([]*capella.Withdrawal, len(data.Withdrawals))
+	for i, wd := range data.Withdrawals {
+		withdrawalData[i] = &capella.Withdrawal{
+			Index:          capella.WithdrawalIndex(wd.Index),
+			ValidatorIndex: phase0.ValidatorIndex(wd.Validator),
+			Address:        bellatrix.ExecutionAddress(wd.Address),
+			Amount:         phase0.Gwei(wd.Amount),
+		}
+	}
+
+	baseFeePerGas := new(uint256.Int)
+	if baseFeePerGas.SetFromBig(data.BaseFeePerGas) {
+		return nil, errors.New("base fee per gas: overflow")
+	}
+
+	return &deneb.ExecutionPayload{
+		ParentHash:    [32]byte(data.ParentHash),
+		FeeRecipient:  [20]byte(data.FeeRecipient),
+		StateRoot:     [32]byte(data.StateRoot),
+		ReceiptsRoot:  [32]byte(data.ReceiptsRoot),
+		LogsBloom:     types.BytesToBloom(data.LogsBloom),
+		PrevRandao:    [32]byte(data.Random),
+		BlockNumber:   data.Number,
+		GasLimit:      data.GasLimit,
+		GasUsed:       data.GasUsed,
+		Timestamp:     data.Timestamp,
+		ExtraData:     data.ExtraData,
+		BaseFeePerGas: baseFeePerGas,
+		BlockHash:     [32]byte(data.BlockHash),
+		Transactions:  transactionData,
+		Withdrawals:   withdrawalData,
+	}, nil
 }
