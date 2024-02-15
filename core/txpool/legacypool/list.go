@@ -160,7 +160,7 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 	// Otherwise gather and drop the highest nonce'd transactions
 	var drops types.Transactions
 
-	sort.Sort(*m.index) // the sorted array is a heap, so no need to reheap after deleting tail items
+	slices.Sort(*m.index) // the sorted array is a heap, so no need to reheap after deleting tail items
 	for size := len(m.items); size > threshold; size-- {
 		drops = append(drops, m.items[(*m.index)[size-1]])
 		delete(m.items, (*m.index)[size-1])
