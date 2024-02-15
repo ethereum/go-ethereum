@@ -87,3 +87,25 @@ func BenchmarkListAdd(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkListCapOneTx(b *testing.B) {
+	// Generate a list of transactions to insert
+	key, _ := crypto.GenerateKey()
+
+	txs := make(types.Transactions, 32)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = transaction(uint64(i), 0, key)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		list := newList(true)
+		// Insert the transactions in a random order
+		for _, v := range rand.Perm(len(txs)) {
+			list.Add(txs[v], DefaultConfig.PriceBump)
+		}
+		b.StartTimer()
+		list.Cap(list.Len() - 1)
+		b.StopTimer()
+	}
+}
