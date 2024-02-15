@@ -32,6 +32,5 @@ type BuildBlockArgs struct {
 type API interface {
 	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
-	AddBundle(ctx context.Context, sessionId string, bundle Bundle) error
 	BuildBlock(ctx context.Context, sessionId string) error
 }

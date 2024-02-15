@@ -10,7 +10,6 @@ import (
 type SessionManager interface {
 	NewSession(context.Context, *BuildBlockArgs) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
-	AddBundle(sessionId string, bundle Bundle) error
 	BuildBlock(sessionId string) error
 }
 
@@ -33,10 +32,6 @@ func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types
 	return s.sessionMngr.AddTransaction(sessionId, tx)
 }
 
-func (s *Server) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
-	return s.sessionMngr.AddBundle(sessionId, bundle)
-}
-
 func (s *Server) BuildBlock(ctx context.Context, sessionId string) error {
 	return s.sessionMngr.BuildBlock(sessionId)
 }
@@ -50,10 +45,6 @@ func (s *MockServer) NewSession(ctx context.Context, args *BuildBlockArgs) (stri
 
 func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
 	return &types.SimulateTransactionResult{}, nil
-}
-
-func (s *MockServer) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
-	return nil
 }
 
 func (s *MockServer) BuildBlock(ctx context.Context) error {

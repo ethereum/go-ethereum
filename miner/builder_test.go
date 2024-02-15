@@ -1,7 +1,6 @@
 package miner
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/consensus/clique"
@@ -57,7 +56,6 @@ func TestBuilder_FillTransactions(t *testing.T) {
 
 func TestBuilder_BuildBlock(t *testing.T) {
 	t.Parallel()
-	t.Skip("TODO")
 
 	config, backend := newMockBuilderConfig(t)
 
@@ -71,7 +69,8 @@ func TestBuilder_BuildBlock(t *testing.T) {
 
 	block, err := builder.BuildBlock()
 	require.NoError(t, err)
-	fmt.Println(block)
+	require.NotNil(t, block)
+	require.Len(t, block.Transactions(), 1)
 }
 
 func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {

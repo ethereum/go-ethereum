@@ -41,10 +41,6 @@ func (a *APIClient) AddTransaction(ctx context.Context, sessionId string, tx *ty
 	return receipt, err
 }
 
-func (a *APIClient) AddBundle(ctx context.Context, sessionId string, bundle Bundle) error {
-	return a.rpc.CallContext(ctx, nil, "suavex_addBundle", sessionId, bundle)
-}
-
 func (a *APIClient) BuildBlock(ctx context.Context, sessionId string) error {
 	return a.rpc.CallContext(ctx, nil, "suavex_buildBlock", sessionId)
 }
