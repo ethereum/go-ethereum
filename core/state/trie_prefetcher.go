@@ -72,7 +72,8 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 }
 
 // close iterates over all the subfetchers, waits on any that were left spinning
-// and reports the stats to the metrics subsystem.
+// and reports the stats to the metrics subsystem.  close should not be called
+// more than once on a triePrefetcher instance.
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
 		fetcher.wait() // safe to do multiple times
@@ -99,8 +100,6 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	// Clear out all fetchers (will crash on a second call, deliberate)
-	p.fetchers = nil
 }
 
 // prefetch schedules a batch of trie items to prefetch.
@@ -207,14 +206,6 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	select {
 	case sf.wake <- true:
 	default:
-	}
-}
-
-// wait instructs all subfetchers to finish their tasks
-// and stop receiving new requests.
-func (p *triePrefetcher) wait() {
-	for _, fetcher := range p.fetchers {
-		fetcher.wait()
 	}
 }
 

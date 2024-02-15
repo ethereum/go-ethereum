@@ -921,13 +921,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	prefetcher := s.prefetcher
 	if s.prefetcher != nil {
 		defer func() {
-			s.prefetcher.wait()
+			s.prefetcher.close()
 			if s.witness != nil {
 				// TODO: move read prefetcher logic into Commit?
 				s.collectReadStorageAccessLists()
 				s.collectReadAccountsAccessLists()
 			}
-			s.prefetcher.close()
 			s.prefetcher = nil
 		}()
 	}

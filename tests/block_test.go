@@ -194,21 +194,21 @@ func execBlockTestStateless(t *testing.T, bt *testMatcher, test *BlockTest) {
 	tracer := logger.NewJSONLogger(logconfig, os.Stdout)
 	_ = tracer
 
-	if err := bt.checkFailure(t, test.RunStateless(false, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.RunStateless(false, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode without snapshotter failed: %v", err)
 		return
 	}
 
-	if err := bt.checkFailure(t, test.RunStateless(true, rawdb.HashScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.RunStateless(true, rawdb.HashScheme, nil, nil)); err != nil {
 		t.Errorf("test in hash mode with snapshotter failed: %v", err)
 		return
 	}
 
-	if err := bt.checkFailure(t, test.RunStateless(false, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.RunStateless(false, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode without snapshotter failed: %v", err)
 		return
 	}
-	if err := bt.checkFailure(t, test.RunStateless(true, rawdb.PathScheme, nil)); err != nil {
+	if err := bt.checkFailure(t, test.RunStateless(true, rawdb.PathScheme, nil, nil)); err != nil {
 		t.Errorf("test in path mode with snapshotter failed: %v", err)
 		return
 	}
