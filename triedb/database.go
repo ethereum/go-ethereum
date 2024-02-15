@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package triedb
 
 import (
 	"errors"
@@ -22,10 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 // Config defines all necessary options for database.
@@ -108,14 +110,21 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB)
 	} else {
-		db.backend = hashdb.New(diskdb, config.HashDB, mptResolver{})
+		var resolver hashdb.ChildResolver
+		if config.IsVerkle {
+			// TODO define verkle resolver
+			log.Crit("Verkle node resolver is not defined")
+		} else {
+			resolver = trie.MerkleResolver{}
+		}
+		db.backend = hashdb.New(diskdb, config.HashDB, resolver)
 	}
 	return db
 }
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
+func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
 	switch b := db.backend.(type) {
 	case *hashdb.Database:
 		return b.Reader(blockRoot)
@@ -190,13 +199,20 @@ func (db *Database) WritePreimages() {
 	}
 }
 
-// Preimage retrieves a cached trie node pre-image from memory. If it cannot be
-// found cached, the method queries the persistent database for the content.
+// Preimage retrieves a cached trie node pre-image from preimage store.
 func (db *Database) Preimage(hash common.Hash) []byte {
 	if db.preimages == nil {
 		return nil
 	}
 	return db.preimages.preimage(hash)
+}
+
+// InsertPreimage writes pre-images of trie node to the preimage store.
+func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
+	if db.preimages == nil {
+		return
+	}
+	db.preimages.insertPreimage(preimages)
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
@@ -249,7 +265,14 @@ func (db *Database) Recover(target common.Hash) error {
 	if !ok {
 		return errors.New("not supported")
 	}
-	return pdb.Recover(target, &trieLoader{db: db})
+	var loader triestate.TrieLoader
+	if db.config.IsVerkle {
+		// TODO define verkle loader
+		log.Crit("Verkle loader is not defined")
+	} else {
+		loader = trie.NewMerkleLoader(db)
+	}
+	return pdb.Recover(target, loader)
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be
