@@ -437,7 +437,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if !msg.Delegate {
 			ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 		} else {
-			var contract = vm.NewContract(sender, sender, big.NewInt(0), st.gasRemaining)
+			var contract = vm.NewContract(sender, sender, uint256.NewInt(0), st.gasRemaining)
 			ret, st.gasRemaining, vmerr = st.evm.DelegateCall(contract, st.to(), msg.Data, st.gasRemaining)
 		}
 	}
