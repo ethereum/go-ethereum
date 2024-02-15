@@ -244,7 +244,7 @@ type branchAccessKey struct {
 
 func newBranchAccessKey(addr []byte, treeIndex uint256.Int) branchAccessKey {
 	var sk branchAccessKey
-	copy(sk.addr[:], addr)
+	copy(sk.addr[20-len(addr):], addr)
 	sk.treeIndex = treeIndex
 	return sk
 }
