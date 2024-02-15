@@ -511,7 +511,7 @@ transaction gets propagated.`)
 	if err != nil {
 		t.Fatalf("failed to sign tx: %v", err)
 	}
-	if err := s.sendTxs([]*types.Transaction{tx}); err != nil {
+	if err := s.sendTxs(t, []*types.Transaction{tx}); err != nil {
 		t.Fatal(err)
 	}
 	s.chain.IncNonce(from, 1)
@@ -539,7 +539,7 @@ does not propagate them.`)
 	if err != nil {
 		t.Fatalf("failed to sign tx: %v", err)
 	}
-	if err := s.sendTxs([]*types.Transaction{tx}); err != nil {
+	if err := s.sendTxs(t, []*types.Transaction{tx}); err != nil {
 		t.Fatalf("failed to send txs: %v", err)
 	}
 	s.chain.IncNonce(from, 1)
@@ -595,7 +595,7 @@ does not propagate them.`)
 		}
 		txs = append(txs, tx)
 	}
-	if err := s.sendInvalidTxs(txs); err != nil {
+	if err := s.sendInvalidTxs(t, txs); err != nil {
 		t.Fatalf("failed to send invalid txs: %v", err)
 	}
 }
@@ -636,7 +636,7 @@ on another peer connection using GetPooledTransactions.`)
 	s.chain.IncNonce(from, uint64(count))
 
 	// Send txs.
-	if err := s.sendTxs(txs); err != nil {
+	if err := s.sendTxs(t, txs); err != nil {
 		t.Fatalf("failed to send txs: %v", err)
 	}
 
