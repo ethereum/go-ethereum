@@ -1885,8 +1885,8 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 }
 
 // RegisterHealthService adds the Health API to the node.
-func RegisterHealthService(stack *node.Node, backend ethapi.Backend, cfg *node.Config) {
-	err := health.New(stack, backend, cfg.HTTPCors, cfg.HTTPVirtualHosts)
+func RegisterHealthService(stack *node.Node, cfg *node.Config) {
+	err := health.New(stack, cfg.HTTPCors, cfg.HTTPVirtualHosts)
 	if err != nil {
 		Fatalf("Failed to register the health service: %v", err)
 	}

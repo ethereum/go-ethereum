@@ -197,7 +197,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
 	// TODO: ENG191 add flag to request endpoint
-	utils.RegisterHealthService(stack, backend, &cfg.Node)
+	utils.RegisterHealthService(stack, &cfg.Node)
 
 	// Configure GraphQL if requested.
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {

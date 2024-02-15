@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 )
 
@@ -22,13 +21,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New constructs a new health service instance.
-func New(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) error {
-	_, err := newHandler(stack, backend, cors, vhosts)
+func New(stack *node.Node, cors, vhosts []string) error {
+	_, err := newHandler(stack, cors, vhosts)
 	return err
 }
 
 // newHandler returns a new `http.Handler` that will answer node health queries.
-func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) (*handler, error) {
+func newHandler(stack *node.Node, cors, vhosts []string) (*handler, error) {
 	ec := ethclient.NewClient(stack.Attach())
 	h := handler{ec}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
