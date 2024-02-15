@@ -155,7 +155,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 }
 
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
-	t.Log(`This test requests blocks headers from the node, performing two requests in
+	t.Log(`This test requests blocks headers from the node, performing two requests
 concurrently, with different request IDs.`)
 
 	conn, err := s.dial()
@@ -795,7 +795,7 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
-	t.Log(`This test sends some invalid blob tx announcements, and expects the node to disconnect.`)
+	t.Log(`This test sends some invalid blob tx announcements and expects the node to disconnect.`)
 
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
