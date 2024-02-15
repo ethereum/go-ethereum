@@ -929,15 +929,20 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Construct the sealing block header.
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasLimit, w.config.GasCeil),
-		Time:       timestamp,
-		Coinbase:   genParams.coinbase,
+		ParentHash:       parent.Hash(),
+		Number:           new(big.Int).Add(parent.Number, common.Big1),
+		GasLimit:         core.CalcGasLimit(parent.GasLimit, w.config.GasCeil),
+		Time:             timestamp,
+		Coinbase:         genParams.coinbase,
+		ParentBeaconRoot: genParams.beaconRoot,
 	}
 	// Set the extra field.
 	if len(w.extra) != 0 {
-		header.Extra = w.extra
+		if len(genParams.extra) != 0 {
+			header.Extra = genParams.extra
+		} else {
+			header.Extra = w.extra
+		}
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
@@ -1291,6 +1296,7 @@ func (w *worker) buildBlockFromTxs(ctx context.Context, args *types.BuildBlockAr
 		random:      args.Random,
 		extra:       args.Extra,
 		withdrawals: args.Withdrawals,
+		beaconRoot:  &args.BeaconRoot,
 		// noUncle:     true,
 		noTxs: false,
 	}
@@ -1339,6 +1345,7 @@ func (w *worker) buildBlockFromBundles(ctx context.Context, args *types.BuildBlo
 		random:      args.Random,
 		extra:       args.Extra,
 		withdrawals: args.Withdrawals,
+		beaconRoot:  &args.BeaconRoot,
 		// noUncle:     true,
 		noTxs: false,
 	}
