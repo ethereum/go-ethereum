@@ -94,9 +94,9 @@ func (s *Suite) SnapTests() []utesting.Test {
 	}
 }
 
-// TestStatus attempts to connect to the given node and exchange a status
-// message with it on the eth protocol.
 func (s *Suite) TestStatus(t *utesting.T) {
+	t.Log(`This test is just a sanity check. It performs an eth protocol handshake.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -112,9 +112,9 @@ func headersMatch(expected []*types.Header, headers []*types.Header) bool {
 	return reflect.DeepEqual(expected, headers)
 }
 
-// TestGetBlockHeaders tests whether the given node can respond to an eth
-// `GetBlockHeaders` request and that the response is accurate.
 func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
+	t.Log(`This test requests block headers from the node.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -154,10 +154,10 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	}
 }
 
-// TestSimultaneousRequests sends two simultaneous `GetBlockHeader` requests
-// from the same connection with different request IDs and checks to make sure
-// the node responds with the correct headers per request.
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
+	t.Log(`This test requests blocks headers from the node, performing two requests in
+concurrently, with different request IDs.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -228,9 +228,10 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	}
 }
 
-// TestSameRequestID sends two requests with the same request ID to a single
-// node.
 func (s *Suite) TestSameRequestID(t *utesting.T) {
+	t.Log(`This test requests block headers, performing two concurrent requests with the
+same request ID. The node should handle the request by responding to both requests.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -298,9 +299,10 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	}
 }
 
-// TestZeroRequestID checks that a message with a request ID of zero is still handled
-// by the node.
 func (s *Suite) TestZeroRequestID(t *utesting.T) {
+	t.Log(`This test sends a GetBlockHeaders message with a request-id of zero,
+and expects a response.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -333,9 +335,9 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	}
 }
 
-// TestGetBlockBodies tests whether the given node can respond to a
-// `GetBlockBodies` request and that the response is accurate.
 func (s *Suite) TestGetBlockBodies(t *utesting.T) {
+	t.Log(`This test sends GetBlockBodies requests to the node for known blocks in the test chain.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -376,12 +378,12 @@ func randBuf(size int) []byte {
 	return buf
 }
 
-// TestMaliciousHandshake tries to send malicious data during the handshake.
 func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
-	key, _ := crypto.GenerateKey()
+	t.Log(`This test tries to send malicious data during the devp2p handshake, in various ways.`)
 
 	// Write hello to client.
 	var (
+		key, _  = crypto.GenerateKey()
 		pub0    = crypto.FromECDSAPub(&key.PublicKey)[1:]
 		version = eth.ProtocolVersions[0]
 	)
@@ -451,8 +453,9 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 	}
 }
 
-// TestMaliciousStatus sends a status package with a large total difficulty.
 func (s *Suite) TestMaliciousStatus(t *utesting.T) {
+	t.Log(`This test sends a malicious eth Status message to the node and expects a disconnect.`)
+
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -486,9 +489,10 @@ func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	}
 }
 
-// TestTransaction sends a valid transaction to the node and checks if the
-// transaction gets propagated.
 func (s *Suite) TestTransaction(t *utesting.T) {
+	t.Log(`This test sends a valid transaction to the node and checks if the
+transaction gets propagated.`)
+
 	// Nudge client out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
@@ -513,9 +517,10 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 	s.chain.IncNonce(from, 1)
 }
 
-// TestInvalidTxs sends several invalid transactions and tests whether
-// the node will propagate them.
 func (s *Suite) TestInvalidTxs(t *utesting.T) {
+	t.Log(`This test sends several kinds of invalid transactions and checks that the node
+does not propagate them.`)
+
 	// Nudge client out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
@@ -595,9 +600,10 @@ func (s *Suite) TestInvalidTxs(t *utesting.T) {
 	}
 }
 
-// TestLargeTxRequest tests whether a node can fulfill a large GetPooledTransactions
-// request.
 func (s *Suite) TestLargeTxRequest(t *utesting.T) {
+	t.Log(`This test first send ~2000 transactions to the node, then requests them
+on another peer connection using GetPooledTransactions.`)
+
 	// Nudge client out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
@@ -667,13 +673,15 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	}
 }
 
-// TestNewPooledTxs tests whether a node will do a GetPooledTransactions request
-// upon receiving a NewPooledTransactionHashes announcement.
 func (s *Suite) TestNewPooledTxs(t *utesting.T) {
+	t.Log(`This test announces transaction hashes to the node and expects it to fetch
+the transactions using a GetPooledTransactions request.`)
+
 	// Nudge client out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
+
 	var (
 		count       = 50
 		from, nonce = s.chain.GetSender(1)
@@ -787,6 +795,8 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 }
 
 func (s *Suite) TestBlobViolations(t *utesting.T) {
+	t.Log(`This test sends some invalid blob tx announcements, and expects the node to disconnect.`)
+
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
