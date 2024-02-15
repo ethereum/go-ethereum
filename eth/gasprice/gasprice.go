@@ -208,7 +208,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	price := lastPrice
 	if len(results) > 0 {
-		slices.SortFunc(results, func(a, b *big.Int) bool { return a.Cmp(b) < 0 })
+		slices.SortFunc(results, func(a, b *big.Int) int { return a.Cmp(b) })
 		price = results[(len(results)-1)*oracle.percentile/100]
 	}
 	if price.Cmp(oracle.maxPrice) > 0 {
@@ -247,12 +247,12 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, blockNum uint64, limit
 	sortedTxs := make([]*types.Transaction, len(txs))
 	copy(sortedTxs, txs)
 	baseFee := block.BaseFee()
-	slices.SortFunc(sortedTxs, func(a, b *types.Transaction) bool {
+	slices.SortFunc(sortedTxs, func(a, b *types.Transaction) int {
 		// It's okay to discard the error because a tx would never be
 		// accepted into a block with an invalid effective tip.
 		tip1, _ := a.EffectiveGasTip(baseFee)
 		tip2, _ := b.EffectiveGasTip(baseFee)
-		return tip1.Cmp(tip2) < 0
+		return tip1.Cmp(tip2)
 	})
 
 	var prices []*big.Int

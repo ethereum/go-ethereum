@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -168,7 +168,7 @@ type Config struct {
 type Tree struct {
 	config Config                   // Snapshots configurations
 	diskdb ethdb.KeyValueStore      // Persistent database to store the snapshot
-	triedb *trie.Database           // In-memory cache to access the trie through
+	triedb *triedb.Database         // In-memory cache to access the trie through
 	layers map[common.Hash]snapshot // Collection of all known layers
 	lock   sync.RWMutex
 
@@ -192,7 +192,7 @@ type Tree struct {
 //     state trie.
 //   - otherwise, the entire snapshot is considered invalid and will be recreated on
 //     a background thread.
-func New(config Config, diskdb ethdb.KeyValueStore, triedb *trie.Database, root common.Hash) (*Tree, error) {
+func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		config: config,
@@ -258,6 +258,14 @@ func (t *Tree) Disable() {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
+
+			layer.lock.RLock()
+			generating := layer.genMarker != nil
+			layer.lock.RUnlock()
+			if !generating {
+				// Generator is already aborted or finished
+				break
+			}
 			// If the base layer is generating, abort it
 			if layer.genAbort != nil {
 				abort := make(chan *generatorStats)
@@ -564,7 +572,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			// Ensure we don't delete too much data blindly (contract can be
 			// huge). It's ok to flush, the root will go missing in case of a
 			// crash and we'll detect and regenerate the snapshot.
-			if batch.ValueSize() > ethdb.IdealBatchSize {
+			if batch.ValueSize() > 64*1024*1024 {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write storage deletions", "err", err)
 				}
@@ -590,7 +598,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// Ensure we don't write too much data blindly. It's ok to flush, the
 		// root will go missing in case of a crash and we'll detect and regen
 		// the snapshot.
-		if batch.ValueSize() > ethdb.IdealBatchSize {
+		if batch.ValueSize() > 64*1024*1024 {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write storage deletions", "err", err)
 			}
@@ -654,6 +662,13 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		go res.generate(stats)
 	}
 	return res
+}
+
+// Release releases resources
+func (t *Tree) Release() {
+	if dl := t.disklayer(); dl != nil {
+		dl.Release()
+	}
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
@@ -851,4 +866,22 @@ func (t *Tree) DiskRoot() common.Hash {
 	defer t.lock.Unlock()
 
 	return t.diskRoot()
+}
+
+// Size returns the memory usage of the diff layers above the disk layer and the
+// dirty nodes buffered in the disk layer. Currently, the implementation uses a
+// special diff layer (the first) as an aggregator simulating a dirty buffer, so
+// the second return will always be 0. However, this will be made consistent with
+// the pathdb, which will require a second return.
+func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	var size common.StorageSize
+	for _, layer := range t.layers {
+		if layer, ok := layer.(*diffLayer); ok {
+			size += common.StorageSize(layer.memory)
+		}
+	}
+	return size, 0
 }

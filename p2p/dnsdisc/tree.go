@@ -214,8 +214,8 @@ func (t *Tree) build(entries []entry) entry {
 }
 
 func sortByID(nodes []*enode.Node) []*enode.Node {
-	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
-		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes()) < 0
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 	return nodes
 }
@@ -344,11 +344,11 @@ func parseLink(e string) (*linkEntry, error) {
 		return nil, fmt.Errorf("wrong/missing scheme 'enrtree' in URL")
 	}
 	e = e[len(linkPrefix):]
-	pos := strings.IndexByte(e, '@')
-	if pos == -1 {
+
+	keystring, domain, found := strings.Cut(e, "@")
+	if !found {
 		return nil, entryError{"link", errNoPubkey}
 	}
-	keystring, domain := e[:pos], e[pos+1:]
 	keybytes, err := b32format.DecodeString(keystring)
 	if err != nil {
 		return nil, entryError{"link", errBadPubkey}

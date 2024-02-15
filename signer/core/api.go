@@ -65,7 +65,7 @@ type ExternalAPI interface {
 	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
-	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
+	// SignGnosisSafeTx signs/confirms a gnosis-safe multisig transaction
 	SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
 }
 
@@ -631,7 +631,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 		}
 	}
 	typedData := gnosisTx.ToTypedData()
-	// might aswell error early.
+	// might as well error early.
 	// we are expected to sign. If our calculated hash does not match what they want,
 	// The gnosis safetx input contains a 'safeTxHash' which is the expected safeTxHash that
 	sighash, _, err := apitypes.TypedDataAndHash(typedData)

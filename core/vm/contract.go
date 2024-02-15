@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -31,13 +29,13 @@ type ContractRef interface {
 // AccountRef implements ContractRef.
 //
 // Account references are used during EVM initialisation and
-// it's primary use is to fetch addresses. Removing this object
+// its primary use is to fetch addresses. Removing this object
 // proves difficult because of the cached jump destinations which
 // are fetched from the parent contract (i.e. the caller), which
 // is a ContractRef.
 type AccountRef common.Address
 
-// Address casts AccountRef to a Address
+// Address casts AccountRef to an Address
 func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
 
 // Contract represents an ethereum contract in the state database. It contains
@@ -59,11 +57,11 @@ type Contract struct {
 	Input    []byte
 
 	Gas   uint64
-	value *big.Int
+	value *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
+func NewContract(caller ContractRef, object ContractRef, value *uint256.Int, gas uint64) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
 
 	if parent, ok := caller.(*Contract); ok {
@@ -173,7 +171,7 @@ func (c *Contract) Address() common.Address {
 }
 
 // Value returns the contract's value (sent to it from it's caller)
-func (c *Contract) Value() *big.Int {
+func (c *Contract) Value() *uint256.Int {
 	return c.value
 }
 

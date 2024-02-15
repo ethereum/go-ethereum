@@ -109,8 +109,11 @@ func fillBucket(tab *Table, n *node) (last *node) {
 
 // fillTable adds nodes the table to the end of their corresponding bucket
 // if the bucket is not full. The caller must not hold tab.mutex.
-func fillTable(tab *Table, nodes []*node) {
+func fillTable(tab *Table, nodes []*node, setLive bool) {
 	for _, n := range nodes {
+		if setLive {
+			n.livenessChecks = 1
+		}
 		tab.addSeenNode(n)
 	}
 }
@@ -217,14 +220,14 @@ func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
 }
 
 func sortByID(nodes []*enode.Node) {
-	slices.SortFunc(nodes, func(a, b *enode.Node) bool {
-		return string(a.ID().Bytes()) < string(b.ID().Bytes())
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 }
 
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
-	return slices.IsSortedFunc(slice, func(a, b *node) bool {
-		return enode.DistCmp(distbase, a.ID(), b.ID()) < 0
+	return slices.IsSortedFunc(slice, func(a, b *node) int {
+		return enode.DistCmp(distbase, a.ID(), b.ID())
 	})
 }
 

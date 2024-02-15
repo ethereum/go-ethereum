@@ -51,13 +51,15 @@ type Server struct {
 	run                atomic.Bool
 	batchItemLimit     int
 	batchResponseLimit int
+	httpBodyLimit      int
 }
 
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
-		idgen:  randomIDGenerator(),
-		codecs: make(map[ServerCodec]struct{}),
+		idgen:         randomIDGenerator(),
+		codecs:        make(map[ServerCodec]struct{}),
+		httpBodyLimit: defaultBodyLimit,
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -76,6 +78,13 @@ func NewServer() *Server {
 func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
 	s.batchItemLimit = itemLimit
 	s.batchResponseLimit = maxResponseSize
+}
+
+// SetHTTPBodyLimit sets the size limit for HTTP requests.
+//
+// This method should be called before processing any requests via ServeHTTP.
+func (s *Server) SetHTTPBodyLimit(limit int) {
+	s.httpBodyLimit = limit
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no

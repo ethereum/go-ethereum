@@ -40,8 +40,8 @@ import (
 const minReloadInterval = 2 * time.Second
 
 // byURL defines the sorting order for accounts.
-func byURL(a, b accounts.Account) bool {
-	return a.URL.Cmp(b.URL) < 0
+func byURL(a, b accounts.Account) int {
+	return a.URL.Cmp(b.URL)
 }
 
 // AmbiguousAddrError is returned when attempting to unlock

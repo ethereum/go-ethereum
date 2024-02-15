@@ -27,13 +27,15 @@ import (
 )
 
 func TestRoundtrip(t *testing.T) {
+	t.Parallel()
 	for i, want := range []string{
 		"0xf880806482520894d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0a1010000000000000000000000000000000000000000000000000000000000000001801ba0c16787a8e25e941d67691954642876c08f00996163ae7dfadbbfd6cd436f549da06180e5626cae31590f40641fe8f63734316c4bfeb4cdfab6714198c1044d2e28",
 		"0xd5c0d3cb84746573742a2a808213378667617a6f6e6b",
 		"0xc780c0c1c0825208",
 	} {
 		var out strings.Builder
-		err := rlpToText(bytes.NewReader(common.FromHex(want)), &out)
+		in := newInStream(bytes.NewReader(common.FromHex(want)), 0)
+		err := rlpToText(in, &out)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -51,6 +53,7 @@ func TestRoundtrip(t *testing.T) {
 }
 
 func TestTextToRlp(t *testing.T) {
+	t.Parallel()
 	type tc struct {
 		text string
 		want string

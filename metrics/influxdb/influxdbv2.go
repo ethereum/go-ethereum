@@ -25,7 +25,7 @@ type v2Reporter struct {
 	write  api.WriteAPI
 }
 
-// InfluxDBWithTags starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval with the specified tags
+// InfluxDBV2WithTags starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval with the specified tags
 func InfluxDBV2WithTags(r metrics.Registry, d time.Duration, endpoint string, token string, bucket string, organization string, namespace string, tags map[string]string) {
 	rep := &v2Reporter{
 		reg:          r,
@@ -64,7 +64,7 @@ func (r *v2Reporter) run() {
 	for {
 		select {
 		case <-intervalTicker.C:
-			r.send()
+			r.send(0)
 		case <-pingTicker.C:
 			_, err := r.client.Health(context.Background())
 			if err != nil {
@@ -74,9 +74,16 @@ func (r *v2Reporter) run() {
 	}
 }
 
-func (r *v2Reporter) send() {
+// send sends the measurements. If provided tstamp is >0, it is used. Otherwise,
+// a 'fresh' timestamp is used.
+func (r *v2Reporter) send(tstamp int64) {
 	r.reg.Each(func(name string, i interface{}) {
-		now := time.Now()
+		var now time.Time
+		if tstamp <= 0 {
+			now = time.Now()
+		} else {
+			now = time.Unix(tstamp, 0)
+		}
 		measurement, fields := readMeter(r.namespace, name, i)
 		if fields == nil {
 			return

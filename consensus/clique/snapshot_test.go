@@ -53,7 +53,7 @@ func (ap *testerAccountPool) checkpoint(header *types.Header, signers []string) 
 	for i, signer := range signers {
 		auths[i] = ap.address(signer)
 	}
-	slices.SortFunc(auths, common.Address.Less)
+	slices.SortFunc(auths, common.Address.Cmp)
 	for i, auth := range auths {
 		copy(header.Extra[extraVanity+i*common.AddressLength:], auth.Bytes())
 	}

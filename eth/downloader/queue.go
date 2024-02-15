@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -798,10 +799,10 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			}
 		}
 		// Blocks must have a number of blobs corresponding to the header gas usage,
-		// and zero before the Cancun hardfork
+		// and zero before the Cancun hardfork.
 		var blobs int
 		for _, tx := range txLists[index] {
-			// Count the number of blobs to validate against the header's dataGasUsed
+			// Count the number of blobs to validate against the header's blobGasUsed
 			blobs += len(tx.BlobHashes())
 
 			// Validate the data blobs individually too
@@ -810,14 +811,17 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 					return errInvalidBody
 				}
 				for _, hash := range tx.BlobHashes() {
-					if hash[0] != params.BlobTxHashVersion {
+					if !kzg4844.IsValidVersionedHash(hash[:]) {
 						return errInvalidBody
 					}
 				}
+				if tx.BlobTxSidecar() != nil {
+					return errInvalidBody
+				}
 			}
 		}
-		if header.DataGasUsed != nil {
-			if want := *header.DataGasUsed / params.BlobTxDataGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+		if header.BlobGasUsed != nil {
+			if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
 				return errInvalidBody
 			}
 		} else {

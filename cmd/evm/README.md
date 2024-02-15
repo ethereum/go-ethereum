@@ -88,7 +88,7 @@ type Env struct {
     CurrentTimestamp uint64              `json:"currentTimestamp"`
     Withdrawals      []*Withdrawal       `json:"withdrawals"`
     // optional
-    CurrentDifficulty *big.Int           `json:"currentDifficuly"`
+    CurrentDifficulty *big.Int           `json:"currentDifficulty"`
     CurrentRandom     *big.Int           `json:"currentRandom"`
     CurrentBaseFee    *big.Int           `json:"currentBaseFee"`
     ParentDifficulty  *big.Int           `json:"parentDifficulty"`
@@ -214,7 +214,7 @@ exitcode:3 OK
 
 The chain configuration to be used for a transition is specified via the
 `--state.fork` CLI flag. A list of possible values and configurations can be
-found in [`tests/init.go`](tests/init.go).
+found in [`tests/init.go`](../../tests/init.go).
 
 #### Examples
 ##### Basic usage

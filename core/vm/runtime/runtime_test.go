@@ -38,6 +38,7 @@ import (
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	"github.com/holiman/uint256"
 )
 
 func TestDefaults(t *testing.T) {
@@ -362,12 +363,12 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(destination, code)
-	vmenv.Call(sender, destination, nil, gas, cfg.Value)
+	vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			vmenv.Call(sender, destination, nil, gas, cfg.Value)
+			vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
 		}
 	})
 }
@@ -671,7 +672,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 			for ii, op := range tracer.StructLogs() {
 				t.Logf("%d: %v %d", ii, op.OpName(), op.GasCost)
 			}
-			t.Fatalf("tescase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
+			t.Fatalf("testcase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
 		}
 	}
 }
@@ -679,30 +680,30 @@ func TestColdAccountAccessCost(t *testing.T) {
 func TestRuntimeJSTracer(t *testing.T) {
 	jsTracers := []string{
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
-	step: function() { this.steps++}, 
-	fault: function() {}, 
-	result: function() { 
-		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
-	}, 
-	enter: function(frame) { 
-		this.enters++; 
+	step: function() { this.steps++},
+	fault: function() {},
+	result: function() {
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",")
+	},
+	enter: function(frame) {
+		this.enters++;
 		this.enterGas = frame.getGas();
-	}, 
-	exit: function(res) { 
-		this.exits++; 
+	},
+	exit: function(res) {
+		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`,
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
-	fault: function() {}, 
-	result: function() { 
-		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
-	}, 
-	enter: function(frame) { 
-		this.enters++; 
+	fault: function() {},
+	result: function() {
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",")
+	},
+	enter: function(frame) {
+		this.enters++;
 		this.enterGas = frame.getGas();
-	}, 
-	exit: function(res) { 
-		this.exits++; 
+	},
+	exit: function(res) {
+		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`}
 	tests := []struct {

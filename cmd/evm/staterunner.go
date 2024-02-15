@@ -23,10 +23,10 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -50,11 +50,6 @@ type StatetestResult struct {
 }
 
 func stateTestCmd(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
-
 	// Configure the EVM logger
 	config := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
@@ -94,35 +89,36 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 	if err != nil {
 		return err
 	}
-	var tests map[string]tests.StateTest
-	if err := json.Unmarshal(src, &tests); err != nil {
+	var testsByName map[string]tests.StateTest
+	if err := json.Unmarshal(src, &testsByName); err != nil {
 		return err
 	}
+
 	// Iterate over all the tests, run them and aggregate the results
-	results := make([]StatetestResult, 0, len(tests))
-	for key, test := range tests {
+	results := make([]StatetestResult, 0, len(testsByName))
+	for key, test := range testsByName {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			_, s, err := test.Run(st, cfg, false)
-			// print state root for evmlab tracing
-			if s != nil {
-				root := s.IntermediateRoot(false)
-				result.Root = &root
-				if jsonOut {
-					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
+				var root common.Hash
+				if tstate.StateDB != nil {
+					root = tstate.StateDB.IntermediateRoot(false)
+					result.Root = &root
+					if jsonOut {
+						fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+					}
+					if dump { // Dump any state to aid debugging
+						cpy, _ := state.New(root, tstate.StateDB.Database(), nil)
+						dump := cpy.RawDump(nil)
+						result.State = &dump
+					}
 				}
-			}
-			if err != nil {
-				// Test failed, mark as so and dump any state to aid debugging
-				result.Pass, result.Error = false, err.Error()
-				if dump && s != nil {
-					s, _ = state.New(*result.Root, s.Database(), nil)
-					dump := s.RawDump(nil)
-					result.State = &dump
+				if err != nil {
+					// Test failed, mark as so
+					result.Pass, result.Error = false, err.Error()
 				}
-			}
-
+			})
 			results = append(results, *result)
 		}
 	}

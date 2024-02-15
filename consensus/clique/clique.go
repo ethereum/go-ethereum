@@ -33,6 +33,7 @@ import (
 	lru "github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -301,8 +302,21 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if chain.Config().IsShanghai(header.Number, header.Time) {
 		return errors.New("clique does not support shanghai fork")
 	}
+	// Verify the non-existence of withdrawalsHash.
+	if header.WithdrawalsHash != nil {
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
+	}
 	if chain.Config().IsCancun(header.Number, header.Time) {
 		return errors.New("clique does not support cancun fork")
+	}
+	// Verify the non-existence of cancun-specific header fields
+	switch {
+	case header.ExcessBlobGas != nil:
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
+	case header.BlobGasUsed != nil:
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+	case header.ParentBeaconRoot != nil:
+		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -343,7 +357,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 			return err
 		}
-	} else if err := misc.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -751,6 +765,15 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 	if header.WithdrawalsHash != nil {
 		panic("unexpected withdrawal hash value in clique")
+	}
+	if header.ExcessBlobGas != nil {
+		panic("unexpected excess blob gas value in clique")
+	}
+	if header.BlobGasUsed != nil {
+		panic("unexpected blob gas used value in clique")
+	}
+	if header.ParentBeaconRoot != nil {
+		panic("unexpected parent beacon root value in clique")
 	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())

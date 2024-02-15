@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -77,10 +78,16 @@ func (cap Cap) String() string {
 	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
-// Less defines the canonical sorting order of capabilities.
-func (cap Cap) Less(other Cap) bool {
+// Cmp defines the canonical sorting order of capabilities.
+func (cap Cap) Cmp(other Cap) int {
 	if cap.Name == other.Name {
-		return cap.Version < other.Version
+		if cap.Version < other.Version {
+			return -1
+		}
+		if cap.Version > other.Version {
+			return 1
+		}
+		return 0
 	}
-	return cap.Name < other.Name
+	return strings.Compare(cap.Name, other.Name)
 }

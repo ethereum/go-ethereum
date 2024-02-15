@@ -84,20 +84,19 @@ func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
 		}
 		return hashed, cached
 	default:
-		// Value and hash nodes don't have children so they're left as were
+		// Value and hash nodes don't have children, so they're left as were
 		return n, n
 	}
 }
 
 // hashShortNodeChildren collapses the short node. The returned collapsed node
 // holds a live reference to the Key, and must not be modified.
-// The cached
 func (h *hasher) hashShortNodeChildren(n *shortNode) (collapsed, cached *shortNode) {
 	// Hash the short node's child, caching the newly hashed subtree
 	collapsed, cached = n.copy(), n.copy()
 	// Previously, we did copy this one. We don't seem to need to actually
 	// do that, since we don't overwrite/reuse keys
-	//cached.Key = common.CopyBytes(n.Key)
+	// cached.Key = common.CopyBytes(n.Key)
 	collapsed.Key = hexToCompact(n.Key)
 	// Unless the child is a valuenode or hashnode, hash it
 	switch n.Val.(type) {
@@ -153,7 +152,7 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	return h.hashData(enc)
 }
 
-// shortnodeToHash is used to creates a hashNode from a set of hashNodes, (which
+// fullnodeToHash is used to create a hashNode from a fullNode, (which
 // may contain nil values)
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	n.encode(h.encbuf)
@@ -203,7 +202,7 @@ func (h *hasher) proofHash(original node) (collapsed, hashed node) {
 		fn, _ := h.hashFullNodeChildren(n)
 		return fn, h.fullnodeToHash(fn, false)
 	default:
-		// Value and hash nodes don't have children so they're left as were
+		// Value and hash nodes don't have children, so they're left as were
 		return n, n
 	}
 }

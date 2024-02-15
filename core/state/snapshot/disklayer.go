@@ -26,13 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
-	triedb *trie.Database      // Trie node cache for reconstruction purposes
+	triedb *triedb.Database    // Trie node cache for reconstruction purposes
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
@@ -43,6 +43,16 @@ type diskLayer struct {
 	genAbort   chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
 
 	lock sync.RWMutex
+}
+
+// Release releases underlying resources; specifically the fastcache requires
+// Reset() in order to not leak memory.
+// OBS: It does not invoke Close on the diskdb
+func (dl *diskLayer) Release() error {
+	if dl.cache != nil {
+		dl.cache.Reset()
+	}
+	return nil
 }
 
 // Root returns  root hash for which this snapshot was made.

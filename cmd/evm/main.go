@@ -23,121 +23,134 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 var (
 	DebugFlag = &cli.BoolFlag{
-		Name:  "debug",
-		Usage: "output full trace logs",
-	}
-	MemProfileFlag = &cli.StringFlag{
-		Name:  "memprofile",
-		Usage: "creates a memory profile at the given path",
-	}
-	CPUProfileFlag = &cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "creates a CPU profile at the given path",
+		Name:     "debug",
+		Usage:    "output full trace logs",
+		Category: flags.VMCategory,
 	}
 	StatDumpFlag = &cli.BoolFlag{
-		Name:  "statdump",
-		Usage: "displays stack and heap memory information",
+		Name:     "statdump",
+		Usage:    "displays stack and heap memory information",
+		Category: flags.VMCategory,
 	}
 	CodeFlag = &cli.StringFlag{
-		Name:  "code",
-		Usage: "EVM code",
+		Name:     "code",
+		Usage:    "EVM code",
+		Category: flags.VMCategory,
 	}
 	CodeFileFlag = &cli.StringFlag{
-		Name:  "codefile",
-		Usage: "File containing EVM code. If '-' is specified, code is read from stdin ",
+		Name:     "codefile",
+		Usage:    "File containing EVM code. If '-' is specified, code is read from stdin ",
+		Category: flags.VMCategory,
 	}
 	GasFlag = &cli.Uint64Flag{
-		Name:  "gas",
-		Usage: "gas limit for the evm",
-		Value: 10000000000,
+		Name:     "gas",
+		Usage:    "gas limit for the evm",
+		Value:    10000000000,
+		Category: flags.VMCategory,
 	}
 	PriceFlag = &flags.BigFlag{
-		Name:  "price",
-		Usage: "price set for the evm",
-		Value: new(big.Int),
+		Name:     "price",
+		Usage:    "price set for the evm",
+		Value:    new(big.Int),
+		Category: flags.VMCategory,
 	}
 	ValueFlag = &flags.BigFlag{
-		Name:  "value",
-		Usage: "value set for the evm",
-		Value: new(big.Int),
+		Name:     "value",
+		Usage:    "value set for the evm",
+		Value:    new(big.Int),
+		Category: flags.VMCategory,
 	}
 	DumpFlag = &cli.BoolFlag{
-		Name:  "dump",
-		Usage: "dumps the state after the run",
+		Name:     "dump",
+		Usage:    "dumps the state after the run",
+		Category: flags.VMCategory,
 	}
 	InputFlag = &cli.StringFlag{
-		Name:  "input",
-		Usage: "input for the EVM",
+		Name:     "input",
+		Usage:    "input for the EVM",
+		Category: flags.VMCategory,
 	}
 	InputFileFlag = &cli.StringFlag{
-		Name:  "inputfile",
-		Usage: "file containing input for the EVM",
-	}
-	VerbosityFlag = &cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "sets the verbosity level",
+		Name:     "inputfile",
+		Usage:    "file containing input for the EVM",
+		Category: flags.VMCategory,
 	}
 	BenchFlag = &cli.BoolFlag{
-		Name:  "bench",
-		Usage: "benchmark the execution",
+		Name:     "bench",
+		Usage:    "benchmark the execution",
+		Category: flags.VMCategory,
 	}
 	CreateFlag = &cli.BoolFlag{
-		Name:  "create",
-		Usage: "indicates the action should be create rather than call",
+		Name:     "create",
+		Usage:    "indicates the action should be create rather than call",
+		Category: flags.VMCategory,
 	}
 	GenesisFlag = &cli.StringFlag{
-		Name:  "prestate",
-		Usage: "JSON file with prestate (genesis) config",
+		Name:     "prestate",
+		Usage:    "JSON file with prestate (genesis) config",
+		Category: flags.VMCategory,
 	}
 	MachineFlag = &cli.BoolFlag{
-		Name:  "json",
-		Usage: "output trace logs in machine readable format (json)",
+		Name:     "json",
+		Usage:    "output trace logs in machine readable format (json)",
+		Category: flags.VMCategory,
 	}
 	SenderFlag = &cli.StringFlag{
-		Name:  "sender",
-		Usage: "The transaction origin",
+		Name:     "sender",
+		Usage:    "The transaction origin",
+		Category: flags.VMCategory,
 	}
 	ReceiverFlag = &cli.StringFlag{
-		Name:  "receiver",
-		Usage: "The transaction receiver (execution context)",
+		Name:     "receiver",
+		Usage:    "The transaction receiver (execution context)",
+		Category: flags.VMCategory,
 	}
 	DisableMemoryFlag = &cli.BoolFlag{
-		Name:  "nomemory",
-		Value: true,
-		Usage: "disable memory output",
+		Name:     "nomemory",
+		Value:    true,
+		Usage:    "disable memory output",
+		Category: flags.VMCategory,
 	}
 	DisableStackFlag = &cli.BoolFlag{
-		Name:  "nostack",
-		Usage: "disable stack output",
+		Name:     "nostack",
+		Usage:    "disable stack output",
+		Category: flags.VMCategory,
 	}
 	DisableStorageFlag = &cli.BoolFlag{
-		Name:  "nostorage",
-		Usage: "disable storage output",
+		Name:     "nostorage",
+		Usage:    "disable storage output",
+		Category: flags.VMCategory,
 	}
 	DisableReturnDataFlag = &cli.BoolFlag{
-		Name:  "noreturndata",
-		Value: true,
-		Usage: "enable return data output",
+		Name:     "noreturndata",
+		Value:    true,
+		Usage:    "enable return data output",
+		Category: flags.VMCategory,
 	}
 )
 
 var stateTransitionCommand = &cli.Command{
 	Name:    "transition",
 	Aliases: []string{"t8n"},
-	Usage:   "executes a full state transition",
+	Usage:   "Executes a full state transition",
 	Action:  t8ntool.Transition,
 	Flags: []cli.Flag{
 		t8ntool.TraceFlag,
-		t8ntool.TraceDisableMemoryFlag,
+		t8ntool.TraceTracerFlag,
+		t8ntool.TraceTracerConfigFlag,
 		t8ntool.TraceEnableMemoryFlag,
 		t8ntool.TraceDisableStackFlag,
-		t8ntool.TraceDisableReturnDataFlag,
 		t8ntool.TraceEnableReturnDataFlag,
 		t8ntool.OutputBasedir,
 		t8ntool.OutputAllocFlag,
@@ -149,27 +162,25 @@ var stateTransitionCommand = &cli.Command{
 		t8ntool.ForknameFlag,
 		t8ntool.ChainIDFlag,
 		t8ntool.RewardFlag,
-		t8ntool.VerbosityFlag,
 	},
 }
 
 var transactionCommand = &cli.Command{
 	Name:    "transaction",
 	Aliases: []string{"t9n"},
-	Usage:   "performs transaction validation",
+	Usage:   "Performs transaction validation",
 	Action:  t8ntool.Transaction,
 	Flags: []cli.Flag{
 		t8ntool.InputTxsFlag,
 		t8ntool.ChainIDFlag,
 		t8ntool.ForknameFlag,
-		t8ntool.VerbosityFlag,
 	},
 }
 
 var blockBuilderCommand = &cli.Command{
 	Name:    "block-builder",
 	Aliases: []string{"b11r"},
-	Usage:   "builds a block",
+	Usage:   "Builds a block",
 	Action:  t8ntool.BuildBlock,
 	Flags: []cli.Flag{
 		t8ntool.OutputBasedir,
@@ -179,38 +190,41 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.InputWithdrawalsFlag,
 		t8ntool.InputTxsRlpFlag,
 		t8ntool.SealCliqueFlag,
-		t8ntool.VerbosityFlag,
 	},
+}
+
+// vmFlags contains flags related to running the EVM.
+var vmFlags = []cli.Flag{
+	CodeFlag,
+	CodeFileFlag,
+	CreateFlag,
+	GasFlag,
+	PriceFlag,
+	ValueFlag,
+	InputFlag,
+	InputFileFlag,
+	GenesisFlag,
+	SenderFlag,
+	ReceiverFlag,
+}
+
+// traceFlags contains flags that configure tracing output.
+var traceFlags = []cli.Flag{
+	BenchFlag,
+	DebugFlag,
+	DumpFlag,
+	MachineFlag,
+	StatDumpFlag,
+	DisableMemoryFlag,
+	DisableStackFlag,
+	DisableStorageFlag,
+	DisableReturnDataFlag,
 }
 
 var app = flags.NewApp("the evm command line interface")
 
 func init() {
-	app.Flags = []cli.Flag{
-		BenchFlag,
-		CreateFlag,
-		DebugFlag,
-		VerbosityFlag,
-		CodeFlag,
-		CodeFileFlag,
-		GasFlag,
-		PriceFlag,
-		ValueFlag,
-		DumpFlag,
-		InputFlag,
-		InputFileFlag,
-		MemProfileFlag,
-		CPUProfileFlag,
-		StatDumpFlag,
-		GenesisFlag,
-		MachineFlag,
-		SenderFlag,
-		ReceiverFlag,
-		DisableMemoryFlag,
-		DisableStackFlag,
-		DisableStorageFlag,
-		DisableReturnDataFlag,
-	}
+	app.Flags = flags.Merge(vmFlags, traceFlags, debug.Flags)
 	app.Commands = []*cli.Command{
 		compileCommand,
 		disasmCommand,
@@ -220,6 +234,14 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
+	}
+	app.Before = func(ctx *cli.Context) error {
+		flags.MigrateGlobalFlags(ctx)
+		return debug.Setup(ctx)
+	}
+	app.After = func(ctx *cli.Context) error {
+		debug.Exit()
+		return nil
 	}
 }
 
