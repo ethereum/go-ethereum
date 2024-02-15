@@ -55,9 +55,6 @@ func (t *noop) CaptureEnter(typ vm.OpCode, from common.Address, to common.Addres
 func (t *noop) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
-func (t *noop) OnBeaconBlockRootStart(root common.Hash) {}
-func (t *noop) OnBeaconBlockRootEnd()                   {}
-
 func (t *noop) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
 }
 

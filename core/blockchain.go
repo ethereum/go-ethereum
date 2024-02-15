@@ -200,8 +200,6 @@ type BlockchainLogger interface {
 	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, skip bool)
 	OnBlockEnd(err error)
 	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
-	OnBeaconBlockRootStart(root common.Hash)
-	OnBeaconBlockRootEnd()
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
