@@ -268,7 +268,7 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 //     going up, crossing the smaller positive jump counter). As such, the pool
 //     cares only about the min of the two delta values for eviction priority.
 //
-//     priority = min(delta-basefee, delta-blobfee)
+//     priority = min(deltaBasefee, deltaBlobfee)
 //
 //   - The above very aggressive dimensionality and noise reduction should result
 //     in transaction being grouped into a small number of buckets, the further
@@ -280,7 +280,7 @@ func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
 //     with high fee caps since it could enable pool wars. As such, any positive
 //     priority will be grouped together.
 //
-//     priority = min(delta-basefee, delta-blobfee, 0)
+//     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
 // Optimisation tradeoffs:
 //
