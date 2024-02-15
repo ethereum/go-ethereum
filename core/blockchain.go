@@ -185,6 +185,15 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	return &config
 }
 
+// BlockEvent is emitted upon tracing an incoming block.
+// It contains the block as well as consensus related information.
+type BlockEvent struct {
+	Block     *types.Block
+	TD        *big.Int
+	Finalized *types.Header
+	Safe      *types.Header
+}
+
 // BlockchainLogger is used to collect traces during chain processing.
 // Please make a copy of the referenced types if you intend to retain them.
 type BlockchainLogger interface {
@@ -193,12 +202,12 @@ type BlockchainLogger interface {
 	OnBlockchainInit(chainConfig *params.ChainConfig)
 	// OnBlockStart is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	// `skip` indicates processing of this previously known block
-	// will be skipped. OnBlockStart and OnBlockEnd will be emitted to
-	// convey how chain is progressing. E.g. known blocks will be skipped
-	// when node is started after a crash.
-	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, skip bool)
+	OnBlockStart(event BlockEvent)
 	OnBlockEnd(err error)
+	// OnSkippedBlock indicates a block was skipped during processing
+	// due to it being known previously. This can happen e.g. when recovering
+	// from a crash.
+	OnSkippedBlock(event BlockEvent)
 	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
 }
 
@@ -1811,8 +1820,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil {
-				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), true)
-				bc.logger.OnBlockEnd(nil)
+				bc.logger.OnSkippedBlock(BlockEvent{
+					Block:     block,
+					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
+					Finalized: bc.CurrentFinalBlock(),
+					Safe:      bc.CurrentSafeBlock(),
+				})
 			}
 
 			// We can assume that logs are empty here, since the only way for consecutive
@@ -1940,7 +1953,12 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), false)
+		bc.logger.OnBlockStart(BlockEvent{
+			Block:     block,
+			TD:        td,
+			Finalized: bc.CurrentFinalBlock(),
+			Safe:      bc.CurrentSafeBlock(),
+		})
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
