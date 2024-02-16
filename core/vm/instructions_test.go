@@ -827,26 +827,28 @@ func TestBlockHashEip2935(t *testing.T) {
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
 		}
-		env             = NewEVM(blockContext, TxContext{}, statedb, chainConfig, Config{})
-		stack           = newstack()
-		pc              = uint64(0)
-		evmInterpreter  = env.interpreter
-		callBlockHash10 = func(t *testing.T, name string) {
-			stack.push(uint256.NewInt(10))
-			opBlockhash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
-			if len(stack.data) != 1 {
-				t.Errorf("Expected one item on stack got %d: ", len(stack.data))
-			}
-			actual := stack.pop()
-			expected, overflow := uint256.FromBig(new(big.Int).SetBytes(expect.Bytes()))
-			if overflow {
-				t.Errorf("invalid overflow")
-			}
-			if actual.Cmp(expected) != 0 {
-				t.Errorf("%s: expected  %x, got %x", name, expected, actual)
+		env            = NewEVM(blockContext, TxContext{}, statedb, chainConfig, Config{})
+		stack          = newstack()
+		pc             = uint64(0)
+		evmInterpreter = env.interpreter
+		callBlockHashN = func(n uint64) func(t *testing.T, name string) uint256.Int {
+			return func(t *testing.T, name string) uint256.Int {
+				stack.push(uint256.NewInt(n))
+				opBlockhash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+				if len(stack.data) != 1 {
+					t.Errorf("Expected one item on stack got %d: ", len(stack.data))
+				}
+				return stack.pop()
 			}
 		}
+		callBlockHash10   = callBlockHashN(10)
+		callBlockHash1024 = callBlockHashN(1024)
 	)
+
+	expected, overflow := uint256.FromBig(new(big.Int).SetBytes(expect.Bytes()))
+	if overflow {
+		t.Errorf("invalid overflow")
+	}
 
 	// insert 500 block hashes, starting from genesis.
 	for i := uint64(0); i < 500; i++ {
@@ -857,12 +859,24 @@ func TestBlockHashEip2935(t *testing.T) {
 
 	// simulate a call to BLOCKHASH at block 100, i.e. less than 256
 	// blocks after a genesis with eip 2935 activated.
-	callBlockHash10(t, "legacy")
+	actual := callBlockHash10(t, "legacy")
+	if actual.Cmp(expected) != 0 {
+		t.Errorf("%s: expected  %x, got %x", "legacy", expected, actual)
+	}
 
 	// now do the same thing much later, after all blocks have
 	// been inserted.
-	env.Context.BlockNumber.SetInt64(500)
-	callBlockHash10(t, "contract")
+	env.Context.BlockNumber.SetInt64(501)
+	actual = callBlockHash10(t, "contract")
+	if actual.Cmp(expected) != 0 {
+		t.Errorf("%s: expected  %x, got %x", "contract", expected, actual)
+	}
+
+	// still at block 501, but now request the hash of a higher block
+	actual = callBlockHash1024(t, "contract with non-existent block hash")
+	if !actual.IsZero() {
+		t.Errorf("%s: expected  0, got %x", "contract with non-existent block hash", actual)
+	}
 }
 
 func TestOpMCopy(t *testing.T) {
