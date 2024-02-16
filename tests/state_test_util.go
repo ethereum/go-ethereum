@@ -64,7 +64,7 @@ func (t *StateTest) UnmarshalJSON(in []byte) error {
 
 type stJSON struct {
 	Env  stEnv                    `json:"env"`
-	Pre  core.GenesisAlloc        `json:"pre"`
+	Pre  types.GenesisAlloc       `json:"pre"`
 	Tx   stTransaction            `json:"transaction"`
 	Out  hexutil.Bytes            `json:"out"`
 	Post map[string][]stPostState `json:"post"`
@@ -443,7 +443,7 @@ type StateTestState struct {
 }
 
 // MakePreState creates a state containing the given allocation.
-func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
 	tconf := &triedb.Config{Preimages: true}
 	if scheme == rawdb.HashScheme {
 		tconf.HashDB = hashdb.Defaults

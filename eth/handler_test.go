@@ -149,7 +149,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
-		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
 	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 
