@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/slices"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -160,14 +161,14 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 	}
 	// Otherwise gather and drop the highest nonce'd transactions
 	var drops types.Transactions
-
-	sort.Sort(*m.index)
+	slices.Sort(*m.index)
 	for size := len(m.items); size > threshold; size-- {
 		drops = append(drops, m.items[(*m.index)[size-1]])
 		delete(m.items, (*m.index)[size-1])
 	}
 	*m.index = (*m.index)[:threshold]
-	heap.Init(m.index)
+	// The sorted m.index slice is still a valid heap, so there is no need to
+	// reheap after deleting tail items.
 
 	// If we had a cache, shift the back
 	m.cacheMu.Lock()
