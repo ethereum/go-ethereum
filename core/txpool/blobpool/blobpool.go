@@ -378,7 +378,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: queuedir}, newSlotter(), index)
+	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, newSlotter(), index)
 	if err != nil {
 		return err
 	}
