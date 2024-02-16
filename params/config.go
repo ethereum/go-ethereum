@@ -78,6 +78,8 @@ var (
 		MuirGlacierBlock:              big.NewInt(0),
 		BerlinBlock:                   big.NewInt(0),
 		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             nil,
+		GrayGlacierBlock:              nil,
 		TerminalTotalDifficulty:       big.NewInt(17_000_000_000_000_000),
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            big.NewInt(1735371),
@@ -197,6 +199,7 @@ var (
 		BerlinBlock:         big.NewInt(13996000),
 		LondonBlock:         big.NewInt(22640000),
 		ShanghaiBlock:       big.NewInt(41874000),
+		CancunBlock:         big.NewInt(45648608),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(22770000),
 			DelhiBlock:  big.NewInt(29638656),
@@ -452,7 +455,7 @@ var (
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers for testing proposes.
+	// and accepted by the Ethereum core developers for testing purposes.
 	TestChainConfig = &ChainConfig{
 		ChainID:                       big.NewInt(1),
 		HomesteadBlock:                big.NewInt(0),
@@ -701,7 +704,7 @@ func (c *BorConfig) CalculateBurntContract(number uint64) string {
 func (c *ChainConfig) Description() string {
 	var banner string
 
-	// Create some basinc network config output
+	// Create some basic network config output
 	network := NetworkNames[c.ChainID.String()]
 	if network == "" {
 		network = "unknown"

@@ -673,7 +673,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header, force
 
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		if force {
-			log.Warn("Beacon chain forked", "ancestor", parent.Number, "hash", parent.Hash(), "want", head.ParentHash)
+			log.Warn("Beacon chain forked", "ancestor", number-1, "hash", parent.Hash(), "want", head.ParentHash)
 		}
 
 		return true
@@ -833,7 +833,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 
 	case res := <-resCh:
 		// Headers successfully retrieved, update the metrics
-		headers := *res.Res.(*eth.BlockHeadersPacket)
+		headers := *res.Res.(*eth.BlockHeadersRequest)
 
 		headerReqTimer.Update(time.Since(start))
 		s.peers.rates.Update(peer.id, eth.BlockHeadersMsg, res.Time, len(headers))

@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -91,20 +92,17 @@ func (tx *LegacyTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *LegacyTx) txType() byte              { return LegacyTxType }
-func (tx *LegacyTx) chainID() *big.Int         { return deriveChainId(tx.V) }
-func (tx *LegacyTx) accessList() AccessList    { return nil }
-func (tx *LegacyTx) data() []byte              { return tx.Data }
-func (tx *LegacyTx) gas() uint64               { return tx.Gas }
-func (tx *LegacyTx) gasPrice() *big.Int        { return tx.GasPrice }
-func (tx *LegacyTx) gasTipCap() *big.Int       { return tx.GasPrice }
-func (tx *LegacyTx) gasFeeCap() *big.Int       { return tx.GasPrice }
-func (tx *LegacyTx) value() *big.Int           { return tx.Value }
-func (tx *LegacyTx) nonce() uint64             { return tx.Nonce }
-func (tx *LegacyTx) to() *common.Address       { return tx.To }
-func (tx *LegacyTx) blobGas() uint64           { return 0 }
-func (tx *LegacyTx) blobGasFeeCap() *big.Int   { return nil }
-func (tx *LegacyTx) blobHashes() []common.Hash { return nil }
+func (tx *LegacyTx) txType() byte           { return LegacyTxType }
+func (tx *LegacyTx) chainID() *big.Int      { return deriveChainId(tx.V) }
+func (tx *LegacyTx) accessList() AccessList { return nil }
+func (tx *LegacyTx) data() []byte           { return tx.Data }
+func (tx *LegacyTx) gas() uint64            { return tx.Gas }
+func (tx *LegacyTx) gasPrice() *big.Int     { return tx.GasPrice }
+func (tx *LegacyTx) gasTipCap() *big.Int    { return tx.GasPrice }
+func (tx *LegacyTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *LegacyTx) value() *big.Int        { return tx.Value }
+func (tx *LegacyTx) nonce() uint64          { return tx.Nonce }
+func (tx *LegacyTx) to() *common.Address    { return tx.To }
 
 func (tx *LegacyTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(tx.GasPrice)
@@ -116,4 +114,12 @@ func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (tx *LegacyTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.V, tx.R, tx.S = v, r, s
+}
+
+func (tx *LegacyTx) encode(*bytes.Buffer) error {
+	panic("encode called on LegacyTx")
+}
+
+func (tx *LegacyTx) decode([]byte) error {
+	panic("decode called on LegacyTx)")
 }

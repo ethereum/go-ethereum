@@ -47,8 +47,8 @@ func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.C
 	// Initialize a clean cache if the memory allowance is not zero
 	// or reuse the provided cache if it is not nil (inherited from
 	// the original disk layer).
-	if cleans == nil && db.config.CleanSize != 0 {
-		cleans = fastcache.New(db.config.CleanSize)
+	if cleans == nil && db.config.CleanCacheSize != 0 {
+		cleans = fastcache.New(db.config.CleanCacheSize)
 	}
 	return &diskLayer{
 		root:   root,
@@ -150,7 +150,7 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	if nHash != hash {
 		diskFalseMeter.Mark(1)
 		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
-		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path)
+		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path, nBlob)
 	}
 	if dl.cleans != nil && len(nBlob) > 0 {
 		dl.cleans.Set(key, nBlob)
@@ -172,36 +172,64 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	// Construct and store the state history first. If crash happens
-	// after storing the state history but without flushing the
-	// corresponding states(journal), the stored state history will
-	// be truncated in the next restart.
+	// Construct and store the state history first. If crash happens after storing
+	// the state history but without flushing the corresponding states(journal),
+	// the stored state history will be truncated from head in the next restart.
+	var (
+		overflow bool
+		oldest   uint64
+	)
 	if dl.db.freezer != nil {
-		err := writeHistory(dl.db.diskdb, dl.db.freezer, bottom, dl.db.config.StateLimit)
+		err := writeHistory(dl.db.freezer, bottom)
 		if err != nil {
 			return nil, err
+		}
+		// Determine if the persisted history object has exceeded the configured
+		// limitation, set the overflow as true if so.
+		tail, err := dl.db.freezer.Tail()
+		if err != nil {
+			return nil, err
+		}
+		limit := dl.db.config.StateHistory
+		if limit != 0 && bottom.stateID()-tail > limit {
+			overflow = true
+			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 		}
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.stale = true
 
-	// Store the root->id lookup afterwards. All stored lookups are
-	// identified by the **unique** state root. It's impossible that
-	// in the same chain blocks are not adjacent but have the same
-	// root.
+	// Store the root->id lookup afterwards. All stored lookups are identified
+	// by the **unique** state root. It's impossible that in the same chain
+	// blocks are not adjacent but have the same root.
 	if dl.id == 0 {
 		rawdb.WriteStateID(dl.db.diskdb, dl.root, 0)
 	}
 	rawdb.WriteStateID(dl.db.diskdb, bottom.rootHash(), bottom.stateID())
 
-	// Construct a new disk layer by merging the nodes from the provided
-	// diff layer, and flush the content in disk layer if there are too
-	// many nodes cached. The clean cache is inherited from the original
-	// disk layer for reusing.
+	// Construct a new disk layer by merging the nodes from the provided diff
+	// layer, and flush the content in disk layer if there are too many nodes
+	// cached. The clean cache is inherited from the original disk layer.
 	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.cleans, dl.buffer.commit(bottom.nodes))
-	err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force)
-	if err != nil {
+
+	// In a unique scenario where the ID of the oldest history object (after tail
+	// truncation) surpasses the persisted state ID, we take the necessary action
+	// of forcibly committing the cached dirty nodes to ensure that the persisted
+	// state ID remains higher.
+	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
+		force = true
+	}
+	if err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force); err != nil {
 		return nil, err
+	}
+	// To remove outdated history objects from the end, we set the 'tail' parameter
+	// to 'oldest-1' due to the offset between the freezer index and the history ID.
+	if overflow {
+		pruned, err := truncateFromTail(ndl.db.diskdb, ndl.db.freezer, oldest-1)
+		if err != nil {
+			return nil, err
+		}
+		log.Debug("Pruned state history", "items", pruned, "tailid", oldest)
 	}
 	return ndl, nil
 }
@@ -274,6 +302,20 @@ func (dl *diskLayer) size() common.StorageSize {
 		return 0
 	}
 	return common.StorageSize(dl.buffer.size)
+}
+
+// resetCache releases the memory held by clean cache to prevent memory leak.
+func (dl *diskLayer) resetCache() {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// Stale disk layer loses the ownership of clean cache.
+	if dl.stale {
+		return
+	}
+	if dl.cleans != nil {
+		dl.cleans.Reset()
+	}
 }
 
 // hasher is used to compute the sha256 hash of the provided data.

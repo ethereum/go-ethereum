@@ -118,6 +118,10 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 			} else if err != nil {
 				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)
 			}
+			// ignore the genesis block when importing blocks
+			if block.NumberU64() == 0 {
+				continue
+			}
 			blocks = append(blocks, block)
 			index++
 		}

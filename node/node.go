@@ -490,8 +490,11 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		sharedConfig := rpcConfig
-		sharedConfig.jwtSecret = secret
+		sharedConfig := rpcEndpointConfig{
+			jwtSecret:              secret,
+			batchItemLimit:         engineAPIBatchItemLimit,
+			batchResponseSizeLimit: engineAPIBatchResponseSizeLimit,
+		}
 		if err := server.enableRPC(allAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
@@ -778,7 +781,7 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool, extraDBConfig rawdb.ExtraDBConfig) (ethdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -794,13 +797,12 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 		db = rawdb.NewMemoryDatabase()
 	} else {
 		db, err = rawdb.Open(rawdb.OpenOptions{
-			Type:          n.config.DBEngine,
-			Directory:     n.ResolvePath(name),
-			Namespace:     namespace,
-			Cache:         cache,
-			Handles:       handles,
-			ReadOnly:      readonly,
-			ExtraDBConfig: extraDBConfig,
+			Type:      n.config.DBEngine,
+			Directory: n.ResolvePath(name),
+			Namespace: namespace,
+			Cache:     cache,
+			Handles:   handles,
+			ReadOnly:  readonly,
 		})
 	}
 
@@ -816,7 +818,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache int, handles int, ancient string, namespace string, readonly bool, extraDBConfig rawdb.ExtraDBConfig) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -839,7 +841,6 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache int, handles int, anci
 			Cache:             cache,
 			Handles:           handles,
 			ReadOnly:          readonly,
-			ExtraDBConfig:     extraDBConfig,
 		})
 	}
 

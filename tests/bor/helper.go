@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -127,14 +128,14 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 		BorLogs: true,
 	}
 
-	ethConf.Genesis.MustCommit(db)
+	ethConf.Genesis.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	ethereum := utils.CreateBorEthereum(ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 
-	ethConf.Genesis.MustCommit(ethereum.ChainDb())
+	ethConf.Genesis.MustCommit(ethereum.ChainDb(), trie.NewDatabase(ethereum.ChainDb(), trie.HashDefaults))
 
 	ethereum.Engine().(*bor.Bor).Authorize(addr, func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), key)

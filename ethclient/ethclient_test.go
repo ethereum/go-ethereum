@@ -363,8 +363,17 @@ func TestEthClient(t *testing.T) {
 // 		t.Run(name, func(t *testing.T) {
 // 			ec := NewClient(client)
 
-// 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-// 			defer cancel()
+// Test tx in block interrupted.
+// ctx, cancel := context.WithCancel(context.Background())
+// cancel()
+// <-ctx.Done() // Ensure the close of the Done channel
+// tx, err := ec.TransactionInBlock(ctx, block.Hash(), 0)
+// if tx != nil {
+// 	t.Fatal("transaction should be nil")
+// }
+// if err == nil || err == ethereum.NotFound {
+// 	t.Fatal("error should not be nil/notfound")
+// }
 
 // 			got, err := ec.BalanceAt(ctx, tt.account, tt.block)
 // 			if tt.wantErr != nil && (err == nil || err.Error() != tt.wantErr.Error()) {
@@ -396,9 +405,14 @@ func TestEthClient(t *testing.T) {
 // 		t.Fatal("transaction should be nil")
 // 	}
 
-// 	if err == nil || err == ethereum.NotFound {
-// 		t.Fatal("error should not be nil/notfound")
-// 	}
+// NetworkID
+// networkID, err := ec.NetworkID(context.Background())
+// if err != nil {
+// 	t.Fatalf("unexpected error: %v", err)
+// }
+// if networkID.Cmp(big.NewInt(1337)) != 0 {
+// 	t.Fatalf("unexpected networkID: %v", networkID)
+// }
 
 // 	// Test tx in block not found.
 // 	if _, err := ec.TransactionInBlock(context.Background(), block.Hash(), 20); err != ethereum.NotFound {
@@ -446,23 +460,100 @@ func TestEthClient(t *testing.T) {
 // 		t.Fatalf("unexpected error: %v", err)
 // 	}
 
-// 	if block.Hash() != blockH.Hash() {
-// 		t.Fatalf("BlockByHash returned wrong block: want %v got %v", block.Hash().Hex(), blockH.Hash().Hex())
-// 	}
-// 	// Get header by number
-// 	header, err := ec.HeaderByNumber(context.Background(), new(big.Int).SetUint64(blockNumber))
+// 	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
 // 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
+// 		t.Fatalf("BlockByNumber error: %v", err)
 // 	}
 
-// 	if block.Header().Hash() != header.Hash() {
-// 		t.Fatalf("HeaderByNumber returned wrong header: want %v got %v", block.Header().Hash().Hex(), header.Hash().Hex())
-// 	}
-// 	// Get header by hash
-// 	headerH, err := ec.HeaderByHash(context.Background(), block.Hash())
+// 	// send a transaction for some interesting pending status
+// 	sendTransaction(ec)
+// 	time.Sleep(100 * time.Millisecond)
+
+// 	// Check pending transaction count
+// 	pending, err := ec.PendingTransactionCount(context.Background())
 // 	if err != nil {
 // 		t.Fatalf("unexpected error: %v", err)
 // 	}
+// 	if pending != 1 {
+// 		t.Fatalf("unexpected pending, wanted 1 got: %v", pending)
+// 	}
+// 	// Query balance
+// 	balance, err := ec.BalanceAt(context.Background(), testAddr, nil)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	hashBalance, err := ec.BalanceAtHash(context.Background(), testAddr, block.Hash())
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if balance.Cmp(hashBalance) == 0 {
+// 		t.Fatalf("unexpected balance at hash: %v %v", balance, hashBalance)
+// 	}
+// 	penBalance, err := ec.PendingBalanceAt(context.Background(), testAddr)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if balance.Cmp(penBalance) == 0 {
+// 		t.Fatalf("unexpected balance: %v %v", balance, penBalance)
+// 	}
+// 	// NonceAt
+// 	nonce, err := ec.NonceAt(context.Background(), testAddr, nil)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	hashNonce, err := ec.NonceAtHash(context.Background(), testAddr, block.Hash())
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if hashNonce == nonce {
+// 		t.Fatalf("unexpected nonce at hash: %v %v", nonce, hashNonce)
+// 	}
+// 	penNonce, err := ec.PendingNonceAt(context.Background(), testAddr)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if penNonce != nonce+1 {
+// 		t.Fatalf("unexpected nonce: %v %v", nonce, penNonce)
+// 	}
+// 	// StorageAt
+// 	storage, err := ec.StorageAt(context.Background(), testAddr, common.Hash{}, nil)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	hashStorage, err := ec.StorageAtHash(context.Background(), testAddr, common.Hash{}, block.Hash())
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if !bytes.Equal(storage, hashStorage) {
+// 		t.Fatalf("unexpected storage at hash: %v %v", storage, hashStorage)
+// 	}
+// 	penStorage, err := ec.PendingStorageAt(context.Background(), testAddr, common.Hash{})
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if !bytes.Equal(storage, penStorage) {
+// 		t.Fatalf("unexpected storage: %v %v", storage, penStorage)
+// 	}
+// 	// CodeAt
+// 	code, err := ec.CodeAt(context.Background(), testAddr, nil)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	hashCode, err := ec.CodeAtHash(context.Background(), common.Address{}, block.Hash())
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if !bytes.Equal(code, hashCode) {
+// 		t.Fatalf("unexpected code at hash: %v %v", code, hashCode)
+// 	}
+// 	penCode, err := ec.PendingCodeAt(context.Background(), testAddr)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	if !bytes.Equal(code, penCode) {
+// 		t.Fatalf("unexpected code: %v %v", code, penCode)
+// 	}
+// }
 
 // 	if block.Header().Hash() != headerH.Hash() {
 // 		t.Fatalf("HeaderByHash returned wrong header: want %v got %v", block.Header().Hash().Hex(), headerH.Hash().Hex())
@@ -472,11 +563,18 @@ func TestEthClient(t *testing.T) {
 // func testStatusFunctions(t *testing.T, client *rpc.Client) {
 // 	ec := NewClient(client)
 
-// 	// Sync progress
-// 	progress, err := ec.SyncProgress(context.Background())
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
+// The sender address is cached in tx1, so no additional RPC should be required in
+// TransactionSender. Ensure the server is not asked by canceling the context here.
+// canceledCtx, cancel := context.WithCancel(context.Background())
+// cancel()
+// <-canceledCtx.Done() // Ensure the close of the Done channel
+// sender1, err := ec.TransactionSender(canceledCtx, tx1, block2.Hash(), 0)
+// if err != nil {
+// 	t.Fatal(err)
+// }
+// if sender1 != testAddr {
+// 	t.Fatal("wrong sender:", sender1)
+// }
 
 // 	if progress != nil {
 // 		t.Fatalf("unexpected progress: %v", progress)

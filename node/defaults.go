@@ -37,6 +37,13 @@ const (
 	DefaultAuthPort = 8551        // Default port for the authenticated apis
 )
 
+const (
+	// Engine API batch limits: these are not configurable by users, and should cover the
+	// needs of all CLs.
+	engineAPIBatchItemLimit         = 2000
+	engineAPIBatchResponseSizeLimit = 250 * 1000 * 1000
+)
+
 var (
 	DefaultAuthCors    = []string{"localhost"} // Default cors domain for the authenticated apis
 	DefaultAuthVhosts  = []string{"localhost"} // Default virtual hosts for the authenticated apis

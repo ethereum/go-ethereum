@@ -83,12 +83,11 @@ type LightEthereum struct {
 
 // New creates an instance of the light client.
 func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
-	extraDBConfig := resolveExtraDBConfig(config)
-	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false, extraDBConfig)
+	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
-	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/lesclient/", false, extraDBConfig)
+	lesDb, err := stack.OpenDatabase("les.client", 0, 0, "eth/db/lesclient/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +98,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, trie.NewDatabase(chainDb), config.Genesis, &overrides)
+	triedb := trie.NewDatabase(chainDb, trie.HashDefaults)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, triedb, config.Genesis, &overrides)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
@@ -202,15 +202,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.shutdownTracker.MarkStartup()
 
 	return leth, nil
-}
-
-func resolveExtraDBConfig(config *ethconfig.Config) rawdb.ExtraDBConfig {
-	return rawdb.ExtraDBConfig{
-		LevelDBCompactionTableSize:           config.LevelDbCompactionTableSize,
-		LevelDBCompactionTableSizeMultiplier: config.LevelDbCompactionTableSizeMultiplier,
-		LevelDBCompactionTotalSize:           config.LevelDbCompactionTotalSize,
-		LevelDBCompactionTotalSizeMultiplier: config.LevelDbCompactionTotalSizeMultiplier,
-	}
 }
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses

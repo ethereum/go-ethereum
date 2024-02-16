@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// LookupInstructionSet returns the instructionset for the fork configured by
+// LookupInstructionSet returns the instruction set for the fork configured by
 // the rules.
 func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {

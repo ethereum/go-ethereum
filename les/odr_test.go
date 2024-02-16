@@ -104,7 +104,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	for _, addr := range acc {
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			st, err = state.New(header.Root, state.NewDatabase(db), nil)
+			st, err = state.New(header.Root, bc.StateCache(), nil)
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			st = light.NewState(ctx, header, lc.Odr())

@@ -57,3 +57,6 @@ dist
 .dccache
 
 *.csv
+logs/
+
+tests/spec-tests/

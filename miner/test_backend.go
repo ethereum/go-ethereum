@@ -62,8 +62,8 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 	}
 	worker.noempty.Store(true)
 	worker.profileCount = new(int32)
-	// Subscribe NewTxsEvent for tx pool
-	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+	// Subscribe for transaction insertion events (whether from network or resurrects)
+	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 
@@ -145,12 +145,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 			}
 
 		case req := <-w.getWorkCh:
-			block, fees, err := w.generateWork(req.ctx, req.params)
-			req.result <- &newPayloadResult{
-				err:   err,
-				block: block,
-				fees:  fees,
-			}
+			req.result <- w.generateWork(ctx, req.params)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -168,11 +163,14 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], &txpool.LazyTransaction{
+						Pool:      w.eth.TxPool(), // We don't know where this came from, yolo resolve from everywhere
 						Hash:      tx.Hash(),
-						Tx:        &txpool.Transaction{Tx: tx},
+						Tx:        nil, // Do *not* set this! We need to resolve it later to pull blobs in
 						Time:      tx.Time(),
 						GasFeeCap: tx.GasFeeCap(),
 						GasTipCap: tx.GasTipCap(),
+						Gas:       tx.Gas(),
+						BlobGas:   tx.BlobGas(),
 					})
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
@@ -514,7 +512,7 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactions
 
 	var depsWg sync.WaitGroup
 
-	EnableMVHashMap := false
+	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {
@@ -594,36 +592,47 @@ mainloop:
 			breakCause = "all transactions has been included"
 			break
 		}
+		// If we don't have enough space for the next transaction, skip the account.
+		if env.gasPool.Gas() < ltx.Gas {
+			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
+			txs.Pop()
+			continue
+		}
+		if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
+			log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
+			txs.Pop()
+			continue
+		}
+		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
-			log.Warn("Ignoring evicted transaction")
-
+			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
 			txs.Pop()
 			continue
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
-		from, _ := types.Sender(env.signer, tx.Tx)
+		from, _ := types.Sender(env.signer, tx)
 
 		// not prioritising conditional transaction, yet.
 		//nolint:nestif
-		if options := tx.Tx.GetOptions(); options != nil {
+		if options := tx.GetOptions(); options != nil {
 			if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
-				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 
 				continue
 			}
 
 			if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
-				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 
 				continue
 			}
 
 			if err := env.state.ValidateKnownAccounts(options.KnownAccounts); err != nil {
-				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Tx.Hash(), "reason", err)
+				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 
 				continue
@@ -632,14 +641,13 @@ mainloop:
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-
+		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
+			log.Trace("Ignoring replay protected transaction", "hash", ltx.Hash, "eip155", w.chainConfig.EIP155Block)
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		var start time.Time
 
@@ -647,7 +655,7 @@ mainloop:
 			start = time.Now()
 		})
 
-		logs, err := w.commitTransaction(env, tx.Tx, interruptCtx)
+		logs, err := w.commitTransaction(env, tx, interruptCtx)
 
 		if interruptCtx != nil {
 			if delay := interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
@@ -659,7 +667,7 @@ mainloop:
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Tx.Nonce())
+			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
 			txs.Shift()
 
 		case errors.Is(err, nil):
@@ -685,13 +693,13 @@ mainloop:
 			txs.Shift()
 
 			log.OnDebug(func(lg log.Logging) {
-				lg("Committed new tx", "tx hash", tx.Tx.Hash(), "from", from, "to", tx.Tx.To(), "nonce", tx.Tx.Nonce(), "gas", tx.Tx.Gas(), "gasPrice", tx.Tx.GasPrice(), "value", tx.Tx.Value(), "time spent", time.Since(start))
+				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
 			})
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", tx.Tx.Hash(), "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
 		}
 

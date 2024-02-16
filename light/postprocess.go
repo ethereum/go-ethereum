@@ -145,7 +145,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64, dis
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
-		triedb:         trie.NewDatabaseWithConfig(trieTable, &trie.Config{Cache: 1}), // Use a tiny cache only to keep memory down
+		triedb:         trie.NewDatabase(trieTable, trie.HashDefaults),
 		sectionSize:    size,
 		disablePruning: disablePruning,
 	}
@@ -348,7 +348,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
-		triedb:         trie.NewDatabaseWithConfig(trieTable, &trie.Config{Cache: 1}), // Use a tiny cache only to keep memory down
+		triedb:         trie.NewDatabase(trieTable, trie.HashDefaults),
 		parentSize:     parentSize,
 		size:           size,
 		disablePruning: disablePruning,
@@ -363,7 +363,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section uint64, root common.Hash) error {
 	indexCh := make(chan uint, types.BloomBitLength)
 	type res struct {
-		nodes *NodeSet
+		nodes *trienode.ProofSet
 		err   error
 	}
 	resCh := make(chan res, types.BloomBitLength)

@@ -136,7 +136,6 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 		m.cache = m.cache[len(removed):]
 	}
 	m.cacheMu.Unlock()
-
 	return removed
 }
 
@@ -164,7 +163,9 @@ func (m *sortedMap) reheap() {
 		*m.index = append(*m.index, nonce)
 	}
 	heap.Init(m.index)
+	m.cacheMu.Lock()
 	m.cache = nil
+	m.cacheMu.Unlock()
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
@@ -223,7 +224,6 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 		m.cache = m.cache[:len(m.cache)-len(drops)]
 	}
 	m.cacheMu.Unlock()
-
 	return drops
 }
 
@@ -265,7 +265,7 @@ func (m *sortedMap) Remove(nonce uint64) bool {
 // removed from the list.
 //
 // Note, all transactions with nonces lower than start will also be returned to
-// prevent getting into and invalid state. This is not something that should ever
+// prevent getting into an invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (m *sortedMap) Ready(start uint64) types.Transactions {
 	m.m.Lock()
@@ -383,8 +383,11 @@ func (m *sortedMap) lastElement() *types.Transaction {
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
 func (m *sortedMap) Flatten() types.Transactions {
-	// Copy the cache to prevent accidental modifications
-	return m.flatten()
+	cache := m.flatten()
+	// Copy the cache to prevent accidental modification
+	txs := make(types.Transactions, len(cache))
+	copy(txs, cache)
+	return txs
 }
 
 // LastElement returns the last element of a flattened list, thus, the
@@ -582,7 +585,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // removed from the list.
 //
 // Note, all transactions with nonces lower than start will also be returned to
-// prevent getting into and invalid state. This is not something that should ever
+// prevent getting into an invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *list) Ready(start uint64) types.Transactions {
 	txs := l.txs.Ready(start)

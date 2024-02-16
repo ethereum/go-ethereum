@@ -82,9 +82,8 @@ type backend interface {
 // reporting to ethstats
 type fullNodeBackend interface {
 	backend
-	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	CurrentBlock() *types.Block
+	CurrentBlock() *types.Header
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
@@ -100,6 +99,13 @@ func (e *EthstatsDataType) AddKV(key, val string) {
 // Arbitrary Data that can be included
 var EthstatsData = &EthstatsDataType{
 	kv: make(map[string]string),
+}
+
+// miningNodeBackend encompasses the functionality necessary for a mining node
+// reporting to ethstats
+type miningNodeBackend interface {
+	fullNodeBackend
+	Miner() *miner.Miner
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -713,7 +719,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
 		if block == nil {
-			block = fullBackend.CurrentBlock()
+			head := fullBackend.CurrentBlock()
+			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
 		}
 
 		header = block.Header()
@@ -914,10 +921,11 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		gasprice int
 	)
 	// check if backend is a full node
-	fullBackend, ok := s.backend.(fullNodeBackend)
-	if ok {
-		mining = fullBackend.Miner().Mining()
-		hashrate = int(fullBackend.Miner().Hashrate())
+	if fullBackend, ok := s.backend.(fullNodeBackend); ok {
+		if miningBackend, ok := s.backend.(miningNodeBackend); ok {
+			mining = miningBackend.Miner().Mining()
+			hashrate = int(miningBackend.Miner().Hashrate())
+		}
 
 		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock

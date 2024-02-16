@@ -10,10 +10,13 @@ import (
 	"os"
 	"runtime/metrics"
 	"runtime/pprof"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/BurntSushi/toml"
 )
@@ -33,8 +36,14 @@ var EnabledExpensive = false
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 
+// enablerEnvVars is the env var names to use to enable metrics collections.
+var enablerEnvVars = []string{"GETH_METRICS"}
+
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}
+
+// expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
+var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
 
 // configFlag is the CLI flag name to use to start node by providing a toml based config
 var configFlag = "config"
@@ -43,11 +52,26 @@ var configFlag = "config"
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
+	for _, enabler := range enablerEnvVars {
+		if val, found := syscall.Getenv(enabler); found && !Enabled {
+			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
+				log.Info("Enabling metrics collection")
+				Enabled = true
+			}
+		}
+	}
+	for _, enabler := range expensiveEnablerEnvVars {
+		if val, found := syscall.Getenv(enabler); found && !EnabledExpensive {
+			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
+				log.Info("Enabling expensive metrics collection")
+				EnabledExpensive = true
+			}
+		}
+	}
+
 	var configFile string
 
-	for i := 0; i < len(os.Args); i++ {
-		arg := os.Args[i]
-
+	for i, arg := range os.Args {
 		flag := strings.TrimLeft(arg, "-")
 
 		// check for existence of `config` flag
@@ -60,12 +84,13 @@ func init() {
 
 		for _, enabler := range enablerFlags {
 			if !Enabled && flag == enabler {
+				log.Info("Enabling metrics collection")
 				Enabled = true
 			}
 		}
-
 		for _, enabler := range expensiveEnablerFlags {
 			if !EnabledExpensive && flag == enabler {
+				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
 			}
 		}
@@ -141,6 +166,12 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/memory/classes/heap/unused:bytes"},
 	{Name: "/sched/goroutines:goroutines"},
 	{Name: "/sched/latencies:seconds"}, // histogram
+}
+
+func ReadRuntimeStats() *runtimeStats {
+	r := new(runtimeStats)
+	readRuntimeStats(r)
+	return r
 }
 
 func readRuntimeStats(v *runtimeStats) {

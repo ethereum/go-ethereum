@@ -160,8 +160,7 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
-	kind, _, err := s.Kind()
-
+	kind, size, err := s.Kind()
 	switch {
 	case err != nil:
 		return err
@@ -175,13 +174,18 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		r.Type = LegacyTxType
 
 		return r.setFromRLP(dec)
+	case kind == rlp.Byte:
+		return errShortTypedReceipt
 	default:
 		// It's an EIP-2718 typed tx receipt.
-		b, err := s.Bytes()
+		b, buf, err := getPooledBuffer(size)
 		if err != nil {
 			return err
 		}
-
+		defer encodeBufferPool.Put(buf)
+		if err := s.ReadBytes(b); err != nil {
+			return err
+		}
 		return r.decodeTyped(b)
 	}
 }
@@ -288,7 +292,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	logList := w.List()
 
 	for _, log := range r.Logs {
-		if err := rlp.Encode(w, log); err != nil {
+		if err := log.EncodeRLP(w); err != nil {
 			return err
 		}
 	}

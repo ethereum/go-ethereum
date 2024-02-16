@@ -101,14 +101,12 @@ func TestRegistryDuplicate(t *testing.T) {
 func TestRegistryGet(t *testing.T) {
 	r := NewRegistry()
 	r.Register("foo", NewCounter())
-
-	if count := r.Get("foo").(Counter).Count(); count != 0 {
+	if count := r.Get("foo").(Counter).Snapshot().Count(); count != 0 {
 		t.Fatal(count)
 	}
 
 	r.Get("foo").(Counter).Inc(1)
-
-	if count := r.Get("foo").(Counter).Count(); count != 1 {
+	if count := r.Get("foo").(Counter).Snapshot().Count(); count != 1 {
 		t.Fatal(count)
 	}
 }

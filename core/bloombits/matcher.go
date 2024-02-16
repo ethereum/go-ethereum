@@ -59,7 +59,7 @@ type partialMatches struct {
 // bit with the given number of fetch elements, or a response for such a request.
 // It can also have the actual results set to be used as a delivery data struct.
 //
-// The contest and error fields are used by the light client to terminate matching
+// The context and error fields are used by the light client to terminate matching
 // early if an error is encountered on some path of the pipeline.
 type Retrieval struct {
 	Bit      uint
@@ -412,7 +412,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 		shutdown   = session.quit            // Shutdown request channel, will gracefully wait for pending requests
 	)
 
-	// assign is a helper method fo try to assign a pending bit an actively
+	// assign is a helper method to try to assign a pending bit an actively
 	// listening servicer, or schedule it up for later when one arrives.
 	assign := func(bit uint) {
 		select {
@@ -663,14 +663,16 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 			request <- &Retrieval{Bit: bit, Sections: sections, Context: s.ctx}
 
 			result := <-request
+
+			// Deliver a result before s.Close() to avoid a deadlock
+			s.deliverSections(result.Bit, result.Sections, result.Bitsets)
+
 			if result.Error != nil {
 				s.errLock.Lock()
 				s.err = result.Error
 				s.errLock.Unlock()
 				s.Close()
 			}
-
-			s.deliverSections(result.Bit, result.Sections, result.Bitsets)
 		}
 	}
 }

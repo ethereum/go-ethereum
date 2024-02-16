@@ -62,7 +62,7 @@ func (c *ChainSpanner) GetCurrentSpan(ctx context.Context, headerHash common.Has
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr, nil, nil)
+	}, &blockNr, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (c *ChainSpanner) GetCurrentValidatorsByBlockNrOrHash(ctx context.Context, 
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNrOrHash, nil, nil)
+	}, &blockNrOrHash, nil, nil)
 	if err != nil {
 		return nil, err
 	}

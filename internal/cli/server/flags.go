@@ -98,6 +98,12 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Value:   &c.cliConfig.GcMode,
 		Default: c.cliConfig.GcMode,
 	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "state.scheme",
+		Usage:   "Scheme to use for storing ethereum state ('hash' or 'path')",
+		Value:   &c.cliConfig.StateScheme,
+		Default: c.cliConfig.StateScheme,
+	})
 	f.MapStringFlag(&flagset.MapStringFlag{
 		Name:    "eth.requiredblocks",
 		Usage:   "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",

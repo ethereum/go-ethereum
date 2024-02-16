@@ -36,6 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 var (
@@ -94,7 +96,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		if err != nil {
 			panic(err)
 		}
-		nodes := NewNodeSet()
+		nodes := trienode.NewProofSet()
 		t.Prove(req.Key, nodes)
 		req.Proof = nodes
 	case *CodeRequest:
@@ -282,7 +284,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 		t.Fatal(err)
 	}
 
-	gspec.MustCommit(ldb)
+	gspec.MustCommit(ldb, trie.NewDatabase(ldb, trie.HashDefaults))
 	odr := &testOdr{sdb: sdb, ldb: ldb, serverState: blockchain.StateCache(), indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, gspec.Config, ethash.NewFullFaker(), nil)
 	if err != nil {

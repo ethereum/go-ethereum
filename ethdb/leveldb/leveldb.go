@@ -22,6 +22,7 @@ package leveldb
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,13 +93,12 @@ type LevelDBConfig struct {
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string, readonly bool, config LevelDBConfig) (*Database, error) {
+func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
 	return NewCustom(file, namespace, func(options *opt.Options) {
 		// Ensure we have some minimal caching and file guarantees
 		if cache < minCache {
 			cache = minCache
 		}
-
 		if handles < minHandles {
 			handles = minHandles
 		}
@@ -106,23 +106,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool, c
 		options.OpenFilesCacheCapacity = handles
 		options.BlockCacheCapacity = cache / 2 * opt.MiB
 		options.WriteBuffer = cache / 4 * opt.MiB // Two of these are used internally
-
-		if config.CompactionTableSize != 0 {
-			options.CompactionTableSize = int(config.CompactionTableSize * opt.MiB)
-		}
-
-		if config.CompactionTableSizeMultiplier != 0 {
-			options.CompactionTableSizeMultiplier = config.CompactionTableSizeMultiplier
-		}
-
-		if config.CompactionTotalSize != 0 {
-			options.CompactionTotalSize = int(config.CompactionTotalSize * opt.MiB)
-		}
-
-		if config.CompactionTotalSizeMultiplier != 0 {
-			options.CompactionTotalSizeMultiplier = config.CompactionTotalSizeMultiplier
-		}
-
 		if readonly {
 			options.ReadOnly = true
 		}
@@ -286,6 +269,11 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 
 // Stat returns a particular internal stat of the database.
 func (db *Database) Stat(property string) (string, error) {
+	if property == "" {
+		property = "leveldb.stats"
+	} else if !strings.HasPrefix(property, "leveldb.") {
+		property = "leveldb." + property
+	}
 	return db.db.GetProperty(property)
 }
 

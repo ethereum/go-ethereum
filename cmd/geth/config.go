@@ -17,13 +17,16 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
+	"runtime"
+	"strings"
 	"time"
-
-	"github.com/BurntSushi/toml"
-	"github.com/urfave/cli/v2"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -31,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -41,6 +46,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/naoina/toml"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -60,6 +67,28 @@ var (
 	}
 )
 
+// These settings ensure that TOML keys use the same names as Go struct fields.
+var tomlSettings = toml.Config{
+	NormFieldName: func(rt reflect.Type, key string) string {
+		return key
+	},
+	FieldToKey: func(rt reflect.Type, field string) string {
+		return field
+	},
+	MissingField: func(rt reflect.Type, field string) error {
+		id := fmt.Sprintf("%s.%s", rt.String(), field)
+		if deprecated(id) {
+			log.Warn("Config field is deprecated and won't have an effect", "name", id)
+			return nil
+		}
+		var link string
+		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
+			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
+		}
+		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
+	},
+}
+
 type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
@@ -72,17 +101,18 @@ type gethConfig struct {
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
-	data, err := os.ReadFile(file)
+	f, err := os.Open(file)
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	tomlData := string(data)
-	if _, err = toml.Decode(tomlData, &cfg); err != nil {
-		return err
+	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
+	// Add file name to errors that have a line number.
+	if _, ok := err.(*toml.LineError); ok {
+		err = errors.New(file + ", " + err.Error())
 	}
-
-	return nil
+	return err
 }
 
 func defaultNodeConfig() node.Config {
@@ -171,6 +201,20 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
+	// Create gauge with geth system and build information
+	if eth != nil { // The 'eth' backend may be nil in light mode
+		var protos []string
+		for _, p := range eth.Protocols() {
+			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
+		}
+		metrics.NewRegisteredGaugeInfo("geth/info", nil).Update(metrics.GaugeInfoValue{
+			"arch":      runtime.GOARCH,
+			"os":        runtime.GOOS,
+			"version":   cfg.Node.Version,
+			"protocols": strings.Join(protos, ","),
+		})
+	}
+
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
@@ -178,17 +222,18 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
-
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
-
 	// Configure full-sync tester service if requested
-	if ctx.IsSet(utils.SyncTargetFlag.Name) && cfg.Eth.SyncMode == downloader.FullSync {
-		utils.RegisterFullSyncTester(stack, eth, ctx.Path(utils.SyncTargetFlag.Name))
+	if ctx.IsSet(utils.SyncTargetFlag.Name) {
+		hex := hexutil.MustDecode(ctx.String(utils.SyncTargetFlag.Name))
+		if len(hex) != common.HashLength {
+			utils.Fatalf("invalid sync target length: have %d, want %d", len(hex), common.HashLength)
+		}
+		utils.RegisterFullSyncTester(stack, eth, common.BytesToHash(hex))
 	}
-
 	// Start the dev mode if requested, or launch the engine API for
 	// interacting with external consensus client.
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
@@ -277,6 +322,21 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
+	}
+}
+
+func deprecated(field string) bool {
+	switch field {
+	case "ethconfig.Config.EVMInterpreter":
+		return true
+	case "ethconfig.Config.EWASMInterpreter":
+		return true
+	case "ethconfig.Config.TrieCleanCacheJournal":
+		return true
+	case "ethconfig.Config.TrieCleanCacheRejournal":
+		return true
+	default:
+		return false
 	}
 }
 

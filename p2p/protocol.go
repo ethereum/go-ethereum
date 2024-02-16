@@ -79,15 +79,15 @@ func (cap Cap) String() string {
 }
 
 // Cmp defines the canonical sorting order of capabilities.
-func (capacity Cap) Cmp(other Cap) int {
-	if capacity.Name == other.Name {
-		if capacity.Version < other.Version {
+func (cap Cap) Cmp(other Cap) int {
+	if cap.Name == other.Name {
+		if cap.Version < other.Version {
 			return -1
 		}
-		if capacity.Version > other.Version {
+		if cap.Version > other.Version {
 			return 1
 		}
 		return 0
 	}
-	return strings.Compare(capacity.Name, other.Name)
+	return strings.Compare(cap.Name, other.Name)
 }

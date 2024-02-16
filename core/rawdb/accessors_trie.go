@@ -37,7 +37,7 @@ import (
 //
 // Now this scheme is still kept for backward compatibility, and it will be used
 // for archive node and some other tries(e.g. light trie).
-const HashScheme = "hashScheme"
+const HashScheme = "hash"
 
 // PathScheme is the new path-based state scheme with which trie nodes are stored
 // in the disk with node path as the database key. This scheme will only store one
@@ -45,7 +45,7 @@ const HashScheme = "hashScheme"
 // is native. At the same time, this scheme will put adjacent trie nodes in the same
 // area of the disk with good data locality property. But this scheme needs to rely
 // on extra state diffs to survive deep reorg.
-const PathScheme = "pathScheme"
+const PathScheme = "path"
 
 // hasher is used to compute the sha256 hash of the provided data.
 type hasher struct{ sha crypto.KeccakState }
@@ -90,6 +90,16 @@ func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) 
 	return h.hash(data) == hash
 }
 
+// ExistsAccountTrieNode checks the presence of the account trie node with the
+// specified node path, regardless of the node hash.
+func ExistsAccountTrieNode(db ethdb.KeyValueReader, path []byte) bool {
+	has, err := db.Has(accountTrieNodeKey(path))
+	if err != nil {
+		return false
+	}
+	return has
+}
+
 // WriteAccountTrieNode writes the provided account trie node into database.
 func WriteAccountTrieNode(db ethdb.KeyValueWriter, path []byte, node []byte) {
 	if err := db.Put(accountTrieNodeKey(path), node); err != nil {
@@ -126,6 +136,16 @@ func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path [
 	h := newHasher()
 	defer h.release()
 	return h.hash(data) == hash
+}
+
+// ExistsStorageTrieNode checks the presence of the storage trie node with the
+// specified account hash and node path, regardless of the node hash.
+func ExistsStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) bool {
+	has, err := db.Has(storageTrieNodeKey(accountHash, path))
+	if err != nil {
+		return false
+	}
+	return has
 }
 
 // WriteStorageTrieNode writes the provided storage trie node into database.
@@ -268,4 +288,61 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
 	}
+}
+
+// ReadStateScheme reads the state scheme of persistent state, or none
+// if the state is not present in database.
+func ReadStateScheme(db ethdb.Reader) string {
+	// Check if state in path-based scheme is present
+	blob, _ := ReadAccountTrieNode(db, nil)
+	if len(blob) != 0 {
+		return PathScheme
+	}
+	// In a hash-based scheme, the genesis state is consistently stored
+	// on the disk. To assess the scheme of the persistent state, it
+	// suffices to inspect the scheme of the genesis state.
+	header := ReadHeader(db, ReadCanonicalHash(db, 0), 0)
+	if header == nil {
+		return "" // empty datadir
+	}
+	blob = ReadLegacyTrieNode(db, header.Root)
+	if len(blob) == 0 {
+		return "" // no state in disk
+	}
+	return HashScheme
+}
+
+// ParseStateScheme checks if the specified state scheme is compatible with
+// the stored state.
+//
+//   - If the provided scheme is none, use the scheme consistent with persistent
+//     state, or fallback to hash-based scheme if state is empty.
+//
+//   - If the provided scheme is hash, use hash-based scheme or error out if not
+//     compatible with persistent state scheme.
+//
+//   - If the provided scheme is path: use path-based scheme or error out if not
+//     compatible with persistent state scheme.
+func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
+	// If state scheme is not specified, use the scheme consistent
+	// with persistent state, or fallback to hash mode if database
+	// is empty.
+	stored := ReadStateScheme(disk)
+	if provided == "" {
+		if stored == "" {
+			// use default scheme for empty database, flip it when
+			// path mode is chosen as default
+			log.Info("State schema set to default", "scheme", "hash")
+			return HashScheme, nil
+		}
+		log.Info("State scheme set to already existing", "scheme", stored)
+		return stored, nil // reuse scheme of persistent scheme
+	}
+	// If state scheme is specified, ensure it's compatible with
+	// persistent state.
+	if stored == "" || provided == stored {
+		log.Info("State scheme set by user", "scheme", provided)
+		return provided, nil
+	}
+	return "", fmt.Errorf("incompatible state scheme, stored: %s, provided: %s", stored, provided)
 }
