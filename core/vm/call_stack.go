@@ -35,9 +35,9 @@ type callStack struct {
 }
 
 type csCall struct {
-	Op        OpCode
-	Address   common.Address
-	Signature []byte
+	Op       OpCode
+	Address  common.Address
+	Selector []byte
 }
 
 // newCallStack creates a new call stack.
@@ -47,14 +47,14 @@ func newCallStack() *callStack {
 
 // Push pushes given call to the stack.
 func (cs *callStack) Push(op OpCode, addr common.Address, input []byte) {
-	var signature []byte
+	var selector []byte
 	if len(input) >= 4 {
-		signature = input[:4]
+		selector = input[:4]
 	}
 	cs.calls = append(cs.calls, &csCall{
-		Op:        op,
-		Address:   addr,
-		Signature: signature,
+		Op:       op,
+		Address:  addr,
+		Selector: selector,
 	})
 }
 
@@ -121,7 +121,7 @@ func (enc *callStackEncoder) Encode() ([]byte, error) {
 	for _, call := range enc.calls {
 		enc.appendNum(uint256.NewInt(uint64(call.Op)))
 		enc.appendAddr(call.Address)
-		enc.appendNum(uint256.NewInt(0).SetBytes(call.Signature))
+		enc.appendNum(uint256.NewInt(0).SetBytes(call.Selector))
 	}
 
 	return enc.result, nil

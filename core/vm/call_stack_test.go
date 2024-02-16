@@ -40,9 +40,9 @@ func benchCallStackPrecompileN(b *testing.B, n int) {
 	var calls []*csCall
 	for i := 0; i < n; i++ {
 		calls = append(calls, &csCall{
-			Op:        OpCode(i),
-			Address:   common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
-			Signature: []byte{0xde, 0xad, 0xbe, 0xef},
+			Op:       OpCode(i),
+			Address:  common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
+			Selector: []byte{0xde, 0xad, 0xbe, 0xef},
 		})
 	}
 	callStack := newCallStack()
@@ -57,14 +57,14 @@ func TestCallStackPrecompile(t *testing.T) {
 	callStack := newCallStack()
 	callStack.calls = []*csCall{
 		{
-			Op:        OpCode(0x10),
-			Address:   common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
-			Signature: []byte{0xab, 0xcd, 0xef, 0x12},
+			Op:       OpCode(0x10),
+			Address:  common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
+			Selector: []byte{0xab, 0xcd, 0xef, 0x12},
 		},
 		{
-			Op:        OpCode(0x20),
-			Address:   common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
-			Signature: []byte{0xde, 0xad, 0xbe, 0xef},
+			Op:       OpCode(0x20),
+			Address:  common.HexToAddress("0xCdA8dcaEe60ce9d63165Ef025fD98CDA2B99B5B2"),
+			Selector: []byte{0xde, 0xad, 0xbe, 0xef},
 		},
 	}
 	b, err := callStack.Run(nil)
