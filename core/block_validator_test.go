@@ -106,7 +106,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		gspec = &Genesis{
 			Config:    &config,
 			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
-			Alloc: map[common.Address]GenesisAccount{
+			Alloc: map[common.Address]types.GenesisAccount{
 				addr: {Balance: big.NewInt(1)},
 			},
 			BaseFee:    big.NewInt(params.InitialBaseFee),
