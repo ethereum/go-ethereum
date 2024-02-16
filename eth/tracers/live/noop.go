@@ -23,8 +23,21 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer(_ json.RawMessage) (core.BlockchainLogger, error) {
-	return &noop{}, nil
+func newNoopTracer(_ json.RawMessage) (*live.LiveLogger, error) {
+	t := &noop{}
+	return &live.LiveLogger{
+		VMLogger:         t,
+		OnBlockchainInit: t.OnBlockchainInit,
+		OnBlockStart:     t.OnBlockStart,
+		OnBlockEnd:       t.OnBlockEnd,
+		OnSkippedBlock:   t.OnSkippedBlock,
+		OnGenesisBlock:   t.OnGenesisBlock,
+		OnBalanceChange:  t.OnBalanceChange,
+		OnNonceChange:    t.OnNonceChange,
+		OnCodeChange:     t.OnCodeChange,
+		OnStorageChange:  t.OnStorageChange,
+		OnLog:            t.OnLog,
+	}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.

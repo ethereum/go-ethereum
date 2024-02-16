@@ -191,7 +191,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 				utils.Fatalf("Failed to create tracer %q: %v", name, err)
 			}
 
-			cfg.Eth.VMTracer = t
+			cfg.Eth.VMTracer = t.VMLogger
+			cfg.Eth.LiveLogger = t
 		}
 	}
 

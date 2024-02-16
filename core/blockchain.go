@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/syncx"
@@ -285,7 +286,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
-	logger     BlockchainLogger
+	logger     *live.LiveLogger
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -297,15 +298,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	// Open trie database with provided config
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
-	var logger BlockchainLogger
-	if vmConfig.Tracer != nil {
-		l, ok := vmConfig.Tracer.(BlockchainLogger)
-		if ok {
-			logger = l
-		} else {
-			log.Warn("only extended tracers are supported for live mode")
-		}
-	}
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
@@ -338,7 +330,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
-		logger:        logger,
+		logger:        vmConfig.LiveLogger,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -465,7 +457,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 
-	if bc.logger != nil {
+	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
 			if err != nil {
@@ -516,7 +508,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
-	if bc.logger != nil {
+	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
 		bc.logger.OnBlockchainInit(chainConfig)
 	}
 	// Start tx indexer if it's enabled.
@@ -1778,7 +1770,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				return it.index, err
 			}
 			stats.processed++
-			if bc.logger != nil {
+			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
 				bc.logger.OnSkippedBlock(BlockEvent{
 					Block:     block,
 					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
@@ -1910,7 +1902,7 @@ type blockProcessingResult struct {
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
-	if bc.logger != nil {
+	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 		bc.logger.OnBlockStart(BlockEvent{
 			Block:     block,
@@ -1918,6 +1910,8 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 			Finalized: bc.CurrentFinalBlock(),
 			Safe:      bc.CurrentSafeBlock(),
 		})
+	}
+	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
