@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
@@ -153,7 +154,8 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Enables VM tracing
-	VMTracer vm.EVMLogger
+	VMTracer   vm.EVMLogger
+	LiveLogger *live.LiveLogger
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -77,7 +78,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
-	logger     StateLogger
+	logger     *live.LiveLogger
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
@@ -188,7 +189,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 // SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l StateLogger) {
+func (s *StateDB) SetLogger(l *live.LiveLogger) {
 	s.logger = l
 }
 
@@ -232,7 +233,7 @@ func (s *StateDB) AddLog(log *types.Log) {
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
 	log.Index = s.logSize
-	if s.logger != nil {
+	if s.logger != nil && s.logger.OnLog != nil {
 		s.logger.OnLog(log)
 	}
 	s.logs[s.thash] = append(s.logs[s.thash], log)
@@ -479,7 +480,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prev:        stateObject.selfDestructed,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
-	if s.logger != nil && prev.Sign() > 0 {
+	if s.logger != nil && s.logger.OnBalanceChange != nil && prev.Sign() > 0 {
 		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()
@@ -868,7 +869,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			obj.deleted = true
 
 			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); s.logger != nil && obj.selfDestructed && bal.Sign() != 0 {
+			if bal := obj.Balance(); s.logger != nil && s.logger.OnBalanceChange != nil && obj.selfDestructed && bal.Sign() != 0 {
 				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
