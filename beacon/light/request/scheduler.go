@@ -203,14 +203,15 @@ func (s *Scheduler) syncLoop() {
 		s.lock.Lock()
 		s.processRound()
 		s.lock.Unlock()
-	for triggered := false; !triggered; {
-		select {
-		case stop := <-s.stopCh:
-			close(stop)
-			return
-		case <-s.triggerCh:
-			triggered = true
-		case <-s.testWaitCh:
+		for triggered := false; !triggered; {
+			select {
+			case stop := <-s.stopCh:
+				close(stop)
+				return
+			case <-s.triggerCh:
+				triggered = true
+			case <-s.testWaitCh:
+			}
 		}
 	}
 }
