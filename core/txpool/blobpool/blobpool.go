@@ -1441,7 +1441,10 @@ func (p *BlobPool) drop() {
 
 // Pending retrieves all currently processable transactions, grouped by origin
 // account and sorted by nonce.
-func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+//
+// The transactions can also be pre-filtered by the dynamic fee components to
+// reduce allocations and load on downstream subsystems.
+func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
 	// The latter will be pretty much moot, but we've kept it to have symmetric
@@ -1459,6 +1462,25 @@ func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTr
 	for addr, txs := range p.index {
 		var lazies []*txpool.LazyTransaction
 		for _, tx := range txs {
+			// If transaction filtering was requested, discard badly priced ones
+			if minTip != nil && baseFee != nil {
+				if tx.execFeeCap.Lt(baseFee) {
+					break // basefee too low, cannot be included, discard rest of txs from the account
+				}
+				tip := new(uint256.Int).Sub(tx.execFeeCap, baseFee)
+				if tip.Gt(tx.execTipCap) {
+					tip = tx.execTipCap
+				}
+				if tip.Lt(minTip) {
+					break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
+				}
+			}
+			if blobFee != nil {
+				if tx.blobFeeCap.Lt(blobFee) {
+					break // blobfee too low, cannot be included, discard rest of txs from the account
+				}
+			}
+			// Transaction was accepted according to the filter, append to the pending list
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
 				Hash:      tx.hash,

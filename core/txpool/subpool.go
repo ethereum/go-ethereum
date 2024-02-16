@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/holiman/uint256"
 )
 
 // LazyTransaction contains a small subset of the transaction properties that is
@@ -114,7 +115,10 @@ type SubPool interface {
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.
-	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
+	//
+	// The transactions can also be pre-filtered by the dynamic fee components to
+	// reduce allocations and load on downstream subsystems.
+	Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*LazyTransaction
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions
