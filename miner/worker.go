@@ -1004,7 +1004,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	tip := w.tip
 	w.mu.RUnlock()
 
-	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynaimc fees
+	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
 	var baseFee *uint256.Int
 	if env.header.BaseFee != nil {
 		baseFee = uint256.MustFromBig(env.header.BaseFee)
