@@ -85,6 +85,7 @@ type TxContext struct {
 	GasPrice   *big.Int       // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
 	BlobHashes []common.Hash  // Provides information for BLOBHASH
 	BlobFeeCap *big.Int       // Is used to zero the blobbasefee if NoBaseFee is set
+	Is5806     bool           // Indicates if this is an eip-5806 transaction
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
