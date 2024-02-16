@@ -594,6 +594,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 // func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, lpv3) }
 // func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, lpv4) }
 
+// nolint:unused
 func testTransactionStatus(t *testing.T, protocol int) {
 	netconfig := testnetConfig{
 		protocol:  protocol,

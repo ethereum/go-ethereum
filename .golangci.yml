@@ -19,6 +19,7 @@ linters:
     - ineffassign
     - misspell
     - unconvert
+    - typecheck
     - unused
     - staticcheck
     - bidichk
