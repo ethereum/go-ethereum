@@ -289,7 +289,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -345,7 +345,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -391,7 +391,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -449,7 +449,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -497,7 +497,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -564,7 +564,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -610,7 +610,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
@@ -649,7 +649,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
@@ -696,7 +696,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -746,7 +746,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -821,7 +821,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -915,7 +915,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/common"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1105,7 +1105,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1240,7 +1240,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 
@@ -1382,7 +1382,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1448,7 +1448,7 @@ var bindTests = []struct {
 
 		"github.com/ethereum/go-ethereum/accounts/abi/bind"
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ethereum/go-ethereum/core/types"
 		"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1537,7 +1537,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind"
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ethereum/go-ethereum/core/types"
 		`,
 		`
 		// Initialize test accounts
@@ -1600,7 +1600,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind"
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
-		"github.com/ethereum/go-ethereum/core"
+		"github.com/ethereum/go-ethereum/core/types"
         `,
 		`
 		key, _ := crypto.GenerateKey()
@@ -1661,7 +1661,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 		`,
 		`
@@ -1722,7 +1722,7 @@ var bindTests = []struct {
 	
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 	   `,
 		`
@@ -1810,7 +1810,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
 	   `,
@@ -1881,7 +1881,7 @@ var bindTests = []struct {
 	
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
 	   `,
@@ -1934,7 +1934,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,
@@ -1983,7 +1983,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,
@@ -2024,7 +2024,7 @@ var bindTests = []struct {
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-			"github.com/ethereum/go-ethereum/core"
+			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
 		`,

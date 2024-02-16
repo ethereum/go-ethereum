@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -105,7 +106,7 @@ func getChain() *core.BlockChain {
 	}
 	for i := 0; i < 1000; i++ {
 		binary.LittleEndian.PutUint64(a, uint64(i+0xff))
-		acc := types.GenesisAccount{Balance: big.NewInt(int64(i))}
+		acc := types.Account{Balance: big.NewInt(int64(i))}
 		if i%2 == 1 {
 			acc.Storage = storage
 		}

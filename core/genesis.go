@@ -46,7 +46,7 @@ import (
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
 // Deprecated: use types.GenesisAccount instead.
-type GenesisAccount = types.GenesisAccount
+type GenesisAccount = types.Account
 
 // Deprecated: use types.GenesisAlloc instead.
 type GenesisAlloc = types.GenesisAlloc
@@ -190,7 +190,7 @@ type genesisSpecMarshaling struct {
 	GasUsed       math.HexOrDecimal64
 	Number        math.HexOrDecimal64
 	Difficulty    *math.HexOrDecimal256
-	Alloc         map[common.UnprefixedAddress]types.GenesisAccount
+	Alloc         map[common.UnprefixedAddress]types.Account
 	BaseFee       *math.HexOrDecimal256
 	ExcessBlobGas *math.HexOrDecimal64
 	BlobGasUsed   *math.HexOrDecimal64
@@ -546,7 +546,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
-		Alloc: map[common.Address]types.GenesisAccount{
+		Alloc: map[common.Address]types.Account{
 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
 			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
@@ -559,7 +559,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		},
 	}
 	if faucet != nil {
-		genesis.Alloc[*faucet] = types.GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
+		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 	}
 	return genesis
 }
@@ -582,7 +582,7 @@ func decodePrealloc(data string) types.GenesisAlloc {
 	}
 	ga := make(types.GenesisAlloc, len(p))
 	for _, account := range p {
-		acc := types.GenesisAccount{Balance: account.Balance}
+		acc := types.Account{Balance: account.Balance}
 		if account.Misc != nil {
 			acc.Nonce = account.Misc.Nonce
 			acc.Code = account.Misc.Code

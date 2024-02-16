@@ -69,13 +69,13 @@ func TestGeneratePOSChain(t *testing.T) {
 	storage[common.Hash{0x01}] = common.Hash{0x01}
 	storage[common.Hash{0x02}] = common.Hash{0x02}
 	storage[common.Hash{0x03}] = common.HexToHash("0303")
-	gspec.Alloc[aa] = types.GenesisAccount{
+	gspec.Alloc[aa] = types.Account{
 		Balance: common.Big1,
 		Nonce:   1,
 		Storage: storage,
 		Code:    common.Hex2Bytes("6042"),
 	}
-	gspec.Alloc[bb] = types.GenesisAccount{
+	gspec.Alloc[bb] = types.Account{
 		Balance: common.Big2,
 		Nonce:   1,
 		Storage: storage,

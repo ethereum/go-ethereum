@@ -28,18 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-//go:generate go run github.com/fjl/gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+//go:generate go run github.com/fjl/gencodec -type Account -field-override accountMarshaling -out gen_account.go
 
-// GenesisAccount is an account in the state of the genesis block.
-type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+// Account represents an Ethereum account and its attached data.
+// This type is used to specify accounts in the genesis block state, and
+// is also useful for JSON encoding/decoding of accounts.
+type Account struct {
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
+
+	// used in tests
+	PrivateKey []byte `json:"secretKey,omitempty"`
 }
 
-type genesisAccountMarshaling struct {
+type accountMarshaling struct {
 	Code       hexutil.Bytes
 	Balance    *math.HexOrDecimal256
 	Nonce      math.HexOrDecimal64
@@ -67,11 +71,11 @@ func (h storageJSON) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
-// GenesisAlloc specifies the initial of the genesis block.
-type GenesisAlloc map[common.Address]GenesisAccount
+// GenesisAlloc specifies the initial state of a genesis block.
+type GenesisAlloc map[common.Address]Account
 
 func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
-	m := make(map[common.UnprefixedAddress]GenesisAccount)
+	m := make(map[common.UnprefixedAddress]Account)
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
