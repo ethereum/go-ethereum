@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // pendingTTL indicates the period of time a generated pending block should
@@ -31,24 +30,24 @@ const pendingTTL = 2 * time.Second
 
 // pending wraps a pending block with additional metadata.
 type pending struct {
-	created time.Time
-	parent  *types.Header
-	result  *newPayloadResult
-	lock    sync.Mutex
+	created    time.Time
+	parentHash common.Hash
+	result     *newPayloadResult
+	lock       sync.Mutex
 }
 
 // resolve retrieves the cached pending result if it's available. Nothing will be
-// returned if the parent/coinbase is not matched or the result is already too old.
+// returned if the parentHash/coinbase is not matched or the result is already too old.
 //
 // Note, don't modify the returned payload result.
-func (p *pending) resolve(parent *types.Header, coinbase common.Address) *newPayloadResult {
+func (p *pending) resolve(parentHash common.Hash, coinbase common.Address) *newPayloadResult {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if p.result == nil || p.parent == nil {
+	if p.result == nil {
 		return nil
 	}
-	if parent.Hash() != p.parent.Hash() {
+	if parentHash != p.parentHash {
 		return nil
 	}
 	if p.result.block.Coinbase() != coinbase {
@@ -61,11 +60,11 @@ func (p *pending) resolve(parent *types.Header, coinbase common.Address) *newPay
 }
 
 // update refreshes the cached pending block with newly created one.
-func (p *pending) update(parent *types.Header, result *newPayloadResult) {
+func (p *pending) update(parent common.Hash, result *newPayloadResult) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.parent = parent
+	p.parentHash = parent
 	p.result = result
 	p.created = time.Now()
 }

@@ -143,7 +143,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 	miner.confMu.RUnlock()
 
 	header := miner.chain.CurrentHeader()
-	if cached := miner.pending.resolve(header, coinbase); cached != nil {
+	if cached := miner.pending.resolve(header.Hash(), coinbase); cached != nil {
 		return cached
 	}
 	var (
@@ -166,6 +166,6 @@ func (miner *Miner) getPending() *newPayloadResult {
 	if ret.err != nil {
 		return nil
 	}
-	miner.pending.update(header, ret)
+	miner.pending.update(header.Hash(), ret)
 	return ret
 }
