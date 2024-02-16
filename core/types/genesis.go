@@ -67,7 +67,7 @@ func (h storageJSON) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
-// types.GenesisAlloc specifies the initial state that is part of the genesis block.
+// GenesisAlloc specifies the initial of the genesis block.
 type GenesisAlloc map[common.Address]GenesisAccount
 
 func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
