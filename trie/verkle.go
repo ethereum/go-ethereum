@@ -213,27 +213,6 @@ func (trie *VerkleTrie) UpdateStorage(address common.Address, key, value []byte)
 }
 
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
-	var (
-		err    error
-		values = make([][]byte, verkle.NodeWidth)
-		stem   = t.pointCache.GetTreeKeyVersionCached(addr[:])
-	)
-
-	for i := 0; i < verkle.NodeWidth; i++ {
-		values[i] = zero[:]
-	}
-
-	switch root := t.root.(type) {
-	case *verkle.InternalNode:
-		err = root.InsertValuesAtStem(stem, values, t.FlatdbNodeResolver)
-	default:
-		return errInvalidRootType
-	}
-	if err != nil {
-		return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
-	}
-	// TODO figure out if the code size needs to be updated, too
-
 	return nil
 }
 

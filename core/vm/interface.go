@@ -57,6 +57,8 @@ type StateDB interface {
 
 	Selfdestruct6780(common.Address)
 
+	WasCreatedInCurrentTx(common.Address) bool
+
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for self-destructed accounts.
 	Exist(common.Address) bool

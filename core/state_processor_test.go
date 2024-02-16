@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 
 	//"fmt"
 	"math/big"
@@ -896,7 +897,6 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 			tx, _ := types.SignTx(types.NewTransaction(2, extCodeHashContractAddr, big.NewInt(0), 100_000, big.NewInt(875000000), nil), signer, testKey)
 			gen.AddTx(tx)
 		}
-
 	})
 
 	contractKeccakTreeKey := utils.GetTreeKeyCodeKeccak(dummyContractAddr[:])
@@ -1020,5 +1020,491 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	}
 	if balanceStateDiff.NewValue != nil {
 		t.Fatalf("invalid new value")
+	}
+}
+
+func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	genesis := gspec.MustCommit(bcdb)
+	gspec.MustCommit(gendb)
+
+	// The goal of this test is to test SELFDESTRUCT that happens in a contract execution which is created
+	// in a previous transaction.
+
+	selfDestructContract := []byte{
+		0x60, 22, // PUSH1 22
+		0x60, 12, // PUSH1 12
+		0x60, 0x00, // PUSH1 0
+		0x39, // CODECOPY
+
+		0x60, 22, // PUSH1 22
+		0x60, 0x00, // PUSH1 0
+		0xF3, // RETURN
+
+		// Deployed code
+		0x73,                                                                                                                   // PUSH20
+		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
+		0xFF, // SELFDESTRUCT
+	}
+	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 2, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+
+		if i == 0 {
+			// Create selfdestruct contract, sending 42 wei.
+			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+			gen.AddTx(tx)
+		} else {
+			// Call it.
+			tx, _ := types.SignTx(types.NewTransaction(1, selfDestructContractAddr, big.NewInt(0), 100_000, big.NewInt(875000000), nil), signer, testKey)
+			gen.AddTx(tx)
+		}
+	})
+
+	var zero [32]byte
+	{ // Check self-destructed contract in the witness
+		selfDestructContractTreeKey := utils.GetTreeKeyCodeKeccak(selfDestructContractAddr[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[1] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructContractTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[1][stateDiffIdx].SuffixDiffs[1]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+
+		// The original balance was 42.
+		var fourtyTwo [32]byte
+		fourtyTwo[0] = 42
+		if *balanceStateDiff.CurrentValue != fourtyTwo {
+			t.Fatalf("the pre-state balance before self-destruct must be 42")
+		}
+
+		// The new balance must be 0.
+		if *balanceStateDiff.NewValue != zero {
+			t.Fatalf("the post-state balance after self-destruct must be 0")
+		}
+	}
+	{ // Check self-destructed target in the witness.
+		selfDestructTargetTreeKey := utils.GetTreeKeyCodeKeccak(account2[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[1] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructTargetTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[1][stateDiffIdx].SuffixDiffs[0]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+		if balanceStateDiff.CurrentValue == nil {
+			t.Fatalf("codeHash.CurrentValue must not be empty")
+		}
+		if balanceStateDiff.NewValue == nil {
+			t.Fatalf("codeHash.NewValue must not be empty")
+		}
+		preStateBalance := binary.LittleEndian.Uint64(balanceStateDiff.CurrentValue[:])
+		postStateBalance := binary.LittleEndian.Uint64(balanceStateDiff.NewValue[:])
+		if postStateBalance-preStateBalance != 42 {
+			t.Fatalf("the post-state balance after self-destruct must be 42")
+		}
+	}
+}
+
+func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	genesis := gspec.MustCommit(bcdb)
+	gspec.MustCommit(gendb)
+
+	// The goal of this test is to test SELFDESTRUCT that happens in a contract execution which is created
+	// in **the same** transaction sending the remaining balance to an external (i.e: not itself) account.
+
+	selfDestructContract := []byte{
+		0x73,                                                                                                                   // PUSH20
+		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
+		0xFF, // SELFDESTRUCT
+	}
+	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 1, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+		gen.AddTx(tx)
+	})
+
+	{ // Check self-destructed contract in the witness
+		selfDestructContractTreeKey := utils.GetTreeKeyCodeKeccak(selfDestructContractAddr[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[0] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructContractTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[0][stateDiffIdx].SuffixDiffs[1]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+
+		if balanceStateDiff.CurrentValue != nil {
+			t.Fatalf("the pre-state balance before must be nil, since the contract didn't exist")
+		}
+
+		if balanceStateDiff.NewValue != nil {
+			t.Fatalf("the post-state balance after self-destruct must be nil since the contract shouldn't be created at all")
+		}
+	}
+	{ // Check self-destructed target in the witness.
+		selfDestructTargetTreeKey := utils.GetTreeKeyCodeKeccak(account2[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[0] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructTargetTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[0][stateDiffIdx].SuffixDiffs[0]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+		if balanceStateDiff.CurrentValue == nil {
+			t.Fatalf("codeHash.CurrentValue must not be empty")
+		}
+		if balanceStateDiff.NewValue == nil {
+			t.Fatalf("codeHash.NewValue must not be empty")
+		}
+		preStateBalance := binary.LittleEndian.Uint64(balanceStateDiff.CurrentValue[:])
+		postStateBalance := binary.LittleEndian.Uint64(balanceStateDiff.NewValue[:])
+		if postStateBalance-preStateBalance != 42 {
+			t.Fatalf("the post-state balance after self-destruct must be 42")
+		}
+	}
+}
+
+func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	genesis := gspec.MustCommit(bcdb)
+	gspec.MustCommit(gendb)
+
+	// The goal of this test is to test SELFDESTRUCT that happens in a contract execution which is created
+	// in a *previous* transaction sending the remaining balance to itself.
+
+	selfDestructContract := []byte{
+		0x60, 22, // PUSH1 22
+		0x60, 12, // PUSH1 12
+		0x60, 0x00, // PUSH1 0
+		0x39, // CODECOPY
+
+		0x60, 22, // PUSH1 22
+		0x60, 0x00, // PUSH1 0
+		0xF3, // RETURN
+
+		// Deployed code
+		0x73,                                                                                                                   // PUSH20
+		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
+		0xFF, // SELFDESTRUCT
+	}
+	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 2, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		if i == 0 {
+			// Create selfdestruct contract, sending 42 wei.
+			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+			gen.AddTx(tx)
+		} else {
+			// Call it.
+			tx, _ := types.SignTx(types.NewTransaction(1, selfDestructContractAddr, big.NewInt(0), 100_000, big.NewInt(875000000), nil), signer, testKey)
+			gen.AddTx(tx)
+		}
+	})
+
+	{
+		// Check self-destructed contract in the witness.
+		// The way 6780 is implemented today, it always SubBalance from the self-destructed contract, and AddBalance
+		// to the beneficiary. In this case both addresses are the same, thus this might be optimizable from a gas
+		// perspective. But until that happens, we need to honor this "balance reading" adding it to the witness.
+
+		selfDestructContractTreeKey := utils.GetTreeKeyCodeKeccak(selfDestructContractAddr[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[1] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructContractTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[1][stateDiffIdx].SuffixDiffs[1]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+
+		// The original balance was 42.
+		var fourtyTwo [32]byte
+		fourtyTwo[0] = 42
+		if *balanceStateDiff.CurrentValue != fourtyTwo {
+			t.Fatalf("the pre-state balance before self-destruct must be 42")
+		}
+
+		// Note that the SubBalance+AddBalance net effect is a 0 change, so NewValue
+		// must be nil.
+		if balanceStateDiff.NewValue != nil {
+			t.Fatalf("the post-state balance after self-destruct must be empty")
+		}
+	}
+}
+
+func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:                       big.NewInt(69421),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			Ethash:                        new(params.EthashConfig),
+			ShanghaiTime:                  u64(0),
+			PragueTime:                    u64(0),
+			TerminalTotalDifficulty:       common.Big0,
+			TerminalTotalDifficultyPassed: true,
+			ProofInBlocks:                 true,
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
+		gendb      = rawdb.NewMemoryDatabase() // Database for the block-generation code, they must be separate as they are path-based.
+		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				coinbase: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account1: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+				account2: GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   3,
+				},
+			},
+		}
+	)
+	genesis := gspec.MustCommit(bcdb)
+	gspec.MustCommit(gendb)
+
+	// The goal of this test is to test SELFDESTRUCT that happens in a contract execution which is created
+	// in **the same** transaction sending the remaining balance to itself.
+
+	selfDestructContract := []byte{
+		0x73,                                                                                                                   // PUSH20
+		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
+		0xFF, // SELFDESTRUCT
+	}
+	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
+	_, _, _, statediff := GenerateVerkleChain(gspec.Config, genesis, beacon.New(ethash.NewFaker()), gendb, 1, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+		gen.AddTx(tx)
+	})
+
+	{ // Check self-destructed contract in the witness
+		selfDestructContractTreeKey := utils.GetTreeKeyCodeKeccak(selfDestructContractAddr[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range statediff[0] {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructContractTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatalf("no state diff found for stem")
+		}
+
+		balanceStateDiff := statediff[0][stateDiffIdx].SuffixDiffs[1]
+		if balanceStateDiff.Suffix != utils.BalanceLeafKey {
+			t.Fatalf("balance invalid suffix")
+		}
+
+		if balanceStateDiff.CurrentValue != nil {
+			t.Fatalf("the pre-state balance before must be nil, since the contract didn't exist")
+		}
+
+		if balanceStateDiff.NewValue != nil {
+			t.Fatalf("the post-state balance after self-destruct must be nil since the contract shouldn't be created at all")
+		}
 	}
 }

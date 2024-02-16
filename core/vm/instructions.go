@@ -943,6 +943,22 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		tracer.CaptureEnter(SELFDESTRUCT, scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		tracer.CaptureExit([]byte{}, 0, nil)
 	}
+	if interpreter.evm.chainRules.IsPrague {
+		contractAddr := scope.Contract.Address()
+		beneficiaryAddr := beneficiary.Bytes20()
+		// If the beneficiary isn't the contract, we need to touch the beneficiary's balance.
+		// If the beneficiary is the contract itself, there're two possibilities:
+		// 1. The contract was created in the same transaction: the balance is already touched (no need to touch again)
+		// 2. The contract wasn't created in the same transaction: there's no net change in balance,
+		//    and SELFDESTRUCT will perform no action on the account header. (we touch since we did SubBalance+AddBalance above)
+		if contractAddr != beneficiaryAddr || interpreter.evm.StateDB.WasCreatedInCurrentTx(contractAddr) {
+			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(beneficiaryAddr[:], uint256.Int{}, trieUtils.BalanceLeafKey)
+			if !scope.Contract.UseGas(statelessGas) {
+				scope.Contract.Gas = 0
+				return nil, ErrOutOfGas
+			}
+		}
+	}
 	return nil, errStopToken
 }
 
