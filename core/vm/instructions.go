@@ -578,6 +578,11 @@ func opGas(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 }
 
 func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.evm.TxContext.Is5806 {
+		if scope.Contract.CodeHash == types.EmptyCodeHash || scope.Contract.CodeHash == (common.Hash{}) {
+			return nil, ErrEip5806Write
+		}
+	}
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
