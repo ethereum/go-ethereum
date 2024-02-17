@@ -1301,42 +1301,49 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	capacity := datacap / params.BlobTxBlobGasPerBlob
 
 	var (
-		keys  = make([]*ecdsa.PrivateKey, capacity)
-		addrs = make([]common.Address, capacity)
+		basefee    = uint64(1050)
+		blobfee    = uint64(105)
+		signer     = types.LatestSigner(testChainConfig)
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		chain      = &testBlockChain{
+			config:  testChainConfig,
+			basefee: uint256.NewInt(basefee),
+			blobfee: uint256.NewInt(blobfee),
+			statedb: statedb,
+		}
+		pool = New(Config{Datadir: ""}, chain)
 	)
-	for i := 0; i < int(capacity); i++ {
-		keys[i], _ = crypto.GenerateKey()
-		addrs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
-	}
-	// Create the empty blob pool, initialized with the accounts
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	for _, addr := range addrs {
-		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000))
-	}
-	statedb.Commit(0, true)
 
-	chain := &testBlockChain{
-		config:  testChainConfig,
-		basefee: uint256.NewInt(1050),
-		blobfee: uint256.NewInt(105),
-		statedb: statedb,
-	}
-	pool := New(Config{Datadir: ""}, chain)
 	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
 	}
-	defer pool.Close()
-
 	// Fill the pool up with one random transaction from each account with the
 	// same price and everything to maximize the worst case scenario
-	for _, key := range keys {
-		pool.add(makeTx(0, 10, chain.basefee.Uint64()+10, chain.blobfee.Uint64(), key))
+	for i := 0; i < int(capacity); i++ {
+		blobtx := makeUnsignedTx(0, 10, basefee+10, blobfee)
+		blobtx.R = uint256.NewInt(1)
+		blobtx.S = uint256.NewInt(uint64(100 + i))
+		blobtx.V = uint256.NewInt(0)
+		tx := types.NewTx(blobtx)
+		addr, err := types.Sender(signer, tx)
+		if err != nil {
+			b.Fatal(err)
+		}
+		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000))
+		pool.add(tx)
 	}
+	statedb.Commit(0, true)
+	defer pool.Close()
+
 	// Benchmark assembling the pending
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		pool.Pending(uint256.NewInt(1), chain.basefee, chain.blobfee)
+		p := pool.Pending(uint256.NewInt(1), chain.basefee, chain.blobfee)
+		if len(p) != int(capacity) {
+			b.Fatalf("have %d want %d", len(p), capacity)
+
+		}
 	}
 }
