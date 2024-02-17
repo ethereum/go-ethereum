@@ -1456,13 +1456,14 @@ func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *u
 	pendwaitHist.Update(time.Since(pendStart).Nanoseconds())
 	defer p.lock.RUnlock()
 
-	defer func(start time.Time) {
-		pendtimeHist.Update(time.Since(start).Nanoseconds())
-	}(time.Now())
+	execStart := time.Now()
+	defer func() {
+		pendtimeHist.Update(time.Since(execStart).Nanoseconds())
+	}()
 
-	pending := make(map[common.Address][]*txpool.LazyTransaction)
+	pending := make(map[common.Address][]*txpool.LazyTransaction, len(p.index))
 	for addr, txs := range p.index {
-		var lazies []*txpool.LazyTransaction
+		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
 			// If transaction filtering was requested, discard badly priced ones
 			if minTip != nil && baseFee != nil {
@@ -1486,9 +1487,9 @@ func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *u
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
 				Hash:      tx.hash,
-				Time:      time.Now(), // TODO(karalabe): Maybe save these and use that?
-				GasFeeCap: tx.execFeeCap.ToBig(),
-				GasTipCap: tx.execTipCap.ToBig(),
+				Time:      execStart, // TODO(karalabe): Maybe save these and use that?
+				GasFeeCap: tx.execFeeCap,
+				GasTipCap: tx.execTipCap,
 				Gas:       tx.execGas,
 				BlobGas:   tx.blobGas,
 			})

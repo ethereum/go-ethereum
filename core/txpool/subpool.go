@@ -35,9 +35,9 @@ type LazyTransaction struct {
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
-	Time      time.Time // Time when the transaction was first seen
-	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
-	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
+	Time      time.Time    // Time when the transaction was first seen
+	GasFeeCap *uint256.Int // Maximum fee per gas the transaction may consume
+	GasTipCap *uint256.Int // Maximum miner tip per gas the transaction can pay
 
 	Gas     uint64 // Amount of gas required by the transaction
 	BlobGas uint64 // Amount of blob gas required by the transaction
