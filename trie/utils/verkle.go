@@ -305,16 +305,17 @@ func StorageSlotKeyWithEvaluatedAddress(evaluated *verkle.Point, storageKey []by
 	return GetTreeKeyWithEvaluatedAddress(evaluated, treeIndex, subIndex)
 }
 
+// TODO: We can remove this method once https://github.com/ethereum/go-verkle/pull/428
+// TODO is merged.
+// TODO: we would then be able to call `verkle.MapToScalarFieldBytes`
+func MapToScalarFieldBytes(point *verkle.Point) [32]byte {
+	var hashedPoint verkle.Fr
+	point.MapToScalarField(&hashedPoint)
+	return hashedPoint.BytesLE()
+}
+
 func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
-	// The output of Byte() is big endian for banderwagon. This
-	// introduces an imbalance in the tree, because hashes are
-	// elements of a 253-bit field. This means more than half the
-	// tree would be empty. To avoid this problem, use a little
-	// endian commitment and chop the MSB.
-	bytes := evaluated.Bytes()
-	for i := 0; i < 16; i++ {
-		bytes[31-i], bytes[i] = bytes[i], bytes[31-i]
-	}
+	bytes := MapToScalarFieldBytes(evaluated)
 	bytes[31] = suffix
 	return bytes[:]
 }
