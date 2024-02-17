@@ -50,7 +50,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc:  core.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
+			Alloc:  types.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
 		}
 		signer = types.LatestSigner(genesis.Config)
 	)

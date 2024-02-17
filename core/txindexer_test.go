@@ -39,7 +39,7 @@ func TestTxIndexer(t *testing.T) {
 
 		gspec = &Genesis{
 			Config:  params.TestChainConfig,
-			Alloc:   GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+			Alloc:   types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		engine    = ethash.NewFaker()
