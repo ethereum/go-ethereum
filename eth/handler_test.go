@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -92,7 +93,7 @@ func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []erro
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
