@@ -92,7 +92,7 @@ func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []erro
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -104,21 +104,63 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 	for _, batch := range batches {
 		sort.Sort(types.TxByNonce(batch))
 	}
-	pending := make(map[common.Address][]*txpool.LazyTransaction)
+	var (
+		tails   = make(map[common.Address][]*txpool.LazyTransaction)
+		heads   txpool.TipList
+		baseFee = new(uint256.Int)
+	)
+
+	if filter.BaseFee != nil {
+		baseFee = filter.BaseFee
+	}
+
 	for addr, batch := range batches {
+		var tail []*txpool.LazyTransaction
+		for i, tx := range batch {
+			gasTipCap := uint256.MustFromBig(tx.GasTipCap())
+			gasFeeCap := uint256.MustFromBig(tx.GasFeeCap())
+			tip := new(uint256.Int).Sub(gasFeeCap, baseFee)
+			if tip.Gt(gasTipCap) {
+				tip = gasTipCap
+			}
+			ltx := &txpool.LazyTransaction{
+				Hash:    tx.Hash(),
+				Tx:      tx,
+				Time:    tx.Time(),
+				Fees:    *tip,
+				Gas:     tx.Gas(),
+				BlobGas: tx.BlobGas(),
+			}
+			tail = append(tail, ltx)
+			if i == 0 {
+				heads = append(heads, &txpool.TxTips{
+					From: addr,
+					Tips: *tip,
+					Time: ltx.Time.UnixNano(),
+				})
+			}
+		}
+		tails[addr] = tail
+	}
+	return txpool.NewPendingSet(heads, tails)
+}
+
+func (p *testTxPool) PendingHashes(filter txpool.PendingFilter) []common.Hash {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	batches := make(map[common.Address][]*types.Transaction)
+	for _, tx := range p.pool {
+		from, _ := types.Sender(types.HomesteadSigner{}, tx)
+		batches[from] = append(batches[from], tx)
+	}
+	var hashes []common.Hash
+	for _, batch := range batches {
+		sort.Sort(types.TxByNonce(batch))
 		for _, tx := range batch {
-			pending[addr] = append(pending[addr], &txpool.LazyTransaction{
-				Hash:      tx.Hash(),
-				Tx:        tx,
-				Time:      tx.Time(),
-				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
-				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
-				Gas:       tx.Gas(),
-				BlobGas:   tx.BlobGas(),
-			})
+			hashes = append(hashes, tx.Hash())
 		}
 	}
-	return pending
+	return hashes
 }
 
 // SubscribeTransactions should return an event subscription of NewTxsEvent and

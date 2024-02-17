@@ -1356,15 +1356,22 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	// Benchmark assembling the pending
 	b.ResetTimer()
 	b.ReportAllocs()
-
+	var p txpool.Pending
 	for i := 0; i < b.N; i++ {
-		p := pool.Pending(txpool.PendingFilter{
+		p = pool.Pending(txpool.PendingFilter{
 			MinTip:  uint256.NewInt(1),
 			BaseFee: chain.basefee,
 			BlobFee: chain.blobfee,
 		})
-		if len(p) != int(capacity) {
-			b.Fatalf("have %d want %d", len(p), capacity)
-		}
+	}
+	b.StopTimer()
+
+	count := 0
+	for ltx, _ := p.Peek(); ltx != nil; ltx, _ = p.Peek() {
+		p.Shift()
+		count++
+	}
+	if count != int(capacity) {
+		b.Fatalf("have %d want %d", count, capacity)
 	}
 }

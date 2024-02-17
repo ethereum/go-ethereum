@@ -271,7 +271,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 	return receipt, err
 }
 
-func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs txpool.Pending, interrupt *atomic.Int32) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -298,7 +298,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// Retrieve the next transaction and abort if all done.
 		var (
 			ltx *txpool.LazyTransaction
-			txs *transactionsByPriceAndNonce
+			txs txpool.Pending
 		)
 		pltx, ptip := plainTxs.Peek()
 		bltx, btip := blobTxs.Peek()
@@ -315,6 +315,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 				txs, ltx = plainTxs, pltx
 			}
 		}
+
 		if ltx == nil {
 			break
 		}
@@ -376,53 +377,61 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 // be customized with the plugin in the future.
 func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) error {
 	miner.confMu.RLock()
-	tip := miner.config.GasPrice
+	tip := uint256.MustFromBig(miner.config.GasPrice)
 	miner.confMu.RUnlock()
 
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
-	filter := txpool.PendingFilter{
-		MinTip: uint256.MustFromBig(tip),
-	}
+	var (
+		baseFee *uint256.Int
+		blobFee *uint256.Int
+	)
 	if env.header.BaseFee != nil {
-		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
+		baseFee = uint256.MustFromBig(env.header.BaseFee)
 	}
 	if env.header.ExcessBlobGas != nil {
-		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
+		blobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
 	}
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
-	pendingPlainTxs := miner.txpool.Pending(filter)
+	localPlainTxs := miner.txpool.Pending(txpool.PendingFilter{
+		MinTip:       nil, // no mintip for locals
+		BaseFee:      baseFee,
+		BlobFee:      blobFee,
+		OnlyPlainTxs: true,
+		OnlyBlobTxs:  false,
+		OnlyLocals:   true,
+	})
+	localBlobTxs := miner.txpool.Pending(txpool.PendingFilter{
+		MinTip:       nil, // no mintip for locals
+		BaseFee:      baseFee,
+		BlobFee:      blobFee,
+		OnlyPlainTxs: false,
+		OnlyBlobTxs:  true,
+		OnlyLocals:   true,
+	})
 
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
-	pendingBlobTxs := miner.txpool.Pending(filter)
-
-	// Split the pending transactions into locals and remotes.
-	localPlainTxs, remotePlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
-	localBlobTxs, remoteBlobTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
-
-	for _, account := range miner.txpool.Locals() {
-		if txs := remotePlainTxs[account]; len(txs) > 0 {
-			delete(remotePlainTxs, account)
-			localPlainTxs[account] = txs
-		}
-		if txs := remoteBlobTxs[account]; len(txs) > 0 {
-			delete(remoteBlobTxs, account)
-			localBlobTxs[account] = txs
-		}
-	}
+	remotePlainTxs := miner.txpool.Pending(txpool.PendingFilter{
+		MinTip:       tip,
+		BaseFee:      baseFee,
+		BlobFee:      blobFee,
+		OnlyPlainTxs: true,
+		OnlyBlobTxs:  false,
+		OnlyLocals:   false,
+	})
+	remoteBlobTxs := miner.txpool.Pending(txpool.PendingFilter{
+		MinTip:       tip,
+		BaseFee:      baseFee,
+		BlobFee:      blobFee,
+		OnlyPlainTxs: false,
+		OnlyBlobTxs:  true,
+		OnlyLocals:   false,
+	})
 	// Fill the block with all available pending transactions.
-	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
-		plainTxs := newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
-		blobTxs := newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
-
-		if err := miner.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+	if !localPlainTxs.Empty() || !localBlobTxs.Empty() {
+		if err := miner.commitTransactions(env, localPlainTxs, localBlobTxs, interrupt); err != nil {
 			return err
 		}
 	}
-	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
-		plainTxs := newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
-		blobTxs := newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
-
-		if err := miner.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+	if !remotePlainTxs.Empty() || !remoteBlobTxs.Empty() {
+		if err := miner.commitTransactions(env, remotePlainTxs, remoteBlobTxs, interrupt); err != nil {
 			return err
 		}
 	}

@@ -1446,11 +1446,15 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (p *BlobPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
 	if filter.OnlyPlainTxs {
-		return nil
+		return txpool.EmptyPending
+	}
+	if filter.OnlyLocals {
+		// There is no notion of local accounts in the blob pool.
+		return txpool.EmptyPending
 	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
@@ -1466,19 +1470,31 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 		pendtimeHist.Update(time.Since(execStart).Nanoseconds())
 	}()
 
-	pending := make(map[common.Address][]*txpool.LazyTransaction, len(p.index))
+	var (
+		baseFee = new(uint256.Int)
+		heads   = make(txpool.TipList, 0, len(p.index))
+		tails   = make(map[common.Address][]*txpool.LazyTransaction, len(p.index))
+	)
+	if filter.BaseFee != nil {
+		baseFee = filter.BaseFee
+	}
 	for addr, txs := range p.index {
-		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
-		for _, tx := range txs {
-			// If transaction filtering was requested, discard badly priced ones
-			if filter.MinTip != nil && filter.BaseFee != nil {
+		var (
+			tail  []*txpool.LazyTransaction
+			first = true
+		)
+		for i, tx := range txs {
+			var tip *uint256.Int
+			if filter.BaseFee != nil {
 				if tx.execFeeCap.Lt(filter.BaseFee) {
 					break // basefee too low, cannot be included, discard rest of txs from the account
 				}
-				tip := new(uint256.Int).Sub(tx.execFeeCap, filter.BaseFee)
-				if tip.Gt(tx.execTipCap) {
-					tip = tx.execTipCap
-				}
+			}
+			tip = new(uint256.Int).Sub(tx.execFeeCap, baseFee)
+			if tip.Gt(tx.execTipCap) {
+				tip = tx.execTipCap
+			}
+			if filter.MinTip != nil {
 				if tip.Lt(filter.MinTip) {
 					break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
 				}
@@ -1488,22 +1504,49 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 					break // blobfee too low, cannot be included, discard rest of txs from the account
 				}
 			}
-			// Transaction was accepted according to the filter, append to the pending list
-			lazies = append(lazies, &txpool.LazyTransaction{
-				Pool:      p,
-				Hash:      tx.hash,
-				Time:      execStart, // TODO(karalabe): Maybe save these and use that?
-				GasFeeCap: tx.execFeeCap,
-				GasTipCap: tx.execTipCap,
-				Gas:       tx.execGas,
-				BlobGas:   tx.blobGas,
-			})
+			// Transaction was accepted according to the filter, append to the pending set
+			lazyTx := &txpool.LazyTransaction{
+				Pool:    p,
+				Hash:    tx.hash,
+				Time:    execStart,
+				Fees:    *tip,
+				Gas:     tx.execGas,
+				BlobGas: tx.blobGas,
+			}
+			if first {
+				first = false
+				tail = make([]*txpool.LazyTransaction, 0, len(txs)-i)
+				heads = append(heads, &txpool.TxTips{
+					From: addr,
+					Tips: lazyTx.Fees,
+					Time: lazyTx.Time.UnixNano(),
+				})
+			}
+			tail = append(tail, lazyTx)
 		}
-		if len(lazies) > 0 {
-			pending[addr] = lazies
+		if len(tail) > 0 {
+			tails[addr] = tail
 		}
 	}
-	return pending
+	return txpool.NewPendingSet(heads, tails)
+}
+
+// PendingHashes retrieves the hashes of all currently processable transactions.
+// The returned list is grouped by origin account and sorted by nonce
+func (p *BlobPool) PendingHashes(filter txpool.PendingFilter) []common.Hash {
+	if filter.OnlyPlainTxs || filter.OnlyLocals {
+		return nil
+	}
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	var hashes = make([]common.Hash, 0, len(p.index))
+	for _, txs := range p.index {
+		for _, tx := range txs {
+			hashes = append(hashes, tx.hash)
+		}
+	}
+	return hashes
 }
 
 // updateStorageMetrics retrieves a bunch of stats from the data store and pushes
