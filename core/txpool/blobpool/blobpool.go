@@ -436,8 +436,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 // Close closes down the underlying persistent store.
 func (p *BlobPool) Close() error {
 	var errs []error
-	if err := p.limbo.Close(); err != nil {
-		errs = append(errs, err)
+	if p.limbo != nil { // Close might be invoked due to error in constructor, before p,limbo is set
+		if err := p.limbo.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if err := p.store.Close(); err != nil {
 		errs = append(errs, err)
