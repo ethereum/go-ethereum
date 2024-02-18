@@ -17,17 +17,23 @@ archives are published at https://geth.ethereum.org/downloads/.
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/getting-started/installing-geth).
 
 Building `geth` requires both a Go (version 1.19 or later) and a C compiler. You can install
-them using your favourite package manager. Once the dependencies are installed, run
+them using your favourite package manager. Once the dependencies are installed, run:
 
 ```shell
 make geth
 ```
+
+if you have go installed, you
 
 or, to build the full suite of utilities:
 
 ```shell
 make all
 ```
+
+
+
+
 
 ## Executables
 
@@ -195,6 +201,16 @@ You'll need to use your own programming environments' capabilities (libraries, t
 connect via HTTP, WS or IPC to a `geth` node configured with the above flags and you'll
 need to speak [JSON-RPC](https://www.jsonrpc.org/specification) on all transports. You
 can reuse the same connection for multiple requests!
+
+
+Also, you can add geth as a project dependency in your Go apps with this command:
+
+
+```
+   go get github.com/ethereum/go-ethereum@latest
+```
+
+
 
 **Note: Please understand the security implications of opening up an HTTP/WS based
 transport before doing so! Hackers on the internet are actively trying to subvert
