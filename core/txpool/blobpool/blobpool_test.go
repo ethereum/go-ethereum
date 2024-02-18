@@ -1343,7 +1343,6 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		p := pool.Pending(uint256.NewInt(1), chain.basefee, chain.blobfee)
 		if len(p) != int(capacity) {
 			b.Fatalf("have %d want %d", len(p), capacity)
-
 		}
 	}
 }
