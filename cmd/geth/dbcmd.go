@@ -630,7 +630,7 @@ func importLDBdata(ctx *cli.Context) error {
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, false)
 	defer db.Close()
-	return utils.ImportLDBData(db, fName, int64(start), stop)
+	return blockchainio.ImportLDBData(db, fName, int64(start), stop)
 }
 
 type preimageIterator struct {
@@ -727,7 +727,7 @@ func exportChaindata(ctx *cli.Context) error {
 	}()
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
-	return utils.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
+	return blockchainio.ExportChaindata(ctx.Args().Get(1), kind, exporter(db), stop)
 }
 
 func showMetaData(ctx *cli.Context) error {

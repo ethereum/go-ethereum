@@ -655,7 +655,7 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root)
+	return blockchainio.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root)
 }
 
 // checkAccount iterates the snap data layers, and looks up the given account

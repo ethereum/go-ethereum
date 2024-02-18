@@ -319,13 +319,13 @@ func importChain(ctx *cli.Context) error {
 	var importErr error
 
 	if ctx.Args().Len() == 1 {
-		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+		if err := blockchainio.ImportChain(chain, ctx.Args().First()); err != nil {
 			importErr = err
 			log.Error("Import error", "err", err)
 		}
 	} else {
 		for _, arg := range ctx.Args().Slice() {
-			if err := utils.ImportChain(chain, arg); err != nil {
+			if err := blockchainio.ImportChain(chain, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
 			}
@@ -377,7 +377,7 @@ func exportChain(ctx *cli.Context) error {
 	var err error
 	fp := ctx.Args().First()
 	if ctx.Args().Len() < 3 {
-		err = utils.ExportChain(chain, fp)
+		err = blockchainio.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
@@ -391,7 +391,7 @@ func exportChain(ctx *cli.Context) error {
 		if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+		err = blockchainio.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
@@ -449,7 +449,7 @@ func importHistory(ctx *cli.Context) error {
 		network = networks[0]
 	}
 
-	if err := utils.ImportHistory(chain, db, dir, network); err != nil {
+	if err := blockchainio.ImportHistory(chain, db, dir, network); err != nil {
 		return err
 	}
 	fmt.Printf("Import done in %v\n", time.Since(start))
@@ -483,7 +483,7 @@ func exportHistory(ctx *cli.Context) error {
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size))
+	err := blockchainio.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
@@ -507,7 +507,7 @@ func importPreimages(ctx *cli.Context) error {
 	defer db.Close()
 	start := time.Now()
 
-	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
+	if err := blockchainio.ImportPreimages(db, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
 	fmt.Printf("Import done in %v\n", time.Since(start))
