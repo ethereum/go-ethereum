@@ -75,7 +75,7 @@ type AddressReserver func(addr common.Address, reserve bool) error
 //
 // Note, the entries here are not arbitrary useful filters, rather each one has
 // a very specific call site in mind and each one can be evaluated very cheaply
-// by the pool implementations. Only add new ones that satisfy those contraits.
+// by the pool implementations. Only add new ones that satisfy those constraints.
 type PendingFilter struct {
 	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
 	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
