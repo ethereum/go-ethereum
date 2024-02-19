@@ -106,7 +106,7 @@ var Flags = []cli.Flag{
 	//blockprofilerateFlag,
 	cpuprofileFlag,
 	//traceFlag,
-	periodicProfilingFlag,
+	//periodicProfilingFlag,
 	debugDataDirFlag,
 }
 
