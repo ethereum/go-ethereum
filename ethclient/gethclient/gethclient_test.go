@@ -81,7 +81,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
 			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
 			testEmpty:    {Balance: big.NewInt(1)},

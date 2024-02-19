@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -999,7 +1000,20 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) error {
-	pending := w.eth.TxPool().Pending(true)
+	w.mu.RLock()
+	tip := w.tip
+	w.mu.RUnlock()
+
+	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
+	var baseFee *uint256.Int
+	if env.header.BaseFee != nil {
+		baseFee = uint256.MustFromBig(env.header.BaseFee)
+	}
+	var blobFee *uint256.Int
+	if env.header.ExcessBlobGas != nil {
+		blobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
+	}
+	pending := w.eth.TxPool().Pending(uint256.MustFromBig(tip), baseFee, blobFee)
 
 	// Split the pending transactions into locals and remotes.
 	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
@@ -1011,10 +1025,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	}
 
 	// Fill the block with all available pending transactions.
-	w.mu.RLock()
-	tip := w.tip
-	w.mu.RUnlock()
-
 	if len(localTxs) > 0 {
 		txs := newTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
 		if err := w.commitTransactions(env, txs, interrupt, new(big.Int)); err != nil {
