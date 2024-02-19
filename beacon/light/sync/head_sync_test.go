@@ -51,7 +51,7 @@ func TestValidatedHead(t *testing.T) {
 	ht.ExpValidated(t, 0, nil)
 
 	ts.AddServer(testServer1, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead1)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testSHead1)
 	ts.Run(1)
 	// announced head should be queued because of uninitialized chain
 	ht.ExpValidated(t, 1, nil)
@@ -62,16 +62,16 @@ func TestValidatedHead(t *testing.T) {
 	ht.ExpValidated(t, 2, []types.SignedHeader{testSHead1})
 
 	chain.SetNextSyncPeriod(1)
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead2)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testSHead2)
 	ts.AddServer(testServer2, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead2)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, testSHead2)
 	ts.Run(3)
 	// expect both head announcements to be validated instantly
 	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead2, testSHead2})
 
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead3)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testSHead3)
 	ts.AddServer(testServer3, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer3, testSHead4)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer3, testSHead4)
 	ts.Run(4)
 	// future period annonced heads should be queued
 	ht.ExpValidated(t, 4, nil)
@@ -91,7 +91,7 @@ func TestValidatedHead(t *testing.T) {
 	// testSHead4 could be validated now but it's not queued by any registered server
 	ht.ExpValidated(t, 7, nil)
 
-	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead4)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, testSHead4)
 	ts.Run(8)
 	// now testSHead4 should be validated
 	ht.ExpValidated(t, 8, []types.SignedHeader{testSHead4})

@@ -83,29 +83,29 @@ type CommitteeChain struct {
 }
 
 // NewCommitteeChain creates a new CommitteeChain.
-func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
-	return newCommitteeChain(db, config, signerThreshold, enforceTime, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
+func NewCommitteeChain(db ethdb.KeyValueStore, config ClientConfig) *CommitteeChain {
+	return newCommitteeChain(db, config, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 }
 
 // NewTestCommitteeChain creates a new CommitteeChain for testing.
-func NewTestCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, clock *mclock.Simulated) *CommitteeChain {
-	return newCommitteeChain(db, config, signerThreshold, enforceTime, dummyVerifier{}, clock, func() int64 { return int64(clock.Now()) })
+func NewTestCommitteeChain(db ethdb.KeyValueStore, config ClientConfig, clock *mclock.Simulated) *CommitteeChain {
+	return newCommitteeChain(db, config, dummyVerifier{}, clock, func() int64 { return int64(clock.Now()) })
 }
 
 // newCommitteeChain creates a new CommitteeChain with the option of replacing the
 // clock source and signature verification for testing purposes.
-func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
+func newCommitteeChain(db ethdb.KeyValueStore, config ClientConfig, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
 		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
 		db:              db,
 		sigVerifier:     sigVerifier,
 		clock:           clock,
 		unixNano:        unixNano,
-		config:          config,
-		signerThreshold: signerThreshold,
-		enforceTime:     enforceTime,
+		config:          config.ChainConfig.ChainConfig,
+		signerThreshold: config.Threshold,
+		enforceTime:     config.TimeCheck,
 		minimumUpdateScore: types.UpdateScore{
-			SignerCount:    uint32(signerThreshold),
+			SignerCount:    uint32(config.Threshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
 		},
 	}

@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,29 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package sync
+package lightclient
 
 import (
-	"github.com/ethereum/go-ethereum/beacon/light/request"
-	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var (
-	EvNewHead             = &request.EventType{Name: "newHead"}           // data: types.HeadInfo
-	EvNewOptimisticUpdate = &request.EventType{Name: "newSignedHead"}     // data: types.SignedHeader
-	EvNewFinalityUpdate   = &request.EventType{Name: "newFinalityUpdate"} // data: types.FinalityUpdate
-)
-
 type (
-	ReqUpdates struct {
-		FirstPeriod, Count uint64
-	}
-	RespUpdates struct {
-		Updates    []*types.LightClientUpdate
-		Committees []*types.SerializedSyncCommittee
-	}
-	ReqHeader         common.Hash
-	ReqCheckpointData common.Hash
-	ReqBeaconBlock    common.Hash
+	ReqHeader common.Hash
+	ReqBlock  common.Hash
 )

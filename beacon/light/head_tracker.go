@@ -29,15 +29,15 @@ import (
 // which is the (not necessarily validated) head announced by the majority of
 // servers.
 type HeadTracker struct {
-	lock              sync.RWMutex
-	committeeChain    *CommitteeChain
-	minSignerCount    int
-	signedHead        types.SignedHeader
-	hasSignedHead     bool
-	finalityUpdate    types.FinalityUpdate
-	hasFinalityUpdate bool
-	prefetchHead      types.HeadInfo
-	changeCounter     uint64
+	lock                sync.RWMutex
+	committeeChain      *CommitteeChain
+	minSignerCount      int
+	optimisticUpdate    types.OptimisticUpdate
+	hasOptimisticUpdate bool
+	finalityUpdate      types.FinalityUpdate
+	hasFinalityUpdate   bool
+	prefetchHead        types.HeadInfo
+	changeCounter       uint64
 }
 
 // NewHeadTracker creates a new HeadTracker.
@@ -49,11 +49,11 @@ func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTra
 }
 
 // ValidatedHead returns the latest validated head.
-func (h *HeadTracker) ValidatedHead() (types.SignedHeader, bool) {
+func (h *HeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
-	return h.signedHead, h.hasSignedHead
+	return h.optimisticUpdate, h.hasOptimisticUpdate
 }
 
 // ValidatedHead returns the latest validated head.
@@ -68,13 +68,16 @@ func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 // and it is better than the old validated head (higher slot or same slot and more
 // signers) then ValidatedHead is updated. The boolean return flag signals if
 // ValidatedHead has been changed.
-func (h *HeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
+func (h *HeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	replace, err := h.validate(head, h.signedHead)
+	if err := update.Validate(); err != nil {
+		return false, err
+	}
+	replace, err := h.validate(update.SignedHeader(), h.optimisticUpdate.SignedHeader())
 	if replace {
-		h.signedHead, h.hasSignedHead = head, true
+		h.optimisticUpdate, h.hasOptimisticUpdate = update, true
 		h.changeCounter++
 	}
 	return replace, err
@@ -84,6 +87,9 @@ func (h *HeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	if err := update.Validate(); err != nil {
+		return false, err
+	}
 	replace, err := h.validate(update.SignedHeader(), h.finalityUpdate.SignedHeader())
 	if replace {
 		h.finalityUpdate, h.hasFinalityUpdate = update, true

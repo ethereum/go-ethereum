@@ -185,21 +185,21 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 	return updates, committees, nil
 }
 
-// GetOptimisticHeadUpdate fetches a signed header based on the latest available
-// optimistic update. Note that the signature should be verified by the caller
-// as its validity depends on the update chain.
+// GetOptimisticUpdate fetches the latest available optimistic update.
+// Note that the signature should be verified by the caller as its validity
+// depends on the update chain.
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
-func (api *BeaconLightApi) GetOptimisticHeadUpdate() (types.SignedHeader, error) {
+func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
 	if err != nil {
-		return types.SignedHeader{}, err
+		return types.OptimisticUpdate{}, err
 	}
 	return decodeOptimisticHeadUpdate(resp)
 }
 
-func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
+func decodeOptimisticHeadUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	var data struct {
 		Data struct {
 			Header        jsonBeaconHeader    `json:"attested_header"`
@@ -223,8 +223,12 @@ func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
 		return types.SignedHeader{}, errors.New("invalid sync_committee_signature length")
 	}
-	return types.SignedHeader{
-		Header:        data.Data.Header.Beacon,
+	return types.OptimisticUpdate{
+		Attested: types.HeaderWithExecProof{
+			Header:        data.Data.Attested.Beacon,
+			PayloadHeader: data.Data.Attested.Execution,
+			PayloadBranch: data.Data.Attested.ExecutionBranch,
+		},
 		Signature:     data.Data.Aggregate,
 		SignatureSlot: uint64(data.Data.SignatureSlot),
 	}, nil
@@ -397,7 +401,7 @@ func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
 // head updates and calls the specified callback functions when they are received.
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
-func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHeader), finalityFn func(head types.FinalityUpdate), errFn func(err error)) func() {
+func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), optimisticFn func(update types.OptimisticUpdate), finalityFn func(update types.FinalityUpdate), errFn func(err error)) func() {
 	closeCh := make(chan struct{})   // initiate closing the stream
 	closedCh := make(chan struct{})  // stream closed (or failed to create)
 	stoppedCh := make(chan struct{}) // sync loop stopped
@@ -433,8 +437,8 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		if head, err := api.GetHeader(common.Hash{}); err == nil {
 			headFn(head.Slot, head.Hash())
 		}
-		if signedHead, err := api.GetOptimisticHeadUpdate(); err == nil {
-			signedFn(signedHead)
+		if optimisticUpdate, err := api.GetOptimisticUpdate(); err == nil {
+			optimisticFn(optimisticUpdate)
 		}
 		if finalityUpdate, err := api.GetFinalityUpdate(); err == nil {
 			finalityFn(finalityUpdate)
@@ -457,8 +461,8 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 						errFn(fmt.Errorf("error decoding head event: %v", err))
 					}
 				case "light_client_optimistic_update":
-					if signedHead, err := decodeOptimisticHeadUpdate([]byte(event.Data())); err == nil {
-						signedFn(signedHead)
+					if optimisticUpdate, err := decodeOptimisticHeadUpdate([]byte(event.Data())); err == nil {
+						optimisticFn(optimisticUpdate)
 					} else {
 						errFn(fmt.Errorf("error decoding optimistic update event: %v", err))
 					}
