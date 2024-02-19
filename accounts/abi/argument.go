@@ -290,7 +290,7 @@ func capitalise(input string) string {
 	return strings.ToUpper(input[:1]) + input[1:]
 }
 
-//unpackStruct extracts each argument into its corresponding struct field
+// unpackStruct extracts each argument into its corresponding struct field
 func unpackStruct(value, reflectValue reflect.Value, arg Argument) error {
 	name := capitalise(arg.Name)
 	typ := value.Type()

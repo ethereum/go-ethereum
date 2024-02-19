@@ -148,7 +148,6 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
 }
 
-
 // revertSelector is a special function selector for revert reason unpacking.
 var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
 

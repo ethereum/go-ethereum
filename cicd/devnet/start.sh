@@ -1,28 +1,16 @@
 #!/bin/bash
-
-# Update AWS Max Health can resolve below issue, and it's already addressed
-# echo "Preparing to start the XDC chain, it's likely to take up to 1 minute"
-# Sleep for > 30 as we need to wait for the ECS tasks container being killed by fargate. Otherwise it will ended up with two same nodes running on a single /work/xdcchain directory
-# sleep 60
-
 if [ ! -d /work/xdcchain/XDC/chaindata ]
 then
-  # Randomly select a key from environment variable, seperated by ','
-  if test -z "$PRIVATE_KEYS" 
+  if test -z "$PRIVATE_KEY"
   then
-        echo "PRIVATE_KEYS environment variable has not been set. You need to pass at least one PK, or you can pass multiple PK seperated by ',', we will randomly choose one for you"
+        echo "PRIVATE_KEY environment variable has not been set."
         exit 1
   fi
-  IFS=', ' read -r -a private_keys <<< "$PRIVATE_KEYS"
-  private_key=${private_keys[ $RANDOM % ${#private_keys[@]} ]}
-
-  echo "${private_key}" >> /tmp/key
-  echo "Creating a new wallet"
-  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key |  awk -F '[{}]' '{print $2}')
+  echo $PRIVATE_KEY >> /tmp/key
+  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -v FS="({|})" '{print $2}')
   XDC --datadir /work/xdcchain init /work/genesis.json
 else
-  echo "Wallet already exist, re-use the same one"
-  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 |  awk -F '[{}]' '{print $2}')
+  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -v FS="({|})" '{print $2}')
 fi
 
 input="/work/bootnodes.list"

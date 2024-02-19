@@ -13,6 +13,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
+
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
@@ -259,6 +261,10 @@ func Deserialize(r []byte) (*RingSignature, error) {
 
 	sig.SerializedRing = r
 
+	if !Verify(sig, false) {
+		return nil, errors.New("failed to deserialize, invalid ring signature")
+	}
+
 	return sig, nil
 }
 
@@ -357,7 +363,8 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 	for i := 0; i < numRing; i++ {
 		pubkeys[i] = &privkeys[i].PublicKey
 	}
-	curve := pubkeys[0].Curve
+	//cast to BitCurve used in go-eth since elliptic.Curve.Add() and elliptic.Curve.ScalarMult() is deprecated
+	curve := pubkeys[0].Curve.(*secp256k1.BitCurve)
 	sig := new(RingSignature)
 	sig.Size = ringsize
 	sig.NumRing = numRing
@@ -447,6 +454,9 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			// calculate L[j][idx] = s[j][idx]*G + c[idx]*Ring[j][idx]
 			px, py := curve.ScalarMult(rings[j][idx].X, rings[j][idx].Y, PadTo32Bytes(C[idx].Bytes())) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(PadTo32Bytes(S[j][idx].Bytes()))                            // sx, sy = s[n-1]*G
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return nil, errors.New("Could not create ring signature")
+			}
 			l_x, l_y := curve.Add(sx, sy, px, py)
 			L[j][idx] = &ecdsa.PublicKey{curve, l_x, l_y}
 			lT := append(PadTo32Bytes(l_x.Bytes()), PadTo32Bytes(l_y.Bytes())...)
@@ -456,6 +466,9 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			px, py = curve.ScalarMult(images[j].X, images[j].Y, C[idx].Bytes()) // px, py = c_i*I
 			hx, hy := HashPoint(rings[j][idx])
 			sx, sy = curve.ScalarMult(hx, hy, S[j][idx].Bytes()) // sx, sy = s[n-1]*H_p(P_i)
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return nil, errors.New("Could not create ring signature")
+			}
 			r_x, r_y := curve.Add(sx, sy, px, py)
 			R[j][idx] = &ecdsa.PublicKey{curve, r_x, r_y}
 			rT := append(PadTo32Bytes(r_x.Bytes()), PadTo32Bytes(r_y.Bytes())...)
@@ -504,8 +517,23 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	S := sig.S
 	C := make([]*big.Int, ringsize+1)
 	C[0] = sig.C
-	curve := sig.Curve
+	//cast to BitCurve used in go-eth since elliptic.Curve.Add() and elliptic.Curve.ScalarMult() is deprecated
+	curve := sig.Curve.(*secp256k1.BitCurve)
 	image := sig.I
+
+	//check on curve
+	for i := 0; i < numRing; i++ {
+		onCurve := curve.IsOnCurve(image[i].X, image[i].Y)
+		if !onCurve {
+			return false
+		}
+		for j := 0; j < ringsize; j++ {
+			onCurve := curve.IsOnCurve(rings[i][j].X, rings[i][j].Y)
+			if !onCurve {
+				return false
+			}
+		}
+	}
 
 	// calculate c[i+1] = H(m, s[i]*G + c[i]*P[i])
 	// and c[0] = H)(m, s[n-1]*G + c[n-1]*P[n-1]) where n is the ring size
@@ -513,9 +541,17 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	for j := 0; j < ringsize; j++ {
 		var l []byte
 		for i := 0; i < numRing; i++ {
+			// Validate S[i][j] and C[j]
+			if !isValidScalar(S[i][j], curve) || !isValidScalar(C[j], curve) {
+				return false // Or handle the error as required
+			}
+
 			// calculate L[i][j] = s[i][j]*G + c[j]*Ring[i][j]
 			px, py := curve.ScalarMult(rings[i][j].X, rings[i][j].Y, C[j].Bytes()) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(S[i][j].Bytes())                        // sx, sy = s[i]*G
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return false
+			}
 			l_x, l_y := curve.Add(sx, sy, px, py)
 			lT := append(PadTo32Bytes(l_x.Bytes()), PadTo32Bytes(l_y.Bytes())...)
 			//log.Info("L[i][j]", "i", i, "j", j, "L", common.Bytes2Hex(lT))
@@ -524,9 +560,17 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 			// calculate R_i = s[i][j]*H_p(Ring[i][j]) + c[j]*I[j]
 			px, py = curve.ScalarMult(image[i].X, image[i].Y, C[j].Bytes()) // px, py = c[i]*I
 			hx, hy := HashPoint(rings[i][j])
+
+			// Validate S[i][j], hx, and hy
+			if !isValidScalar(S[i][j], curve) || !isValidScalar(hx, curve) || !isValidScalar(hy, curve) {
+				return false // Or handle the error as required
+			}
 			//log.Info("H[i][j]", "i", i, "j", j, "x.input", common.Bytes2Hex(rings[i][j].X.Bytes()), "y.input", common.Bytes2Hex(rings[i][j].Y.Bytes()))
 			//log.Info("H[i][j]", "i", i, "j", j, "x", common.Bytes2Hex(hx.Bytes()), "y", common.Bytes2Hex(hy.Bytes()))
 			sx, sy = curve.ScalarMult(hx, hy, S[i][j].Bytes()) // sx, sy = s[i]*H_p(P[i])
+			if px == nil || py == nil || sx == nil || sy == nil {
+				return false
+			}
 			r_x, r_y := curve.Add(sx, sy, px, py)
 			rT := append(PadTo32Bytes(r_x.Bytes()), PadTo32Bytes(r_y.Bytes())...)
 			//log.Info("R[i][j]", "i", i, "j", j, "L", common.Bytes2Hex(rT))
@@ -547,6 +591,10 @@ func Verify(sig *RingSignature, verifyMes bool) bool {
 	}
 
 	return bytes.Equal(sig.C.Bytes(), C[ringsize].Bytes())
+}
+
+func isValidScalar(scalar *big.Int, curve elliptic.Curve) bool {
+	return scalar.Sign() >= 0 && scalar.Cmp(curve.Params().N) < 0
 }
 
 func Link(sig_a *RingSignature, sig_b *RingSignature) bool {

@@ -1,5 +1,6 @@
 // Copyright 2010 The Go Authors. All rights reserved.
 // Copyright 2011 ThePiachu. All rights reserved.
+// Copyright 2015 Jeffrey Wilcke, Felix Lange, Gustav Simonsson. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -34,16 +35,28 @@ package secp256k1
 import (
 	"crypto/elliptic"
 	"math/big"
-	"unsafe"
-
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 )
 
-/*
-#include "libsecp256k1/include/secp256k1.h"
-extern int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
-*/
-import "C"
+const (
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
+)
+
+// readBits encodes the absolute value of bigint as big-endian bytes. Callers
+// must ensure that buf has enough space. If buf is too short the result will
+// be incomplete.
+func readBits(bigint *big.Int, buf []byte) {
+	i := len(buf)
+	for _, d := range bigint.Bits() {
+		for j := 0; j < wordBytes && i > 0; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
+}
 
 // This code is from https://github.com/ThePiachu/GoBit and implements
 // several Koblitz elliptic curves over prime fields.
@@ -77,7 +90,7 @@ func (BitCurve *BitCurve) Params() *elliptic.CurveParams {
 	}
 }
 
-// IsOnBitCurve returns true if the given (x,y) lies on the BitCurve.
+// IsOnCurve returns true if the given (x,y) lies on the BitCurve.
 func (BitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
 	// y² = x³ + b
 	y2 := new(big.Int).Mul(y, y) //y²
@@ -92,7 +105,6 @@ func (BitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
 	return x3.Cmp(y2) == 0
 }
 
-//TODO: double check if the function is okay
 // affineFromJacobian reverses the Jacobian transform. See the comment at the
 // top of the file.
 func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.Int) {
@@ -113,7 +125,18 @@ func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.
 
 // Add returns the sum of (x1,y1) and (x2,y2)
 func (BitCurve *BitCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
+	// If one point is at infinity, return the other point.
+	// Adding the point at infinity to any point will preserve the other point.
+	if x1.Sign() == 0 && y1.Sign() == 0 {
+		return x2, y2
+	}
+	if x2.Sign() == 0 && y2.Sign() == 0 {
+		return x1, y1
+	}
 	z := new(big.Int).SetInt64(1)
+	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
+		return BitCurve.affineFromJacobian(BitCurve.doubleJacobian(x1, y1, z))
+	}
 	return BitCurve.affineFromJacobian(BitCurve.addJacobian(x1, y1, z, x2, y2, z))
 }
 
@@ -222,40 +245,6 @@ func (BitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 	return x3, y3, z3
 }
 
-func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, *big.Int) {
-	// Ensure scalar is exactly 32 bytes. We pad always, even if
-	// scalar is 32 bytes long, to avoid a timing side channel.
-	if len(scalar) > 32 {
-		panic("can't handle scalars > 256 bits")
-	}
-	// NOTE: potential timing issue
-	padded := make([]byte, 32)
-	copy(padded[32-len(scalar):], scalar)
-	scalar = padded
-
-	// Do the multiplication in C, updating point.
-	point := make([]byte, 64)
-	math.ReadBits(Bx, point[:32])
-	math.ReadBits(By, point[32:])
-	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
-	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
-	res := C.secp256k1_ext_scalar_mul(context, pointPtr, scalarPtr)
-
-	// Unpack the result and clear temporaries.
-	x := new(big.Int).SetBytes(point[:32])
-	y := new(big.Int).SetBytes(point[32:])
-	for i := range point {
-		point[i] = 0
-	}
-	for i := range padded {
-		scalar[i] = 0
-	}
-	if res != 1 {
-		return nil, nil
-	}
-	return x, y
-}
-
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
 // an integer in big-endian form.
 func (BitCurve *BitCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
@@ -268,8 +257,8 @@ func (BitCurve *BitCurve) Marshal(x, y *big.Int) []byte {
 	byteLen := (BitCurve.BitSize + 7) >> 3
 	ret := make([]byte, 1+2*byteLen)
 	ret[0] = 4 // uncompressed point flag
-	math.ReadBits(x, ret[1:1+byteLen])
-	math.ReadBits(y, ret[1+byteLen:])
+	readBits(x, ret[1:1+byteLen])
+	readBits(y, ret[1+byteLen:])
 	return ret
 }
 
@@ -293,12 +282,12 @@ var theCurve = new(BitCurve)
 func init() {
 	// See SEC 2 section 2.7.1
 	// curve parameters taken from:
-	// http://www.secg.org/collateral/sec2_final.pdf
-	theCurve.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
-	theCurve.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
-	theCurve.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000000000000000000000000000007", 16)
-	theCurve.Gx, _ = new(big.Int).SetString("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16)
-	theCurve.Gy, _ = new(big.Int).SetString("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16)
+	// http://www.secg.org/sec2-v2.pdf
+	theCurve.P, _ = new(big.Int).SetString("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 0)
+	theCurve.N, _ = new(big.Int).SetString("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 0)
+	theCurve.B, _ = new(big.Int).SetString("0x0000000000000000000000000000000000000000000000000000000000000007", 0)
+	theCurve.Gx, _ = new(big.Int).SetString("0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 0)
+	theCurve.Gy, _ = new(big.Int).SetString("0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 0)
 	theCurve.BitSize = 256
 }
 
