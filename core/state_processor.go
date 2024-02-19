@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -78,6 +79,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if p.config.IsPrague(block.Number(), block.Time()) {
+		parent := p.bc.GetBlockByHash(block.ParentHash())
+		if !p.config.IsPrague(parent.Number(), parent.Time()) {
+			InsertBlockHashHistoryAtEip2935Fork(statedb, block.NumberU64()-1, block.ParentHash(), p.bc)
+		} else {
+			ProcessParentBlockHash(statedb, block.NumberU64()-1, block.ParentHash())
+		}
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -188,4 +197,21 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+}
+
+// InsertBlockHashHistoryAtEip2935Fork inserts the block hashes for the 256 ancestors
+// of the fork block.
+func InsertBlockHashHistoryAtEip2935Fork(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash, chain consensus.ChainHeaderReader) {
+	ancestor := chain.GetHeader(prevHash, prevNumber)
+	for i := prevNumber; i > 0 && i >= prevNumber-256; i-- {
+		ProcessParentBlockHash(statedb, i, ancestor.Hash())
+		ancestor = chain.GetHeader(ancestor.ParentHash, ancestor.Number.Uint64()-1)
+	}
+}
+
+// ProcessParentBlockHash inserts the parent block hash into the history storage contract.
+func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash) {
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], prevNumber)
+	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
 }

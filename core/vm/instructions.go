@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -429,6 +431,12 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
+func getBlockHashFromContract(number uint64, statedb StateDB) common.Hash {
+	var pnum common.Hash
+	binary.BigEndian.PutUint64(pnum[24:], number)
+	return statedb.GetState(params.HistoryStorageAddress, pnum)
+}
+
 func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	num := scope.Stack.peek()
 	num64, overflow := num.Uint64WithOverflow()
@@ -436,6 +444,13 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
+
+	evm := interpreter.evm
+	if evm.chainRules.IsPrague {
+		num.SetBytes(getBlockHashFromContract(num64, evm.StateDB).Bytes())
+		return nil, nil
+	}
+
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {

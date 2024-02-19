@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -788,6 +789,93 @@ func TestBlobHash(t *testing.T) {
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %v: expected  %x, got %x", tt.name, expected, actual)
 		}
+	}
+}
+
+func TestBlockHashEip2935(t *testing.T) {
+	type testcase struct {
+		name   string
+		idx    uint64
+		expect common.Hash
+		hashes []common.Hash
+	}
+	var (
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		expect     = common.HexToHash("0x1234")
+		getHash    = func(uint64) common.Hash {
+			return expect
+		}
+		newUint64    = func(val uint64) *uint64 { return &val }
+		blockContext = BlockContext{BlockNumber: big.NewInt(100), GetHash: getHash, Time: 0}
+		chainConfig  = &params.ChainConfig{
+			ChainID:                       big.NewInt(1337),
+			HomesteadBlock:                big.NewInt(0),
+			EIP150Block:                   big.NewInt(0),
+			EIP155Block:                   big.NewInt(0),
+			EIP158Block:                   big.NewInt(0),
+			ByzantiumBlock:                big.NewInt(0),
+			ConstantinopleBlock:           big.NewInt(0),
+			PetersburgBlock:               big.NewInt(0),
+			IstanbulBlock:                 big.NewInt(0),
+			MuirGlacierBlock:              big.NewInt(0),
+			BerlinBlock:                   big.NewInt(0),
+			LondonBlock:                   big.NewInt(0),
+			ArrowGlacierBlock:             big.NewInt(0),
+			GrayGlacierBlock:              big.NewInt(0),
+			ShanghaiTime:                  newUint64(0),
+			PragueTime:                    newUint64(0),
+			TerminalTotalDifficulty:       big.NewInt(0),
+			TerminalTotalDifficultyPassed: true,
+		}
+		env            = NewEVM(blockContext, TxContext{}, statedb, chainConfig, Config{})
+		stack          = newstack()
+		pc             = uint64(0)
+		evmInterpreter = env.interpreter
+		callBlockHashN = func(n uint64) func(t *testing.T, name string) uint256.Int {
+			return func(t *testing.T, name string) uint256.Int {
+				stack.push(uint256.NewInt(n))
+				opBlockhash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+				if len(stack.data) != 1 {
+					t.Errorf("Expected one item on stack got %d: ", len(stack.data))
+				}
+				return stack.pop()
+			}
+		}
+		callBlockHash10   = callBlockHashN(10)
+		callBlockHash1024 = callBlockHashN(1024)
+	)
+
+	expected, overflow := uint256.FromBig(new(big.Int).SetBytes(expect.Bytes()))
+	if overflow {
+		t.Errorf("invalid overflow")
+	}
+
+	// insert 500 block hashes, starting from genesis.
+	for i := uint64(0); i < 500; i++ {
+		var blockNumber common.Hash
+		binary.BigEndian.PutUint64(blockNumber[24:], i)
+		statedb.SetState(params.HistoryStorageAddress, blockNumber, expect)
+	}
+
+	// simulate a call to BLOCKHASH at block 100, i.e. less than 256
+	// blocks after a genesis with eip 2935 activated.
+	actual := callBlockHash10(t, "legacy")
+	if actual.Cmp(expected) != 0 {
+		t.Errorf("%s: expected  %x, got %x", "legacy", expected, actual)
+	}
+
+	// now do the same thing much later, after all blocks have
+	// been inserted.
+	env.Context.BlockNumber.SetInt64(501)
+	actual = callBlockHash10(t, "contract")
+	if actual.Cmp(expected) != 0 {
+		t.Errorf("%s: expected  %x, got %x", "contract", expected, actual)
+	}
+
+	// still at block 501, but now request the hash of a higher block
+	actual = callBlockHash1024(t, "contract with non-existent block hash")
+	if !actual.IsZero() {
+		t.Errorf("%s: expected  0, got %x", "contract with non-existent block hash", actual)
 	}
 }
 
