@@ -1025,7 +1025,7 @@ type BlockOverrides struct {
 	FeeRecipient  *common.Address
 	PrevRandao    *common.Hash
 	BaseFeePerGas *hexutil.Big
-	BlobGasPrice  *hexutil.Big
+	BlobBaseFee   *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -1054,8 +1054,8 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if o.BaseFeePerGas != nil {
 		blockCtx.BaseFee = o.BaseFeePerGas.ToInt()
 	}
-	if o.BlobGasPrice != nil {
-		blockCtx.BlobBaseFee = o.BlobGasPrice.ToInt()
+	if o.BlobBaseFee != nil {
+		blockCtx.BlobBaseFee = o.BlobBaseFee.ToInt()
 	}
 }
 

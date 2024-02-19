@@ -161,8 +161,8 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 
 func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
 	blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
-	if block.BlockOverrides != nil && block.BlockOverrides.BlobGasPrice != nil {
-		blockContext.BlobBaseFee = block.BlockOverrides.BlobGasPrice.ToInt()
+	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
+		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
 	// Respond to BLOCKHASH requests.
 	blockContext.GetHash = func(n uint64) common.Hash {
