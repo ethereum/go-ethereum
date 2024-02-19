@@ -1446,7 +1446,12 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
+func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	// If only plain transactions are requested, this pool is unsuitable as it
+	// contains none, don't even bother.
+	if filter.OnlyPlainTxs {
+		return nil
+	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
 	// The latter will be pretty much moot, but we've kept it to have symmetric
@@ -1466,20 +1471,20 @@ func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *u
 		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
 			// If transaction filtering was requested, discard badly priced ones
-			if minTip != nil && baseFee != nil {
-				if tx.execFeeCap.Lt(baseFee) {
+			if filter.MinTip != nil && filter.BaseFee != nil {
+				if tx.execFeeCap.Lt(filter.BaseFee) {
 					break // basefee too low, cannot be included, discard rest of txs from the account
 				}
-				tip := new(uint256.Int).Sub(tx.execFeeCap, baseFee)
+				tip := new(uint256.Int).Sub(tx.execFeeCap, filter.BaseFee)
 				if tip.Gt(tx.execTipCap) {
 					tip = tx.execTipCap
 				}
-				if tip.Lt(minTip) {
+				if tip.Lt(filter.MinTip) {
 					break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
 				}
 			}
-			if blobFee != nil {
-				if tx.blobFeeCap.Lt(blobFee) {
+			if filter.BlobFee != nil {
+				if tx.blobFeeCap.Lt(filter.BlobFee) {
 					break // blobfee too low, cannot be included, discard rest of txs from the account
 				}
 			}
