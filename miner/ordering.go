@@ -155,7 +155,7 @@ func (t *transactionsByPriceAndNonce) Pop() {
 }
 
 // Empty returns if the price heap is empty. It can be used to check it simpler
-// than calling peek and checkign for nil return.
+// than calling peek and checking for nil return.
 func (t *transactionsByPriceAndNonce) Empty() bool {
 	return len(t.heads) == 0
 }
