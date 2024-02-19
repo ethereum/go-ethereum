@@ -1024,7 +1024,7 @@ func TestSimulateV1(t *testing.T) {
 		coinbase  = "0x000000000000000000000000000000000000ffff"
 		genesis   = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
@@ -1354,7 +1354,7 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want:      []blockRes{},
-			expectErr: &invalidBlockNumberError{message: fmt.Sprintf("block numbers must be in order: 11 <= 12")},
+			expectErr: &invalidBlockNumberError{message: "block numbers must be in order: 11 <= 12"},
 		},
 		// Test on solidity storage example. Set value in one call, read in next.
 		{

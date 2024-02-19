@@ -330,7 +330,7 @@ func (sim *simulator) computeBlockHash(ctx context.Context, n uint64, base *type
 		return h.Hash(), nil
 	}
 	h := base
-	for i, _ := range headers {
+	for i := range headers {
 		tmp := headers[i]
 		// BLOCKHASH will only allow numbers prior to current block
 		// so no need to check that condition.
