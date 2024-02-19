@@ -116,7 +116,7 @@ func TestVerify1(t *testing.T) {
 	assert.True(t, Verify(deserializedSig, false), "Verify should return true")
 }
 
-func TestVerify2(t *testing.T) {
+func TestDeserialize2(t *testing.T) {
 	numRing := 5
 	ringSize := 10
 	s := 7
@@ -139,12 +139,8 @@ func TestVerify2(t *testing.T) {
 		t.Error("fail to serialize input ring signature")
 	}
 
-	deserializedSig, err := Deserialize(sig)
-	if err != nil {
-		t.Error("fail to deserialize ring signature")
-	}
-
-	assert.False(t, Verify(deserializedSig, false), "TestNilPointerDereferencePanic should return false")
+	_, err = Deserialize(sig)
+	assert.EqualError(t, err, "failed to deserialize, invalid ring signature")
 }
 
 func TestPadTo32Bytes(t *testing.T) {
