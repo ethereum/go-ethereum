@@ -1251,7 +1251,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs, bl
 
 		res, _, failed, err, vmErr := s.doCall(ctx, args, rpc.LatestBlockNumber, vm.Config{}, 0)
 		if err != nil {
-			if errors.Is(err, core.ErrIntrinsicGas) {
+			if errors.Is(err, vm.ErrOutOfGas) || errors.Is(err, core.ErrIntrinsicGas) {
 				return false, nil, nil, nil // Special case, raise gas limit
 			}
 			return false, nil, err, nil // Bail out
@@ -1262,6 +1262,25 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs, bl
 
 		return true, nil, nil, nil
 	}
+
+	// If the transaction is a plain value transfer, short circuit estimation and
+	// directly try 21000. Returning 21000 without any execution is dangerous as
+	// some tx field combos might bump the price up even for plain transfers (e.g.
+	// unused access list items). Ever so slightly wasteful, but safer overall.
+	if len(args.Data) == 0 && args.To != nil {
+		statedb, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if statedb == nil || err != nil {
+			return 0, err
+		}
+
+		if statedb.GetCodeSize(*args.To) == 0 {
+			ok, _, err, _ := executable(params.TxGas)
+			if ok && err == nil {
+				return hexutil.Uint64(params.TxGas), nil
+			}
+		}
+	}
+
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
