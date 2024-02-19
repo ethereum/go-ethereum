@@ -2,22 +2,16 @@
 
 if [ ! -d /work/xdcchain/XDC/chaindata ]
 then
-  # Randomly select a key from environment variable, seperated by ','
-  if test -z "$PRIVATE_KEYS"
+  if test -z "$PRIVATE_KEY"
   then
-        echo "PRIVATE_KEYS environment variable has not been set. You need to pass at least one PK, or you can pass multiple PK seperated by ',', we will randomly choose one for you"
+        echo "PRIVATE_KEY environment variable has not been set."
         exit 1
   fi
-  IFS=', ' read -r -a private_keys <<< "$PRIVATE_KEYS"
-  private_key=${private_keys[ $RANDOM % ${#private_keys[@]} ]}
-
-  echo "${private_key}" >> /tmp/key
-  echo "Creating a new wallet"
-  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -F '[{}]' '{print $2}')
+  echo $PRIVATE_KEY >> /tmp/key
+  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -v FS="({|})" '{print $2}')
   XDC --datadir /work/xdcchain init /work/genesis.json
 else
-  echo "Wallet already exist, re-use the same one"
-  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -F '[{}]' '{print $2}')
+  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -v FS="({|})" '{print $2}')
 fi
 
 input="/work/bootnodes.list"
