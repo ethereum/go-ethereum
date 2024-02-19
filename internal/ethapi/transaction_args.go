@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,10 +27,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
+)
+
+var (
+	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -53,6 +62,18 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	// For BlobTxType
+	BlobFeeCap *hexutil.Big  `json:"maxFeePerBlobGas"`
+	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+
+	// For BlobTxType transactions with blob sidecar
+	Blobs       []kzg4844.Blob       `json:"blobs"`
+	Commitments []kzg4844.Commitment `json:"commitments"`
+	Proofs      []kzg4844.Proof      `json:"proofs"`
+
+	// This configures whether blobs are allowed to be passed.
+	blobSidecarAllowed bool
 }
 
 // from retrieves the transaction sender address.
@@ -92,33 +113,86 @@ func (args *TransactionArgs) validate() error {
 }
 
 func (args *TransactionArgs) validateFees(b Backend) error {
+	var (
+		head   = b.CurrentHeader()
+		config = b.ChainConfig()
+	)
+	// Sanity check the EIP-4844 fee parameters.
+	if args.BlobFeeCap != nil {
+		if args.BlobFeeCap.ToInt().Sign() == 0 {
+			return errors.New("maxFeePerBlobGas must be non-zero")
+		}
+		if !config.IsCancun(head.Number, head.Time) {
+			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
+		}
+	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	// If the tx has completely specified a fee mechanism, no default is needed.
-	// This allows users who are not yet synced past London to get defaults for
-	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
-	// for more information.
-	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-
 	// Sanity check the EIP-1559 fee parameters if present.
-	if args.GasPrice == nil && eip1559ParamsSet {
+	if (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) && !config.IsLondon(head.Number) {
+		return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+	}
+	if args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil {
 		if args.MaxFeePerGas.ToInt().Sign() == 0 {
 			return errors.New("maxFeePerGas must be non-zero")
 		}
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 		}
-	} else if args.GasPrice != nil && !eip1559ParamsSet {
-		// Sanity check the non-EIP-1559 fee parameters.
-		head := b.CurrentHeader()
-		isLondon := b.ChainConfig().IsLondon(head.Number)
+	} else if args.GasPrice != nil {
 		// Zero gas-price is not allowed after London fork
-		if args.GasPrice.ToInt().Sign() == 0 && isLondon {
+		if args.GasPrice.ToInt().Sign() == 0 && config.IsLondon(head.Number) {
 			return errors.New("gasPrice must be non-zero after london fork")
 		}
 	}
+	return nil
+}
+
+func (args *TransactionArgs) validateBlobs(b Backend) error {
+	head := b.CurrentHeader()
+	if !b.ChainConfig().IsCancun(head.Number, head.Time) && (args.BlobHashes != nil || args.Blobs != nil || args.Commitments != nil || args.Proofs != nil) {
+		return errors.New("blobs are not valid before Cancun is active")
+	}
+	if args.BlobHashes != nil {
+		if len(args.BlobHashes) == 0 {
+			return errors.New(`need at least 1 blob for a blob transaction`)
+		}
+		if len(args.BlobHashes) > maxBlobsPerTransaction {
+			return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+		}
+		if args.To == nil {
+			return errors.New(`missing "to" in blob transaction`)
+		}
+	}
+	// Some methods only accept blob hashes, not the blobs themselves.
+	if args.Blobs == nil {
+		if args.Commitments != nil || args.Proofs != nil {
+			return errors.New(`blob commitments and proofs provided without blobs`)
+		}
+		return nil
+	}
+	// Assume user provides either only blobs (w/o hashes), or
+	// blobs together with commitments and proofs.
+	if args.Commitments == nil && args.Proofs != nil {
+		return errors.New(`blob proofs provided while commitments were not`)
+	} else if args.Commitments != nil && args.Proofs == nil {
+		return errors.New(`blob commitments provided while proofs were not`)
+	}
+
+	n := len(args.Blobs)
+	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	if args.Commitments != nil && len(args.Commitments) != n {
+		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+	}
+	if args.Proofs != nil && len(args.Proofs) != n {
+		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) != n {
+		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
+	}
+
 	return nil
 }
 
@@ -127,9 +201,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if err := args.validate(); err != nil {
 		return err
 	}
+	if err := args.setBlobTxSidecar(ctx, b); err != nil {
+		return err
+	}
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
+
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
 	}
@@ -154,15 +232,18 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			Value:                args.Value,
 			Data:                 (*hexutil.Bytes)(&data),
 			AccessList:           args.AccessList,
+			BlobFeeCap:           args.BlobFeeCap,
+			BlobHashes:           args.BlobHashes,
 		}
-		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
-		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, nil, b.RPCGasCap())
+		latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
 		if err != nil {
 			return err
 		}
 		args.Gas = &estimated
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
+
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
 	// chain id as the default.
 	want := b.ChainConfig().ChainID
@@ -181,20 +262,30 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if err := args.validateFees(b); err != nil {
 		return err
 	}
+	head := b.CurrentHeader()
+	if b.ChainConfig().IsCancun(head.Number, head.Time) {
+		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
+	}
+	// If the tx has completely specified a fee mechanism, no default is needed.
+	// This allows users who are not yet synced past London to get defaults for
+	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
+	// for more information.
+	if args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil {
+		return nil
+	}
+	// If gasPrice has been provided, no need to set any defaults.
 	if args.GasPrice != nil && args.MaxFeePerGas == nil && args.MaxPriorityFeePerGas == nil {
 		return nil
 	}
 	// Now attempt to fill in default value depending on whether London is active or not.
-	head := b.CurrentHeader()
 	if b.ChainConfig().IsLondon(head.Number) {
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
 			return err
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
-		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
 		if err != nil {
@@ -203,6 +294,21 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		args.GasPrice = (*hexutil.Big)(price)
 	}
 	return nil
+}
+
+// setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
+func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+	// Set maxFeePerBlobGas if it is missing.
+	if args.BlobHashes != nil && args.BlobFeeCap == nil {
+		// ExcessBlobGas must be set for a Cancun block.
+		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
+		// Set the max fee to be 2 times larger than the previous block's blob base fee.
+		// The additional slack allows the tx to not become invalidated if the base
+		// fee is rising.
+		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
+		args.BlobFeeCap = (*hexutil.Big)(val)
+	}
+	return args.setLondonFeeDefaults(ctx, head, b)
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
@@ -233,6 +339,65 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 	return nil
 }
 
+// setBlobTxSidecar adds the blob tx
+func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) error {
+	if err := args.validateBlobs(b); err != nil {
+		return err
+	}
+	// No blobs, we're done.
+	if args.Blobs == nil {
+		return nil
+	}
+	// Passing blobs is not allowed in all contexts, only in specific methods.
+	if !args.blobSidecarAllowed {
+		return errors.New(`"blobs" is not supported for this RPC method`)
+	}
+	n := len(args.Blobs)
+	// Either both commitments and proofs are available, or neither.
+	if args.Commitments == nil {
+		// Generate commitment and proof.
+		commitments := make([]kzg4844.Commitment, n)
+		proofs := make([]kzg4844.Proof, n)
+		for i, b := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(b)
+			if err != nil {
+				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
+			}
+			commitments[i] = c
+			p, err := kzg4844.ComputeBlobProof(b, c)
+			if err != nil {
+				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+			}
+			proofs[i] = p
+		}
+		args.Commitments = commitments
+		args.Proofs = proofs
+	} else {
+		for i, b := range args.Blobs {
+			if err := kzg4844.VerifyBlobProof(b, args.Commitments[i], args.Proofs[i]); err != nil {
+				return fmt.Errorf("failed to verify blob proof: %v", err)
+			}
+		}
+	}
+	// Compute hashes from commitments.
+	hashes := make([]common.Hash, n)
+	hasher := sha256.New()
+	for i, c := range args.Commitments {
+		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
+	}
+	// Generate/validate blob hashes.
+	if args.BlobHashes != nil {
+		for i, h := range hashes {
+			if h != args.BlobHashes[i] {
+				return fmt.Errorf("blob hash verification failed (have=%s, want=%s)", args.BlobHashes[i], h)
+			}
+		}
+	} else {
+		args.BlobHashes = hashes
+	}
+	return nil
+}
+
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
@@ -257,9 +422,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, sk
 		gas = globalGasCap
 	}
 	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
+		gasPrice   *big.Int
+		gasFeeCap  *big.Int
+		gasTipCap  *big.Int
+		blobFeeCap *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -291,6 +457,11 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, sk
 			}
 		}
 	}
+	if args.BlobFeeCap != nil {
+		blobFeeCap = args.BlobFeeCap.ToInt()
+	} else if args.BlobHashes != nil {
+		blobFeeCap = new(big.Int)
+	}
 	value := new(big.Int)
 	if args.Value != nil {
 		value = args.Value.ToInt()
@@ -315,6 +486,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, sk
 		GasTipCap:         gasTipCap,
 		Data:              data,
 		AccessList:        accessList,
+		BlobGasFeeCap:     blobFeeCap,
+		BlobHashes:        args.BlobHashes,
 		SkipAccountChecks: skipChecks,
 	}
 	return msg, nil
@@ -325,6 +498,32 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, sk
 func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 	var data types.TxData
 	switch {
+	case args.BlobHashes != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.BlobTx{
+			To:         *args.To,
+			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			BlobHashes: args.BlobHashes,
+			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
+		}
+		if args.Blobs != nil {
+			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
+				Blobs:       args.Blobs,
+				Commitments: args.Commitments,
+				Proofs:      args.Proofs,
+			}
+		}
+
 	case args.MaxFeePerGas != nil || type2:
 		al := types.AccessList{}
 		if args.AccessList != nil {
@@ -341,6 +540,7 @@ func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 			Data:       args.data(),
 			AccessList: al,
 		}
+
 	case args.AccessList != nil:
 		data = &types.AccessListTx{
 			To:         args.To,
@@ -352,6 +552,7 @@ func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 			Data:       args.data(),
 			AccessList: *args.AccessList,
 		}
+
 	default:
 		data = &types.LegacyTx{
 			To:       args.To,
@@ -371,4 +572,9 @@ func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) ToTransaction() *types.Transaction {
 	return args.toTransaction(args.GasPrice == nil)
+}
+
+// IsEIP4844 returns an indicator if the args contains EIP4844 fields.
+func (args *TransactionArgs) IsEIP4844() bool {
+	return args.BlobHashes != nil || args.BlobFeeCap != nil
 }

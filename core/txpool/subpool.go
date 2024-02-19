@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/holiman/uint256"
 )
 
 // LazyTransaction contains a small subset of the transaction properties that is
@@ -44,11 +45,17 @@ type LazyTransaction struct {
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still
 // maintained by the transaction pool.
+//
+// Note, the method will *not* cache the retrieved transaction if the original
+// pool has not cached it. The idea being, that if the tx was too big to insert
+// originally, silently saving it will cause more trouble down the line (and
+// indeed seems to have caused a memory bloat in the original implementation
+// which did just that).
 func (ltx *LazyTransaction) Resolve() *types.Transaction {
-	if ltx.Tx == nil {
-		ltx.Tx = ltx.Pool.Get(ltx.Hash)
+	if ltx.Tx != nil {
+		return ltx.Tx
 	}
-	return ltx.Tx
+	return ltx.Pool.Get(ltx.Hash)
 }
 
 // LazyResolver is a minimal interface needed for a transaction pool to satisfy
@@ -69,7 +76,7 @@ type AddressReserver func(addr common.Address, reserve bool) error
 // production, this interface defines the common methods that allow the primary
 // transaction pool to manage the subpools.
 type SubPool interface {
-	// Filter is a selector used to decide whether a transaction whould be added
+	// Filter is a selector used to decide whether a transaction would be added
 	// to this particular subpool.
 	Filter(tx *types.Transaction) bool
 
@@ -80,7 +87,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip *big.Int, head *types.Header, reserve AddressReserver) error
+	Init(gasTip uint64, head *types.Header, reserve AddressReserver) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.
@@ -108,7 +115,10 @@ type SubPool interface {
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.
-	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
+	//
+	// The transactions can also be pre-filtered by the dynamic fee components to
+	// reduce allocations and load on downstream subsystems.
+	Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*LazyTransaction
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions

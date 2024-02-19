@@ -26,6 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// PayloadVersion denotes the version of PayloadAttributes used to request the
+// building of the payload to commence.
+type PayloadVersion byte
+
+var (
+	PayloadV1 PayloadVersion = 0x1
+	PayloadV2 PayloadVersion = 0x2
+	PayloadV3 PayloadVersion = 0x3
+)
+
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
 // PayloadAttributes describes the environment context in which a block should
@@ -114,6 +124,21 @@ type TransitionConfigurationV1 struct {
 
 // PayloadID is an identifier of the payload build process
 type PayloadID [8]byte
+
+// Version returns the payload version associated with the identifier.
+func (b PayloadID) Version() PayloadVersion {
+	return PayloadVersion(b[0])
+}
+
+// Is returns whether the identifier matches any of provided payload versions.
+func (b PayloadID) Is(versions ...PayloadVersion) bool {
+	for _, v := range versions {
+		if v == b.Version() {
+			return true
+		}
+	}
+	return false
+}
 
 func (b PayloadID) String() string {
 	return hexutil.Encode(b[:])
@@ -277,4 +302,22 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 type ExecutionPayloadBodyV1 struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+}
+
+// Client identifiers to support ClientVersionV1.
+const (
+	ClientCode = "GE"
+	ClientName = "go-ethereum"
+)
+
+// ClientVersionV1 contains information which identifies a client implementation.
+type ClientVersionV1 struct {
+	Code    string `json:"code"`
+	Name    string `json:"clientName"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
+func (v *ClientVersionV1) String() string {
+	return fmt.Sprintf("%s-%s-%s-%s", v.Code, v.Name, v.Version, v.Commit)
 }
