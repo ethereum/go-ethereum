@@ -3568,6 +3568,65 @@ func testEIP2718Transition(t *testing.T, scheme string) {
 	}
 }
 
+func TestEIP5806Transition(t *testing.T) {
+	var (
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000000000)
+		gspec   = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				address: {Balance: funds},
+			},
+		}
+		contractAddr  = crypto.CreateAddress(address, 0)
+		storageDeploy = common.Hex2Bytes("608060405234801561001057600080fd5b5060c78061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80632e64cec11460375780636057361d146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506087565b005b60008054905090565b806000819055505056fea2646970667358221220aca4d6522f4cac72207b299362b5c5b4bead4107337f028ad714bf8036a5e9a464736f6c63430007060033")
+	)
+	// Generate blocks
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		signer := types.LatestSigner(gspec.Config)
+
+		b.SetCoinbase(common.Address{1})
+
+		txCreate, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 1000000, b.header.BaseFee, storageDeploy), signer, key)
+		b.AddTx(txCreate)
+
+		// One transaction to the contract
+		tx, _ := types.SignNewTx(key, signer, &types.DelegateTx{
+			ChainID:  gspec.Config.ChainID,
+			Nonce:    1,
+			To:       &contractAddr,
+			Gas:      30000,
+			GasPrice: b.header.BaseFee,
+			AccessList: types.AccessList{{
+				Address:     contractAddr,
+				StorageKeys: []common.Hash{{0}},
+			}},
+		})
+		b.AddTx(tx)
+	})
+
+	// Import the canonical chain
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(rawdb.PathScheme), gspec, nil, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+	code := state.GetCode(contractAddr)
+	if len(code) == 0 {
+		t.Fatal("created contract has length 0")
+	}
+}
+
 // TestEIP1559Transition tests the following:
 //
 //  1. A transaction whose gasFeeCap is greater than the baseFee is valid.
