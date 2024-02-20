@@ -71,17 +71,17 @@ func (tx *DelegateTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *DelegateTx) txType() byte              { return DelegateTxType }
-func (tx *DelegateTx) chainID() *big.Int         { return tx.ChainID }
-func (tx *DelegateTx) accessList() AccessList    { return tx.AccessList }
-func (tx *DelegateTx) data() []byte              { return tx.Data }
-func (tx *DelegateTx) gas() uint64               { return tx.Gas }
-func (tx *DelegateTx) gasPrice() *big.Int        { return tx.GasPrice }
-func (tx *DelegateTx) gasTipCap() *big.Int       { return tx.GasPrice }
-func (tx *DelegateTx) gasFeeCap() *big.Int       { return tx.GasPrice }
-func (tx *DelegateTx) value() *big.Int           { return big.NewInt(0) }
-func (tx *DelegateTx) nonce() uint64             { return tx.Nonce }
-func (tx *DelegateTx) to() *common.Address       { return tx.To }
+func (tx *DelegateTx) txType() byte           { return DelegateTxType }
+func (tx *DelegateTx) chainID() *big.Int      { return tx.ChainID }
+func (tx *DelegateTx) accessList() AccessList { return tx.AccessList }
+func (tx *DelegateTx) data() []byte           { return tx.Data }
+func (tx *DelegateTx) gas() uint64            { return tx.Gas }
+func (tx *DelegateTx) gasPrice() *big.Int     { return tx.GasPrice }
+func (tx *DelegateTx) gasTipCap() *big.Int    { return tx.GasPrice }
+func (tx *DelegateTx) gasFeeCap() *big.Int    { return tx.GasPrice }
+func (tx *DelegateTx) value() *big.Int        { return big.NewInt(0) }
+func (tx *DelegateTx) nonce() uint64          { return tx.Nonce }
+func (tx *DelegateTx) to() *common.Address    { return tx.To }
 
 func (tx *DelegateTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	return dst.Set(tx.GasPrice)
