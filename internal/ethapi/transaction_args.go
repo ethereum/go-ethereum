@@ -182,14 +182,8 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas must be non-zero")
 	}
-	if b.ChainConfig().IsCancun(head.Number, head.Time) {
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
-			return err
-		}
-	} else {
-		if args.BlobFeeCap != nil {
-			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
-		}
+	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+		return err
 	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
@@ -245,15 +239,19 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
+		var excessBlobGas uint64
+		if head.ExcessBlobGas != nil {
+			excessBlobGas = *head.ExcessBlobGas
+		}
 		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
 		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
 		args.BlobFeeCap = (*hexutil.Big)(val)
 	}
-	return args.setLondonFeeDefaults(ctx, head, b)
+	return nil
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
@@ -286,10 +284,6 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 
 // setBlobTxSidecar adds the blob tx
 func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) error {
-	isCancun := b.ChainConfig().IsCancun(b.CurrentHeader().Number, b.CurrentHeader().Time)
-	if !isCancun && (args.Blobs != nil || args.Commitments != nil || args.Proofs != nil || args.BlobHashes != nil) {
-		return errors.New("blobs are only valid after Cancun is active")
-	}
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil

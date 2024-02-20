@@ -208,20 +208,6 @@ func TestSetFeeDefaults(t *testing.T) {
 		},
 		// EIP-4844
 		{
-			"set maxFeePerBlobGas pre cancun",
-			"london",
-			&TransactionArgs{BlobFeeCap: fortytwo},
-			nil,
-			errors.New("maxFeePerBlobGas is not valid before Cancun is active"),
-		},
-		{
-			"set maxFeePerBlobGas pre london",
-			"legacy",
-			&TransactionArgs{BlobFeeCap: fortytwo},
-			nil,
-			errors.New("maxFeePerBlobGas is not valid before Cancun is active"),
-		},
-		{
 			"set gas price and maxFee for blob transaction",
 			"cancun",
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, BlobHashes: []common.Hash{}},
