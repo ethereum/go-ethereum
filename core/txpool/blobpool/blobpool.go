@@ -371,7 +371,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 	}
 	p.head, p.state = head, state
 
-	// Index all transactions on disk and delete anything inprocessable
+	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
 		if p.parseTransaction(id, size, blob) != nil {
