@@ -30,9 +30,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -88,6 +90,7 @@ var caps = []string{
 	"engine_newPayloadV3",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
+	"engine_getClientVersionV1",
 }
 
 type ConsensusAPI struct {
@@ -811,6 +814,23 @@ func (api *ConsensusAPI) heartbeat() {
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
+}
+
+// GetClientVersionV1 exchanges client version data of this node.
+func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engine.ClientVersionV1 {
+	log.Trace("Engine API request received", "method", "GetClientVersionV1", "info", info.String())
+	commit := make([]byte, 4)
+	if vcs, ok := version.VCS(); ok {
+		commit = common.FromHex(vcs.Commit)[0:4]
+	}
+	return []engine.ClientVersionV1{
+		{
+			Code:    engine.ClientCode,
+			Name:    engine.ClientName,
+			Version: params.VersionWithMeta,
+			Commit:  hexutil.Encode(commit),
+		},
+	}
 }
 
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list

@@ -302,7 +302,7 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	// Note, the signature must conform to the secp256k1 curve R, S and V values, where
 	// the V value must be 27 or 28 for legacy reasons.
 	//
-	// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
+	// https://geth.ethereum.org/docs/tools/clef/apis#account-ecrecover
 	if len(sig) != 65 {
 		return common.Address{}, errors.New("signature must be 65 bytes long")
 	}
