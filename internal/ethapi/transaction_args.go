@@ -178,9 +178,17 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
 	head := b.CurrentHeader()
+	// Sanity check the EIP-4844 fee parameters.
+	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
+		return errors.New("maxFeePerBlobGas must be non-zero")
+	}
 	if b.ChainConfig().IsCancun(head.Number, head.Time) {
 		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
 			return err
+		}
+	} else {
+		if args.BlobFeeCap != nil {
+			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
 		}
 	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
@@ -203,11 +211,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
 
-	// Sanity check the EIP-4844 fee parameters.
-	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
-		return errors.New("maxFeePerBlobGas must be non-zero")
-	}
-
 	// Sanity check the non-EIP-1559 fee parameters.
 	isLondon := b.ChainConfig().IsLondon(head.Number)
 	if args.GasPrice != nil && !eip1559ParamsSet {
@@ -220,16 +223,13 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 
 	// Now attempt to fill in default value depending on whether London is active or not.
 	if isLondon {
-		if args.BlobFeeCap != nil {
-			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
-		}
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
 			return err
 		}
 	} else {
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil || args.BlobFeeCap != nil {
-			return errors.New("maxFeePerGas and maxPriorityFeePerGas and maxFeePerBlobGas are not valid before London is active")
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
 		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
