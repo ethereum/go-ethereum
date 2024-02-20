@@ -145,6 +145,19 @@ func Transaction(ctx *cli.Context) error {
 				results = append(results, r)
 				continue
 			}
+			if chainConfig.IsPrague(new(big.Int), 0) {
+				if floorDataGas, err := core.FloorDataGas(tx.Data()); err != nil {
+					r.Error = err
+					results = append(results, r)
+					continue
+				} else {
+					if tx.Gas() < floorDataGas {
+						r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
+						results = append(results, r)
+						continue
+					}
+				}
+			}
 		}
 		// Validate <256bit fields
 		switch {
