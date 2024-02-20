@@ -17,7 +17,6 @@
 package state
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
