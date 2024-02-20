@@ -1,6 +1,7 @@
 package health
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -12,7 +13,7 @@ var (
 )
 
 func checkSynced(ec ethClient, r *http.Request) error {
-	i, err := ec.SyncProgress(r.Context())
+	i, err := ec.SyncProgress(context.TODO())
 	if err != nil {
 		log.Root().Warn("Unable to check sync status for healthcheck", "err", err.Error())
 		return err
