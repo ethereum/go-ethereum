@@ -177,6 +177,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
+	head := b.CurrentHeader()
+	if b.ChainConfig().IsCancun(head.Number, head.Time) {
+		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
+	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -186,7 +192,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
 	// for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
-
 	// Sanity check the EIP-1559 fee parameters if present.
 	if args.GasPrice == nil && eip1559ParamsSet {
 		if args.MaxFeePerGas.ToInt().Sign() == 0 {
@@ -204,7 +209,6 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	}
 
 	// Sanity check the non-EIP-1559 fee parameters.
-	head := b.CurrentHeader()
 	isLondon := b.ChainConfig().IsLondon(head.Number)
 	if args.GasPrice != nil && !eip1559ParamsSet {
 		// Zero gas-price is not allowed after London fork
@@ -215,11 +219,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	}
 
 	// Now attempt to fill in default value depending on whether London is active or not.
-	if b.ChainConfig().IsCancun(head.Number, head.Time) {
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
-			return err
-		}
-	} else if isLondon {
+	if isLondon {
 		if args.BlobFeeCap != nil {
 			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
 		}
@@ -286,6 +286,10 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 
 // setBlobTxSidecar adds the blob tx
 func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) error {
+	isCancun := b.ChainConfig().IsCancun(b.CurrentHeader().Number, b.CurrentHeader().Time)
+	if !isCancun && (args.Blobs != nil || args.Commitments != nil || args.Proofs != nil || args.BlobHashes != nil) {
+		return errors.New("blobs are only valid after Cancun is active")
+	}
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil
