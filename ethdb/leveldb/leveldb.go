@@ -21,7 +21,9 @@
 package leveldb
 
 import (
+	"errors"
 	"fmt"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -120,7 +121,8 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
-	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
+	var errCorrupted *dberrors.ErrCorrupted
+	if errors.As(err, &errCorrupted) {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
 	if err != nil {

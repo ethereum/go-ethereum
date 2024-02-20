@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -59,7 +60,8 @@ func TestDecodeFullNodeWrongSizeChild(t *testing.T) {
 	rlp.Encode(buf, fullNodeData)
 
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
-	if _, ok := err.(*decodeError); !ok {
+	var decodeError *decodeError
+	if !errors.As(err, &decodeError) {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
 	}
 }
@@ -78,7 +80,8 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 	rlp.Encode(buf, fullNodeData)
 
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
-	if _, ok := err.(*decodeError); !ok {
+	var decodeError *decodeError
+	if !errors.As(err, &decodeError) {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
 	}
 }

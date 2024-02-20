@@ -17,6 +17,7 @@
 package downloader
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -614,7 +615,7 @@ func testBoundedForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, len(chainA.blocks))
 
 	// Synchronise with the second peer and ensure that the fork is rejected to being too old
-	if err := tester.sync("rewriter", nil, mode); err != errInvalidAncestor {
+	if err := tester.sync("rewriter", nil, mode); !errors.Is(err, errInvalidAncestor) {
 		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidAncestor)
 	}
 }
@@ -649,7 +650,7 @@ func testBoundedHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 
 	tester.newPeer("heavy-rewriter", protocol, chainB.blocks[1:])
 	// Synchronise with the second peer and ensure that the fork is rejected to being too old
-	if err := tester.sync("heavy-rewriter", nil, mode); err != errInvalidAncestor {
+	if err := tester.sync("heavy-rewriter", nil, mode); !errors.Is(err, errInvalidAncestor) {
 		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidAncestor)
 	}
 }
@@ -854,7 +855,7 @@ func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 
 	chain := testChainBase.shorten(1)
 	tester.newPeer("attack", protocol, chain.blocks[1:])
-	if err := tester.sync("attack", big.NewInt(1000000), mode); err != errStallingPeer {
+	if err := tester.sync("attack", big.NewInt(1000000), mode); !errors.Is(err, errStallingPeer) {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }

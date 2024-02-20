@@ -106,17 +106,19 @@ func TestClientErrorData(t *testing.T) {
 	// The method handler returns an error value which implements the rpc.Error
 	// interface, i.e. it has a custom error code. The server returns this error code.
 	expectedCode := testError{}.ErrorCode()
-	if e, ok := err.(Error); !ok {
+	var e Error
+	if !errors.As(err, &e) {
 		t.Fatalf("client did not return rpc.Error, got %#v", e)
 	} else if e.ErrorCode() != expectedCode {
 		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), expectedCode)
 	}
 
 	// Check data.
-	if e, ok := err.(DataError); !ok {
+	var de DataError
+	if !errors.As(err, &de) {
 		t.Fatalf("client did not return rpc.DataError, got %#v", e)
-	} else if e.ErrorData() != (testError{}.ErrorData()) {
-		t.Fatalf("wrong error data %#v, want %#v", e.ErrorData(), testError{}.ErrorData())
+	} else if de.ErrorData() != (testError{}.ErrorData()) {
+		t.Fatalf("wrong error data %#v, want %#v", de.ErrorData(), testError{}.ErrorData())
 	}
 }
 
@@ -633,7 +635,7 @@ func TestClientNotificationStorm(t *testing.T) {
 					t.Fatalf("(%d/%d) unexpected value %d", i, count, val)
 				}
 			case err := <-sub.Err():
-				if wantError && err != ErrSubscriptionQueueOverflow {
+				if wantError && !errors.Is(err, ErrSubscriptionQueueOverflow) {
 					t.Fatalf("(%d/%d) got error %q, want %q", i, count, err, ErrSubscriptionQueueOverflow)
 				} else if !wantError {
 					t.Fatalf("(%d/%d) got unexpected error %q", i, count, err)

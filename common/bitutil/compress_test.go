@@ -18,6 +18,7 @@ package bitutil
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -143,7 +144,7 @@ func TestCompression(t *testing.T) {
 		t.Errorf("decoding mismatch for dense data: have %x, want %x, error %v", data, in, err)
 	}
 	// Check that decompressing a longer input than the target fails
-	if _, err := DecompressBytes([]byte{0xc0, 0x01, 0x01}, 2); err != errExceededTarget {
+	if _, err := DecompressBytes([]byte{0xc0, 0x01, 0x01}, 2); !errors.Is(err, errExceededTarget) {
 		t.Errorf("decoding error mismatch for long data: have %v, want %v", err, errExceededTarget)
 	}
 }

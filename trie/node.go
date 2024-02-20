@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -242,7 +243,8 @@ func wrapError(err error, ctx string) error {
 	if err == nil {
 		return nil
 	}
-	if decErr, ok := err.(*decodeError); ok {
+	var decErr *decodeError
+	if errors.As(err, &decErr) {
 		decErr.stack = append(decErr.stack, ctx)
 		return decErr
 	}

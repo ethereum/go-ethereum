@@ -275,7 +275,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
 	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+	var configCompatError *params.ConfigCompatError
+	if genesisErr != nil && !errors.As(genesisErr, &configCompatError) {
 		return nil, genesisErr
 	}
 	log.Info("")
@@ -455,7 +456,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	go bc.updateFutureBlocks()
 
 	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+	var compat *params.ConfigCompatError
+	if errors.As(genesisErr, &compat) {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		if compat.RewindToTime > 0 {
 			bc.SetHeadWithTimestamp(compat.RewindToTime)
@@ -1282,7 +1284,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// Write downloaded chain data and corresponding receipt chain data
 	if len(ancientBlocks) > 0 {
 		if n, err := writeAncient(ancientBlocks, ancientReceipts); err != nil {
-			if err == errInsertionInterrupted {
+			if errors.Is(err, errInsertionInterrupted) {
 				return 0, nil
 			}
 			return n, err
@@ -1290,7 +1292,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 	if len(liveBlocks) > 0 {
 		if n, err := writeLive(liveBlocks, liveReceipts); err != nil {
-			if err == errInsertionInterrupted {
+			if errors.Is(err, errInsertionInterrupted) {
 				return 0, nil
 			}
 			return n, err

@@ -227,7 +227,8 @@ func TestCopy(t *testing.T) {
 func TestSnapshotRandom(t *testing.T) {
 	config := &quick.Config{MaxCount: 1000}
 	err := quick.Check((*snapshotTest).run, config)
-	if cerr, ok := err.(*quick.CheckError); ok {
+	var cerr *quick.CheckError
+	if errors.As(err, &cerr) {
 		test := cerr.In[0].(*snapshotTest)
 		t.Errorf("%v:\n%s", test.err, test)
 	} else if err != nil {

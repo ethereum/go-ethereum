@@ -52,7 +52,8 @@ func readJSON(reader io.Reader, value interface{}) error {
 		return fmt.Errorf("error reading JSON file: %v", err)
 	}
 	if err = json.Unmarshal(data, &value); err != nil {
-		if syntaxerr, ok := err.(*json.SyntaxError); ok {
+		var syntaxerr *json.SyntaxError
+		if errors.As(err, &syntaxerr) {
 			line := findLine(data, syntaxerr.Offset)
 			return fmt.Errorf("JSON syntax error at line %v: %v", line, err)
 		}

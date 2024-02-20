@@ -100,13 +100,15 @@ func (d DiscReason) Error() string {
 }
 
 func discReasonForError(err error) DiscReason {
-	if reason, ok := err.(DiscReason); ok {
+	var reason DiscReason
+	if errors.As(err, &reason) {
 		return reason
 	}
 	if errors.Is(err, errProtocolReturned) {
 		return DiscQuitting
 	}
-	peerError, ok := err.(*peerError)
+	var peerError *peerError
+	ok := errors.As(err, &peerError)
 	if ok {
 		switch peerError.code {
 		case errInvalidMsgCode, errInvalidMsg:

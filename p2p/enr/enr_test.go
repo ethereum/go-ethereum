@@ -19,6 +19,7 @@ package enr
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -97,8 +98,8 @@ func TestLoadErrors(t *testing.T) {
 	// Check error for invalid keys.
 	var list []uint
 	err = r.Load(WithEntry(ip4.ENRKey(), &list))
-	kerr, ok := err.(*KeyError)
-	if !ok {
+	var kerr *KeyError
+	if !errors.As(err, &kerr) {
 		t.Fatalf("expected KeyError, got %T", err)
 	}
 	assert.Equal(t, kerr.Key, ip4.ENRKey())
@@ -149,7 +150,7 @@ func TestSortedGetAndSet(t *testing.T) {
 func TestDirty(t *testing.T) {
 	var r Record
 
-	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
+	if _, err := rlp.EncodeToBytes(r); !errors.Is(err, errEncodeUnsigned) {
 		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 
@@ -164,7 +165,7 @@ func TestDirty(t *testing.T) {
 	if len(r.signature) != 0 {
 		t.Error("signature still set after modification")
 	}
-	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
+	if _, err := rlp.EncodeToBytes(r); !errors.Is(err, errEncodeUnsigned) {
 		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 }
@@ -248,7 +249,7 @@ func TestRecordTooBig(t *testing.T) {
 
 	// set a big value for random key, expect error
 	r.Set(WithEntry(key, randomString(SizeLimit)))
-	if err := signTest([]byte{5}, &r); err != errTooBig {
+	if err := signTest([]byte{5}, &r); !errors.Is(err, errTooBig) {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 

@@ -128,7 +128,7 @@ var (
 // returns false, it is pretty certain that the packet causing the error does not belong
 // to discv5.
 func IsInvalidHeader(err error) bool {
-	return err == errTooShort || err == errInvalidHeader || err == errMsgTooShort
+	return errors.Is(err, errTooShort) || errors.Is(err, errInvalidHeader) || errors.Is(err, errMsgTooShort)
 }
 
 // Packet sizes.

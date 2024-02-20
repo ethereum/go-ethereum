@@ -117,8 +117,9 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 		}
 		if err != nil {
-			switch err.(type) {
-			case *trie.MissingNodeError:
+			var missingNodeError *trie.MissingNodeError
+			switch {
+			case errors.As(err, &missingNodeError):
 				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
 			default:
 				return nil, nil, err

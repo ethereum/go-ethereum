@@ -272,7 +272,8 @@ loop:
 			}
 			writeStart <- struct{}{}
 		case err = <-readErr:
-			if r, ok := err.(DiscReason); ok {
+			var r DiscReason
+			if errors.As(err, &r) {
 				remoteRequested = true
 				reason = r
 			} else {

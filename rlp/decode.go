@@ -141,7 +141,8 @@ func wrapStreamError(err error, typ reflect.Type) error {
 }
 
 func addErrorContext(err error, ctx string) error {
-	if decErr, ok := err.(*decodeError); ok {
+	var decErr *decodeError
+	if errors.As(err, &decErr) {
 		decErr.ctx = append(decErr.ctx, ctx)
 	}
 	return err
@@ -326,7 +327,7 @@ func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 			val.SetLen(i + 1)
 		}
 		// decode into element
-		if err := elemdec(s, val.Index(i)); err == EOL {
+		if err := elemdec(s, val.Index(i)); errors.Is(err, EOL) {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -345,7 +346,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 	vlen := val.Len()
 	i := 0
 	for ; i < vlen; i++ {
-		if err := elemdec(s, val.Index(i)); err == EOL {
+		if err := elemdec(s, val.Index(i)); errors.Is(err, EOL) {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -417,7 +418,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		}
 		for i, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
-			if err == EOL {
+			if errors.Is(err, EOL) {
 				if f.optional {
 					// The field is optional, so reaching the end of the list before
 					// reaching the last field is acceptable. All remaining undecoded
@@ -757,7 +758,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 		}
 		v, err := s.readUint(byte(size))
 		switch {
-		case err == ErrCanonSize:
+		case errors.Is(err, ErrCanonSize):
 			// Adjust error because we're not reading a size right now.
 			return 0, ErrCanonInt
 		case err != nil:
@@ -948,7 +949,8 @@ func (s *Stream) Decode(val interface{}) error {
 	}
 
 	err = decoder(s, rval.Elem())
-	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
+	var decErr *decodeError
+	if errors.As(err, &decErr) && len(decErr.ctx) > 0 {
 		// Add decode target type to error so context has more meaning.
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
 	}

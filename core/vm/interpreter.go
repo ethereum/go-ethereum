@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -234,7 +235,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc++
 	}
 
-	if err == errStopToken {
+	if errors.Is(err, errStopToken) {
 		err = nil // clear stop token error
 	}
 

@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -68,7 +69,7 @@ func TestFreezerBasics(t *testing.T) {
 	}
 	// Check that we cannot read too far
 	_, err = f.Retrieve(uint64(255))
-	if err != errOutOfBounds {
+	if !errors.Is(err, errOutOfBounds) {
 		t.Fatal(err)
 	}
 }
@@ -1361,7 +1362,8 @@ func runRandTest(rt randTest) bool {
 
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTest, nil); err != nil {
-		if cerr, ok := err.(*quick.CheckError); ok {
+		var cerr *quick.CheckError
+		if errors.As(err, &cerr) {
 			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
 		}
 		t.Fatal(err)
