@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -614,25 +616,48 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
+	var (
+		direct = big.NewInt(int64(math.Sqrt(float64(h.peers.len()))))   // Approximate number of peers to broadcst to
+		total  = new(big.Int).Exp(direct, big.NewInt(2), nil)           // Stabilise total peer count a bit based on sqrt peers
+		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we ust need *a* sender
+		hasher = sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hash   = make([]byte, 32)
+	)
 	for _, tx := range txs {
-		peers := h.peers.peersWithoutTransaction(tx.Hash())
-
-		var numDirect int
+		var maybeDirect bool
 		switch {
 		case tx.Type() == types.BlobTxType:
 			blobTxs++
 		case tx.Size() > txMaxBroadcastSize:
 			largeTxs++
 		default:
-			numDirect = int(math.Sqrt(float64(len(peers))))
+			maybeDirect = true
 		}
-		// Send the tx unconditionally to a subset of our peers
-		for _, peer := range peers[:numDirect] {
-			txset[peer] = append(txset[peer], tx.Hash())
-		}
-		// For the remaining peers, send announcement only
-		for _, peer := range peers[numDirect:] {
-			annos[peer] = append(annos[peer], tx.Hash())
+		// Send the transaction (if it's small enough) directly to a subset of
+		// the peers that have not received it yet, ensuring that the flow of
+		// transactions is groupped by account to (try and) avoid nonce gaps.
+		//
+		// To do this, we hash a peer's enode ID together with the transaction
+		// sender and broadcast if `sha(peer, sender) mod peers < sqrt(peers)`.
+		for _, peer := range h.peers.peersWithoutTransaction(tx.Hash()) {
+			var broadcast bool
+			if maybeDirect {
+				hasher.Reset()
+				hasher.Write(peer.Node().ID().Bytes())
+
+				from, _ := types.Sender(signer, tx) // Ignore error, we only use the addr as a propagation target splitter
+				hasher.Write(from.Bytes())
+
+				hasher.Read(hash)
+				if new(big.Int).Mod(new(big.Int).SetBytes(hash), total).Cmp(direct) < 0 {
+					broadcast = true
+				}
+			}
+			if broadcast {
+				txset[peer] = append(txset[peer], tx.Hash())
+			} else {
+				annos[peer] = append(annos[peer], tx.Hash())
+			}
 		}
 	}
 	for peer, hashes := range txset {
