@@ -28,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	_ "github.com/ethereum/go-ethereum/ethclient/engineclient" // Register the ethclient codec
+
+	// Temporary to get engineclient to compile for testing. Will remove
+	_ "github.com/ethereum/go-ethereum/ethclient/engineclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
