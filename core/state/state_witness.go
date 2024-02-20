@@ -3,35 +3,22 @@ package state
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
-	"math/big"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// A Witness contains a block and all pre-state needed to execute the block
+// and compute the post-state root.
 type Witness struct {
 	Block       *types.Block
 	blockHashes map[uint64]common.Hash
 	codes       map[common.Hash]Code
 	root        common.Hash
 	lists       map[common.Hash]map[string][]byte
-}
-
-func (w *Witness) GetBlockHash(num uint64) common.Hash {
-	return w.blockHashes[num]
-}
-
-func (w *Witness) Root() common.Hash {
-	return w.root
 }
 
 type rlpWitness struct {
@@ -46,7 +33,7 @@ type rlpWitness struct {
 	CodeHashes  []common.Hash
 }
 
-func (e *rlpWitness) ToWitness() (*Witness, error) {
+func (e *rlpWitness) toWitness() (*Witness, error) {
 	res := NewWitness(e.Root)
 	if err := rlp.DecodeBytes(e.EncBlock, &res.Block); err != nil {
 		return nil, err
@@ -72,7 +59,7 @@ func DecodeWitnessRLP(b []byte) (*Witness, error) {
 	if err := rlp.DecodeBytes(b, &res); err != nil {
 		return nil, err
 	}
-	if wit, err := res.ToWitness(); err != nil {
+	if wit, err := res.toWitness(); err != nil {
 		return nil, err
 	} else {
 		return wit, nil
@@ -152,8 +139,6 @@ func (w *Witness) AddCode(hash common.Hash, code Code) {
 }
 
 // AddCodeHash adds a code hash to the witness
-// TODO bug:  adding a code hash before executing the same account later would result in the account's code
-// not being added to the witness.  this should be covered in state tests?
 func (w *Witness) AddCodeHash(hash common.Hash) {
 	if _, ok := w.codes[hash]; ok {
 		return
@@ -351,61 +336,4 @@ func NewWitness(root common.Hash) *Witness {
 		root:        root,
 		lists:       make(map[common.Hash]map[string][]byte),
 	}
-}
-
-// DumpBlockWitnessToFile serializes a witness object and writes it and the provided chain config to files on
-// a given path.
-func DumpBlockWitnessToFile(cfg *params.ChainConfig, w *Witness, path string) error {
-	enc, _ := w.EncodeRLP()
-
-	blockHash := w.Block.Hash()
-	witnessOutputFName := fmt.Sprintf("%d-%x.rlp", w.Block.NumberU64(), blockHash[0:8])
-	witnessPath := filepath.Join(path, witnessOutputFName)
-	err := os.WriteFile(witnessPath, enc, 0644)
-	if err != nil {
-		return err
-	}
-
-	cfgOutputFName := fmt.Sprintf("%d-%x-chaincfg.json", w.Block.NumberU64(), blockHash[0:8])
-	cfgPath := filepath.Join(path, cfgOutputFName)
-	f, err := os.OpenFile(cfgPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	cfgWriter := json.NewEncoder(f)
-	cfgWriter.Encode(cfg)
-	return nil
-}
-
-// PopulateDB imports trie nodes from the witness
-// into the specified backing database.
-func (w *Witness) PopulateDB(db ethdb.Database) error {
-	batch := db.NewBatch()
-	for owner, nodes := range w.lists {
-		for path, node := range nodes {
-			if owner == (common.Hash{}) {
-				rawdb.WriteAccountTrieNode(batch, []byte(path), node)
-			} else {
-				rawdb.WriteStorageTrieNode(batch, owner, []byte(path), node)
-			}
-		}
-	}
-
-	for blockNum, blockHash := range w.blockHashes {
-		fakeHeader := types.Header{}
-		fakeHeader.ParentHash = blockHash
-		fakeHeader.Number = new(big.Int).SetUint64(blockNum)
-		rawdb.WriteHeader(batch, &fakeHeader)
-	}
-
-	for codeHash, code := range w.codes {
-		rawdb.WriteCode(batch, codeHash, code)
-	}
-
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	return nil
 }

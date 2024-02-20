@@ -197,9 +197,13 @@ func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer 
 
 	if stateless {
 		for _, blk := range validBlocks {
-			_, err := eth.BuildProof(blk.BlockHeader.Number.Uint64(), chain)
+			proof, err := eth.BuildProof(blk.BlockHeader.Number.Uint64(), chain)
 			if err != nil {
 				return fmt.Errorf("failed to build proof: %v", err)
+			}
+			_, err = state.DecodeWitnessRLP(proof)
+			if err != nil {
+				return fmt.Errorf("failed to decode witness RLP: %v", err)
 			}
 			// TODO: decode and execute the stateless proof, verify the produced root
 			// matches the block root.
