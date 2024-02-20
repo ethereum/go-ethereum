@@ -37,8 +37,8 @@ var (
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
-	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
+	closed   bool
 
 	deliveryMissMeter metrics.Meter
 	accountLoadMeter  metrics.Meter
@@ -71,11 +71,12 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	return p
 }
 
-// close iterates over all the subfetchers, aborts any that were left spinning
-// and reports the stats to the metrics subsystem.
+// close iterates over all the subfetchers, waits on any that were left spinning
+// and reports the stats to the metrics subsystem.  close should not be called
+// more than once on a triePrefetcher instance.
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
-		fetcher.abort() // safe to do multiple times
+		fetcher.close()
 
 		if metrics.Enabled {
 			if fetcher.root == p.root {
@@ -99,54 +100,18 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	// Clear out all fetchers (will crash on a second call, deliberate)
-	p.fetchers = nil
+	p.closed = true
 }
 
-// copy creates a deep-but-inactive copy of the trie prefetcher. Any trie data
-// already loaded will be copied over, but no goroutines will be started. This
-// is mostly used in the miner which creates a copy of it's actively mutated
-// state to be sealed while it may further mutate the state.
-func (p *triePrefetcher) copy() *triePrefetcher {
-	copy := &triePrefetcher{
-		db:      p.db,
-		root:    p.root,
-		fetches: make(map[string]Trie), // Active prefetchers use the fetches map
-
-		deliveryMissMeter: p.deliveryMissMeter,
-		accountLoadMeter:  p.accountLoadMeter,
-		accountDupMeter:   p.accountDupMeter,
-		accountSkipMeter:  p.accountSkipMeter,
-		accountWasteMeter: p.accountWasteMeter,
-		storageLoadMeter:  p.storageLoadMeter,
-		storageDupMeter:   p.storageDupMeter,
-		storageSkipMeter:  p.storageSkipMeter,
-		storageWasteMeter: p.storageWasteMeter,
-	}
-	// If the prefetcher is already a copy, duplicate the data
-	if p.fetches != nil {
-		for root, fetch := range p.fetches {
-			if fetch == nil {
-				continue
-			}
-			copy.fetches[root] = p.db.CopyTrie(fetch)
-		}
-		return copy
-	}
-	// Otherwise we're copying an active fetcher, retrieve the current states
-	for id, fetcher := range p.fetchers {
-		copy.fetches[id] = fetcher.peek()
-	}
-	return copy
-}
-
-// prefetch schedules a batch of trie items to prefetch.
+// prefetch schedules a batch of trie items to prefetch. After the prefetcher is closed, all the following tasks scheduled will not be executed.
+//
+// prefetch is called from two locations:
+//  1. Finalize of the state-objects storage roots. This happens at the end
+//     of every transaction, meaning that if several transactions touches
+//     upon the same contract, the parameters invoking this method may be
+//     repeated.
+//  2. Finalize of the main account trie. This happens only once per block.
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
-	// If the prefetcher is an inactive one, bail out
-	if p.fetches != nil {
-		return
-	}
-	// Active fetcher, schedule the retrievals
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
@@ -157,34 +122,24 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
-// have it.
+// have it. trie is not safe to call concurrently
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
-	// If the prefetcher is inactive, return from existing deep copies
-	id := p.trieID(owner, root)
-	if p.fetches != nil {
-		trie := p.fetches[id]
-		if trie == nil {
-			p.deliveryMissMeter.Mark(1)
-			return nil
-		}
-		return p.db.CopyTrie(trie)
-	}
-	// Otherwise the prefetcher is active, bail if no trie was prefetched for this root
-	fetcher := p.fetchers[id]
-	if fetcher == nil {
+	// Bail if no trie was prefetched for this root
+	fetcher := p.fetchers[p.trieID(owner, root)]
+	if fetcher == nil || fetcher.trie == nil {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
-	// Interrupt the prefetcher if it's by any chance still running and return
-	// a copy of any pre-loaded trie.
-	fetcher.abort() // safe to do multiple times
-
-	trie := fetcher.peek()
-	if trie == nil {
-		p.deliveryMissMeter.Mark(1)
-		return nil
+	if p.closed {
+		return fetcher.db.CopyTrie(fetcher.trie)
 	}
-	return trie
+	trieChan := make(chan Trie)
+	fetcher.copy <- trieChan
+	select {
+	case fetcher.wake <- true:
+	default:
+	}
+	return <-trieChan
 }
 
 // used marks a batch of state items used to allow creating statistics as to
@@ -218,10 +173,9 @@ type subfetcher struct {
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
+	wake chan bool      // Wake channel if a new task is scheduled, true if the subfetcher should continue running when there are no pending tasks
 	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // Channel to request a copy of the current trie
+	copy chan chan Trie // channel for retrieving copies of the subfetcher's trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -237,10 +191,9 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		owner: owner,
 		root:  root,
 		addr:  addr,
-		wake:  make(chan struct{}, 1),
-		stop:  make(chan struct{}),
+		wake:  make(chan bool, 1),
+		copy:  make(chan chan Trie, 1),
 		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
 	go sf.loop()
@@ -251,52 +204,32 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 func (sf *subfetcher) schedule(keys [][]byte) {
 	// Append the tasks to the current queue
 	sf.lock.Lock()
+
 	sf.tasks = append(sf.tasks, keys...)
 	sf.lock.Unlock()
-
 	// Notify the prefetcher, it's fine if it's already terminated
 	select {
-	case sf.wake <- struct{}{}:
+	case sf.wake <- true:
 	default:
 	}
 }
 
-// peek tries to retrieve a deep copy of the fetcher's trie in whatever form it
-// is currently.
-func (sf *subfetcher) peek() Trie {
-	ch := make(chan Trie)
-	select {
-	case sf.copy <- ch:
-		// Subfetcher still alive, return copy from it
-		return <-ch
-
-	case <-sf.term:
-		// Subfetcher already terminated, return a copy directly
-		if sf.trie == nil {
-			return nil
-		}
-		return sf.db.CopyTrie(sf.trie)
-	}
-}
-
-// abort interrupts the subfetcher immediately. It is safe to call abort multiple
-// times but it is not thread safe.
-func (sf *subfetcher) abort() {
-	select {
-	case <-sf.stop:
-	default:
-		close(sf.stop)
-	}
+// close waits for the subfetcher to finish its tasks. It cannot be called multiple times
+func (sf *subfetcher) close() {
+	// Notify the prefetcher. The wake-chan is buffered, so this is async.
+	sf.wake <- false
+	// Wait for it to terminate
 	<-sf.term
 }
 
-// loop waits for new tasks to be scheduled and keeps loading them until it runs
-// out of tasks or its underlying trie is retrieved for committing.
+// loop loads newly-scheduled trie tasks as they are received and loads them, stopping
+// when requested.
 func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
-	// Start by opening the trie and stop processing if it fails
+	// Any calls to trie
+	// start by opening the trie and stop processing if it fails.
 	if sf.owner == (common.Hash{}) {
 		trie, err := sf.db.OpenTrie(sf.root)
 		if err != nil {
@@ -315,50 +248,34 @@ func (sf *subfetcher) loop() {
 		sf.trie = trie
 	}
 	// Trie opened successfully, keep prefetching items
-	for {
-		select {
-		case <-sf.wake:
-			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-			sf.lock.Lock()
-			tasks := sf.tasks
-			sf.tasks = nil
-			sf.lock.Unlock()
+	for keepRunning := range sf.wake {
+		// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
+		sf.lock.Lock()
+		tasks := sf.tasks
+		sf.tasks = nil
+		sf.lock.Unlock()
 
-			// Prefetch any tasks until the loop is interrupted
-			for i, task := range tasks {
-				select {
-				case <-sf.stop:
-					// If termination is requested, add any leftover back and return
-					sf.lock.Lock()
-					sf.tasks = append(sf.tasks, tasks[i:]...)
-					sf.lock.Unlock()
-					return
-
-				case ch := <-sf.copy:
-					// Somebody wants a copy of the current trie, grant them
-					ch <- sf.db.CopyTrie(sf.trie)
-
-				default:
-					// No termination request yet, prefetch the next entry
-					if _, ok := sf.seen[string(task)]; ok {
-						sf.dups++
-					} else {
-						if len(task) == common.AddressLength {
-							sf.trie.GetAccount(common.BytesToAddress(task))
-						} else {
-							sf.trie.GetStorage(sf.addr, task)
-						}
-						sf.seen[string(task)] = struct{}{}
-					}
-				}
+		// Prefetch all tasks
+		for _, task := range tasks {
+			if _, ok := sf.seen[string(task)]; ok {
+				sf.dups++
+				continue
 			}
-
+			if len(task) == common.AddressLength {
+				sf.trie.GetAccount(common.BytesToAddress(task))
+			} else {
+				sf.trie.GetStorage(sf.addr, task)
+			}
+			sf.seen[string(task)] = struct{}{}
+		}
+		// if any trie retrieval request is made, ensure it is completed
+		// after pending tasks have been processed.
+		select {
 		case ch := <-sf.copy:
-			// Somebody wants a copy of the current trie, grant them
 			ch <- sf.db.CopyTrie(sf.trie)
-
-		case <-sf.stop:
-			// Termination is requested, abort and leave remaining tasks
+		default:
+		}
+		if !keepRunning {
 			return
 		}
 	}
