@@ -271,11 +271,7 @@ func (sf *subfetcher) loop() {
 			if len(task) == common.AddressLength {
 				sf.trie.GetAccount(common.BytesToAddress(task))
 			} else {
-				_, err := sf.trie.GetStorage(sf.addr, task)
-				if err != nil {
-					// TODO: see what needs to be done in this case
-					fmt.Printf("prefetch storage failed: %+v\n", err)
-				}
+				_, _ := sf.trie.GetStorage(sf.addr, task)
 			}
 			sf.seen[string(task)] = struct{}{}
 		}
