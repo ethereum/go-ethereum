@@ -216,6 +216,14 @@ func (t *VerkleTrie) Hash() common.Hash {
 	return t.root.Commit().Bytes()
 }
 
+func (t *VerkleTrie) AccessList() map[string][]byte {
+	panic("not implemented")
+}
+
+func (t *VerkleTrie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
+	panic("not implemented")
+}
+
 // Commit writes all nodes to the tree's memory database.
 func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 	root, ok := t.root.(*verkle.InternalNode)

@@ -26,6 +26,8 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/ethereum/go-ethereum/eth"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -57,8 +59,8 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 type btJSON struct {
 	Blocks     []btBlock             `json:"blocks"`
 	Genesis    btHeader              `json:"genesisBlockHeader"`
-	Pre        types.GenesisAlloc    `json:"pre"`
-	Post       types.GenesisAlloc    `json:"postState"`
+	Pre        core.GenesisAlloc     `json:"pre"`
+	Post       core.GenesisAlloc     `json:"postState"`
 	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
 	Network    string                `json:"network"`
 	SealEngine string                `json:"sealEngine"`
@@ -109,7 +111,15 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(false, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(true, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -126,6 +136,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	} else {
 		tconf.HashDB = hashdb.Defaults
 	}
+
 	// Commit genesis state
 	gspec := t.genesis(config)
 	triedb := triedb.NewDatabase(db, tconf)
@@ -144,7 +155,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true, TrieDirtyDisabled: true}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
@@ -181,6 +192,17 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	if snapshotter {
 		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
 			return err
+		}
+	}
+
+	if stateless {
+		for _, blk := range validBlocks {
+			_, err := eth.BuildProof(blk.BlockHeader.Number.Uint64(), chain)
+			if err != nil {
+				return fmt.Errorf("failed to build proof: %v", err)
+			}
+			// TODO: decode and execute the stateless proof, verify the produced root
+			// matches the block root.
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
