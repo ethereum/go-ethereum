@@ -2,7 +2,6 @@ package state
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"sort"
 
@@ -315,16 +314,6 @@ func (w *Witness) PrettyPrint() string {
 		fmt.Fprintf(b, "\t%x:%x\n", codeHash, code)
 	}
 	return b.String()
-}
-
-// Hash returns the sha256 hash of a witness
-func (w *Witness) Hash() common.Hash {
-	res, err := rlp.EncodeToBytes(w.sortedWitness())
-	if err != nil {
-		panic(err)
-	}
-
-	return common.Hash(sha256.Sum256(res[:]))
 }
 
 // NewWitness returns a new witness object.

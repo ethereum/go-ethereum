@@ -126,12 +126,13 @@ type Trie interface {
 	// be created with new root and updated trie database for following usage
 	Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error)
 
-	// CommitAndObtainAccessList does the same thing as Commit and returns an
-	// access list map of trie nodes read from the database.
-	CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error)
-
-	// AccessList returns a map of trie node read from the database.
+	// AccessList returns a map of path->blob containing all trie nodes that have
+	// been accessed.
 	AccessList() map[string][]byte
+
+	// CommitAndObtainAccessList does the same thing as Commit, but also returns
+	// the access list of the trie.
+	CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned
