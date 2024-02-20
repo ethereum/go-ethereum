@@ -918,6 +918,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
+        // If there was a trie prefetcher operating, it gets aborted and irrevocably
+        // modified after we start retrieving tries. Remove it from the statedb after
+        // this round of use.
+        //
+        // This is weird pre-byzantium since the first tx runs with a prefetcher and
+        // the remainder without, but pre-byzantium even the initial prefetcher is
+        // useless, so no sleep lost.
 	prefetcher := s.prefetcher
 	if s.prefetcher != nil {
 		defer func() {
@@ -939,7 +946,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj.updateRoot()
 		}
 	}
-
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
