@@ -45,11 +45,6 @@ var HashDefaults = &Config{
 	HashDB:    hashdb.Defaults,
 }
 
-var PathDefaults = &Config{
-	Preimages: false,
-	PathDB:    pathdb.Defaults,
-}
-
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {

@@ -107,7 +107,7 @@ func NewEmpty(db database.Database) *Trie {
 }
 
 // MustNodeIterator is a wrapper of NodeIterator and will omit any encountered
-// error but just printg out an error message.
+// error but just print out an error message.
 func (t *Trie) MustNodeIterator(start []byte) NodeIterator {
 	it, err := t.NodeIterator(start)
 	if err != nil {
@@ -581,10 +581,6 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
-// TODO: for resolveAndTrack, differentiate between hash node resolve failure in stateless
-// vs normal execution.  In normal mode, it represents an error with database
-// consistency.  In stateless execution, it means that the witness is incomplete.
-
 // resolveAndTrack loads node from the underlying store with the given node hash
 // and path prefix and also tracks the loaded node blob in tracer treated as the
 // node's original value. The rlp-encoded blob is preferred to be loaded from
@@ -606,10 +602,14 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
+// AccessList returns a map of path->blob containing all trie nodes that have
+// been accessed.
 func (t *Trie) AccessList() map[string][]byte {
 	return t.tracer.accessList
 }
 
+// CommitAndObtainAccessList does the same thing as Commit, but also returns
+// the access list of the trie.
 func (t *Trie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
 	accessList := t.tracer.accessList
 	// Commit will reset the tracer accessList, so after this

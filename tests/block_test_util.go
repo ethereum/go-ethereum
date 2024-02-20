@@ -59,8 +59,8 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 type btJSON struct {
 	Blocks     []btBlock             `json:"blocks"`
 	Genesis    btHeader              `json:"genesisBlockHeader"`
-	Pre        core.GenesisAlloc     `json:"pre"`
-	Post       core.GenesisAlloc     `json:"postState"`
+	Pre        types.GenesisAlloc    `json:"pre"`
+	Post       types.GenesisAlloc    `json:"postState"`
 	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
 	Network    string                `json:"network"`
 	SealEngine string                `json:"sealEngine"`
@@ -155,7 +155,7 @@ func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer 
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true, TrieDirtyDisabled: true}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
@@ -197,7 +197,7 @@ func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer 
 
 	if stateless {
 		for _, blk := range validBlocks {
-			proof, err := eth.BuildProof(blk.BlockHeader.Number.Uint64(), chain)
+			proof, err := eth.BuildStatelessProof(blk.BlockHeader.Number.Uint64(), chain)
 			if err != nil {
 				return fmt.Errorf("failed to build proof: %v", err)
 			}

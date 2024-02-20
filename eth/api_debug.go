@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -449,7 +447,9 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
 
-func BuildProof(number uint64, bc *core.BlockChain) ([]byte, error) {
+// BuildStatelessProof executes a block, collecting the accessed pre-state into
+// a Witness.  The RLP-encoded witness is returned.
+func BuildStatelessProof(number uint64, bc *core.BlockChain) ([]byte, error) {
 	if number == 0 {
 		panic("cannot build genesis block proof")
 	}
@@ -459,19 +459,8 @@ func BuildProof(number uint64, bc *core.BlockChain) ([]byte, error) {
 		return nil, err
 	}
 	db.EnableWitnessRecording()
-	db.StartPrefetcher("apidebug")
+	db.StartPrefetcher("debug_buildStatelessProof")
 	block := bc.GetBlockByNumber(number)
-
-	logconfig := &logger.Config{
-		EnableMemory:     false,
-		DisableStack:     false,
-		DisableStorage:   false,
-		EnableReturnData: true,
-		Debug:            true,
-	}
-	tracer := logger.NewJSONLogger(logconfig, os.Stdout)
-	_ = tracer
-
 	stateProcessor := core.NewStateProcessor(bc.Config(), bc, bc.Engine())
 	_, _, _, err = stateProcessor.Process(block, db, vm.Config{})
 	if err != nil {
@@ -489,6 +478,8 @@ func BuildProof(number uint64, bc *core.BlockChain) ([]byte, error) {
 	return enc, nil
 }
 
-func (api *DebugAPI) BuildProof(num rpc.BlockNumber) ([]byte, error) {
-	return BuildProof(uint64(num), api.eth.blockchain)
+// BuildStatelessProof executes a block, collecting the accessed pre-state into
+// a Witness.  The RLP-encoded witness is returned.
+func (api *DebugAPI) BuildStatelessProof(num rpc.BlockNumber) ([]byte, error) {
+	return BuildStatelessProof(uint64(num), api.eth.blockchain)
 }

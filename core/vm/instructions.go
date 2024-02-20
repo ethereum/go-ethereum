@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"math"
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -365,7 +366,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = 0xffffffffffffffff
+		uint64CodeOffset = math.MaxUint64
 	}
 	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
@@ -383,7 +384,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = 0xffffffffffffffff
+		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
@@ -428,8 +429,8 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		_ = interpreter.evm.StateDB.GetCode(address) // ensure the account leaf is fetched and included in the witness
 		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+			_ = interpreter.evm.StateDB.GetCode(address) // ensure the account leaf is fetched and included in the witness
 			witness.AddCodeHash(interpreter.evm.StateDB.GetCodeHash(address))
 		}
 		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())

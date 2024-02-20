@@ -502,8 +502,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'buildProof',
-			call: 'debug_buildProof',
+			name: 'buildStatelessProof',
+			call: 'debug_buildStatelessProof',
 			params: 1
 		}),
 	],
