@@ -360,7 +360,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 		}
 	}
 	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
+	// case the head state is not available (might occur when node is not
 	// fully synced).
 	state, err := p.chain.StateAt(head.Root)
 	if err != nil {
@@ -540,7 +540,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		}
 		delete(p.index, addr)
 		delete(p.spent, addr)
-		if inclusions != nil { // only during reorgs will the heap will be initialized
+		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
 		p.reserve(addr, false)
@@ -693,7 +693,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		if len(txs) == 0 {
 			delete(p.index, addr)
 			delete(p.spent, addr)
-			if inclusions != nil { // only during reorgs will the heap will be initialized
+			if inclusions != nil { // only during reorgs will the heap be initialized
 				heap.Remove(p.evict, p.evict.index[addr])
 			}
 			p.reserve(addr, false)
@@ -809,7 +809,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 				}
 			}
 			// Recheck the account's pooled transactions to drop included and
-			// invalidated one
+			// invalidated ones
 			p.recheck(addr, inclusions)
 		}
 		if len(adds) > 0 {
@@ -1226,7 +1226,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 // consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
-	// only even pulled form the network, so this method will act as the overload
+	// only even pulled from the network, so this method will act as the overload
 	// protection for fetches.
 	waitStart := time.Now()
 	p.lock.Lock()
@@ -1554,7 +1554,7 @@ func (p *BlobPool) updateStorageMetrics() {
 }
 
 // updateLimboMetrics retrieves a bunch of stats from the limbo store and pushes
-// // them out as metrics.
+// them out as metrics.
 func (p *BlobPool) updateLimboMetrics() {
 	stats := p.limbo.store.Infos()
 
