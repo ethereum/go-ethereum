@@ -194,13 +194,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		err   error
 		value common.Hash
 	)
-
-	if s.db.witness != nil && s.db.snap != nil && s.origin != nil {
-		// when building a witness with snapshot enabled, prefetch all read slots to be collected
-		// and included in the witness when the block root hash is committed (intermediateroot/commit?)
-		s.db.readPrefetcher.prefetch(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]})
-	}
-
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
@@ -214,6 +207,11 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			}
 			value.SetBytes(content)
 		}
+		// If witness building is enabled, prefetch any trie paths loaded directly
+		// via the snapshots
+		if s.db.prefetcher != nil && err == nil && s.db.witness != nil && s.data.Root != types.EmptyRootHash {
+			s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]})
+		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
@@ -224,7 +222,6 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			return common.Hash{}
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
-		//fmt.Printf("trie access list is %v\n", tr.AccessList())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
