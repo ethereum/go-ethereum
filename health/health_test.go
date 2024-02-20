@@ -382,7 +382,7 @@ func TestProcessFromHeaders(t *testing.T) {
 	}
 }
 
-func TestProcessHealthcheckIfNeeded_RequestBody(t *testing.T) {
+func TestProcessFromBody(t *testing.T) {
 	cases := []struct {
 		body                string
 		clientPeerResult    uint64
