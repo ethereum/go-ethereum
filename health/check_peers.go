@@ -4,15 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 var (
 	errNotEnoughPeers = errors.New("not enough peers")
 )
 
-func checkMinPeers(ec *ethclient.Client, minPeerCount uint) error {
+func checkMinPeers(ec ethClient, minPeerCount uint) error {
 	peerCount, err := ec.PeerCount(context.TODO())
 	if err != nil {
 		return err

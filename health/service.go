@@ -14,9 +14,9 @@ type handler struct {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	headers := r.Header.Values(healthHeader)
 	if len(headers) != 0 {
-		h.processFromHeaders(headers, w, r)
+		processFromHeaders(h.ec, headers, w, r)
 	} else {
-		h.processFromBody(w, r)
+		processFromBody(h.ec, w, r)
 	}
 }
 

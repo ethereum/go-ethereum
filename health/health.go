@@ -16,6 +16,7 @@ import (
 
 const (
 	healthHeader     = "X-GETH-HEALTHCHECK"
+	query            = "query"
 	synced           = "synced"
 	minPeerCount     = "min_peer_count"
 	checkBlock       = "check_block"
@@ -23,8 +24,8 @@ const (
 )
 
 var (
-	errCheckDisabled  = errors.New("error check disabled")
-	errBadHeaderValue = errors.New("bad header value")
+	errCheckDisabled = errors.New("error check disabled")
+	errInvalidValue  = errors.New("invalid value provided")
 )
 
 type requestBody struct {
@@ -34,7 +35,7 @@ type requestBody struct {
 	MaxSecondsBehind *int    `json:"max_seconds_behind"`
 }
 
-func (h *handler) processFromHeaders(headers []string, w http.ResponseWriter, r *http.Request) {
+func processFromHeaders(ec ethClient, headers []string, w http.ResponseWriter, r *http.Request) {
 	var (
 		errCheckSynced  = errCheckDisabled
 		errCheckPeer    = errCheckDisabled
@@ -45,7 +46,7 @@ func (h *handler) processFromHeaders(headers []string, w http.ResponseWriter, r 
 	for _, header := range headers {
 		lHeader := strings.ToLower(header)
 		if lHeader == synced {
-			errCheckSynced = checkSynced(h.ec, r)
+			errCheckSynced = checkSynced(ec, r)
 		}
 		if strings.HasPrefix(lHeader, minPeerCount) {
 			peers, err := strconv.Atoi(strings.TrimPrefix(lHeader, minPeerCount))
@@ -53,7 +54,7 @@ func (h *handler) processFromHeaders(headers []string, w http.ResponseWriter, r 
 				errCheckPeer = err
 				break
 			}
-			errCheckPeer = checkMinPeers(h.ec, uint(peers))
+			errCheckPeer = checkMinPeers(ec, uint(peers))
 		}
 		if strings.HasPrefix(lHeader, checkBlock) {
 			block, err := strconv.Atoi(strings.TrimPrefix(lHeader, checkBlock))
@@ -61,7 +62,7 @@ func (h *handler) processFromHeaders(headers []string, w http.ResponseWriter, r 
 				errCheckBlock = err
 				break
 			}
-			errCheckBlock = checkBlockNumber(h.ec, big.NewInt(int64(block)))
+			errCheckBlock = checkBlockNumber(ec, big.NewInt(int64(block)))
 		}
 		if strings.HasPrefix(lHeader, maxSecondsBehind) {
 			seconds, err := strconv.Atoi(strings.TrimPrefix(lHeader, maxSecondsBehind))
@@ -70,18 +71,18 @@ func (h *handler) processFromHeaders(headers []string, w http.ResponseWriter, r 
 				break
 			}
 			if seconds < 0 {
-				errCheckSeconds = errBadHeaderValue
+				errCheckSeconds = errInvalidValue
 				break
 			}
 			now := time.Now().Unix()
-			errCheckSeconds = checkTime(h.ec, r, int(now)-seconds)
+			errCheckSeconds = checkTime(ec, r, int(now)-seconds)
 		}
 	}
 
-	reportHealth(errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds, w)
+	reportHealth(nil, errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds, w)
 }
 
-func (h *handler) processFromBody(w http.ResponseWriter, r *http.Request) {
+func processFromBody(ec ethClient, w http.ResponseWriter, r *http.Request) {
 	body, errParse := parseHealthCheckBody(r.Body)
 	defer r.Body.Close()
 
@@ -96,36 +97,42 @@ func (h *handler) processFromBody(w http.ResponseWriter, r *http.Request) {
 		log.Root().Warn("Unable to process healthcheck request", "err", errParse)
 	} else {
 		if body.Synced != nil {
-			errCheckSynced = checkSynced(h.ec, r)
+			errCheckSynced = checkSynced(ec, r)
 		}
 
 		if body.MinPeerCount != nil {
-			errCheckPeer = checkMinPeers(h.ec, *body.MinPeerCount)
+			errCheckPeer = checkMinPeers(ec, *body.MinPeerCount)
 		}
 
 		if body.CheckBlock != nil {
-			errCheckBlock = checkBlockNumber(h.ec, big.NewInt(int64(*body.CheckBlock)))
+			errCheckBlock = checkBlockNumber(ec, big.NewInt(int64(*body.CheckBlock)))
 		}
 
 		if body.MaxSecondsBehind != nil {
 			seconds := *body.MaxSecondsBehind
 			if seconds < 0 {
-				errCheckSeconds = errBadHeaderValue
+				errCheckSeconds = errInvalidValue
+			} else {
+				now := time.Now().Unix()
+				errCheckSeconds = checkTime(ec, r, int(now)-seconds)
 			}
-			now := time.Now().Unix()
-			errCheckSeconds = checkTime(h.ec, r, int(now)-seconds)
 		}
 	}
 
-	err := reportHealth(errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds, w)
+	err := reportHealth(errParse, errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds, w)
 	if err != nil {
 		log.Root().Warn("Unable to process healthcheck request", "err", err)
 	}
 }
 
-func reportHealth(errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds error, w http.ResponseWriter) error {
+func reportHealth(errParse, errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds error, w http.ResponseWriter) error {
 	statusCode := http.StatusOK
 	errs := make(map[string]string)
+
+	if shouldChangeStatusCode(errParse) {
+		statusCode = http.StatusInternalServerError
+	}
+	errs[query] = errorStringOrOK(errParse)
 
 	if shouldChangeStatusCode(errCheckSynced) {
 		statusCode = http.StatusInternalServerError
@@ -188,7 +195,7 @@ func shouldChangeStatusCode(err error) bool {
 
 func errorStringOrOK(err error) string {
 	if err == nil {
-		return "HEALTHY"
+		return "OK"
 	}
 
 	if errors.Is(err, errCheckDisabled) {

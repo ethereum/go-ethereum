@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 var (
@@ -14,7 +12,7 @@ var (
 )
 
 func checkTime(
-	ec *ethclient.Client,
+	ec ethClient,
 	r *http.Request,
 	seconds int,
 ) error {
