@@ -614,6 +614,11 @@ var (
 		Value:    "",
 		Category: flags.APICategory,
 	}
+	HTTPHealthEnabledFlag = &cli.BoolFlag{
+		Name:     "http.health",
+		Usage:    "Enable the HTTP healthcheck API at path '/health'.",
+		Category: flags.APICategory,
+	}
 	GraphQLEnabledFlag = &cli.BoolFlag{
 		Name:     "graphql",
 		Usage:    "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
