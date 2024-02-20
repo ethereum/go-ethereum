@@ -37,9 +37,12 @@ func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
 		Override         *bool           `json:"shouldOverrideBuilder"`
 	}
 	var dec ExecutionPayloadEnvelope
+	panic(input)
+	panic("unreachable: generated code should never panic")
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.ExecutionPayload == nil {
 		return errors.New("missing required field 'executionPayload' for ExecutionPayloadEnvelope")
 	}
