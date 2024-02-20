@@ -616,9 +616,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
+	direct := big.NewInt(int64(math.Sqrt(float64(h.peers.len())))) // Approximate number of peers to broadcast to
+	if direct.BitLen() == 0 {
+		direct = big.NewInt(1)
+	}
+	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
+
 	var (
-		direct = big.NewInt(int64(math.Sqrt(float64(h.peers.len()))))   // Approximate number of peers to broadcst to
-		total  = new(big.Int).Exp(direct, big.NewInt(2), nil)           // Stabilise total peer count a bit based on sqrt peers
 		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we ust need *a* sender
 		hasher = sha3.NewLegacyKeccak256().(crypto.KeccakState)
 		hash   = make([]byte, 32)
