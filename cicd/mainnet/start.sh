@@ -7,10 +7,10 @@ then
         exit 1
   fi
   echo $PRIVATE_KEY >> /tmp/key
-  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -v FS="({|})" '{print $2}')
+  wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -F '[{}]' '{print $2}')
   XDC --datadir /work/xdcchain init /work/genesis.json
 else
-  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -v FS="({|})" '{print $2}')
+  wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -F '[{}]' '{print $2}')
 fi
 
 input="/work/bootnodes.list"
@@ -79,6 +79,6 @@ XDC --ethstats ${netstats} --gcmode archive \
 --rpcapi admin,db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
 --rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
 --gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
---periodicprofile --debugdatadir /work/xdcchain \
+--debugdatadir /work/xdcchain \
 --ws --wsaddr=0.0.0.0 --wsport $ws_port \
 --wsorigins "*" 2>&1 >>/work/xdcchain/xdc.log | tee -a /work/xdcchain/xdc.log
