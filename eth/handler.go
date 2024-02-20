@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"golang.org/x/crypto/sha3"
 )
@@ -86,6 +87,7 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
+	NodeID         enode.ID               // P2P node ID used for tx propagation topology
 	Database       ethdb.Database         // Database for direct sync insertions
 	Chain          *core.BlockChain       // Blockchain to serve data from
 	TxPool         txPool                 // Transaction pool to propagate from
@@ -98,6 +100,7 @@ type handlerConfig struct {
 }
 
 type handler struct {
+	nodeID     enode.ID
 	networkID  uint64
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
@@ -139,6 +142,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
 	h := &handler{
+		nodeID:         config.NodeID,
 		networkID:      config.Network,
 		forkFilter:     forkid.NewFilter(config.Chain),
 		eventMux:       config.EventMux,
@@ -647,6 +651,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 			var broadcast bool
 			if maybeDirect {
 				hasher.Reset()
+				hasher.Write(h.nodeID.Bytes())
 				hasher.Write(peer.Node().ID().Bytes())
 
 				from, _ := types.Sender(signer, tx) // Ignore error, we only use the addr as a propagation target splitter
