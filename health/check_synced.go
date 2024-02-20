@@ -12,6 +12,7 @@ var (
 	errNotSynced = errors.New("not synced")
 )
 
+// checkSynced returns 'errNotSynced' if the node is in the syncing state.
 func checkSynced(ec ethClient, r *http.Request) error {
 	i, err := ec.SyncProgress(context.TODO())
 	if err != nil {

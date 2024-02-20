@@ -11,6 +11,7 @@ type handler struct {
 	ec *ethclient.Client
 }
 
+// ServeHTTP implements the http.Handler interface.
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	headers := r.Header.Values(healthHeader)
 	if len(headers) != 0 {

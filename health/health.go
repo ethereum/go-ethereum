@@ -35,6 +35,7 @@ type requestBody struct {
 	MaxSecondsBehind *int    `json:"max_seconds_behind"`
 }
 
+// processFromHeaders handles requests when 'X-GETH-HEALTHCHECK' header labels are present.
 func processFromHeaders(ec ethClient, headers []string, w http.ResponseWriter, r *http.Request) {
 	var (
 		errCheckSynced  = errCheckDisabled
@@ -82,6 +83,7 @@ func processFromHeaders(ec ethClient, headers []string, w http.ResponseWriter, r
 	reportHealth(nil, errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds, w)
 }
 
+// processFromBody handles requests when 'X-GETH-HEALTHCHECK' headers are not present.
 func processFromBody(ec ethClient, w http.ResponseWriter, r *http.Request) {
 	body, errParse := parseHealthCheckBody(r.Body)
 	defer r.Body.Close()
@@ -125,6 +127,7 @@ func processFromBody(ec ethClient, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// reportHealth builds the response body, sets the status code and calls for it to be written.
 func reportHealth(errParse, errCheckSynced, errCheckPeer, errCheckBlock, errCheckSeconds error, w http.ResponseWriter) error {
 	statusCode := http.StatusOK
 	errs := make(map[string]string)
@@ -157,6 +160,7 @@ func reportHealth(errParse, errCheckSynced, errCheckPeer, errCheckBlock, errChec
 	return writeResponse(w, errs, statusCode)
 }
 
+// parseHealthCheckBody parses and type checks the request body when 'X-GETH-HEALTHCHECK' headers are not present.
 func parseHealthCheckBody(reader io.Reader) (requestBody, error) {
 	var body requestBody
 
@@ -173,6 +177,7 @@ func parseHealthCheckBody(reader io.Reader) (requestBody, error) {
 	return body, nil
 }
 
+// writeResponse delivers the status and body to the response writer.
 func writeResponse(w http.ResponseWriter, errs map[string]string, statusCode int) error {
 	w.WriteHeader(statusCode)
 
@@ -189,10 +194,12 @@ func writeResponse(w http.ResponseWriter, errs map[string]string, statusCode int
 	return nil
 }
 
+// shouldChangeStatusCode returns 'true' if an error exists and is not 'errCheckDisabled'.
 func shouldChangeStatusCode(err error) bool {
 	return err != nil && !errors.Is(err, errCheckDisabled)
 }
 
+// errorStringOrOK returns "OK", "DISABLED" or the error message based on the output of the check.
 func errorStringOrOK(err error) string {
 	if err == nil {
 		return "OK"

@@ -10,6 +10,7 @@ var (
 	errNotEnoughPeers = errors.New("not enough peers")
 )
 
+// checkMinPeers returns 'errNotEnoughPeers' if the current peer count its lower than 'minPeerCount'
 func checkMinPeers(ec ethClient, minPeerCount uint) error {
 	peerCount, err := ec.PeerCount(context.TODO())
 	if err != nil {
