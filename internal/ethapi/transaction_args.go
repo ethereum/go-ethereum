@@ -180,7 +180,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	head := b.CurrentHeader()
 	// Sanity check the EIP-4844 fee parameters.
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
-		return errors.New("maxFeePerBlobGas must be non-zero")
+		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
 	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
 		return err
