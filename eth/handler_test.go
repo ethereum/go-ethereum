@@ -93,7 +93,7 @@ func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []erro
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -112,8 +112,8 @@ func (p *testTxPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee 
 				Hash:      tx.Hash(),
 				Tx:        tx,
 				Time:      tx.Time(),
-				GasFeeCap: tx.GasFeeCap(),
-				GasTipCap: tx.GasTipCap(),
+				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 				Gas:       tx.Gas(),
 				BlobGas:   tx.BlobGas(),
 			})

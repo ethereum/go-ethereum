@@ -221,6 +221,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
+		{
+			"fill maxFeePerBlobGas when dynamic fees are set",
+			"cancun",
+			&TransactionArgs{BlobHashes: []common.Hash{}, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+			nil,
+		},
 	}
 
 	ctx := context.Background()
@@ -233,12 +240,13 @@ func TestSetFeeDefaults(t *testing.T) {
 		if err != nil {
 			if test.err == nil {
 				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
+			} else if err.Error() != test.err.Error() {
+				t.Fatalf("test %d (%s): unexpected error: (got: %s, want: %s)", i, test.name, err, test.err)
 			}
-			if err.Error() == test.err.Error() {
-				// Test threw expected error.
-				continue
-			}
-			t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
+			// Matching error.
+			continue
+		} else if test.err != nil {
+			t.Fatalf("test %d (%s): expected error: %s", i, test.name, test.err)
 		}
 		if !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("test %d (%s): did not fill defaults as expected: (got: %v, want: %v)", i, test.name, got, test.want)

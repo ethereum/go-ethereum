@@ -278,7 +278,7 @@ type list struct {
 	totalcost *uint256.Int // Total cost of all transactions in the list
 }
 
-// newList create a new transaction list for maintaining nonce-indexable fast,
+// newList creates a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
 func newList(strict bool) *list {
 	return &list{

@@ -92,7 +92,7 @@ type Peer struct {
 	lock sync.RWMutex  // Mutex protecting the internal fields
 }
 
-// NewPeer create a wrapper for a network connection and negotiated  protocol
+// NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
