@@ -242,7 +242,7 @@ func (t *jsTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, fr
 	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
 	if err != nil {
 		t.err = err
-		t.env.Cancel()
+		t.env.VM.Cancel()
 		return
 	}
 	t.ctx["gasPrice"] = gasPriceBig
@@ -265,7 +265,7 @@ func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	cancel := func(err error) {
 		t.err = err
-		t.env.Cancel()
+		t.env.VM.Cancel()
 	}
 	if create {
 		t.ctx["type"] = t.vm.ToValue("CREATE")
@@ -408,7 +408,7 @@ func (t *jsTracer) onError(context string, err error) {
 	t.err = wrapError(context, err)
 	// `env` is set on CaptureStart which comes before any JS execution.
 	// So it should be non-nil.
-	t.env.Cancel()
+	t.env.VM.Cancel()
 }
 
 func wrapError(context string, err error) error {
