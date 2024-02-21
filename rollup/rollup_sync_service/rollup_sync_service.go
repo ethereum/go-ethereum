@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"syscall"
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
@@ -16,6 +15,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
 
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
@@ -54,9 +54,10 @@ type RollupSyncService struct {
 	l1RevertBatchEventSignature   common.Hash
 	l1FinalizeBatchEventSignature common.Hash
 	bc                            *core.BlockChain
+	stack                         *node.Node
 }
 
-func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig, db ethdb.Database, l1Client sync_service.EthClient, bc *core.BlockChain, l1DeploymentBlock uint64) (*RollupSyncService, error) {
+func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig, db ethdb.Database, l1Client sync_service.EthClient, bc *core.BlockChain, stack *node.Node) (*RollupSyncService, error) {
 	// terminate if the caller does not provide an L1 client (e.g. in tests)
 	if l1Client == nil || (reflect.ValueOf(l1Client).Kind() == reflect.Ptr && reflect.ValueOf(l1Client).IsNil()) {
 		log.Warn("No L1 client provided, L1 rollup sync service will not run")
@@ -80,8 +81,8 @@ func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig
 	// Initialize the latestProcessedBlock with the block just before the L1 deployment block.
 	// This serves as a default value when there's no L1 rollup events synced in the database.
 	var latestProcessedBlock uint64
-	if l1DeploymentBlock > 0 {
-		latestProcessedBlock = l1DeploymentBlock - 1
+	if stack.Config().L1DeploymentBlock > 0 {
+		latestProcessedBlock = stack.Config().L1DeploymentBlock - 1
 	}
 
 	block := rawdb.ReadRollupEventSyncedL1BlockNumber(db)
@@ -103,6 +104,7 @@ func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig
 		l1RevertBatchEventSignature:   scrollChainABI.Events["RevertBatch"].ID,
 		l1FinalizeBatchEventSignature: scrollChainABI.Events["FinalizeBatch"].ID,
 		bc:                            bc,
+		stack:                         stack,
 	}
 
 	return &service, nil
@@ -223,7 +225,7 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 				return fmt.Errorf("failed to get local node info, batch index: %v, err: %w", batchIndex, err)
 			}
 
-			endBlock, finalizedBatchMeta, err := validateBatch(event, parentBatchMeta, chunks)
+			endBlock, finalizedBatchMeta, err := validateBatch(event, parentBatchMeta, chunks, s.stack)
 			if err != nil {
 				return fmt.Errorf("fatal: validateBatch failed: finalize event: %v, err: %w", event, err)
 			}
@@ -375,7 +377,7 @@ func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.Chun
 // validateBatch verifies the consistency between the L1 contract and L2 node data.
 // The function will terminate the node and exit if any consistency check fails.
 // It returns the number of the end block, a finalized batch meta data, and an error if any.
-func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.FinalizedBatchMeta, chunks []*Chunk) (uint64, *rawdb.FinalizedBatchMeta, error) {
+func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.FinalizedBatchMeta, chunks []*Chunk, stack *node.Node) (uint64, *rawdb.FinalizedBatchMeta, error) {
 	if len(chunks) == 0 {
 		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0, batch index: %v", event.BatchIndex.Uint64())
 	}
@@ -395,15 +397,15 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 	localStateRoot := endBlock.Header.Root
 	if localStateRoot != event.StateRoot {
 		log.Error("State root mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentBatchMeta.BatchHash.Hex(), "l1 finalized state root", event.StateRoot.Hex(), "l2 state root", localStateRoot.Hex())
-		syscall.Kill(os.Getpid(), syscall.SIGTERM)
-		return 0, nil, fmt.Errorf("state root mismatch")
+		stack.Close()
+		os.Exit(1)
 	}
 
 	localWithdrawRoot := endBlock.WithdrawRoot
 	if localWithdrawRoot != event.WithdrawRoot {
 		log.Error("Withdraw root mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentBatchMeta.BatchHash.Hex(), "l1 finalized withdraw root", event.WithdrawRoot.Hex(), "l2 withdraw root", localWithdrawRoot.Hex())
-		syscall.Kill(os.Getpid(), syscall.SIGTERM)
-		return 0, nil, fmt.Errorf("withdraw root mismatch")
+		stack.Close()
+		os.Exit(1)
 	}
 
 	// Note: All params for NewBatchHeader are calculated locally based on the block data.
@@ -422,8 +424,8 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 			log.Error("marshal chunks failed", "err", err)
 		}
 		log.Error("Chunks", "chunks", string(chunksJson))
-		syscall.Kill(os.Getpid(), syscall.SIGTERM)
-		return 0, nil, fmt.Errorf("batch hash mismatch")
+		stack.Close()
+		os.Exit(1)
 	}
 
 	totalL1MessagePopped := parentBatchMeta.TotalL1MessagePopped

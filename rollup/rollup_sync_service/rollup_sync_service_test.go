@@ -17,6 +17,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
+	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
 )
 
@@ -32,7 +33,12 @@ func TestRollupSyncServiceStartAndStop(t *testing.T) {
 	db := rawdb.NewDatabase(memorydb.New())
 	l1Client := &mockEthClient{}
 	bc := &core.BlockChain{}
-	service, err := NewRollupSyncService(context.Background(), genesisConfig, db, l1Client, bc, 1)
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("Failed to new P2P node: %v", err)
+	}
+	defer stack.Close()
+	service, err := NewRollupSyncService(context.Background(), genesisConfig, db, l1Client, bc, stack)
 	if err != nil {
 		t.Fatalf("Failed to new rollup sync service: %v", err)
 	}
@@ -112,7 +118,12 @@ func TestGetChunkRanges(t *testing.T) {
 		commitBatchRLP: rlpData,
 	}
 	bc := &core.BlockChain{}
-	service, err := NewRollupSyncService(context.Background(), genesisConfig, db, l1Client, bc, 1)
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("Failed to new P2P node: %v", err)
+	}
+	defer stack.Close()
+	service, err := NewRollupSyncService(context.Background(), genesisConfig, db, l1Client, bc, stack)
 	if err != nil {
 		t.Fatalf("Failed to new rollup sync service: %v", err)
 	}
@@ -169,7 +180,7 @@ func TestValidateBatch(t *testing.T) {
 		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*Chunk{chunk1, chunk2, chunk3})
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*Chunk{chunk1, chunk2, chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -193,7 +204,7 @@ func TestValidateBatch(t *testing.T) {
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*Chunk{chunk4})
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
