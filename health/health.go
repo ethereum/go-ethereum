@@ -46,26 +46,24 @@ func processFromHeaders(ec ethClient, headers []string, w http.ResponseWriter, r
 
 	for _, header := range headers {
 		lHeader := strings.ToLower(header)
-		if lHeader == synced {
+		switch {
+		case lHeader == synced:
 			errCheckSynced = checkSynced(ec, r)
-		}
-		if strings.HasPrefix(lHeader, minPeerCount) {
+		case strings.HasPrefix(lHeader, minPeerCount):
 			peers, err := strconv.Atoi(strings.TrimPrefix(lHeader, minPeerCount))
 			if err != nil {
 				errCheckPeer = err
 				break
 			}
 			errCheckPeer = checkMinPeers(ec, uint(peers))
-		}
-		if strings.HasPrefix(lHeader, checkBlock) {
+		case strings.HasPrefix(lHeader, checkBlock):
 			block, err := strconv.Atoi(strings.TrimPrefix(lHeader, checkBlock))
 			if err != nil {
 				errCheckBlock = err
 				break
 			}
 			errCheckBlock = checkBlockNumber(ec, big.NewInt(int64(block)))
-		}
-		if strings.HasPrefix(lHeader, maxSecondsBehind) {
+		case strings.HasPrefix(lHeader, maxSecondsBehind):
 			seconds, err := strconv.Atoi(strings.TrimPrefix(lHeader, maxSecondsBehind))
 			if err != nil {
 				errCheckSeconds = err
