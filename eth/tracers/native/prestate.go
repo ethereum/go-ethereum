@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -58,7 +59,7 @@ type accountMarshaling struct {
 
 type prestateTracer struct {
 	directory.NoopTracer
-	env       *vm.EVM
+	env       *live.VMContext
 	pre       stateMap
 	post      stateMap
 	to        common.Address
@@ -73,24 +74,33 @@ type prestateTracerConfig struct {
 	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
-func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
+func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	return &prestateTracer{
+	t := &prestateTracer{
 		pre:     stateMap{},
 		post:    stateMap{},
 		config:  config,
 		created: make(map[common.Address]bool),
 		deleted: make(map[common.Address]bool),
+	}
+	return &directory.Tracer{
+		LiveLogger: &live.LiveLogger{
+			CaptureTxStart: t.CaptureTxStart,
+			CaptureTxEnd:   t.CaptureTxEnd,
+			CaptureState:   t.CaptureState,
+		},
+		GetResult: t.GetResult,
+		Stop:      t.Stop,
 	}, nil
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *prestateTracer) CaptureState(pc uint64, opcode live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -98,10 +108,10 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	if t.interrupt.Load() {
 		return
 	}
-	stack := scope.Stack
-	stackData := stack.Data()
+	op := vm.OpCode(opcode)
+	stackData := scope.GetStackData()
 	stackLen := len(stackData)
-	caller := scope.Contract.Address()
+	caller := scope.GetAddress()
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
@@ -136,7 +146,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (t *prestateTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
@@ -147,7 +157,7 @@ func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from
 
 	t.lookupAccount(from)
 	t.lookupAccount(t.to)
-	t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Coinbase)
 }
 
 func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt, err error) {

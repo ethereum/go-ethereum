@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -564,10 +565,10 @@ func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, heade
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		stateDB.AddBalance(uncle.Coinbase, r, state.BalanceIncreaseRewardMineUncle)
+		stateDB.AddBalance(uncle.Coinbase, r, live.BalanceIncreaseRewardMineUncle)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	stateDB.AddBalance(header.Coinbase, reward, state.BalanceIncreaseRewardMineBlock)
+	stateDB.AddBalance(header.Coinbase, reward, live.BalanceIncreaseRewardMineBlock)
 }

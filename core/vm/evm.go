@@ -22,9 +22,9 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -230,8 +230,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, live.GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -286,8 +286,8 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, live.GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -333,8 +333,8 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, live.GasChangeCallFailedExecution)
 			}
 			gas = 0
 		}
@@ -369,7 +369,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 	// but is the correct thing to do and matters on other networks, in tests, and potential
 	// future scenarios
-	evm.StateDB.AddBalance(addr, new(big.Int), state.BalanceChangeTouchAccount)
+	evm.StateDB.AddBalance(addr, new(big.Int), live.BalanceChangeTouchAccount)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
@@ -391,8 +391,8 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			if evm.Config.Tracer != nil {
-				evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+				evm.Config.Tracer.OnGasChange(gas, 0, live.GasChangeCallFailedExecution)
 			}
 
 			gas = 0
@@ -442,8 +442,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
-		if evm.Config.Tracer != nil {
-			evm.Config.Tracer.OnGasChange(gas, 0, GasChangeCallFailedExecution)
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
+			evm.Config.Tracer.OnGasChange(gas, 0, live.GasChangeCallFailedExecution)
 		}
 
 		return nil, common.Address{}, 0, ErrContractAddressCollision
@@ -479,7 +479,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// by the error checking condition below.
 	if err == nil {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
-		if contract.UseGas(createDataGas, evm.Config.Tracer, GasChangeCallCodeStorage) {
+		if contract.UseGas(createDataGas, evm.Config.Tracer, live.GasChangeCallCodeStorage) {
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
@@ -492,7 +492,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer, GasChangeCallFailedExecution)
+			contract.UseGas(contract.Gas, evm.Config.Tracer, live.GasChangeCallFailedExecution)
 		}
 	}
 
@@ -522,19 +522,23 @@ func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to co
 	tracer := evm.Config.Tracer
 
 	if isRoot {
-		tracer.CaptureStart(from, to, typ == CREATE || typ == CREATE2, input, startGas, value)
-	} else {
-		tracer.CaptureEnter(typ, from, to, input, startGas, value)
+		if tracer.CaptureStart != nil {
+			tracer.CaptureStart(from, to, typ == CREATE || typ == CREATE2, input, startGas, value)
+		}
+	} else if tracer.CaptureEnter != nil {
+		tracer.CaptureEnter(live.OpCode(typ), from, to, input, startGas, value)
 	}
 
-	tracer.OnGasChange(0, startGas, GasChangeCallInitialBalance)
+	if tracer.OnGasChange != nil {
+		tracer.OnGasChange(0, startGas, live.GasChangeCallInitialBalance)
+	}
 }
 
 func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas uint64, ret []byte, err error) {
 	tracer := evm.Config.Tracer
 
-	if leftOverGas != 0 {
-		tracer.OnGasChange(leftOverGas, 0, GasChangeCallLeftOverReturned)
+	if leftOverGas != 0 && tracer.OnGasChange != nil {
+		tracer.OnGasChange(leftOverGas, 0, live.GasChangeCallLeftOverReturned)
 	}
 	var reverted bool
 	if err != nil {
@@ -544,8 +548,22 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 		reverted = false
 	}
 	if isRoot {
-		tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
-	} else {
+		if tracer.CaptureEnd != nil {
+			tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+		}
+	} else if tracer.CaptureExit != nil {
 		tracer.CaptureExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	}
+}
+
+func (evm *EVM) GetVMContext() *live.VMContext {
+	return &live.VMContext{
+		Coinbase:    evm.Context.Coinbase,
+		BlockNumber: evm.Context.BlockNumber,
+		Time:        evm.Context.Time,
+		Random:      evm.Context.Random,
+		GasPrice:    evm.TxContext.GasPrice,
+		ChainConfig: evm.ChainConfig(),
+		StateDB:     evm.StateDB,
 	}
 }
