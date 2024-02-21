@@ -186,32 +186,6 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	return &config
 }
 
-// BlockEvent is emitted upon tracing an incoming block.
-// It contains the block as well as consensus related information.
-type BlockEvent struct {
-	Block     *types.Block
-	TD        *big.Int
-	Finalized *types.Header
-	Safe      *types.Header
-}
-
-// BlockchainLogger is used to collect traces during chain processing.
-// Please make a copy of the referenced types if you intend to retain them.
-type BlockchainLogger interface {
-	vm.EVMLogger
-	state.StateLogger
-	OnBlockchainInit(chainConfig *params.ChainConfig)
-	// OnBlockStart is called before executing `block`.
-	// `td` is the total difficulty prior to `block`.
-	OnBlockStart(event BlockEvent)
-	OnBlockEnd(err error)
-	// OnSkippedBlock indicates a block was skipped during processing
-	// due to it being known previously. This can happen e.g. when recovering
-	// from a crash.
-	OnSkippedBlock(event BlockEvent)
-	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
-}
-
 // txLookup is wrapper over transaction lookup along with the corresponding
 // transaction object.
 type txLookup struct {
@@ -330,7 +304,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
-		logger:        vmConfig.LiveLogger,
+		logger:        vmConfig.Tracer,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -1771,7 +1745,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
-				bc.logger.OnSkippedBlock(BlockEvent{
+				bc.logger.OnSkippedBlock(live.BlockEvent{
 					Block:     block,
 					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
 					Finalized: bc.CurrentFinalBlock(),
@@ -1904,7 +1878,7 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(BlockEvent{
+		bc.logger.OnBlockStart(live.BlockEvent{
 			Block:     block,
 			TD:        td,
 			Finalized: bc.CurrentFinalBlock(),

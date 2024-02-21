@@ -25,13 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 type JSONLogger struct {
 	directory.NoopTracer
 	encoder *json.Encoder
 	cfg     *Config
-	env     *vm.EVM
+	env     *live.VMContext
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -44,31 +45,40 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (l *JSONLogger) GetLogger() *live.LiveLogger {
+	return &live.LiveLogger{
+		CaptureTxStart: l.CaptureTxStart,
+		CaptureEnd:     l.CaptureEnd,
+		CaptureState:   l.CaptureState,
+		CaptureFault:   l.CaptureFault,
+	}
+}
+
+func (l *JSONLogger) CaptureFault(pc uint64, op live.OpCode, gas uint64, cost uint64, scope live.ScopeContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
 	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.Memory
-	stack := scope.Stack
+func (l *JSONLogger) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+	memory := scope.GetMemoryData()
+	stack := scope.GetStackData()
 
 	log := StructLog{
 		Pc:            pc,
-		Op:            op,
+		Op:            vm.OpCode(op),
 		Gas:           gas,
 		GasCost:       cost,
-		MemorySize:    memory.Len(),
+		MemorySize:    len(memory),
 		Depth:         depth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
 	}
 	if l.cfg.EnableMemory {
-		log.Memory = memory.Data()
+		log.Memory = memory
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = stack.Data()
+		log.Stack = stack
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
@@ -90,6 +100,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error, revert
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (l *JSONLogger) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }

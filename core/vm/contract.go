@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/holiman/uint256"
 )
 
@@ -157,11 +158,11 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger EVMLogger, reason GasChangeReason) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger *live.LiveLogger, reason live.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
-	if logger != nil && reason != GasChangeIgnored {
+	if logger != nil && logger.OnGasChange != nil && reason != live.GasChangeIgnored {
 		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
 	}
 	c.Gas -= gas

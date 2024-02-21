@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -110,7 +111,7 @@ func (s *StructLog) ErrorString() string {
 type StructLogger struct {
 	directory.NoopTracer
 	cfg Config
-	env *vm.EVM
+	env *live.VMContext
 
 	storage map[common.Address]Storage
 	logs    []StructLog
@@ -133,6 +134,19 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
+func (l *StructLogger) GetTracer() *directory.Tracer {
+	return &directory.Tracer{
+		LiveLogger: &live.LiveLogger{
+			CaptureTxStart: l.CaptureTxStart,
+			CaptureTxEnd:   l.CaptureTxEnd,
+			CaptureEnd:     l.CaptureEnd,
+			CaptureState:   l.CaptureState,
+		},
+		GetResult: l.GetResult,
+		Stop:      l.Stop,
+	}
+}
+
 // Reset clears the data held by the logger.
 func (l *StructLogger) Reset() {
 	l.storage = make(map[common.Address]Storage)
@@ -144,7 +158,7 @@ func (l *StructLogger) Reset() {
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(pc uint64, opcode live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if l.interrupt.Load() {
 		return
@@ -154,49 +168,49 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 		return
 	}
 
-	memory := scope.Memory
-	stack := scope.Stack
-	contract := scope.Contract
+	op := vm.OpCode(opcode)
+	memory := scope.GetMemoryData()
+	stack := scope.GetStackData()
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if l.cfg.EnableMemory {
-		mem = make([]byte, len(memory.Data()))
-		copy(mem, memory.Data())
+		mem = make([]byte, len(memory))
+		copy(mem, memory)
 	}
 	// Copy a snapshot of the current stack state to a new buffer
 	var stck []uint256.Int
 	if !l.cfg.DisableStack {
-		stck = make([]uint256.Int, len(stack.Data()))
-		for i, item := range stack.Data() {
+		stck = make([]uint256.Int, len(stack))
+		for i, item := range stack {
 			stck[i] = item
 		}
 	}
-	stackData := stack.Data()
-	stackLen := len(stackData)
+	contractAddr := scope.GetAddress()
+	stackLen := len(stack)
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
 	if !l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
-		if l.storage[contract.Address()] == nil {
-			l.storage[contract.Address()] = make(Storage)
+		if l.storage[contractAddr] == nil {
+			l.storage[contractAddr] = make(Storage)
 		}
 		// capture SLOAD opcodes and record the read entry in the local storage
 		if op == vm.SLOAD && stackLen >= 1 {
 			var (
-				address = common.Hash(stackData[stackLen-1].Bytes32())
-				value   = l.env.StateDB.GetState(contract.Address(), address)
+				address = common.Hash(stack[stackLen-1].Bytes32())
+				value   = l.env.StateDB.GetState(contractAddr, address)
 			)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			l.storage[contractAddr][address] = value
+			storage = l.storage[contractAddr].Copy()
 		} else if op == vm.SSTORE && stackLen >= 2 {
 			// capture SSTORE opcodes and record the written entry in the local storage.
 			var (
-				value   = common.Hash(stackData[stackLen-2].Bytes32())
-				address = common.Hash(stackData[stackLen-1].Bytes32())
+				value   = common.Hash(stack[stackLen-2].Bytes32())
+				address = common.Hash(stack[stackLen-1].Bytes32())
 			)
-			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			l.storage[contractAddr][address] = value
+			storage = l.storage[contractAddr].Copy()
 		}
 	}
 	var rdata []byte
@@ -205,7 +219,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 		copy(rdata, rData)
 	}
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{pc, op, gas, cost, mem, len(memory), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
 	l.logs = append(l.logs, log)
 }
 
@@ -247,7 +261,7 @@ func (l *StructLogger) Stop(err error) {
 	l.interrupt.Store(true)
 }
 
-func (l *StructLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (l *StructLogger) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
 

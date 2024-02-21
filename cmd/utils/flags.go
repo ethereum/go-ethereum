@@ -2141,8 +2141,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
-			vmcfg.LiveLogger = t
-			vmcfg.Tracer = t.VMLogger
+			vmcfg.Tracer = t
 		}
 	}
 	// Disable transaction indexing/unindexing by default.

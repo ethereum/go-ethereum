@@ -778,14 +778,14 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
+				Tracer:                  logger.NewJSONLogger(&logConfig, writer).GetLogger(),
 				EnablePreimageRecording: true,
 			}
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.SetTxContext(tx.Hash(), i)
-		vmConf.Tracer.CaptureTxStart(vmenv, tx, msg.From)
+		vmConf.Tracer.CaptureTxStart(vmenv.GetVMContext(), tx, msg.From)
 		vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		vmConf.Tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
 		if writer != nil {
@@ -941,7 +941,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
-		tracer  directory.Tracer
+		tracer  *directory.Tracer
 		err     error
 		timeout = defaultTraceTimeout
 		usedGas uint64
@@ -950,15 +950,15 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config = &TraceConfig{}
 	}
 	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(config.Config)
+	tracer = logger.NewStructLogger(config.Config).GetTracer()
 	if config.Tracer != nil {
 		tracer, err = directory.DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {
 			return nil, err
 		}
 	}
-	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: big.NewInt(0)}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
-	statedb.SetLogger(tracer)
+	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: big.NewInt(0)}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.LiveLogger, NoBaseFee: true})
+	statedb.SetLogger(tracer.LiveLogger)
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {

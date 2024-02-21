@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 func init() {
@@ -48,7 +49,6 @@ func init() {
 //	}
 type fourByteTracer struct {
 	directory.NoopTracer
-	env               *vm.EVM
 	ids               map[string]int   // ids aggregates the 4byte ids found
 	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	reason            error            // Textual reason for the interruption
@@ -57,11 +57,19 @@ type fourByteTracer struct {
 
 // newFourByteTracer returns a native go tracer which collects
 // 4 byte-identifiers of a tx, and implements vm.EVMLogger.
-func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (directory.Tracer, error) {
+func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (*directory.Tracer, error) {
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}
-	return t, nil
+	return &directory.Tracer{
+		LiveLogger: &live.LiveLogger{
+			CaptureTxStart: t.CaptureTxStart,
+			CaptureStart:   t.CaptureStart,
+			CaptureEnter:   t.CaptureEnter,
+		},
+		GetResult: t.GetResult,
+		Stop:      t.Stop,
+	}, nil
 }
 
 // isPrecompiled returns whether the addr is a precompile. Logic borrowed from newJsTracer in eth/tracers/js/tracer.go
@@ -80,10 +88,9 @@ func (t *fourByteTracer) store(id []byte, size int) {
 	t.ids[key] += 1
 }
 
-func (t *fourByteTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
-	t.env = env
+func (t *fourByteTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	// Update list of precompiles based on current block
-	rules := t.env.ChainConfig().Rules(t.env.Context.BlockNumber, t.env.Context.Random != nil, t.env.Context.Time)
+	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
@@ -96,7 +103,7 @@ func (t *fourByteTracer) CaptureStart(from common.Address, to common.Address, cr
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureEnter(opcode live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return
@@ -104,6 +111,7 @@ func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to comm
 	if len(input) < 4 {
 		return
 	}
+	op := vm.OpCode(opcode)
 	// primarily we want to avoid CREATE/CREATE2/SELFDESTRUCT
 	if op != vm.DELEGATECALL && op != vm.STATICCALL &&
 		op != vm.CALL && op != vm.CALLCODE {

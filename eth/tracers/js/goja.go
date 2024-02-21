@@ -25,6 +25,7 @@ import (
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -42,9 +43,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	type ctorFn = func(*directory.Context, json.RawMessage) (directory.Tracer, error)
+	type ctorFn = func(*directory.Context, json.RawMessage) (*directory.Tracer, error)
 	lookup := func(code string) ctorFn {
-		return func(ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
+		return func(ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
 			return newJsTracer(code, ctx, cfg)
 		}
 	}
@@ -99,7 +100,7 @@ type jsTracer struct {
 	directory.NoopTracer
 
 	vm                *goja.Runtime
-	env               *vm.EVM
+	env               *live.VMContext
 	toBig             toBigFn               // Converts a hex string into a JS bigint
 	toBuf             toBufFn               // Converts a []byte into a JS buffer
 	fromBuf           fromBufFn             // Converts an array, hex string or Uint8Array to a []byte
@@ -136,7 +137,7 @@ type jsTracer struct {
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
-func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
+func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
@@ -219,22 +220,36 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (dire
 	t.frameValue = t.frame.setupObject()
 	t.frameResultValue = t.frameResult.setupObject()
 	t.logValue = t.log.setupObject()
-	return t, nil
+
+	return &directory.Tracer{
+		LiveLogger: &live.LiveLogger{
+			CaptureTxStart: t.CaptureTxStart,
+			CaptureTxEnd:   t.CaptureTxEnd,
+			CaptureStart:   t.CaptureStart,
+			CaptureEnd:     t.CaptureEnd,
+			CaptureEnter:   t.CaptureEnter,
+			CaptureExit:    t.CaptureExit,
+			CaptureState:   t.CaptureState,
+			CaptureFault:   t.CaptureFault,
+		},
+		GetResult: t.GetResult,
+		Stop:      t.Stop,
+	}, nil
 }
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (t *jsTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	// Need statedb access for db object
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
+	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
-	t.ctx["block"] = t.vm.ToValue(t.env.Context.BlockNumber.Uint64())
+	t.ctx["block"] = t.vm.ToValue(t.env.BlockNumber.Uint64())
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
-	gasPriceBig, err := t.toBig(t.vm, env.TxContext.GasPrice.String())
+	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
 	if err != nil {
 		t.err = err
 		t.env.Cancel()
@@ -294,7 +309,7 @@ func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -303,7 +318,7 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	}
 
 	log := t.log
-	log.op.op = op
+	log.op.op = vm.OpCode(op)
 	log.memory.memory = scope.Memory
 	log.stack.stack = scope.Stack
 	log.contract.contract = scope.Contract
@@ -319,7 +334,7 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (t *jsTracer) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -344,7 +359,7 @@ func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) CaptureEnter(typ live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !t.traceFrame {
 		return
 	}
@@ -352,7 +367,7 @@ func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 		return
 	}
 
-	t.frame.typ = typ.String()
+	t.frame.typ = vm.OpCode(typ).String()
 	t.frame.from = from
 	t.frame.to = to
 	t.frame.input = common.CopyBytes(input)
@@ -697,7 +712,7 @@ func (s *stackObj) setupObject() *goja.Object {
 }
 
 type dbObj struct {
-	db      vm.StateDB
+	db      live.StateDB
 	vm      *goja.Runtime
 	toBig   toBigFn
 	toBuf   toBufFn
