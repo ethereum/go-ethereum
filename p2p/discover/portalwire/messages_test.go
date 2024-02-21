@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
+	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,16 +167,16 @@ func TestOfferAndAcceptMessage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
 
-	// TODO  test for accept
+	contentKeyBitlist := bitfield.NewBitlist(8)
+	contentKeyBitlist.SetBitAt(0, true)
+	accept := &Accept{
+		ConnectionId: []byte{0x01, 0x02},
+		ContentKeys:  []byte(contentKeyBitlist),
+	}
 
-	// accept := &Accept{
-	// 	ConnectionId: []byte{0x01, 0x02},
-	// 	ContentKeys: []byte{1, 0, 0, 0, 0, 0, 0, 0},
-	// }
+	expected = "0x0102060000000101"
 
-	// expected = "0x0102060000000101"
-
-	// data, err = accept.MarshalSSZ()
-	// assert.NoError(t, err)
-	// assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
+	data, err = accept.MarshalSSZ()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
 }
