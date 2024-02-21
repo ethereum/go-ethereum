@@ -33,7 +33,8 @@ import (
 
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
-	c *rpc.Client
+	c       *rpc.Client
+	useData bool
 }
 
 // Dial connects a client to the given URL.
@@ -52,12 +53,17 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 
 // NewClient creates a client that uses the given RPC client.
 func NewClient(c *rpc.Client) *Client {
-	return &Client{c}
+	return &Client{c: c}
 }
 
 // Close closes the underlying RPC connection.
 func (ec *Client) Close() {
 	ec.c.Close()
+}
+
+// UseData makes toCallArg use the old "data" field instead of "input" field
+func (ec *Client) UseData() {
+	ec.useData = true
 }
 
 // Client gets the underlying RPC client.
@@ -518,7 +524,7 @@ func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 // blocks might not be available.
 func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), toBlockNumArg(blockNumber))
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg, ec.useData), toBlockNumArg(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +535,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 // the block by block hash instead of block height.
 func (ec *Client) CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), rpc.BlockNumberOrHashWithHash(blockHash, false))
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg, ec.useData), rpc.BlockNumberOrHashWithHash(blockHash, false))
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +546,7 @@ func (ec *Client) CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, 
 // The state seen by the contract call is the pending state.
 func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
 	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
+	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg, ec.useData), "pending")
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +611,7 @@ func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *
 // but it should provide a basis for setting a reasonable default.
 func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64, error) {
 	var hex hexutil.Uint64
-	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg))
+	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg, ec.useData))
 	if err != nil {
 		return 0, err
 	}
@@ -639,13 +645,17 @@ func toBlockNumArg(number *big.Int) string {
 	return fmt.Sprintf("<invalid %d>", number)
 }
 
-func toCallArg(msg ethereum.CallMsg) interface{} {
+func toCallArg(msg ethereum.CallMsg, useData bool) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,
 		"to":   msg.To,
 	}
 	if len(msg.Data) > 0 {
-		arg["input"] = hexutil.Bytes(msg.Data)
+		if useData {
+			arg["data"] = hexutil.Bytes(msg.Data)
+		} else {
+			arg["input"] = hexutil.Bytes(msg.Data)
+		}
 	}
 	if msg.Value != nil {
 		arg["value"] = (*hexutil.Big)(msg.Value)
