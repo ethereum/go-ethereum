@@ -1,4 +1,4 @@
-package engineclient
+package client
 
 import (
 	"github.com/ethereum/go-ethereum/beacon/engine"

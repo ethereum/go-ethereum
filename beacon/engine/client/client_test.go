@@ -1,4 +1,4 @@
-package engineclient
+package client
 
 import (
 	"context"
@@ -160,7 +160,7 @@ func TestEngineClient(t *testing.T) {
 		t.Run(name, tt.test)
 	}
 }
-func testExchangeCapabilities(t *testing.T, chain []*types.Block, client *Client) {
+func testExchangeCapabilities(t *testing.T, chain []*types.Block, client *Engine) {
 	expected := catalyst.Caps
 	capabilities := []string{"random", "ignored", "strings"}
 	actual, err := client.ExchangeCapabilities(context.Background(), capabilities)
@@ -172,7 +172,7 @@ func testExchangeCapabilities(t *testing.T, chain []*types.Block, client *Client
 	}
 }
 
-func testGetClientV1(t *testing.T, chain []*types.Block, client *Client) {
+func testGetClientV1(t *testing.T, chain []*types.Block, client *Engine) {
 	actual, err := client.GetClientVersionV1(context.Background())
 	if err != nil {
 		t.Fatalf("GetClientVersionV1 failed: %v", err)
@@ -182,7 +182,7 @@ func testGetClientV1(t *testing.T, chain []*types.Block, client *Client) {
 	}
 }
 
-func testGetPayloadBodiesByHashV1(t *testing.T, chain []*types.Block, client *Client) {
+func testGetPayloadBodiesByHashV1(t *testing.T, chain []*types.Block, client *Engine) {
 	actual, err := client.GetPayloadBodiesByHashV1(context.Background(), []common.Hash{chain[2].Hash()})
 	if err != nil {
 		t.Fatalf("GetPayloadBodiesByHashV1 failed: %v", err)
@@ -204,7 +204,7 @@ func testGetPayloadBodiesByHashV1(t *testing.T, chain []*types.Block, client *Cl
 	}
 }
 
-func testGetPayloadBodiesByRangeV1(t *testing.T, chain []*types.Block, client *Client) {
+func testGetPayloadBodiesByRangeV1(t *testing.T, chain []*types.Block, client *Engine) {
 	actual, err := client.GetPayloadBodiesByRangeV1(context.Background(), hexutil.Uint64(chain[2].NumberU64()), hexutil.Uint64(1))
 	if err != nil {
 		t.Fatalf("GetPayloadBodiesByRangeV1 failed: %v", err)
@@ -225,7 +225,7 @@ func testGetPayloadBodiesByRangeV1(t *testing.T, chain []*types.Block, client *C
 	}
 }
 
-func testNewPayloadV1(t *testing.T, chain []*types.Block, client *Client) {
+func testNewPayloadV1(t *testing.T, chain []*types.Block, client *Engine) {
 	ctx := context.Background()
 
 	// Create a mock payload
@@ -241,7 +241,7 @@ func testNewPayloadV1(t *testing.T, chain []*types.Block, client *Client) {
 	}
 }
 
-func testNewPayloadV2(t *testing.T, chain []*types.Block, client *Client) {
+func testNewPayloadV2(t *testing.T, chain []*types.Block, client *Engine) {
 	ctx := context.Background()
 
 	// Create a mock payload
@@ -257,7 +257,7 @@ func testNewPayloadV2(t *testing.T, chain []*types.Block, client *Client) {
 	}
 }
 
-func testNewPayloadV3(t *testing.T, chain []*types.Block, client *Client) {
+func testNewPayloadV3(t *testing.T, chain []*types.Block, client *Engine) {
 	ctx := context.Background()
 
 	// Create a mock payload
@@ -297,7 +297,7 @@ func createMockPayload(parent *types.Block) *engine.ExecutionPayloadEnvelope {
 		}}
 }
 
-func testForkchoiceUpdatedV1(t *testing.T, chain []*types.Block, client *Client) {
+func testForkchoiceUpdatedV1(t *testing.T, chain []*types.Block, client *Engine) {
 	// Call ForkchoiceUpdatedV2
 	resp, err := client.ForkchoiceUpdatedV1(context.Background(), &engine.ForkchoiceStateV1{
 		HeadBlockHash: common.Hash{},
@@ -314,7 +314,7 @@ func testForkchoiceUpdatedV1(t *testing.T, chain []*types.Block, client *Client)
 	}
 }
 
-func testForkchoiceUpdatedV2(t *testing.T, chain []*types.Block, client *Client) {
+func testForkchoiceUpdatedV2(t *testing.T, chain []*types.Block, client *Engine) {
 	// Call ForkchoiceUpdatedV2
 	resp, err := client.ForkchoiceUpdatedV2(context.Background(), &engine.ForkchoiceStateV1{
 		HeadBlockHash: common.Hash{},
@@ -331,7 +331,7 @@ func testForkchoiceUpdatedV2(t *testing.T, chain []*types.Block, client *Client)
 	}
 }
 
-func testForkchoiceUpdatedV3(t *testing.T, chain []*types.Block, client *Client) {
+func testForkchoiceUpdatedV3(t *testing.T, chain []*types.Block, client *Engine) {
 	// Call ForkchoiceUpdatedV3
 	resp, err := client.ForkchoiceUpdatedV3(context.Background(), &engine.ForkchoiceStateV1{
 		HeadBlockHash: common.Hash{},
@@ -348,7 +348,7 @@ func testForkchoiceUpdatedV3(t *testing.T, chain []*types.Block, client *Client)
 	}
 }
 
-func testGetPayloadV3(t *testing.T, chain []*types.Block, client *Client) {
+func testGetPayloadV3(t *testing.T, chain []*types.Block, client *Engine) {
 	payloadID := engine.PayloadID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08} // Example PayloadID, adjust as necessary
 	_, err := client.GetPayloadV3(context.Background(), &payloadID)
 	if err.Error() != "Unsupported fork" {
@@ -356,7 +356,7 @@ func testGetPayloadV3(t *testing.T, chain []*types.Block, client *Client) {
 	}
 }
 
-func testGetPayloadV2(t *testing.T, chain []*types.Block, client *Client) {
+func testGetPayloadV2(t *testing.T, chain []*types.Block, client *Engine) {
 	payloadID := engine.PayloadID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08} // Example PayloadID, adjust as necessary
 	_, err := client.GetPayloadV2(context.Background(), &payloadID)
 	if err.Error() != "Unknown payload" {
@@ -364,7 +364,7 @@ func testGetPayloadV2(t *testing.T, chain []*types.Block, client *Client) {
 	}
 }
 
-func testGetPayloadV1(t *testing.T, chain []*types.Block, client *Client) {
+func testGetPayloadV1(t *testing.T, chain []*types.Block, client *Engine) {
 	payloadID := engine.PayloadID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08} // Example PayloadID, adjust as necessary
 	_, err := client.GetPayloadV1(context.Background(), &payloadID)
 	if err.Error() != "Unknown payload" {

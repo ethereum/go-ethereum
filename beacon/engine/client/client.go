@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package engineclient provides an RPC client for engine API required functionc.
-package engineclient
+// Package client provides an RPC client for engine API required functionc.
+package client
 
 import (
 	"context"
@@ -28,22 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// Client is a wrapper around rpc.Client that implements geth-specific functionality.
+// Engine is a wrapper around ethclient.Client that implements geth-specific functionality.
 //
-// If you want to use the standardized Ethereum RPC functionality, use ethclient.Client instead.
-type Client struct {
+// If you want to use the standardized Ethereum RPC functionality, use ethclient.Engine instead.
+type Engine struct {
 	*ethclient.Client
 }
 
 // New creates a client that uses the given RPC client.
-func New(c *ethclient.Client) *Client {
-	return &Client{c}
+func New(c *ethclient.Client) *Engine {
+	return &Engine{c}
 }
 
 // ExchangeTransitionConfigurationV1 calls the engine_exchangeTransitionConfigurationV1
 // method via JSON-RPC. This is not really needed anymore, since we are post merge,
 // but it is still here for reference / completeness sake.
-func (c *Client) ExchangeTransitionConfigurationV1(
+func (c *Engine) ExchangeTransitionConfigurationV1(
 	ctx context.Context,
 	config engine.TransitionConfigurationV1,
 ) (*engine.TransitionConfigurationV1, error) {
@@ -57,7 +57,7 @@ func (c *Client) ExchangeTransitionConfigurationV1(
 }
 
 // ExchangeCapabilities calls the engine_exchangeCapabilities method via JSON-RPC.
-func (c *Client) ExchangeCapabilities(
+func (c *Engine) ExchangeCapabilities(
 	ctx context.Context,
 	capabilities []string,
 ) ([]string, error) {
@@ -71,7 +71,7 @@ func (c *Client) ExchangeCapabilities(
 }
 
 // GetClientVersionV1 calls the engine_getClientVersionV1 method via JSON-RPC.
-func (c *Client) GetClientVersionV1(ctx context.Context) ([]engine.ClientVersionV1, error) {
+func (c *Engine) GetClientVersionV1(ctx context.Context) ([]engine.ClientVersionV1, error) {
 	result := make([]engine.ClientVersionV1, 0)
 	if err := c.Client.Client().CallContext(
 		ctx, &result, "engine_getClientVersionV1", nil,
@@ -82,7 +82,7 @@ func (c *Client) GetClientVersionV1(ctx context.Context) ([]engine.ClientVersion
 }
 
 // NewPayloadV3 calls the engine_newPayloadV3 method via JSON-RPC.
-func (c *Client) NewPayloadV3(
+func (c *Engine) NewPayloadV3(
 	ctx context.Context, payload *engine.ExecutionPayloadEnvelope,
 	versionedHashes common.Hash, parentBlockRoot common.Hash,
 ) (*engine.PayloadStatusV1, error) {
@@ -90,21 +90,21 @@ func (c *Client) NewPayloadV3(
 }
 
 // NewPayloadV2 calls the engine_newPayloadV2 method via JSON-RPC.
-func (c *Client) NewPayloadV2(
+func (c *Engine) NewPayloadV2(
 	ctx context.Context, payload *engine.ExecutionPayloadEnvelope,
 ) (*engine.PayloadStatusV1, error) {
 	return c.newPayload(ctx, ShanghaiV2, payload)
 }
 
 // NewPayloadV1 calls the engine_newPayloadV1 method via JSON-RPC.
-func (c *Client) NewPayloadV1(
+func (c *Engine) NewPayloadV1(
 	ctx context.Context, payload *engine.ExecutionPayloadEnvelope,
 ) (*engine.PayloadStatusV1, error) {
 	return c.newPayload(ctx, ParisV1, payload)
 }
 
 // newPayload is a helper function that can call an arbitrary version of the newPayload method.
-func (c *Client) newPayload(
+func (c *Engine) newPayload(
 	ctx context.Context, version APIVersion, payload *engine.ExecutionPayloadEnvelope,
 ) (*engine.PayloadStatusV1, error) {
 	result := &engine.PayloadStatusV1{}
@@ -117,7 +117,7 @@ func (c *Client) newPayload(
 }
 
 // newPayloadWithArgs is a helper function that can call an arbitrary version of the newPayload method.
-func (c *Client) newPayloadWithArgs(
+func (c *Engine) newPayloadWithArgs(
 	ctx context.Context, version APIVersion, payload *engine.ExecutionPayloadEnvelope, args ...any,
 ) (*engine.PayloadStatusV1, error) {
 	result := &engine.PayloadStatusV1{}
@@ -130,21 +130,21 @@ func (c *Client) newPayloadWithArgs(
 }
 
 // ForkchoiceUpdatedV1 calls the engine_forkchoiceUpdatedV1 method via JSON-RPC.
-func (c *Client) ForkchoiceUpdatedV1(
+func (c *Engine) ForkchoiceUpdatedV1(
 	ctx context.Context, state *engine.ForkchoiceStateV1, attrs *engine.PayloadAttributes,
 ) (*ForkchoiceUpdatedResponse, error) {
 	return c.forkchoiceUpdated(ctx, ParisV1, state, attrs)
 }
 
 // ForkchoiceUpdatedV2 calls the engine_forkchoiceUpdatedV2 method via JSON-RPC.
-func (c *Client) ForkchoiceUpdatedV2(
+func (c *Engine) ForkchoiceUpdatedV2(
 	ctx context.Context, state *engine.ForkchoiceStateV1, attrs *engine.PayloadAttributes,
 ) (*ForkchoiceUpdatedResponse, error) {
 	return c.forkchoiceUpdated(ctx, ShanghaiV2, state, attrs)
 }
 
 // ForkchoiceUpdatedV3 calls the engine_forkchoiceUpdatedV3 method via JSON-RPC.
-func (c *Client) ForkchoiceUpdatedV3(
+func (c *Engine) ForkchoiceUpdatedV3(
 	ctx context.Context, state *engine.ForkchoiceStateV1, attrs *engine.PayloadAttributes,
 ) (*ForkchoiceUpdatedResponse, error) {
 	return c.forkchoiceUpdated(ctx, CancunV3, state, attrs)
@@ -152,7 +152,7 @@ func (c *Client) ForkchoiceUpdatedV3(
 
 // forkchoiceUpdateCall is a helper function to call to any version of the forkchoiceUpdated
 // method.
-func (c *Client) forkchoiceUpdated(
+func (c *Engine) forkchoiceUpdated(
 	ctx context.Context, version APIVersion, state *engine.ForkchoiceStateV1, attrs any,
 ) (*ForkchoiceUpdatedResponse, error) {
 	result := &ForkchoiceUpdatedResponse{}
@@ -173,28 +173,28 @@ func (c *Client) forkchoiceUpdated(
 }
 
 // GetPayloadV3 calls the engine_getPayloadV3 method via JSON-RPC.
-func (c *Client) GetPayloadV1(
+func (c *Engine) GetPayloadV1(
 	ctx context.Context, payloadID *engine.PayloadID,
 ) (*engine.ExecutionPayloadEnvelope, error) {
 	return c.getPayload(ctx, ParisV1, payloadID)
 }
 
 // GetPayloadV2 calls the engine_getPayloadV3 method via JSON-RPC.
-func (c *Client) GetPayloadV2(
+func (c *Engine) GetPayloadV2(
 	ctx context.Context, payloadID *engine.PayloadID,
 ) (*engine.ExecutionPayloadEnvelope, error) {
 	return c.getPayload(ctx, ShanghaiV2, payloadID)
 }
 
 // GetPayloadV3 calls the engine_getPayloadV3 method via JSON-RPC.
-func (c *Client) GetPayloadV3(
+func (c *Engine) GetPayloadV3(
 	ctx context.Context, payloadID *engine.PayloadID,
 ) (*engine.ExecutionPayloadEnvelope, error) {
 	return c.getPayload(ctx, CancunV3, payloadID)
 }
 
 // getPayload is a helper function that can call an arbitrary version of the getPayload method.
-func (c *Client) getPayload(ctx context.Context, version APIVersion, payloadID *engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+func (c *Engine) getPayload(ctx context.Context, version APIVersion, payloadID *engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	result := &engine.ExecutionPayloadEnvelope{}
 	if err := c.Client.Client().CallContext(
 		ctx, result, fmt.Sprintf("engine_getPayloadV%d", version), payloadID,
@@ -205,7 +205,7 @@ func (c *Client) getPayload(ctx context.Context, version APIVersion, payloadID *
 }
 
 // GetPayloadBodiesByHashV1 calls the engine_getPayloadBodiesByHashV1 method via JSON-RPC.
-func (c *Client) GetPayloadBodiesByHashV1(
+func (c *Engine) GetPayloadBodiesByHashV1(
 	ctx context.Context,
 	hashes []common.Hash,
 ) ([]*engine.ExecutionPayloadBodyV1, error) {
@@ -219,7 +219,7 @@ func (c *Client) GetPayloadBodiesByHashV1(
 }
 
 // GetPayloadBodiesByRangeV1 calls the engine_getPayloadBodiesByRangeV1 method via JSON-RPC.
-func (c *Client) GetPayloadBodiesByRangeV1(
+func (c *Engine) GetPayloadBodiesByRangeV1(
 	ctx context.Context, start, count hexutil.Uint64,
 ) ([]*engine.ExecutionPayloadBodyV1, error) {
 	result := make([]*engine.ExecutionPayloadBodyV1, 0)
