@@ -95,112 +95,8 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
-func (args *TransactionArgs) validateAll(b Backend) error {
-	if err := args.validate(); err != nil {
-		return err
-	}
-	return args.validateFees(b)
-}
-
-func (args *TransactionArgs) validate() error {
-	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
-		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
-	}
-	if args.To == nil && len(args.data()) == 0 {
-		return errors.New(`contract creation without any data provided`)
-	}
-	return nil
-}
-
-func (args *TransactionArgs) validateFees(b Backend) error {
-	var (
-		head   = b.CurrentHeader()
-		config = b.ChainConfig()
-	)
-	// Sanity check the EIP-4844 fee parameters.
-	if args.BlobFeeCap != nil {
-		if args.BlobFeeCap.ToInt().Sign() == 0 {
-			return errors.New("maxFeePerBlobGas must be non-zero")
-		}
-		if !config.IsCancun(head.Number, head.Time) {
-			return errors.New("maxFeePerBlobGas is not valid before Cancun is active")
-		}
-	}
-	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	// Sanity check the EIP-1559 fee parameters if present.
-	if (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) && !config.IsLondon(head.Number) {
-		return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
-	}
-	if args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil {
-		if args.MaxFeePerGas.ToInt().Sign() == 0 {
-			return errors.New("maxFeePerGas must be non-zero")
-		}
-		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
-		}
-	} else if args.GasPrice != nil {
-		// Zero gas-price is not allowed after London fork
-		if args.GasPrice.ToInt().Sign() == 0 && config.IsLondon(head.Number) {
-			return errors.New("gasPrice must be non-zero after london fork")
-		}
-	}
-	return nil
-}
-
-func (args *TransactionArgs) validateBlobs(b Backend) error {
-	head := b.CurrentHeader()
-	if !b.ChainConfig().IsCancun(head.Number, head.Time) && (args.BlobHashes != nil || args.Blobs != nil || args.Commitments != nil || args.Proofs != nil) {
-		return errors.New("blobs are not valid before Cancun is active")
-	}
-	if args.BlobHashes != nil {
-		if len(args.BlobHashes) == 0 {
-			return errors.New(`need at least 1 blob for a blob transaction`)
-		}
-		if len(args.BlobHashes) > maxBlobsPerTransaction {
-			return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
-		}
-		if args.To == nil {
-			return errors.New(`missing "to" in blob transaction`)
-		}
-	}
-	// Some methods only accept blob hashes, not the blobs themselves.
-	if args.Blobs == nil {
-		if args.Commitments != nil || args.Proofs != nil {
-			return errors.New(`blob commitments and proofs provided without blobs`)
-		}
-		return nil
-	}
-	// Assume user provides either only blobs (w/o hashes), or
-	// blobs together with commitments and proofs.
-	if args.Commitments == nil && args.Proofs != nil {
-		return errors.New(`blob proofs provided while commitments were not`)
-	} else if args.Commitments != nil && args.Proofs == nil {
-		return errors.New(`blob commitments provided while proofs were not`)
-	}
-
-	n := len(args.Blobs)
-	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
-	if args.Commitments != nil && len(args.Commitments) != n {
-		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
-	}
-	if args.Proofs != nil && len(args.Proofs) != n {
-		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
-	}
-	if args.BlobHashes != nil && len(args.BlobHashes) != n {
-		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
-	}
-
-	return nil
-}
-
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if err := args.validate(); err != nil {
-		return err
-	}
 	if err := args.setBlobTxSidecar(ctx, b); err != nil {
 		return err
 	}
@@ -218,6 +114,28 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 		args.Nonce = (*hexutil.Uint64)(&nonce)
 	}
+	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
+		return errors.New(`both "data" and "input" are set and not equal. Please use "input" to pass transaction call data`)
+	}
+
+	// BlobTx fields
+	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
+		return errors.New(`need at least 1 blob for a blob transaction`)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
+		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+	}
+
+	// create check
+	if args.To == nil {
+		if args.BlobHashes != nil {
+			return errors.New(`missing "to" in blob transaction`)
+		}
+		if len(args.data()) == 0 {
+			return errors.New(`contract creation without any data provided`)
+		}
+	}
+
 	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
 		// These fields are immutable during the estimation, safe to
@@ -259,33 +177,54 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
 func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	if err := args.validateFees(b); err != nil {
+	head := b.CurrentHeader()
+	// Sanity check the EIP-4844 fee parameters.
+	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
+		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
+	}
+	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
 		return err
 	}
-	head := b.CurrentHeader()
-	if b.ChainConfig().IsCancun(head.Number, head.Time) {
-		if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
-			return err
-		}
+	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
 	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
 	// for more information.
-	if args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil {
-		return nil
+	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
+	// Sanity check the EIP-1559 fee parameters if present.
+	if args.GasPrice == nil && eip1559ParamsSet {
+		if args.MaxFeePerGas.ToInt().Sign() == 0 {
+			return errors.New("maxFeePerGas must be non-zero")
+		}
+		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
 	}
-	// If gasPrice has been provided, no need to set any defaults.
-	if args.GasPrice != nil && args.MaxFeePerGas == nil && args.MaxPriorityFeePerGas == nil {
-		return nil
+
+	// Sanity check the non-EIP-1559 fee parameters.
+	isLondon := b.ChainConfig().IsLondon(head.Number)
+	if args.GasPrice != nil && !eip1559ParamsSet {
+		// Zero gas-price is not allowed after London fork
+		if args.GasPrice.ToInt().Sign() == 0 && isLondon {
+			return errors.New("gasPrice must be non-zero after london fork")
+		}
+		return nil // No need to set anything, user already set GasPrice
 	}
+
 	// Now attempt to fill in default value depending on whether London is active or not.
-	if b.ChainConfig().IsLondon(head.Number) {
+	if isLondon {
 		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
 		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
 			return err
 		}
 	} else {
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		}
 		// London not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
 		if err != nil {
@@ -300,15 +239,19 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
+		var excessBlobGas uint64
+		if head.ExcessBlobGas != nil {
+			excessBlobGas = *head.ExcessBlobGas
+		}
 		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(*head.ExcessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
 		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
 		args.BlobFeeCap = (*hexutil.Big)(val)
 	}
-	return args.setLondonFeeDefaults(ctx, head, b)
+	return nil
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
@@ -341,19 +284,36 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 
 // setBlobTxSidecar adds the blob tx
 func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) error {
-	if err := args.validateBlobs(b); err != nil {
-		return err
-	}
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil
 	}
+
 	// Passing blobs is not allowed in all contexts, only in specific methods.
 	if !args.blobSidecarAllowed {
 		return errors.New(`"blobs" is not supported for this RPC method`)
 	}
+
 	n := len(args.Blobs)
-	// Either both commitments and proofs are available, or neither.
+	// Assume user provides either only blobs (w/o hashes), or
+	// blobs together with commitments and proofs.
+	if args.Commitments == nil && args.Proofs != nil {
+		return errors.New(`blob proofs provided while commitments were not`)
+	} else if args.Commitments != nil && args.Proofs == nil {
+		return errors.New(`blob commitments provided while proofs were not`)
+	}
+
+	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	if args.Commitments != nil && len(args.Commitments) != n {
+		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+	}
+	if args.Proofs != nil && len(args.Proofs) != n {
+		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
+	}
+	if args.BlobHashes != nil && len(args.BlobHashes) != n {
+		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
+	}
+
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
@@ -379,13 +339,12 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) er
 			}
 		}
 	}
-	// Compute hashes from commitments.
+
 	hashes := make([]common.Hash, n)
 	hasher := sha256.New()
 	for i, c := range args.Commitments {
 		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
 	}
-	// Generate/validate blob hashes.
 	if args.BlobHashes != nil {
 		for i, h := range hashes {
 			if h != args.BlobHashes[i] {

@@ -284,9 +284,6 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
 	// TODO: check chainID and against current header for london fees
-	if err := call.validateAll(sim.b); err != nil {
-		return err
-	}
 	if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
 		call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
 		call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
