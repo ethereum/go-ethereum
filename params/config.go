@@ -421,38 +421,39 @@ func (c *ChainConfig) Description() string {
 	// Create a list of forks with a short description of them. Forks that only
 	// makes sense for mainnet should be optional at printing to avoid bloating
 	// the output for testnets and private networks.
+	const NETWORK_UPGRADE_URL = "https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades"
 	banner += "Pre-Merge hard forks (block based):\n"
-	banner += fmt.Sprintf(" - Homestead:                   #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)\n", c.HomesteadBlock)
+	banner += fmt.Sprintf(" - Homestead:                   #%-8v (%s/homestead.md)\n", c.HomesteadBlock, NETWORK_UPGRADE_URL)
 	if c.DAOForkBlock != nil {
-		banner += fmt.Sprintf(" - DAO Fork:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md)\n", c.DAOForkBlock)
+		banner += fmt.Sprintf(" - DAO Fork:                    #%-8v (%s/dao-fork.md)\n", c.DAOForkBlock, NETWORK_UPGRADE_URL)
 	}
-	banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md)\n", c.EIP150Block)
-	banner += fmt.Sprintf(" - Spurious Dragon/1 (EIP 155): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
-	banner += fmt.Sprintf(" - Spurious Dragon/2 (EIP 158): #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
-	banner += fmt.Sprintf(" - Byzantium:                   #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/byzantium.md)\n", c.ByzantiumBlock)
-	banner += fmt.Sprintf(" - Constantinople:              #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md)\n", c.ConstantinopleBlock)
-	banner += fmt.Sprintf(" - Petersburg:                  #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md)\n", c.PetersburgBlock)
-	banner += fmt.Sprintf(" - Istanbul:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md)\n", c.IstanbulBlock)
+	banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): #%-8v (%s/tangerine-whistle.md)\n", c.EIP150Block, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Spurious Dragon/1 (EIP 155): #%-8v (%s/spurious-dragon.md)\n", c.EIP155Block, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Spurious Dragon/2 (EIP 158): #%-8v (%s/spurious-dragon.md)\n", c.EIP155Block, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Byzantium:                   #%-8v (%s/byzantium.md)\n", c.ByzantiumBlock, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Constantinople:              #%-8v (%s/constantinople.md)\n", c.ConstantinopleBlock, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Petersburg:                  #%-8v (%s/petersburg.md)\n", c.PetersburgBlock, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - Istanbul:                    #%-8v (%s/istanbul.md)\n", c.IstanbulBlock, NETWORK_UPGRADE_URL)
 	if c.MuirGlacierBlock != nil {
-		banner += fmt.Sprintf(" - Muir Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md)\n", c.MuirGlacierBlock)
+		banner += fmt.Sprintf(" - Muir Glacier:                #%-8v (%s/muir-glacier.md)\n", c.MuirGlacierBlock, NETWORK_UPGRADE_URL)
 	}
-	banner += fmt.Sprintf(" - Berlin:                      #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md)\n", c.BerlinBlock)
-	banner += fmt.Sprintf(" - London:                      #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md)\n", c.LondonBlock)
+	banner += fmt.Sprintf(" - Berlin:                      #%-8v (%s/berlin.md)\n", c.BerlinBlock, NETWORK_UPGRADE_URL)
+	banner += fmt.Sprintf(" - London:                      #%-8v (%s/london.md)\n", c.LondonBlock, NETWORK_UPGRADE_URL)
 	if c.ArrowGlacierBlock != nil {
-		banner += fmt.Sprintf(" - Arrow Glacier:               #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)\n", c.ArrowGlacierBlock)
+		banner += fmt.Sprintf(" - Arrow Glacier:               #%-8v (%s/arrow-glacier.md)\n", c.ArrowGlacierBlock, NETWORK_UPGRADE_URL)
 	}
 	if c.GrayGlacierBlock != nil {
-		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
+		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (%s/gray-glacier.md)\n", c.GrayGlacierBlock, NETWORK_UPGRADE_URL)
 	}
 	banner += "\n"
 
 	// Add a special section for the merge as it's non-obvious
 	if c.TerminalTotalDifficulty == nil {
 		banner += "The Merge is not yet available for this network!\n"
-		banner += " - Hard-fork specification: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md\n"
+		banner += fmt.Sprintf(" - Hard-fork specification: %s/paris.md\n", NETWORK_UPGRADE_URL)
 	} else {
 		banner += "Merge configured:\n"
-		banner += " - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md\n"
+		banner += fmt.Sprintf(" - Hard-fork specification:    %s/paris.md\n", NETWORK_UPGRADE_URL)
 		banner += fmt.Sprintf(" - Network known to be merged: %v\n", c.TerminalTotalDifficultyPassed)
 		banner += fmt.Sprintf(" - Total terminal difficulty:  %v\n", c.TerminalTotalDifficulty)
 		if c.MergeNetsplitBlock != nil {
@@ -464,10 +465,10 @@ func (c *ChainConfig) Description() string {
 	// Create a list of forks post-merge
 	banner += "Post-Merge hard forks (timestamp based):\n"
 	if c.ShanghaiTime != nil {
-		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", *c.ShanghaiTime)
+		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (%s/shanghai.md)\n", *c.ShanghaiTime, NETWORK_UPGRADE_URL)
 	}
 	if c.CancunTime != nil {
-		banner += fmt.Sprintf(" - Cancun:                      @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md)\n", *c.CancunTime)
+		banner += fmt.Sprintf(" - Cancun:                      @%-10v (%s/cancun.md)\n", *c.CancunTime, NETWORK_UPGRADE_URL)
 	}
 	if c.PragueTime != nil {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
