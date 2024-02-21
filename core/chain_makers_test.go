@@ -46,7 +46,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		asm4788 = common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 		gspec   = &Genesis{
 			Config: &config,
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				address:                          {Balance: funds},
 				params.BeaconRootsStorageAddress: {Balance: common.Big0, Code: asm4788},
 			},
@@ -69,13 +69,13 @@ func TestGeneratePOSChain(t *testing.T) {
 	storage[common.Hash{0x01}] = common.Hash{0x01}
 	storage[common.Hash{0x02}] = common.Hash{0x02}
 	storage[common.Hash{0x03}] = common.HexToHash("0303")
-	gspec.Alloc[aa] = GenesisAccount{
+	gspec.Alloc[aa] = types.Account{
 		Balance: common.Big1,
 		Nonce:   1,
 		Storage: storage,
 		Code:    common.Hex2Bytes("6042"),
 	}
-	gspec.Alloc[bb] = GenesisAccount{
+	gspec.Alloc[bb] = types.Account{
 		Balance: common.Big2,
 		Nonce:   1,
 		Storage: storage,
@@ -202,7 +202,7 @@ func ExampleGenerateChain() {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
 	genesis := gspec.MustCommit(genDb, triedb.NewDatabase(genDb, triedb.HashDefaults))
 
