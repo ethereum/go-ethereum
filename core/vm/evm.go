@@ -565,5 +565,6 @@ func (evm *EVM) GetVMContext() *live.VMContext {
 		GasPrice:    evm.TxContext.GasPrice,
 		ChainConfig: evm.ChainConfig(),
 		StateDB:     evm.StateDB,
+		VM:          evm,
 	}
 }
