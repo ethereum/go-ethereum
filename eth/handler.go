@@ -627,7 +627,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
-		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we ust need *a* sender
+		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we just need *a* sender
 		hasher = sha3.NewLegacyKeccak256().(crypto.KeccakState)
 		hash   = make([]byte, 32)
 	)
@@ -645,8 +645,9 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		// the peers that have not received it yet, ensuring that the flow of
 		// transactions is groupped by account to (try and) avoid nonce gaps.
 		//
-		// To do this, we hash a peer's enode ID together with the transaction
-		// sender and broadcast if `sha(peer, sender) mod peers < sqrt(peers)`.
+		// To do this, we hash the local enode IW with together with a peer's
+		// enode ID together with the transaction sender and broadcast if
+		// `sha(self, peer, sender) mod peers < sqrt(peers)`.
 		for _, peer := range h.peers.peersWithoutTransaction(tx.Hash()) {
 			var broadcast bool
 			if maybeDirect {
