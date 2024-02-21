@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
@@ -44,11 +45,12 @@ type SessionManager struct {
 	sessions      map[string]*miner.Builder
 	sessionTimers map[string]*time.Timer
 	sessionsLock  sync.RWMutex
-	blockchain    blockchain
+	blockchain    *core.BlockChain
+	pool          *txpool.TxPool
 	config        *Config
 }
 
-func NewSessionManager(blockchain blockchain, config *Config) *SessionManager {
+func NewSessionManager(blockchain *core.BlockChain, pool *txpool.TxPool, config *Config) *SessionManager {
 	if config.GasCeil == 0 {
 		config.GasCeil = 1000000000000000000
 	}
@@ -70,12 +72,24 @@ func NewSessionManager(blockchain blockchain, config *Config) *SessionManager {
 		sessionTimers: make(map[string]*time.Timer),
 		blockchain:    blockchain,
 		config:        config,
+		pool:          pool,
 	}
 	return s
 }
 
+func (s *SessionManager) BlockChain() *core.BlockChain {
+	return s.blockchain
+}
+
+func (s *SessionManager) TxPool() *txpool.TxPool {
+	return s.pool
+}
+
 // NewSession creates a new builder session and returns the session id
 func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArgs) (string, error) {
+	if args == nil {
+		return "", fmt.Errorf("args cannot be nil")
+	}
 	// Wait for session to become available
 	select {
 	case <-s.sem:
@@ -88,11 +102,17 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 	builderCfg := &miner.BuilderConfig{
 		ChainConfig: s.blockchain.Config(),
 		Engine:      s.blockchain.Engine(),
-		// TODO
+		Chain:       s.blockchain,
+		EthBackend:  s,
+		GasCeil:     s.config.GasCeil,
 	}
 
 	builderArgs := &miner.BuilderArgs{
-		ParentHash: args.Parent,
+		ParentHash:     args.Parent,
+		FeeRecipient:   args.FeeRecipient,
+		ProposerPubkey: args.ProposerPubkey,
+		Extra:          args.Extra,
+		Slot:           args.Slot,
 	}
 
 	id := uuid.New().String()[:7]
