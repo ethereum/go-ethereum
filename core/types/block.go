@@ -422,6 +422,8 @@ func (b *Block) BlobGasUsed() *uint64 {
 	return blobGasUsed
 }
 
+func (b *Block) ExitsHash() *common.Hash { return b.header.ExitsHash }
+
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previously cached value.
 func (b *Block) Size() uint64 {

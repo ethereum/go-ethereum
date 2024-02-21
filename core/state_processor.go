@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -97,6 +98,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	withdrawals := block.Withdrawals()
 	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Number(), block.Time()) {
 		return nil, nil, 0, errors.New("withdrawals before shanghai")
+	}
+	// Fail if Prague not enabled and len(exits) is non-zero.
+	exits := block.Exits()
+	if len(exits) > 0 && !p.config.IsPrague(block.Number(), block.Time()) {
+		return nil, nil, 0, errors.New("exits before prague")
+	}
+	if exitsHash := block.ExitsHash(); exitsHash != nil {
+		exits := ProcessDequeueExits(vmenv, statedb)
+		got := types.DeriveSha(exits, trie.NewStackTrie(nil))
+		if *exitsHash != got {
+			return nil, nil, 0, errors.New("dequeued exits do not match those in block")
+		}
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)
@@ -188,4 +201,34 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+}
+
+// ProcessExits applies the EIP-7002 system call to the validator exits contract.
+func ProcessDequeueExits(vmenv *vm.EVM, statedb *state.StateDB) types.Exits {
+	msg := &Message{
+		From:      params.SystemAddress,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &params.ExitQueueAddress,
+	}
+	vmenv.Reset(NewEVMTxContext(msg), statedb)
+	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
+	ret, _, _ := vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	statedb.Finalise(true)
+
+	// Parse out the exits.
+	var exits types.Exits
+	for i := 0; i < len(ret)/68; i++ {
+		var pubkey [48]byte
+		copy(pubkey[:], ret[i+20:])
+
+		exit := &types.Exit{
+			Source:    common.BytesToAddress(ret[i:]),
+			PublicKey: pubkey,
+		}
+		exits = append(exits, exit)
+	}
+	return exits
 }
