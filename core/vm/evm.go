@@ -429,6 +429,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+	nonce := evm.StateDB.GetNonce(caller.Address())
+	if nonce+1 < nonce {
+		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	}
+	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
 	if evm.chainRules.IsBerlin {
@@ -438,16 +443,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
-	}
-	// Increment caller's nonce (unless specific case)
-	if evm.TxContext.Is5806 && (contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash) && typ == CREATE2 {
-		// skip nonce increment
-	} else {
-		nonce := evm.StateDB.GetNonce(caller.Address())
-		if nonce+1 < nonce {
-			return nil, common.Address{}, gas, ErrNonceUintOverflow
-		}
-		evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()

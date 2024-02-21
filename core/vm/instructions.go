@@ -620,6 +620,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.evm.TxContext.Is5806 && (scope.Contract.CodeHash == (common.Hash{}) || scope.Contract.CodeHash == types.EmptyCodeHash) {
+		return nil, ErrEip5806Write
+	}
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
