@@ -130,7 +130,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--http.vhosts="*" \
 		--http.addr="$NODE_IP" \
 		--http.port="$RPC_PORT" \
-		--http.api=web3,debug,eth,txpool,net,engine \
+		--http.api=web3,debug,eth,txpool,net,engine,clique \
 		--bootnodes $BOOTNODE_ENDPOINT \
 		--networkid=$CHAIN_ID \
 		--unlock=$BLOCK_SIGNER_ADDRESS \
