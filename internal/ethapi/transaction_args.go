@@ -360,7 +360,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) er
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*core.Message, error) {
+func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int, skipChecks bool) (*core.Message, error) {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -425,6 +425,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.Value != nil {
 		value = args.Value.ToInt()
 	}
+	var nonce uint64
+	if args.Nonce != nil {
+		nonce = uint64(*args.Nonce)
+	}
 	data := args.data()
 	var accessList types.AccessList
 	if args.AccessList != nil {
@@ -434,6 +438,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		From:              addr,
 		To:                args.To,
 		Value:             value,
+		Nonce:             nonce,
 		GasLimit:          gas,
 		GasPrice:          gasPrice,
 		GasFeeCap:         gasFeeCap,
@@ -442,14 +447,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		AccessList:        accessList,
 		BlobGasFeeCap:     blobFeeCap,
 		BlobHashes:        args.BlobHashes,
-		SkipAccountChecks: true,
+		SkipAccountChecks: skipChecks,
 	}
 	return msg, nil
 }
 
 // toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) toTransaction() *types.Transaction {
+func (args *TransactionArgs) toTransaction(type2 bool) *types.Transaction {
 	var data types.TxData
 	switch {
 	case args.BlobHashes != nil:
@@ -478,7 +483,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			}
 		}
 
-	case args.MaxFeePerGas != nil:
+	case args.MaxFeePerGas != nil || type2:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
@@ -518,6 +523,14 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		}
 	}
 	return types.NewTx(data)
+}
+
+// ToTransaction converts the arguments to a transaction.
+// It defaults to a dynamic fee transaction unless legacy gas price
+// is explicitly provided.
+// This assumes that setDefaults has been called.
+func (args *TransactionArgs) ToTransaction() *types.Transaction {
+	return args.toTransaction(args.GasPrice == nil)
 }
 
 // IsEIP4844 returns an indicator if the args contains EIP4844 fields.
