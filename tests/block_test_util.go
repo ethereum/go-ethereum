@@ -39,9 +39,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -57,8 +57,8 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 type btJSON struct {
 	Blocks     []btBlock             `json:"blocks"`
 	Genesis    btHeader              `json:"genesisBlockHeader"`
-	Pre        core.GenesisAlloc     `json:"pre"`
-	Post       core.GenesisAlloc     `json:"postState"`
+	Pre        types.GenesisAlloc    `json:"pre"`
+	Post       types.GenesisAlloc    `json:"postState"`
 	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
 	Network    string                `json:"network"`
 	SealEngine string                `json:"sealEngine"`
@@ -117,7 +117,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// import pre accounts & construct test genesis block & state root
 	var (
 		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{
+		tconf = &triedb.Config{
 			Preimages: true,
 		}
 	)
@@ -128,7 +128,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	}
 	// Commit genesis state
 	gspec := t.genesis(config)
-	triedb := trie.NewDatabase(db, tconf)
+	triedb := triedb.NewDatabase(db, tconf)
 	gblock, err := gspec.Commit(db, triedb)
 	if err != nil {
 		return err
