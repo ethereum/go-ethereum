@@ -225,7 +225,7 @@ func ProcessDequeueExits(vmenv *vm.EVM, statedb *state.StateDB) types.Exits {
 		copy(pubkey[:], ret[i+20:])
 
 		exit := &types.Exit{
-			Source:    common.BytesToAddress(ret[i:]),
+			Source:    common.BytesToAddress(ret[i : i+20]),
 			PublicKey: pubkey,
 		}
 		exits = append(exits, exit)

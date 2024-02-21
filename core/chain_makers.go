@@ -345,7 +345,16 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+		var exits types.Exits
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			var (
+				blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+				vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
+			)
+			exits = ProcessDequeueExits(vmenv, statedb)
+		}
+
+		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals, exits)
 		if err != nil {
 			panic(err)
 		}

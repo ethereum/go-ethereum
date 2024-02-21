@@ -285,6 +285,21 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	return b.WithWithdrawals(withdrawals)
 }
 
+// NewBlockWithExits creates a new block with exits.
+func NewBlockWithExits(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, withdrawals []*Withdrawal, exits []*Exit, hasher TrieHasher) *Block {
+	b := NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, hasher)
+
+	if exits == nil {
+		b.header.ExitsHash = nil
+	} else if len(exits) == 0 {
+		b.header.ExitsHash = &EmptyExitsHash
+	} else {
+		h := DeriveSha(Exits(exits), hasher)
+		b.header.ExitsHash = &h
+	}
+	return b.WithExits(exits)
+}
+
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
@@ -496,10 +511,26 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		exits:        b.exits,
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
 		copy(block.withdrawals, withdrawals)
+	}
+	return block
+}
+
+// WithExits returns a copy of the block contianing the given exits.
+func (b *Block) WithExits(exits []*Exit) *Block {
+	block := &Block{
+		header:       b.header,
+		transactions: b.transactions,
+		uncles:       b.uncles,
+		withdrawals:  b.withdrawals,
+	}
+	if exits != nil {
+		block.exits = make([]*Exit, len(exits))
+		copy(block.exits, exits)
 	}
 	return block
 }

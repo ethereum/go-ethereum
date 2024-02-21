@@ -32,6 +32,13 @@ type Exit struct {
 	PublicKey PublicKey      `json:"pubkey"`
 }
 
+func (e *Exit) Bytes() []byte {
+	out := make([]byte, 68)
+	copy(out, e.Source.Bytes())
+	copy(out[20:], e.PublicKey[:])
+	return out
+}
+
 // Exits implements DerivableList for exits.
 type Exits []*Exit
 
