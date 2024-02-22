@@ -9,7 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// TODO: Can we aggregate all the gencodec generation into a single file?
 //go:generate go run github.com/fjl/gencodec -type BuildBlockArgs -field-override buildBlockArgsMarshaling -out gen_buildblockargs_json.go
+//go:generate go run github.com/fjl/gencodec -type SimulateTransactionResult -field-override simulateTransactionResultMarshaling -out gen_simulatetxnresult_json.go
+//go:generate go run github.com/fjl/gencodec -type SimulatedLog -field-override simulateLogMarshaling -out gen_simulateLog_json.go
 
 type Bundle struct {
 	BlockNumber     *big.Int           `json:"blockNumber,omitempty"` // if BlockNumber is set it must match DecryptionCondition!
@@ -40,8 +43,31 @@ type buildBlockArgsMarshaling struct {
 	Extra          hexutil.Bytes
 }
 
+type SimulateTransactionResult struct {
+	Egp     uint64          `json:"egp"`
+	Logs    []*SimulatedLog `json:"logs"`
+	Success bool            `json:"success"`
+	Error   string          `json:"error"`
+}
+
+// field type overrides for gencodec
+type simulateTransactionResultMarshaling struct {
+	Egp hexutil.Uint64
+}
+
+type SimulatedLog struct {
+	Data   []byte         `json:"data"`
+	Addr   common.Address `json:"addr"`
+	Topics []common.Hash  `json:"topics"`
+}
+
+type simulateLogMarshaling struct {
+	Data hexutil.Bytes
+}
+
 type API interface {
 	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
-	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
+	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
+	Bid(ctx context.Context, sessioId string, blsPubKey string) error
 }

@@ -157,7 +157,7 @@ func (s *SessionManager) getSession(sessionId string) (*miner.Builder, error) {
 	return session, nil
 }
 
-func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
+func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*api.SimulateTransactionResult, error) {
 	builder, err := s.getSession(sessionId)
 	if err != nil {
 		return nil, err

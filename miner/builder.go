@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	suavextypes "github.com/ethereum/go-ethereum/suave/builder/api"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/holiman/uint256"
 )
@@ -84,13 +85,13 @@ type SBundle struct {
 	RefundPercent   *int               `json:"percent,omitempty"`
 }
 
-func (b *Builder) AddTransaction(txn *types.Transaction) (*types.SimulateTransactionResult, error) {
+func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateTransactionResult, error) {
 	// If the context is not set, the logs will not be recorded
 	b.env.state.SetTxContext(txn.Hash(), b.env.tcount)
 
 	logs, err := b.wrk.commitTransaction(b.env, txn)
 	if err != nil {
-		return &types.SimulateTransactionResult{
+		return &suavextypes.SimulateTransactionResult{
 			Error:   err.Error(),
 			Success: false,
 		}, nil
@@ -175,13 +176,13 @@ type SubmitBlockRequest struct {
 	Root phase0.Root
 }
 
-func receiptToSimResult(receipt *types.Receipt) *types.SimulateTransactionResult {
-	result := &types.SimulateTransactionResult{
+func receiptToSimResult(receipt *types.Receipt) *suavextypes.SimulateTransactionResult {
+	result := &suavextypes.SimulateTransactionResult{
 		Success: true,
-		Logs:    []*types.SimulatedLog{},
+		Logs:    []*suavextypes.SimulatedLog{},
 	}
 	for _, log := range receipt.Logs {
-		result.Logs = append(result.Logs, &types.SimulatedLog{
+		result.Logs = append(result.Logs, &suavextypes.SimulatedLog{
 			Addr:   log.Address,
 			Topics: log.Topics,
 			Data:   log.Data,

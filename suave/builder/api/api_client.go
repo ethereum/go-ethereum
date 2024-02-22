@@ -35,12 +35,16 @@ func (a *APIClient) NewSession(ctx context.Context, args *BuildBlockArgs) (strin
 	return id, err
 }
 
-func (a *APIClient) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
-	var receipt *types.SimulateTransactionResult
+func (a *APIClient) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error) {
+	var receipt *SimulateTransactionResult
 	err := a.rpc.CallContext(ctx, &receipt, "suavex_addTransaction", sessionId, tx)
 	return receipt, err
 }
 
 func (a *APIClient) BuildBlock(ctx context.Context, sessionId string) error {
 	return a.rpc.CallContext(ctx, nil, "suavex_buildBlock", sessionId)
+}
+
+func (a *APIClient) Bid(ctx context.Context, sessioId string, blsPubKey string) error {
+	return a.rpc.CallContext(ctx, nil, "suavex_bid", sessioId, blsPubKey)
 }

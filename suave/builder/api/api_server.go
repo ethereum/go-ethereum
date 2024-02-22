@@ -6,11 +6,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+var _ API = (*Server)(nil)
+
 // SessionManager is the backend that manages the session state of the builder API.
 type SessionManager interface {
 	NewSession(context.Context, *BuildBlockArgs) (string, error)
-	AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error)
+	AddTransaction(sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(sessionId string) error
+	Bid(sessionId string, blsPubKey string) error
 }
 
 func NewServer(s SessionManager) *Server {
@@ -28,7 +31,7 @@ func (s *Server) NewSession(ctx context.Context, args *BuildBlockArgs) (string, 
 	return s.sessionMngr.NewSession(ctx, args)
 }
 
-func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
+func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error) {
 	return s.sessionMngr.AddTransaction(sessionId, tx)
 }
 
@@ -36,6 +39,11 @@ func (s *Server) BuildBlock(ctx context.Context, sessionId string) error {
 	return s.sessionMngr.BuildBlock(sessionId)
 }
 
+func (s *Server) Bid(ctx context.Context, sessioId string, blsPubKey string) error {
+	return nil
+}
+
+// TODO: Remove
 type MockServer struct {
 }
 
@@ -43,8 +51,8 @@ func (s *MockServer) NewSession(ctx context.Context, args *BuildBlockArgs) (stri
 	return "", nil
 }
 
-func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
-	return &types.SimulateTransactionResult{}, nil
+func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error) {
+	return &SimulateTransactionResult{}, nil
 }
 
 func (s *MockServer) BuildBlock(ctx context.Context) error {
