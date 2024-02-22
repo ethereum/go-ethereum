@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -18,6 +19,11 @@ import (
 )
 
 func main() {
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
+	slogVerbosity := log.FromLegacyLevel(5)
+	glogger.Verbosity(slogVerbosity)
+	log.SetDefault(log.NewLogger(glogger))
+
 	var privateKey *ecdsa.PrivateKey
 	var err error
 	privateKeyHex := os.Getenv("HIVE_CLIENT_PRIVATE_KEY")

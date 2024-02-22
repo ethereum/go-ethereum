@@ -76,7 +76,9 @@ func (d *DiscV5API) AddEnr(enr string) (bool, error) {
 		return false, err
 	}
 
-	d.DiscV5.tab.addSeenNode(wrapNode(n))
+	wn := wrapNode(n)
+	wn.livenessChecks++
+	d.DiscV5.tab.addVerifiedNode(wn)
 	return true, nil
 }
 
@@ -225,7 +227,9 @@ func (p *PortalAPI) HistoryAddEnr(enr string) (bool, error) {
 		return false, err
 	}
 
-	p.portalProtocol.table.addSeenNode(wrapNode(n))
+	wn := wrapNode(n)
+	wn.livenessChecks++
+	p.portalProtocol.table.addVerifiedNode(wn)
 	return true, nil
 }
 
@@ -237,7 +241,9 @@ func (p *PortalAPI) AddEnrs(enrs []string) bool {
 			continue
 		}
 
-		p.portalProtocol.table.addSeenNode(wrapNode(n))
+		wn := wrapNode(n)
+		wn.livenessChecks++
+		p.portalProtocol.table.addVerifiedNode(wn)
 	}
 
 	return true

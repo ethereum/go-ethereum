@@ -13,7 +13,6 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
-	"os"
 	"sort"
 	"time"
 
@@ -202,12 +201,12 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
 				localNode.SetStaticIP(ipnet.IP)
+				break
 			}
 		}
 	}
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	protocol := &PortalProtocol{
 		protocolId:     protocolId,
 		ListenAddr:     config.ListenAddr,
@@ -248,6 +247,9 @@ func (p *PortalProtocol) Start() error {
 	for i := 0; i < concurrentOffers; i++ {
 		go p.offerWorker()
 	}
+
+	// wait for the routing table to be initialized
+	<-p.table.initDone
 	return nil
 }
 
@@ -516,6 +518,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 	}
 
 	p.log.Trace("Received accept response", "id", target.ID(), "accept", accept)
+	p.setJustSeen(target)
 
 	var contentKeyLen int
 	if request.Kind == TransientOfferRequestKind {
@@ -636,6 +639,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.log.Trace("Received content response", "id", target.ID(), "content", content)
+		p.setJustSeen(target)
 		return resp[1], content.Content, nil
 	case portalwire.ContentConnIdSelector:
 		connIdMsg := &portalwire.ConnectionId{}
@@ -645,6 +649,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.log.Trace("Received content response", "id", target.ID(), "connIdMsg", connIdMsg)
+		p.setJustSeen(target)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
@@ -686,7 +691,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
-
+		p.setJustSeen(target)
 		nodes := p.filterNodes(target, enrs.Enrs, nil)
 		return resp[1], nodes, nil
 	default:
@@ -705,10 +710,16 @@ func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances
 		return nil, err
 	}
 
-	p.table.addVerifiedNode(wrapNode(target))
+	p.setJustSeen(target)
 	nodes := p.filterNodes(target, nodesResp.Enrs, distances)
 
 	return nodes, nil
+}
+
+func (p *PortalProtocol) setJustSeen(target *enode.Node) {
+	wn := wrapNode(target)
+	wn.livenessChecks++
+	p.table.addVerifiedNode(wn)
 }
 
 func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distances []uint) []*enode.Node {
@@ -761,9 +772,9 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	}
 
 	p.log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
+	p.setJustSeen(target)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
-	p.table.addVerifiedNode(wrapNode(target))
 	return pong, nil
 }
 
@@ -1308,7 +1319,9 @@ func (p *PortalProtocol) lookupWorker(destNode *node, target enode.ID) ([]*node,
 	}
 	for _, n := range r {
 		if n.ID() != p.Self().ID() {
-			nodes.push(wrapNode(n), portalFindnodesResultLimit)
+			wn := wrapNode(n)
+			p.table.addSeenNode(wn)
+			nodes.push(wn, portalFindnodesResultLimit)
 		}
 	}
 	return nodes.entries, err
