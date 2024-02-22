@@ -38,6 +38,7 @@ type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetchers map[string]*subfetcher // Subfetchers for each trie
+	closed   bool
 
 	deliveryMissMeter metrics.Meter
 	accountLoadMeter  metrics.Meter
@@ -75,7 +76,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 // more than once on a triePrefetcher instance.
 func (p *triePrefetcher) close() {
 	for _, fetcher := range p.fetchers {
-		fetcher.wait() // safe to do multiple times
+		fetcher.close()
 
 		if metrics.Enabled {
 			if fetcher.root == p.root {
@@ -99,6 +100,7 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
+	p.closed = true
 }
 
 // prefetch schedules a batch of trie items to prefetch.
@@ -120,7 +122,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't
-// have it.
+// have it. trie is not safe to call concurrently
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
@@ -128,13 +130,16 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
-	// Wait for the fetcher to finish
-	fetcher.wait() // safe to do multiple times
-	if fetcher.trie == nil {
-		p.deliveryMissMeter.Mark(1)
-		return nil
+	if p.closed {
+		return fetcher.db.CopyTrie(fetcher.trie)
 	}
-	return fetcher.db.CopyTrie(fetcher.trie)
+	trieChan := make(chan Trie)
+	fetcher.copy <- trieChan
+	select {
+	case fetcher.wake <- true:
+	default:
+	}
+	return <-trieChan
 }
 
 // used marks a batch of state items used to allow creating statistics as to
@@ -165,12 +170,12 @@ type subfetcher struct {
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
 
-	tasks   [][]byte   // Items queued up for retrieval
-	lock    sync.Mutex // Lock protecting the task queue
-	closing bool       // set to true if the subfetcher is closing
+	tasks [][]byte   // Items queued up for retrieval
+	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan bool     // Wake channel if a new task is scheduled, true if the subfetcher should continue running when there are no pending tasks
-	term chan struct{} // Channel to signal interruption
+	wake chan bool      // Wake channel if a new task is scheduled, true if the subfetcher should continue running when there are no pending tasks
+	term chan struct{}  // Channel to signal interruption
+	copy chan chan Trie // channel for retrieving copies of the subfetcher's trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -187,6 +192,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		root:  root,
 		addr:  addr,
 		wake:  make(chan bool, 1),
+		copy:  make(chan chan Trie, 1),
 		term:  make(chan struct{}),
 		seen:  make(map[string]struct{}),
 	}
@@ -208,30 +214,22 @@ func (sf *subfetcher) schedule(keys [][]byte) {
 	}
 }
 
-// wait waits for the subfetcher to finish it's task. It is safe to call wait multiple
-// times but it is not thread safe.
-func (sf *subfetcher) wait() {
-	// Signal termination by nil tasks
-	sf.lock.Lock()
-	if sf.closing {
-		sf.lock.Unlock()
-		return // already exiting
-	}
-	sf.closing = true
-	sf.lock.Unlock()
+// close waits for the subfetcher to finish its tasks. It cannot be called multiple times
+func (sf *subfetcher) close() {
 	// Notify the prefetcher. The wake-chan is buffered, so this is async.
 	sf.wake <- false
 	// Wait for it to terminate
 	<-sf.term
 }
 
-// loop waits for new tasks to be scheduled and keeps loading them until it runs
-// out of tasks or its underlying trie is retrieved for committing.
+// loop loads newly-scheduled trie tasks as they are received and loads them, stopping
+// when requested.
 func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
-	// Start by opening the trie and stop processing if it fails
+	// Any calls to trie
+	// start by opening the trie and stop processing if it fails.
 	if sf.owner == (common.Hash{}) {
 		trie, err := sf.db.OpenTrie(sf.root)
 		if err != nil {
@@ -251,28 +249,37 @@ func (sf *subfetcher) loop() {
 	}
 	// Trie opened successfully, keep prefetching items
 	for {
-		keepRunning := <-sf.wake
-		if !keepRunning {
-			return
-		}
-		// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-		sf.lock.Lock()
-		tasks := sf.tasks
-		sf.tasks = nil
-		sf.lock.Unlock()
+		select {
+		case keepRunning := <-sf.wake:
+			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
+			sf.lock.Lock()
+			tasks := sf.tasks
+			sf.tasks = nil
+			sf.lock.Unlock()
 
-		// Prefetch all tasks
-		for _, task := range tasks {
-			if _, ok := sf.seen[string(task)]; ok {
-				sf.dups++
-				continue
+			// Prefetch all tasks
+			for _, task := range tasks {
+				if _, ok := sf.seen[string(task)]; ok {
+					sf.dups++
+					continue
+				}
+				if len(task) == common.AddressLength {
+					sf.trie.GetAccount(common.BytesToAddress(task))
+				} else {
+					sf.trie.GetStorage(sf.addr, task)
+				}
+				sf.seen[string(task)] = struct{}{}
 			}
-			if len(task) == common.AddressLength {
-				sf.trie.GetAccount(common.BytesToAddress(task))
-			} else {
-				sf.trie.GetStorage(sf.addr, task)
+			// if any trie retrieval request is made, ensure it is completed
+			// after pending tasks have been processed.
+			select {
+			case ch := <-sf.copy:
+				ch <- sf.db.CopyTrie(sf.trie)
+			default:
 			}
-			sf.seen[string(task)] = struct{}{}
+			if !keepRunning {
+				return
+			}
 		}
 	}
 }
