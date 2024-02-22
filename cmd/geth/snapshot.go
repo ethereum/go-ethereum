@@ -139,6 +139,8 @@ It's also usable without snapshot enabled.
 				Flags: flags.Merge([]cli.Flag{
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
+					utils.ExcludeContractFlag,
+					utils.ExcludeEOAFlag,
 					utils.StartKeyFlag,
 					utils.DumpLimitFlag,
 				}, utils.NetworkFlags, utils.DatabaseFlags),
@@ -545,6 +547,9 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if conf.SkipEOA && conf.SkipContract {
+		return fmt.Errorf("both EOA and contract accounts are skipped, nothing to dump")
+	}
 	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
 	defer triedb.Close()
 
@@ -578,6 +583,12 @@ func dumpState(ctx *cli.Context) error {
 		account, err := types.FullAccount(accIt.Account())
 		if err != nil {
 			return err
+		}
+		if conf.SkipContract && !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
+			continue
+		}
+		if conf.SkipEOA && bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
+			continue
 		}
 		da := &state.DumpAccount{
 			Balance:     account.Balance.String(),

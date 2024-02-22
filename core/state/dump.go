@@ -34,6 +34,8 @@ import (
 type DumpConfig struct {
 	SkipCode          bool
 	SkipStorage       bool
+	SkipContract      bool
+	SkipEOA           bool
 	OnlyWithAddresses bool
 	Start             []byte
 	Max               uint64

@@ -208,6 +208,14 @@ var (
 		Name:  "nocode",
 		Usage: "Exclude contract code (save db lookups)",
 	}
+	ExcludeContractFlag = &cli.BoolFlag{
+		Name:  "nocontract",
+		Usage: "Exclude contract accounts",
+	}
+	ExcludeEOAFlag = &cli.BoolFlag{
+		Name:  "noeoa",
+		Usage: "Exclude EOA accounts",
+	}
 	StartKeyFlag = &cli.StringFlag{
 		Name:  "start",
 		Usage: "Start position. Either a hash or address",
