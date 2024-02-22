@@ -55,7 +55,7 @@ func processFromHeaders(ec ethClient, headers []string, w http.ResponseWriter, r
 				errCheckPeer = err
 				break
 			}
-			errCheckPeer = checkMinPeers(ec, uint(peers))
+			errCheckPeer = checkMinPeers(ec, uint64(peers))
 		case strings.HasPrefix(lHeader, checkBlock):
 			block, err := strconv.Atoi(strings.TrimPrefix(lHeader, checkBlock))
 			if err != nil {
@@ -101,7 +101,7 @@ func processFromBody(ec ethClient, w http.ResponseWriter, r *http.Request) {
 		}
 
 		if body.MinPeerCount != nil {
-			errCheckPeer = checkMinPeers(ec, *body.MinPeerCount)
+			errCheckPeer = checkMinPeers(ec, uint64(*body.MinPeerCount))
 		}
 
 		if body.CheckBlock != nil {
