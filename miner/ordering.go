@@ -153,3 +153,14 @@ func (t *transactionsByPriceAndNonce) Shift() {
 func (t *transactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
+
+// Empty returns if the price heap is empty. It can be used to check it simpler
+// than calling peek and checking for nil return.
+func (t *transactionsByPriceAndNonce) Empty() bool {
+	return len(t.heads) == 0
+}
+
+// Clear removes the entire content of the heap.
+func (t *transactionsByPriceAndNonce) Clear() {
+	t.heads, t.txs = nil, nil
+}

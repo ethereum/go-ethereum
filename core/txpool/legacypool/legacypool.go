@@ -296,7 +296,7 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 	pool.gasTip.Store(uint256.NewInt(gasTip))
 
 	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
+	// case the head state is not available (might occur when node is not
 	// fully synced).
 	statedb, err := pool.chain.StateAt(head.Root)
 	if err != nil {
@@ -522,7 +522,12 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (pool *LegacyPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
+func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	// If only blob transactions are requested, this pool is unsuitable as it
+	// contains none, don't even bother.
+	if filter.OnlyBlobTxs {
+		return nil
+	}
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -531,13 +536,12 @@ func (pool *LegacyPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobF
 		minTipBig  *big.Int
 		baseFeeBig *big.Int
 	)
-	if minTip != nil {
-		minTipBig = minTip.ToBig()
+	if filter.MinTip != nil {
+		minTipBig = filter.MinTip.ToBig()
 	}
-	if baseFee != nil {
-		baseFeeBig = baseFee.ToBig()
+	if filter.BaseFee != nil {
+		baseFeeBig = filter.BaseFee.ToBig()
 	}
-
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
 		txs := list.Flatten()

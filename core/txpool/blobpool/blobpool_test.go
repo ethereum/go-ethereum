@@ -185,7 +185,7 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 	return types.MustSignNewTx(key, types.LatestSigner(testChainConfig), blobtx)
 }
 
-// makeUnsignedTx is a utility method to construct a random blob tranasaction
+// makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
 	return &types.BlobTx{
@@ -391,7 +391,7 @@ func TestOpenDrops(t *testing.T) {
 		id, _ := store.Put(blob)
 		filled[id] = struct{}{}
 	}
-	// Insert a sequence of transactions with partially passed nonces to veirfy
+	// Insert a sequence of transactions with partially passed nonces to verify
 	// that the included part of the set will get dropped (case 4).
 	var (
 		overlapper, _ = crypto.GenerateKey()
@@ -1340,7 +1340,11 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		p := pool.Pending(uint256.NewInt(1), chain.basefee, chain.blobfee)
+		p := pool.Pending(txpool.PendingFilter{
+			MinTip:  uint256.NewInt(1),
+			BaseFee: chain.basefee,
+			BlobFee: chain.blobfee,
+		})
 		if len(p) != int(capacity) {
 			b.Fatalf("have %d want %d", len(p), capacity)
 		}
