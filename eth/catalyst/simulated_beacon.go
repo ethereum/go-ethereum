@@ -161,14 +161,22 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
-	var random [32]byte
+	var (
+		random         [32]byte
+		payloadVersion = engine.PayloadV2
+		attrs          = &engine.PayloadAttributes{
+			Timestamp:             timestamp,
+			SuggestedFeeRecipient: feeRecipient,
+			Withdrawals:           withdrawals,
+			Random:                random,
+		}
+	)
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
-		Timestamp:             timestamp,
-		SuggestedFeeRecipient: feeRecipient,
-		Withdrawals:           withdrawals,
-		Random:                random,
-	}, engine.PayloadV2, true)
+	if isCancun {
+		payloadVersion = engine.PayloadV3
+		attrs.BeaconRoot = &common.Hash{}
+	}
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, attrs, payloadVersion, true)
 	if err != nil {
 		return err
 	}
