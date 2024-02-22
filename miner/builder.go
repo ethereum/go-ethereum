@@ -85,9 +85,13 @@ type SBundle struct {
 }
 
 func (b *Builder) AddTransaction(txn *types.Transaction) (*types.SimulateTransactionResult, error) {
+	// If the context is not set, the logs will not be recorded
+	b.env.state.SetTxContext(txn.Hash(), b.env.tcount)
+
 	logs, err := b.wrk.commitTransaction(b.env, txn)
 	if err != nil {
 		return &types.SimulateTransactionResult{
+			Error:   err.Error(),
 			Success: false,
 		}, nil
 	}

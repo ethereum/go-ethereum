@@ -1,8 +1,16 @@
 package miner
 
 import (
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -73,6 +81,29 @@ func TestBuilder_BuildBlock(t *testing.T) {
 	require.Len(t, block.Transactions(), 1)
 }
 
+func TestBuilder_ContractWithLogs(t *testing.T) {
+	// test that we can simulate a txn with a contract that emits events
+	t.Parallel()
+
+	config, backend := newMockBuilderConfig(t)
+
+	input, err := suaveExample1Artifact.Abi.Pack("get", big.NewInt(1))
+	require.NoError(t, err)
+
+	tx := backend.newCall(suaveExample1Addr, input)
+
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	simResult, err := builder.AddTransaction(tx)
+	require.NoError(t, err)
+	require.True(t, simResult.Success)
+	require.Len(t, simResult.Logs, 1)
+
+	require.Equal(t, simResult.Logs[0].Addr, suaveExample1Addr)
+	require.Equal(t, simResult.Logs[0].Topics[0], suaveExample1Artifact.Abi.Events["SomeEvent"].ID)
+}
+
 func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
@@ -92,4 +123,44 @@ func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 		GasCeil:     10000000,
 	}
 	return bConfig, backend
+}
+
+func (b *testWorkerBackend) newCall(to common.Address, data []byte) *types.Transaction {
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+	tx, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), to, big.NewInt(0), 1000000, gasPrice, data), types.HomesteadSigner{}, testBankKey)
+	return tx
+}
+
+var (
+	suaveExample1Addr     = common.Address{0x1}
+	suaveExample1Artifact = readContractArtifact("Example.sol/Example.json")
+)
+
+type artifactObj struct {
+	Abi              *abi.ABI `json:"abi"`
+	DeployedBytecode struct {
+		Object string
+	} `json:"deployedBytecode"`
+}
+
+func readContractArtifact(name string) *artifactObj {
+	// Get the caller's file path.
+	_, filename, _, _ := runtime.Caller(1)
+
+	// Resolve the directory of the caller's file.
+	callerDir := filepath.Dir(filename)
+
+	// Construct the absolute path to the target file.
+	targetFilePath := filepath.Join(callerDir, "./contracts/out/", name)
+
+	data, err := os.ReadFile(targetFilePath)
+	if err != nil {
+		panic(fmt.Sprintf("failed to read artifact %s: %v. Maybe you forgot to generate the artifacts? `cd suave && forge build`", name, err))
+	}
+
+	var obj artifactObj
+	if err := json.Unmarshal(data, &obj); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal artifact %s: %v", name, err))
+	}
+	return &obj
 }
