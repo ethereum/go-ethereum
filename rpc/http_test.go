@@ -40,11 +40,13 @@ func confirmStatusCode(t *testing.T, got, want int) {
 
 func confirmRequestValidationCode(t *testing.T, method, contentType, body string, expectedStatusCode int) {
 	t.Helper()
+
+	s := NewServer()
 	request := httptest.NewRequest(method, "http://url.com", strings.NewReader(body))
 	if len(contentType) > 0 {
 		request.Header.Set("Content-Type", contentType)
 	}
-	code, err := validateRequest(request)
+	code, err := s.validateRequest(request)
 	if code == 0 {
 		if err != nil {
 			t.Errorf("validation: got error %v, expected nil", err)
@@ -64,7 +66,7 @@ func TestHTTPErrorResponseWithPut(t *testing.T) {
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
-	body := make([]rune, maxRequestContentLength+1)
+	body := make([]rune, defaultBodyLimit+1)
 	confirmRequestValidationCode(t,
 		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
@@ -104,7 +106,7 @@ func TestHTTPResponseWithEmptyGet(t *testing.T) {
 
 // This checks that maxRequestContentLength is not applied to the response of a request.
 func TestHTTPRespBodyUnlimited(t *testing.T) {
-	const respLength = maxRequestContentLength * 3
+	const respLength = defaultBodyLimit * 3
 
 	s := NewServer()
 	defer s.Stop()

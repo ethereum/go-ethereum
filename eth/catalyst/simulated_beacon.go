@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -283,7 +284,7 @@ func (c *SimulatedBeacon) Rollback() {
 
 // Fork sets the head to the provided hash.
 func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
-	if len(c.eth.TxPool().Pending(false)) != 0 {
+	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
 		return errors.New("pending block dirty")
 	}
 	parent := c.eth.BlockChain().GetBlockByHash(parentHash)
@@ -295,7 +296,7 @@ func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 
 // AdjustTime creates a new block with an adjusted timestamp.
 func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
-	if len(c.eth.TxPool().Pending(false)) != 0 {
+	if len(c.eth.TxPool().Pending(txpool.PendingFilter{})) != 0 {
 		return errors.New("could not adjust time on non-empty block")
 	}
 	parent := c.eth.BlockChain().CurrentBlock()

@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 func TestGeneratePOSChain(t *testing.T) {
@@ -46,7 +46,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		asm4788 = common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 		gspec   = &Genesis{
 			Config: &config,
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				address:                          {Balance: funds},
 				params.BeaconRootsStorageAddress: {Balance: common.Big0, Code: asm4788},
 			},
@@ -69,19 +69,19 @@ func TestGeneratePOSChain(t *testing.T) {
 	storage[common.Hash{0x01}] = common.Hash{0x01}
 	storage[common.Hash{0x02}] = common.Hash{0x02}
 	storage[common.Hash{0x03}] = common.HexToHash("0303")
-	gspec.Alloc[aa] = GenesisAccount{
+	gspec.Alloc[aa] = types.Account{
 		Balance: common.Big1,
 		Nonce:   1,
 		Storage: storage,
 		Code:    common.Hex2Bytes("6042"),
 	}
-	gspec.Alloc[bb] = GenesisAccount{
+	gspec.Alloc[bb] = types.Account{
 		Balance: common.Big2,
 		Nonce:   1,
 		Storage: storage,
 		Code:    common.Hex2Bytes("600154600354"),
 	}
-	genesis := gspec.MustCommit(gendb, trie.NewDatabase(gendb, trie.HashDefaults))
+	genesis := gspec.MustCommit(gendb, triedb.NewDatabase(gendb, triedb.HashDefaults))
 
 	genchain, genreceipts := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
 		gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
@@ -202,9 +202,9 @@ func ExampleGenerateChain() {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
-	genesis := gspec.MustCommit(genDb, trie.NewDatabase(genDb, trie.HashDefaults))
+	genesis := gspec.MustCommit(genDb, triedb.NewDatabase(genDb, triedb.HashDefaults))
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the
