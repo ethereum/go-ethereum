@@ -1167,7 +1167,7 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 	}
 
 	// removed tx
-	for i, tx := range (types.Transactions{pastDrop, freshDrop}) {
+	for i, tx := range types.Transactions{pastDrop, freshDrop} {
 		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn != nil {
 			t.Errorf("drop %d: tx %v found while shouldn't have been", i, txn)
 		}
@@ -1176,7 +1176,7 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		}
 	}
 	// added tx
-	for i, tx := range (types.Transactions{pastAdd, freshAdd, futureAdd}) {
+	for i, tx := range types.Transactions{pastAdd, freshAdd, futureAdd} {
 		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
@@ -1185,7 +1185,7 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		}
 	}
 	// shared tx
-	for i, tx := range (types.Transactions{postponed, swapped}) {
+	for i, tx := range types.Transactions{postponed, swapped} {
 		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
