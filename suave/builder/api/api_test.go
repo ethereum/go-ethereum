@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -46,6 +47,6 @@ func (nullSessionManager) BuildBlock(sessionId string) error {
 	return nil
 }
 
-func (nullSessionManager) Bid(sessioId string, blsPubKey string) error {
-	return nil
+func (nullSessionManager) Bid(sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+	return nil, nil
 }

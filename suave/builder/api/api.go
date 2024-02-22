@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	denebBuilder "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -65,9 +67,16 @@ type simulateLogMarshaling struct {
 	Data hexutil.Bytes
 }
 
+// SubmitBlockRequest is an extension of the builder.SubmitBlockRequest with the root
+// of the bid that needs to be signed
+type SubmitBlockRequest struct {
+	denebBuilder.SubmitBlockRequest
+	Root phase0.Root
+}
+
 type API interface {
 	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
-	Bid(ctx context.Context, sessioId string, blsPubKey string) error
+	Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
 }

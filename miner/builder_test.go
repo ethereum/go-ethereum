@@ -104,6 +104,26 @@ func TestBuilder_ContractWithLogs(t *testing.T) {
 	require.Equal(t, simResult.Logs[0].Topics[0], suaveExample1Artifact.Abi.Events["SomeEvent"].ID)
 }
 
+func TestBuilder_Bid(t *testing.T) {
+	t.Parallel()
+
+	config, _ := newMockBuilderConfig(t)
+
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	_, err = builder.Bid([48]byte{})
+	require.Error(t, err, "cannot create bid without block")
+
+	_, err = builder.BuildBlock()
+	require.NoError(t, err)
+
+	req, err := builder.Bid([48]byte{})
+	require.NoError(t, err)
+
+	fmt.Println("-- req --", req)
+}
+
 func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 	var (
 		db     = rawdb.NewMemoryDatabase()

@@ -117,7 +117,7 @@ func (b *Builder) BuildBlock() (*types.Block, error) {
 	return block, nil
 }
 
-func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*suavextypes.SubmitBlockRequest, error) {
 	work := b.env
 
 	if b.block == nil {
@@ -157,7 +157,7 @@ func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*SubmitBlockRequest, erro
 		return nil, err
 	}
 
-	bidRequest := SubmitBlockRequest{
+	bidRequest := suavextypes.SubmitBlockRequest{
 		Root: phase0.Root(root),
 		SubmitBlockRequest: denebBuilder.SubmitBlockRequest{
 			Message:          &blockBidMsg,
@@ -167,13 +167,6 @@ func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*SubmitBlockRequest, erro
 		},
 	}
 	return &bidRequest, nil
-}
-
-// SubmitBlockRequest is an extension of the builder.SubmitBlockRequest with the root
-// of the bid that needs to be signed
-type SubmitBlockRequest struct {
-	denebBuilder.SubmitBlockRequest
-	Root phase0.Root
 }
 
 func receiptToSimResult(receipt *types.Receipt) *suavextypes.SimulateTransactionResult {

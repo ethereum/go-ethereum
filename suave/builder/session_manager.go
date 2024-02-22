@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/miner"
@@ -18,21 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/suave/builder/api"
 	"github.com/google/uuid"
 )
-
-// blockchain is the minimum interface to the blockchain
-// required to build a block
-type blockchain interface {
-	core.ChainContext
-
-	// Header returns the current tip of the chain
-	CurrentHeader() *types.Header
-
-	// StateAt returns the state at the given root
-	StateAt(root common.Hash) (*state.StateDB, error)
-
-	// Config returns the chain config
-	Config() *params.ChainConfig
-}
 
 type Config struct {
 	GasCeil               uint64
@@ -172,6 +157,14 @@ func (s *SessionManager) BuildBlock(sessionId string) error {
 	}
 	_, err = builder.BuildBlock() // TODO: Return more info
 	return err
+}
+
+func (s *SessionManager) Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*api.SubmitBlockRequest, error) {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return nil, err
+	}
+	return builder.Bid(blsPubKey)
 }
 
 // CalcBaseFee calculates the basefee of the header.

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -13,7 +14,7 @@ type SessionManager interface {
 	NewSession(context.Context, *BuildBlockArgs) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(sessionId string) error
-	Bid(sessionId string, blsPubKey string) error
+	Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
 }
 
 func NewServer(s SessionManager) *Server {
@@ -39,8 +40,8 @@ func (s *Server) BuildBlock(ctx context.Context, sessionId string) error {
 	return s.sessionMngr.BuildBlock(sessionId)
 }
 
-func (s *Server) Bid(ctx context.Context, sessioId string, blsPubKey string) error {
-	return nil
+func (s *Server) Bid(ctx context.Context, sessionId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+	return s.sessionMngr.Bid(sessionId, blsPubKey)
 }
 
 // TODO: Remove

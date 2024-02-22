@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -45,6 +46,8 @@ func (a *APIClient) BuildBlock(ctx context.Context, sessionId string) error {
 	return a.rpc.CallContext(ctx, nil, "suavex_buildBlock", sessionId)
 }
 
-func (a *APIClient) Bid(ctx context.Context, sessioId string, blsPubKey string) error {
-	return a.rpc.CallContext(ctx, nil, "suavex_bid", sessioId, blsPubKey)
+func (a *APIClient) Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+	var req *SubmitBlockRequest
+	err := a.rpc.CallContext(ctx, &req, "suavex_bid", sessioId, blsPubKey)
+	return req, err
 }
