@@ -585,7 +585,7 @@ func TestProcessFromBody(t *testing.T) {
 			clientSyncingError:  nil,
 			expectedStatusCode:  http.StatusInternalServerError,
 			expectedBody: map[string]string{
-				query:            "ERROR: json: cannot unmarshal string into Go struct field requestBody.check_block of type uint64",
+				query:            "ERROR: math/big: cannot unmarshal \"\\\"ABC\\\"\" into a *big.Int",
 				synced:           "DISABLED",
 				minPeerCount:     "DISABLED",
 				checkBlock:       "DISABLED",

@@ -29,10 +29,10 @@ var (
 )
 
 type requestBody struct {
-	Synced           *bool   `json:"synced"`
-	MinPeerCount     *uint   `json:"min_peer_count"`
-	CheckBlock       *uint64 `json:"check_block"`
-	MaxSecondsBehind *int    `json:"max_seconds_behind"`
+	Synced           *bool    `json:"synced"`
+	MinPeerCount     *uint    `json:"min_peer_count"`
+	CheckBlock       *big.Int `json:"check_block"`
+	MaxSecondsBehind *int     `json:"max_seconds_behind"`
 }
 
 // processFromHeaders handles requests when 'X-GETH-HEALTHCHECK' header labels are present.
@@ -105,7 +105,7 @@ func processFromBody(ec ethClient, w http.ResponseWriter, r *http.Request) {
 		}
 
 		if body.CheckBlock != nil {
-			errCheckBlock = checkBlockNumber(ec, big.NewInt(int64(*body.CheckBlock)))
+			errCheckBlock = checkBlockNumber(ec, body.CheckBlock)
 		}
 
 		if body.MaxSecondsBehind != nil {
