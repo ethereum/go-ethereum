@@ -248,38 +248,35 @@ func (sf *subfetcher) loop() {
 		sf.trie = trie
 	}
 	// Trie opened successfully, keep prefetching items
-	for {
-		select {
-		case keepRunning := <-sf.wake:
-			// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
-			sf.lock.Lock()
-			tasks := sf.tasks
-			sf.tasks = nil
-			sf.lock.Unlock()
+	for keepRunning := range sf.wake {
+		// Subfetcher was woken up, retrieve any tasks to avoid spinning the lock
+		sf.lock.Lock()
+		tasks := sf.tasks
+		sf.tasks = nil
+		sf.lock.Unlock()
 
-			// Prefetch all tasks
-			for _, task := range tasks {
-				if _, ok := sf.seen[string(task)]; ok {
-					sf.dups++
-					continue
-				}
-				if len(task) == common.AddressLength {
-					sf.trie.GetAccount(common.BytesToAddress(task))
-				} else {
-					sf.trie.GetStorage(sf.addr, task)
-				}
-				sf.seen[string(task)] = struct{}{}
+		// Prefetch all tasks
+		for _, task := range tasks {
+			if _, ok := sf.seen[string(task)]; ok {
+				sf.dups++
+				continue
 			}
-			// if any trie retrieval request is made, ensure it is completed
-			// after pending tasks have been processed.
-			select {
-			case ch := <-sf.copy:
-				ch <- sf.db.CopyTrie(sf.trie)
-			default:
+			if len(task) == common.AddressLength {
+				sf.trie.GetAccount(common.BytesToAddress(task))
+			} else {
+				sf.trie.GetStorage(sf.addr, task)
 			}
-			if !keepRunning {
-				return
-			}
+			sf.seen[string(task)] = struct{}{}
+		}
+		// if any trie retrieval request is made, ensure it is completed
+		// after pending tasks have been processed.
+		select {
+		case ch := <-sf.copy:
+			ch <- sf.db.CopyTrie(sf.trie)
+		default:
+		}
+		if !keepRunning {
+			return
 		}
 	}
 }
