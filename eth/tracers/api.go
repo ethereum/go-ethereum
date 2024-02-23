@@ -279,7 +279,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 						TxIndex:     i,
 						TxHash:      tx.Hash(),
 					}
-					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
+					res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
 						task.results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
@@ -611,7 +611,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			TxIndex:     i,
 			TxHash:      tx.Hash(),
 		}
-		res, err := api.traceTx(ctx, msg, txctx, blockCtx, statedb, config)
+		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
 		if err != nil {
 			return nil, err
 		}
@@ -651,7 +651,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 					TxIndex:     task.index,
 					TxHash:      txs[task.index].Hash(),
 				}
-				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
+				res, err := api.traceTx(ctx, txs[task.index], msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
 					results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
 					continue
@@ -856,7 +856,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		TxIndex:     int(index),
 		TxHash:      hash,
 	}
-	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
+	return api.traceTx(ctx, tx, msg, txctx, vmctx, statedb, config)
 }
 
 // TraceCall lets you trace a given eth_call. It collects the structured logs
@@ -921,22 +921,26 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if err != nil {
 		return nil, err
 	}
-
+	tx, err := argsToTransaction(api.backend, &args, msg)
+	if err != nil {
+		return nil, err
+	}
 	var traceConfig *TraceConfig
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, msg, new(directory.Context), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, tx, msg, new(directory.Context), vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
 		tracer  directory.Tracer
 		err     error
 		timeout = defaultTraceTimeout
+		usedGas uint64
 	)
 	if config == nil {
 		config = &TraceConfig{}
@@ -971,7 +975,7 @@ func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *direc
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit)); err != nil {
+	if _, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
 	return tracer.GetResult()
@@ -1035,4 +1039,55 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 	}
 
 	return copy, canon
+}
+
+// argsToTransaction produces a Transaction object given call arguments.
+// The `msg` field must be converted from the same arguments.
+func argsToTransaction(b Backend, args *ethapi.TransactionArgs, msg *core.Message) (*types.Transaction, error) {
+	chainID := b.ChainConfig().ChainID
+	if args.ChainID != nil {
+		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
+			return nil, fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
+		}
+	}
+	var data types.TxData
+	switch {
+	case args.MaxFeePerGas != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    chainID,
+			Nonce:      msg.Nonce,
+			Gas:        msg.GasLimit,
+			GasFeeCap:  msg.GasFeeCap,
+			GasTipCap:  msg.GasTipCap,
+			Value:      msg.Value,
+			Data:       msg.Data,
+			AccessList: al,
+		}
+	case args.AccessList != nil:
+		data = &types.AccessListTx{
+			To:         args.To,
+			ChainID:    chainID,
+			Nonce:      msg.Nonce,
+			Gas:        msg.GasLimit,
+			GasPrice:   msg.GasPrice,
+			Value:      msg.Value,
+			Data:       msg.Data,
+			AccessList: *args.AccessList,
+		}
+	default:
+		data = &types.LegacyTx{
+			To:       args.To,
+			Nonce:    msg.Nonce,
+			Gas:      msg.GasLimit,
+			GasPrice: msg.GasPrice,
+			Value:    msg.Value,
+			Data:     msg.Data,
+		}
+	}
+	return types.NewTx(data), nil
 }
