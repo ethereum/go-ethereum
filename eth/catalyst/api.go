@@ -524,7 +524,7 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
 	}
 	if beaconRoot == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil parentBlockBeaconRoot post-cancun"))
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
 	}
 
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
