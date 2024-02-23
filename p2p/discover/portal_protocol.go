@@ -966,6 +966,10 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		}
 
 		enrs := p.truncateNodes(closestNodes, maxPayloadSize, enrOverhead)
+		// TODO fix when no content and no enrs found
+		if len(enrs) == 0 {
+			enrs = append(enrs, []byte{})
+		}
 
 		enrsMsg := &portalwire.Enrs{
 			Enrs: enrs,

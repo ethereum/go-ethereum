@@ -137,20 +137,50 @@ func TestContent(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
 
-	// TODO content response is Union type
+	expected = "0x7468652063616b652069732061206c6965"
 
-	// idBuffer := make([]byte, 0, 2)
-	// idBuffer = append(idBuffer, 0x01)
-	// idBuffer = append(idBuffer, 0x02)
-	// // binary.BigEndian.PutUint16()
-	// // 	binary.BigEndian.PutUint16(idBuffer, uint16(0x0102))
-	// 	cIds := &ConnectionId{
-	// 		Id: idBuffer,
-	// 	}
-	// 	expected = "0x000102"
-	// 	data, err = cIds.MarshalSSZ()
-	// assert.NoError(t, err)
-	// assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
+	contentRes := &Content{
+		Content: hexutil.MustDecode("0x7468652063616b652069732061206c6965"),
+	}
+
+	data, err = contentRes.MarshalSSZ()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
+
+	expectData := &Content{}
+	err = expectData.UnmarshalSSZ(data)
+	assert.NoError(t, err)
+	assert.Equal(t, contentRes.Content, expectData.Content)
+
+	enrs := []string{
+		"enr:-HW4QBzimRxkmT18hMKaAL3IcZF1UcfTMPyi3Q1pxwZZbcZVRI8DC5infUAB_UauARLOJtYTxaagKoGmIjzQxO2qUygBgmlkgnY0iXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTg",
+		"enr:-HW4QNfxw543Ypf4HXKXdYxkyzfcxcO-6p9X986WldfVpnVTQX1xlTnWrktEWUbeTZnmgOuAY_KUhbVV1Ft98WoYUBMBgmlkgnY0iXNlY3AyNTZrMaEDDiy3QkHAxPyOgWbxp5oF1bDdlYE6dLCUUp8xfVw50jU",
+	}
+
+	enrsBytes := make([][]byte, 0)
+	for _, enr := range enrs {
+		n, err := enode.Parse(enode.ValidSchemes, enr)
+		assert.NoError(t, err)
+
+		enrBytes, err := rlp.EncodeToBytes(n.Record())
+		assert.NoError(t, err)
+		enrsBytes = append(enrsBytes, enrBytes)
+	}
+
+	enrsRes := &Enrs{
+		Enrs: enrsBytes,
+	}
+
+	expected = "0x080000007f000000f875b8401ce2991c64993d7c84c29a00bdc871917551c7d330fca2dd0d69c706596dc655448f030b98a77d4001fd46ae0112ce26d613c5a6a02a81a6223cd0c4edaa53280182696482763489736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138f875b840d7f1c39e376297f81d7297758c64cb37dcc5c3beea9f57f7ce9695d7d5a67553417d719539d6ae4b445946de4d99e680eb8063f29485b555d45b7df16a1850130182696482763489736563703235366b31a1030e2cb74241c0c4fc8e8166f1a79a05d5b0dd95813a74b094529f317d5c39d235"
+
+	data, err = enrsRes.MarshalSSZ()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, fmt.Sprintf("0x%x", data))
+
+	expectEnrs := &Enrs{}
+	err = expectEnrs.UnmarshalSSZ(data)
+	assert.NoError(t, err)
+	assert.Equal(t, expectEnrs.Enrs, enrsRes.Enrs)
 }
 
 func TestOfferAndAcceptMessage(t *testing.T) {

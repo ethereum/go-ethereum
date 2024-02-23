@@ -1,6 +1,10 @@
 package portalwire
 
-//go:generate sszgen --path p2p/discover/portalwire/messages.go --exclude-objs BlockHeaderProof,PortalReceipts
+import (
+	ssz "github.com/ferranbt/fastssz"
+)
+
+//go:generate sszgen --path messages.go --exclude-objs Content,Enrs,ContentKV
 
 // Message codes for the portal protocol.
 const (
@@ -108,3 +112,193 @@ type (
 		ContentKeys  []byte `ssz:"bitlist" ssz-max:"64"`
 	}
 )
+
+// MarshalSSZ ssz marshals the Content object
+func (c *Content) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(c)
+}
+
+// MarshalSSZTo ssz marshals the Content object to a target array
+func (c *Content) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Content'
+	if size := len(c.Content); size > 2048 {
+		err = ssz.ErrBytesLengthFn("Content.Content", size, 2048)
+		return
+	}
+	dst = append(dst, c.Content...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the Content object
+func (c *Content) UnmarshalSSZ(buf []byte) error {
+	var err error
+	tail := buf
+
+	// Field (0) 'Content'
+	{
+		buf = tail[:]
+		if len(buf) > 2048 {
+			return ssz.ErrBytesLength
+		}
+		if cap(c.Content) == 0 {
+			c.Content = make([]byte, 0, len(buf))
+		}
+		c.Content = append(c.Content, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Content object
+func (c *Content) SizeSSZ() (size int) {
+	// Field (0) 'Content'
+	return len(c.Content)
+}
+
+// HashTreeRoot ssz hashes the Content object
+func (c *Content) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(c)
+}
+
+// HashTreeRootWith ssz hashes the Content object with a hasher
+func (c *Content) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Content'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(c.Content))
+		if byteLen > 2048 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.Append(c.Content)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (2048+31)/32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the Content object
+func (c *Content) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(c)
+}
+
+// MarshalSSZ ssz marshals the Enrs object
+func (e *Enrs) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the Enrs object to a target array
+func (e *Enrs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(0)
+
+	// Field (0) 'Enrs'
+	if size := len(e.Enrs); size > 32 {
+		err = ssz.ErrListTooBigFn("Enrs.Enrs", size, 32)
+		return
+	}
+	{
+		offset = 4 * len(e.Enrs)
+		for ii := 0; ii < len(e.Enrs); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(e.Enrs[ii])
+		}
+	}
+	for ii := 0; ii < len(e.Enrs); ii++ {
+		if size := len(e.Enrs[ii]); size > 2048 {
+			err = ssz.ErrBytesLengthFn("Enrs.Enrs[ii]", size, 2048)
+			return
+		}
+		dst = append(dst, e.Enrs[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the Enrs object
+func (e *Enrs) UnmarshalSSZ(buf []byte) error {
+	var err error
+	tail := buf
+	// Field (0) 'Enrs'
+	{
+		buf = tail[:]
+		num, err := ssz.DecodeDynamicLength(buf, 32)
+		if err != nil {
+			return err
+		}
+		e.Enrs = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 2048 {
+				return ssz.ErrBytesLength
+			}
+			if cap(e.Enrs[indx]) == 0 {
+				e.Enrs[indx] = make([]byte, 0, len(buf))
+			}
+			e.Enrs[indx] = append(e.Enrs[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Enrs object
+func (e *Enrs) SizeSSZ() (size int) {
+	size = 0
+
+	// Field (0) 'Enrs'
+	for ii := 0; ii < len(e.Enrs); ii++ {
+		size += 4
+		size += len(e.Enrs[ii])
+	}
+
+	return
+}
+
+// HashTreeRoot ssz hashes the Enrs object
+func (e *Enrs) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the Enrs object with a hasher
+func (e *Enrs) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Enrs'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Enrs))
+		if num > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Enrs {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 2048 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (2048+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the Enrs object
+func (e *Enrs) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(e)
+}
