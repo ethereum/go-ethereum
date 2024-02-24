@@ -110,4 +110,7 @@ var (
 
 	// ErrBlobTxCreate is returned if a blob transaction has no explicit to field.
 	ErrBlobTxCreate = errors.New("blob transaction of type create")
+
+	// ErrBlobTxTooEarly is returned if a blob transaction is found before cancun fork.
+	ErrBlobTxTooEarly = errors.New("blob transaction is only allowed after cancun fork")
 )
