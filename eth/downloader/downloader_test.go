@@ -69,7 +69,7 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	})
 	gspec := &core.Genesis{
 		Config:  params.TestChainConfig,
-		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
+		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
@@ -440,9 +440,6 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 func TestCanonicalSynchronisation68Full(t *testing.T)  { testCanonSync(t, eth.ETH68, FullSync) }
 func TestCanonicalSynchronisation68Snap(t *testing.T)  { testCanonSync(t, eth.ETH68, SnapSync) }
 func TestCanonicalSynchronisation68Light(t *testing.T) { testCanonSync(t, eth.ETH68, LightSync) }
-func TestCanonicalSynchronisation67Full(t *testing.T)  { testCanonSync(t, eth.ETH67, FullSync) }
-func TestCanonicalSynchronisation67Snap(t *testing.T)  { testCanonSync(t, eth.ETH67, SnapSync) }
-func TestCanonicalSynchronisation67Light(t *testing.T) { testCanonSync(t, eth.ETH67, LightSync) }
 
 func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -463,8 +460,6 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 // until the cached blocks are retrieved.
 func TestThrottling68Full(t *testing.T) { testThrottling(t, eth.ETH68, FullSync) }
 func TestThrottling68Snap(t *testing.T) { testThrottling(t, eth.ETH68, SnapSync) }
-func TestThrottling67Full(t *testing.T) { testThrottling(t, eth.ETH67, FullSync) }
-func TestThrottling67Snap(t *testing.T) { testThrottling(t, eth.ETH67, SnapSync) }
 
 func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -546,9 +541,6 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 func TestForkedSync68Full(t *testing.T)  { testForkedSync(t, eth.ETH68, FullSync) }
 func TestForkedSync68Snap(t *testing.T)  { testForkedSync(t, eth.ETH68, SnapSync) }
 func TestForkedSync68Light(t *testing.T) { testForkedSync(t, eth.ETH68, LightSync) }
-func TestForkedSync67Full(t *testing.T)  { testForkedSync(t, eth.ETH67, FullSync) }
-func TestForkedSync67Snap(t *testing.T)  { testForkedSync(t, eth.ETH67, SnapSync) }
-func TestForkedSync67Light(t *testing.T) { testForkedSync(t, eth.ETH67, LightSync) }
 
 func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -576,9 +568,6 @@ func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestHeavyForkedSync68Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH68, FullSync) }
 func TestHeavyForkedSync68Snap(t *testing.T)  { testHeavyForkedSync(t, eth.ETH68, SnapSync) }
 func TestHeavyForkedSync68Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH68, LightSync) }
-func TestHeavyForkedSync67Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH67, FullSync) }
-func TestHeavyForkedSync67Snap(t *testing.T)  { testHeavyForkedSync(t, eth.ETH67, SnapSync) }
-func TestHeavyForkedSync67Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH67, LightSync) }
 
 func testHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -608,9 +597,6 @@ func testHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestBoundedForkedSync68Full(t *testing.T)  { testBoundedForkedSync(t, eth.ETH68, FullSync) }
 func TestBoundedForkedSync68Snap(t *testing.T)  { testBoundedForkedSync(t, eth.ETH68, SnapSync) }
 func TestBoundedForkedSync68Light(t *testing.T) { testBoundedForkedSync(t, eth.ETH68, LightSync) }
-func TestBoundedForkedSync67Full(t *testing.T)  { testBoundedForkedSync(t, eth.ETH67, FullSync) }
-func TestBoundedForkedSync67Snap(t *testing.T)  { testBoundedForkedSync(t, eth.ETH67, SnapSync) }
-func TestBoundedForkedSync67Light(t *testing.T) { testBoundedForkedSync(t, eth.ETH67, LightSync) }
 
 func testBoundedForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -645,15 +631,6 @@ func TestBoundedHeavyForkedSync68Snap(t *testing.T) {
 func TestBoundedHeavyForkedSync68Light(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH68, LightSync)
 }
-func TestBoundedHeavyForkedSync67Full(t *testing.T) {
-	testBoundedHeavyForkedSync(t, eth.ETH67, FullSync)
-}
-func TestBoundedHeavyForkedSync67Snap(t *testing.T) {
-	testBoundedHeavyForkedSync(t, eth.ETH67, SnapSync)
-}
-func TestBoundedHeavyForkedSync67Light(t *testing.T) {
-	testBoundedHeavyForkedSync(t, eth.ETH67, LightSync)
-}
 
 func testBoundedHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -681,9 +658,6 @@ func testBoundedHeavyForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestCancel68Full(t *testing.T)  { testCancel(t, eth.ETH68, FullSync) }
 func TestCancel68Snap(t *testing.T)  { testCancel(t, eth.ETH68, SnapSync) }
 func TestCancel68Light(t *testing.T) { testCancel(t, eth.ETH68, LightSync) }
-func TestCancel67Full(t *testing.T)  { testCancel(t, eth.ETH67, FullSync) }
-func TestCancel67Snap(t *testing.T)  { testCancel(t, eth.ETH67, SnapSync) }
-func TestCancel67Light(t *testing.T) { testCancel(t, eth.ETH67, LightSync) }
 
 func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -711,9 +685,6 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 func TestMultiSynchronisation68Full(t *testing.T)  { testMultiSynchronisation(t, eth.ETH68, FullSync) }
 func TestMultiSynchronisation68Snap(t *testing.T)  { testMultiSynchronisation(t, eth.ETH68, SnapSync) }
 func TestMultiSynchronisation68Light(t *testing.T) { testMultiSynchronisation(t, eth.ETH68, LightSync) }
-func TestMultiSynchronisation67Full(t *testing.T)  { testMultiSynchronisation(t, eth.ETH67, FullSync) }
-func TestMultiSynchronisation67Snap(t *testing.T)  { testMultiSynchronisation(t, eth.ETH67, SnapSync) }
-func TestMultiSynchronisation67Light(t *testing.T) { testMultiSynchronisation(t, eth.ETH67, LightSync) }
 
 func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -738,9 +709,6 @@ func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
 func TestMultiProtoSynchronisation68Full(t *testing.T)  { testMultiProtoSync(t, eth.ETH68, FullSync) }
 func TestMultiProtoSynchronisation68Snap(t *testing.T)  { testMultiProtoSync(t, eth.ETH68, SnapSync) }
 func TestMultiProtoSynchronisation68Light(t *testing.T) { testMultiProtoSync(t, eth.ETH68, LightSync) }
-func TestMultiProtoSynchronisation67Full(t *testing.T)  { testMultiProtoSync(t, eth.ETH67, FullSync) }
-func TestMultiProtoSynchronisation67Snap(t *testing.T)  { testMultiProtoSync(t, eth.ETH67, SnapSync) }
-func TestMultiProtoSynchronisation67Light(t *testing.T) { testMultiProtoSync(t, eth.ETH67, LightSync) }
 
 func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -751,7 +719,6 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Create peers of every type
 	tester.newPeer("peer 68", eth.ETH68, chain.blocks[1:])
-	tester.newPeer("peer 67", eth.ETH67, chain.blocks[1:])
 
 	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil, mode); err != nil {
@@ -760,7 +727,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, len(chain.blocks))
 
 	// Check that no peers have been dropped off
-	for _, version := range []int{68, 67} {
+	for _, version := range []int{68} {
 		peer := fmt.Sprintf("peer %d", version)
 		if _, ok := tester.peers[peer]; !ok {
 			t.Errorf("%s dropped", peer)
@@ -773,9 +740,6 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestEmptyShortCircuit68Full(t *testing.T)  { testEmptyShortCircuit(t, eth.ETH68, FullSync) }
 func TestEmptyShortCircuit68Snap(t *testing.T)  { testEmptyShortCircuit(t, eth.ETH68, SnapSync) }
 func TestEmptyShortCircuit68Light(t *testing.T) { testEmptyShortCircuit(t, eth.ETH68, LightSync) }
-func TestEmptyShortCircuit67Full(t *testing.T)  { testEmptyShortCircuit(t, eth.ETH67, FullSync) }
-func TestEmptyShortCircuit67Snap(t *testing.T)  { testEmptyShortCircuit(t, eth.ETH67, SnapSync) }
-func TestEmptyShortCircuit67Light(t *testing.T) { testEmptyShortCircuit(t, eth.ETH67, LightSync) }
 
 func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -824,9 +788,6 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 func TestMissingHeaderAttack68Full(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH68, FullSync) }
 func TestMissingHeaderAttack68Snap(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH68, SnapSync) }
 func TestMissingHeaderAttack68Light(t *testing.T) { testMissingHeaderAttack(t, eth.ETH68, LightSync) }
-func TestMissingHeaderAttack67Full(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH67, FullSync) }
-func TestMissingHeaderAttack67Snap(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH67, SnapSync) }
-func TestMissingHeaderAttack67Light(t *testing.T) { testMissingHeaderAttack(t, eth.ETH67, LightSync) }
 
 func testMissingHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -853,9 +814,6 @@ func testMissingHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 func TestShiftedHeaderAttack68Full(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH68, FullSync) }
 func TestShiftedHeaderAttack68Snap(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH68, SnapSync) }
 func TestShiftedHeaderAttack68Light(t *testing.T) { testShiftedHeaderAttack(t, eth.ETH68, LightSync) }
-func TestShiftedHeaderAttack67Full(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH67, FullSync) }
-func TestShiftedHeaderAttack67Snap(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH67, SnapSync) }
-func TestShiftedHeaderAttack67Light(t *testing.T) { testShiftedHeaderAttack(t, eth.ETH67, LightSync) }
 
 func testShiftedHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -889,15 +847,6 @@ func TestHighTDStarvationAttack68Snap(t *testing.T) {
 func TestHighTDStarvationAttack68Light(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH68, LightSync)
 }
-func TestHighTDStarvationAttack67Full(t *testing.T) {
-	testHighTDStarvationAttack(t, eth.ETH67, FullSync)
-}
-func TestHighTDStarvationAttack67Snap(t *testing.T) {
-	testHighTDStarvationAttack(t, eth.ETH67, SnapSync)
-}
-func TestHighTDStarvationAttack67Light(t *testing.T) {
-	testHighTDStarvationAttack(t, eth.ETH67, LightSync)
-}
 
 func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -912,7 +861,6 @@ func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 
 // Tests that misbehaving peers are disconnected, whilst behaving ones are not.
 func TestBlockHeaderAttackerDropping68(t *testing.T) { testBlockHeaderAttackerDropping(t, eth.ETH68) }
-func TestBlockHeaderAttackerDropping67(t *testing.T) { testBlockHeaderAttackerDropping(t, eth.ETH67) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 	// Define the disconnection requirement for individual hash fetch errors
@@ -963,9 +911,6 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 func TestSyncProgress68Full(t *testing.T)  { testSyncProgress(t, eth.ETH68, FullSync) }
 func TestSyncProgress68Snap(t *testing.T)  { testSyncProgress(t, eth.ETH68, SnapSync) }
 func TestSyncProgress68Light(t *testing.T) { testSyncProgress(t, eth.ETH68, LightSync) }
-func TestSyncProgress67Full(t *testing.T)  { testSyncProgress(t, eth.ETH67, FullSync) }
-func TestSyncProgress67Snap(t *testing.T)  { testSyncProgress(t, eth.ETH67, SnapSync) }
-func TestSyncProgress67Light(t *testing.T) { testSyncProgress(t, eth.ETH67, LightSync) }
 
 func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -1043,9 +988,6 @@ func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.Sync
 func TestForkedSyncProgress68Full(t *testing.T)  { testForkedSyncProgress(t, eth.ETH68, FullSync) }
 func TestForkedSyncProgress68Snap(t *testing.T)  { testForkedSyncProgress(t, eth.ETH68, SnapSync) }
 func TestForkedSyncProgress68Light(t *testing.T) { testForkedSyncProgress(t, eth.ETH68, LightSync) }
-func TestForkedSyncProgress67Full(t *testing.T)  { testForkedSyncProgress(t, eth.ETH67, FullSync) }
-func TestForkedSyncProgress67Snap(t *testing.T)  { testForkedSyncProgress(t, eth.ETH67, SnapSync) }
-func TestForkedSyncProgress67Light(t *testing.T) { testForkedSyncProgress(t, eth.ETH67, LightSync) }
 
 func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -1117,9 +1059,6 @@ func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 func TestFailedSyncProgress68Full(t *testing.T)  { testFailedSyncProgress(t, eth.ETH68, FullSync) }
 func TestFailedSyncProgress68Snap(t *testing.T)  { testFailedSyncProgress(t, eth.ETH68, SnapSync) }
 func TestFailedSyncProgress68Light(t *testing.T) { testFailedSyncProgress(t, eth.ETH68, LightSync) }
-func TestFailedSyncProgress67Full(t *testing.T)  { testFailedSyncProgress(t, eth.ETH67, FullSync) }
-func TestFailedSyncProgress67Snap(t *testing.T)  { testFailedSyncProgress(t, eth.ETH67, SnapSync) }
-func TestFailedSyncProgress67Light(t *testing.T) { testFailedSyncProgress(t, eth.ETH67, LightSync) }
 
 func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -1186,9 +1125,6 @@ func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 func TestFakedSyncProgress68Full(t *testing.T)  { testFakedSyncProgress(t, eth.ETH68, FullSync) }
 func TestFakedSyncProgress68Snap(t *testing.T)  { testFakedSyncProgress(t, eth.ETH68, SnapSync) }
 func TestFakedSyncProgress68Light(t *testing.T) { testFakedSyncProgress(t, eth.ETH68, LightSync) }
-func TestFakedSyncProgress67Full(t *testing.T)  { testFakedSyncProgress(t, eth.ETH67, FullSync) }
-func TestFakedSyncProgress67Snap(t *testing.T)  { testFakedSyncProgress(t, eth.ETH67, SnapSync) }
-func TestFakedSyncProgress67Light(t *testing.T) { testFakedSyncProgress(t, eth.ETH67, LightSync) }
 
 func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t)
@@ -1332,8 +1268,6 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 // being fast-synced from, avoiding potential cheap eclipse attacks.
 func TestBeaconSync68Full(t *testing.T) { testBeaconSync(t, eth.ETH68, FullSync) }
 func TestBeaconSync68Snap(t *testing.T) { testBeaconSync(t, eth.ETH68, SnapSync) }
-func TestBeaconSync67Full(t *testing.T) { testBeaconSync(t, eth.ETH67, FullSync) }
-func TestBeaconSync67Snap(t *testing.T) { testBeaconSync(t, eth.ETH67, SnapSync) }
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))

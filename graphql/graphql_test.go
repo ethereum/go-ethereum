@@ -189,7 +189,7 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		Config:     params.AllEthashProtocolChanges,
 		GasLimit:   11500000,
 		Difficulty: big.NewInt(1048576),
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			address: {Balance: funds},
 			// The address 0xdad sloads 0x00 and 0x01
 			dad: {
@@ -286,7 +286,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 			Config:     params.AllEthashProtocolChanges,
 			GasLimit:   11500000,
 			Difficulty: big.NewInt(1048576),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr: {Balance: big.NewInt(params.Ether)},
 				dad: {
 					// LOG0(0, 0), LOG0(0, 0), RETURN(0, 0)
@@ -379,7 +379,7 @@ func TestWithdrawals(t *testing.T) {
 			Config:     params.AllEthashProtocolChanges,
 			GasLimit:   11500000,
 			Difficulty: common.Big1,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr: {Balance: big.NewInt(params.Ether)},
 			},
 		}

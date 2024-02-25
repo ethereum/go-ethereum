@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -41,7 +42,7 @@ func (e *Ethereum) hashState(ctx context.Context, block *types.Block, reexec uin
 	var (
 		current  *types.Block
 		database state.Database
-		triedb   *trie.Database
+		tdb      *triedb.Database
 		report   = true
 		origin   = block.NumberU64()
 	)
@@ -67,14 +68,14 @@ func (e *Ethereum) hashState(ctx context.Context, block *types.Block, reexec uin
 			// the internal junks created by tracing will be persisted into the disk.
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
-			database = state.NewDatabaseWithConfig(e.chainDb, trie.HashDefaults)
+			database = state.NewDatabaseWithConfig(e.chainDb, triedb.HashDefaults)
 			if statedb, err = state.New(block.Root(), database, nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
 		}
 		// The optional base statedb is given, mark the start point as parent block
-		statedb, database, triedb, report = base, base.Database(), base.Database().TrieDB(), false
+		statedb, database, tdb, report = base, base.Database(), base.Database().TrieDB(), false
 		current = e.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	} else {
 		// Otherwise, try to reexec blocks until we find a state or reach our limit
@@ -84,8 +85,8 @@ func (e *Ethereum) hashState(ctx context.Context, block *types.Block, reexec uin
 		// the internal junks created by tracing will be persisted into the disk.
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
-		triedb = trie.NewDatabase(e.chainDb, trie.HashDefaults)
-		database = state.NewDatabaseWithNodeDB(e.chainDb, triedb)
+		tdb = triedb.NewDatabase(e.chainDb, triedb.HashDefaults)
+		database = state.NewDatabaseWithNodeDB(e.chainDb, tdb)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
@@ -161,17 +162,17 @@ func (e *Ethereum) hashState(ctx context.Context, block *types.Block, reexec uin
 		}
 		// Hold the state reference and also drop the parent state
 		// to prevent accumulating too many nodes in memory.
-		triedb.Reference(root, common.Hash{})
+		tdb.Reference(root, common.Hash{})
 		if parent != (common.Hash{}) {
-			triedb.Dereference(parent)
+			tdb.Dereference(parent)
 		}
 		parent = root
 	}
 	if report {
-		_, nodes, imgs := triedb.Size() // all memory is contained within the nodes return in hashdb
+		_, nodes, imgs := tdb.Size() // all memory is contained within the nodes return in hashdb
 		log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	}
-	return statedb, func() { triedb.Dereference(block.Root()) }, nil
+	return statedb, func() { tdb.Dereference(block.Root()) }, nil
 }
 
 func (e *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {

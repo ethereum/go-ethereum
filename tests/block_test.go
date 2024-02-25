@@ -61,14 +61,14 @@ func TestBlockchain(t *testing.T) {
 	// which run natively, so there's no reason to run them here.
 }
 
-// TestExecutionSpec runs the test fixtures from execution-spec-tests.
-func TestExecutionSpec(t *testing.T) {
-	if !common.FileExist(executionSpecDir) {
-		t.Skipf("directory %s does not exist", executionSpecDir)
+// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktests(t *testing.T) {
+	if !common.FileExist(executionSpecBlockchainTestDir) {
+		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
 	}
 	bt := new(testMatcher)
 
-	bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
+	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
 }

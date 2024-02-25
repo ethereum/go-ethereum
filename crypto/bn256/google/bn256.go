@@ -166,7 +166,7 @@ type G2 struct {
 	p *twistPoint
 }
 
-// RandomG1 returns x and g₂ˣ where x is a random, non-zero number read from r.
+// RandomG2 returns x and g₂ˣ where x is a random, non-zero number read from r.
 func RandomG2(r io.Reader) (*big.Int, *G2, error) {
 	var k *big.Int
 	var err error

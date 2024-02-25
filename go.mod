@@ -22,8 +22,9 @@ require (
 	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127
 	github.com/ethereum/c-kzg-4844 v0.4.0
 	github.com/fatih/color v1.13.0
+	github.com/ferranbt/fastssz v0.1.2
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
-	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
+	github.com/fjl/memsize v0.0.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46
@@ -36,7 +37,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/go-bexpr v0.1.10
-	github.com/holiman/billy v0.0.0-20230718173358-1c7e68d277a7
+	github.com/holiman/billy v0.0.0-20240216141850-2abb0c79d3c4
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.4
 	github.com/huin/goupnp v1.3.0
@@ -114,10 +115,12 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kilic/bls12-381 v0.1.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
+	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/mitchellh/pointerstructure v1.2.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
