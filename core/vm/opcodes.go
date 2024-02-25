@@ -94,7 +94,6 @@ const (
 	TIMESTAMP   OpCode = 0x42
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
-	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
 	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
