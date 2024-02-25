@@ -893,3 +893,25 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 		Withdrawals:     withdrawals,
 	}
 }
+
+func (c *ConsensusAPI) SetLocalAccounts(locals []common.Address) error {
+	for _, addr := range locals {
+		c.eth.TxPool().MarkLocal(addr)
+	}
+	return nil
+}
+
+func (c *ConsensusAPI) GetLocalTransactions() ([][]byte, error) {
+	var res [][]byte
+	for _, addr := range c.eth.TxPool().Locals() {
+		pending, _ := c.eth.TxPool().ContentFrom(addr)
+		for _, tx := range pending {
+			m, err := tx.MarshalJSON()
+			if err != nil {
+				return [][]byte{}, nil
+			}
+			res = append(res, m)
+		}
+	}
+	return res, nil
+}

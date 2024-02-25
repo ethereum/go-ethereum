@@ -1955,3 +1955,8 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
+
+func (p *LegacyPool) AddLocalAddr(addr common.Address) {
+	p.locals.add(addr)
+	// TODO go through all txs to mark as local now
+}

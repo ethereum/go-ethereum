@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -463,6 +464,14 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 		}
 	}
 	return TxStatusUnknown
+}
+
+func (p *TxPool) MarkLocal(addr common.Address) {
+	for _, pool := range p.subpools {
+		if sub, ok := pool.(*legacypool.LegacyPool); ok {
+			sub.AddLocalAddr(addr)
+		}
+	}
 }
 
 // Sync is a helper method for unit tests or simulator runs where the chain events
