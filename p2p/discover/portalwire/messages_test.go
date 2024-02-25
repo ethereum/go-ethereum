@@ -201,8 +201,12 @@ func TestOfferAndAcceptMessage(t *testing.T) {
 	contentKeyBitlist.SetBitAt(0, true)
 	accept := &Accept{
 		ConnectionId: []byte{0x01, 0x02},
-		ContentKeys:  []byte(contentKeyBitlist),
+		ContentKeys:  contentKeyBitlist,
 	}
+
+	contentKeyBitlist1 := bitfield.Bitlist([]byte{0x02})
+	fmt.Println(contentKeyBitlist1.Count())
+	fmt.Println(contentKeyBitlist1.Len())
 
 	expected = "0x0102060000000101"
 

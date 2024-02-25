@@ -408,7 +408,7 @@ func (p *PortalAPI) HistoryOffer(enr string, contentKey string, contentValue str
 	}
 
 	offerReq := &OfferRequest{
-		Kind:    portalwire.OfferRequestDirect,
+		Kind:    TransientOfferRequestKind,
 		Request: transientOfferRequest,
 	}
 	accept, err := p.portalProtocol.offer(n, offerReq)

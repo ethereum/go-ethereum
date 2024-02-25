@@ -25,12 +25,6 @@ const (
 	ContentEnrsSelector   byte = 0x02
 )
 
-// Offer request types for the portal protocol.
-const (
-	OfferRequestDirect   byte = 0x00
-	OfferRequestDatabase byte = 0x01
-)
-
 const (
 	ContentKeysLimit = 64
 	// OfferMessageOverhead overhead of content message is a result of 1byte for kind enum, and

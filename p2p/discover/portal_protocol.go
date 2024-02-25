@@ -418,7 +418,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		return nil, err
 	}
 
-	p.log.Trace("Reveice ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
+	p.log.Trace("Received ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
 
 	return p.processPong(node, talkResp)
 }
@@ -528,7 +528,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 	}
 
 	contentKeyBitlist := bitfield.Bitlist(accept.ContentKeys)
-	if int(contentKeyBitlist.Count()) != contentKeyLen {
+	if contentKeyBitlist.Len() != uint64(contentKeyLen) {
 		return nil, fmt.Errorf("accepted content key bitlist has invalid size, expected %d, got %d", contentKeyLen, contentKeyBitlist.Len())
 	}
 
@@ -1100,7 +1100,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 	if len(p.contentQueue) >= cap(p.contentQueue) {
 		acceptMsg := &portalwire.Accept{
 			ConnectionId: []byte{0, 0},
-			ContentKeys:  []byte(contentKeyBitlist),
+			ContentKeys:  contentKeyBitlist,
 		}
 
 		p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)

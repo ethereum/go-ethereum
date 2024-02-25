@@ -311,7 +311,8 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	testGossipContentKeys := [][]byte{[]byte("test_gossip_content_keys"), []byte("test_gossip_content_keys2")}
 	testGossipContent := [][]byte{[]byte("test_gossip_content"), []byte("test_gossip_content2")}
-	gossip, err := node1.NeighborhoodGossip(nil, testGossipContentKeys, testGossipContent)
+	id := node1.Self().ID()
+	gossip, err := node1.NeighborhoodGossip(&id, testGossipContentKeys, testGossipContent)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, gossip)
 
@@ -331,7 +332,7 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	testRandGossipContentKeys := [][]byte{[]byte("test_rand_gossip_content_keys"), []byte("test_rand_gossip_content_keys2")}
 	testRandGossipContent := [][]byte{[]byte("test_rand_gossip_content"), []byte("test_rand_gossip_content2")}
-	randGossip, err := node1.RandomGossip(nil, testRandGossipContentKeys, testRandGossipContent)
+	randGossip, err := node1.RandomGossip(&id, testRandGossipContentKeys, testRandGossipContent)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, randGossip)
 
