@@ -86,7 +86,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--http.vhosts="*" \
 		--http.addr="$NODE_IP" \
 		--http.port="$RPC_PORT" \
-		--http.api=web3,debug,eth,txpool,net,engine,clique \
+		--http.api=web3,debug,eth,txpool,net,engine \
 		--ws \
 		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
