@@ -879,8 +879,7 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 	)
 
 	for j, tx := range body.Transactions {
-		data, _ := tx.MarshalBinary()
-		txs[j] = hexutil.Bytes(data)
+		txs[j], _ = tx.MarshalBinary()
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
