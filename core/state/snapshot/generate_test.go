@@ -29,9 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -155,20 +156,20 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 
 type testHelper struct {
 	diskdb  ethdb.Database
-	triedb  *trie.Database
+	triedb  *triedb.Database
 	accTrie *trie.StateTrie
 	nodes   *trienode.MergedNodeSet
 }
 
 func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
-	config := &trie.Config{}
+	config := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{} // disable caching
 	} else {
 		config.HashDB = &hashdb.Config{} // disable caching
 	}
-	triedb := trie.NewDatabase(diskdb, config)
+	triedb := triedb.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)
 	return &testHelper{
 		diskdb:  diskdb,
