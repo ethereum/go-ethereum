@@ -108,8 +108,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.GasTipCapIntCmp(opts.MinTip) < 0 {
 		return fmt.Errorf("%w: tip needed %v, tip permitted %v", ErrUnderpriced, opts.MinTip, tx.GasTipCap())
 	}
-	// Ensure blob transactions have valid commitments
 	if tx.Type() == types.BlobTxType {
+		// Ensure the blob fee cap cap satisfies the minimum blob gas price
+		minBlobGasPrice := big.NewInt(params.BlobTxMinBlobGasprice)
+		if tx.BlobGasFeeCapIntCmp(minBlobGasPrice) < 0 {
+			return fmt.Errorf("%w: blob transaction has too low BlobFeeCap: %v, need: %v", ErrUnderpriced, tx.BlobGasFeeCap(), minBlobGasPrice)
+		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
 			return fmt.Errorf("missing sidecar in blob transaction")
@@ -123,6 +127,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if len(hashes) > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
 			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
 		}
+		// Ensure commitments, proofs, & hashes are valid
 		if err := validateBlobSidecar(hashes, sidecar); err != nil {
 			return err
 		}
