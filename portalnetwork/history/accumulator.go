@@ -58,7 +58,7 @@ func (e *epoch) add(header types.Header) error {
 	}
 	sszBytes, err := record.MarshalSSZ()
 	if err != nil {
-		return nil
+		return err
 	}
 	e.records = append(e.records, sszBytes)
 	return nil
@@ -97,7 +97,10 @@ func (a *Accumulator) Update(header types.Header) error {
 		a.historicalEpochs = append(a.historicalEpochs, MixInLength(root, epochSize))
 		a.currentEpoch = newEpoch()
 	}
-	a.currentEpoch.add(header)
+	err := a.currentEpoch.add(header)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -149,7 +152,7 @@ func BuildProof(header types.Header, epochAccumulator EpochAccumulator) (Accumul
 	sizeBytes := make([]byte, 32)
 	binary.LittleEndian.PutUint32(sizeBytes, epochSize)
 	hashes = append(hashes, sizeBytes)
-	return AccumulatorProof(hashes), err
+	return hashes, err
 }
 
 func BuildHeaderWithProof(header types.Header, epochAccumulator EpochAccumulator) (*BlockHeaderWithProof, error) {
@@ -215,7 +218,7 @@ func MixInLength(root [32]byte, length uint64) []byte {
 	hash := ssz.NewHasher()
 	hash.AppendBytes32(root[:])
 	hash.MerkleizeWithMixin(0, length, 0)
-	// length of root is 32, so we can ignore the err
+	// length of root is 32, so we can ignore the error
 	newRoot, _ := hash.HashRoot()
 	return newRoot[:]
 }

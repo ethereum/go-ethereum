@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage/sqlite"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -74,7 +75,13 @@ func main() {
 		panic(err)
 	}
 
-	err = protocol.Start()
+	accumulator, err := history.NewMasterAccumulator()
+	if err != nil {
+		panic(err)
+	}
+
+	historyNetwork := history.NewHistoryNetwork(protocol, &accumulator)
+	err = historyNetwork.Start()
 	if err != nil {
 		panic(err)
 	}
