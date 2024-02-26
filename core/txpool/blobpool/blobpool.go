@@ -1627,11 +1627,20 @@ func (p *BlobPool) Stats() (int, int) {
 
 // Content retrieves the data content of the transaction pool, returning all the
 // pending as well as queued transactions, grouped by account and sorted by nonce.
-//
-// For the blob pool, this method will return nothing for now.
-// TODO(karalabe): Abstract out the returned metadata.
 func (p *BlobPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
-	return make(map[common.Address][]*types.Transaction), make(map[common.Address][]*types.Transaction)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	pending := make(map[common.Address][]*types.Transaction, len(p.index))
+	for addr, metas := range p.index {
+		for _, meta := range metas {
+			if tx, err := p.get(meta.id); err == nil {
+				pending[addr] = append(pending[addr], tx)
+			}
+		}
+	}
+	queued := make(map[common.Address][]*types.Transaction) // No non-executable txs in the blob pool
+	return pending, queued
 }
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
