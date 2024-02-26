@@ -1645,11 +1645,20 @@ func (p *BlobPool) Content() (map[common.Address][]*types.Transaction, map[commo
 
 // ContentFrom retrieves the data content of the transaction pool, returning the
 // pending as well as queued transactions of this address, grouped by nonce.
-//
-// For the blob pool, this method will return nothing for now.
-// TODO(karalabe): Abstract out the returned metadata.
 func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
-	return []*types.Transaction{}, []*types.Transaction{}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	var pending []*types.Transaction
+	if metas, ok := p.index[addr]; ok {
+		for _, meta := range metas {
+			if tx, err := p.get(meta.id); err == nil {
+				pending = append(pending, tx)
+			}
+		}
+	}
+	var queued []*types.Transaction // No non-executable txs in the blob pool
+	return pending, queued
 }
 
 // Locals retrieves the accounts currently considered local by the pool.
