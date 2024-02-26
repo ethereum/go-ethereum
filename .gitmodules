@@ -4,4 +4,4 @@
 	shallow = true
 [submodule "internal/utesting/blocktraces"]
 	path = internal/utesting/blocktraces
-	url = git@github.com:scroll-tech/test-traces.git
+	url = https://github.com/scroll-tech/test-traces.git
