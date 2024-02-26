@@ -131,11 +131,6 @@ func (journal *journal) insert(tx *types.Transaction) error {
 // rotate regenerates the transaction journal based on the current contents of
 // the transaction pool.
 func (journal *journal) rotate(all map[common.Address]types.Transactions) error {
-	// No need to rotate if there are no transactions to write
-	if len(all) == 0 {
-		return nil
-	}
-
 	// Close the current journal (if any is open)
 	if journal.writer != nil {
 		if err := journal.writer.Close(); err != nil {
