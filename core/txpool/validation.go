@@ -30,6 +30,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var (
+	// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
+	// parameter to avoid constucting a new big integer for every transaction.
+	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
+)
+
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
 type ValidationOptions struct {
@@ -109,9 +115,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	if tx.Type() == types.BlobTxType {
 		// Ensure the blob fee cap satisfies the minimum blob gas price
-		minBlobGasPrice := big.NewInt(params.BlobTxMinBlobGasprice)
-		if tx.BlobGasFeeCapIntCmp(minBlobGasPrice) < 0 {
-			return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrUnderpriced, tx.BlobGasFeeCap(), minBlobGasPrice)
+		if tx.BlobGasFeeCapIntCmp(blobTxMinBlobGasPrice) < 0 {
+			return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrUnderpriced, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
 		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
