@@ -1636,6 +1636,8 @@ func (p *BlobPool) Content() (map[common.Address][]*types.Transaction, map[commo
 		for _, meta := range metas {
 			if tx, err := p.get(meta.id); err == nil {
 				pending[addr] = append(pending[addr], tx)
+			} else {
+				log.Error("Failed to retrieve blob transaction", "hash", meta.hash, "id", meta.id, "err", err)
 			}
 		}
 	}
@@ -1654,6 +1656,8 @@ func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*ty
 		for _, meta := range metas {
 			if tx, err := p.get(meta.id); err == nil {
 				pending = append(pending, tx)
+			} else {
+				log.Error("Failed to retrieve blob transaction", "hash", meta.hash, "id", meta.id, "err", err)
 			}
 		}
 	}
