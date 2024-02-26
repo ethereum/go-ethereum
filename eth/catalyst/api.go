@@ -101,7 +101,7 @@ type ConsensusAPI struct {
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
-	// to track historical bad blocks as well as bad tippets in case a chain
+	// to track historical bad blocks as well as bad tipsets in case a chain
 	// is constantly built on it.
 	//
 	// There are a few important caveats in this mechanism:
