@@ -1189,17 +1189,26 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if !ok {
 		return nil
 	}
-	data, err := p.store.Get(id)
+	item, err := p.get(id)
 	if err != nil {
-		log.Error("Tracked blob transaction missing from store", "hash", hash, "id", id, "err", err)
-		return nil
-	}
-	item := new(types.Transaction)
-	if err = rlp.DecodeBytes(data, item); err != nil {
-		log.Error("Blobs corrupted for traced transaction", "hash", hash, "id", id, "err", err)
+		log.Error("Failed to retrieve blob transaction", "hash", hash, "id", id, "err", err)
 		return nil
 	}
 	return item
+}
+
+// get retrieves a blob transaction from the pool's storage and assembles it into
+// types.Transaction.
+func (p *BlobPool) get(id uint64) (*types.Transaction, error) {
+	data, err := p.store.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("Tracked blob transaction missing from store: %w", err)
+	}
+	item := new(types.Transaction)
+	if err = rlp.DecodeBytes(data, item); err != nil {
+		return nil, fmt.Errorf("Blobs corrupted for traced transaction: %w", err)
+	}
+	return item, nil
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
