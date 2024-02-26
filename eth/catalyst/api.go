@@ -58,9 +58,9 @@ const (
 	// to be reprocessed again.
 	invalidBlockHitEviction = 128
 
-	// invalidTippetsCap is the max number of recent block hashes tracked that
+	// invalidTipetsCap is the max number of recent block hashes tracked that
 	// have lead to some bad ancestor block. It's just an OOM protection.
-	invalidTippetsCap = 512
+	invalidTipetsCap = 512
 
 	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
 	// attached before starting to issue warnings.
@@ -715,7 +715,7 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	// Not too many failures yet, mark the head of the invalid chain as invalid
 	if check != head {
 		log.Warn("Marked new chain head as invalid", "hash", head, "badnumber", invalid.Number, "badhash", badHash)
-		for len(api.invalidTipsets) >= invalidTippetsCap {
+		for len(api.invalidTipsets) >= invalidTipetsCap {
 			for key := range api.invalidTipsets {
 				delete(api.invalidTipsets, key)
 				break
