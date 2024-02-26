@@ -58,9 +58,9 @@ const (
 	// to be reprocessed again.
 	invalidBlockHitEviction = 128
 
-	// invalidTipsetsCap is the max number of recent block hashes tracked that
+	// invalidTippetsCap is the max number of recent block hashes tracked that
 	// have lead to some bad ancestor block. It's just an OOM protection.
-	invalidTipsetsCap = 512
+	invalidTippetsCap = 512
 
 	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
 	// attached before starting to issue warnings.
@@ -101,7 +101,7 @@ type ConsensusAPI struct {
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
-	// to track historical bad blocks as well as bad tipsets in case a chain
+	// to track historical bad blocks as well as bad tippets in case a chain
 	// is constantly built on it.
 	//
 	// There are a few important caveats in this mechanism:
@@ -112,7 +112,7 @@ type ConsensusAPI struct {
 	//   - Bad blocks will get forgotten after a certain threshold of import
 	//     attempts and will be retried. The rationale is that if the network
 	//     really-really-really tries to feed us a block, we should give it a
-	//     new chance, perhaps us being racey instead of the block being legit
+	//     new chance, perhaps us being race instead of the block being legit
 	//     bad (this happened in Geth at a point with import vs. pending race).
 	//   - Tracking all the blocks built on top of the bad one could be a bit
 	//     problematic, so we will only track the head chain segment of a bad
@@ -271,7 +271,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
 
 		// Header advertised via a past newPayload request. Start syncing to it.
-		// Before we do however, make sure any legacy sync in switched off so we
+		// Before we do however, make sure any legacy sync in switched off, so we
 		// don't accidentally have 2 cycles running.
 		if merger := api.eth.Merger(); !merger.TDDReached() {
 			merger.ReachTTD()
@@ -326,7 +326,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	} else if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
 		// If the specified head matches with our local head, do nothing and keep
 		// generating the payload. It's a special corner case that a few slots are
-		// missing and we are requested to generate the payload in slot.
+		// missing, and we are requested to generate the payload in slot.
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
@@ -381,7 +381,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			Version:      payloadVersion,
 		}
 		id := args.Id()
-		// If we already are busy generating this work, then we do not need
+		// If we already are busying generating this work, then we do not need
 		// to start a second process.
 		if api.localBlocks.has(id) {
 			return valid(&id), nil
@@ -538,7 +538,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
 	//      api.eth.BlockChain().InsertBlockWithoutSetHead, where it is blocked on
-	//      e.g database compaction.
+	//      e.g. database compaction.
 	// 2. The call times out on the CL layer, which issues another NewPayload (execdata-N) call.
 	//    Similarly, this also get stuck on the same place. Importantly, since the
 	//    first call has not gone through, the early checks for "do we already have this block"
@@ -715,7 +715,7 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	// Not too many failures yet, mark the head of the invalid chain as invalid
 	if check != head {
 		log.Warn("Marked new chain head as invalid", "hash", head, "badnumber", invalid.Number, "badhash", badHash)
-		for len(api.invalidTipsets) >= invalidTipsetsCap {
+		for len(api.invalidTipsets) >= invalidTippetsCap {
 			for key := range api.invalidTipsets {
 				delete(api.invalidTipsets, key)
 				break
@@ -812,7 +812,7 @@ func (api *ConsensusAPI) heartbeat() {
 }
 
 // ExchangeCapabilities returns the current methods provided by this node.
-func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+func (api *ConsensusAPI) ExchangeCapabilities(_ []string) []string {
 	return caps
 }
 
@@ -880,7 +880,7 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 
 	for j, tx := range body.Transactions {
 		data, _ := tx.MarshalBinary()
-		txs[j] = hexutil.Bytes(data)
+		txs[j] = data
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
