@@ -40,7 +40,7 @@ func TestMemCopying(t *testing.T) {
 	} {
 		mem := vm.NewMemory()
 		mem.Resize(uint64(tc.memsize))
-		cpy, err := GetMemoryCopyPadded(mem, tc.offset, tc.size)
+		cpy, err := GetMemoryCopyPadded(mem.Data(), tc.offset, tc.size)
 		if want := tc.wantErr; want != "" {
 			if err == nil {
 				t.Fatalf("test %d: want '%v' have no error", i, want)
