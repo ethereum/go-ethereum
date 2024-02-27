@@ -103,7 +103,7 @@ func (p *triePrefetcher) close() {
 	p.closed = true
 }
 
-// prefetch schedules a batch of trie items to prefetch.
+// prefetch schedules a batch of trie items to prefetch. After the prefetcher is closed, all the following tasks scheduled will not be executed.
 //
 // prefetch is called from two locations:
 //  1. Finalize of the state-objects storage roots. This happens at the end
@@ -126,7 +126,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
-	if fetcher == nil {
+	if fetcher == nil || fetcher.trie == nil {
 		p.deliveryMissMeter.Mark(1)
 		return nil
 	}
