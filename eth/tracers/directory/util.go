@@ -18,6 +18,8 @@ package directory
 import (
 	"errors"
 	"fmt"
+
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -40,7 +42,7 @@ func GetMemoryCopyPadded(m []byte, offset, size int64) ([]byte, error) {
 	}
 	cpy := make([]byte, size)
 	if overlap := length - offset; overlap > 0 {
-		copy(cpy, m[offset:offset+overlap])
+		copy(cpy, MemoryPtr(m, offset, overlap))
 	}
 	return cpy, nil
 }
@@ -58,4 +60,21 @@ func memoryCopy(m []byte, offset, size int64) (cpy []byte) {
 	}
 
 	return
+}
+
+func MemoryPtr(m []byte, offset, size int64) []byte {
+	if size == 0 {
+		return nil
+	}
+
+	if len(m) > int(offset) {
+		return m[offset : offset+size]
+	}
+
+	return nil
+}
+
+// Back returns the n'th item in stack
+func StackBack(st []uint256.Int, n int) *uint256.Int {
+	return &st[len(st)-n-1]
 }

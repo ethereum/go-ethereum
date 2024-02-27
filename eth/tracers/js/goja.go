@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -319,9 +320,9 @@ func (t *jsTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, sco
 
 	log := t.log
 	log.op.op = vm.OpCode(op)
-	log.memory.memory = scope.Memory
-	log.stack.stack = scope.Stack
-	log.contract.contract = scope.Contract
+	log.memory.memory = scope.GetMemoryData()
+	log.stack.stack = scope.GetStackData()
+	log.contract.scope = scope
 	log.pc = pc
 	log.gas = gas
 	log.cost = cost
@@ -603,7 +604,7 @@ func (o *opObj) setupObject() *goja.Object {
 }
 
 type memoryObj struct {
-	memory *vm.Memory
+	memory []byte
 	vm     *goja.Runtime
 	toBig  toBigFn
 	toBuf  toBufFn
@@ -654,14 +655,14 @@ func (mo *memoryObj) GetUint(addr int64) goja.Value {
 
 // getUint returns the 32 bytes at the specified address interpreted as a uint.
 func (mo *memoryObj) getUint(addr int64) (*big.Int, error) {
-	if mo.memory.Len() < int(addr)+32 || addr < 0 {
-		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), addr, 32)
+	if len(mo.memory) < int(addr)+32 || addr < 0 {
+		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", len(mo.memory), addr, 32)
 	}
-	return new(big.Int).SetBytes(mo.memory.GetPtr(addr, 32)), nil
+	return new(big.Int).SetBytes(directory.MemoryPtr(mo.memory, addr, 32)), nil
 }
 
 func (mo *memoryObj) Length() int {
-	return mo.memory.Len()
+	return len(mo.memory)
 }
 
 func (m *memoryObj) setupObject() *goja.Object {
@@ -673,7 +674,7 @@ func (m *memoryObj) setupObject() *goja.Object {
 }
 
 type stackObj struct {
-	stack *vm.Stack
+	stack []uint256.Int
 	vm    *goja.Runtime
 	toBig toBigFn
 }
@@ -694,14 +695,14 @@ func (s *stackObj) Peek(idx int) goja.Value {
 
 // peek returns the nth-from-the-top element of the stack.
 func (s *stackObj) peek(idx int) (*big.Int, error) {
-	if len(s.stack.Data()) <= idx || idx < 0 {
-		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data()), idx)
+	if len(s.stack) <= idx || idx < 0 {
+		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack), idx)
 	}
-	return s.stack.Back(idx).ToBig(), nil
+	return directory.StackBack(s.stack, idx).ToBig(), nil
 }
 
 func (s *stackObj) Length() int {
-	return len(s.stack.Data())
+	return len(s.stack)
 }
 
 func (s *stackObj) setupObject() *goja.Object {
@@ -804,14 +805,14 @@ func (do *dbObj) setupObject() *goja.Object {
 }
 
 type contractObj struct {
-	contract *vm.Contract
-	vm       *goja.Runtime
-	toBig    toBigFn
-	toBuf    toBufFn
+	scope live.ScopeContext
+	vm    *goja.Runtime
+	toBig toBigFn
+	toBuf toBufFn
 }
 
 func (co *contractObj) GetCaller() goja.Value {
-	caller := co.contract.Caller().Bytes()
+	caller := co.scope.GetCaller().Bytes()
 	res, err := co.toBuf(co.vm, caller)
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -821,7 +822,7 @@ func (co *contractObj) GetCaller() goja.Value {
 }
 
 func (co *contractObj) GetAddress() goja.Value {
-	addr := co.contract.Address().Bytes()
+	addr := co.scope.GetAddress().Bytes()
 	res, err := co.toBuf(co.vm, addr)
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -831,7 +832,7 @@ func (co *contractObj) GetAddress() goja.Value {
 }
 
 func (co *contractObj) GetValue() goja.Value {
-	value := co.contract.Value()
+	value := co.scope.GetCallValue()
 	res, err := co.toBig(co.vm, value.String())
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -841,7 +842,7 @@ func (co *contractObj) GetValue() goja.Value {
 }
 
 func (co *contractObj) GetInput() goja.Value {
-	input := common.CopyBytes(co.contract.Input)
+	input := common.CopyBytes(co.scope.GetCallInput())
 	res, err := co.toBuf(co.vm, input)
 	if err != nil {
 		co.vm.Interrupt(err)
