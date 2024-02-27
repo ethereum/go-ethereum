@@ -42,10 +42,16 @@ type ScopeContext struct {
 }
 
 func (ctx *ScopeContext) GetMemoryData() []byte {
+	if ctx.Memory == nil {
+		return nil
+	}
 	return ctx.Memory.Data()
 }
 
 func (ctx *ScopeContext) GetStackData() []uint256.Int {
+	if ctx.Stack == nil {
+		return nil
+	}
 	return ctx.Stack.Data()
 }
 

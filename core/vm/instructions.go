@@ -248,7 +248,7 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
-	if interpreter.evm.Config.Tracer != nil {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.CaptureKeccakPreimage != nil {
 		interpreter.evm.Config.Tracer.CaptureKeccakPreimage(common.BytesToHash(interpreter.hasherBuf[:]), data)
 	}
 	size.SetBytes(interpreter.hasherBuf[:])
@@ -615,7 +615,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -660,7 +660,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -710,7 +710,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -750,7 +750,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -783,7 +783,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -816,7 +816,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && returnGas > 0 {
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
 		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, live.GasChangeCallLeftOverRefunded)
 	}
 
@@ -858,8 +858,12 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, live.BalanceIncreaseSelfdestruct)
 	interpreter.evm.StateDB.SelfDestruct(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
-		tracer.CaptureEnter(live.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
-		tracer.CaptureExit([]byte{}, 0, nil, false)
+		if tracer.CaptureEnter != nil {
+			tracer.CaptureEnter(live.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
+		}
+		if tracer.CaptureExit != nil {
+			tracer.CaptureExit([]byte{}, 0, nil, false)
+		}
 	}
 	return nil, errStopToken
 }
@@ -874,8 +878,12 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, live.BalanceIncreaseSelfdestruct)
 	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
-		tracer.CaptureEnter(live.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
-		tracer.CaptureExit([]byte{}, 0, nil, false)
+		if tracer.CaptureEnter != nil {
+			tracer.CaptureEnter(live.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
+		}
+		if tracer.CaptureExit != nil {
+			tracer.CaptureExit([]byte{}, 0, nil, false)
+		}
 	}
 	return nil, errStopToken
 }

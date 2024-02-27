@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path"
@@ -86,12 +87,7 @@ func Transition(ctx *cli.Context) error {
 	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
-	var (
-		err    error
-		tracer vm.EVMLogger
-	)
-	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
-
+	var getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) { return nil, nil, nil }
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
@@ -123,32 +119,36 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
-		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-			if prevFile != nil {
-				prevFile.Close()
-			}
+		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
-				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
 			prevFile = traceFile
-			return logger.NewJSONLogger(logConfig, traceFile), nil
+			logger := logger.NewJSONLogger(logConfig, traceFile).GetLogger()
+			tracer := &directory.Tracer{
+				LiveLogger: logger,
+				// JSONLogger streams out result to file.
+				GetResult: func() (json.RawMessage, error) { return nil, nil },
+				Stop:      func(err error) {},
+			}
+			return tracer, traceFile, nil
 		}
 	} else if ctx.IsSet(TraceTracerFlag.Name) {
 		var config json.RawMessage
 		if ctx.IsSet(TraceTracerConfigFlag.Name) {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
+		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
-				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
 			tracer, err := directory.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
 			if err != nil {
-				return nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}
-			return &traceWriter{tracer, traceFile}, nil
+			return tracer, traceFile, nil
 		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
