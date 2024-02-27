@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -46,7 +47,8 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 				// Once we're done with YOLOv2 and schedule this for mainnet, might
 				// be good to remove this panic here, which is just really a
 				// canary to have during testing
-				panic("impossible case: address was not present in access list during sstore op")
+
+				panic(fmt.Sprintf("impossible case: address was not present in access list during sstore op %s", contract.Address()))
 			}
 		}
 		value := common.Hash(y.Bytes32())

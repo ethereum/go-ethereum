@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -318,4 +319,104 @@ func enable6780(jt *JumpTable) {
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 	}
+}
+
+func enable3074(jt *JumpTable) {
+	jt[AUTH] = &operation{
+		execute:     opAuth,
+		constantGas: 3100,
+		dynamicGas:  gasReturn,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryAuth,
+	}
+	jt[AUTHCALL] = &operation{
+		execute:     opAuthCall,
+		constantGas: params.CallGasEIP150,
+		dynamicGas:  gasCallEIP2929,
+		minStack:    minStack(8, 1),
+		maxStack:    maxStack(8, 1),
+		memorySize:  memoryCall,
+	}
+}
+
+func opAuth(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		tmp       = scope.Stack.pop()
+		authority = common.Address(tmp.Bytes20())
+		offset    = scope.Stack.pop()
+		length    = scope.Stack.pop()
+		data      = scope.Memory.GetPtr(int64(offset.Uint64()), int64(length.Uint64()))
+		sig       = make([]byte, 65)
+		commit    common.Hash
+	)
+	copy(sig, data)
+	if len(data) > 65 {
+		copy(commit[:], data[65:])
+	}
+
+	// Build original auth message.
+	msg := []byte{params.AuthMagic}
+	msg = append(msg, common.LeftPadBytes(interpreter.evm.chainConfig.ChainID.Bytes(), 32)...)
+	msg = append(msg, common.LeftPadBytes(scope.Contract.Address().Bytes(), 32)...)
+	msg = append(msg, commit.Bytes()...)
+	msg = crypto.Keccak256(msg)
+
+	// Verify signature against provided address.
+	sig = append(sig[1:], sig[0])
+	pub, err := crypto.Ecrecover(msg, sig)
+	var recovered common.Address
+	copy(recovered[:], crypto.Keccak256(pub[1:])[12:])
+
+	fmt.Println(recovered)
+	fmt.Println(authority)
+
+	if err != nil || recovered != authority {
+		scope.Stack.push(uint256.NewInt(0))
+		return nil, err
+	}
+
+	scope.Stack.push(uint256.NewInt(1))
+	scope.Authorized = &authority
+	return nil, nil
+}
+
+func opAuthCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if scope.Authorized == nil {
+		return nil, ErrAuthorizedNotSet
+	}
+	var (
+		stack                                                = scope.Stack
+		temp                                                 = stack.pop()
+		gas                                                  = interpreter.evm.callGasTemp
+		addr, value, _, inOffset, inSize, retOffset, retSize = stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
+		toAddr                                               = common.Address(addr.Bytes20())
+		args                                                 = scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	)
+
+	if interpreter.readOnly && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
+
+	var bigVal = big0
+	if !value.IsZero() {
+		bigVal = value.ToBig()
+	}
+
+	ret, returnGas, err := interpreter.evm.AuthCall(scope.Contract, *scope.Authorized, toAddr, args, gas, bigVal)
+
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+	if err == nil || err == ErrExecutionReverted {
+		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	scope.Contract.Gas += returnGas
+
+	interpreter.returnData = ret
+	return ret, nil
+
 }
