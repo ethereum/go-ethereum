@@ -17,7 +17,10 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
 
@@ -37,6 +40,9 @@ type journalEntry interface {
 type journal struct {
 	entries []journalEntry         // Current changes tracked by the journal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
+
+	// snapshots is a list of the indexes to revert to
+	snapshots []int
 }
 
 // newJournal creates a new initialized journal.
@@ -44,6 +50,34 @@ func newJournal() *journal {
 	return &journal{
 		dirties: make(map[common.Address]int),
 	}
+}
+
+// Reset clears the journal, after this operation the journal can be used
+// anew. It is semantically similar to calling 'newJournal', but the underlying
+// slices can be reused
+func (j *journal) Reset() {
+	j.entries = j.entries[:0]
+	j.snapshots = j.snapshots[:0]
+	j.dirties = make(map[common.Address]int)
+}
+
+// Snapshot returns an identifier for the current revision of the state.
+func (j *journal) Snapshot() int {
+	id := len(j.snapshots)
+	j.snapshots = append(j.snapshots, j.length())
+	return id
+}
+
+// RevertToSnapshot reverts all state changes made since the given revision.
+func (j *journal) RevertToSnapshot(id int, s *StateDB) {
+	if id >= len(j.snapshots) {
+		panic(fmt.Errorf("revision id %v cannot be reverted", id))
+	}
+	snapshot := j.snapshots[id]
+
+	// Replay the journal to undo changes and remove invalidated snapshots
+	j.revert(s, snapshot)
+	j.snapshots = j.snapshots[:id]
 }
 
 // append inserts a new modification entry to the end of the change journal.
@@ -83,6 +117,104 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
+func (j *journal) JournalAccessListAddAccount(addr common.Address) {
+	j.append(accessListAddAccountChange{&addr})
+}
+
+func (j *journal) JournalAccessListAddSlot(addr common.Address, slot common.Hash) {
+	j.append(accessListAddSlotChange{
+		address: &addr,
+		slot:    &slot,
+	})
+}
+
+func (j *journal) JournalLog(txHash common.Hash) {
+	j.append(addLogChange{txhash: txHash})
+}
+
+func (j *journal) JournalRefund(prev uint64) {
+	j.append(refundChange{prev: prev})
+}
+
+func (j *journal) JournalCreate(addr common.Address) {
+	j.append(createObjectChange{account: &addr})
+}
+
+func (j *journal) JournalDestruct(addr common.Address) {
+	j.append(selfDestructChange{account: &addr})
+}
+
+func (j *journal) JournalSetState(addr common.Address, key, prev common.Hash) {
+	j.append(storageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+}
+
+func (j *journal) JournalSetTransientState(addr common.Address, key, prev common.Hash) {
+	j.append(transientStorageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+}
+
+func (j *journal) JournalRefundChange(previous uint64) {
+	j.append(refundChange{prev: previous})
+}
+
+func (j *journal) JournalBalanceChange(addr common.Address, previous *uint256.Int) {
+	j.append(balanceChange{
+		account: &addr,
+		prev:    previous.Clone(),
+	})
+}
+
+// JournalSetCode journals the setting of code: it is implicit that the previous
+// values were "no code" and emptyCodeHash.
+func (j *journal) JournalSetCode(address common.Address) {
+	j.append(codeChange{account: &address})
+}
+
+func (j *journal) JournalNonceChange(address common.Address, prev uint64) {
+	j.append(nonceChange{
+		account: &address,
+		prev:    prev,
+	})
+}
+
+func (j *journal) JournalTouch(address common.Address) {
+	j.append(touchChange{
+		account: &address,
+	})
+	if address == ripemd {
+		// Explicitly put it in the dirty-cache, which is otherwise generated from
+		// flattened journals.
+		j.dirty(address)
+	}
+}
+
+func (j *journal) JournalReset(address common.Address,
+	prev *stateObject,
+	prevdestruct bool,
+	prevAccount []byte,
+	prevStorage map[common.Hash][]byte,
+	prevAccountOriginExist bool,
+	prevAccountOrigin []byte,
+	prevStorageOrigin map[common.Hash][]byte) {
+	j.append(resetObjectChange{
+		account:                &address,
+		prev:                   prev,
+		prevdestruct:           prevdestruct,
+		prevAccount:            prevAccount,
+		prevStorage:            prevStorage,
+		prevAccountOriginExist: prevAccountOriginExist,
+		prevAccountOrigin:      prevAccountOrigin,
+		prevStorageOrigin:      prevStorageOrigin,
+	})
+}
+
 type (
 	// Changes to the account trie.
 	createObjectChange struct {
@@ -100,9 +232,7 @@ type (
 		prevStorageOrigin      map[common.Hash][]byte
 	}
 	selfDestructChange struct {
-		account     *common.Address
-		prev        bool // whether account had already self-destructed
-		prevbalance *uint256.Int
+		account *common.Address
 	}
 
 	// Changes to individual accounts.
@@ -119,8 +249,7 @@ type (
 		key, prevalue common.Hash
 	}
 	codeChange struct {
-		account            *common.Address
-		prevcode, prevhash []byte
+		account *common.Address
 	}
 
 	// Changes to other state values.
@@ -129,9 +258,6 @@ type (
 	}
 	addLogChange struct {
 		txhash common.Hash
-	}
-	addPreimageChange struct {
-		hash common.Hash
 	}
 	touchChange struct {
 		account *common.Address
@@ -186,8 +312,7 @@ func (ch resetObjectChange) dirtied() *common.Address {
 func (ch selfDestructChange) revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
-		obj.selfDestructed = ch.prev
-		obj.setBalance(ch.prevbalance)
+		obj.selfDestructed = false
 	}
 }
 
@@ -221,7 +346,7 @@ func (ch nonceChange) dirtied() *common.Address {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	s.getStateObject(*ch.account).setCode(types.EmptyCodeHash, nil)
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -263,14 +388,6 @@ func (ch addLogChange) revert(s *StateDB) {
 }
 
 func (ch addLogChange) dirtied() *common.Address {
-	return nil
-}
-
-func (ch addPreimageChange) revert(s *StateDB) {
-	delete(s.preimages, ch.hash)
-}
-
-func (ch addPreimageChange) dirtied() *common.Address {
 	return nil
 }
 
