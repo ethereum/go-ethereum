@@ -133,7 +133,7 @@ func (t *prestateTracer) CaptureState(pc uint64, opcode live.OpCode, gas, cost u
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init, err := directory.GetMemoryCopyPadded(scope.Memory, int64(offset.Uint64()), int64(size.Uint64()))
+		init, err := directory.GetMemoryCopyPadded(scope.GetMemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
 		if err != nil {
 			log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
 			return
