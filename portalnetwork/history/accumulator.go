@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -197,12 +198,12 @@ func (f MasterAccumulator) VerifyHeader(header types.Header, headerProof BlockHe
 	case accumulatorProof:
 		return f.VerifyAccumulatorProof(header, headerProof.Proof)
 	case none:
-		if header.Number.Uint64() > mergeBlockNumber {
-			return false, ErrNotPreMergeHeader
+		if header.Number.Uint64() <= mergeBlockNumber {
+			return false, ErrPreMergeHeaderMustWithProof
 		}
-		return false, ErrPreMergeHeaderMustWithProof
+		return true, nil
 	}
-	return false, nil
+	return false, fmt.Errorf("unknown header proof selector %v", headerProof.Selector)
 }
 
 func (f MasterAccumulator) Contains(epochHash []byte) bool {

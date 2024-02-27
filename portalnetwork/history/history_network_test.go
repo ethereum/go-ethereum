@@ -14,12 +14,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed testdata/shanghaibody.txt
@@ -285,6 +287,31 @@ func TestGetContentByKey(t *testing.T) {
 	require.NotNil(t, epoch)
 }
 
+type Entry struct {
+	ContentKey   string `yaml:"content_key"`
+	ContentValue string `yaml:"content_value"`
+}
+
+func TestValidateContents(t *testing.T) {
+	file, err := os.ReadFile("./testdata/hive_gossip.yaml")
+	require.NoError(t, err)
+	entries := make([]Entry, 0)
+	err = yaml.Unmarshal(file, &entries)
+	require.NoError(t, err)
+	historyNetwork, err := genHistoryNetwork(":7897", nil)
+	require.NoError(t, err)
+
+	keys := make([][]byte, 0)
+	values := make([][]byte, 0)
+
+	for _, entry := range entries {
+		keys = append(keys, hexutil.MustDecode(entry.ContentKey))
+		values = append(values, hexutil.MustDecode(entry.ContentValue))
+	}
+	err = historyNetwork.validateContents(keys, values)
+	require.NoError(t, err)
+}
+
 type contentEntry struct {
 	key   []byte
 	value []byte
@@ -338,6 +365,10 @@ func (m *MockStorage) Put(contentId []byte, content []byte) error {
 }
 
 func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, error) {
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
+	slogVerbosity := log.FromLegacyLevel(5)
+	glogger.Verbosity(slogVerbosity)
+	log.SetDefault(log.NewLogger(glogger))
 	conf := discover.DefaultPortalProtocolConfig()
 	if addr != "" {
 		conf.ListenAddr = addr
