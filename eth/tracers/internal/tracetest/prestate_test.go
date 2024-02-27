@@ -112,13 +112,13 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
 
-			state.StateDB.SetLogger(tracer)
+			state.StateDB.SetLogger(tracer.LiveLogger)
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer})
-			tracer.CaptureTxStart(evm, tx, msg.From)
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.LiveLogger})
+			tracer.CaptureTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)

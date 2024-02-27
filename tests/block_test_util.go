@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -109,7 +110,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *live.LiveLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
