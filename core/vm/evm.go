@@ -519,6 +519,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
+	if err == nil && evm.chainRules.IsPrague {
+		if len(ret) > 0 {
+			touchCodeChunksRangeOnReadAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), evm.Accesses)
+		}
+		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:])) {
+			err = ErrOutOfGas
+		}
+	}
+
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
@@ -526,16 +535,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas)
-		}
-	}
-
-	if err == nil && evm.chainRules.IsPrague {
-		if len(ret) > 0 {
-			touchCodeChunksRangeOnReadAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), evm.Accesses)
-		}
-		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:])) {
-			evm.StateDB.RevertToSnapshot(snapshot)
-			err = ErrOutOfGas
 		}
 	}
 
