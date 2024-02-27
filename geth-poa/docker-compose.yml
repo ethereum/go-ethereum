@@ -220,9 +220,9 @@ services:
       - NET_RESTRICT=172.29.0.0/16
     networks:
       primev_net:
-        ipv4_address: '172.29.0.99'
+        ipv4_address: '172.29.0.101'
     ports:
-      - 60602:60601
+      - 60604:60601
     volumes:
       - geth-data-node1:/data
     profiles:
@@ -262,9 +262,9 @@ services:
       - NET_RESTRICT=172.29.0.0/16
     networks:
       primev_net:
-        ipv4_address: '172.29.0.99'
+        ipv4_address: '172.29.0.101'
     ports:
-      - 60602:60601
+      - 60604:60601
     volumes:
       - geth-data-node3:/data
     profiles:
@@ -301,9 +301,9 @@ services:
       - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
     networks:
       primev_net:
-        ipv4_address: '172.29.0.101'
+        ipv4_address: '172.29.0.102'
     ports:
-      - 60604:60601
+      - 60605:60601
     volumes:
       - geth-data-node3:/data
       - geth-data-backup:/backup
