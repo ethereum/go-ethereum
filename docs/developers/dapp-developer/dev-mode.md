@@ -27,7 +27,7 @@ Starting Geth in developer mode is as simple as providing the `--dev` flag. It i
 Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, enable `http` and the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. For this tutorial some other namespaces will also be enabled. The full command is as follows:
 
 ```sh
-geth --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
+geth --dev --http --http.api eth,web3,net --http.corsdomain "https://remix.ethereum.org"
 ```
 
 The terminal will display the following logs, confirming Geth has started successfully in developer mode:
@@ -280,7 +280,7 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode.
 
 ```sh
-geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org"
+geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "https://remix.ethereum.org"
 ```
 
 ## Re-using accounts {#reusing-accounts}
@@ -288,7 +288,7 @@ geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain 
 Geth will fail to start in dev-mode if keys have been manually created or imported into the keystore in the `--datadir` directory. This is because the account cannot be automatically unlocked. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
 
 ```sh
-geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
+geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "https://remix.ethereum.org" --password password.txt
 ```
 
 ## Using a Custom Genesis Configuration
