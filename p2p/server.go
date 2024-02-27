@@ -914,13 +914,13 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	}
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
-		return fmt.Errorf("not in netrestrict list")
+		return errors.New("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
 	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
-		return fmt.Errorf("too many attempts")
+		return errors.New("too many attempts")
 	}
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
 	return nil
