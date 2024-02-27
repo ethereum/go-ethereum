@@ -32,6 +32,10 @@ type Sample interface {
 	Update(int64)
 }
 
+func NewBoundedHistogramSample() Sample {
+	return NewSlidingTimeWindowArraySample(time.Minute * 1)
+}
+
 // ExpDecaySample is an exponentially-decaying sample using a forward-decaying
 // priority reservoir.  See Cormode et al's "Forward Decay: A Practical Time
 // Decay Model for Streaming Systems".
