@@ -17,10 +17,18 @@
 package lightclient
 
 import (
+	"context"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type Client struct {
@@ -29,7 +37,7 @@ type Client struct {
 	blocksAndHeaders *blocksAndHeaders
 }
 
-func NewClient(config light.ClientConfig, db ethdb.Database) *Client {
+func NewClient(config light.ClientConfig, db ethdb.Database, rpcClient *rpc.Client) *Client {
 	// create data structures
 	var (
 		committeeChain = light.NewCommitteeChain(db, config)
@@ -38,24 +46,23 @@ func NewClient(config light.ClientConfig, db ethdb.Database) *Client {
 	// set up scheduler and sync modules
 	//chainHeadFeed := new(event.Feed)
 	scheduler := request.NewScheduler()
+	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
+	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders)
 	client := &Client{
 		scheduler:        scheduler,
-		canonicalChain:   newCanonicalChain(),
-		blocksAndHeaders: newBlocksAndHeaders(),
+		blocksAndHeaders: blocksAndHeaders,
+		canonicalChain:   canonicalChain,
 	}
 
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
-	chainOdr := newChainOdr(headTracker, client.canonicalChain, client.blocksAndHeaders)
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
-	scheduler.RegisterTarget(client.canonicalChain)
-	scheduler.RegisterTarget(client.blocksAndHeaders)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
-	scheduler.RegisterModule(chainOdr, "chainOdr")
+	scheduler.RegisterModule(client.canonicalChain, "canonicalChain")
 	return client
 }
 
@@ -65,4 +72,76 @@ func (c *Client) Start() {
 
 func (c *Client) Stop() {
 	c.scheduler.Stop()
+}
+
+func (c *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return c.blocksAndHeaders.getBlock(ctx, hash)
+}
+
+func (c *Client) numberToHash(ctx context.Context, number *big.Int) (common.Hash, error) {
+	if !number.IsInt64() {
+		return common.Hash{}, errors.New("Invalid block number")
+	}
+	num := number.Int64()
+	if num < 0 {
+		switch rpc.BlockNumber(num) {
+		case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
+			if header := c.canonicalChain.getFinality(); header != nil {
+				return header.Hash(), nil
+			}
+			return common.Hash{}, errors.New("Finalized block unknown")
+		case rpc.LatestBlockNumber, rpc.PendingBlockNumber:
+			if header := c.canonicalChain.getHead(); header != nil {
+				return header.Hash(), nil
+			}
+			return common.Hash{}, errors.New("Head block unknown")
+		default:
+			return common.Hash{}, errors.New("Invalid block number")
+		}
+	}
+	return c.canonicalChain.getHash(ctx, uint64(num))
+}
+
+func (c *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+	hash, err := c.numberToHash(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	return c.BlockByHash(ctx, hash)
+}
+
+func (c *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	return c.blocksAndHeaders.getHeader(ctx, hash)
+}
+
+func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	hash, err := c.numberToHash(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	return c.HeaderByHash(ctx, hash)
+}
+
+func (c *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error) {
+	block, err := c.BlockByHash(ctx, blockHash)
+	if err != nil {
+		return 0, err
+	}
+	return uint(len(block.Transactions())), nil
+}
+
+func (c *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
+	block, err := c.BlockByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	txs := block.Transactions()
+	if index >= uint(len(txs)) {
+		return nil, errors.New("Invalid transaction index")
+	}
+	return txs[index], nil
+}
+
+func (c *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return nil, nil //TODO
 }
