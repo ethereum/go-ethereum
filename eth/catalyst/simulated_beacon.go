@@ -206,7 +206,11 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		if envelope.BlobsBundle != nil {
 			hasher := sha256.New()
 			for _, commit := range envelope.BlobsBundle.Commitments {
-				c := kzg4844.Commitment(commit[:])
+				var c kzg4844.Commitment
+				if len(commit) != len(c) {
+					return errors.New("invalid commitment length")
+				}
+				copy(c[:], commit)
 				blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
 			}
 		}
