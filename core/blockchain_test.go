@@ -3064,7 +3064,7 @@ func testDeleteRecreateSlots(t *testing.T, scheme string) {
 	})
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, nil, engine, vm.Config{
-		Tracer: logger.NewJSONLogger(nil, os.Stdout).Logger(),
+		Tracer: logger.NewJSONLogger(nil, os.Stdout).Hooks(),
 	}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
@@ -3146,7 +3146,7 @@ func testDeleteRecreateAccount(t *testing.T, scheme string) {
 	})
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, nil, engine, vm.Config{
-		Tracer: logger.NewJSONLogger(nil, os.Stdout).Logger(),
+		Tracer: logger.NewJSONLogger(nil, os.Stdout).Hooks(),
 	}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
@@ -4292,7 +4292,7 @@ func TestEIP3651(t *testing.T) {
 
 		b.AddTx(tx)
 	})
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Logger()}, nil, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
