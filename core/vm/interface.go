@@ -60,6 +60,7 @@ type StateDB interface {
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for self-destructed accounts.
 	Exist(common.Address) bool
+
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(common.Address) bool
