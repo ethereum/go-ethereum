@@ -133,8 +133,8 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
-func (l *StructLogger) Logger() *tracing.LiveLogger {
-	return &tracing.LiveLogger{
+func (l *StructLogger) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		CaptureTxStart: l.CaptureTxStart,
 		CaptureTxEnd:   l.CaptureTxEnd,
 		CaptureEnd:     l.CaptureEnd,
@@ -144,9 +144,9 @@ func (l *StructLogger) Logger() *tracing.LiveLogger {
 
 func (l *StructLogger) Tracer() *directory.Tracer {
 	return &directory.Tracer{
-		LiveLogger: l.Logger(),
-		GetResult:  l.GetResult,
-		Stop:       l.Stop,
+		Hooks:     l.Hooks(),
+		GetResult: l.GetResult,
+		Stop:      l.Stop,
 	}
 }
 
@@ -352,8 +352,8 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) Logger() *tracing.LiveLogger {
-	return &tracing.LiveLogger{
+func (t *mdLogger) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		CaptureTxStart: t.CaptureTxStart,
 		CaptureStart:   t.CaptureStart,
 		CaptureState:   t.CaptureState,

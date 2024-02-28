@@ -128,10 +128,10 @@ func runCmd(ctx *cli.Context) error {
 		blobBaseFee = new(big.Int) // TODO (MariusVanDerWijden) implement blob fee in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
-		tracer = logger.NewJSONLogger(logconfig, os.Stdout).Logger()
+		tracer = logger.NewJSONLogger(logconfig, os.Stdout).Hooks()
 	} else if ctx.Bool(DebugFlag.Name) {
 		debugLogger = logger.NewStructLogger(logconfig)
-		tracer = debugLogger.Logger()
+		tracer = debugLogger.Hooks()
 	} else {
 		debugLogger = logger.NewStructLogger(logconfig)
 	}

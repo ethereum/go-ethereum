@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -116,7 +117,7 @@ type LiveLogger struct {
 	// due to it being known previously. This can happen e.g. when recovering
 	// from a crash.
 	OnSkippedBlock func(event BlockEvent)
-	OnGenesisBlock func(genesis *types.Block, alloc types.GenesisAlloc)
+	OnGenesisBlock func(genesis *types.Block, alloc core.GenesisAlloc)
 
 	/*
 		- State events -

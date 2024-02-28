@@ -45,8 +45,8 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 	return l
 }
 
-func (l *JSONLogger) Logger() *tracing.LiveLogger {
-	return &tracing.LiveLogger{
+func (l *JSONLogger) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		CaptureTxStart: l.CaptureTxStart,
 		CaptureEnd:     l.CaptureEnd,
 		CaptureState:   l.CaptureState,
