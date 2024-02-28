@@ -25,11 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/internal/utesting"
 )
 
 // sendTxs sends the given transactions to the node and
 // expects the node to accept and propagate them.
-func (s *Suite) sendTxs(txs []*types.Transaction) error {
+func (s *Suite) sendTxs(t *utesting.T, txs []*types.Transaction) error {
 	// Open sending conn.
 	sendConn, err := s.dial()
 	if err != nil {
@@ -70,10 +71,19 @@ func (s *Suite) sendTxs(txs []*types.Transaction) error {
 			for _, tx := range *msg {
 				got[tx.Hash()] = true
 			}
-		case *eth.NewPooledTransactionHashesPacket68:
+		case *eth.NewPooledTransactionHashesPacket:
 			for _, hash := range msg.Hashes {
 				got[hash] = true
 			}
+		case *eth.GetBlockHeadersPacket:
+			headers, err := s.chain.GetHeaders(msg)
+			if err != nil {
+				t.Logf("invalid GetBlockHeaders request: %v", err)
+			}
+			recvConn.Write(ethProto, eth.BlockHeadersMsg, &eth.BlockHeadersPacket{
+				RequestId:           msg.RequestId,
+				BlockHeadersRequest: headers,
+			})
 		default:
 			return fmt.Errorf("unexpected eth wire msg: %s", pretty.Sdump(msg))
 		}
@@ -95,7 +105,7 @@ func (s *Suite) sendTxs(txs []*types.Transaction) error {
 	return fmt.Errorf("timed out waiting for txs")
 }
 
-func (s *Suite) sendInvalidTxs(txs []*types.Transaction) error {
+func (s *Suite) sendInvalidTxs(t *utesting.T, txs []*types.Transaction) error {
 	// Open sending conn.
 	sendConn, err := s.dial()
 	if err != nil {
@@ -146,12 +156,21 @@ func (s *Suite) sendInvalidTxs(txs []*types.Transaction) error {
 					return fmt.Errorf("received bad tx: %s", tx.Hash())
 				}
 			}
-		case *eth.NewPooledTransactionHashesPacket68:
+		case *eth.NewPooledTransactionHashesPacket:
 			for _, hash := range msg.Hashes {
 				if _, ok := invalids[hash]; ok {
 					return fmt.Errorf("received bad tx: %s", hash)
 				}
 			}
+		case *eth.GetBlockHeadersPacket:
+			headers, err := s.chain.GetHeaders(msg)
+			if err != nil {
+				t.Logf("invalid GetBlockHeaders request: %v", err)
+			}
+			recvConn.Write(ethProto, eth.BlockHeadersMsg, &eth.BlockHeadersPacket{
+				RequestId:           msg.RequestId,
+				BlockHeadersRequest: headers,
+			})
 		default:
 			return fmt.Errorf("unexpected eth message: %v", pretty.Sdump(msg))
 		}

@@ -204,6 +204,19 @@ func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.
 	return b.flush(db, clean, id, false)
 }
 
+// allocBatch returns a database batch with pre-allocated buffer.
+func (b *nodebuffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
+	var metasize int
+	for owner, nodes := range b.nodes {
+		if owner == (common.Hash{}) {
+			metasize += len(nodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
+		} else {
+			metasize += len(nodes) * (len(rawdb.TrieNodeStoragePrefix) + common.HashLength) // database key prefix + owner
+		}
+	}
+	return db.NewBatchWithSize((metasize + int(b.size)) * 11 / 10) // extra 10% for potential pebble internal stuff
+}
+
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
 func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
@@ -217,7 +230,7 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	}
 	var (
 		start = time.Now()
-		batch = db.NewBatchWithSize(int(b.size))
+		batch = b.allocBatch(db)
 	)
 	nodes := writeNodes(batch, b.nodes, clean)
 	rawdb.WritePersistentStateID(batch, id)

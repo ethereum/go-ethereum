@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -212,7 +212,7 @@ type BlockChain interface {
 
 	// TrieDB retrieves the low level trie database used for interacting
 	// with trie nodes.
-	TrieDB() *trie.Database
+	TrieDB() *triedb.Database
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -611,6 +611,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			if err := d.lightchain.SetHead(origin); err != nil {
 				return err
 			}
+			log.Info("Truncated excess ancient chain segment", "oldhead", frozen-1, "newhead", origin)
 		}
 	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm

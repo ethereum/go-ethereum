@@ -74,8 +74,10 @@ func TestCreation(t *testing.T) {
 				{15049999, 0, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}},            // Last Arrow Glacier block
 				{15050000, 0, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 1681338455}},          // First Gray Glacier block
 				{20000000, 1681338454, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 1681338455}}, // Last Gray Glacier block
-				{20000000, 1681338455, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}},          // First Shanghai block
-				{30000000, 2000000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}},          // Future Shanghai block
+				{20000000, 1681338455, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // First Shanghai block
+				{30000000, 1710338134, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // Last Shanghai block
+				{40000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 0}},          // First Cancun block
+				{50000000, 2000000000, ID{Hash: checksumToBytes(0x9f3d2254), Next: 0}},          // Future Cancun block
 			},
 		},
 		// Goerli test cases
@@ -141,6 +143,7 @@ func TestValidation(t *testing.T) {
 	// Config that has not timestamp enabled
 	legacyConfig := *params.MainnetChainConfig
 	legacyConfig.ShanghaiTime = nil
+	legacyConfig.CancunTime = nil
 
 	tests := []struct {
 		config *params.ChainConfig
@@ -213,14 +216,10 @@ func TestValidation(t *testing.T) {
 		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		//
-		// TODO(karalabe): This testcase will fail once mainnet gets timestamped forks, make legacy chain config
 		{&legacyConfig, 88888888, 0, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 88888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
 		// fork) at block 7279999, before Petersburg. Local is incompatible.
-		//
-		// TODO(karalabe): This testcase will fail once mainnet gets timestamped forks, make legacy chain config
 		{&legacyConfig, 7279999, 0, ID{Hash: checksumToBytes(0xa00bc324), Next: 7279999}, ErrLocalIncompatibleOrStale},
 
 		//------------------------------------
@@ -297,34 +296,25 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet currently in Shanghai only (so it's aware of Cancun), remote announces
 		// also Shanghai, but it's not yet aware of Cancun (e.g. non updated node before the fork).
 		// In this case we don't know if Cancun passed yet or not.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced
-		//{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0x71147644), Next: 0}, nil},
+		{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}, nil},
 
 		// Local is mainnet currently in Shanghai only (so it's aware of Cancun), remote announces
 		// also Shanghai, and it's also aware of Cancun (e.g. updated node before the fork). We
 		// don't know if Cancun passed yet (will pass) or not.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced and update next timestamp
-		//{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, nil},
+		{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}, nil},
 
 		// Local is mainnet currently in Shanghai only (so it's aware of Cancun), remote announces
 		// also Shanghai, and it's also aware of some random fork (e.g. misconfigured Cancun). As
 		// neither forks passed at neither nodes, they may mismatch, but we still connect for now.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced
-		//{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0x71147644), Next: math.MaxUint64}, nil},
+		{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(0xdce96c2d), Next: math.MaxUint64}, nil},
 
 		// Local is mainnet exactly on Cancun, remote announces Shanghai + knowledge about Cancun. Remote
 		// is simply out of sync, accept.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced, update local head and time, next timestamp
-		// {params.MainnetChainConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, nil},
+		{params.MainnetChainConfig, 21000000, 1710338135, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}, nil},
 
 		// Local is mainnet Cancun, remote announces Shanghai + knowledge about Cancun. Remote
 		// is simply out of sync, accept.
-		// TODO(karalabe): Enable this when Cancun is specced, update local head and time, next timestamp
-		//{params.MainnetChainConfig, 21123456, 1678123456, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, nil},
+		{params.MainnetChainConfig, 21123456, 1710338136, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}, nil},
 
 		// Local is mainnet Prague, remote announces Shanghai + knowledge about Cancun. Remote
 		// is definitely out of sync. It may or may not need the Prague update, we don't know yet.
@@ -333,9 +323,7 @@ func TestValidation(t *testing.T) {
 		//{params.MainnetChainConfig, 0, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}, nil},
 
 		// Local is mainnet Shanghai, remote announces Cancun. Local is out of sync, accept.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced, update remote checksum
-		//{params.MainnetChainConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0x00000000), Next: 0}, nil},
+		{params.MainnetChainConfig, 21000000, 1700000000, ID{Hash: checksumToBytes(0x9f3d2254), Next: 0}, nil},
 
 		// Local is mainnet Shanghai, remote announces Cancun, but is not aware of Prague. Local
 		// out of sync. Local also knows about a future fork, but that is uncertain yet.
@@ -345,9 +333,7 @@ func TestValidation(t *testing.T) {
 
 		// Local is mainnet Cancun. remote announces Shanghai but is not aware of further forks.
 		// Remote needs software update.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced, update local head and time
-		//{params.MainnetChainConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0x71147644), Next: 0}, ErrRemoteStale},
+		{params.MainnetChainConfig, 21000000, 1710338135, ID{Hash: checksumToBytes(0xdce96c2d), Next: 0}, ErrRemoteStale},
 
 		// Local is mainnet Shanghai, and isn't aware of more forks. Remote announces Shanghai +
 		// 0xffffffff. Local needs software update, reject.
@@ -355,24 +341,20 @@ func TestValidation(t *testing.T) {
 
 		// Local is mainnet Shanghai, and is aware of Cancun. Remote announces Cancun +
 		// 0xffffffff. Local needs software update, reject.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced, update remote checksum
-		//{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(checksumUpdate(0x00000000, math.MaxUint64)), Next: 0}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 20000000, 1668000000, ID{Hash: checksumToBytes(checksumUpdate(0x9f3d2254, math.MaxUint64)), Next: 0}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Shanghai, remote is random Shanghai.
 		{params.MainnetChainConfig, 20000000, 1681338455, ID{Hash: checksumToBytes(0x12345678), Next: 0}, ErrLocalIncompatibleOrStale},
 
-		// Local is mainnet Shanghai, far in the future. Remote announces Gopherium (non existing fork)
+		// Local is mainnet Cancun, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future timestamp 8888888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0xdce96c2d), Next: 8888888888}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0x9f3d2254), Next: 8888888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Shanghai. Remote is also in Shanghai, but announces Gopherium (non existing
 		// fork) at timestamp 1668000000, before Cancun. Local is incompatible.
-		//
-		// TODO(karalabe): Enable this when Cancun is specced
-		//{params.MainnetChainConfig, 20999999, 1677999999, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 20999999, 1699999999, ID{Hash: checksumToBytes(0x71147644), Next: 1700000000}, ErrLocalIncompatibleOrStale},
 	}
 	genesis := core.DefaultGenesisBlock().ToBlock()
 	for i, tt := range tests {

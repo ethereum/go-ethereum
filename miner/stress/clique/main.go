@@ -154,9 +154,9 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	genesis.Config.ChainID = big.NewInt(18)
 	genesis.Config.Clique.Period = 1
 
-	genesis.Alloc = core.GenesisAlloc{}
+	genesis.Alloc = types.GenesisAlloc{}
 	for _, faucet := range faucets {
-		genesis.Alloc[crypto.PubkeyToAddress(faucet.PublicKey)] = core.GenesisAccount{
+		genesis.Alloc[crypto.PubkeyToAddress(faucet.PublicKey)] = types.Account{
 			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		}
 	}

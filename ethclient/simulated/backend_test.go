@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -41,7 +40,7 @@ var (
 
 func simTestBackend(testAddr common.Address) *Backend {
 	return NewBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		},
 	)
@@ -52,7 +51,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 
 	// create a signed transaction to send
 	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	chainid, _ := client.ChainID(context.Background())
 	nonce, err := client.PendingNonceAt(context.Background(), addr)
@@ -62,7 +61,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   chainid,
 		Nonce:     nonce,
-		GasTipCap: big.NewInt(1),
+		GasTipCap: big.NewInt(params.GWei),
 		GasFeeCap: gasPrice,
 		Gas:       21000,
 		To:        &addr,
@@ -71,7 +70,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 }
 
 func TestNewBackend(t *testing.T) {
-	sim := NewBackend(core.GenesisAlloc{})
+	sim := NewBackend(types.GenesisAlloc{})
 	defer sim.Close()
 
 	client := sim.Client()
@@ -94,7 +93,7 @@ func TestNewBackend(t *testing.T) {
 }
 
 func TestAdjustTime(t *testing.T) {
-	sim := NewBackend(core.GenesisAlloc{})
+	sim := NewBackend(types.GenesisAlloc{})
 	defer sim.Close()
 
 	client := sim.Client()
