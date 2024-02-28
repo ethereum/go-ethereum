@@ -37,7 +37,7 @@ type NoopTracer struct{}
 func newNoopTracer(ctx *Context, _ json.RawMessage) (*Tracer, error) {
 	t := &NoopTracer{}
 	return &Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart:        t.CaptureTxStart,
 			CaptureTxEnd:          t.CaptureTxEnd,
 			CaptureStart:          t.CaptureStart,

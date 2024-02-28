@@ -231,7 +231,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, err
 		}
 		if vmConfig.Tracer != nil {
-			vmConfig.Tracer = tracer.LiveLogger
+			vmConfig.Tracer = tracer.Hooks
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
 
@@ -301,7 +301,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
 			if tracer != nil {
-				tracer.LiveLogger.CaptureTxEnd(receipt, nil)
+				tracer.Hooks.CaptureTxEnd(receipt, nil)
 				writeTraceResult(tracer, traceOutput)
 			}
 		}

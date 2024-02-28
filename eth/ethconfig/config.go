@@ -143,7 +143,7 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Enables VM tracing
-	VMTracer *tracing.LiveLogger
+	VMTracer *tracing.Hooks
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`

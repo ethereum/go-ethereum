@@ -58,7 +58,7 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 
 	t := &muxTracer{names: names, tracers: objects}
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart:        t.CaptureTxStart,
 			CaptureTxEnd:          t.CaptureTxEnd,
 			CaptureStart:          t.CaptureStart,

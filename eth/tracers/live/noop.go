@@ -21,9 +21,9 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer(_ json.RawMessage) (*tracing.LiveLogger, error) {
+func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	t := &noop{}
-	return &tracing.LiveLogger{
+	return &tracing.Hooks{
 		CaptureTxStart:        t.CaptureTxStart,
 		CaptureTxEnd:          t.CaptureTxEnd,
 		CaptureStart:          t.CaptureStart,

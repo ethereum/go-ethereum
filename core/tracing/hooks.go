@@ -74,7 +74,7 @@ type BlockEvent struct {
 // TODO: provide utils for consumers
 type OpCode byte
 
-type LiveLogger struct {
+type Hooks struct {
 	/*
 		- VM events -
 	*/

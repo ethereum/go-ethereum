@@ -103,7 +103,7 @@ func Transition(ctx *cli.Context) error {
 			}
 			logger := logger.NewJSONLogger(logConfig, traceFile).Logger()
 			tracer := &directory.Tracer{
-				LiveLogger: logger,
+				Hooks: logger,
 				// JSONLogger streams out result to file.
 				GetResult: func() (json.RawMessage, error) { return nil, nil },
 				Stop:      func(err error) {},

@@ -223,7 +223,7 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 	t.logValue = t.log.setupObject()
 
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureTxEnd:   t.CaptureTxEnd,
 			CaptureStart:   t.CaptureStart,

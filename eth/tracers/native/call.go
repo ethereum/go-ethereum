@@ -127,7 +127,7 @@ func newCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trac
 		return nil, err
 	}
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureTxEnd:   t.CaptureTxEnd,
 			CaptureStart:   t.CaptureStart,

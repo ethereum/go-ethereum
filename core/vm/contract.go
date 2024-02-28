@@ -158,7 +158,7 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.LiveLogger, reason tracing.GasChangeReason) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}

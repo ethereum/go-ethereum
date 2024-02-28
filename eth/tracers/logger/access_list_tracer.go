@@ -133,8 +133,8 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) GetLogger() *tracing.LiveLogger {
-	return &tracing.LiveLogger{
+func (a *AccessListTracer) GetLogger() *tracing.Hooks {
+	return &tracing.Hooks{
 		CaptureState: a.CaptureState,
 	}
 }

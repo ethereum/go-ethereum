@@ -65,7 +65,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
-	logger     *tracing.LiveLogger
+	logger     *tracing.Hooks
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
@@ -176,7 +176,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 // SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l *tracing.LiveLogger) {
+func (s *StateDB) SetLogger(l *tracing.Hooks) {
 	s.logger = l
 }
 

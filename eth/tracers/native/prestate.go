@@ -89,7 +89,7 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 		deleted: make(map[common.Address]bool),
 	}
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureTxEnd:   t.CaptureTxEnd,
 			CaptureState:   t.CaptureState,

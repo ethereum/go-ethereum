@@ -141,7 +141,7 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
+		Hooks: &tracing.Hooks{
 			CaptureTxStart: ft.CaptureTxStart,
 			CaptureTxEnd:   ft.CaptureTxEnd,
 			CaptureStart:   ft.CaptureStart,
