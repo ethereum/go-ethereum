@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
@@ -20,9 +21,9 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer(_ json.RawMessage) (*live.LiveLogger, error) {
+func newNoopTracer(_ json.RawMessage) (*tracing.LiveLogger, error) {
 	t := &noop{}
-	return &live.LiveLogger{
+	return &tracing.LiveLogger{
 		CaptureTxStart:        t.CaptureTxStart,
 		CaptureTxEnd:          t.CaptureTxEnd,
 		CaptureStart:          t.CaptureStart,
@@ -55,18 +56,18 @@ func (t *noop) CaptureEnd(output []byte, gasUsed uint64, err error, reverted boo
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *noop) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *noop) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *noop) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, _ live.ScopeContext, depth int, err error) {
+func (t *noop) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, _ tracing.ScopeContext, depth int, err error) {
 }
 
 // CaptureKeccakPreimage is called during the KECCAK256 opcode.
 func (t *noop) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *noop) CaptureEnter(typ live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *noop) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
@@ -74,19 +75,19 @@ func (t *noop) CaptureEnter(typ live.OpCode, from common.Address, to common.Addr
 func (t *noop) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
-func (t *noop) CaptureTxStart(vm *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *noop) CaptureTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 }
 
 func (t *noop) CaptureTxEnd(receipt *types.Receipt, err error) {
 }
 
-func (t *noop) OnBlockStart(ev live.BlockEvent) {
+func (t *noop) OnBlockStart(ev tracing.BlockEvent) {
 }
 
 func (t *noop) OnBlockEnd(err error) {
 }
 
-func (t *noop) OnSkippedBlock(ev live.BlockEvent) {}
+func (t *noop) OnSkippedBlock(ev tracing.BlockEvent) {}
 
 func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
 }
@@ -94,7 +95,7 @@ func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
 func (t *noop) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 }
 
-func (t *noop) OnBalanceChange(a common.Address, prev, new *big.Int, reason live.BalanceChangeReason) {
+func (t *noop) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 }
 
 func (t *noop) OnNonceChange(a common.Address, prev, new uint64) {
@@ -110,5 +111,5 @@ func (t *noop) OnLog(l *types.Log) {
 
 }
 
-func (t *noop) OnGasChange(old, new uint64, reason live.GasChangeReason) {
+func (t *noop) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 }

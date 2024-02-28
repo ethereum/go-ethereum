@@ -25,10 +25,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 //go:generate go run github.com/fjl/gencodec -type flatCallAction -field-override flatCallActionMarshaling -out gen_flatcallaction_json.go
@@ -141,7 +141,7 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
+		LiveLogger: &tracing.LiveLogger{
 			CaptureTxStart: ft.CaptureTxStart,
 			CaptureTxEnd:   ft.CaptureTxEnd,
 			CaptureStart:   ft.CaptureStart,
@@ -167,17 +167,17 @@ func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error, re
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *flatCallTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *flatCallTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	t.tracer.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *flatCallTracer) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
+func (t *flatCallTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
 	t.tracer.CaptureFault(pc, op, gas, cost, scope, depth, err)
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *flatCallTracer) CaptureEnter(typ live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *flatCallTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
 
 	// Child calls must have a value, even if it's zero.
@@ -211,7 +211,7 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error, r
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *flatCallTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.tracer.CaptureTxStart(env, tx, from)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)

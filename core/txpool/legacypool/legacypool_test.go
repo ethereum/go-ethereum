@@ -33,10 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -256,7 +256,7 @@ func (c *testChain) State() (*state.StateDB, error) {
 		c.statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		// simulate that the new head block included tx0 and tx1
 		c.statedb.SetNonce(c.address, 2)
-		c.statedb.SetBalance(c.address, new(big.Int).SetUint64(params.Ether), core/state/state_test.go.BalanceChangeUnspecified)
+		c.statedb.SetBalance(c.address, new(big.Int).SetUint64(params.Ether), tracing.BalanceChangeUnspecified)
 		*c.trigger = false
 	}
 	return stdb, nil
@@ -276,7 +276,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 	)
 
 	// setup pool with 2 transaction in it
-	statedb.SetBalance(address, new(big.Int).SetUint64(params.Ether), core/state/state_test.go.BalanceChangeUnspecified)
+	statedb.SetBalance(address, new(big.Int).SetUint64(params.Ether), tracing.BalanceChangeUnspecified)
 	blockchain := &testChain{newTestBlockChain(params.TestChainConfig, 1000000000, statedb, new(event.Feed)), address, &trigger}
 
 	tx0 := transaction(0, 100000, key)
@@ -310,7 +310,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 
 func testAddBalance(pool *LegacyPool, addr common.Address, amount *big.Int) {
 	pool.mu.Lock()
-	pool.currentState.AddBalance(addr, amount, core/state/state_test.go.BalanceChangeUnspecified)
+	pool.currentState.AddBalance(addr, amount, tracing.BalanceChangeUnspecified)
 	pool.mu.Unlock()
 }
 
@@ -471,7 +471,7 @@ func TestChainFork(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000), core/state/state_test.go.BalanceChangeUnspecified)
+		statedb.AddBalance(addr, big.NewInt(100000000000000), tracing.BalanceChangeUnspecified)
 
 		pool.chain = newTestBlockChain(pool.chainconfig, 1000000, statedb, new(event.Feed))
 		<-pool.requestReset(nil, nil)
@@ -500,7 +500,7 @@ func TestDoubleNonce(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.AddBalance(addr, big.NewInt(100000000000000), core/state/state_test.go.BalanceChangeUnspecified)
+		statedb.AddBalance(addr, big.NewInt(100000000000000), tracing.BalanceChangeUnspecified)
 
 		pool.chain = newTestBlockChain(pool.chainconfig, 1000000, statedb, new(event.Feed))
 		<-pool.requestReset(nil, nil)
@@ -2619,7 +2619,7 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.GenerateKey()
 		account := crypto.PubkeyToAddress(key.PublicKey)
-		pool.currentState.AddBalance(account, big.NewInt(1000000), live.BalanceChangeUnspecified)
+		pool.currentState.AddBalance(account, big.NewInt(1000000), tracing.BalanceChangeUnspecified)
 		tx := transaction(uint64(0), 100000, key)
 		batches[i] = tx
 	}

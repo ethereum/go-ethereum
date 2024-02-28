@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -64,7 +64,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
-	logger     *live.LiveLogger
+	logger     *tracing.LiveLogger
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
@@ -175,7 +175,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 // SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l *live.LiveLogger) {
+func (s *StateDB) SetLogger(l *tracing.LiveLogger) {
 	s.logger = l
 }
 
@@ -383,7 +383,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason live.BalanceChangeReason) {
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, reason)
@@ -391,14 +391,14 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason live.B
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason live.BalanceChangeReason) {
+func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount, reason)
 	}
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason live.BalanceChangeReason) {
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount, reason)
@@ -467,7 +467,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 	if s.logger != nil && s.logger.OnBalanceChange != nil && prev.Sign() > 0 {
-		s.logger.OnBalanceChange(addr, prev, n, live.BalanceDecreaseSelfdestruct)
+		s.logger.OnBalanceChange(addr, prev, n, tracing.BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()
 	stateObject.data.Balance = new(big.Int)
@@ -856,7 +856,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 			// If ether was sent to account post-selfdestruct it is burnt.
 			if bal := obj.Balance(); s.logger != nil && s.logger.OnBalanceChange != nil && obj.selfDestructed && bal.Sign() != 0 {
-				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), live.BalanceDecreaseSelfdestructBurn)
+				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct

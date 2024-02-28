@@ -37,9 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/syncx"
@@ -266,7 +266,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
-	logger     *live.LiveLogger
+	logger     *tracing.LiveLogger
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1794,7 +1794,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			}
 			stats.processed++
 			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
-				bc.logger.OnSkippedBlock(live.BlockEvent{
+				bc.logger.OnSkippedBlock(tracing.BlockEvent{
 					Block:     block,
 					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
 					Finalized: bc.CurrentFinalBlock(),
@@ -1927,7 +1927,7 @@ type blockProcessingResult struct {
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(live.BlockEvent{
+		bc.logger.OnBlockStart(tracing.BlockEvent{
 			Block:     block,
 			TD:        td,
 			Finalized: bc.CurrentFinalBlock(),

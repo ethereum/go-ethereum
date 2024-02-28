@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -405,7 +405,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *big.Int, reason live.BalanceChangeReason) {
+func (s *stateObject) AddBalance(amount *big.Int, reason tracing.BalanceChangeReason) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.Sign() == 0 {
@@ -419,14 +419,14 @@ func (s *stateObject) AddBalance(amount *big.Int, reason live.BalanceChangeReaso
 
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *big.Int, reason live.BalanceChangeReason) {
+func (s *stateObject) SubBalance(amount *big.Int, reason tracing.BalanceChangeReason) {
 	if amount.IsZero() {
 		return
 	}
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount), reason)
 }
 
-func (s *stateObject) SetBalance(amount *big.Int, reason live.BalanceChangeReason) {
+func (s *stateObject) SetBalance(amount *big.Int, reason tracing.BalanceChangeReason) {
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),

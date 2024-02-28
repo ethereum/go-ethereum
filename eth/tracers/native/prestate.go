@@ -24,11 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -59,7 +59,7 @@ type accountMarshaling struct {
 
 type prestateTracer struct {
 	directory.NoopTracer
-	env       *live.VMContext
+	env       *tracing.VMContext
 	pre       stateMap
 	post      stateMap
 	to        common.Address
@@ -89,7 +89,7 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 		deleted: make(map[common.Address]bool),
 	}
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
+		LiveLogger: &tracing.LiveLogger{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureTxEnd:   t.CaptureTxEnd,
 			CaptureState:   t.CaptureState,
@@ -100,7 +100,7 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, opcode live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (t *prestateTracer) CaptureState(pc uint64, opcode live.OpCode, gas, cost u
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *prestateTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))

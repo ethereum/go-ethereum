@@ -19,15 +19,15 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	Tracer                  *live.LiveLogger
+	Tracer                  *tracing.LiveLogger
 	NoBaseFee               bool  // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool  // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int // Additional EIPS that are to be enabled
@@ -191,10 +191,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if err != nil {
 				if !logged {
 					if in.evm.Config.Tracer.CaptureState != nil {
-						in.evm.Config.Tracer.CaptureState(pcCopy, live.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+						in.evm.Config.Tracer.CaptureState(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 					}
 				} else if in.evm.Config.Tracer.CaptureFault != nil {
-					in.evm.Config.Tracer.CaptureFault(pcCopy, live.OpCode(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
+					in.evm.Config.Tracer.CaptureFault(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
 				}
 			}
 		}()
@@ -219,7 +219,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
-		if !contract.UseGas(cost, in.evm.Config.Tracer, live.GasChangeIgnored) {
+		if !contract.UseGas(cost, in.evm.Config.Tracer, tracing.GasChangeIgnored) {
 			return nil, ErrOutOfGas
 		}
 
@@ -246,17 +246,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
-			if err != nil || !contract.UseGas(dynamicCost, in.evm.Config.Tracer, live.GasChangeIgnored) {
+			if err != nil || !contract.UseGas(dynamicCost, in.evm.Config.Tracer, tracing.GasChangeIgnored) {
 				return nil, ErrOutOfGas
 			}
 
 			// Do tracing before memory expansion
 			if debug {
 				if in.evm.Config.Tracer.OnGasChange != nil {
-					in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, live.GasChangeCallOpCode)
+					in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 				}
 				if in.evm.Config.Tracer.CaptureState != nil {
-					in.evm.Config.Tracer.CaptureState(pc, live.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+					in.evm.Config.Tracer.CaptureState(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 					logged = true
 				}
 			}
@@ -265,10 +265,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		} else if debug {
 			if in.evm.Config.Tracer.OnGasChange != nil {
-				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, live.GasChangeCallOpCode)
+				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 			}
 			if in.evm.Config.Tracer.CaptureState != nil {
-				in.evm.Config.Tracer.CaptureState(pc, live.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+				in.evm.Config.Tracer.CaptureState(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 		}

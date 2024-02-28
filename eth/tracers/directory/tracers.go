@@ -24,7 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
+	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -41,7 +41,7 @@ type Context struct {
 // This involves a method to retrieve results and one to
 // stop tracing.
 type Tracer struct {
-	*live.LiveLogger
+	*tracing.LiveLogger
 	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop func(err error)

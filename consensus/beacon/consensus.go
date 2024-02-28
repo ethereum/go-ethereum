@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -358,7 +358,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		// Convert amount from gwei to wei.
 		amount := new(big.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, big.NewInt(params.GWei))
-		stateDB.AddBalance(w.Address, amount, live.BalanceIncreaseWithdrawal)
+		stateDB.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
 	}
 	// No block reward which is issued by consensus layer instead.
 }
