@@ -1272,14 +1272,13 @@ func TestFillBlobTransaction(t *testing.T) {
 
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
-		gas          = tx.Gas()
-		nonce        = tx.Nonce()
-		input        = tx.Data()
-		accessList   = (*types.AccessList)(nil)
-		txAccessList = tx.AccessList()
+		gas        = tx.Gas()
+		nonce      = tx.Nonce()
+		input      = tx.Data()
+		accessList *types.AccessList
 	)
-	if txAccessList != nil {
-		accessList = &txAccessList
+	if acl := tx.AccessList(); acl != nil {
+		accessList = &acl
 	}
 	return TransactionArgs{
 		From:                 &from,
