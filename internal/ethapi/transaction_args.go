@@ -96,7 +96,7 @@ func (args *TransactionArgs) data() []byte {
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGasEstimation bool) error {
 	if err := args.setBlobTxSidecar(ctx, b); err != nil {
 		return err
 	}
@@ -136,30 +136,37 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 	}
 
-	// Estimate the gas usage if necessary.
 	if args.Gas == nil {
-		// These fields are immutable during the estimation, safe to
-		// pass the pointer directly.
-		data := args.data()
-		callArgs := TransactionArgs{
-			From:                 args.From,
-			To:                   args.To,
-			GasPrice:             args.GasPrice,
-			MaxFeePerGas:         args.MaxFeePerGas,
-			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-			Value:                args.Value,
-			Data:                 (*hexutil.Bytes)(&data),
-			AccessList:           args.AccessList,
-			BlobFeeCap:           args.BlobFeeCap,
-			BlobHashes:           args.BlobHashes,
+		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
+			gas := hexutil.Uint64(b.RPCGasCap())
+			if gas == 0 {
+				gas = hexutil.Uint64(math.MaxUint64 / 2)
+			}
+			args.Gas = &gas
+		} else { // Estimate the gas usage otherwise.
+			// These fields are immutable during the estimation, safe to
+			// pass the pointer directly.
+			data := args.data()
+			callArgs := TransactionArgs{
+				From:                 args.From,
+				To:                   args.To,
+				GasPrice:             args.GasPrice,
+				MaxFeePerGas:         args.MaxFeePerGas,
+				MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+				Value:                args.Value,
+				Data:                 (*hexutil.Bytes)(&data),
+				AccessList:           args.AccessList,
+				BlobFeeCap:           args.BlobFeeCap,
+				BlobHashes:           args.BlobHashes,
+			}
+			latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
+			if err != nil {
+				return err
+			}
+			args.Gas = &estimated
+			log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 		}
-		latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
-		if err != nil {
-			return err
-		}
-		args.Gas = &estimated
-		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
