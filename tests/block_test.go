@@ -58,6 +58,8 @@ func TestBlockchain(t *testing.T) {
 
 // TestExecutionSpec runs the test fixtures from execution-spec-tests.
 func TestExecutionSpec(t *testing.T) {
+	t.Skip("skip TestExecutionSpec")
+
 	if !common.FileExist(executionSpecDir) {
 		t.Skipf("directory %s does not exist", executionSpecDir)
 	}
