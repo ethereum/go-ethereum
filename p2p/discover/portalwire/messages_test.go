@@ -204,10 +204,6 @@ func TestOfferAndAcceptMessage(t *testing.T) {
 		ContentKeys:  contentKeyBitlist,
 	}
 
-	contentKeyBitlist1 := bitfield.Bitlist([]byte{0x02})
-	fmt.Println(contentKeyBitlist1.Count())
-	fmt.Println(contentKeyBitlist1.Len())
-
 	expected = "0x0102060000000101"
 
 	data, err = accept.MarshalSSZ()

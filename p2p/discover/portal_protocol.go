@@ -648,7 +648,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.log.Trace("Received content response", "id", target.ID(), "connIdMsg", connIdMsg)
+		p.log.Trace("Received returned content response", "id", target.ID(), "connIdMsg", connIdMsg)
 		p.setJustSeen(target)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
@@ -666,22 +666,13 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 		// Read ALL the data from the connection until EOF and return it
-		data := make([]byte, 0)
-		buf := make([]byte, 1024)
-		for {
-			var read int
-			read, err = conn.Read(buf)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					p.log.Trace("Received content response", "id", target.ID(), "data", data, "size", read)
-					return resp[1], data, nil
-				}
-
-				p.log.Error("failed to read from utp connection", "err", err)
-				return 0xff, nil, err
-			}
-			data = append(data, buf[:read]...)
+		data, err := io.ReadAll(conn)
+		if err != nil {
+			p.log.Error("failed to read from utp connection", "err", err)
+			return 0xff, nil, err
 		}
+		p.log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
+		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
 		enrs := &portalwire.Enrs{}
 		err := enrs.UnmarshalSSZ(resp[2:])
@@ -968,7 +959,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		enrs := p.truncateNodes(closestNodes, maxPayloadSize, enrOverhead)
 		// TODO fix when no content and no enrs found
 		if len(enrs) == 0 {
-			enrs = append(enrs, []byte{})
+			enrs = nil
 		}
 
 		enrsMsg := &portalwire.Enrs{
@@ -1160,22 +1151,13 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 						return
 					}
 					// Read ALL the data from the connection until EOF and return it
-					data := make([]byte, 0)
-					buf := make([]byte, 1024)
-					for {
-						var n int
-						n, err = conn.Read(buf)
-						if err != nil {
-							if errors.Is(err, io.EOF) {
-								p.log.Trace("Received content response", "id", id, "data", data, "size", n)
-								break
-							}
-
-							p.log.Error("failed to read from utp connection", "err", err)
-							return
-						}
-						data = append(data, buf[:n]...)
+					var data []byte
+					data, err = io.ReadAll(conn)
+					if err != nil {
+						p.log.Error("failed to read from utp connection", "err", err)
+						return
 					}
+					p.log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
 
 					err = p.handleOfferedContents(id, contentKeys, data)
 					if err != nil {

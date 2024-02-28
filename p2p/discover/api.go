@@ -362,21 +362,26 @@ func (p *PortalAPI) HistoryFindContent(enr string, contentKey string) (interface
 
 	switch flag {
 	case portalwire.ContentRawSelector:
-		return &ContentInfo{
+		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: false,
-		}, nil
+		}
+		p.portalProtocol.log.Trace("HistoryFindContent", "contentInfo", contentInfo)
+		return contentInfo, nil
 	case portalwire.ContentConnIdSelector:
-		return &ContentInfo{
+		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: true,
-		}, nil
+		}
+		p.portalProtocol.log.Trace("HistoryFindContent", "contentInfo", contentInfo)
+		return contentInfo, nil
 	default:
 		enrs := make([]string, 0)
 		for _, r := range findContent.([]*enode.Node) {
 			enrs = append(enrs, r.String())
 		}
 
+		p.portalProtocol.log.Trace("HistoryFindContent", "enrs", enrs)
 		return &Enrs{
 			Enrs: enrs,
 		}, nil
