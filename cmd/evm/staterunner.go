@@ -60,10 +60,10 @@ func stateTestCmd(ctx *cli.Context) error {
 	var cfg vm.Config
 	switch {
 	case ctx.Bool(MachineFlag.Name):
-		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
+		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr).GetLogger()
 
 	case ctx.Bool(DebugFlag.Name):
-		cfg.Tracer = logger.NewStructLogger(config)
+		cfg.Tracer = logger.NewStructLogger(config).GetTracer().LiveLogger
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {

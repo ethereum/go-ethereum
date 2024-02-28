@@ -336,7 +336,7 @@ type mdLogger struct {
 	directory.NoopTracer
 	out io.Writer
 	cfg *Config
-	env *vm.EVM
+	env *live.VMContext
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -349,7 +349,17 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (t *mdLogger) Logger() *live.LiveLogger {
+	return &live.LiveLogger{
+		CaptureTxStart: t.CaptureTxStart,
+		CaptureStart:   t.CaptureStart,
+		CaptureState:   t.CaptureState,
+		CaptureFault:   t.CaptureFault,
+		CaptureEnd:     t.CaptureEnd,
+	}
+}
+
+func (t *mdLogger) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 }
 
@@ -371,14 +381,14 @@ func (t *mdLogger) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	stack := scope.Stack
+func (t *mdLogger) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+	stack := scope.GetStackData()
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
 		// format stack
 		var a []string
-		for _, elem := range stack.Data() {
+		for _, elem := range stack {
 			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
@@ -391,7 +401,7 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	}
 }
 
-func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (t *mdLogger) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 

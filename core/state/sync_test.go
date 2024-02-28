@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -61,7 +62,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		obj := state.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(uint256.NewInt(uint64(11*i)), BalanceChangeUnspecified)
+		obj.AddBalance(uint256.NewInt(uint64(11*i)), live.BalanceChangeUnspecified)
 		acc.balance = uint256.NewInt(uint64(11 * i))
 
 		obj.SetNonce(uint64(42 * i))
