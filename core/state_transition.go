@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	cmath "github.com/scroll-tech/go-ethereum/common/math"
@@ -27,10 +28,13 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
 )
 
 var emptyKeccakCodeHash = codehash.EmptyKeccakCodeHash
+
+var evmCallExecutionTimer = metrics.NewRegisteredTimer("evm/call/execution", nil)
 
 /*
 The State Transitioning Model
@@ -384,7 +388,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		evmCallStart := time.Now()
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		evmCallExecutionTimer.Update(time.Since(evmCallStart))
 	}
 
 	// no refunds for l1 messages
