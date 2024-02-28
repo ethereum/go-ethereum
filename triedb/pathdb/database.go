@@ -377,10 +377,10 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 }
 
 // Recoverable returns the indicator if the specified state is recoverable.
-func (db *Database) Recoverable(root common.Hash) bool {
+func (db *Database) Recoverable(dest common.Hash) bool {
 	// Ensure the requested state is a known state.
-	root = types.TrieRootHash(root)
-	id := rawdb.ReadStateID(db.diskdb, root)
+	dest = types.TrieRootHash(dest)
+	id := rawdb.ReadStateID(db.diskdb, dest)
 	if id == nil {
 		return false
 	}
@@ -391,17 +391,19 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
+	if db.freezer == nil {
+		return false
+	}
 	// Ensure the requested state is a canonical state and all state
 	// histories in range [id+1, disklayer.ID] are present and complete.
-	parent := root
 	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != parent {
+		if m.parent != dest {
 			return errors.New("unexpected state history")
 		}
 		if len(m.incomplete) > 0 {
 			return errors.New("incomplete state history")
 		}
-		parent = m.root
+		dest = m.root
 		return nil
 	}) == nil
 }
