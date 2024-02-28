@@ -1272,11 +1272,15 @@ func TestFillBlobTransaction(t *testing.T) {
 
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
-		gas        = tx.Gas()
-		nonce      = tx.Nonce()
-		input      = tx.Data()
-		accessList = tx.AccessList()
+		gas          = tx.Gas()
+		nonce        = tx.Nonce()
+		input        = tx.Data()
+		accessList   = (*types.AccessList)(nil)
+		txAccessList = tx.AccessList()
 	)
+	if txAccessList != nil {
+		accessList = &txAccessList
+	}
 	return TransactionArgs{
 		From:                 &from,
 		To:                   tx.To(),
@@ -1287,7 +1291,7 @@ func argsFromTransaction(tx *types.Transaction, from common.Address) Transaction
 		Nonce:                (*hexutil.Uint64)(&nonce),
 		Input:                (*hexutil.Bytes)(&input),
 		ChainID:              (*hexutil.Big)(tx.ChainId()),
-		AccessList:           &accessList,
+		AccessList:           accessList,
 		BlobFeeCap:           (*hexutil.Big)(tx.BlobGasFeeCap()),
 		BlobHashes:           tx.BlobHashes(),
 	}
