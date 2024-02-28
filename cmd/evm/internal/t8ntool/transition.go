@@ -124,8 +124,7 @@ func Transition(ctx *cli.Context) error {
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			prevFile = traceFile
-			logger := logger.NewJSONLogger(logConfig, traceFile).GetLogger()
+			logger := logger.NewJSONLogger(logConfig, traceFile).Logger()
 			tracer := &directory.Tracer{
 				LiveLogger: logger,
 				// JSONLogger streams out result to file.
