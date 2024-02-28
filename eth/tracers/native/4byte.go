@@ -23,10 +23,10 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 func init() {
@@ -62,7 +62,7 @@ func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (*directory.Tr
 		ids: make(map[string]int),
 	}
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
+		LiveLogger: &tracing.LiveLogger{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureStart:   t.CaptureStart,
 			CaptureEnter:   t.CaptureEnter,
@@ -88,7 +88,7 @@ func (t *fourByteTracer) store(id []byte, size int) {
 	t.ids[key] += 1
 }
 
-func (t *fourByteTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *fourByteTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
@@ -103,7 +103,7 @@ func (t *fourByteTracer) CaptureStart(from common.Address, to common.Address, cr
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(opcode live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureEnter(opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return

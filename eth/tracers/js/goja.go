@@ -23,9 +23,9 @@ import (
 	"math/big"
 
 	"github.com/dop251/goja"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -101,7 +101,7 @@ type jsTracer struct {
 	directory.NoopTracer
 
 	vm                *goja.Runtime
-	env               *live.VMContext
+	env               *tracing.VMContext
 	toBig             toBigFn               // Converts a hex string into a JS bigint
 	toBuf             toBufFn               // Converts a []byte into a JS buffer
 	fromBuf           fromBufFn             // Converts an array, hex string or Uint8Array to a []byte
@@ -223,7 +223,7 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 	t.logValue = t.log.setupObject()
 
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
+		LiveLogger: &tracing.LiveLogger{
 			CaptureTxStart: t.CaptureTxStart,
 			CaptureTxEnd:   t.CaptureTxEnd,
 			CaptureStart:   t.CaptureStart,
@@ -240,7 +240,7 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *jsTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	// Need statedb access for db object
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
@@ -310,7 +310,7 @@ func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -335,7 +335,7 @@ func (t *jsTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, sco
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
+func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -360,7 +360,7 @@ func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *jsTracer) CaptureEnter(typ live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !t.traceFrame {
 		return
 	}
@@ -713,7 +713,7 @@ func (s *stackObj) setupObject() *goja.Object {
 }
 
 type dbObj struct {
-	db      live.StateDB
+	db      tracing.StateDB
 	vm      *goja.Runtime
 	toBig   toBigFn
 	toBuf   toBufFn
@@ -805,7 +805,7 @@ func (do *dbObj) setupObject() *goja.Object {
 }
 
 type contractObj struct {
-	scope live.ScopeContext
+	scope tracing.ScopeContext
 	vm    *goja.Runtime
 	toBig toBigFn
 	toBuf toBufFn

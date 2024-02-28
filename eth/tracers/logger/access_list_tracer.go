@@ -18,10 +18,10 @@ package logger
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM
@@ -133,14 +133,14 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) GetLogger() *live.LiveLogger {
-	return &live.LiveLogger{
+func (a *AccessListTracer) GetLogger() *tracing.LiveLogger {
+	return &tracing.LiveLogger{
 		CaptureState: a.CaptureState,
 	}
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) CaptureState(pc uint64, opcode live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (a *AccessListTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	stackData := scope.GetStackData()
 	stackLen := len(stackData)
 	op := vm.OpCode(opcode)

@@ -21,9 +21,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 )
 
 func init() {
@@ -58,7 +58,7 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 
 	t := &muxTracer{names: names, tracers: objects}
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
+		LiveLogger: &tracing.LiveLogger{
 			CaptureTxStart:        t.CaptureTxStart,
 			CaptureTxEnd:          t.CaptureTxEnd,
 			CaptureStart:          t.CaptureStart,
@@ -99,7 +99,7 @@ func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverte
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *muxTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.CaptureState != nil {
 			t.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
@@ -108,7 +108,7 @@ func (t *muxTracer) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, sc
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *muxTracer) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
+func (t *muxTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.CaptureFault != nil {
 			t.CaptureFault(pc, op, gas, cost, scope, depth, err)
@@ -126,7 +126,7 @@ func (t *muxTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 }
 
 // CaptureGasConsumed is called when gas is consumed.
-func (t *muxTracer) OnGasChange(old, new uint64, reason live.GasChangeReason) {
+func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 	for _, t := range t.tracers {
 		if t.OnGasChange != nil {
 			t.OnGasChange(old, new, reason)
@@ -135,7 +135,7 @@ func (t *muxTracer) OnGasChange(old, new uint64, reason live.GasChangeReason) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *muxTracer) CaptureEnter(typ live.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *muxTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		if t.CaptureEnter != nil {
 			t.CaptureEnter(typ, from, to, input, gas, value)
@@ -153,7 +153,7 @@ func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error, revert
 	}
 }
 
-func (t *muxTracer) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *muxTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	for _, t := range t.tracers {
 		if t.CaptureTxStart != nil {
 			t.CaptureTxStart(env, tx, from)
@@ -169,7 +169,7 @@ func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-func (t *muxTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason live.BalanceChangeReason) {
+func (t *muxTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 	for _, t := range t.tracers {
 		if t.OnBalanceChange != nil {
 			t.OnBalanceChange(a, prev, new, reason)

@@ -28,10 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -111,7 +111,7 @@ func (s *StructLog) ErrorString() string {
 type StructLogger struct {
 	directory.NoopTracer
 	cfg Config
-	env *live.VMContext
+	env *tracing.VMContext
 
 	storage map[common.Address]Storage
 	logs    []StructLog
@@ -134,8 +134,8 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
-func (l *StructLogger) Logger() *live.LiveLogger {
-	return &live.LiveLogger{
+func (l *StructLogger) Logger() *tracing.LiveLogger {
+	return &tracing.LiveLogger{
 		CaptureTxStart: l.CaptureTxStart,
 		CaptureTxEnd:   l.CaptureTxEnd,
 		CaptureEnd:     l.CaptureEnd,
@@ -162,7 +162,7 @@ func (l *StructLogger) Reset() {
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, opcode live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if l.interrupt.Load() {
 		return
@@ -265,7 +265,7 @@ func (l *StructLogger) Stop(err error) {
 	l.interrupt.Store(true)
 }
 
-func (l *StructLogger) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (l *StructLogger) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
 
@@ -340,7 +340,7 @@ type mdLogger struct {
 	directory.NoopTracer
 	out io.Writer
 	cfg *Config
-	env *live.VMContext
+	env *tracing.VMContext
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -353,8 +353,8 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) Logger() *live.LiveLogger {
-	return &live.LiveLogger{
+func (t *mdLogger) Logger() *tracing.LiveLogger {
+	return &tracing.LiveLogger{
 		CaptureTxStart: t.CaptureTxStart,
 		CaptureStart:   t.CaptureStart,
 		CaptureState:   t.CaptureState,
@@ -363,7 +363,7 @@ func (t *mdLogger) Logger() *live.LiveLogger {
 	}
 }
 
-func (t *mdLogger) CaptureTxStart(env *live.VMContext, tx *types.Transaction, from common.Address) {
+func (t *mdLogger) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 }
 
@@ -385,7 +385,7 @@ func (t *mdLogger) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, rData []byte, depth int, err error) {
+func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.GetStackData()
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
@@ -405,7 +405,7 @@ func (t *mdLogger) CaptureState(pc uint64, op live.OpCode, gas, cost uint64, sco
 	}
 }
 
-func (t *mdLogger) CaptureFault(pc uint64, op live.OpCode, gas, cost uint64, scope live.ScopeContext, depth int, err error) {
+func (t *mdLogger) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
