@@ -1,4 +1,4 @@
-// This file originates from Docker/Moby,
+// This file originates from Docker/Moby
 // https://github.com/moby/moby/blob/master/pkg/reexec/
 // Licensed under Apache License 2.0: https://github.com/moby/moby/blob/master/LICENSE
 // Copyright 2013-2018 Docker, Inc.
