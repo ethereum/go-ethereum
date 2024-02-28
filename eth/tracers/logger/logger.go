@@ -134,16 +134,20 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
-func (l *StructLogger) GetTracer() *directory.Tracer {
+func (l *StructLogger) Logger() *live.LiveLogger {
+	return &live.LiveLogger{
+		CaptureTxStart: l.CaptureTxStart,
+		CaptureTxEnd:   l.CaptureTxEnd,
+		CaptureEnd:     l.CaptureEnd,
+		CaptureState:   l.CaptureState,
+	}
+}
+
+func (l *StructLogger) Tracer() *directory.Tracer {
 	return &directory.Tracer{
-		LiveLogger: &live.LiveLogger{
-			CaptureTxStart: l.CaptureTxStart,
-			CaptureTxEnd:   l.CaptureTxEnd,
-			CaptureEnd:     l.CaptureEnd,
-			CaptureState:   l.CaptureState,
-		},
-		GetResult: l.GetResult,
-		Stop:      l.Stop,
+		LiveLogger: l.Logger(),
+		GetResult:  l.GetResult,
+		Stop:       l.Stop,
 	}
 }
 

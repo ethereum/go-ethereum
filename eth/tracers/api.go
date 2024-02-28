@@ -778,7 +778,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer).GetLogger(),
+				Tracer:                  logger.NewJSONLogger(&logConfig, writer).Logger(),
 				EnablePreimageRecording: true,
 			}
 		}
@@ -950,7 +950,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config = &TraceConfig{}
 	}
 	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(config.Config).GetTracer()
+	tracer = logger.NewStructLogger(config.Config).Tracer()
 	if config.Tracer != nil {
 		tracer, err = directory.DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {
