@@ -22,8 +22,8 @@ import (
 
 const (
 	VersionMajor = 1          // Major version component of the current release
-	VersionMinor = 13         // Minor version component of the current release
-	VersionPatch = 15         // Patch version component of the current release
+	VersionMinor = 14         // Minor version component of the current release
+	VersionPatch = 0          // Patch version component of the current release
 	VersionMeta  = "unstable" // Version metadata to append to the version string
 )
 
