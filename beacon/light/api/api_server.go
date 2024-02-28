@@ -75,10 +75,6 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 			if block, err := s.api.GetBeaconBlock(common.Hash(data)); err == nil {
 				resp = block
 			}
-		case sync.ReqFinality:
-			if finality, err := s.api.GetFinality(); err == nil {
-				resp = finality
-			}
 		default:
 		}
 		if resp != nil {

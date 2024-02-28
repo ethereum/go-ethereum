@@ -202,26 +202,26 @@ func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error)
 func decodeOptimisticHeadUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	var data struct {
 		Data struct {
-			Header        jsonBeaconHeader    `json:"attested_header"`
-			Aggregate     types.SyncAggregate `json:"sync_aggregate"`
-			SignatureSlot common.Decimal      `json:"signature_slot"`
+			Attested      jsonHeaderWithExecProof `json:"attested_header"`
+			Aggregate     types.SyncAggregate     `json:"sync_aggregate"`
+			SignatureSlot common.Decimal          `json:"signature_slot"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
-		return types.SignedHeader{}, err
+		return types.OptimisticUpdate{}, err
 	}
-	if data.Data.Header.Beacon.StateRoot == (common.Hash{}) {
+	if data.Data.Attested.Beacon.StateRoot == (common.Hash{}) {
 		// workaround for different event encoding format in Lodestar
 		if err := json.Unmarshal(enc, &data.Data); err != nil {
-			return types.SignedHeader{}, err
+			return types.OptimisticUpdate{}, err
 		}
 	}
 
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
-		return types.SignedHeader{}, errors.New("invalid sync_committee_bits length")
+		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
-		return types.SignedHeader{}, errors.New("invalid sync_committee_signature length")
+		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_signature length")
 	}
 	return types.OptimisticUpdate{
 		Attested: types.HeaderWithExecProof{
