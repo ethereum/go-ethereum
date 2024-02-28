@@ -111,7 +111,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 
 		if isEIP7623 {
-			tokens := z*params.TxDataZeroGas + nz*nonZeroGas
+			tokens := z + nz*params.TokenPerNonZeroByte7623
 			if floor := params.CostFloorPerToken7623 * tokens; gasForData < floor {
 				gasForData = floor
 			}
