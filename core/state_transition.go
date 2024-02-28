@@ -78,6 +78,15 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
+		// Charge for the contract creation
+		if isContractCreation && isEIP3860 {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
+
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
 		for _, byt := range data {
@@ -97,18 +106,10 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		gasForData += nz * nonZeroGas
 
 		z := dataLen - nz
-		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
+		if (math.MaxUint64-gas-gasForData)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
 		gasForData += z * params.TxDataZeroGas
-
-		if isContractCreation && isEIP3860 {
-			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
-			}
-			gas += lenWords * params.InitCodeWordGas
-		}
 
 		if isEIP7623 {
 			tokens := z + nz*params.TokenPerNonZeroByte7623
