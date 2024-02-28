@@ -391,6 +391,10 @@ func (db *Database) Recoverable(dest common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
+	// This is a temporary workaround for the unavailability of the freezer in
+	// dev mode. As a consequence, the Pathdb loses the ability for deep reorg
+	// in certain cases.
+	// TODO(rjl493456442): Implement the in-memory ancient store.
 	if db.freezer == nil {
 		return false
 	}
