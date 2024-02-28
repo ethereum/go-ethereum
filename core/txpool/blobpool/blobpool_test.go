@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -512,17 +513,17 @@ func TestOpenDrops(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
 	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3)
-	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
 	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2)
-	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), big.NewInt(1000000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), big.NewInt(10000000), state.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(overdrafter.PublicKey), big.NewInt(1000000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), big.NewInt(10000000), live.BalanceChangeUnspecified)
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -637,7 +638,7 @@ func TestOpenIndex(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(addr, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
+	statedb.AddBalance(addr, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -737,9 +738,9 @@ func TestOpenHeap(t *testing.T) {
 
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	statedb.AddBalance(addr1, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(addr2, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
-	statedb.AddBalance(addr3, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
+	statedb.AddBalance(addr1, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
+	statedb.AddBalance(addr3, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
@@ -817,9 +818,9 @@ func TestOpenCap(t *testing.T) {
 	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-		statedb.AddBalance(addr1, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
-		statedb.AddBalance(addr2, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
-		statedb.AddBalance(addr3, big.NewInt(1_000_000_000), state.BalanceChangeUnspecified)
+		statedb.AddBalance(addr1, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
+		statedb.AddBalance(addr2, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
+		statedb.AddBalance(addr3, big.NewInt(1_000_000_000), live.BalanceChangeUnspecified)
 		statedb.Commit(0, true)
 
 		chain := &testBlockChain{
@@ -1210,7 +1211,7 @@ func TestAdd(t *testing.T) {
 			addrs[acc] = crypto.PubkeyToAddress(keys[acc].PublicKey)
 
 			// Seed the state database with this acocunt
-			statedb.AddBalance(addrs[acc], new(big.Int).SetUint64(seed.balance), state.BalanceChangeUnspecified)
+			statedb.AddBalance(addrs[acc], new(big.Int).SetUint64(seed.balance), live.BalanceChangeUnspecified)
 			statedb.SetNonce(addrs[acc], seed.nonce)
 
 			// Sign the seed transactions and store them in the data store

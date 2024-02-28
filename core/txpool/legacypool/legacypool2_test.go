@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -49,7 +50,11 @@ func fillPool(t testing.TB, pool *LegacyPool) {
 	nonExecutableTxs := types.Transactions{}
 	for i := 0; i < 384; i++ {
 		key, _ := crypto.GenerateKey()
+<<<<<<< HEAD
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(10000000000), state.BalanceChangeUnspecified)
+=======
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(10000000000), live.BalanceChangeUnspecified)
+>>>>>>> 8cc747f439 (moaar fixes)
 		// Add executable ones
 		for j := 0; j < int(pool.config.AccountSlots); j++ {
 			executableTxs = append(executableTxs, pricedTransaction(uint64(j), 100000, big.NewInt(300), key))
@@ -91,7 +96,11 @@ func TestTransactionFutureAttack(t *testing.T) {
 	// Now, future transaction attack starts, let's add a bunch of expensive non-executables, and see if the pending-count drops
 	{
 		key, _ := crypto.GenerateKey()
+<<<<<<< HEAD
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), state.BalanceChangeUnspecified)
+=======
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(100000000000), live.BalanceChangeUnspecified)
+>>>>>>> 8cc747f439 (moaar fixes)
 		futureTxs := types.Transactions{}
 		for j := 0; j < int(pool.config.GlobalSlots+pool.config.GlobalQueue); j++ {
 			futureTxs = append(futureTxs, pricedTransaction(1000+uint64(j), 100000, big.NewInt(500), key))
@@ -128,7 +137,11 @@ func TestTransactionFuture1559(t *testing.T) {
 	// Now, future transaction attack starts, let's add a bunch of expensive non-executables, and see if the pending-count drops
 	{
 		key, _ := crypto.GenerateKey()
+<<<<<<< HEAD
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), state.BalanceChangeUnspecified)
+=======
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(100000000000), live.BalanceChangeUnspecified)
+>>>>>>> 8cc747f439 (moaar fixes)
 		futureTxs := types.Transactions{}
 		for j := 0; j < int(pool.config.GlobalSlots+pool.config.GlobalQueue); j++ {
 			futureTxs = append(futureTxs, dynamicFeeTx(1000+uint64(j), 100000, big.NewInt(200), big.NewInt(101), key))
@@ -182,7 +195,11 @@ func TestTransactionZAttack(t *testing.T) {
 	for j := 0; j < int(pool.config.GlobalQueue); j++ {
 		futureTxs := types.Transactions{}
 		key, _ := crypto.GenerateKey()
+<<<<<<< HEAD
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), state.BalanceChangeUnspecified)
+=======
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(100000000000), live.BalanceChangeUnspecified)
+>>>>>>> 8cc747f439 (moaar fixes)
 		futureTxs = append(futureTxs, pricedTransaction(1000+uint64(j), 21000, big.NewInt(500), key))
 		pool.addRemotesSync(futureTxs)
 	}
@@ -190,7 +207,11 @@ func TestTransactionZAttack(t *testing.T) {
 	overDraftTxs := types.Transactions{}
 	{
 		key, _ := crypto.GenerateKey()
+<<<<<<< HEAD
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), state.BalanceChangeUnspecified)
+=======
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(100000000000), live.BalanceChangeUnspecified)
+>>>>>>> 8cc747f439 (moaar fixes)
 		for j := 0; j < int(pool.config.GlobalSlots); j++ {
 			overDraftTxs = append(overDraftTxs, pricedValuedTransaction(uint64(j), 600000000000, 21000, big.NewInt(500), key))
 		}
@@ -227,7 +248,7 @@ func BenchmarkFutureAttack(b *testing.B) {
 	fillPool(b, pool)
 
 	key, _ := crypto.GenerateKey()
-	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), state.BalanceChangeUnspecified)
+	pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(100000000000), core/state/state_test.go.BalanceChangeUnspecified)
 	futureTxs := types.Transactions{}
 
 	for n := 0; n < b.N; n++ {
