@@ -107,11 +107,14 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
 			}
-			gasForData += lenWords * params.InitCodeWordGas
+			gas += lenWords * params.InitCodeWordGas
 		}
 
 		if isEIP7623 {
 			tokens := z + nz*params.TokenPerNonZeroByte7623
+			if (math.MaxUint64-gas-gasForData)/params.CostFloorPerToken7623 < tokens {
+				return 0, ErrGasUintOverflow
+			}
 			if floor := params.CostFloorPerToken7623 * tokens; gasForData < floor {
 				gasForData = floor
 			}
