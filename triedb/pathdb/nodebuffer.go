@@ -214,7 +214,7 @@ func (b *nodebuffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
 			metasize += len(nodes) * (len(rawdb.TrieNodeStoragePrefix) + common.HashLength) // database key prefix + owner
 		}
 	}
-	return db.NewBatchWithSize(int(float64(uint64(metasize)+b.size) * 1.1)) // extra 10% for potential pebble internal stuff
+	return db.NewBatchWithSize((metasize + int(b.size)) * 11 / 10) // extra 10% for potential pebble internal stuff
 }
 
 // flush persists the in-memory dirty trie node into the disk if the configured
