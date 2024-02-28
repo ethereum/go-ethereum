@@ -4,13 +4,13 @@ ENV LDFLAGS="-static"
 WORKDIR /build
 
 FROM base as tests
-RUN git clone --depth 1 -b zkevm https://github.com/privacy-scaling-explorations/eth-tests.git /tests
+RUN git clone --depth 1 -b develop https://github.com/ethereum/tests.git /tests
 
 FROM base AS retesteth
 RUN git clone --depth 1 -b develop https://github.com/ethereum/retesteth.git /retesteth
 RUN cmake /retesteth -DCMAKE_BUILD_TYPE=Release && make && cp retesteth/retesteth /target
 
-FROM golang:1.18-alpine as geth
+FROM golang:1.21-alpine as geth
 RUN apk add --no-cache gcc musl-dev linux-headers git
 WORKDIR /go-ethereum
 COPY go.mod .
