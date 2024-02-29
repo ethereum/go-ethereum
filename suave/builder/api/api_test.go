@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -19,7 +20,7 @@ func TestAPI(t *testing.T) {
 
 	c := NewClientFromRPC(rpc.DialInProc(srv))
 
-	res0, err := c.NewSession(context.Background())
+	res0, err := c.NewSession(context.Background(), nil)
 	require.NoError(t, err)
 	require.Equal(t, res0, "1")
 
@@ -30,10 +31,22 @@ func TestAPI(t *testing.T) {
 
 type nullSessionManager struct{}
 
-func (nullSessionManager) NewSession(ctx context.Context) (string, error) {
+func (nullSessionManager) NewSession(ctx context.Context, args *BuildBlockArgs) (string, error) {
 	return "1", ctx.Err()
 }
 
-func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*types.SimulateTransactionResult, error) {
-	return &types.SimulateTransactionResult{Logs: []*types.SimulatedLog{}}, nil
+func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error) {
+	return &SimulateTransactionResult{Logs: []*SimulatedLog{}}, nil
+}
+
+func (nullSessionManager) AddBundle(sessionId string, bundle Bundle) error {
+	return nil
+}
+
+func (nullSessionManager) BuildBlock(sessionId string) error {
+	return nil
+}
+
+func (nullSessionManager) Bid(sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
+	return nil, nil
 }

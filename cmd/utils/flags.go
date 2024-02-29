@@ -1792,6 +1792,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			if err != nil {
 				Fatalf("Failed to create developer account: %v", err)
 			}
+
+			// == Suave fork specific ==
+			// When running in developer mode, we want to have a deterministic public key
+			// we can use to sign transactions outside geth.
+			// This is the private key for the mnemonic
+			// "test test test test test test test test test test test junk"
+			// which is the same used in foundry Anvil.
+			priv, _ := crypto.HexToECDSA("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+			developer, err = ks.ImportECDSA(priv, "")
+			if err != nil {
+				Fatalf("Failed to import developer account: %v", err)
+			}
+			// == End of Suave fork specific ==
 		}
 		// Make sure the address is configured as fee recipient, otherwise
 		// the miner will fail to start.

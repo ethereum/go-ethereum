@@ -118,6 +118,10 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		Config: chainConfig,
 		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 	}
+	// == SUAVE SPECIFIC ==
+	// Add custom contracts for the genesis
+	gspec.Alloc[suaveExample1Addr] = core.GenesisAccount{Balance: big.NewInt(0), Code: common.FromHex(suaveExample1Artifact.DeployedBytecode.Object)}
+	// == END OF SUAVE SPECIFIC ==
 	switch e := engine.(type) {
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
