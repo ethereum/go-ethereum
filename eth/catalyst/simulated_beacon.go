@@ -161,8 +161,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
+	var random [32]byte
+	rand.Read(random[:])
 	var (
-		random         [32]byte
 		payloadVersion = engine.PayloadV2
 		attrs          = &engine.PayloadAttributes{
 			Timestamp:             timestamp,
@@ -171,7 +172,6 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 			Random:                random,
 		}
 	)
-	rand.Read(random[:])
 	if isCancun {
 		payloadVersion = engine.PayloadV3
 		attrs.BeaconRoot = &common.Hash{}
