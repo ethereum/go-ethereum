@@ -100,7 +100,7 @@ func (ps *peerSet) registerSnapExtension(peer *snap.Peer) error {
 	return nil
 }
 
-// waitExtensions blocks until all satellite protocols are connected and tracked
+// waitSnapExtension blocks until all satellite protocols are connected and tracked
 // by the peerset.
 func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 	// If the peer does not support a compatible `snap`, don't wait
