@@ -310,7 +310,7 @@ func (t *jsTracer) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -320,8 +320,8 @@ func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, 
 
 	log := t.log
 	log.op.op = vm.OpCode(op)
-	log.memory.memory = scope.GetMemoryData()
-	log.stack.stack = scope.GetStackData()
+	log.memory.memory = scope.MemoryData()
+	log.stack.stack = scope.StackData()
 	log.contract.scope = scope
 	log.pc = pc
 	log.gas = gas
@@ -335,7 +335,7 @@ func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, 
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
+func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -805,14 +805,14 @@ func (do *dbObj) setupObject() *goja.Object {
 }
 
 type contractObj struct {
-	scope tracing.ScopeContext
+	scope tracing.OpContext
 	vm    *goja.Runtime
 	toBig toBigFn
 	toBuf toBufFn
 }
 
 func (co *contractObj) GetCaller() goja.Value {
-	caller := co.scope.GetCaller().Bytes()
+	caller := co.scope.Caller().Bytes()
 	res, err := co.toBuf(co.vm, caller)
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -822,7 +822,7 @@ func (co *contractObj) GetCaller() goja.Value {
 }
 
 func (co *contractObj) GetAddress() goja.Value {
-	addr := co.scope.GetAddress().Bytes()
+	addr := co.scope.Address().Bytes()
 	res, err := co.toBuf(co.vm, addr)
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -832,7 +832,7 @@ func (co *contractObj) GetAddress() goja.Value {
 }
 
 func (co *contractObj) GetValue() goja.Value {
-	value := co.scope.GetCallValue()
+	value := co.scope.CallValue()
 	res, err := co.toBig(co.vm, value.String())
 	if err != nil {
 		co.vm.Interrupt(err)
@@ -842,7 +842,7 @@ func (co *contractObj) GetValue() goja.Value {
 }
 
 func (co *contractObj) GetInput() goja.Value {
-	input := common.CopyBytes(co.scope.GetCallInput())
+	input := common.CopyBytes(co.scope.CallInput())
 	res, err := co.toBuf(co.vm, input)
 	if err != nil {
 		co.vm.Interrupt(err)

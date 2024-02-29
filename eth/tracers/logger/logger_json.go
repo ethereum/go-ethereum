@@ -54,15 +54,15 @@ func (l *JSONLogger) Hooks() *tracing.Hooks {
 	}
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op tracing.OpCode, gas uint64, cost uint64, scope tracing.ScopeContext, depth int, err error) {
+func (l *JSONLogger) CaptureFault(pc uint64, op tracing.OpCode, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
 	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.GetMemoryData()
-	stack := scope.GetStackData()
+func (l *JSONLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	memory := scope.MemoryData()
+	stack := scope.StackData()
 
 	log := StructLog{
 		Pc:            pc,

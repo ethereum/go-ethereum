@@ -41,33 +41,33 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
-func (ctx *ScopeContext) GetMemoryData() []byte {
+func (ctx *ScopeContext) MemoryData() []byte {
 	if ctx.Memory == nil {
 		return nil
 	}
 	return ctx.Memory.Data()
 }
 
-func (ctx *ScopeContext) GetStackData() []uint256.Int {
+func (ctx *ScopeContext) StackData() []uint256.Int {
 	if ctx.Stack == nil {
 		return nil
 	}
 	return ctx.Stack.Data()
 }
 
-func (ctx *ScopeContext) GetCaller() common.Address {
+func (ctx *ScopeContext) Caller() common.Address {
 	return ctx.Contract.Caller()
 }
 
-func (ctx *ScopeContext) GetAddress() common.Address {
+func (ctx *ScopeContext) Address() common.Address {
 	return ctx.Contract.Address()
 }
 
-func (ctx *ScopeContext) GetCallValue() *uint256.Int {
+func (ctx *ScopeContext) CallValue() *uint256.Int {
 	return ctx.Contract.Value()
 }
 
-func (ctx *ScopeContext) GetCallInput() []byte {
+func (ctx *ScopeContext) CallInput() []byte {
 	return ctx.Contract.Input
 }
 

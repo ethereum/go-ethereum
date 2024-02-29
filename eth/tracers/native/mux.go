@@ -99,7 +99,7 @@ func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverte
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
+func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.CaptureState != nil {
 			t.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
@@ -108,7 +108,7 @@ func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64,
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *muxTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
+func (t *muxTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.CaptureFault != nil {
 			t.CaptureFault(pc, op, gas, cost, scope, depth, err)
