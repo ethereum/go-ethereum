@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -265,7 +265,7 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, trieUtils.BalanceLeafKey)
+		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, utils.BalanceLeafKey)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -355,7 +355,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	cs := uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20()))
 	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, trieUtils.CodeSizeLeafKey)
+		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, utils.CodeSizeLeafKey)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -495,7 +495,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
 	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, trieUtils.CodeKeccakLeafKey)
+		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, utils.CodeKeccakLeafKey)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -518,7 +518,8 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) common.Hash {
 	var pnum common.Hash
 	binary.BigEndian.PutUint64(pnum[24:], number)
-	witness.TouchAddressOnReadAndComputeGas(params.HistoryStorageAddress[:], *uint256.NewInt(number / 256), byte(number&0xFF))
+	treeIndex, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(pnum.Bytes())
+	witness.TouchAddressOnReadAndComputeGas(params.HistoryStorageAddress[:], *treeIndex, suffix)
 	return statedb.GetState(params.HistoryStorageAddress, pnum)
 }
 
@@ -952,7 +953,7 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		// 2. The contract wasn't created in the same transaction: there's no net change in balance,
 		//    and SELFDESTRUCT will perform no action on the account header. (we touch since we did SubBalance+AddBalance above)
 		if contractAddr != beneficiaryAddr || interpreter.evm.StateDB.WasCreatedInCurrentTx(contractAddr) {
-			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(beneficiaryAddr[:], uint256.Int{}, trieUtils.BalanceLeafKey)
+			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(beneficiaryAddr[:], uint256.Int{}, utils.BalanceLeafKey)
 			if !scope.Contract.UseGas(statelessGas) {
 				scope.Contract.Gas = 0
 				return nil, ErrOutOfGas
