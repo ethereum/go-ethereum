@@ -109,8 +109,8 @@ type (
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
 	ExitHook = func(output []byte, gasUsed uint64, err error, reverted bool)
 
-	// StateHook is invoked just prior to the execution of an opcode.
-	StateHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+	// OpcodeHook is invoked just prior to the execution of an opcode.
+	OpcodeHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
@@ -165,16 +165,16 @@ type (
 
 type Hooks struct {
 	// VM events
-	CaptureTxStart        TxStartHook
-	CaptureTxEnd          TxEndHook
-	CaptureStart          StartHook
-	CaptureEnd            EndHook
-	CaptureEnter          EnterHook
-	CaptureExit           ExitHook
-	CaptureState          StateHook
-	CaptureFault          FaultHook
-	CaptureKeccakPreimage KeccakPreimageHook
-	OnGasChange           GasChangeHook
+	OnTxStart        TxStartHook
+	OnTxEnd          TxEndHook
+	OnStart          StartHook
+	OnEnd            EndHook
+	OnEnter          EnterHook
+	OnExit           ExitHook
+	OnOpcode         OpcodeHook
+	OnFault          FaultHook
+	OnKeccakPreimage KeccakPreimageHook
+	OnGasChange      GasChangeHook
 	// Chain events
 	OnBlockchainInit BlockchainInitHook
 	OnBlockStart     BlockStartHook
@@ -284,7 +284,7 @@ const (
 	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
 	GasChangeCallCodeStorage GasChangeReason = 10
 	// GasChangeCallOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
-	// performed can be check by `CaptureState` handling.
+	// performed can be check by `OnOpcode` handling.
 	GasChangeCallOpCode GasChangeReason = 11
 	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution.
 	GasChangeCallPrecompiledContract GasChangeReason = 12

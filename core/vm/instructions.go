@@ -248,8 +248,8 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.CaptureKeccakPreimage != nil {
-		interpreter.evm.Config.Tracer.CaptureKeccakPreimage(common.BytesToHash(interpreter.hasherBuf[:]), data)
+	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnKeccakPreimage != nil {
+		interpreter.evm.Config.Tracer.OnKeccakPreimage(common.BytesToHash(interpreter.hasherBuf[:]), data)
 	}
 	size.SetBytes(interpreter.hasherBuf[:])
 	return nil, nil
@@ -858,11 +858,11 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	interpreter.evm.StateDB.SelfDestruct(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
-		if tracer.CaptureEnter != nil {
-			tracer.CaptureEnter(tracing.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
+		if tracer.OnEnter != nil {
+			tracer.OnEnter(tracing.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		}
-		if tracer.CaptureExit != nil {
-			tracer.CaptureExit([]byte{}, 0, nil, false)
+		if tracer.OnExit != nil {
+			tracer.OnExit([]byte{}, 0, nil, false)
 		}
 	}
 	return nil, errStopToken
@@ -878,11 +878,11 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
-		if tracer.CaptureEnter != nil {
-			tracer.CaptureEnter(tracing.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
+		if tracer.OnEnter != nil {
+			tracer.OnEnter(tracing.OpCode(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		}
-		if tracer.CaptureExit != nil {
-			tracer.CaptureExit([]byte{}, 0, nil, false)
+		if tracer.OnExit != nil {
+			tracer.OnExit([]byte{}, 0, nil, false)
 		}
 	}
 	return nil, errStopToken

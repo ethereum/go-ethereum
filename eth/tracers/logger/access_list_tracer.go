@@ -135,7 +135,7 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 
 func (a *AccessListTracer) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		CaptureState: a.CaptureState,
+		OnOpcode: a.CaptureState,
 	}
 }
 

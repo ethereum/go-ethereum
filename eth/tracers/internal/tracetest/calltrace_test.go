@@ -149,13 +149,13 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.LiveLogger})
-			tracer.CaptureTxStart(evm.GetVMContext(), tx, msg.From)
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
@@ -398,12 +398,12 @@ func TestInternals(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
-			tc.tracer.CaptureTxStart(evm.GetVMContext(), tx, msg.From)
+			tc.tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}
-			tc.tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+			tc.tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected
 			res, err := tc.tracer.GetResult()
 			if err != nil {

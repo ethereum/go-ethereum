@@ -62,10 +62,10 @@ func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (*directory.Tr
 		ids: make(map[string]int),
 	}
 	return &directory.Tracer{
-		LiveLogger: &tracing.LiveLogger{
-			CaptureTxStart: t.CaptureTxStart,
-			CaptureStart:   t.CaptureStart,
-			CaptureEnter:   t.CaptureEnter,
+		Hooks: &tracing.Hooks{
+			OnTxStart: t.CaptureTxStart,
+			OnStart:   t.CaptureStart,
+			OnEnter:   t.CaptureEnter,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,

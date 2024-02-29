@@ -23,27 +23,27 @@ type noop struct{}
 
 func newNoopTracer(_ json.RawMessage) (*tracing.LiveLogger, error) {
 	t := &noop{}
-	return &tracing.LiveLogger{
-		CaptureTxStart:        t.CaptureTxStart,
-		CaptureTxEnd:          t.CaptureTxEnd,
-		CaptureStart:          t.CaptureStart,
-		CaptureEnd:            t.CaptureEnd,
-		CaptureEnter:          t.CaptureEnter,
-		CaptureExit:           t.CaptureExit,
-		CaptureState:          t.CaptureState,
-		CaptureFault:          t.CaptureFault,
-		CaptureKeccakPreimage: t.CaptureKeccakPreimage,
-		OnGasChange:           t.OnGasChange,
-		OnBlockchainInit:      t.OnBlockchainInit,
-		OnBlockStart:          t.OnBlockStart,
-		OnBlockEnd:            t.OnBlockEnd,
-		OnSkippedBlock:        t.OnSkippedBlock,
-		OnGenesisBlock:        t.OnGenesisBlock,
-		OnBalanceChange:       t.OnBalanceChange,
-		OnNonceChange:         t.OnNonceChange,
-		OnCodeChange:          t.OnCodeChange,
-		OnStorageChange:       t.OnStorageChange,
-		OnLog:                 t.OnLog,
+	return &tracing.Hooks{
+		OnTxStart:        t.CaptureTxStart,
+		OnTxEnd:          t.CaptureTxEnd,
+		OnStart:          t.CaptureStart,
+		OnEnd:            t.CaptureEnd,
+		OnEnter:          t.CaptureEnter,
+		OnExit:           t.CaptureExit,
+		OnOpcode:         t.CaptureState,
+		OnFault:          t.CaptureFault,
+		OnKeccakPreimage: t.CaptureKeccakPreimage,
+		OnGasChange:      t.OnGasChange,
+		OnBlockchainInit: t.OnBlockchainInit,
+		OnBlockStart:     t.OnBlockStart,
+		OnBlockEnd:       t.OnBlockEnd,
+		OnSkippedBlock:   t.OnSkippedBlock,
+		OnGenesisBlock:   t.OnGenesisBlock,
+		OnBalanceChange:  t.OnBalanceChange,
+		OnNonceChange:    t.OnNonceChange,
+		OnCodeChange:     t.OnCodeChange,
+		OnStorageChange:  t.OnStorageChange,
+		OnLog:            t.OnLog,
 	}, nil
 }
 

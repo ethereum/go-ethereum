@@ -47,10 +47,10 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 
 func (l *JSONLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		CaptureTxStart: l.CaptureTxStart,
-		CaptureEnd:     l.CaptureEnd,
-		CaptureState:   l.CaptureState,
-		CaptureFault:   l.CaptureFault,
+		OnTxStart: l.CaptureTxStart,
+		OnEnd:     l.CaptureEnd,
+		OnOpcode:  l.CaptureState,
+		OnFault:   l.CaptureFault,
 	}
 }
 
