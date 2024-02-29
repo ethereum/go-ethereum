@@ -36,6 +36,7 @@ type OpContext interface {
 	CallInput() []byte
 }
 
+// StateDB gives tracers access to the whole state.
 type StateDB interface {
 	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
@@ -51,6 +52,7 @@ type Canceler interface {
 	Cancel()
 }
 
+// VMContext provides the context for the EVM execution.
 type VMContext struct {
 	Coinbase    common.Address
 	BlockNumber *big.Int
@@ -190,49 +192,49 @@ const (
 type GasChangeReason byte
 
 const (
-	GasChangeUnspecified GasChangeReason = iota
+	GasChangeUnspecified GasChangeReason = 0
 
 	// GasChangeTxInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
 	// one such gas change per transaction.
-	GasChangeTxInitialBalance
+	GasChangeTxInitialBalance GasChangeReason = 1
 	// GasChangeTxIntrinsicGas is the amount of gas that will be charged for the intrinsic cost of the transaction, there is
 	// always exactly one of those per transaction.
-	GasChangeTxIntrinsicGas
+	GasChangeTxIntrinsicGas GasChangeReason = 2
 	// GasChangeTxRefunds is the sum of all refunds which happened during the tx execution (e.g. storage slot being cleared)
 	// this generates an increase in gas. There is at most one of such gas change per transaction.
-	GasChangeTxRefunds
+	GasChangeTxRefunds GasChangeReason = 3
 	// GasChangeTxLeftOverReturned is the amount of gas left over at the end of transaction's execution that will be returned
 	// to the chain. This change will always be a negative change as we "drain" left over gas towards 0. If there was no gas
 	// left at the end of execution, no such even will be emitted. The returned gas's value in Wei is returned to caller.
 	// There is at most one of such gas change per transaction.
-	GasChangeTxLeftOverReturned
+	GasChangeTxLeftOverReturned GasChangeReason = 4
 
 	// GasChangeCallInitialBalance is the initial balance for the call which will be equal to the gasLimit of the call. There is only
 	// one such gas change per call.
-	GasChangeCallInitialBalance
+	GasChangeCallInitialBalance GasChangeReason = 5
 	// GasChangeCallLeftOverReturned is the amount of gas left over that will be returned to the caller, this change will always
 	// be a negative change as we "drain" left over gas towards 0. If there was no gas left at the end of execution, no such even
 	// will be emitted.
-	GasChangeCallLeftOverReturned
+	GasChangeCallLeftOverReturned GasChangeReason = 6
 	// GasChangeCallLeftOverRefunded is the amount of gas that will be refunded to the call after the child call execution it
 	// executed completed. This value is always positive as we are giving gas back to the you, the left over gas of the child.
 	// If there was no gas left to be refunded, no such even will be emitted.
-	GasChangeCallLeftOverRefunded
+	GasChangeCallLeftOverRefunded GasChangeReason = 7
 	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE.
-	GasChangeCallContractCreation
+	GasChangeCallContractCreation GasChangeReason = 8
 	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2.
-	GasChangeCallContractCreation2
+	GasChangeCallContractCreation2 GasChangeReason = 9
 	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
-	GasChangeCallCodeStorage
+	GasChangeCallCodeStorage GasChangeReason = 10
 	// GasChangeCallOpCode is the amount of gas that will be charged for an opcode executed by the EVM, exact opcode that was
 	// performed can be check by `CaptureState` handling.
-	GasChangeCallOpCode
+	GasChangeCallOpCode GasChangeReason = 11
 	// GasChangeCallPrecompiledContract is the amount of gas that will be charged for a precompiled contract execution.
-	GasChangeCallPrecompiledContract
+	GasChangeCallPrecompiledContract GasChangeReason = 12
 	// GasChangeCallStorageColdAccess is the amount of gas that will be charged for a cold storage access as controlled by EIP2929 rules.
-	GasChangeCallStorageColdAccess
+	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
-	GasChangeCallFailedExecution
+	GasChangeCallFailedExecution GasChangeReason = 14
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
