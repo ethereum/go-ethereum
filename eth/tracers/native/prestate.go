@@ -100,7 +100,7 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
+func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -109,9 +109,9 @@ func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cos
 		return
 	}
 	op := vm.OpCode(opcode)
-	stackData := scope.GetStackData()
+	stackData := scope.StackData()
 	stackLen := len(stackData)
-	caller := scope.GetAddress()
+	caller := scope.Address()
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
@@ -133,7 +133,7 @@ func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cos
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init, err := directory.GetMemoryCopyPadded(scope.GetMemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
+		init, err := directory.GetMemoryCopyPadded(scope.MemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
 		if err != nil {
 			log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
 			return

@@ -140,13 +140,13 @@ func (a *AccessListTracer) Hooks() *tracing.Hooks {
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
-	stackData := scope.GetStackData()
+func (a *AccessListTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	stackData := scope.StackData()
 	stackLen := len(stackData)
 	op := vm.OpCode(opcode)
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
-		a.list.addSlot(scope.GetAddress(), slot)
+		a.list.addSlot(scope.Address(), slot)
 	}
 	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
 		addr := common.Address(stackData[stackLen-1].Bytes20())

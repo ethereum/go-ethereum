@@ -161,7 +161,7 @@ func (l *StructLogger) Reset() {
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if l.interrupt.Load() {
 		return
@@ -172,8 +172,8 @@ func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost 
 	}
 
 	op := vm.OpCode(opcode)
-	memory := scope.GetMemoryData()
-	stack := scope.GetStackData()
+	memory := scope.MemoryData()
+	stack := scope.StackData()
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if l.cfg.EnableMemory {
@@ -188,7 +188,7 @@ func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost 
 			stck[i] = item
 		}
 	}
-	contractAddr := scope.GetAddress()
+	contractAddr := scope.Address()
 	stackLen := len(stack)
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
@@ -384,8 +384,8 @@ func (t *mdLogger) CaptureStart(from common.Address, to common.Address, create b
 }
 
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, rData []byte, depth int, err error) {
-	stack := scope.GetStackData()
+func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	stack := scope.StackData()
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
@@ -404,7 +404,7 @@ func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, 
 	}
 }
 
-func (t *mdLogger) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.ScopeContext, depth int, err error) {
+func (t *mdLogger) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 

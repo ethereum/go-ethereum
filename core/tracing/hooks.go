@@ -26,13 +26,15 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type ScopeContext interface {
-	GetMemoryData() []byte
-	GetStackData() []uint256.Int
-	GetCaller() common.Address
-	GetAddress() common.Address
-	GetCallValue() *uint256.Int
-	GetCallInput() []byte
+// OpContext provides the context at which the opcode is being
+// executed in, including the memory, stack and various contract-level information.
+type OpContext interface {
+	MemoryData() []byte
+	StackData() []uint256.Int
+	Caller() common.Address
+	Address() common.Address
+	CallValue() *uint256.Int
+	CallInput() []byte
 }
 
 type StateDB interface {
@@ -99,8 +101,8 @@ type LiveLogger struct {
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
 	CaptureExit func(output []byte, gasUsed uint64, err error, reverted bool)
 	// Opcode level
-	CaptureState          func(pc uint64, op OpCode, gas, cost uint64, scope ScopeContext, rData []byte, depth int, err error)
-	CaptureFault          func(pc uint64, op OpCode, gas, cost uint64, scope ScopeContext, depth int, err error)
+	CaptureState          func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+	CaptureFault          func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
 	CaptureKeccakPreimage func(hash common.Hash, data []byte)
 	// Misc
 	OnGasChange func(old, new uint64, reason GasChangeReason)
