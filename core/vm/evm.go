@@ -46,12 +46,14 @@ type (
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
 	if contract.CodeAddr != nil {
-		precompiles := PrecompiledContractsHomestead
-		if evm.chainRules.IsByzantium {
-			precompiles = PrecompiledContractsByzantium
-		}
-		if evm.chainRules.IsIstanbul {
+		var precompiles map[common.Address]PrecompiledContract
+		switch {
+		case evm.chainRules.IsIstanbul:
 			precompiles = PrecompiledContractsIstanbul
+		case evm.chainRules.IsByzantium:
+			precompiles = PrecompiledContractsByzantium
+		default:
+			precompiles = PrecompiledContractsHomestead
 		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {
 			switch p.(type) {

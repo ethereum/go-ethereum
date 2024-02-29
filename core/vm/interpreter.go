@@ -93,6 +93,10 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsLondon:
+			cfg.JumpTable = &londonInstructionSet
+		case evm.chainRules.IsBerlin:
+			cfg.JumpTable = &berlinInstructionSet
 		case evm.chainRules.IsIstanbul:
 			cfg.JumpTable = &istanbulInstructionSet
 		case evm.chainRules.IsConstantinople:
