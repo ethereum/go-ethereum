@@ -224,14 +224,14 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			CaptureTxStart: t.CaptureTxStart,
-			CaptureTxEnd:   t.CaptureTxEnd,
-			CaptureStart:   t.CaptureStart,
-			CaptureEnd:     t.CaptureEnd,
-			CaptureEnter:   t.CaptureEnter,
-			CaptureExit:    t.CaptureExit,
-			CaptureState:   t.CaptureState,
-			CaptureFault:   t.CaptureFault,
+			OnTxStart: t.CaptureTxStart,
+			OnTxEnd:   t.CaptureTxEnd,
+			OnStart:   t.CaptureStart,
+			OnEnd:     t.CaptureEnd,
+			OnEnter:   t.CaptureEnter,
+			OnExit:    t.CaptureExit,
+			OnOpcode:  t.CaptureState,
+			OnFault:   t.CaptureFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -339,7 +339,7 @@ func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, 
 	if t.err != nil {
 		return
 	}
-	// Other log fields have been already set as part of the last CaptureState.
+	// Other log fields have been already set as part of the last OnOpcode.
 	t.log.err = err
 	if _, err := t.fault(t.obj, t.logValue, t.dbValue); err != nil {
 		t.onError("fault", err)
@@ -423,7 +423,7 @@ func (t *jsTracer) Stop(err error) {
 // execution.
 func (t *jsTracer) onError(context string, err error) {
 	t.err = wrapError(context, err)
-	// `env` is set on CaptureStart which comes before any JS execution.
+	// `env` is set on OnStart which comes before any JS execution.
 	// So it should be non-nil.
 	t.env.VM.Cancel()
 }

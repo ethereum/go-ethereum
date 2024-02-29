@@ -190,11 +190,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		defer func() {
 			if err != nil {
 				if !logged {
-					if in.evm.Config.Tracer.CaptureState != nil {
-						in.evm.Config.Tracer.CaptureState(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+					if in.evm.Config.Tracer.OnOpcode != nil {
+						in.evm.Config.Tracer.OnOpcode(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 					}
-				} else if in.evm.Config.Tracer.CaptureFault != nil {
-					in.evm.Config.Tracer.CaptureFault(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
+				} else if in.evm.Config.Tracer.OnFault != nil {
+					in.evm.Config.Tracer.OnFault(pcCopy, tracing.OpCode(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
 				}
 			}
 		}()
@@ -255,8 +255,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				if in.evm.Config.Tracer.OnGasChange != nil {
 					in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 				}
-				if in.evm.Config.Tracer.CaptureState != nil {
-					in.evm.Config.Tracer.CaptureState(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+				if in.evm.Config.Tracer.OnOpcode != nil {
+					in.evm.Config.Tracer.OnOpcode(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 					logged = true
 				}
 			}
@@ -267,8 +267,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if in.evm.Config.Tracer.OnGasChange != nil {
 				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 			}
-			if in.evm.Config.Tracer.CaptureState != nil {
-				in.evm.Config.Tracer.CaptureState(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			if in.evm.Config.Tracer.OnOpcode != nil {
+				in.evm.Config.Tracer.OnOpcode(pc, tracing.OpCode(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 		}

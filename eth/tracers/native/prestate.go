@@ -90,9 +90,9 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 	}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			CaptureTxStart: t.CaptureTxStart,
-			CaptureTxEnd:   t.CaptureTxEnd,
-			CaptureState:   t.CaptureState,
+			OnTxStart: t.CaptureTxStart,
+			OnTxEnd:   t.CaptureTxEnd,
+			OnOpcode:  t.CaptureState,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,

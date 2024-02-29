@@ -522,11 +522,11 @@ func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to co
 	tracer := evm.Config.Tracer
 
 	if isRoot {
-		if tracer.CaptureStart != nil {
-			tracer.CaptureStart(from, to, typ == CREATE || typ == CREATE2, input, startGas, value)
+		if tracer.OnStart != nil {
+			tracer.OnStart(from, to, typ == CREATE || typ == CREATE2, input, startGas, value)
 		}
-	} else if tracer.CaptureEnter != nil {
-		tracer.CaptureEnter(tracing.OpCode(typ), from, to, input, startGas, value)
+	} else if tracer.OnEnter != nil {
+		tracer.OnEnter(tracing.OpCode(typ), from, to, input, startGas, value)
 	}
 
 	if tracer.OnGasChange != nil {
@@ -548,11 +548,11 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 		reverted = false
 	}
 	if isRoot {
-		if tracer.CaptureEnd != nil {
-			tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+		if tracer.OnEnd != nil {
+			tracer.OnEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 		}
-	} else if tracer.CaptureExit != nil {
-		tracer.CaptureExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	} else if tracer.OnExit != nil {
+		tracer.OnExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 	}
 }
 

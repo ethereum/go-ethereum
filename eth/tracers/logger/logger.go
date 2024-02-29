@@ -136,10 +136,10 @@ func NewStructLogger(cfg *Config) *StructLogger {
 
 func (l *StructLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		CaptureTxStart: l.CaptureTxStart,
-		CaptureTxEnd:   l.CaptureTxEnd,
-		CaptureEnd:     l.CaptureEnd,
-		CaptureState:   l.CaptureState,
+		OnTxStart: l.CaptureTxStart,
+		OnTxEnd:   l.CaptureTxEnd,
+		OnEnd:     l.CaptureEnd,
+		OnOpcode:  l.CaptureState,
 	}
 }
 
@@ -355,11 +355,11 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		CaptureTxStart: t.CaptureTxStart,
-		CaptureStart:   t.CaptureStart,
-		CaptureState:   t.CaptureState,
-		CaptureFault:   t.CaptureFault,
-		CaptureEnd:     t.CaptureEnd,
+		OnTxStart: t.CaptureTxStart,
+		OnStart:   t.CaptureStart,
+		OnOpcode:  t.CaptureState,
+		OnFault:   t.CaptureFault,
+		OnEnd:     t.CaptureEnd,
 	}
 }
 
