@@ -78,58 +78,115 @@ type BlockEvent struct {
 // TODO: provide utils for consumers
 type OpCode byte
 
-type Hooks struct {
+type (
 	/*
 		- VM events -
 	*/
-	// Transaction level
+
+	// TxStartHook is called before the execution of a transaction starts.
 	// Call simulations don't come with a valid signature. `from` field
 	// to be used for address of the caller.
-	CaptureTxStart func(vm *VMContext, tx *types.Transaction, from common.Address)
-	CaptureTxEnd   func(receipt *types.Receipt, err error)
-	// Top call frame
-	CaptureStart func(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-	// CaptureEnd is invoked when the processing of the top call ends.
-	// See docs for `CaptureExit` for info on the `reverted` parameter.
-	CaptureEnd func(output []byte, gasUsed uint64, err error, reverted bool)
-	// Rest of call frames
-	CaptureEnter func(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
-	// CaptureExit is invoked when the processing of a message ends.
+	TxStartHook = func(vm *VMContext, tx *types.Transaction, from common.Address)
+
+	// TxEndHook is called after the execution of a transaction ends.
+	TxEndHook = func(receipt *types.Receipt, err error)
+
+	// StartHook is invoked when the processing of the root call starts.
+	StartHook = func(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
+
+	// EndHook is invoked when the processing of the top call ends.
+	// See docs for `ExitHook` for info on the `reverted` parameter.
+	EndHook = func(output []byte, gasUsed uint64, err error, reverted bool)
+
+	// EnterHook is invoked when the processing of a message starts.
+	EnterHook = func(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+
+	// ExitHook is invoked when the processing of a message ends.
 	// `revert` is true when there was an error during the execution.
 	// Exceptionally, before the homestead hardfork a contract creation that
 	// ran out of gas when attempting to persist the code to database did not
 	// count as a call failure and did not cause a revert of the call. This will
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
-	CaptureExit func(output []byte, gasUsed uint64, err error, reverted bool)
-	// Opcode level
-	CaptureState          func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
-	CaptureFault          func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
-	CaptureKeccakPreimage func(hash common.Hash, data []byte)
-	// Misc
-	OnGasChange func(old, new uint64, reason GasChangeReason)
+	ExitHook = func(output []byte, gasUsed uint64, err error, reverted bool)
+
+	// StateHook is invoked just prior to the execution of an opcode.
+	StateHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+
+	// FaultHook is invoked when an error occurs during the execution of an opcode.
+	FaultHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
+
+	// KeccakPreimageHook is invoked on the KECCAK256 opcode to provide the preimage for the hash.
+	KeccakPreimageHook = func(hash common.Hash, data []byte)
+
+	// GasChangeHook is invoked when the gas changes.
+	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
 	/*
 		- Chain events -
 	*/
-	OnBlockchainInit func(chainConfig *params.ChainConfig)
-	// OnBlockStart is called before executing `block`.
+
+	// BlockchainInitHook is called when the blockchain is initialized.
+	BlockchainInitHook = func(chainConfig *params.ChainConfig)
+
+	// BlockStartHook is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
-	OnBlockStart func(event BlockEvent)
-	OnBlockEnd   func(err error)
-	// OnSkippedBlock indicates a block was skipped during processing
+	BlockStartHook = func(event BlockEvent)
+
+	// BlockEndHook is called after executing a block.
+	BlockEndHook = func(err error)
+
+	// SkippedBlockHook indicates a block was skipped during processing
 	// due to it being known previously. This can happen e.g. when recovering
 	// from a crash.
-	OnSkippedBlock func(event BlockEvent)
-	OnGenesisBlock func(genesis *types.Block, alloc types.GenesisAlloc)
+	SkippedBlockHook = func(event BlockEvent)
+
+	// GenesisBlockHook is called when the genesis block is being processed.
+	GenesisBlockHook = func(genesis *types.Block, alloc types.GenesisAlloc)
 
 	/*
 		- State events -
 	*/
-	OnBalanceChange func(addr common.Address, prev, new *big.Int, reason BalanceChangeReason)
-	OnNonceChange   func(addr common.Address, prev, new uint64)
-	OnCodeChange    func(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
-	OnStorageChange func(addr common.Address, slot common.Hash, prev, new common.Hash)
-	OnLog           func(log *types.Log)
+
+	// BalanceChangeHook is called when the balance of an account changes.
+	BalanceChangeHook = func(addr common.Address, prev, new *big.Int, reason BalanceChangeReason)
+
+	// NonceChangeHook is called when the nonce of an account changes.
+	NonceChangeHook = func(addr common.Address, prev, new uint64)
+
+	// CodeChangeHook is called when the code of an account changes.
+	CodeChangeHook = func(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
+
+	// StorageChangeHook is called when the storage of an account changes.
+	StorageChangeHook = func(addr common.Address, slot common.Hash, prev, new common.Hash)
+
+	// LogHook is called when a log is emitted.
+	LogHook = func(log *types.Log)
+)
+
+type Hooks struct {
+	// VM events
+	CaptureTxStart        TxStartHook
+	CaptureTxEnd          TxEndHook
+	CaptureStart          StartHook
+	CaptureEnd            EndHook
+	CaptureEnter          EnterHook
+	CaptureExit           ExitHook
+	CaptureState          StateHook
+	CaptureFault          FaultHook
+	CaptureKeccakPreimage KeccakPreimageHook
+	OnGasChange           GasChangeHook
+	// Chain events
+	OnBlockchainInit BlockchainInitHook
+	OnBlockStart     BlockStartHook
+	OnBlockEnd       BlockEndHook
+	OnSkippedBlock   SkippedBlockHook
+	OnGenesisBlock   GenesisBlockHook
+	// State events
+	OnBalanceChange BalanceChangeHook
+	OnNonceChange   NonceChangeHook
+	OnCodeChange    CodeChangeHook
+	OnStorageChange StorageChangeHook
+	OnLog           LogHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
