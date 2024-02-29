@@ -215,7 +215,7 @@ func (m *meta) encode() []byte {
 // decode unpacks the meta object from byte stream.
 func (m *meta) decode(blob []byte) error {
 	if len(blob) < 1 {
-		return fmt.Errorf("no version tag")
+		return errors.New("no version tag")
 	}
 	switch blob[0] {
 	case stateHistoryVersion:
