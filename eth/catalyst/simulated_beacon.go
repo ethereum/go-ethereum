@@ -151,32 +151,20 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.feeRecipientLock.Unlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	var (
-		header   = c.eth.BlockChain().CurrentBlock()
-		number   = new(big.Int).Add(header.Number, big.NewInt(1))
-		isCancun = c.eth.BlockChain().Config().IsCancun(number, timestamp)
-	)
-	if c.curForkchoiceState.HeadBlockHash != header.Hash() {
+	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
 	var random [32]byte
 	rand.Read(random[:])
-	var (
-		payloadVersion = engine.PayloadV2
-		attrs          = &engine.PayloadAttributes{
-			Timestamp:             timestamp,
-			SuggestedFeeRecipient: feeRecipient,
-			Withdrawals:           withdrawals,
-			Random:                random,
-		}
-	)
-	if isCancun {
-		payloadVersion = engine.PayloadV3
-		attrs.BeaconRoot = &common.Hash{}
-	}
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, attrs, payloadVersion, true)
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
+		Timestamp:             timestamp,
+		SuggestedFeeRecipient: feeRecipient,
+		Withdrawals:           withdrawals,
+		Random:                random,
+		BeaconRoot:            &common.Hash{},
+	}, engine.PayloadV3, true)
 	if err != nil {
 		return err
 	}
@@ -200,27 +188,22 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 
-	// Mark the payload as canon
-	if isCancun {
-		blobHashes := make([]common.Hash, 0)
-		if envelope.BlobsBundle != nil {
-			hasher := sha256.New()
-			for _, commit := range envelope.BlobsBundle.Commitments {
-				var c kzg4844.Commitment
-				if len(commit) != len(c) {
-					return errors.New("invalid commitment length")
-				}
-				copy(c[:], commit)
-				blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
+	// Independently calculate the blob hashes from sidecars.
+	blobHashes := make([]common.Hash, 0)
+	if envelope.BlobsBundle != nil {
+		hasher := sha256.New()
+		for _, commit := range envelope.BlobsBundle.Commitments {
+			var c kzg4844.Commitment
+			if len(commit) != len(c) {
+				return errors.New("invalid commitment length")
 			}
+			copy(c[:], commit)
+			blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
 		}
-		if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
-			return err
-		}
-	} else {
-		if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
-			return err
-		}
+	}
+	// Mark the payload as canon
+	if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
+		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
