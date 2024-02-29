@@ -444,7 +444,7 @@ func importHistory(ctx *cli.Context) error {
 			return fmt.Errorf("no era1 files found in %s", dir)
 		}
 		if len(networks) > 1 {
-			return fmt.Errorf("multiple networks found, use a network flag to specify desired network")
+			return errors.New("multiple networks found, use a network flag to specify desired network")
 		}
 		network = networks[0]
 	}

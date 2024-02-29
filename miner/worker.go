@@ -947,7 +947,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if genParams.parentHash != (common.Hash{}) {
 		block := w.chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
-			return nil, fmt.Errorf("missing parent")
+			return nil, errors.New("missing parent")
 		}
 		parent = block.Header()
 	}

@@ -17,6 +17,7 @@
 package era
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -61,7 +62,7 @@ func (it *Iterator) Error() error {
 // Block returns the block for the iterator's current position.
 func (it *Iterator) Block() (*types.Block, error) {
 	if it.inner.Header == nil || it.inner.Body == nil {
-		return nil, fmt.Errorf("header and body must be non-nil")
+		return nil, errors.New("header and body must be non-nil")
 	}
 	var (
 		header types.Header
