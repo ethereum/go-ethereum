@@ -88,8 +88,8 @@ type AncientReaderOp interface {
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
 
-	// Tail returns the number of first stored item in the freezer.
-	// This number can also be interpreted as the total deleted item numbers.
+	// Tail returns the number of first stored item in the ancient store.
+	// This number can also be interpreted as the total deleted items.
 	Tail() (uint64, error)
 
 	// AncientSize returns the ancient size of the specified category.
@@ -101,7 +101,7 @@ type AncientReader interface {
 	AncientReaderOp
 
 	// ReadAncients runs the given read operation while ensuring that no writes take place
-	// on the underlying freezer.
+	// on the underlying ancient store.
 	ReadAncients(fn func(AncientReaderOp) error) (err error)
 }
 
@@ -141,11 +141,15 @@ type AncientWriteOp interface {
 	AppendRaw(kind string, number uint64, item []byte) error
 }
 
-// AncientStater wraps the Stat method of a backing data store.
+// AncientStater wraps the Stat method of a backing ancient store.
 type AncientStater interface {
-	// AncientDatadir returns the path of root ancient directory. Empty string
-	// will be returned if ancient store is not enabled at all. The returned
-	// path can be used to construct the path of other freezers.
+	// AncientDatadir returns the path of the ancient store directory.
+	//
+	// If the ancient store is not activated, an error is returned.
+	// If an ephemeral ancient store is used, an empty path is returned.
+	//
+	// The path returned by AncientDatadir can be used as the root path
+	// of the ancient store to construct paths for other sub ancient stores.
 	AncientDatadir() (string, error)
 }
 
@@ -171,15 +175,23 @@ type Stater interface {
 }
 
 // AncientStore contains all the methods required to allow handling different
-// ancient data stores backing immutable chain data store.
+// ancient data stores backing immutable data store.
 type AncientStore interface {
 	AncientReader
 	AncientWriter
 	io.Closer
 }
 
+// ResettableAncientStore extends the AncientStore interface by adding a Reset method.
+type ResettableAncientStore interface {
+	AncientStore
+
+	// Reset is designed to reset the entire ancient store to its default state.
+	Reset() error
+}
+
 // Database contains all the methods required by the high level database to not
-// only access the key-value data store but also the chain freezer.
+// only access the key-value data store but also the ancient chain store.
 type Database interface {
 	Reader
 	Writer

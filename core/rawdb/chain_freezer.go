@@ -39,26 +39,40 @@ const (
 	freezerBatchLimit = 30000
 )
 
-// chainFreezer is a wrapper of freezer with additional chain freezing feature.
-// The background thread will keep moving ancient chain segments from key-value
-// database to flat files for saving space on live database.
+// chainFreezer is a wrapper of chain ancient store with additional chain freezing
+// feature. The background thread will keep moving ancient chain segments from
+// key-value database to flat files for saving space on live database.
 type chainFreezer struct {
-	*Freezer
+	ethdb.AncientStore // Ancient store for storing cold chain segment
+
 	quit    chan struct{}
 	wg      sync.WaitGroup
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 }
 
-// newChainFreezer initializes the freezer for ancient chain data.
+// newChainFreezer initializes the freezer for ancient chain segment.
+//
+//   - if the empty directory is given, initializes the pure in-memory
+//     state freezer (e.g. dev mode).
+//   - if non-empty directory is given, initializes the regular file-based
+//     state freezer.
 func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFreezer, error) {
-	freezer, err := NewChainFreezer(datadir, namespace, readonly)
+	var (
+		err     error
+		freezer ethdb.AncientStore
+	)
+	if datadir == "" {
+		freezer = NewMemoryFreezer(readonly, chainFreezerNoSnappy)
+	} else {
+		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return &chainFreezer{
-		Freezer: freezer,
-		quit:    make(chan struct{}),
-		trigger: make(chan chan struct{}),
+		AncientStore: freezer,
+		quit:         make(chan struct{}),
+		trigger:      make(chan chan struct{}),
 	}, nil
 }
 
@@ -70,7 +84,7 @@ func (f *chainFreezer) Close() error {
 		close(f.quit)
 	}
 	f.wg.Wait()
-	return f.Freezer.Close()
+	return f.AncientStore.Close()
 }
 
 // readHeadNumber returns the number of chain head block. 0 is returned if the
@@ -167,7 +181,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			log.Debug("Current full block not old enough to freeze", "err", err)
 			continue
 		}
-		frozen := f.frozen.Load()
+		frozen, _ := f.Ancients() // no error will occur, safe to ignore
 
 		// Short circuit if the blocks below threshold are already frozen.
 		if frozen != 0 && frozen-1 >= threshold {
@@ -190,7 +204,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
-		// Batch of blocks have been frozen, flush them before wiping from leveldb
+		// Batch of blocks have been frozen, flush them before wiping from key-value store
 		if err := f.Sync(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
@@ -210,7 +224,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
-		frozen = f.frozen.Load() // Needs reload after during freezeRange
+		frozen, _ = f.Ancients() // Needs reload after during freezeRange
 		for number := first; number < frozen; number++ {
 			// Always keep the genesis block in active database
 			if number != 0 {

@@ -178,22 +178,20 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		overflow bool
 		oldest   uint64
 	)
-	if dl.db.freezer != nil {
-		err := writeHistory(dl.db.freezer, bottom)
-		if err != nil {
-			return nil, err
-		}
-		// Determine if the persisted history object has exceeded the configured
-		// limitation, set the overflow as true if so.
-		tail, err := dl.db.freezer.Tail()
-		if err != nil {
-			return nil, err
-		}
-		limit := dl.db.config.StateHistory
-		if limit != 0 && bottom.stateID()-tail > limit {
-			overflow = true
-			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
-		}
+	err := writeHistory(dl.db.freezer, bottom)
+	if err != nil {
+		return nil, err
+	}
+	// Determine if the persisted history object has exceeded the configured
+	// limitation, set the overflow as true if so.
+	tail, err := dl.db.freezer.Tail()
+	if err != nil {
+		return nil, err
+	}
+	limit := dl.db.config.StateHistory
+	if limit != 0 && bottom.stateID()-tail > limit {
+		overflow = true
+		oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.stale = true

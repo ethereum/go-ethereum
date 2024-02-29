@@ -130,14 +130,14 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly   bool                     // Flag if database is opened in read only mode
-	waitSync   bool                     // Flag if database is deactivated due to initial state sync
-	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
-	config     *Config                  // Configuration for database
-	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
-	tree       *layerTree               // The group for all known layers
-	freezer    *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
-	lock       sync.RWMutex             // Lock to prevent mutations from happening at the same time
+	readOnly   bool                         // Flag if database is opened in read only mode
+	waitSync   bool                         // Flag if database is deactivated due to initial state sync
+	bufferSize int                          // Memory allowance (in bytes) for caching dirty nodes
+	config     *Config                      // Configuration for database
+	diskdb     ethdb.Database               // Persistent storage for matured trie nodes
+	tree       *layerTree                   // The group for all known layers
+	freezer    ethdb.ResettableAncientStore // Ancient store for storing state histories
+	lock       sync.RWMutex                 // Lock to prevent mutations from happening at the same time
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -159,45 +159,21 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
-	// Open the freezer for state history if the passed database contains an
-	// ancient store. Otherwise, all the relevant functionalities are disabled.
-	//
-	// Because the freezer can only be opened once at the same time, this
-	// mechanism also ensures that at most one **non-readOnly** database
-	// is opened at the same time to prevent accidental mutation.
-	if ancient, err := diskdb.AncientDatadir(); err == nil && ancient != "" && !db.readOnly {
-		freezer, err := rawdb.NewStateFreezer(ancient, false)
-		if err != nil {
-			log.Crit("Failed to open state history freezer", "err", err)
-		}
-		db.freezer = freezer
+	// Open the freezer for state history. This mechanism ensures that
+	// only one database instance can be opened at a time to prevent
+	// accidental mutation.
+	ancient, err := diskdb.AncientDatadir()
+	if err != nil {
+		log.Crit("Ancient store is not enabled")
+	}
+	freezer, err := rawdb.NewStateFreezer(ancient, false)
+	if err != nil {
+		log.Crit("Failed to open state history freezer", "err", err)
+	}
+	db.freezer = freezer
 
-		diskLayerID := db.tree.bottom().stateID()
-		if diskLayerID == 0 {
-			// Reset the entire state histories in case the trie database is
-			// not initialized yet, as these state histories are not expected.
-			frozen, err := db.freezer.Ancients()
-			if err != nil {
-				log.Crit("Failed to retrieve head of state history", "err", err)
-			}
-			if frozen != 0 {
-				err := db.freezer.Reset()
-				if err != nil {
-					log.Crit("Failed to reset state histories", "err", err)
-				}
-				log.Info("Truncated extraneous state history")
-			}
-		} else {
-			// Truncate the extra state histories above in freezer in case
-			// it's not aligned with the disk layer.
-			pruned, err := truncateFromHead(db.diskdb, freezer, diskLayerID)
-			if err != nil {
-				log.Crit("Failed to truncate extra state histories", "err", err)
-			}
-			if pruned != 0 {
-				log.Warn("Truncated extra state histories", "number", pruned)
-			}
-		}
+	if err := db.repair(); err != nil {
+		log.Crit("Failed to repair pathdb", "err", err)
 	}
 	// Disable database in case node is still in the initial state sync stage.
 	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
@@ -206,6 +182,39 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		}
 	}
 	return db
+}
+
+// repair truncates leftover state history objects, which may occur due to an
+// unclean shutdown or other unexpected reasons.
+func (db *Database) repair() error {
+	// Reset the entire state histories if the trie database is not initialized
+	// yet. This action is necessary because these state histories are not
+	// expected to exist without an initialized trie database.
+	id := db.tree.bottom().stateID()
+	if id == 0 {
+		frozen, err := db.freezer.Ancients()
+		if err != nil {
+			log.Crit("Failed to retrieve head of state history", "err", err)
+		}
+		if frozen != 0 {
+			err := db.freezer.Reset()
+			if err != nil {
+				log.Crit("Failed to reset state histories", "err", err)
+			}
+			log.Info("Truncated extraneous state history")
+		}
+		return nil
+	}
+	// Truncate the extra state histories above in freezer in case it's not
+	// aligned with the disk layer. It might happen after a unclean shutdown.
+	pruned, err := truncateFromHead(db.diskdb, db.freezer, id)
+	if err != nil {
+		log.Crit("Failed to truncate extra state histories", "err", err)
+	}
+	if pruned != 0 {
+		log.Warn("Truncated extra state histories", "number", pruned)
+	}
+	return nil
 }
 
 // Reader retrieves a layer belonging to the given state root.
@@ -314,10 +323,8 @@ func (db *Database) Enable(root common.Hash) error {
 	// all root->id mappings should be removed as well. Since
 	// mappings can be huge and might take a while to clear
 	// them, just leave them in disk and wait for overwriting.
-	if db.freezer != nil {
-		if err := db.freezer.Reset(); err != nil {
-			return err
-		}
+	if err := db.freezer.Reset(); err != nil {
+		return err
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
@@ -340,9 +347,6 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 	// Short circuit if rollback operation is not supported.
 	if err := db.modifyAllowed(); err != nil {
 		return err
-	}
-	if db.freezer == nil {
-		return errors.New("state rollback is non-supported")
 	}
 	// Short circuit if the target state is not recoverable.
 	root = types.TrieRootHash(root)
@@ -392,13 +396,6 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
-	// This is a temporary workaround for the unavailability of the freezer in
-	// dev mode. As a consequence, the Pathdb loses the ability for deep reorg
-	// in certain cases.
-	// TODO(rjl493456442): Implement the in-memory ancient store.
-	if db.freezer == nil {
-		return false
-	}
 	// Ensure the requested state is a canonical state and all state
 	// histories in range [id+1, disklayer.ID] are present and complete.
 	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
@@ -421,11 +418,6 @@ func (db *Database) Close() error {
 
 	// Release the memory held by clean cache.
 	db.tree.bottom().resetCache()
-
-	// Close the attached state history freezer.
-	if db.freezer == nil {
-		return nil
-	}
 	return db.freezer.Close()
 }
 

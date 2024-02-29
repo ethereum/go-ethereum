@@ -62,7 +62,7 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 //     reserving it for go-ethereum. This would also reduce the memory requirements
 //     of Geth, and thus also GC overhead.
 type Freezer struct {
-	frozen atomic.Uint64 // Number of blocks already frozen
+	frozen atomic.Uint64 // Number of items already frozen
 	tail   atomic.Uint64 // Number of the first stored item in the freezer
 
 	// This lock synchronizes writers and the truncate operation, as well as
@@ -74,12 +74,6 @@ type Freezer struct {
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock *flock.Flock             // File-system lock to prevent double opens
 	closeOnce    sync.Once
-}
-
-// NewChainFreezer is a small utility method around NewFreezer that sets the
-// default parameters for the chain storage.
-func NewChainFreezer(datadir string, namespace string, readonly bool) (*Freezer, error) {
-	return NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
