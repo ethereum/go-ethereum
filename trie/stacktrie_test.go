@@ -381,7 +381,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 	}
 }
 
-func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
+func buildPartialTree(entries []*kv) map[string]common.Hash {
 	var (
 		options = NewStackTrieOptions()
 		nodes   = make(map[string]common.Hash)
@@ -456,7 +456,7 @@ func TestPartialStackTrie(t *testing.T) {
 		tr.Commit()
 
 		for j := 0; j < 100; j++ {
-			for path, hash := range buildPartialTree(entries, t) {
+			for path, hash := range buildPartialTree(entries) {
 				if nodes[path] != hash {
 					t.Errorf("%v, want %x, got %x", []byte(path), nodes[path], hash)
 				}

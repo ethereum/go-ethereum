@@ -361,7 +361,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 	}
 }
 
-func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
+func allBlobTxs(addr common.Address, _ *params.ChainConfig) []txData {
 	return []txData{
 		{
 			Tx: &types.BlobTx{
@@ -1244,7 +1244,7 @@ func TestFillBlobTransaction(t *testing.T) {
 			if len(tc.err) > 0 {
 				if err == nil {
 					t.Fatalf("missing error. want: %s", tc.err)
-				} else if err != nil && err.Error() != tc.err {
+				} else if err.Error() != tc.err {
 					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
 				}
 				return

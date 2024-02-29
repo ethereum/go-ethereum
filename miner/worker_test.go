@@ -114,7 +114,7 @@ type testWorkerBackend struct {
 	genesis *core.Genesis
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database) *testWorkerBackend {
 	var gspec = &core.Genesis{
 		Config: chainConfig,
 		Alloc:  types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
@@ -159,8 +159,8 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database) (*worker, *testWorkerBackend) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db)
 	backend.txPool.Add(pendingTxs, true, false)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
@@ -176,7 +176,7 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	config.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	engine := clique.New(config.Clique, db)
 
-	w, b := newTestWorker(t, &config, engine, db, 0)
+	w, b := newTestWorker(t, &config, engine, db)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -223,7 +223,7 @@ func TestEmptyWorkClique(t *testing.T) {
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase())
 	defer w.close()
 
 	taskCh := make(chan struct{}, 2)
@@ -268,7 +268,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase())
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -372,7 +372,7 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase())
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
