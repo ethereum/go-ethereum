@@ -30,7 +30,7 @@ type Iterator struct {
 	inner *RawIterator
 }
 
-// NewRawIterator returns a new Iterator instance. Next must be immediately
+// NewIterator returns a new Iterator instance. Next must be immediately
 // called on new iterators to load the first item.
 func NewIterator(e *Era) (*Iterator, error) {
 	inner, err := NewRawIterator(e)
