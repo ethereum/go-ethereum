@@ -234,12 +234,14 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+// GetRawReceiptsByHash retrieves the receipts for all transactions in a given block
+// without deriving the internal fields and the Bloom.
+func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) rlp.RawValue {
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
-	return rawdb.ReadRawReceipts(bc.db, hash, *number)
+	return rawdb.ReadReceiptsRLP(bc.db, hash, *number)
 }
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until

@@ -66,10 +66,10 @@ func (s *Suite) dialAs(key *ecdsa.PrivateKey) (*Conn, error) {
 		return nil, err
 	}
 	conn.caps = []p2p.Cap{
-		{Name: "eth", Version: 67},
 		{Name: "eth", Version: 68},
+		{Name: "eth", Version: 69},
 	}
-	conn.ourHighestProtoVersion = 68
+	conn.ourHighestProtoVersion = 69
 	return &conn, nil
 }
 

@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,14 +42,14 @@ func (p *Peer) Handshake(network uint64, head common.Hash, genesis common.Hash, 
 	var status StatusPacket // safe to read after two values have been received from errc
 
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
+		pkt := &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
-			TD:              new(big.Int), // unknown for post-merge tail=pruned networks
 			Head:            head,
 			Genesis:         genesis,
 			ForkID:          forkID,
-		})
+		}
+		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
 	go func() {
 		errc <- p.readStatus(network, &status, genesis, forkFilter)

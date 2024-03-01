@@ -255,7 +255,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
-	blobs := eth.ServiceGetReceiptsQuery(dlp.chain, hashes)
+	blobs := eth.ServiceGetReceiptsQuery68(dlp.chain, hashes)
 
 	receipts := make([][]*types.Receipt, len(blobs))
 	for i, blob := range blobs {
