@@ -699,3 +699,41 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		t.Errorf("pooled transaction mismatch: %v", err)
 	}
 }
+
+func TestTransformReceipts(t *testing.T) {
+	tests := []struct {
+		input  []types.ReceiptForStorage
+		txs    []*types.Transaction
+		output []receiptForNetwork
+	}{
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.LegacyTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil, Type: 2}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil, Type: 1}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}}},
+			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}, Type: 1}},
+		},
+	}
+
+	for i, test := range tests {
+		in, _ := rlp.EncodeToBytes(test.input)
+		have := transformReceipts(in, test.txs)
+		out, _ := rlp.EncodeToBytes(test.output)
+		if !bytes.Equal(have, out) {
+			t.Fatalf("transforming receipt mismatch, test %v: want %v have %v", i, out, have)
+		}
+	}
+}

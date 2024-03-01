@@ -258,7 +258,7 @@ func (r *Receipt) Size() common.StorageSize {
 }
 
 // ReceiptForStorage is a wrapper around a Receipt with RLP serialization
-// that omits the Bloom field and deserialization that re-computes it.
+// that omits the Bloom field. The Bloom field is recomputed by DeriveFields.
 type ReceiptForStorage Receipt
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
@@ -291,7 +291,6 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom((*Receipt)(r))
 
 	return nil
 }
@@ -372,6 +371,9 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			rs[i].Logs[j].Index = logIndex
 			logIndex++
 		}
+		// also derive the Bloom if not derived yet
+		rs[i].Bloom = CreateBloom(rs[i])
 	}
+
 	return nil
 }

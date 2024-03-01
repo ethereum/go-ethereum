@@ -377,7 +377,11 @@ func TestBlockReceiptStorage(t *testing.T) {
 		t.Fatalf("receipts returned when body was deleted: %v", rs)
 	}
 	// Ensure that receipts without metadata can be returned without the block body too
-	if err := checkReceiptsRLP(ReadRawReceipts(db, hash, 0), receipts); err != nil {
+	raw := ReadRawReceipts(db, hash, 0)
+	for _, r := range raw {
+		r.Bloom = types.CreateBloom(r)
+	}
+	if err := checkReceiptsRLP(raw, receipts); err != nil {
 		t.Fatal(err)
 	}
 	// Sanity check that body alone without the receipt is a full purge
