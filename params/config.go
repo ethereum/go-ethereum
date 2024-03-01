@@ -241,31 +241,74 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainId: big.NewInt(1337),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock: nil,
+		DAOForkSupport: false,
+		EIP150Block: big.NewInt(0),
+		EIP150Hash: common.Hash{},
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash: new(EthashConfig),
+		Clique: nil,
+		XDPoS: nil,
+	}
 
 	// AllXDPoSProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the XDPoS consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 900}}
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 900}, nil}
+	AllXDPoSProtocolChanges  = &ChainConfig{
+		ChainId: big.NewInt(89),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock: nil,
+		DAOForkSupport: false,
+		EIP150Block: big.NewInt(0),
+		EIP150Hash: common.Hash{},
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash: nil,
+		Clique: nil,
+		XDPoS: &XDPoSConfig{Period: 0, Epoch: 900},
+	}
+
+	AllCliqueProtocolChanges = &ChainConfig{
+		ChainId: big.NewInt(1337),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock: nil,
+		DAOForkSupport: false,
+		EIP150Block: big.NewInt(0),
+		EIP150Hash: common.Hash{},
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash: nil,
+		Clique: &CliqueConfig{Period: 0, Epoch: 900},
+		XDPoS: nil,
+	}
 
 	// XDPoS config with v2 engine after block 901
 	TestXDPoSMockChainConfig = &ChainConfig{
-		big.NewInt(1337),
-		big.NewInt(0),
-		nil,
-		false,
-		big.NewInt(0),
-		common.Hash{},
-		big.NewInt(0),
-		big.NewInt(0),
-		big.NewInt(0),
-		nil,
-		new(EthashConfig),
-		nil,
-		&XDPoSConfig{
+		ChainId: big.NewInt(1337),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock: nil,
+		DAOForkSupport: false,
+		EIP150Block: big.NewInt(0),
+		EIP150Hash: common.Hash{},
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash: new(EthashConfig),
+		Clique: nil,
+		XDPoS: &XDPoSConfig{
 			Epoch:               900,
 			Gap:                 450,
 			SkipV1Validation:    true,
@@ -279,7 +322,21 @@ var (
 		},
 	}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	TestChainConfig = &ChainConfig{
+		ChainId: big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock: nil,
+		DAOForkSupport: false,
+		EIP150Block: big.NewInt(0),
+		EIP150Hash: common.Hash{},
+		EIP155Block: big.NewInt(0),
+		EIP158Block: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash: new(EthashConfig),
+		Clique: nil,
+		XDPoS: nil,
+	}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
