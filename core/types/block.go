@@ -93,6 +93,9 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	// ExitsHash was added by EIP-7002 and is ignored in legacy headers.
+	ExitsHash *common.Hash `json:"exitsRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -154,10 +157,17 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions, no uncles and no withdrawals.
 func (h *Header) EmptyBody() bool {
-	if h.WithdrawalsHash != nil {
-		return h.TxHash == EmptyTxsHash && *h.WithdrawalsHash == EmptyWithdrawalsHash
+	empty := true
+	if h.ExitsHash != nil && *h.ExitsHash != EmptyExitsHash {
+		empty = false
 	}
-	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash
+	if h.WithdrawalsHash != nil && *h.WithdrawalsHash != EmptyWithdrawalsHash {
+		empty = false
+	}
+	if h.TxHash != EmptyTxsHash || h.UncleHash != EmptyUncleHash {
+		empty = false
+	}
+	return empty
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
@@ -171,6 +181,7 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Exits        []*Exit       `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -195,6 +206,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
+	exits        Exits
 
 	// caches
 	hash atomic.Value
@@ -212,6 +224,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
+	Exits       []*Exit       `rlp:"optional"`
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -272,6 +285,21 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	return b.WithWithdrawals(withdrawals)
 }
 
+// NewBlockWithExits creates a new block with exits.
+func NewBlockWithExits(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, withdrawals []*Withdrawal, exits []*Exit, hasher TrieHasher) *Block {
+	b := NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, hasher)
+
+	if exits == nil {
+		b.header.ExitsHash = nil
+	} else if len(exits) == 0 {
+		b.header.ExitsHash = &EmptyExitsHash
+	} else {
+		h := DeriveSha(Exits(exits), hasher)
+		b.header.ExitsHash = &h
+	}
+	return b.WithExits(exits)
+}
+
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
@@ -304,6 +332,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	if h.ExitsHash != nil {
+		cpy.ExitsHash = new(common.Hash)
+		*cpy.ExitsHash = *h.ExitsHash
+	}
 	return &cpy
 }
 
@@ -314,7 +346,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
+	b.header, b.uncles, b.transactions, b.withdrawals, b.exits = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals, eb.Exits
 	b.size.Store(rlp.ListSize(size))
 	return nil
 }
@@ -326,13 +358,14 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
+		Exits:       b.exits,
 	})
 }
 
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.exits}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -341,6 +374,7 @@ func (b *Block) Body() *Body {
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Exits() Exits               { return b.exits }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -403,6 +437,8 @@ func (b *Block) BlobGasUsed() *uint64 {
 	return blobGasUsed
 }
 
+func (b *Block) ExitsHash() *common.Hash { return b.header.ExitsHash }
+
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previously cached value.
 func (b *Block) Size() uint64 {
@@ -460,6 +496,7 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
 		withdrawals:  b.withdrawals,
+		exits:        b.exits,
 	}
 	copy(block.transactions, transactions)
 	for i := range uncles {
@@ -474,10 +511,26 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		exits:        b.exits,
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
 		copy(block.withdrawals, withdrawals)
+	}
+	return block
+}
+
+// WithExits returns a copy of the block contianing the given exits.
+func (b *Block) WithExits(exits []*Exit) *Block {
+	block := &Block{
+		header:       b.header,
+		transactions: b.transactions,
+		uncles:       b.uncles,
+		withdrawals:  b.withdrawals,
+	}
+	if exits != nil {
+		block.exits = make([]*Exit, len(exits))
+		copy(block.exits, exits)
 	}
 	return block
 }
