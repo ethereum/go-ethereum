@@ -426,8 +426,30 @@ func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 }
 
 func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
-	// TODO (MariusVanDerWijden) implement!
-	return nil
+	// A batch of receipts arrived to one of our previous requests
+	res := new(ReceiptsPacket)
+	if err := msg.Decode(res); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// calculate the bloom filter before dispatching
+	for _, receipts := range res.ReceiptsResponse {
+		for _, receipt := range receipts {
+			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		}
+	}
+	metadata := func() interface{} {
+		hasher := trie.NewStackTrie(nil)
+		hashes := make([]common.Hash, len(res.ReceiptsResponse))
+		for i, receipt := range res.ReceiptsResponse {
+			hashes[i] = types.DeriveSha(types.Receipts(receipt), hasher)
+		}
+		return hashes
+	}
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: ReceiptsMsg,
+		Res:  &res.ReceiptsResponse,
+	}, metadata)
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
