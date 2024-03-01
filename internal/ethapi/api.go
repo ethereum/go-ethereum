@@ -124,6 +124,11 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 	return results, nil
 }
 
+func (s *EthereumAPI) BlobBaseFee(ctx context.Context) (*hexutil.Big, error) {
+	blobBaseFee, err := s.b.BlobBaseFee(ctx)
+	return (*hexutil.Big)(blobBaseFee), err
+}
+
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
