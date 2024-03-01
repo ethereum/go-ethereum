@@ -242,6 +242,16 @@ func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
+func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the block receipts retrieval message
+	var query GetReceiptsPacket
+	if err := msg.Decode(&query); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	response := ServiceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
+	return peer.ReplyReceiptsRLP(query.RequestId, response)
+}
+
 // ServiceGetReceiptsQuery assembles the response to a receipt query. It is
 // exposed to allow external packages to test protocol behavior.
 func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
@@ -257,6 +267,38 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) [
 		}
 		// Retrieve the requested block's receipts
 		results := chain.GetReceiptsByHash(hash)
+		if results == nil {
+			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+				continue
+			}
+		}
+		// If known, encode and queue for response packet
+		if encoded, err := rlp.EncodeToBytes(results); err != nil {
+			log.Error("Failed to encode receipt", "err", err)
+		} else {
+			receipts = append(receipts, encoded)
+			bytes += len(encoded)
+		}
+	}
+	return receipts
+}
+
+// ServiceGetReceiptsQuery69 assembles the response to a receipt query. It is
+// exposed to allow external packages to test protocol behavior.
+// It does not send the bloom filters for the receipts
+func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+	// Gather state data until the fetch or network limits is reached
+	var (
+		bytes    int
+		receipts []rlp.RawValue
+	)
+	for lookups, hash := range query {
+		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
+			lookups >= 2*maxReceiptsServe {
+			break
+		}
+		// Retrieve the requested block's receipts
+		results := chain.GetRawReceiptsByHash(hash)
 		if results == nil {
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 				continue
@@ -381,6 +423,11 @@ func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 		code: ReceiptsMsg,
 		Res:  &res.ReceiptsResponse,
 	}, metadata)
+}
+
+func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
+	// TODO (MariusVanDerWijden) implement!
+	return nil
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
