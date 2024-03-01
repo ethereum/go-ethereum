@@ -38,6 +38,7 @@ type canonicalChain struct {
 	lock             sync.Mutex
 	headTracker      *light.HeadTracker
 	blocksAndHeaders *blocksAndHeaders
+	newHeadCb        func(*types.Header)
 
 	head, finality *types.Header
 	recent         map[uint64]common.Hash           // nil until initialized
@@ -46,10 +47,11 @@ type canonicalChain struct {
 	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor finalized
 }
 
-func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders) *canonicalChain {
+func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(*types.Header)) *canonicalChain {
 	return &canonicalChain{
 		headTracker:      headTracker,
 		blocksAndHeaders: blocksAndHeaders,
+		newHeadCb:        newHeadCb,
 		finalized:        lru.NewCache[uint64, common.Hash](10000),
 		requests:         newRequestMap[uint64, common.Hash](),
 	}
@@ -57,15 +59,17 @@ func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksA
 
 // Process implements request.Module in order to get notified about new heads.
 func (c *canonicalChain) Process(requester request.Requester, events []request.Event) {
-	if optimistic, ok := c.headTracker.ValidatedOptimistic(); ok {
-		head := optimistic.Attested.ExecHeader()
-		c.setHead(head)
-		c.blocksAndHeaders.addHeader(head)
-	}
 	if finality, ok := c.headTracker.ValidatedFinality(); ok {
 		finalized := finality.Finalized.ExecHeader()
 		c.setFinality(finalized)
 		c.blocksAndHeaders.addHeader(finalized)
+	}
+	if optimistic, ok := c.headTracker.ValidatedOptimistic(); ok {
+		head := optimistic.Attested.ExecHeader()
+		c.blocksAndHeaders.addHeader(head)
+		if c.setHead(head) {
+			c.newHeadCb(head)
+		}
 	}
 }
 
@@ -84,11 +88,14 @@ func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Has
 	return c.requests.waitForValue(ctx, number, ch)
 }
 
-func (c *canonicalChain) setHead(head *types.Header) {
+func (c *canonicalChain) setHead(head *types.Header) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	headNum, headHash := head.Number.Uint64(), head.Hash()
+	if c.head != nil && c.head.Hash() == headHash {
+		return false
+	}
 	if c.recent == nil || c.head == nil || c.head.Number.Uint64()+1 != headNum || headHash != head.ParentHash {
 		c.recent = make(map[uint64]common.Hash)
 		if headNum > 0 {
@@ -108,6 +115,7 @@ func (c *canonicalChain) setHead(head *types.Header) {
 		c.recentTail++
 	}
 	c.requests.deliver(headNum, headHash, nil)
+	return true
 }
 
 func (c *canonicalChain) setFinality(finality *types.Header) {

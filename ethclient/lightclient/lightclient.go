@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	ssync "sync"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/beacon/light"
@@ -35,6 +36,8 @@ type Client struct {
 	scheduler        *request.Scheduler
 	canonicalChain   *canonicalChain
 	blocksAndHeaders *blocksAndHeaders
+	headSubLock      ssync.Mutex
+	headSubs         map[*headSub]struct{}
 }
 
 func NewClient(config light.ClientConfig, db ethdb.Database, rpcClient *rpc.Client) *Client {
@@ -47,12 +50,13 @@ func NewClient(config light.ClientConfig, db ethdb.Database, rpcClient *rpc.Clie
 	//chainHeadFeed := new(event.Feed)
 	scheduler := request.NewScheduler()
 	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
-	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders)
 	client := &Client{
 		scheduler:        scheduler,
 		blocksAndHeaders: blocksAndHeaders,
-		canonicalChain:   canonicalChain,
+		headSubs:         make(map[*headSub]struct{}),
 	}
+	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders, client.broadcastNewHead)
+	client.canonicalChain = canonicalChain
 
 	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
@@ -143,5 +147,42 @@ func (c *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, 
 }
 
 func (c *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return nil, nil //TODO
+	sub := &headSub{
+		client: c,
+		headCh: ch,
+		errCh:  make(chan error, 1),
+	}
+	c.headSubLock.Lock()
+	c.headSubs[sub] = struct{}{}
+	c.headSubLock.Unlock()
+	return sub, nil
+}
+
+func (c *Client) broadcastNewHead(head *types.Header) {
+	c.headSubLock.Lock()
+	for sub := range c.headSubs {
+		sub.headCh <- head
+	}
+	c.headSubLock.Unlock()
+}
+
+func (c *Client) unsubscribeNewHead(sub *headSub) {
+	c.headSubLock.Lock()
+	delete(c.headSubs, sub)
+	c.headSubLock.Unlock()
+}
+
+type headSub struct {
+	client *Client
+	headCh chan<- *types.Header
+	errCh  chan error
+}
+
+func (h *headSub) Unsubscribe() {
+	h.client.unsubscribeNewHead(h)
+	close(h.errCh)
+}
+
+func (h *headSub) Err() <-chan error {
+	return h.errCh
 }
