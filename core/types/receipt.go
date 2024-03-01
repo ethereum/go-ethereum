@@ -291,7 +291,6 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
 	return nil
 }
@@ -372,6 +371,9 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			rs[i].Logs[j].Index = logIndex
 			logIndex++
 		}
+		// also derive the Bloom if not derived yet
+		rs[i].Bloom = CreateBloom(Receipts{(*Receipt)(rs[i])})
 	}
+
 	return nil
 }
