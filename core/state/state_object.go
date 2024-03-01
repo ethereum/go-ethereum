@@ -306,9 +306,6 @@ func (self *stateObject) setBalance(amount *big.Int) {
 	}
 }
 
-// Return the gas back to the origin. Used by the Virtual machine or Closures
-func (c *stateObject) ReturnGas(gas *big.Int) {}
-
 func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *stateObject {
 	stateObject := newObject(db, self.address, self.data, onDirty)
 	if self.trie != nil {

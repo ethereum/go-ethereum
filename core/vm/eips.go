@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 // EnableEIP enables the given EIP on the config.
@@ -51,17 +52,16 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = operation{
+	jt[SELFBALANCE] = &operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	balance := interpreter.intPool.get().Set(interpreter.evm.StateDB.GetBalance(callContext.contract.Address()))
+	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(callContext.contract.Address()))
 	callContext.stack.push(balance)
 	return nil, nil
 }
@@ -70,18 +70,17 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = operation{
+	jt[CHAINID] = &operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	chainId := interpreter.intPool.get().Set(interpreter.evm.chainConfig.ChainId)
+	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainId)
 	callContext.stack.push(chainId)
 	return nil, nil
 }
