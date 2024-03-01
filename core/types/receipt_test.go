@@ -296,6 +296,13 @@ var (
 	}
 )
 
+func init() {
+	// Correctly compute the bloom filters
+	for _, receipt := range receipts {
+		receipt.Bloom = CreateBloom(Receipts{receipt})
+	}
+}
+
 func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
 	var r Receipt
@@ -511,6 +518,7 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.EffectiveGasPrice = big.NewInt(0)
 	cpy.BlobGasUsed = 0
 	cpy.BlobGasPrice = nil
+	cpy.Bloom = CreateBloom(Receipts{&cpy})
 	return &cpy
 }
 

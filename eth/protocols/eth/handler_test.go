@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"io"
 	"math"
 	"math/big"
 	"math/rand"
@@ -575,4 +576,74 @@ func FuzzEthProtocolHandlers(f *testing.F) {
 		}
 		handler(backend, decoder{msg: msg}, peer.Peer)
 	})
+}
+
+type receiptForNetwork struct {
+	Type    byte
+	Status  uint64
+	GasUsed uint64
+	Logs    []*types.Log
+}
+
+func (r *receiptForNetwork) EncodeRLP(_w io.Writer) error {
+	data := &types.ReceiptForStorage{Status: r.Status, CumulativeGasUsed: r.GasUsed, Logs: r.Logs}
+	if r.Type == types.LegacyTxType {
+		return rlp.Encode(_w, data)
+	}
+	w := rlp.NewEncoderBuffer(_w)
+	outerList := w.List()
+	w.Write([]byte{r.Type})
+	if r.Status == types.ReceiptStatusSuccessful {
+		w.Write([]byte{0x01})
+	} else {
+		w.Write([]byte{0x00})
+	}
+	w.WriteUint64(r.GasUsed)
+	logList := w.List()
+	for _, log := range r.Logs {
+		if err := log.EncodeRLP(w); err != nil {
+			return err
+		}
+	}
+	w.ListEnd(logList)
+	w.ListEnd(outerList)
+	return w.Flush()
+}
+
+func TestTransformReceipts(t *testing.T) {
+	tests := []struct {
+		input  []types.ReceiptForStorage
+		txs    []*types.Transaction
+		output []receiptForNetwork
+	}{
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.LegacyTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil, Type: 2}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
+			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: nil, Type: 1}},
+		},
+		{
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}}},
+			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+			output: []receiptForNetwork{{GasUsed: 123, Status: 1, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}, Type: 1}},
+		},
+	}
+
+	for i, test := range tests {
+		in, _ := rlp.EncodeToBytes(test.input)
+		have := transformReceipts(in, test.txs)
+		out, _ := rlp.EncodeToBytes(test.output)
+		if !bytes.Equal(have, out) {
+			t.Fatalf("transforming receipt mismatch, test %v: want %v have %v", i, out, have)
+		}
+	}
 }
