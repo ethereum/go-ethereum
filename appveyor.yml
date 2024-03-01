@@ -55,3 +55,7 @@ for:
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
       - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short
+    artifacts:
+      - path: geth.exe 
+        name: geth
+        type: zip
