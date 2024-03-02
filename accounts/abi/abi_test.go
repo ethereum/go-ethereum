@@ -983,7 +983,7 @@ func TestABI_MethodById(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodById(m.ID)
+		m2, err := abi.MethodByID(m.ID)
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
@@ -993,17 +993,17 @@ func TestABI_MethodById(t *testing.T) {
 		}
 	}
 	// test unsuccessful lookups
-	if _, err = abi.MethodById(crypto.Keccak256()); err == nil {
+	if _, err = abi.MethodByID(crypto.Keccak256()); err == nil {
 		t.Error("Expected error: no method with this id")
 	}
 	// Also test empty
-	if _, err := abi.MethodById([]byte{0x00}); err == nil {
+	if _, err := abi.MethodByID([]byte{0x00}); err == nil {
 		t.Errorf("Expected error, too short to decode data")
 	}
-	if _, err := abi.MethodById([]byte{}); err == nil {
+	if _, err := abi.MethodByID([]byte{}); err == nil {
 		t.Errorf("Expected error, too short to decode data")
 	}
-	if _, err := abi.MethodById(nil); err == nil {
+	if _, err := abi.MethodByID(nil); err == nil {
 		t.Errorf("Expected error, nil is short to decode data")
 	}
 }

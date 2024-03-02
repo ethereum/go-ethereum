@@ -103,7 +103,7 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 	if err != nil {
 		return nil, fmt.Errorf("invalid method signature (%q): %v", unescapedAbidata, err)
 	}
-	method, err := abispec.MethodById(sigdata)
+	method, err := abispec.MethodByID(sigdata)
 	if err != nil {
 		return nil, err
 	}

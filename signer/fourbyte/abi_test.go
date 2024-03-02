@@ -33,7 +33,7 @@ func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
 	}
 	cd := common.Hex2Bytes(calldata)
 	sigdata, argdata := cd[:4], cd[4:]
-	method, err := abispec.MethodById(sigdata)
+	method, err := abispec.MethodByID(sigdata)
 	if err != nil {
 		t.Fatal(err)
 	}
