@@ -45,6 +45,8 @@ var TIPXDCX = big.NewInt(225000)
 var TIPXDCXLending = big.NewInt(225000)
 var TIPXDCXCancellationFee = big.NewInt(225000)
 var TIPXDCXCancellationFeeTestnet = big.NewInt(225000)
+var BerlinBlock = big.NewInt(9999999999)
+var LondonBlock = big.NewInt(9999999999)
 
 var TIPXDCXTestnet = big.NewInt(0)
 var IsTestnet bool = false

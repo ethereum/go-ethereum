@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/holiman/uint256"
 )
@@ -28,6 +29,8 @@ import (
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
+	case 3898:
+		enable3198(jt)
 	case 2200:
 		enable2200(jt)
 	case 1884:
@@ -89,4 +92,23 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
+}
+
+// enable3198 applies EIP-3198 (BASEFEE Opcode)
+// - Adds an opcode that returns the current block's base fee.
+func enable3198(jt *JumpTable) {
+	// New opcode
+	jt[BASEFEE] = &operation{
+		execute:     opBaseFee,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
+// opBaseFee implements BASEFEE opcode
+func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(common.MinGasPrice50x)
+	callContext.stack.push(baseFee)
+	return nil, nil
 }
