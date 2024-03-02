@@ -291,7 +291,7 @@ func typedDataRequest(data any) (*SignDataRequest, error) {
 
 // EcRecover recovers the address associated with the given sig.
 // Only compatible with `text/plain`
-func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
+func (api *SignerAPI) EcRecover(_ context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
 	// Returns the address for the Account that was used to create the signature.
 	//
 	// Note, this function is compatible with eth_sign and personal_sign. As such it recovers

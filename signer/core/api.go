@@ -332,7 +332,7 @@ func (api *SignerAPI) startUSBListener() {
 	for _, wallet := range am.Wallets() {
 		if err := wallet.Open(""); err != nil {
 			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
-			if err == usbwallet.ErrTrezorPINNeeded {
+			if errors.Is(err, usbwallet.ErrTrezorPINNeeded) {
 				go api.openTrezor(wallet.URL())
 			}
 		}
@@ -348,7 +348,7 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 		case accounts.WalletArrived:
 			if err := event.Wallet.Open(""); err != nil {
 				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
-				if err == usbwallet.ErrTrezorPINNeeded {
+				if errors.Is(err, usbwallet.ErrTrezorPINNeeded) {
 					go api.openTrezor(event.Wallet.URL())
 				}
 			}
@@ -663,8 +663,8 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 	return &gnosisTx, nil
 }
 
-// Returns the external api version. This method does not require user acceptance. Available methods are
+// Version Returns the external api version. This method does not require user acceptance. Available methods are
 // available via enumeration anyway, and this info does not contain user-specific data
-func (api *SignerAPI) Version(ctx context.Context) (string, error) {
+func (api *SignerAPI) Version(_ context.Context) (string, error) {
 	return ExternalAPIVersion, nil
 }

@@ -36,13 +36,15 @@ func TestEncryption(t *testing.T) {
 	key := []byte("AES256Key-32Characters1234567890")
 	plaintext := []byte("exampleplaintext")
 
-	c, iv, err := encrypt(key, plaintext, nil)
+	aesStore := NewAESEncryptedStorage("", key)
+
+	c, iv, err := aesStore.encrypt(plaintext, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("Ciphertext %x, nonce %x\n", c, iv)
 
-	p, err := decrypt(key, iv, c, nil)
+	p, err := aesStore.decrypt(c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
