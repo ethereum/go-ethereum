@@ -99,14 +99,15 @@ func TestEnd2End(t *testing.T) {
 
 	d := t.TempDir()
 
-	s1 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
-	}
-	s2 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
-	}
+	s1 := NewAESEncryptedStorage(
+		fmt.Sprintf("%v/vault.json", d),
+		[]byte("AES256Key-32Characters1234567890"),
+	)
+
+	s2 := NewAESEncryptedStorage(
+		fmt.Sprintf("%v/vault.json", d),
+		[]byte("AES256Key-32Characters1234567890"),
+	)
 
 	s1.Put("bazonk", "foobar")
 	if v, err := s2.Get("bazonk"); v != "foobar" || err != nil {
@@ -122,10 +123,10 @@ func TestSwappedKeys(t *testing.T) {
 
 	d := t.TempDir()
 
-	s1 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
-	}
+	s1 := NewAESEncryptedStorage(
+		fmt.Sprintf("%v/vault.json", d),
+		[]byte("AES256Key-32Characters1234567890"),
+	)
 	s1.Put("k1", "v1")
 	s1.Put("k2", "v2")
 	// Now make a modified copy
