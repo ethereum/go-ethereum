@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -56,9 +57,10 @@ type Manager struct {
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
-	quit chan chan error
-	term chan struct{} // Channel is closed upon termination of the update loop
-	lock sync.RWMutex
+	quit  chan chan error
+	term  chan struct{} // Channel is closed upon termination of the update loop
+	close atomic.Bool   // Whether the manager has been closed
+	lock  sync.RWMutex
 }
 
 // NewManager creates a generic account manager to sign transaction via various
@@ -98,6 +100,10 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 
 // Close terminates the account manager's internal notification processes.
 func (am *Manager) Close() error {
+	if am.close.Swap(true) {
+		return nil
+	}
+
 	for _, w := range am.wallets {
 		w.Close()
 	}
@@ -114,6 +120,10 @@ func (am *Manager) Config() *Config {
 // AddBackend starts the tracking of an additional backend for wallet updates.
 // cmd/geth assumes once this func returns the backends have been already integrated.
 func (am *Manager) AddBackend(backend Backend) {
+	if am.close.Load() {
+		return
+	}
+
 	done := make(chan struct{})
 	am.newBackends <- newBackendEvent{backend, done}
 	<-done
