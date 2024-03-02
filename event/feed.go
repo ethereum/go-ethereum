@@ -220,19 +220,3 @@ func (cs caseList) deactivate(index int) caseList {
 	cs[index], cs[last] = cs[last], cs[index]
 	return cs[:last]
 }
-
-// func (cs caseList) String() string {
-//     s := "["
-//     for i, cas := range cs {
-//             if i != 0 {
-//                     s += ", "
-//             }
-//             switch cas.Dir {
-//             case reflect.SelectSend:
-//                     s += fmt.Sprintf("%v<-", cas.Chan.Interface())
-//             case reflect.SelectRecv:
-//                     s += fmt.Sprintf("<-%v", cas.Chan.Interface())
-//             }
-//     }
-//     return s + "]"
-// }
