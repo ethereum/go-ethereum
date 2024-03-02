@@ -21,7 +21,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/json"
-	"io"
+	"errors"
 	"os"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -41,14 +41,32 @@ type AESEncryptedStorage struct {
 	filename string
 	// Key stored in base64
 	key []byte
+	gcm cipher.AEAD
+
+	gcmNS int // NonceSize
 }
 
 // NewAESEncryptedStorage creates a new encrypted storage backed by the given file/key
 func NewAESEncryptedStorage(filename string, key []byte) *AESEncryptedStorage {
-	return &AESEncryptedStorage{
+	aesStore := &AESEncryptedStorage{
 		filename: filename,
 		key:      key,
 	}
+
+	blk, err := aes.NewCipher(key)
+	if err != nil {
+		log.Warn("reading AES key", "err", err)
+		return nil
+	}
+
+	aesStore.gcm, err = cipher.NewGCM(blk)
+	if err != nil {
+		log.Warn("initializing AES AEAD", "err", err)
+		return nil
+	}
+
+	aesStore.gcmNS = aesStore.gcm.NonceSize()
+	return aesStore
 }
 
 // Put stores a value by key. 0-length keys results in noop.
@@ -61,7 +79,7 @@ func (s *AESEncryptedStorage) Put(key, value string) {
 		log.Warn("Failed to read encrypted storage", "err", err, "file", s.filename)
 		return
 	}
-	ciphertext, iv, err := encrypt(s.key, []byte(value), []byte(key))
+	ciphertext, iv, err := s.encrypt([]byte(value), []byte(key))
 	if err != nil {
 		log.Warn("Failed to encrypt entry", "err", err)
 		return
@@ -89,7 +107,7 @@ func (s *AESEncryptedStorage) Get(key string) (string, error) {
 		log.Warn("Key does not exist", "key", key)
 		return "", ErrNotFound
 	}
-	entry, err := decrypt(s.key, encrypted.Iv, encrypted.CipherText, []byte(key))
+	entry, err := s.decrypt(encrypted.CipherText, []byte(key))
 	if err != nil {
 		log.Warn("Failed to decrypt key", "key", key)
 		return "", err
@@ -141,38 +159,29 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 	return nil
 }
 
+func randBytes(size int) (blk []byte, err error) {
+	blk = make([]byte, size)
+	_, err = rand.Read(blk)
+	return
+}
+
 // encrypt encrypts plaintext with the given key, with additional data
 // The 'additionalData' is used to place the (plaintext) KV-store key into the V,
 // to prevent the possibility to alter a K, or swap two entries in the KV store with each other.
-func encrypt(key []byte, plaintext []byte, additionalData []byte) ([]byte, []byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, nil, err
+func (s *AESEncryptedStorage) encrypt(plaintext []byte, additionalData []byte) (_ []byte, _ []byte, err error) {
+	// Never use more than 2^32 random nonce's with a given
+	// key because of the risk of a repeat.
+	var n []byte
+
+	if n, err = randBytes(s.gcmNS); err != nil {
+		return
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, nil, err
-	}
-	nonce := make([]byte, aesgcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, nil, err
-	}
-	ciphertext := aesgcm.Seal(nil, nonce, plaintext, additionalData)
-	return ciphertext, nonce, nil
+	return append(n, s.gcm.Seal(nil, n, plaintext, additionalData)...), n, nil
 }
 
-func decrypt(key []byte, nonce []byte, ciphertext []byte, additionalData []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
+func (s *AESEncryptedStorage) decrypt(ciphertext []byte, additionalData []byte) ([]byte, error) {
+	if len(ciphertext) < s.gcmNS {
+		return nil, errors.New("cipher data too short")
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, additionalData)
-	if err != nil {
-		return nil, err
-	}
-	return plaintext, nil
+	return s.gcm.Open(nil, ciphertext[0:s.gcmNS], ciphertext[s.gcmNS:], additionalData)
 }
