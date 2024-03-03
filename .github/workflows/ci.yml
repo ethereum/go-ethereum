@@ -48,12 +48,13 @@ jobs:
             script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[t-z].*")
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ${{ env.GOPATH }}/src/XDPoSChain
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
+          cache: false
           go-version: '1.21.x'
       - name: Run tests
         run: ${{ matrix.script }}
@@ -65,7 +66,7 @@ jobs:
     needs: tests
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Login to Docker Hub
         run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
       - name: Build Docker image
@@ -78,7 +79,7 @@ jobs:
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
     needs: tests
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Login to Docker Hub
         run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
       - name: Build and Push Docker images
@@ -99,7 +100,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ vars.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Terraform Apply
         run: |
           cd cicd/devnet/terraform
@@ -109,17 +110,17 @@ jobs:
           source .env
           for ((i=$us_east_2_start;i<$us_east_2_end;i++)); do
             echo "Force deploy xdc-$i"
-            aws ecs update-service --region us-east-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
+            aws ecs update-service --region us-east-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
           done
           for ((i=$eu_west_1_start;i<$eu_west_1_end;i++)); do
             echo "Force deploy xdc-$i"
-            aws ecs update-service --region eu-west-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
+            aws ecs update-service --region eu-west-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
           done
           for ((i=$ap_southeast_2_start;i<$ap_southeast_2_end;i++)); do
             echo "Force deploy xdc-$i"
-            aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager;
+            aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
           done
-          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager;
+          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
 
 
   devnet_send_notification:
@@ -127,7 +128,7 @@ jobs:
     needs: devnet_terraform_apply
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Send deployment notification
         run: |
           curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
