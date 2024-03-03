@@ -708,9 +708,9 @@ func (x *XDPoS_v1) Prepare(chain consensus.ChainReader, header *types.Header) er
 	if err != nil {
 		return err
 	}
-	if number%x.config.Epoch != 0 {
-		x.lock.RLock()
 
+	x.lock.RLock()
+	if number%x.config.Epoch != 0 {
 		// Gather all the proposals that make sense voting on
 		addresses := make([]common.Address, 0, len(x.proposals))
 		for address, authorize := range x.proposals {
@@ -727,14 +727,16 @@ func (x *XDPoS_v1) Prepare(chain consensus.ChainReader, header *types.Header) er
 				copy(header.Nonce[:], utils.NonceDropVote)
 			}
 		}
-		x.lock.RUnlock()
 	}
+	signer := x.signer
+	x.lock.RUnlock()
+
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
 	// Set the correct difficulty
-	header.Difficulty = x.calcDifficulty(chain, parent, x.signer)
+	header.Difficulty = x.calcDifficulty(chain, parent, signer)
 	log.Debug("CalcDifficulty ", "number", header.Number, "difficulty", header.Difficulty)
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < utils.ExtraVanity {
@@ -956,7 +958,10 @@ func (x *XDPoS_v1) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (x *XDPoS_v1) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	return x.calcDifficulty(chain, parent, x.signer)
+	x.lock.Lock()
+	signer := x.signer
+	x.lock.Unlock()
+	return x.calcDifficulty(chain, parent, signer)
 }
 
 func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
