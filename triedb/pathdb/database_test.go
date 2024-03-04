@@ -397,7 +397,11 @@ func TestDatabaseRollback(t *testing.T) {
 		if err := tester.db.Recover(parent, loader); err != nil {
 			t.Fatalf("Failed to revert db, err: %v", err)
 		}
-		tester.verifyState(parent)
+		if i > 0 {
+			if err := tester.verifyState(parent); err != nil {
+				t.Fatalf("Failed to verify state, err: %v", err)
+			}
+		}
 	}
 	if tester.db.tree.len() != 1 {
 		t.Fatal("Only disk layer is expected")
