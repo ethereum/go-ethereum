@@ -418,7 +418,9 @@ func TestRegisterHandler_Successful(t *testing.T) {
 // Tests that the given handler will not be successfully mounted since no HTTP server
 // is enabled for RPC
 func TestRegisterHandler_Unsuccessful(t *testing.T) {
-	node, err := New(&DefaultConfig)
+	cfg := DefaultConfig
+	cfg.DataDir = t.TempDir()
+	node, err := New(&cfg)
 	if err != nil {
 		t.Fatalf("could not create new node: %v", err)
 	}
