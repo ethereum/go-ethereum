@@ -398,14 +398,34 @@ func (db *Database) Recoverable(root common.Hash) bool {
 		return false
 	}
 	// Ensure the requested state is a canonical state and all state
-	// histories in range [id+1, disklayer.ID] are present and complete.
-	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != root {
-			return errors.New("unexpected state history")
+	// histories in range [id+1, diskLayer.ID] are present and linked.
+	var (
+		start = *id + 1
+		limit = dl.stateID()
+	)
+	for {
+		// Short circuit if nothing more to check
+		if start > limit {
+			break
 		}
-		root = m.root
-		return nil
-	}) == nil
+		// Cap the meta items for single retrieval
+		count := limit - start + 1
+		if count > 1024 {
+			count = 1024
+		}
+		err := checkHistories(db.freezer, start, count, func(m *meta) error {
+			if m.parent != root {
+				return errors.New("unexpected state history")
+			}
+			root = m.root
+			return nil
+		})
+		if err != nil {
+			return false
+		}
+		start += count
+	}
+	return true
 }
 
 // Close closes the trie database and the held freezer.

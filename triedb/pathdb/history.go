@@ -519,29 +519,21 @@ func writeHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer) error {
 	return nil
 }
 
-// checkHistories retrieves a batch of meta objects with the specified range
-// and performs the callback on each item.
+// checkHistories retrieves a batch of meta objects within the specified range
+// and performs the callback on top.
 func checkHistories(freezer *rawdb.ResettableFreezer, start, count uint64, check func(*meta) error) error {
-	for count > 0 {
-		number := count
-		if number > 10000 {
-			number = 10000 // split the big read into small chunks
-		}
-		blobs, err := rawdb.ReadStateHistoryMetaList(freezer, start, number)
-		if err != nil {
+	blobs, err := rawdb.ReadStateHistoryMetaList(freezer, start, count)
+	if err != nil {
+		return err
+	}
+	for _, blob := range blobs {
+		var dec meta
+		if err := dec.decode(blob); err != nil {
 			return err
 		}
-		for _, blob := range blobs {
-			var dec meta
-			if err := dec.decode(blob); err != nil {
-				return err
-			}
-			if err := check(&dec); err != nil {
-				return err
-			}
+		if err := check(&dec); err != nil {
+			return err
 		}
-		count -= uint64(len(blobs))
-		start += uint64(len(blobs))
 	}
 	return nil
 }
