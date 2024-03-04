@@ -97,7 +97,7 @@ jobs:
     needs: devnet_build_push
     environment: devnet
     env:
-      AWS_ACCESS_KEY_ID: ${{ vars.AWS_ACCESS_KEY_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -122,6 +122,48 @@ jobs:
           done
           aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
 
+  rpcnode_terraform_apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: devnet_build_push
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Terraform Apply
+        run: |
+          cd cicd/terraform
+          terraform init ${{ env.tf_init_cli_options }}
+          terraform apply ${{ env.tf_apply_cli_options }}
+
+  testnet_dev-upgrade_node:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: rpcnode_terraform_apply
+    environment: testnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ECS Update
+        run: |
+          aws ecs update-service --region ap-southeast-1 --cluster testnet-xdcnode-cluster --service ecs-service-testnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
+
+  mainnet_dev-upgrade_node:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: rpcnode_terraform_apply
+    environment: mainnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ECS Update
+        run: |
+          aws ecs update-service --region ap-southeast-1 --cluster mainnet-xdcnode-cluster --service ecs-service-mainnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
 
   devnet_send_notification:
     runs-on: ubuntu-latest
