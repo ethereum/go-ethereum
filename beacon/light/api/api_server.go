@@ -17,6 +17,8 @@
 package api
 
 import (
+	"reflect"
+
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
@@ -84,7 +86,7 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 		}
 
 		if err != nil {
-			log.Warn("Beacon API request failed", "id", id, "err", err)
+			log.Warn("Beacon API request failed", "type", reflect.TypeOf(req), "reqid", id, "err", err)
 			s.eventCallback(request.Event{Type: request.EvFail, Data: request.RequestResponse{ID: id, Request: req}})
 		} else {
 			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.RequestResponse{ID: id, Request: req, Response: resp}})
