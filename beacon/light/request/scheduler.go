@@ -236,10 +236,10 @@ func (s *Scheduler) targetChanged() (changed bool) {
 // requests are generated and sent if necessary and possible.
 func (s *Scheduler) processRound() {
 	for {
-		log.Debug("Processing modules")
+		log.Trace("Processing modules")
 		filteredEvents := s.filterEvents()
 		for _, module := range s.modules {
-			log.Debug("Processing module", "name", s.names[module], "events", len(filteredEvents[module]))
+			log.Trace("Processing module", "name", s.names[module], "events", len(filteredEvents[module]))
 			module.Process(requester{s, module}, filteredEvents[module])
 		}
 		if !s.targetChanged() {
