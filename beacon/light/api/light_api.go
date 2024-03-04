@@ -393,11 +393,18 @@ func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
 	return uint64(data.Slot), data.Block, nil
 }
 
+type HeadEventListener struct {
+	OnNewHead    func(slot uint64, blockRoot common.Hash)
+	OnSignedHead func(head types.SignedHeader)
+	OnFinality   func(head types.FinalityUpdate)
+	OnError      func(err error)
+}
+
 // StartHeadListener creates an event subscription for heads and signed (optimistic)
 // head updates and calls the specified callback functions when they are received.
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
-func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot common.Hash), signedFn func(head types.SignedHeader), finalityFn func(head types.FinalityUpdate), errFn func(err error)) func() {
+func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() {
 	closeCh := make(chan struct{})   // initiate closing the stream
 	closedCh := make(chan struct{})  // stream closed (or failed to create)
 	stoppedCh := make(chan struct{}) // sync loop stopped
@@ -411,7 +418,7 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		req, err := http.NewRequest("GET", api.url+
 			"/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update", nil)
 		if err != nil {
-			errFn(fmt.Errorf("error creating event subscription request: %v", err))
+			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
 			return
 		}
 		for k, v := range api.customHeaders {
@@ -419,7 +426,7 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		}
 		stream, err := eventsource.SubscribeWithRequest("", req)
 		if err != nil {
-			errFn(fmt.Errorf("error creating event subscription: %v", err))
+			listener.OnError(fmt.Errorf("error creating event subscription: %v", err))
 			close(streamCh)
 			return
 		}
@@ -427,22 +434,24 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 		<-closeCh
 		stream.Close()
 	}()
+
 	go func() {
 		defer close(stoppedCh)
 
 		if head, err := api.GetHeader(common.Hash{}); err == nil {
-			headFn(head.Slot, head.Hash())
+			listener.OnNewHead(head.Slot, head.Hash())
 		}
 		if signedHead, err := api.GetOptimisticHeadUpdate(); err == nil {
-			signedFn(signedHead)
+			listener.OnSignedHead(signedHead)
 		}
 		if finalityUpdate, err := api.GetFinalityUpdate(); err == nil {
-			finalityFn(finalityUpdate)
+			listener.OnFinality(finalityUpdate)
 		}
 		stream := <-streamCh
 		if stream == nil {
 			return
 		}
+
 		for {
 			select {
 			case event, ok := <-stream.Events:
@@ -452,30 +461,30 @@ func (api *BeaconLightApi) StartHeadListener(headFn func(slot uint64, blockRoot 
 				switch event.Event() {
 				case "head":
 					if slot, blockRoot, err := decodeHeadEvent([]byte(event.Data())); err == nil {
-						headFn(slot, blockRoot)
+						listener.OnNewHead(slot, blockRoot)
 					} else {
-						errFn(fmt.Errorf("error decoding head event: %v", err))
+						listener.OnError(fmt.Errorf("error decoding head event: %v", err))
 					}
 				case "light_client_optimistic_update":
 					if signedHead, err := decodeOptimisticHeadUpdate([]byte(event.Data())); err == nil {
-						signedFn(signedHead)
+						listener.OnSignedHead(signedHead)
 					} else {
-						errFn(fmt.Errorf("error decoding optimistic update event: %v", err))
+						listener.OnError(fmt.Errorf("error decoding optimistic update event: %v", err))
 					}
 				case "light_client_finality_update":
 					if finalityUpdate, err := decodeFinalityUpdate([]byte(event.Data())); err == nil {
-						finalityFn(finalityUpdate)
+						listener.OnFinality(finalityUpdate)
 					} else {
-						errFn(fmt.Errorf("error decoding finality update event: %v", err))
+						listener.OnError(fmt.Errorf("error decoding finality update event: %v", err))
 					}
 				default:
-					errFn(fmt.Errorf("unexpected event: %s", event.Event()))
+					listener.OnError(fmt.Errorf("unexpected event: %s", event.Event()))
 				}
 			case err, ok := <-stream.Errors:
 				if !ok {
 					break
 				}
-				errFn(err)
+				listener.OnError(err)
 			}
 		}
 	}()

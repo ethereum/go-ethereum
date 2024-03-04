@@ -40,18 +40,24 @@ func NewApiServer(api *BeaconLightApi) *ApiServer {
 // Subscribe implements request.requestServer.
 func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 	s.eventCallback = eventCallback
-	s.unsubscribe = s.api.StartHeadListener(func(slot uint64, blockRoot common.Hash) {
-		log.Debug("New head received", "slot", slot, "blockRoot", blockRoot)
-		eventCallback(request.Event{Type: sync.EvNewHead, Data: types.HeadInfo{Slot: slot, BlockRoot: blockRoot}})
-	}, func(head types.SignedHeader) {
-		log.Debug("New signed head received", "slot", head.Header.Slot, "blockRoot", head.Header.Hash(), "signerCount", head.Signature.SignerCount())
-		eventCallback(request.Event{Type: sync.EvNewSignedHead, Data: head})
-	}, func(head types.FinalityUpdate) {
-		log.Debug("New finality update received", "slot", head.Attested.Slot, "blockRoot", head.Attested.Hash(), "signerCount", head.Signature.SignerCount())
-		eventCallback(request.Event{Type: sync.EvNewFinalityUpdate, Data: head})
-	}, func(err error) {
-		log.Warn("Head event stream error", "err", err)
-	})
+	listener := HeadEventListener{
+		OnNewHead: func(slot uint64, blockRoot common.Hash) {
+			log.Debug("New head received", "slot", slot, "blockRoot", blockRoot)
+			eventCallback(request.Event{Type: sync.EvNewHead, Data: types.HeadInfo{Slot: slot, BlockRoot: blockRoot}})
+		},
+		OnSignedHead: func(head types.SignedHeader) {
+			log.Debug("New signed head received", "slot", head.Header.Slot, "blockRoot", head.Header.Hash(), "signerCount", head.Signature.SignerCount())
+			eventCallback(request.Event{Type: sync.EvNewSignedHead, Data: head})
+		},
+		OnFinality: func(head types.FinalityUpdate) {
+			log.Debug("New finality update received", "slot", head.Attested.Slot, "blockRoot", head.Attested.Hash(), "signerCount", head.Signature.SignerCount())
+			eventCallback(request.Event{Type: sync.EvNewFinalityUpdate, Data: head})
+		},
+		OnError: func(err error) {
+			log.Warn("Head event stream error", "err", err)
+		},
+	}
+	s.unsubscribe = s.api.StartHeadListener(listener)
 }
 
 // SendRequest implements request.requestServer.
