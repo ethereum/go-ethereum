@@ -29,7 +29,7 @@ import (
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
-	case 3898:
+	case 3198:
 		enable3198(jt)
 	case 2200:
 		enable2200(jt)
