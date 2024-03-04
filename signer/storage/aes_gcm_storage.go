@@ -159,9 +159,9 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 	return nil
 }
 
-func randBytes(size int) (blk []byte, err error) {
-	blk = make([]byte, size)
-	_, err = rand.Read(blk)
+func (s *AESEncryptedStorage) randBytes() (nonce []byte, err error) {
+	nonce = make([]byte, s.gcmNS)
+	_, err = io.ReadFull(rand.Reader, nonce)
 	return
 }
 
@@ -173,7 +173,7 @@ func (s *AESEncryptedStorage) encrypt(plaintext []byte, additionalData []byte) (
 	// key because of the risk of a repeat.
 	var n []byte
 
-	if n, err = randBytes(s.gcmNS); err != nil {
+	if n, err = s.randBytes(); err != nil {
 		return
 	}
 	return append(n, s.gcm.Seal(nil, n, plaintext, additionalData)...), n, nil
