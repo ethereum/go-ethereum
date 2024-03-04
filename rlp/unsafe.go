@@ -26,5 +26,5 @@ import (
 
 // byteArrayBytes returns a slice of the byte array v.
 func byteArrayBytes(v reflect.Value, length int) []byte {
-	return unsafe.Slice((*byte)((unsafe.Pointer)(v.UnsafeAddr())), length)
+	return unsafe.Slice((*byte)(unsafe.Pointer(v.UnsafeAddr())), length)
 }
