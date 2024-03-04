@@ -60,18 +60,22 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 		var resp request.Response
 		switch data := req.(type) {
 		case sync.ReqUpdates:
+			log.Debug("Requesting light client update", "period", data.FirstPeriod, "count", data.Count)
 			if updates, committees, err := s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count); err == nil {
 				resp = sync.RespUpdates{Updates: updates, Committees: committees}
 			}
 		case sync.ReqHeader:
+			log.Debug("Requesting beacon header", "hash", common.Hash(data))
 			if header, err := s.api.GetHeader(common.Hash(data)); err == nil {
 				resp = header
 			}
 		case sync.ReqCheckpointData:
+			log.Debug("Requesting beacon checkpoint data", "hash", common.Hash(data))
 			if bootstrap, err := s.api.GetCheckpointData(common.Hash(data)); err == nil {
 				resp = bootstrap
 			}
 		case sync.ReqBeaconBlock:
+			log.Debug("Requesting beacon block", "hash", common.Hash(data))
 			if block, err := s.api.GetBeaconBlock(common.Hash(data)); err == nil {
 				resp = block
 			}
