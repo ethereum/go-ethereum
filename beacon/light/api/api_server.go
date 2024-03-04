@@ -67,18 +67,18 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 		var err error
 		switch data := req.(type) {
 		case sync.ReqUpdates:
-			log.Debug("Requesting light client update", "reqid", id, "period", data.FirstPeriod, "count", data.Count)
+			log.Debug("Beacon API: requesting light client update", "reqid", id, "period", data.FirstPeriod, "count", data.Count)
 			var r sync.RespUpdates
 			r.Updates, r.Committees, err = s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count)
 			resp = r
 		case sync.ReqHeader:
-			log.Debug("Requesting beacon header", "reqid", id, "hash", common.Hash(data))
+			log.Debug("Beacon API: requesting header", "reqid", id, "hash", common.Hash(data))
 			resp, err = s.api.GetHeader(common.Hash(data))
 		case sync.ReqCheckpointData:
-			log.Debug("Requesting beacon checkpoint data", "reqid", id, "hash", common.Hash(data))
+			log.Debug("Beacon API: requesting checkpoint data", "reqid", id, "hash", common.Hash(data))
 			resp, err = s.api.GetCheckpointData(common.Hash(data))
 		case sync.ReqBeaconBlock:
-			log.Debug("Requesting beacon block", "reqid", id, "hash", common.Hash(data))
+			log.Debug("Beacon API: requesting block", "reqid", id, "hash", common.Hash(data))
 			resp, err = s.api.GetBeaconBlock(common.Hash(data))
 		default:
 		}
