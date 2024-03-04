@@ -21,12 +21,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/metrics"
 	"io"
 	"math/big"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -255,7 +256,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	number := header.Number.Uint64()
 
 	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
+	if header.Time > uint64(time.Now().UnixMilli()) {
 		return consensus.ErrFutureBlock
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
@@ -346,7 +347,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+c.config.PeriodMs/1000 > header.Time {
+	if parent.Time+c.config.PeriodMs > header.Time {
 		return errInvalidTimestamp
 	}
 	// Verify that the gasUsed is <= gasLimit
@@ -575,9 +576,10 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.PeriodMs/1000
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
+
+	header.Time = parent.Time + c.config.PeriodMs
+	if header.Time < uint64(time.Now().UnixMilli()) {
+		header.Time = uint64(time.Now().UnixMilli())
 	}
 	return nil
 }
@@ -657,7 +659,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		}
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	delay := time.UnixMilli(int64(header.Time)).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
