@@ -179,7 +179,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		var (
 			start = time.Now()
 			first = frozen    // the first block to freeze
-			last  = threshold // the last block to freezer
+			last  = threshold // the last block to freeze
 		)
 		if last-first+1 > freezerBatchLimit {
 			last = freezerBatchLimit + first - 1
