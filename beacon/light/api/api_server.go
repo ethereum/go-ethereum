@@ -64,33 +64,30 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 	go func() {
 		var resp request.Response
+		var err error
 		switch data := req.(type) {
 		case sync.ReqUpdates:
-			log.Debug("Requesting light client update", "period", data.FirstPeriod, "count", data.Count)
-			if updates, committees, err := s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count); err == nil {
-				resp = sync.RespUpdates{Updates: updates, Committees: committees}
-			}
+			log.Debug("Requesting light client update", "reqid", id, "period", data.FirstPeriod, "count", data.Count)
+			var r sync.RespUpdates
+			r.Updates, r.Committees, err = s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count)
+			resp = r
 		case sync.ReqHeader:
-			log.Debug("Requesting beacon header", "hash", common.Hash(data))
-			if header, err := s.api.GetHeader(common.Hash(data)); err == nil {
-				resp = header
-			}
+			log.Debug("Requesting beacon header", "reqid", id, "hash", common.Hash(data))
+			resp, err = s.api.GetHeader(common.Hash(data))
 		case sync.ReqCheckpointData:
-			log.Debug("Requesting beacon checkpoint data", "hash", common.Hash(data))
-			if bootstrap, err := s.api.GetCheckpointData(common.Hash(data)); err == nil {
-				resp = bootstrap
-			}
+			log.Debug("Requesting beacon checkpoint data", "reqid", id, "hash", common.Hash(data))
+			resp, err = s.api.GetCheckpointData(common.Hash(data))
 		case sync.ReqBeaconBlock:
-			log.Debug("Requesting beacon block", "hash", common.Hash(data))
-			if block, err := s.api.GetBeaconBlock(common.Hash(data)); err == nil {
-				resp = block
-			}
+			log.Debug("Requesting beacon block", "reqid", id, "hash", common.Hash(data))
+			resp, err = s.api.GetBeaconBlock(common.Hash(data))
 		default:
 		}
-		if resp != nil {
-			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.RequestResponse{ID: id, Request: req, Response: resp}})
-		} else {
+
+		if err != nil {
+			log.Warn("Beacon API request failed", "id", id, "err", err)
 			s.eventCallback(request.Event{Type: request.EvFail, Data: request.RequestResponse{ID: id, Request: req}})
+		} else {
+			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.RequestResponse{ID: id, Request: req, Response: resp}})
 		}
 	}()
 }
