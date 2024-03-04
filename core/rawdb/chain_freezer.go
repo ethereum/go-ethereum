@@ -73,29 +73,32 @@ func (f *chainFreezer) Close() error {
 	return f.Freezer.Close()
 }
 
-// block tags
-const (
-	finalizedBlock = "finalized"
-	headBlock      = "head"
-)
-
-// readBlock returns the number of specified block. 0 is returned if the block
-// is unknown or not available yet.
-func (f *chainFreezer) readBlock(db ethdb.KeyValueReader, tag string) uint64 {
-	var hash common.Hash
-	switch tag {
-	case finalizedBlock:
-		hash = ReadFinalizedBlockHash(db)
-	case headBlock:
-		hash = ReadHeadBlockHash(db)
-	default:
+// readHeadNumber returns the number of chain head block. 0 is returned if the
+// block is unknown or not available yet.
+func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
+	hash := ReadHeadBlockHash(db)
+	if hash == (common.Hash{}) {
+		log.Error("Head block is not reachable")
 		return 0
 	}
+	number := ReadHeaderNumber(db, hash)
+	if number == nil {
+		log.Error("Number of head block is missing")
+		return 0
+	}
+	return *number
+}
+
+// readFinalizedNumber returns the number of finalized block. 0 is returned
+// if the block is unknown or not available yet.
+func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
+	hash := ReadFinalizedBlockHash(db)
 	if hash == (common.Hash{}) {
 		return 0
 	}
 	number := ReadHeaderNumber(db, hash)
 	if number == nil {
+		log.Error("Number of finalized block is missing")
 		return 0
 	}
 	return *number
@@ -105,8 +108,8 @@ func (f *chainFreezer) readBlock(db ethdb.KeyValueReader, tag string) uint64 {
 // by formula: max(finality, HEAD-params.FullImmutabilityThreshold).
 func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) {
 	var (
-		head      = f.readBlock(db, headBlock)
-		final     = f.readBlock(db, finalizedBlock)
+		head      = f.readHeadNumber(db)
+		final     = f.readFinalizedNumber(db)
 		headLimit uint64
 	)
 	if head > params.FullImmutabilityThreshold {
@@ -158,25 +161,25 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				return
 			}
 		}
-		number, err := f.freezeThreshold(nfdb)
+		threshold, err := f.freezeThreshold(nfdb)
 		if err != nil {
 			backoff = true
-			log.Debug("Current full block not old enough to freeze")
+			log.Debug("Current full block not old enough to freeze", "err", err)
 			continue
 		}
 		frozen := f.frozen.Load()
 
-		// Short circuit if finalized blocks are already frozen.
-		if frozen != 0 && frozen-1 >= number {
+		// Short circuit if the blocks below threshold are already frozen.
+		if frozen != 0 && frozen-1 >= threshold {
 			backoff = true
-			log.Debug("Ancient blocks frozen already", "number", number, "frozen", frozen)
+			log.Debug("Ancient blocks frozen already", "threshold", threshold, "frozen", frozen)
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
 		var (
 			start = time.Now()
-			first = frozen // the first block to freeze
-			last  = number // the last block to freezer
+			first = frozen    // the first block to freeze
+			last  = threshold // the last block to freezer
 		)
 		if last-first+1 > freezerBatchLimit {
 			last = freezerBatchLimit + first - 1
