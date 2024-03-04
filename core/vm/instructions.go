@@ -477,6 +477,17 @@ func opDifficulty(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx)
 	return nil, nil
 }
 
+func opRandom(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	var v *uint256.Int
+	if interpreter.evm.Context.Random != nil {
+		v = new(uint256.Int).SetBytes((interpreter.evm.Context.Random.Bytes()))
+	} else { // if context random is not set, use emptyCodeHash as default
+		v = new(uint256.Int).SetBytes(emptyCodeHash.Bytes())
+	}
+	callContext.stack.push(v)
+	return nil, nil
+}
+
 func opGasLimit(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	callContext.stack.push(new(uint256.Int).SetUint64(interpreter.evm.GasLimit))
 	return nil, nil

@@ -93,6 +93,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsMerge:
+			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:
 			cfg.JumpTable = &londonInstructionSet
 		case evm.chainRules.IsBerlin:
@@ -262,7 +264,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		pc++
 	}
-	
+
 	if err == errStopToken {
 		err = nil // clear stop token error
 	}
