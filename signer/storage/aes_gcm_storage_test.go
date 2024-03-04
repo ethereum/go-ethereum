@@ -160,3 +160,31 @@ func TestSwappedKeys(t *testing.T) {
 		t.Errorf("double-swapped value should work fine")
 	}
 }
+
+func BenchmarkEncryption(b *testing.B) {
+	storage := NewAESEncryptedStorage("test.json", []byte("x?^0^fIhNpSkTKbN"))
+
+	// Generate plaintext and additional data
+	plaintext := []byte("example plaintext")
+	additionalData := []byte("additional data")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Encrypt plaintext
+		ciphertext, _, err := storage.encrypt(plaintext, additionalData)
+		if err != nil {
+			b.Fatalf("Encryption failed: %v", err)
+		}
+
+		// Decrypt ciphertext
+		decryptedPlaintext, err := storage.decrypt(ciphertext, additionalData)
+		if err != nil {
+			b.Fatalf("Decryption failed: %v", err)
+		}
+
+		// Verify decryption
+		if string(decryptedPlaintext) != string(plaintext) {
+			b.Fatalf("Decryption failed: plaintext mismatch")
+		}
+	}
+}

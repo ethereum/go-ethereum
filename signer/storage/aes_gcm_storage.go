@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 
 	"github.com/ethereum/go-ethereum/log"
