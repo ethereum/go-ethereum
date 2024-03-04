@@ -248,7 +248,7 @@ func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := ServiceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
+	response := serviceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
@@ -283,10 +283,9 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) [
 	return receipts
 }
 
-// ServiceGetReceiptsQuery69 assembles the response to a receipt query. It is
-// exposed to allow external packages to test protocol behavior.
+// serviceGetReceiptsQuery69 assembles the response to a receipt query.
 // It does not send the bloom filters for the receipts
-func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
@@ -304,8 +303,13 @@ func ServiceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 		}
+		// Remove unnecessary fields
+		var storageReceipts []*types.ReceiptForStorage
+		for _, receipt := range results {
+			storageReceipts = append(storageReceipts, (*types.ReceiptForStorage)(receipt))
+		}
 		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(results); err != nil {
+		if encoded, err := rlp.EncodeToBytes(storageReceipts); err != nil {
 			log.Error("Failed to encode receipt", "err", err)
 		} else {
 			receipts = append(receipts, encoded)

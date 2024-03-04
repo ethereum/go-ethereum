@@ -258,7 +258,7 @@ func (r *Receipt) Size() common.StorageSize {
 }
 
 // ReceiptForStorage is a wrapper around a Receipt with RLP serialization
-// that omits the Bloom field and deserialization that re-computes it.
+// that omits the Bloom field. The Bloom field is recomputed by DeriveFields.
 type ReceiptForStorage Receipt
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
