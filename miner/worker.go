@@ -652,7 +652,7 @@ func (self *worker) commitNewWork() {
 			log.Warn("Can't find coinbase account wallet", "coinbase", self.coinbase, "err", err)
 			return
 		}
-		if self.config.XDPoS != nil && self.chain.Config().IsTIPXDCX(header.Number) {
+		if self.config.XDPoS != nil && self.chain.Config().IsTIPXDCXMiner(header.Number) {
 			XDCX := self.eth.GetXDCX()
 			XDCXLending := self.eth.GetXDCXLending()
 			if XDCX != nil && header.Number.Uint64() > self.config.XDPoS.Epoch {
@@ -710,8 +710,13 @@ func (self *worker) commitNewWork() {
 						if XDCX.IsSDKNode() {
 							self.chain.AddMatchingResult(tradingTransaction.Hash(), tradingMatchingResults)
 						}
+						// force adding trading, lending transaction to this block
+						if tradingTransaction != nil {
+							specialTxs = append(specialTxs, tradingTransaction)
+						}
 					}
 				}
+
 				if len(lendingInput) > 0 {
 					// lending transaction
 					lendingBatch := &lendingstate.TxLendingBatch{
@@ -735,6 +740,9 @@ func (self *worker) commitNewWork() {
 						if XDCX.IsSDKNode() {
 							self.chain.AddLendingResult(lendingTransaction.Hash(), lendingMatchingResults)
 						}
+						if lendingTransaction != nil {
+							specialTxs = append(specialTxs, lendingTransaction)
+						}
 					}
 				}
 
@@ -756,32 +764,23 @@ func (self *worker) commitNewWork() {
 						if XDCX.IsSDKNode() {
 							self.chain.AddFinalizedTrades(lendingFinalizedTradeTransaction.Hash(), updatedTrades)
 						}
+						if lendingFinalizedTradeTransaction != nil {
+							specialTxs = append(specialTxs, lendingFinalizedTradeTransaction)
+						}
 					}
 				}
 			}
+			XDCxStateRoot := work.tradingState.IntermediateRoot()
+			LendingStateRoot := work.lendingState.IntermediateRoot()
+			txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
+			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.HexToAddress(common.TradingStateAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
+			txStateRoot, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
+			if err != nil {
+				log.Error("Fail to create tx state root", "error", err)
+				return
+			}
+			specialTxs = append(specialTxs, txStateRoot)
 		}
-
-		// force adding trading, lending transaction to this block
-		if tradingTransaction != nil {
-			specialTxs = append(specialTxs, tradingTransaction)
-		}
-		if lendingTransaction != nil {
-			specialTxs = append(specialTxs, lendingTransaction)
-		}
-		if lendingFinalizedTradeTransaction != nil {
-			specialTxs = append(specialTxs, lendingFinalizedTradeTransaction)
-		}
-
-		XDCxStateRoot := work.tradingState.IntermediateRoot()
-		LendingStateRoot := work.lendingState.IntermediateRoot()
-		txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
-		tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.HexToAddress(common.TradingStateAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
-		txStateRoot, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
-		if err != nil {
-			log.Error("Fail to create tx state root", "error", err)
-			return
-		}
-		specialTxs = append(specialTxs, txStateRoot)
 	}
 	work.commitTransactions(self.mux, feeCapacity, txs, specialTxs, self.chain, self.coinbase)
 	// compute uncles for the new block.
