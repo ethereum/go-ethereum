@@ -361,7 +361,7 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 	}
 }
 
-func allBlobTxs(addr common.Address, _ *params.ChainConfig) []txData {
+func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 	return []txData{
 		{
 			Tx: &types.BlobTx{
