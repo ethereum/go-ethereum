@@ -102,6 +102,9 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	// The recipient balance includes the value transferred.
 	toBal := new(big.Int).Sub(t.pre[to].Balance, value)
 	t.pre[to].Balance = toBal
+	if env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time).IsEIP158 && create {
+		t.pre[to].Nonce--
+	}
 
 	// The sender balance is after reducing: value and gasLimit.
 	// We need to re-add them to get the pre-tx balance.
