@@ -267,12 +267,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
 
 		// Header advertised via a past newPayload request. Start syncing to it.
-		// Before we do however, make sure any legacy sync in switched off so we
-		// don't accidentally have 2 cycles running.
-		if merger := api.eth.Merger(); !merger.TDDReached() {
-			merger.ReachTTD()
-			api.eth.Downloader().Cancel()
-		}
 		context := []interface{}{"number", header.Number, "hash", header.Hash()}
 		if update.FinalizedBlockHash != (common.Hash{}) {
 			if finalized == nil {
@@ -334,9 +328,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// If the beacon client also advertised a finalized block, mark the local
 	// chain final and completely in PoS mode.
 	if update.FinalizedBlockHash != (common.Hash{}) {
-		if merger := api.eth.Merger(); !merger.PoSFinalized() {
-			merger.FinalizePoS()
-		}
 		// If the finalized block is not in our canonical tree, something is wrong
 		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
@@ -620,13 +611,6 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 
 		return api.invalid(err, parent.Header()), nil
 	}
-	// We've accepted a valid payload from the beacon client. Mark the local
-	// chain transitions to notify other subsystems (e.g. downloader) of the
-	// behavioral change.
-	if merger := api.eth.Merger(); !merger.TDDReached() {
-		merger.ReachTTD()
-		api.eth.Downloader().Cancel()
-	}
 	hash := block.Hash()
 	return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
 }
@@ -784,26 +768,23 @@ func (api *ConsensusAPI) heartbeat() {
 
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
-		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastForkchoiceUpdate) <= beaconUpdateConsensusTimeout || time.Since(lastNewPayloadUpdate) <= beaconUpdateConsensusTimeout {
-				offlineLogged = time.Time{}
-				continue
-			}
-
-			if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-				if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
-					if lastTransitionUpdate.IsZero() {
-						log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
-					} else {
-						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
-					}
-				} else {
-					log.Warn("Beacon client online, but no consensus updates received in a while. Please fix your beacon client to follow the chain!")
-				}
-				offlineLogged = time.Now()
-			}
+		if time.Since(lastForkchoiceUpdate) <= beaconUpdateConsensusTimeout || time.Since(lastNewPayloadUpdate) <= beaconUpdateConsensusTimeout {
+			offlineLogged = time.Time{}
 			continue
 		}
+		if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
+			if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
+				if lastTransitionUpdate.IsZero() {
+					log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
+				} else {
+					log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
+				}
+			} else {
+				log.Warn("Beacon client online, but no consensus updates received in a while. Please fix your beacon client to follow the chain!")
+			}
+			offlineLogged = time.Now()
+		}
+		continue
 	}
 }
 
