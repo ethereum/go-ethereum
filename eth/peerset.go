@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -223,24 +222,6 @@ func (ps *peerSet) snapLen() int {
 	defer ps.lock.RUnlock()
 
 	return ps.snapPeers
-}
-
-// peerWithHighestTD retrieves the known peer with the currently highest total
-// difficulty, but below the given PoS switchover threshold.
-func (ps *peerSet) peerWithHighestTD() *eth.Peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var (
-		bestPeer *eth.Peer
-		bestTd   *big.Int
-	)
-	for _, p := range ps.peers {
-		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p.Peer, td
-		}
-	}
-	return bestPeer
 }
 
 // close disconnects all peers.
