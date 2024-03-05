@@ -191,6 +191,9 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 		} else {
 			blob = ReadStorageTrieNode(db, owner, path)
 		}
+		if len(blob) == 0 {
+			return nil
+		}
 		h := newHasher()
 		defer h.release()
 		if h.hash(blob) != hash {
