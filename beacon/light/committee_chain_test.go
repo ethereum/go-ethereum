@@ -210,7 +210,7 @@ func TestCommitteeChainFork(t *testing.T) {
 	}
 	c.verifyRange(tcFork, 0, 10)
 	// reload the chain while switching to the base fork
-	c.config = tfBase
+	c.config.ChainConfig.ChainConfig = &tfBase
 	c.reloadChain()
 	// updates 7..9 should be rolled back now
 	c.verifyRange(tcFork, 0, 6) // again, period 7 only verifies on the right fork
@@ -226,7 +226,7 @@ type committeeChainTest struct {
 	t               *testing.T
 	db              *memorydb.Database
 	clock           *mclock.Simulated
-	config          types.ChainConfig
+	config          ClientConfig
 	signerThreshold int
 	enforceTime     bool
 	chain           *CommitteeChain
@@ -237,16 +237,16 @@ func newCommitteeChainTest(t *testing.T, config types.ChainConfig, signerThresho
 		t:               t,
 		db:              memorydb.New(),
 		clock:           &mclock.Simulated{},
-		config:          config,
+		config:          ClientConfig{ChainConfig: ChainConfig{ChainConfig: &config}, Threshold: signerThreshold, TimeCheck: enforceTime},
 		signerThreshold: signerThreshold,
 		enforceTime:     enforceTime,
 	}
-	c.chain = newCommitteeChain(c.db, &config, signerThreshold, enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
+	c.chain = NewTestCommitteeChain(c.db, c.config, c.clock)
 	return c
 }
 
 func (c *committeeChainTest) reloadChain() {
-	c.chain = newCommitteeChain(c.db, &c.config, c.signerThreshold, c.enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
+	c.chain = NewTestCommitteeChain(c.db, c.config, c.clock)
 }
 
 func (c *committeeChainTest) setClockPeriod(period float64) {

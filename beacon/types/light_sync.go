@@ -19,11 +19,23 @@ package types
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	ctypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/ztyp/tree"
 )
+
+// HeadInfo represents an unvalidated new head announcement.
+type HeadInfo struct {
+	Slot      uint64
+	BlockRoot common.Hash
+}
 
 // BootstrapData contains a sync committee where light sync can be started,
 // together with a proof through a beacon header and corresponding state.
@@ -133,4 +145,99 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 		return uFinalized
 	}
 	return u.SignerCount > w.SignerCount
+}
+
+type HeaderWithExecProof struct {
+	Header
+	PayloadHeader *capella.ExecutionPayloadHeader
+	PayloadBranch merkle.Values
+}
+
+func (h *HeaderWithExecProof) ExecHeader() *ctypes.Header {
+	withdrawalsHash := new(common.Hash)
+	*withdrawalsHash = common.Hash(h.PayloadHeader.WithdrawalsRoot)
+	return &ctypes.Header{
+		ParentHash:      common.Hash(h.PayloadHeader.ParentHash),
+		UncleHash:       ctypes.EmptyUncleHash,
+		Coinbase:        common.Address(h.PayloadHeader.FeeRecipient),
+		Root:            common.Hash(h.PayloadHeader.StateRoot),
+		TxHash:          common.Hash(h.PayloadHeader.TransactionsRoot),
+		ReceiptHash:     common.Hash(h.PayloadHeader.ReceiptsRoot),
+		Bloom:           ctypes.Bloom(h.PayloadHeader.LogsBloom),
+		Difficulty:      common.Big0,
+		Number:          new(big.Int).SetUint64(uint64(h.PayloadHeader.BlockNumber)),
+		GasLimit:        uint64(h.PayloadHeader.GasLimit),
+		GasUsed:         uint64(h.PayloadHeader.GasUsed),
+		Time:            uint64(h.PayloadHeader.Timestamp),
+		Extra:           []byte(h.PayloadHeader.ExtraData),
+		MixDigest:       common.Hash(h.PayloadHeader.PrevRandao), // reused in merge
+		Nonce:           ctypes.BlockNonce{},                     // zero
+		BaseFee:         (*uint256.Int)(&h.PayloadHeader.BaseFeePerGas).ToBig(),
+		WithdrawalsHash: withdrawalsHash,
+	}
+}
+
+func (h *HeaderWithExecProof) Validate() error {
+	if h.ExecHeader().Hash() != common.Hash(h.PayloadHeader.BlockHash) {
+		return errors.New("Execution header hash mismatch")
+	}
+	payloadRoot := merkle.Value(h.PayloadHeader.HashTreeRoot(tree.GetHashFn()))
+	return merkle.VerifyProof(h.BodyRoot, params.BodyIndexExecPayload, h.PayloadBranch, payloadRoot)
+}
+
+type OptimisticUpdate struct {
+	Attested HeaderWithExecProof
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
+}
+
+func (u *OptimisticUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        u.Attested.Header,
+		Signature:     u.Signature,
+		SignatureSlot: u.SignatureSlot,
+	}
+}
+
+func (u *OptimisticUpdate) Validate() error {
+	return u.Attested.Validate()
+}
+
+type FinalityUpdate struct {
+	Attested, Finalized HeaderWithExecProof
+	FinalityBranch      merkle.Values
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
+}
+
+func (u *FinalityUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        u.Attested.Header,
+		Signature:     u.Signature,
+		SignatureSlot: u.SignatureSlot,
+	}
+}
+
+func (u *FinalityUpdate) Validate() error {
+	if err := u.Attested.Validate(); err != nil {
+		return err
+	}
+	if err := u.Finalized.Validate(); err != nil {
+		return err
+	}
+	return merkle.VerifyProof(u.Attested.StateRoot, params.StateIndexFinalBlock, u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
+}
+
+// ChainHeadEvent returns an authenticated execution payload associated with the
+// latest accepted head of the beacon chain, along with the hash of the latest
+// finalized execution block.
+type ChainHeadEvent struct {
+	HeadBlock *engine.ExecutableData
+	Finalized common.Hash
 }
