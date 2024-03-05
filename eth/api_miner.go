@@ -63,3 +63,8 @@ func (api *MinerAPI) SetEtherbase(etherbase common.Address) bool {
 	api.e.SetEtherbase(etherbase)
 	return true
 }
+
+// Etherbase is the address that mining rewards will be sent to.
+func (api *MinerAPI) Etherbase() common.Address {
+	return api.e.Miner().Etherbase()
+}

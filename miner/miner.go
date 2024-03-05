@@ -107,6 +107,14 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
+// Etherbase returns the address of fee recipient.
+func (miner *Miner) Etherbase() common.Address {
+	miner.confMu.RLock()
+	addr := miner.config.Etherbase
+	miner.confMu.RUnlock()
+	return addr
+}
+
 // SetEtherbase sets the address of fee recipient.
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.confMu.Lock()
