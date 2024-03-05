@@ -185,7 +185,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		tracer      = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
 		config      = sim.b.ChainConfig()
 		vmConfig    = &vm.Config{
-			NoBaseFee: true,
+			NoBaseFee: !sim.validate,
 			// Block hash will be repaired after execution.
 			Tracer: tracer,
 		}
