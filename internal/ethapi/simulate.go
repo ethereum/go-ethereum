@@ -393,7 +393,7 @@ func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Head
 		if config.IsLondon(overrides.Number.ToInt()) {
 			baseFee = eip1559.CalcBaseFee(config, header)
 		}
-		header = &types.Header{
+		header = overrides.MakeHeader(&types.Header{
 			UncleHash:   types.EmptyUncleHash,
 			ReceiptHash: types.EmptyReceiptsHash,
 			TxHash:      types.EmptyTxsHash,
@@ -402,8 +402,8 @@ func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Head
 			GasLimit:    base.GasLimit,
 			//MixDigest:  header.MixDigest,
 			BaseFee: baseFee,
-		}
-		res[bi] = overrides.MakeHeader(header)
+		})
+		res[bi] = header
 	}
 	return res, nil
 }
