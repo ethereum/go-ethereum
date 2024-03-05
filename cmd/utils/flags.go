@@ -1193,7 +1193,7 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 }
 
 // setLes shows the deprecation warnings for LES flags.
-func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
+func setLes(ctx *cli.Context) {
 	if ctx.IsSet(LightServeFlag.Name) {
 		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightServeFlag.Name)
 	}
@@ -1594,7 +1594,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
-	setLes(ctx, cfg)
+	setLes(ctx)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
