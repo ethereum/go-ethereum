@@ -248,6 +248,8 @@ jobs:
 
         - name: Run smoke tests
           run: |
+            echo "Funding ganache accounts..."
+            timeout 10m bash bor/integration-tests/fund_ganache_accounts.sh
             echo "Deposit 100 matic for each account to bor network"
             cd matic-cli/devnet/code/contracts
             npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
