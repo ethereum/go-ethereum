@@ -57,12 +57,6 @@ func (h *ethHandler) AcceptTxs() bool {
 func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the downloader
 	switch packet := packet.(type) {
-	case *eth.NewBlockHashesPacket:
-		return errors.New("block announcements disallowed")
-
-	case *eth.NewBlockPacket:
-		return errors.New("block broadcasts disallowed")
-
 	case *eth.NewPooledTransactionHashesPacket:
 		return h.txFetcher.Notify(peer.ID(), packet.Types, packet.Sizes, packet.Hashes)
 

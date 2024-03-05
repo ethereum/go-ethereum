@@ -25,8 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -91,7 +89,6 @@ type handlerConfig struct {
 	Database       ethdb.Database         // Database for direct sync insertions
 	Chain          *core.BlockChain       // Blockchain to serve data from
 	TxPool         txPool                 // Transaction pool to propagate from
-	Merger         *consensus.Merger      // The manager for eth1/2 transition
 	Network        uint64                 // Network identifier to advertise
 	Sync           downloader.SyncMode    // Whether to snap or full sync
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
@@ -115,12 +112,10 @@ type handler struct {
 	downloader *downloader.Downloader
 	txFetcher  *fetcher.TxFetcher
 	peers      *peerSet
-	merger     *consensus.Merger
 
-	eventMux      *event.TypeMux
-	txsCh         chan core.NewTxsEvent
-	txsSub        event.Subscription
-	minedBlockSub *event.TypeMuxSubscription
+	eventMux *event.TypeMux
+	txsCh    chan core.NewTxsEvent
+	txsSub   event.Subscription
 
 	requiredBlocks map[uint64]common.Hash
 
@@ -148,7 +143,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:         config.TxPool,
 		chain:          config.Chain,
 		peers:          newPeerSet(),
-		merger:         config.Merger,
 		requiredBlocks: config.RequiredBlocks,
 		quitSync:       make(chan struct{}),
 		handlerDoneCh:  make(chan struct{}),
@@ -448,19 +442,13 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
-	// broadcast mined blocks
-	h.wg.Add(1)
-	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
-	go h.minedBroadcastLoop()
-
 	// start peer handler tracker
 	h.wg.Add(1)
 	go h.protoTracker()
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	h.txsSub.Unsubscribe() // quits txBroadcastLoop
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -474,50 +462,6 @@ func (h *handler) Stop() {
 	h.wg.Wait()
 
 	log.Info("Ethereum protocol stopped")
-}
-
-// BroadcastBlock will either propagate a block to a subset of its peers, or
-// will only announce its availability (depending what's requested).
-func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
-	// Disable the block propagation if the chain has already entered the PoS
-	// stage. The block propagation is delegated to the consensus layer.
-	if h.merger.PoSFinalized() {
-		return
-	}
-	// Disable the block propagation if it's the post-merge block.
-	if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
-		if beacon.IsPoSHeader(block.Header()) {
-			return
-		}
-	}
-	hash := block.Hash()
-	peers := h.peers.peersWithoutBlock(hash)
-
-	// If propagation is requested, send to a subset of the peer
-	if propagate {
-		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td *big.Int
-		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), h.chain.GetTd(block.ParentHash(), block.NumberU64()-1))
-		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-			return
-		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		for _, peer := range transfer {
-			peer.AsyncSendNewBlock(block, td)
-		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
-		return
-	}
-	// Otherwise if the block is indeed in out own chain, announce it
-	if h.chain.HasBlock(hash, block.NumberU64()) {
-		for _, peer := range peers {
-			peer.AsyncSendNewBlockHash(block)
-		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
-	}
 }
 
 // BroadcastTransactions will propagate a batch of transactions
@@ -600,18 +544,6 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	}
 	log.Debug("Distributed transactions", "plaintxs", len(txs)-blobTxs-largeTxs, "blobtxs", blobTxs, "largetxs", largeTxs,
 		"bcastpeers", directPeers, "bcastcount", directCount, "annpeers", annPeers, "anncount", annCount)
-}
-
-// minedBroadcastLoop sends mined blocks to connected peers.
-func (h *handler) minedBroadcastLoop() {
-	defer h.wg.Done()
-
-	for obj := range h.minedBlockSub.Chan() {
-		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
-			h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
-			h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
-		}
-	}
 }
 
 // txBroadcastLoop announces new transactions to connected peers.

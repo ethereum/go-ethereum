@@ -74,7 +74,6 @@ type Ethereum struct {
 	handler            *handler
 	ethDialCandidates  enode.Iterator
 	snapDialCandidates enode.Iterator
-	merger             *consensus.Merger
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -158,7 +157,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth := &Ethereum{
 		config:            config,
-		merger:            consensus.NewMerger(chainDb),
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
@@ -240,7 +238,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Database:       chainDb,
 		Chain:          eth.blockchain,
 		TxPool:         eth.txPool,
-		Merger:         eth.merger,
 		Network:        networkID,
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
@@ -487,7 +484,6 @@ func (s *Ethereum) Synced() bool                       { return s.handler.synced
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
-func (s *Ethereum) Merger() *consensus.Merger          { return s.merger }
 
 // Protocols returns all the currently configured
 // network protocols to start.
