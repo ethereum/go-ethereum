@@ -52,7 +52,7 @@ type txJSON struct {
 	Hash common.Hash `json:"hash"`
 
 	// L1 message transaction fields:
-	Sender     common.Address  `json:"sender,omitempty"`
+	Sender     *common.Address `json:"sender,omitempty"`
 	QueueIndex *hexutil.Uint64 `json:"queueIndex,omitempty"`
 }
 
@@ -129,6 +129,14 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.S = (*hexutil.Big)(itx.S)
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
+
+	case *L1MessageTx:
+		enc.QueueIndex = (*hexutil.Uint64)(&itx.QueueIndex)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.To = tx.To()
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Input = (*hexutil.Bytes)(&itx.Data)
+		enc.Sender = &itx.Sender
 
 	case *BlobTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
@@ -425,7 +433,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		itx.Data = *dec.Input
-		itx.Sender = dec.Sender
+		if dec.Sender == nil {
+			return errors.New("missing required field 'sender' in transaction")
+		}
+		itx.Sender = *dec.Sender
 
 	default:
 		return ErrTxTypeNotSupported

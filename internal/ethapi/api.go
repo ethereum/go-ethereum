@@ -1294,7 +1294,7 @@ type RPCTransaction struct {
 	S                *hexutil.Big      `json:"s"`
 
 	// L1 message transaction fields:
-	Sender     common.Address  `json:"sender,omitempty"`
+	Sender     *common.Address `json:"sender,omitempty"`
 	QueueIndex *hexutil.Uint64 `json:"queueIndex,omitempty"`
 }
 
@@ -1344,7 +1344,7 @@ func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		}
 	case types.L1MessageTxType:
 		msg := tx.AsL1MessageTx()
-		result.Sender = msg.Sender
+		result.Sender = &msg.Sender
 		result.QueueIndex = (*hexutil.Uint64)(&msg.QueueIndex)
 	}
 	return result
