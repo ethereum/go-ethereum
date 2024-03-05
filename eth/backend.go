@@ -272,18 +272,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:       chainDb,
-		Chain:          eth.blockchain,
-		TxPool:         eth.txPool,
-		Merger:         eth.merger,
-		Network:        config.NetworkId,
-		Sync:           config.SyncMode,
-		BloomCache:     uint64(cacheLimit),
-		EventMux:       eth.eventMux,
-		RequiredBlocks: config.RequiredBlocks,
-		EthAPI:         blockChainAPI,
-		checker:        checker,
-		txArrivalWait:  eth.p2pServer.TxArrivalWait,
+		Database:            chainDb,
+		Chain:               eth.blockchain,
+		TxPool:              eth.txPool,
+		Merger:              eth.merger,
+		Network:             config.NetworkId,
+		Sync:                config.SyncMode,
+		BloomCache:          uint64(cacheLimit),
+		EventMux:            eth.eventMux,
+		RequiredBlocks:      config.RequiredBlocks,
+		EthAPI:              blockChainAPI,
+		checker:             checker,
+		txArrivalWait:       eth.p2pServer.TxArrivalWait,
+		enableBlockTracking: eth.config.EnableBlockTracking,
 	}); err != nil {
 		return nil, err
 	}

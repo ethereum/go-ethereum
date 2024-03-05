@@ -85,18 +85,19 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database       ethdb.Database      // Database for direct sync insertions
-	Chain          *core.BlockChain    // Blockchain to serve data from
-	TxPool         txPool              // Transaction pool to propagate from
-	Merger         *consensus.Merger   // The manager for eth1/2 transition
-	Network        uint64              // Network identifier to adfvertise
-	Sync           downloader.SyncMode // Whether to snap or full sync
-	BloomCache     uint64              // Megabytes to alloc for snap sync bloom
-	EventMux       *event.TypeMux      // Legacy event mux, deprecate for `feed`
-	txArrivalWait  time.Duration       // Maximum duration to wait for an announced tx before requesting it
-	checker        ethereum.ChainValidator
-	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
-	EthAPI         *ethapi.BlockChainAPI  // EthAPI to interact
+	Database            ethdb.Database      // Database for direct sync insertions
+	Chain               *core.BlockChain    // Blockchain to serve data from
+	TxPool              txPool              // Transaction pool to propagate from
+	Merger              *consensus.Merger   // The manager for eth1/2 transition
+	Network             uint64              // Network identifier to adfvertise
+	Sync                downloader.SyncMode // Whether to snap or full sync
+	BloomCache          uint64              // Megabytes to alloc for snap sync bloom
+	EventMux            *event.TypeMux      // Legacy event mux, deprecate for `feed`
+	txArrivalWait       time.Duration       // Maximum duration to wait for an announced tx before requesting it
+	checker             ethereum.ChainValidator
+	RequiredBlocks      map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	EthAPI              *ethapi.BlockChainAPI  // EthAPI to interact
+	enableBlockTracking bool                   // Whether to log information collected while tracking block lifecycle
 }
 
 type handler struct {
@@ -126,6 +127,8 @@ type handler struct {
 
 	requiredBlocks map[uint64]common.Hash
 
+	enableBlockTracking bool
+
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
 
@@ -144,19 +147,20 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 
 	h := &handler{
-		networkID:      config.Network,
-		forkFilter:     forkid.NewFilter(config.Chain),
-		eventMux:       config.EventMux,
-		database:       config.Database,
-		txpool:         config.TxPool,
-		chain:          config.Chain,
-		peers:          newPeerSet(),
-		merger:         config.Merger,
-		ethAPI:         config.EthAPI,
-		requiredBlocks: config.RequiredBlocks,
-		quitSync:       make(chan struct{}),
-		handlerDoneCh:  make(chan struct{}),
-		handlerStartCh: make(chan struct{}),
+		networkID:           config.Network,
+		forkFilter:          forkid.NewFilter(config.Chain),
+		eventMux:            config.EventMux,
+		database:            config.Database,
+		txpool:              config.TxPool,
+		chain:               config.Chain,
+		peers:               newPeerSet(),
+		merger:              config.Merger,
+		ethAPI:              config.EthAPI,
+		requiredBlocks:      config.RequiredBlocks,
+		enableBlockTracking: config.enableBlockTracking,
+		quitSync:            make(chan struct{}),
+		handlerDoneCh:       make(chan struct{}),
+		handlerStartCh:      make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -295,7 +299,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 		return n, err
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.enableBlockTracking)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -688,6 +692,11 @@ func (h *handler) minedBroadcastLoop() {
 
 	for obj := range h.minedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
+			if h.enableBlockTracking {
+				delayInMs := uint64(time.Now().UnixMilli()) - ev.Block.Time()*1000
+				delay := common.PrettyDuration(time.Millisecond * time.Duration(delayInMs))
+				log.Info("[block tracker] Broadcasting mined block", "number", ev.Block.NumberU64(), "hash", ev.Block.Hash(), "blockTime", ev.Block.Time(), "now", time.Now().Unix(), "delay", delay, "delayInMs", delayInMs)
+			}
 			h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
