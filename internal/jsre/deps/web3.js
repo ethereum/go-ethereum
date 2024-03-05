@@ -3810,6 +3810,12 @@ var outputTransactionReceiptFormatter = function (receipt){
     if(receipt.effectiveGasPrice !== undefined) {
       receipt.effectiveGasPrice = utils.toBigNumber(receipt.effectiveGasPrice);
     }
+    if(receipt.blobGasPrice !== undefined) {
+      receipt.blobGasPrice = utils.toBigNumber(receipt.blobGasPrice);
+    }
+    if(receipt.blobGasUsed !== undefined) {
+      receipt.blobGasUsed = utils.toBigNumber(receipt.blobGasUsed);
+    }
     if(utils.isArray(receipt.logs)) {
         receipt.logs = receipt.logs.map(function(log){
             return outputLogFormatter(log);
