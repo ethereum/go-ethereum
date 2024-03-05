@@ -171,8 +171,8 @@ var eth68 = map[uint64]msgHandler{
 	BlockHeadersMsg:               handleBlockHeaders,
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
-	GetReceiptsMsg:                handleGetReceipts,
-	ReceiptsMsg:                   handleReceipts,
+	GetReceiptsMsg:                handleGetReceipts68,
+	ReceiptsMsg:                   handleReceipts68,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
 }
@@ -203,9 +203,13 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 
-	var handlers = eth68
-	if peer.version == ETH69 {
+	var handlers map[uint64]msgHandler
+	if peer.version == ETH68 {
+		handlers = eth68
+	} else if peer.version == ETH69 {
 		handlers = eth69
+	} else {
+		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}
 
 	// Track the amount of time it takes to serve the request and run the handler
