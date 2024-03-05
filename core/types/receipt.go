@@ -372,7 +372,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			logIndex++
 		}
 		// also derive the Bloom if not derived yet
-		rs[i].Bloom = CreateBloom(Receipts{(*Receipt)(rs[i])})
+		rs[i].Bloom = CreateBloom(Receipts{rs[i]})
 	}
 
 	return nil

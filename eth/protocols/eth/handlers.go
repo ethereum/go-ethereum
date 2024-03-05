@@ -232,13 +232,13 @@ func ServiceGetBlockBodiesQuery(chain *core.BlockChain, query GetBlockBodiesRequ
 	return bodies
 }
 
-func handleGetReceipts(backend Backend, msg Decoder, peer *Peer) error {
+func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := ServiceGetReceiptsQuery(backend.Chain(), query.GetReceiptsRequest)
+	response := ServiceGetReceiptsQuery68(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
@@ -252,9 +252,9 @@ func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
 }
 
-// ServiceGetReceiptsQuery assembles the response to a receipt query. It is
+// ServiceGetReceiptsQuery68 assembles the response to a receipt query. It is
 // exposed to allow external packages to test protocol behavior.
-func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
+func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest) []rlp.RawValue {
 	// Gather state data until the fetch or network limits is reached
 	var (
 		bytes    int
@@ -408,7 +408,7 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
-func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
+func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket)
 	if err := msg.Decode(res); err != nil {
