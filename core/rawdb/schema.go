@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/cockroachdb/pebble"
 	leveldb "github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -188,7 +189,9 @@ func encodeBigEndian(index uint64) []byte {
 }
 
 func isNotFoundErr(err error) bool {
-	return errors.Is(err, leveldb.ErrNotFound) || errors.Is(err, memorydb.ErrMemorydbNotFound)
+	return errors.Is(err, leveldb.ErrNotFound) ||
+		errors.Is(err, memorydb.ErrMemorydbNotFound) ||
+		errors.Is(err, pebble.ErrNotFound)
 }
 
 // headerKeyPrefix = headerPrefix + num (uint64 big endian)
