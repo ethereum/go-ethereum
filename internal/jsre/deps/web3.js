@@ -3840,11 +3840,17 @@ var outputBlockFormatter = function(block) {
     if (block.baseFeePerGas !== undefined) {
       block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
     }
+    if (block.blobGasUsed !== undefined) {
+      block.blobGasUsed = utils.toBigNumber(block.blobGasUsed);
+    }
+    if (block.excessBlobGas !== undefined) {
+      block.excessBlobGas = utils.toBigNumber(block.excessBlobGas);
+    }
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
     block.timestamp = utils.toDecimal(block.timestamp);
-    if(block.number !== null)
+    if (block.number !== null)
         block.number = utils.toDecimal(block.number);
 
     block.difficulty = utils.toBigNumber(block.difficulty);
