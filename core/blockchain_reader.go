@@ -232,12 +232,12 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 
 // GetRawReceiptsByHash retrieves the receipts for all transactions in a given block
 // without deriving the internal fields and the Bloom.
-func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) rlp.RawValue {
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
-	receipts := rawdb.ReadRawReceipts(bc.db, hash, *number)
+	receipts := rawdb.ReadReceiptsRLP(bc.db, hash, *number)
 	if receipts == nil {
 		return nil
 	}
