@@ -55,7 +55,7 @@ func TestUseAfterClose(t *testing.T) {
 	if a == nil {
 		t.Fatal("Prefetching before close should not return nil")
 	}
-	if b == nil {
-		t.Fatal("Trie after close should not return nil")
+	if b != nil {
+		t.Fatal("Trie after close should return nil")
 	}
 }
