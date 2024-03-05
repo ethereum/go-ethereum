@@ -303,18 +303,8 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 		}
-		// Remove unnecessary fields
-		var storageReceipts []*types.ReceiptForStorage
-		for _, receipt := range results {
-			storageReceipts = append(storageReceipts, (*types.ReceiptForStorage)(receipt))
-		}
-		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(storageReceipts); err != nil {
-			log.Error("Failed to encode receipt", "err", err)
-		} else {
-			receipts = append(receipts, encoded)
-			bytes += len(encoded)
-		}
+		receipts = append(receipts, results)
+		bytes += len(results)
 	}
 	return receipts
 }
