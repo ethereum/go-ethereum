@@ -18,7 +18,6 @@ package gasprice
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/sha256"
 	"fmt"
 	"math"
@@ -32,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -129,7 +127,10 @@ func (b *testBackend) teardown() {
 
 // newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
 // after use, otherwise the blockchain instance will mem-leak via goroutines.
-func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, addCancunBlocks bool) *testBackend {
+func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pending bool) *testBackend {
+	if londonBlock != nil && cancunBlock != nil && londonBlock.Cmp(cancunBlock) == 1 {
+		panic("cannot define test backend with cancun before london")
+	}
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
@@ -138,32 +139,29 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, addCancunB
 			Config: &config,
 			Alloc:  types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
-		signer      = types.LatestSigner(gspec.Config)
-		blobSigners = [6]struct {
-			key  *ecdsa.PrivateKey
-			addr common.Address
-		}{}
+		signer = types.LatestSigner(gspec.Config)
+
+		// Compute empty blob hash.
+		emptyBlob          = kzg4844.Blob{}
+		emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
+		emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
 	var engine consensus.Engine = beacon.New(ethash.NewFaker())
-	td := int(params.GenesisDifficulty.Uint64())
+	td := params.GenesisDifficulty.Uint64()
 
-	if addCancunBlocks {
-		for i := range blobSigners {
-			key, _ := crypto.GenerateKey()
-			addr := crypto.PubkeyToAddress(key.PublicKey)
-			blobSigners[i].key = key
-			blobSigners[i].addr = addr
-			gspec.Alloc[addr] = types.Account{Balance: big.NewInt(math.MaxInt64)}
-		}
+	if cancunBlock != nil {
+		ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
+		config.ShanghaiTime = &ts
+		config.CancunTime = &ts
+		signer = types.LatestSigner(gspec.Config)
 	}
 
 	// Generate testing blocks
-	genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
+	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
-		td += int(b.Difficulty().Uint64())
 
 		var txdata types.TxData
 		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
@@ -187,61 +185,15 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, addCancunB
 			}
 		}
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
-	})
-	// Construct testing chain
-	db := rawdb.NewMemoryDatabase()
-	merger := consensus.NewMerger(db)
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to create local chain, %v", err)
-	}
-	if i, err := chain.InsertChain(blocks); err != nil {
-		panic(fmt.Errorf("error inserting block %d: %w", i, err))
-	}
-	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
-	chain.SetSafe(chain.GetBlockByNumber(25).Header())
 
-	if addCancunBlocks {
-		if err := chain.SetHead(26); err != nil {
-			panic(err)
-		}
-
-		head := chain.GetBlockByNumber(26)
-		ts := head.Time()
-		config.ShanghaiTime = &ts
-		config.CancunTime = &ts
-		ttd := chain.GetTd(head.Hash(), head.NumberU64())
-		config.TerminalTotalDifficulty = ttd
-		signer = types.LatestSigner(gspec.Config)
-
-		merger.ReachTTD()
-		merger.FinalizePoS()
-
-		var (
-			emptyBlob          = kzg4844.Blob{}
-			emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-			emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
-		)
-
-		postBlocks, _ := core.GenerateChain(gspec.Config, head, engine, genDb, 6+1, func(i int, b *core.BlockGen) {
+		if cancunBlock != nil && b.Number().Cmp(cancunBlock) >= 0 {
 			b.SetPoS()
-
-			txdata := &types.DynamicFeeTx{
-				ChainID:   gspec.Config.ChainID,
-				Nonce:     b.TxNonce(addr),
-				To:        &common.Address{},
-				Gas:       30000,
-				GasFeeCap: big.NewInt(100 * params.GWei),
-				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
-				Data:      []byte{},
-			}
-			b.AddTx(types.MustSignNewTx(key, signer, txdata))
 
 			// put more blobs in each new block
 			for j := 0; j < i && j < 6; j++ {
 				blobTx := &types.BlobTx{
 					ChainID:    uint256.MustFromBig(gspec.Config.ChainID),
-					Nonce:      b.TxNonce(blobSigners[j].addr),
+					Nonce:      b.TxNonce(addr),
 					To:         common.Address{},
 					Gas:        30000,
 					GasFeeCap:  uint256.NewInt(100 * params.GWei),
@@ -252,14 +204,22 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, addCancunB
 					Value:      uint256.NewInt(100),
 					Sidecar:    nil,
 				}
-				b.AddTx(types.MustSignNewTx(blobSigners[j].key, signer, blobTx))
+				b.AddTx(types.MustSignNewTx(key, signer, blobTx))
 			}
-		})
-
-		if i, err := chain.InsertChain(postBlocks); err != nil {
-			panic(fmt.Errorf("error inserting block %d: %w", i, err))
 		}
+		td += b.Difficulty().Uint64()
+	})
+	// Construct testing chain
+	gspec.Config.TerminalTotalDifficulty = new(big.Int).SetUint64(td)
+	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create local chain, %v", err)
 	}
+	if i, err := chain.InsertChain(blocks); err != nil {
+		panic(fmt.Errorf("error inserting block %d: %w", i, err))
+	}
+	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
+	chain.SetSafe(chain.GetBlockByNumber(25).Header())
 
 	return &testBackend{chain: chain, pending: pending}
 }
@@ -289,7 +249,7 @@ func TestSuggestTipCap(t *testing.T) {
 		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
 	}
 	for _, c := range cases {
-		backend := newTestBackend(t, c.fork, false, false)
+		backend := newTestBackend(t, c.fork, nil, false)
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
