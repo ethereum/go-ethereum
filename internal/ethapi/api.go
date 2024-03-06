@@ -623,6 +623,24 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	return code, state.Error()
 }
 
+// GetAccountInfo returns the information at the given address in the state for the given block number.
+func (s *PublicBlockChainAPI) GetAccountInfo(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	info := state.GetAccountInfo(address)
+	result := map[string]interface{}{
+		"address":     address,
+		"balance":     (*hexutil.Big)(info.Balance),
+		"codeSize":    info.CodeSize,
+		"codeHash":    info.CodeHash,
+		"nonce":       info.Nonce,
+		"storageHash": info.StorageHash,
+	}
+	return result, nil
+}
+
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
