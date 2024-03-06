@@ -90,17 +90,17 @@ func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 	}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.CaptureTxStart,
-			OnTxEnd:   t.CaptureTxEnd,
-			OnOpcode:  t.CaptureState,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnOpcode:  t.OnOpcode,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
 	}, nil
 }
 
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
+func (t *prestateTracer) OnOpcode(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (t *prestateTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cos
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
@@ -160,7 +160,7 @@ func (t *prestateTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transa
 	t.lookupAccount(env.Coinbase)
 }
 
-func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}

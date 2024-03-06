@@ -109,7 +109,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.LiveLogger) error {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks) error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}

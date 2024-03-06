@@ -59,15 +59,13 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 	t := &muxTracer{names: names, tracers: objects}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:        t.CaptureTxStart,
-			OnTxEnd:          t.CaptureTxEnd,
-			OnStart:          t.CaptureStart,
-			OnEnd:            t.CaptureEnd,
-			OnEnter:          t.CaptureEnter,
-			OnExit:           t.CaptureExit,
-			OnOpcode:         t.CaptureState,
-			OnFault:          t.CaptureFault,
-			OnKeccakPreimage: t.CaptureKeccakPreimage,
+			OnTxStart:        t.OnTxStart,
+			OnTxEnd:          t.OnTxEnd,
+			OnEnter:          t.OnEnter,
+			OnExit:           t.OnExit,
+			OnOpcode:         t.OnOpcode,
+			OnFault:          t.OnFault,
+			OnKeccakPreimage: t.OnKeccakPreimage,
 			OnGasChange:      t.OnGasChange,
 			OnBalanceChange:  t.OnBalanceChange,
 			OnNonceChange:    t.OnNonceChange,
@@ -80,26 +78,7 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 	}, nil
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *muxTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	for _, t := range t.tracers {
-		if t.OnStart != nil {
-			t.OnStart(from, to, create, input, gas, value)
-		}
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	for _, t := range t.tracers {
-		if t.OnEnd != nil {
-			t.OnEnd(output, gasUsed, err, reverted)
-		}
-	}
-}
-
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *muxTracer) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnOpcode != nil {
 			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
@@ -107,8 +86,7 @@ func (t *muxTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64,
 	}
 }
 
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *muxTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *muxTracer) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnFault != nil {
 			t.OnFault(pc, op, gas, cost, scope, depth, err)
@@ -116,8 +94,7 @@ func (t *muxTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64,
 	}
 }
 
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (t *muxTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {
+func (t *muxTracer) OnKeccakPreimage(hash common.Hash, data []byte) {
 	for _, t := range t.tracers {
 		if t.OnKeccakPreimage != nil {
 			t.OnKeccakPreimage(hash, data)
@@ -125,7 +102,6 @@ func (t *muxTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {
 	}
 }
 
-// CaptureGasConsumed is called when gas is consumed.
 func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 	for _, t := range t.tracers {
 		if t.OnGasChange != nil {
@@ -134,8 +110,7 @@ func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason)
 	}
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *muxTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *muxTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		if t.OnEnter != nil {
 			t.OnEnter(typ, from, to, input, gas, value)
@@ -143,9 +118,7 @@ func (t *muxTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to com
 	}
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *muxTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	for _, t := range t.tracers {
 		if t.OnExit != nil {
 			t.OnExit(output, gasUsed, err, reverted)
@@ -153,7 +126,7 @@ func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error, revert
 	}
 }
 
-func (t *muxTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *muxTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	for _, t := range t.tracers {
 		if t.OnTxStart != nil {
 			t.OnTxStart(env, tx, from)
@@ -161,7 +134,7 @@ func (t *muxTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction
 	}
 }
 
-func (t *muxTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *muxTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	for _, t := range t.tracers {
 		if t.OnTxEnd != nil {
 			t.OnTxEnd(receipt, err)

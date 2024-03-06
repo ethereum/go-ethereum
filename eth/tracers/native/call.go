@@ -127,27 +127,12 @@ func newCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trac
 		return nil, err
 	}
 	return &directory.Tracer{
-<<<<<<< HEAD
-		LiveLogger: &tracing.LiveLogger{
-			CaptureTxStart: t.CaptureTxStart,
-			CaptureTxEnd:   t.CaptureTxEnd,
-			CaptureStart:   t.CaptureStart,
-			CaptureEnd:     t.CaptureEnd,
-			CaptureEnter:   t.CaptureEnter,
-			CaptureExit:    t.CaptureExit,
-			CaptureState:   t.CaptureState,
-			OnLog:          t.OnLog,
-=======
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.CaptureTxStart,
-			OnTxEnd:   t.CaptureTxEnd,
-			OnStart:   t.CaptureStart,
-			OnEnd:     t.CaptureEnd,
-			OnEnter:   t.CaptureEnter,
-			OnExit:    t.CaptureExit,
-			OnOpcode:  t.CaptureState,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnEnter:   t.OnEnter,
+			OnExit:    t.OnExit,
 			OnLog:     t.OnLog,
->>>>>>> 923c180058 (rename Capture hooks to On)
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -191,10 +176,10 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error, revert
 func (t *callTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *callTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.depth++
-	if t.config.OnlyTopCall {
+// OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *callTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.depth = depth
+	if t.config.OnlyTopCall && depth > 0 {
 		return
 	}
 	// Skip if tracing was interrupted
@@ -214,10 +199,15 @@ func (t *callTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to co
 	t.callstack = append(t.callstack, call)
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.depth--
+func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth == 0 {
+		t.captureEnd(output, gasUsed, err, reverted)
+		return
+	}
+
+	t.depth = depth - 1
 	if t.config.OnlyTopCall {
 		return
 	}
@@ -235,11 +225,18 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error, rever
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	if len(t.callstack) != 1 {
+		return
+	}
+	t.callstack[0].processOutput(output, err, reverted)
+}
+
+func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
 }
 
-func (t *callTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	// Error happened during tx validation.
 	if err != nil {
 		return

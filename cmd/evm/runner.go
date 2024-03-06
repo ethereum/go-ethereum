@@ -117,7 +117,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer      *tracing.LiveLogger
+		tracer      *tracing.Hooks
 		debugLogger *logger.StructLogger
 		statedb     *state.StateDB
 		chainConfig *params.ChainConfig

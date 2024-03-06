@@ -52,7 +52,7 @@ type fourByteTracer struct {
 	ids               map[string]int   // ids aggregates the 4byte ids found
 	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	reason            error            // Textual reason for the interruption
-	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	activePrecompiles []common.Address // Updated on tx start based on given rules
 }
 
 // newFourByteTracer returns a native go tracer which collects
@@ -63,9 +63,8 @@ func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (*directory.Tr
 	}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.CaptureTxStart,
-			OnStart:   t.CaptureStart,
-			OnEnter:   t.CaptureEnter,
+			OnTxStart: t.OnTxStart,
+			OnEnter:   t.OnEnter,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -88,22 +87,14 @@ func (t *fourByteTracer) store(id []byte, size int) {
 	t.ids[key] += 1
 }
 
-func (t *fourByteTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *fourByteTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	// Save the outer calldata
-	if len(input) >= 4 {
-		t.store(input[0:4], len(input)-4)
-	}
-}
-
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+// OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *fourByteTracer) OnEnter(depth int, opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return

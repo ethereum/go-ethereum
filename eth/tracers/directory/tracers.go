@@ -41,7 +41,7 @@ type Context struct {
 // This involves a method to retrieve results and one to
 // stop tracing.
 type Tracer struct {
-	*tracing.LiveLogger
+	*tracing.Hooks
 	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop func(err error)

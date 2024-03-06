@@ -229,7 +229,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, err
 		}
 		if vmConfig.Tracer != nil {
-			vmConfig.Tracer = tracer.LiveLogger
+			vmConfig.Tracer = tracer.Hooks
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
 

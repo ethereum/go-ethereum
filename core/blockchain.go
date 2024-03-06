@@ -266,7 +266,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
-	logger     *tracing.LiveLogger
+	logger     *tracing.Hooks
 }
 
 // NewBlockChain returns a fully initialised block chain using information

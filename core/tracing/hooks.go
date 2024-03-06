@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -141,7 +142,7 @@ type (
 	SkippedBlockHook = func(event BlockEvent)
 
 	// GenesisBlockHook is called when the genesis block is being processed.
-	GenesisBlockHook = func(genesis *types.Block, alloc types.GenesisAlloc)
+	GenesisBlockHook = func(genesis *types.Block, alloc core.GenesisAlloc)
 
 	/*
 		- State events -
