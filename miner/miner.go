@@ -139,11 +139,10 @@ func (miner *Miner) getPending() *newPayloadResult {
 
 	header := miner.chain.CurrentHeader()
 	miner.pendingMu.Lock()
+	defer miner.pendingMu.Unlock()
 	if cached := miner.pending.resolve(header.Hash(), coinbase); cached != nil {
-		miner.pendingMu.Unlock()
 		return cached
 	}
-	defer miner.pendingMu.Unlock()
 
 	var (
 		timestamp  = uint64(time.Now().Unix())
