@@ -167,9 +167,6 @@ func TestWelcome(t *testing.T) {
 	if want := fmt.Sprintf("instance: %s", testInstance); !strings.Contains(output, want) {
 		t.Fatalf("console output missing instance: have\n%s\nwant also %s", output, want)
 	}
-	if want := fmt.Sprintf("coinbase: %s", testAddress); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
 	if want := "at block: 0"; !strings.Contains(output, want) {
 		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
 	}
