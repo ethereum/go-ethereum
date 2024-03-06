@@ -101,8 +101,9 @@ var (
 func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
 	slot := stack.Back(0)
+	address := slot.Bytes20()
 	if evm.chainRules.IsPrague {
-		usedGas += evm.TxContext.Accesses.TouchAddressOnReadAndComputeGas(slot.Bytes(), uint256.Int{}, trieUtils.CodeSizeLeafKey)
+		usedGas += evm.TxContext.Accesses.TouchAddressOnReadAndComputeGas(address[:], uint256.Int{}, trieUtils.CodeSizeLeafKey)
 	}
 
 	return usedGas, nil
