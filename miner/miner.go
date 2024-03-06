@@ -42,11 +42,12 @@ type Backend interface {
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards
-	ExtraData hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasCeil   uint64         // Target gas ceiling for mined blocks.
-	GasPrice  *big.Int       // Minimum gas price for mining a transaction
-	Recommit  time.Duration  // The time interval for miner to re-create mining work.
+	Etherbase           common.Address `toml:"-"`          // Deprecated
+	PendingFeeRecipient common.Address `toml:"-"`          // Address for pending block rewards.
+	ExtraData           hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasCeil             uint64         // Target gas ceiling for mined blocks.
+	GasPrice            *big.Int       // Minimum gas price for mining a transaction
+	Recommit            time.Duration  // The time interval for miner to re-create mining work.
 }
 
 // DefaultConfig contains default settings for miner.
@@ -132,7 +133,7 @@ func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
 // The result might be nil if pending generation is failed.
 func (miner *Miner) getPending() *newPayloadResult {
 	miner.confMu.RLock()
-	coinbase := miner.config.Etherbase
+	coinbase := miner.config.PendingFeeRecipient
 	miner.confMu.RUnlock()
 
 	header := miner.chain.CurrentHeader()

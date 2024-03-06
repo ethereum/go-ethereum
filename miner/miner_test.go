@@ -139,7 +139,7 @@ func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address
 func createMiner(t *testing.T) *Miner {
 	// Create Ethash config
 	config := Config{
-		Etherbase: common.HexToAddress("123456789"),
+		PendingFeeRecipient: common.HexToAddress("123456789"),
 	}
 	// Create chainConfig
 	chainDB := rawdb.NewMemoryDatabase()

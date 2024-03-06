@@ -58,9 +58,9 @@ var (
 	newTxs     []*types.Transaction
 
 	testConfig = Config{
-		Etherbase: testBankAddress,
-		Recommit:  time.Second,
-		GasCeil:   params.GenesisGasLimit,
+		PendingFeeRecipient: testBankAddress,
+		Recommit:            time.Second,
+		GasCeil:             params.GenesisGasLimit,
 	}
 )
 
