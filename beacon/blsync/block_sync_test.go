@@ -149,7 +149,7 @@ func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 	return h.validated, h.validated.Header != (types.Header{})
 }
 
-//TODO add test case for finality
+// TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	return types.FinalityUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},

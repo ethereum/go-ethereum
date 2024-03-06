@@ -220,7 +220,7 @@ func (ht *TestHeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
 	return true, nil
 }
 
-//TODO add test case for finality
+// TODO add test case for finality
 func (ht *TestHeadTracker) ValidateFinality(head types.FinalityUpdate) (bool, error) {
 	return true, nil
 }
