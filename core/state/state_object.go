@@ -102,6 +102,7 @@ func (s *stateObject) empty() bool {
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
 	origin := acct
 	if acct == nil {
+		// TODO: fix the root?
 		acct = types.NewEmptyStateAccount()
 	}
 	return &stateObject{
@@ -142,7 +143,7 @@ func (s *stateObject) touch() {
 func (s *stateObject) getTrie() (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
-		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil {
+		if s.data.Root != s.db.db.TrieDB().EmptyRoot() && s.db.prefetcher != nil {
 			// When the miner is creating the pending state, there is no prefetcher
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
@@ -198,7 +199,9 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		if metrics.EnabledExpensive {
 			s.db.SnapshotStorageReads += time.Since(start)
 		}
-		if len(enc) > 0 {
+		if s.db.db.TrieDB().IsUsingZktrie() {
+			value = common.BytesToHash(enc)
+		} else if len(enc) > 0 {
 			_, content, _, err := rlp.Split(enc)
 			if err != nil {
 				s.db.setError(err)
@@ -258,7 +261,7 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
-	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
+	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != s.db.db.TrieDB().EmptyRoot() {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
@@ -312,9 +315,13 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			}
 			s.db.StorageDeleted += 1
 		} else {
-			// Encoding []byte cannot fail, ok to ignore the error.
 			trimmed := common.TrimLeftZeroes(value[:])
-			encoded, _ = rlp.EncodeToBytes(trimmed)
+			if s.db.db.TrieDB().IsUsingZktrie() {
+				encoded = common.CopyBytes(value[:])
+			} else {
+				// Encoding []byte cannot fail, ok to ignore the error.
+				encoded, _ = rlp.EncodeToBytes(trimmed)
+			}
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
 				return nil, err

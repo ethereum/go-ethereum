@@ -514,7 +514,7 @@ func (s *Ethereum) SyncService() *sync_service.SyncService { return s.syncServic
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
-	if s.config.SnapshotCache > 0 {
+	if !s.blockchain.Config().Scroll.ZktrieEnabled() && s.config.SnapshotCache > 0 {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
 	}
 	return protos
@@ -533,12 +533,12 @@ func (s *Ethereum) Start() error {
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
-	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= s.p2pServer.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
-		}
-		maxPeers -= s.config.LightPeers
-	}
+	// if s.config.LightServ > 0 {
+	// 	if s.config.LightPeers >= s.p2pServer.MaxPeers {
+	// 		return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+	// 	}
+	// 	maxPeers -= s.config.LightPeers
+	// }
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
 	return nil

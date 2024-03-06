@@ -66,7 +66,7 @@ func testGeneration(t *testing.T, scheme string) {
 	helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
 	root, snap := helper.CommitAndGenerate()
-	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
+	if have, want := root, common.HexToHash("0x0bc6b6959d2589404dd3e4b25783a829b58625f6b673f095e9a97391b474c3f9"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
 	select {
@@ -419,14 +419,14 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 	helper := newHelper(scheme)
 
 	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0xc7a30f39aff471c95d8a837497ad0e49b65be475cc0953540f80cfcdbdcd9074
-	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x51d00b998075e2a104a80b7280800fe8779abe0407225929ac507d8ba9e67366
 	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: big.NewInt(3), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x19ead688e907b0fab07176120dceec244a72aff2f0aa51e8b827584e378772f4
 
 	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie node and ensure the generator chokes
 	targetPath := []byte{0xc}
-	targetHash := common.HexToHash("0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7")
+	targetHash := common.HexToHash("0x51d00b998075e2a104a80b7280800fe8779abe0407225929ac507d8ba9e67366")
 
 	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, targetPath, targetHash, scheme)
 
@@ -463,10 +463,10 @@ func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
 		helper = newHelper(scheme)
 	)
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)                                                                                   // 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
-	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0})              // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
-	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0})              // 0x963f96eb81a3b19322afa7044cf396f4bfba698f5887be4778086f1fa5bfe45f
+	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x51d00b998075e2a104a80b7280800fe8779abe0407225929ac507d8ba9e67366
 	stRoot = helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: big.NewInt(3), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: big.NewInt(3), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x326f799ece53f1c71c1d494bf8352798d3973ecca10893ca35a96266882bc12b
 
 	root := helper.Commit()
 
@@ -503,10 +503,10 @@ func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
 	helper := newHelper(scheme)
 
 	stRoot := helper.makeStorageTrie(hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)                                                                                   // 0xddefcd9376dd029653ef384bd2f0a126bb755fe84fdcc9e7cf421ba454f2bc67
-	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0})              // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
-	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
+	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0})              // 0x963f96eb81a3b19322afa7044cf396f4bfba698f5887be4778086f1fa5bfe45f
+	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: big.NewInt(2), Root: types.EmptyRootHash, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x51d00b998075e2a104a80b7280800fe8779abe0407225929ac507d8ba9e67366
 	stRoot = helper.makeStorageTrie(hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: big.NewInt(3), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: big.NewInt(3), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes(), CodeSize: 0}) // 0x326f799ece53f1c71c1d494bf8352798d3973ecca10893ca35a96266882bc12b
 
 	root := helper.Commit()
 
@@ -548,7 +548,7 @@ func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
 		)
 		acc := &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
-		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
+		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x963f96eb81a3b19322afa7044cf396f4bfba698f5887be4778086f1fa5bfe45f
 
 		// Identical in the snap
 		key := hashData([]byte("acc-1"))
@@ -624,7 +624,7 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 		)
 		acc := &types.StateAccount{Balance: big.NewInt(1), Root: stRoot, KeccakCodeHash: types.EmptyKeccakCodeHash.Bytes(), PoseidonCodeHash: types.EmptyPoseidonCodeHash.Bytes()}
 		val, _ := rlp.EncodeToBytes(acc)
-		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e
+		helper.accTrie.MustUpdate([]byte("acc-1"), val) // 0x963f96eb81a3b19322afa7044cf396f4bfba698f5887be4778086f1fa5bfe45f
 
 		// Identical in the snap
 		key := hashData([]byte("acc-1"))

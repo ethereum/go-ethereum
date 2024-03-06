@@ -339,6 +339,9 @@ type ChainConfig struct {
 }
 
 type ScrollConfig struct {
+	// Use zktrie [optional]
+	UseZktrie bool `json:"useZktrie,omitempty"`
+
 	// Maximum number of transactions per block [optional]
 	MaxTxPerBlock *int `json:"maxTxPerBlock,omitempty"`
 
@@ -371,6 +374,10 @@ func (c *L1Config) String() string {
 
 func (s ScrollConfig) FeeVaultEnabled() bool {
 	return s.FeeVaultAddress != nil
+}
+
+func (s ScrollConfig) ZktrieEnabled() bool {
+	return s.UseZktrie
 }
 
 func (s ScrollConfig) ShouldIncludeL1Messages() bool {

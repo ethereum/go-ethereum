@@ -170,6 +170,13 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if db.triedb.IsUsingZktrie() {
+		tr, err := trie.NewZkTrie(root, trie.NewZktrieDatabaseFromTriedb(db.triedb))
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
+	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -179,6 +186,13 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash) (Trie, error) {
+	if db.triedb.IsUsingZktrie() {
+		tr, err := trie.NewZkTrie(root, trie.NewZktrieDatabaseFromTriedb(db.triedb))
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
+	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
 	if err != nil {
 		return nil, err
@@ -190,6 +204,8 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
+		return t.Copy()
+	case *trie.ZkTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))

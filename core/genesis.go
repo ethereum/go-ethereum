@@ -121,10 +121,14 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 }
 
 // hash computes the state root according to the genesis specification.
-func (ga *GenesisAlloc) hash() (common.Hash, error) {
+func (ga *GenesisAlloc) hash(isUsingZktrie bool) (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabase(rawdb.NewMemoryDatabase())
+	trieConfig := trie.HashDefaults
+	if isUsingZktrie {
+		trieConfig = trie.HashDefaultsWithZktrie
+	}
+	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), trieConfig)
 	statedb, err := state.New(types.EmptyRootHash, db, nil)
 	if err != nil {
 		return common.Hash{}, err
@@ -287,6 +291,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		} else {
 			log.Info("Writing custom genesis block")
 		}
+		if genesis.Config.Scroll.ZktrieEnabled() { // genesis.Config must be not nil atm
+			// overwrite triedb IsUsingZktrie config to be safe
+			triedb.SetIsUsingZktrie(genesis.Config.Scroll.ZktrieEnabled())
+		}
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
@@ -299,6 +307,14 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	// is initialized with an external ancient store. Commit genesis state
 	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
+	storedcfg := rawdb.ReadChainConfig(db, stored)
+	if genesis != nil { // genesis.Config must be not nil atm
+		// overwrite triedb IsUsingZktrie config to be safe
+		triedb.SetIsUsingZktrie(genesis.Config.Scroll.ZktrieEnabled())
+	} else if storedcfg != nil && storedcfg.Scroll.ZktrieEnabled() {
+		// overwrite triedb IsUsingZktrie config to be safe
+		triedb.SetIsUsingZktrie(storedcfg.Scroll.ZktrieEnabled())
+	}
 	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
@@ -328,7 +344,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
-	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
@@ -411,7 +426,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := g.Alloc.hash()
+	root, err := g.Alloc.hash(g.Config.Scroll.ZktrieEnabled())
 	if err != nil {
 		panic(err)
 	}
@@ -471,13 +486,17 @@ func (g *Genesis) ToBlock() *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block, error) {
-	block := g.ToBlock()
-	if block.Number().Sign() != 0 {
-		return nil, errors.New("can't commit genesis block with number > 0")
-	}
 	config := g.Config
 	if config == nil {
 		config = params.AllEthashProtocolChanges
+	}
+	if config.Scroll.ZktrieEnabled() != triedb.IsUsingZktrie() {
+		return nil, fmt.Errorf("ZktrieEnabled mismatch. genesis: %v, triedb: %v", g.Config.Scroll.ZktrieEnabled(), triedb.IsUsingZktrie())
+	}
+
+	block := g.ToBlock()
+	if block.Number().Sign() != 0 {
+		return nil, errors.New("can't commit genesis block with number > 0")
 	}
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err

@@ -151,6 +151,8 @@ func runCmd(ctx *cli.Context) error {
 	triedb := trie.NewDatabase(db, &trie.Config{
 		Preimages: preimages,
 		HashDB:    hashdb.Defaults,
+		// scroll related
+		IsUsingZktrie: genesisConfig.Config.Scroll.ZktrieEnabled(),
 	})
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)

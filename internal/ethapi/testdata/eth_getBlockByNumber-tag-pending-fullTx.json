@@ -33,7 +33,8 @@
       "chainId": "0x7fffffffffffffee",
       "v": "0x0",
       "r": "0x0",
-      "s": "0x0"
+      "s": "0x0",
+      "sender": "0x0000000000000000000000000000000000000000"
     }
   ],
   "transactionsRoot": "0x98d9f6dd0aa479c0fb448f2627e9f1964aca699fccab8f6e95861547a4699e37",

@@ -206,6 +206,10 @@ func (s *StateDB) Error() error {
 	return s.dbErr
 }
 
+func (s *StateDB) IsUsingZktrie() bool {
+	return s.db.TrieDB().IsUsingZktrie()
+}
+
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.append(addLogChange{txhash: s.thash})
 
