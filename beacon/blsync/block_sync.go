@@ -31,15 +31,17 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
 )
 
+type beaconBlockType = deneb.BeaconBlock
+
 // beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
 // to the validated and prefetch heads.
 type beaconBlockSync struct {
-	recentBlocks *lru.Cache[common.Hash, *capella.BeaconBlock]
+	recentBlocks *lru.Cache[common.Hash, *beaconBlockType]
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
@@ -59,7 +61,7 @@ func newBeaconBlockSync(headTracker headTracker, chainHeadFeed *event.Feed) *bea
 	return &beaconBlockSync{
 		headTracker:   headTracker,
 		chainHeadFeed: chainHeadFeed,
-		recentBlocks:  lru.NewCache[common.Hash, *capella.BeaconBlock](10),
+		recentBlocks:  lru.NewCache[common.Hash, *beaconBlockType](10),
 		locked:        make(map[common.Hash]request.ServerAndID),
 		serverHeads:   make(map[request.Server]common.Hash),
 	}
@@ -73,7 +75,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 			sid, req, resp := event.RequestInfo()
 			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
 			if resp != nil {
-				s.recentBlocks.Add(blockRoot, resp.(*capella.BeaconBlock))
+				s.recentBlocks.Add(blockRoot, resp.(*beaconBlockType))
 			}
 			if s.locked[blockRoot] == sid {
 				delete(s.locked, blockRoot)
@@ -112,7 +114,7 @@ func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot
 	}
 }
 
-func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
+func blockHeadInfo(block *beaconBlockType) types.HeadInfo {
 	if block == nil {
 		return types.HeadInfo{}
 	}
@@ -120,12 +122,12 @@ func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
 }
 
 // beaconBlockHash calculates the hash of a beacon block.
-func beaconBlockHash(beaconBlock *capella.BeaconBlock) common.Hash {
+func beaconBlockHash(beaconBlock *beaconBlockType) common.Hash {
 	return common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
 }
 
 // getExecBlock extracts the execution block from the beacon block's payload.
-func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
+func getExecBlock(beaconBlock *beaconBlockType) (*ctypes.Block, error) {
 	payload := &beaconBlock.Body.ExecutionPayload
 	txs := make([]*ctypes.Transaction, len(payload.Transactions))
 	for i, opaqueTx := range payload.Transactions {

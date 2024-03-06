@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -33,16 +34,16 @@ var (
 	testServer1 = "testServer1"
 	testServer2 = "testServer2"
 
-	testBlock1 = &capella.BeaconBlock{
+	testBlock1 = &beaconBlockType{
 		Slot: 123,
-		Body: capella.BeaconBlockBody{
-			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 456},
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{BlockNumber: 456},
 		},
 	}
-	testBlock2 = &capella.BeaconBlock{
+	testBlock2 = &beaconBlockType{
 		Slot: 124,
-		Body: capella.BeaconBlockBody{
-			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 457},
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{BlockNumber: 457},
 		},
 	}
 )
@@ -64,7 +65,7 @@ func TestBlockSync(t *testing.T) {
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)
 
-	expHeadBlock := func(tci int, expHead *capella.BeaconBlock) {
+	expHeadBlock := func(tci int, expHead *beaconBlockType) {
 		var expNumber, headNumber uint64
 		if expHead != nil {
 			expNumber = uint64(expHead.Body.ExecutionPayload.BlockNumber)
@@ -126,7 +127,7 @@ func TestBlockSync(t *testing.T) {
 	expHeadBlock(5, testBlock2)
 }
 
-func blockHeader(block *capella.BeaconBlock) types.Header {
+func blockHeader(block *beaconBlockType) types.Header {
 	return types.Header{
 		Slot:          uint64(block.Slot),
 		ProposerIndex: uint64(block.ProposerIndex),
