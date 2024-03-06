@@ -98,8 +98,6 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 // jsTracer is an implementation of the Tracer interface which evaluates
 // JS functions on the relevant EVM hooks. It uses Goja as its JS engine.
 type jsTracer struct {
-	directory.NoopTracer
-
 	vm                *goja.Runtime
 	env               *tracing.VMContext
 	toBig             toBigFn               // Converts a hex string into a JS bigint

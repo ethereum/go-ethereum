@@ -25,11 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 )
 
 type JSONLogger struct {
-	directory.NoopTracer
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext

@@ -110,7 +110,6 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	directory.NoopTracer
 	tracer            *callTracer
 	config            flatCallTracerConfig
 	ctx               *directory.Context // Holds tracer context data

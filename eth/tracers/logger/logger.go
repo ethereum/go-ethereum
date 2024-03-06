@@ -108,7 +108,6 @@ func (s *StructLog) ErrorString() string {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
-	directory.NoopTracer
 	cfg Config
 	env *tracing.VMContext
 
@@ -339,7 +338,6 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 }
 
 type mdLogger struct {
-	directory.NoopTracer
 	out io.Writer
 	cfg *Config
 	env *tracing.VMContext
