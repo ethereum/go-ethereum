@@ -21,10 +21,10 @@ func TestEventFilter(t *testing.T) {
 	s.RegisterServer(srv)
 	s.testWaitCh <- struct{}{}
 	module1.expProcess(t, []Event{
-		Event{Type: EvRegistered, Server: srv},
+		{Type: EvRegistered, Server: srv},
 	})
 	module2.expProcess(t, []Event{
-		Event{Type: EvRegistered, Server: srv},
+		{Type: EvRegistered, Server: srv},
 	})
 	// let module1 send a request
 	srv.canRequest = 1
@@ -38,7 +38,7 @@ func TestEventFilter(t *testing.T) {
 	srv.eventCb(Event{Type: EvTimeout, Data: RequestResponse{ID: 1, Request: testRequest}})
 	s.testWaitCh <- struct{}{}
 	module1.expProcess(t, []Event{
-		Event{Type: EvTimeout, Server: srv, Data: RequestResponse{ID: 1, Request: testRequest}},
+		{Type: EvTimeout, Server: srv, Data: RequestResponse{ID: 1, Request: testRequest}},
 	})
 	module2.expProcess(t, nil)
 	// unregister server; both modules should receive server event
@@ -46,11 +46,11 @@ func TestEventFilter(t *testing.T) {
 	s.testWaitCh <- struct{}{}
 	module1.expProcess(t, []Event{
 		// module1 should also receive EvFail on its pending request
-		Event{Type: EvFail, Server: srv, Data: RequestResponse{ID: 1, Request: testRequest}},
-		Event{Type: EvUnregistered, Server: srv},
+		{Type: EvFail, Server: srv, Data: RequestResponse{ID: 1, Request: testRequest}},
+		{Type: EvUnregistered, Server: srv},
 	})
 	module2.expProcess(t, []Event{
-		Event{Type: EvUnregistered, Server: srv},
+		{Type: EvUnregistered, Server: srv},
 	})
 	// response after server unregistered; should be discarded
 	srv.eventCb(Event{Type: EvResponse, Data: RequestResponse{ID: 1, Request: testRequest, Response: testResponse}})
