@@ -30,7 +30,6 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnExit:           t.OnExit,
 		OnOpcode:         t.OnOpcode,
 		OnFault:          t.OnFault,
-		OnKeccakPreimage: t.OnKeccakPreimage,
 		OnGasChange:      t.OnGasChange,
 		OnBlockchainInit: t.OnBlockchainInit,
 		OnBlockStart:     t.OnBlockStart,
@@ -50,8 +49,6 @@ func (t *noop) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tr
 
 func (t *noop) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
 }
-
-func (t *noop) OnKeccakPreimage(hash common.Hash, data []byte) {}
 
 func (t *noop) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
