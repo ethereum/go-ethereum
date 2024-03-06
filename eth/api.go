@@ -31,7 +31,7 @@ func NewEthereumAPI(e *Ethereum) *EthereumAPI {
 	return &EthereumAPI{e}
 }
 
-// Etherbase is the address that mining rewards will be sent to.
+// Etherbase is the address that mining rewards will be sent to(learn).
 func (api *EthereumAPI) Etherbase() (common.Address, error) {
 	return api.e.Etherbase()
 }
