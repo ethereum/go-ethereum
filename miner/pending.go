@@ -37,10 +37,10 @@ type pending struct {
 }
 
 // resolve retrieves the cached pending result if it's available. Nothing will be
-// returned if the parentHash/coinbase is not matched or the result is already too old.
+// returned if the parentHash is not matched or the result is already too old.
 //
 // Note, don't modify the returned payload result.
-func (p *pending) resolve(parentHash common.Hash, coinbase common.Address) *newPayloadResult {
+func (p *pending) resolve(parentHash common.Hash) *newPayloadResult {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -48,9 +48,6 @@ func (p *pending) resolve(parentHash common.Hash, coinbase common.Address) *newP
 		return nil
 	}
 	if parentHash != p.parentHash {
-		return nil
-	}
-	if p.result.block.Coinbase() != coinbase {
 		return nil
 	}
 	if time.Since(p.created) > pendingTTL {

@@ -65,7 +65,7 @@ var DefaultConfig = Config{
 // Miner is the main object which takes care of submitting new work to consensus
 // engine and gathering the sealing result.
 type Miner struct {
-	confMu      sync.RWMutex // The lock used to protect the config
+	confMu      sync.RWMutex // The lock used to protect the config fields: GasCeil, GasTip and Extradata
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
@@ -133,14 +133,10 @@ func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
 // getPending retrieves the pending block based on the current head block.
 // The result might be nil if pending generation is failed.
 func (miner *Miner) getPending() *newPayloadResult {
-	miner.confMu.RLock()
-	coinbase := miner.config.PendingFeeRecipient
-	miner.confMu.RUnlock()
-
 	header := miner.chain.CurrentHeader()
 	miner.pendingMu.Lock()
 	defer miner.pendingMu.Unlock()
-	if cached := miner.pending.resolve(header.Hash(), coinbase); cached != nil {
+	if cached := miner.pending.resolve(header.Hash()); cached != nil {
 		return cached
 	}
 
@@ -155,7 +151,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 		timestamp:   timestamp,
 		forceTime:   false,
 		parentHash:  header.Hash(),
-		coinbase:    coinbase,
+		coinbase:    miner.config.PendingFeeRecipient,
 		random:      common.Hash{},
 		withdrawals: withdrawal,
 		beaconRoot:  nil,
