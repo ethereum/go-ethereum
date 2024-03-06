@@ -18,7 +18,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -37,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -178,21 +176,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
-	}
-
-	if ctx.IsSet(utils.VMTraceFlag.Name) {
-		if name := ctx.String(utils.VMTraceFlag.Name); name != "" {
-			var config string
-			if ctx.IsSet(utils.VMTraceConfigFlag.Name) {
-				config = ctx.String(utils.VMTraceConfigFlag.Name)
-			}
-			t, err := live.Directory.New(name, json.RawMessage(config))
-			if err != nil {
-				utils.Fatalf("Failed to create tracer %q: %v", name, err)
-			}
-
-			cfg.Eth.VMTracer = t
-		}
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
