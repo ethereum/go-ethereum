@@ -1499,6 +1499,8 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 	return wrapedNode, nil
 }
 
+// func (p *PortalProtocol) traceContentLookupWorker()
+
 func (p *PortalProtocol) ToContentId(contentKey []byte) []byte {
 	return p.toContentId(contentKey)
 }
