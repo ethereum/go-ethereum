@@ -448,8 +448,8 @@ var (
 		Value:    ethconfig.Defaults.Miner.Recommit,
 		Category: flags.MinerCategory,
 	}
-	MinerPendingBlockProducerFlag = &cli.StringFlag{
-		Name:     "miner.pendingBlockProducer",
+	MinerPendingFeeRecipientFlag = &cli.StringFlag{
+		Name:     "miner.pending.feeRecipient",
 		Usage:    "0x prefixed public address for the pending block producer (not used for actual block production)",
 		Category: flags.MinerCategory,
 	}
@@ -1261,16 +1261,16 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
 		return
 	}
-	if !ctx.IsSet(MinerPendingBlockProducerFlag.Name) {
+	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
 		return
 	}
-	addr := ctx.String(MinerPendingBlockProducerFlag.Name)
+	addr := ctx.String(MinerPendingFeeRecipientFlag.Name)
 	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
 		addr = addr[2:]
 	}
 	b, err := hex.DecodeString(addr)
 	if err != nil || len(b) != common.AddressLength {
-		Fatalf("-%s: invalid pending block producer address %q", MinerPendingBlockProducerFlag.Name, addr)
+		Fatalf("-%s: invalid pending block producer address %q", MinerPendingFeeRecipientFlag.Name, addr)
 		return
 	}
 	cfg.Miner.Etherbase = common.BytesToAddress(b)
