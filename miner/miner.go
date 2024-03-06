@@ -72,6 +72,7 @@ type Miner struct {
 	txpool      *txpool.TxPool
 	chain       *core.BlockChain
 	pending     *pending
+	pendingMu   sync.Mutex // Lock protects the pending block
 }
 
 // New creates a new miner with provided config.
@@ -137,9 +138,13 @@ func (miner *Miner) getPending() *newPayloadResult {
 	miner.confMu.RUnlock()
 
 	header := miner.chain.CurrentHeader()
+	miner.pendingMu.Lock()
 	if cached := miner.pending.resolve(header.Hash(), coinbase); cached != nil {
+		miner.pendingMu.Unlock()
 		return cached
 	}
+	defer miner.pendingMu.Unlock()
+
 	var (
 		timestamp  = uint64(time.Now().Unix())
 		withdrawal types.Withdrawals
