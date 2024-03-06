@@ -774,10 +774,10 @@ type nodeStats struct {
 	Uptime   int  `json:"uptime"`
 }
 
-// reportStats retrieves various stats about the node at the networking and
-// mining layer and reports it to the stats server.
+// reportStats retrieves various stats about the node at the networking layer
+// and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
-	// Gather the syncing and mining infos from the local miner instance
+	// Gather the syncing infos from the local miner instance
 	var (
 		syncing  bool
 		gasprice int
