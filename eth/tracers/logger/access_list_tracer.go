@@ -135,12 +135,12 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 
 func (a *AccessListTracer) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnOpcode: a.CaptureState,
+		OnOpcode: a.OnOpcode,
 	}
 }
 
-// CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// OnOpcode captures all opcodes that touch storage or addresses and adds them to the accesslist.
+func (a *AccessListTracer) OnOpcode(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stackData := scope.StackData()
 	stackLen := len(stackData)
 	op := vm.OpCode(opcode)

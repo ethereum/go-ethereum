@@ -224,21 +224,21 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.CaptureTxStart,
-			OnTxEnd:   t.CaptureTxEnd,
-			OnEnter:   t.CaptureEnter,
-			OnExit:    t.CaptureExit,
-			OnOpcode:  t.CaptureState,
-			OnFault:   t.CaptureFault,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnEnter:   t.OnEnter,
+			OnExit:    t.OnExit,
+			OnOpcode:  t.OnOpcode,
+			OnFault:   t.OnFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
 	}, nil
 }
 
-// CaptureTxStart implements the Tracer interface and is invoked at the beginning of
+// OnTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *jsTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	// Need statedb access for db object
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
@@ -257,9 +257,9 @@ func (t *jsTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction,
 	t.ctx["gasPrice"] = gasPriceBig
 }
 
-// CaptureTxEnd implements the Tracer interface and is invoked at the end of
+// OnTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
-func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		// Don't override vm error
 		if _, ok := t.ctx["error"]; !ok {
@@ -270,8 +270,8 @@ func (t *jsTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
 	t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
 }
 
-// CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (t *jsTracer) captureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+// onStart implements the Tracer interface to initialize the tracing operation.
+func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	cancel := func(err error) {
 		t.err = err
 		t.env.VM.Cancel()
@@ -307,8 +307,8 @@ func (t *jsTracer) captureStart(from common.Address, to common.Address, create b
 	t.ctx["value"] = valueBig
 }
 
-// CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// OnOpcode implements the Tracer interface to trace a single step of VM execution.
+func (t *jsTracer) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -332,8 +332,8 @@ func (t *jsTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, 
 	}
 }
 
-// CaptureFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+// OnFault implements the Tracer interface to trace an execution fault
+func (t *jsTracer) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -344,8 +344,8 @@ func (t *jsTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, 
 	}
 }
 
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+// onEnd is called after the call finishes to finalize the tracing.
+func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool) {
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
@@ -357,10 +357,10 @@ func (t *jsTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted
 	t.ctx["output"] = outputVal
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *jsTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+// OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *jsTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if depth == 0 {
-		t.captureStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
+		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
 		return
 	}
 	if !t.traceFrame {
@@ -385,11 +385,11 @@ func (t *jsTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Addre
 	}
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *jsTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
-		t.captureEnd(output, gasUsed, err, reverted)
+		t.onEnd(output, gasUsed, err, reverted)
 		return
 	}
 	if !t.traceFrame {

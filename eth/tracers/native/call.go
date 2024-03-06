@@ -128,10 +128,10 @@ func newCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trac
 	}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.CaptureTxStart,
-			OnTxEnd:   t.CaptureTxEnd,
-			OnEnter:   t.CaptureEnter,
-			OnExit:    t.CaptureExit,
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnEnter:   t.OnEnter,
+			OnExit:    t.OnExit,
 			OnLog:     t.OnLog,
 		},
 		GetResult: t.GetResult,
@@ -151,8 +151,8 @@ func newCallTracerObject(ctx *directory.Context, cfg json.RawMessage) (*callTrac
 	return &callTracer{callstack: make([]callFrame, 0, 1), config: config}, nil
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *callTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+// OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *callTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.depth = depth
 	if t.config.OnlyTopCall && depth > 0 {
 		return
@@ -177,9 +177,9 @@ func (t *callTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Add
 	t.callstack = append(t.callstack, call)
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *callTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
 		t.captureEnd(output, gasUsed, err, reverted)
 		return
@@ -212,11 +212,11 @@ func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, revert
 	t.callstack[0].processOutput(output, err, reverted)
 }
 
-func (t *callTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
 }
 
-func (t *callTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	// Error happened during tx validation.
 	if err != nil {
 		return

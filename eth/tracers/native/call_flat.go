@@ -115,7 +115,7 @@ type flatCallTracer struct {
 	config            flatCallTracerConfig
 	ctx               *directory.Context // Holds tracer context data
 	reason            error              // Textual reason for the interruption
-	activePrecompiles []common.Address   // Updated on CaptureStart based on given rules
+	activePrecompiles []common.Address   // Updated on tx start based on given rules
 }
 
 type flatCallTracerConfig struct {
@@ -142,31 +142,19 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: ft.CaptureTxStart,
-			OnTxEnd:   ft.CaptureTxEnd,
-			OnEnter:   ft.CaptureEnter,
-			OnExit:    ft.CaptureExit,
-			OnOpcode:  ft.CaptureState,
-			OnFault:   ft.CaptureFault,
+			OnTxStart: ft.OnTxStart,
+			OnTxEnd:   ft.OnTxEnd,
+			OnEnter:   ft.OnEnter,
+			OnExit:    ft.OnExit,
 		},
 		Stop:      ft.Stop,
 		GetResult: ft.GetResult,
 	}, nil
 }
 
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *flatCallTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	t.tracer.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
-}
-
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *flatCallTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
-	t.tracer.CaptureFault(pc, op, gas, cost, scope, depth, err)
-}
-
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *flatCallTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.tracer.CaptureEnter(depth, typ, from, to, input, gas, value)
+// OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *flatCallTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.tracer.OnEnter(depth, typ, from, to, input, gas, value)
 
 	if depth == 0 {
 		return
@@ -178,10 +166,10 @@ func (t *flatCallTracer) CaptureEnter(depth int, typ tracing.OpCode, from common
 	}
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *flatCallTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	t.tracer.CaptureExit(depth, output, gasUsed, err, reverted)
+func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
 
 	if depth == 0 {
 		return
@@ -205,15 +193,15 @@ func (t *flatCallTracer) CaptureExit(depth int, output []byte, gasUsed uint64, e
 	}
 }
 
-func (t *flatCallTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	t.tracer.CaptureTxStart(env, tx, from)
+func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.tracer.OnTxStart(env, tx, from)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
-func (t *flatCallTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
-	t.tracer.CaptureTxEnd(receipt, err)
+func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	t.tracer.OnTxEnd(receipt, err)
 }
 
 // GetResult returns an empty json object.

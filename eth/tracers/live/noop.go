@@ -24,13 +24,13 @@ type noop struct{}
 func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	t := &noop{}
 	return &tracing.Hooks{
-		OnTxStart:        t.CaptureTxStart,
-		OnTxEnd:          t.CaptureTxEnd,
-		OnEnter:          t.CaptureEnter,
-		OnExit:           t.CaptureExit,
-		OnOpcode:         t.CaptureState,
-		OnFault:          t.CaptureFault,
-		OnKeccakPreimage: t.CaptureKeccakPreimage,
+		OnTxStart:        t.OnTxStart,
+		OnTxEnd:          t.OnTxEnd,
+		OnEnter:          t.OnEnter,
+		OnExit:           t.OnExit,
+		OnOpcode:         t.OnOpcode,
+		OnFault:          t.OnFault,
+		OnKeccakPreimage: t.OnKeccakPreimage,
 		OnGasChange:      t.OnGasChange,
 		OnBlockchainInit: t.OnBlockchainInit,
 		OnBlockStart:     t.OnBlockStart,
@@ -45,38 +45,24 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *noop) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *noop) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 }
 
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *noop) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *noop) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
 }
 
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *noop) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *noop) OnKeccakPreimage(hash common.Hash, data []byte) {}
+
+func (t *noop) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *noop) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
+func (t *noop) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (t *noop) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *noop) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *noop) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *noop) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-}
-
-func (t *noop) CaptureTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
-}
-
-func (t *noop) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *noop) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 func (t *noop) OnBlockStart(ev tracing.BlockEvent) {

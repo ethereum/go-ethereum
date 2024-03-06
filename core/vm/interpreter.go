@@ -178,8 +178,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
 	)
-	// Don't move this deferred function, it's placed before the capturestate-deferred method,
-	// so that it gets executed _after_: the capturestate needs the stacks before
+	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
+	// so that it gets executed _after_: the OnOpcode needs the stacks before
 	// they are returned to the pools
 	defer func() {
 		returnStack(stack)

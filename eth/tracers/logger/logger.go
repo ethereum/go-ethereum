@@ -136,10 +136,10 @@ func NewStructLogger(cfg *Config) *StructLogger {
 
 func (l *StructLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart: l.CaptureTxStart,
-		OnTxEnd:   l.CaptureTxEnd,
-		OnExit:    l.CaptureExit,
-		OnOpcode:  l.CaptureState,
+		OnTxStart: l.OnTxStart,
+		OnTxEnd:   l.OnTxEnd,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
 	}
 }
 
@@ -159,10 +159,10 @@ func (l *StructLogger) Reset() {
 	l.err = nil
 }
 
-// CaptureState logs a new structured log message and pushes it out to the environment
+// OnOpcode logs a new structured log message and pushes it out to the environment
 //
-// CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
+func (l *StructLogger) OnOpcode(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if l.interrupt.Load() {
 		return
@@ -227,8 +227,8 @@ func (l *StructLogger) CaptureState(pc uint64, opcode tracing.OpCode, gas, cost 
 	l.logs = append(l.logs, log)
 }
 
-// CaptureExit is called a call frame finishes processing.
-func (l *StructLogger) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+// OnExit is called a call frame finishes processing.
+func (l *StructLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth != 0 {
 		return
 	}
@@ -268,11 +268,11 @@ func (l *StructLogger) Stop(err error) {
 	l.interrupt.Store(true)
 }
 
-func (l *StructLogger) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (l *StructLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
 
-func (l *StructLogger) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		// Don't override vm error
 		if l.err == nil {
@@ -358,19 +358,19 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart: t.CaptureTxStart,
-		OnEnter:   t.CaptureEnter,
-		OnExit:    t.CaptureExit,
-		OnOpcode:  t.CaptureState,
-		OnFault:   t.CaptureFault,
+		OnTxStart: t.OnTxStart,
+		OnEnter:   t.OnEnter,
+		OnExit:    t.OnExit,
+		OnOpcode:  t.OnOpcode,
+		OnFault:   t.OnFault,
 	}
 }
 
-func (t *mdLogger) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *mdLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 }
 
-func (t *mdLogger) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if depth != 0 {
 		return
 	}
@@ -391,15 +391,15 @@ func (t *mdLogger) CaptureEnter(depth int, typ tracing.OpCode, from common.Addre
 `)
 }
 
-func (t *mdLogger) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
 		fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 			output, gasUsed, err)
 	}
 }
 
-// CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
+func (t *mdLogger) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stack := scope.StackData()
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
@@ -419,7 +419,7 @@ func (t *mdLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, 
 	}
 }
 
-func (t *mdLogger) CaptureFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *mdLogger) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 

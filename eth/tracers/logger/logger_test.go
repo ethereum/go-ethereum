@@ -61,8 +61,7 @@ func TestStoreCapture(t *testing.T) {
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash
-	logger.CaptureTxStart(env.GetVMContext(), nil, common.Address{})
-	logger.CaptureStart(common.Address{}, contract.Address(), false, nil, 0, nil)
+	logger.OnTxStart(env.GetVMContext(), nil, common.Address{})
 	_, err := env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		t.Fatal(err)

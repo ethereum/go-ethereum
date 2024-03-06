@@ -47,20 +47,19 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 
 func (l *JSONLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart: l.CaptureTxStart,
-		OnExit:    l.CaptureExit,
-		OnOpcode:  l.CaptureState,
-		OnFault:   l.CaptureFault,
+		OnTxStart: l.OnTxStart,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
+		OnFault:   l.OnFault,
 	}
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op tracing.OpCode, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (l *JSONLogger) OnFault(pc uint64, op tracing.OpCode, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
-	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
+	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
 }
 
-// CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *JSONLogger) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	memory := scope.MemoryData()
 	stack := scope.StackData()
 
@@ -86,8 +85,7 @@ func (l *JSONLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64
 	l.encoder.Encode(log)
 }
 
-// CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (l *JSONLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth > 0 {
 		return
 	}
@@ -103,6 +101,6 @@ func (l *JSONLogger) CaptureExit(depth int, output []byte, gasUsed uint64, err e
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (l *JSONLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
