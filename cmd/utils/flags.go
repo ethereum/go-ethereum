@@ -448,6 +448,11 @@ var (
 		Value:    ethconfig.Defaults.Miner.Recommit,
 		Category: flags.MinerCategory,
 	}
+	MinerPendingBlockProducerFlag = &cli.StringFlag{
+		Name:     "miner.pendingBlockProducer",
+		Usage:    "0x prefixed public address for the pending block producer (not used for actual block production)",
+		Category: flags.MinerCategory,
+	}
 
 	// Account settings
 	UnlockedAccountFlag = &cli.StringFlag{
@@ -1252,17 +1257,20 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
-	if !ctx.IsSet(MinerEtherbaseFlag.Name) {
+	if ctx.IsSet(MinerEtherbaseFlag.Name) {
+		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
 		return
 	}
-	log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
-	addr := ctx.String(MinerEtherbaseFlag.Name)
+	if !ctx.IsSet(MinerPendingBlockProducerFlag.Name) {
+		return
+	}
+	addr := ctx.String(MinerPendingBlockProducerFlag.Name)
 	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
 		addr = addr[2:]
 	}
 	b, err := hex.DecodeString(addr)
 	if err != nil || len(b) != common.AddressLength {
-		Fatalf("-%s: invalid etherbase address %q", MinerEtherbaseFlag.Name, addr)
+		Fatalf("-%s: invalid pending block producer address %q", MinerPendingBlockProducerFlag.Name, addr)
 		return
 	}
 	cfg.Miner.Etherbase = common.BytesToAddress(b)

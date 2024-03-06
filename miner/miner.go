@@ -107,21 +107,6 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
-// Etherbase returns the address of fee recipient.
-func (miner *Miner) Etherbase() common.Address {
-	miner.confMu.RLock()
-	addr := miner.config.Etherbase
-	miner.confMu.RUnlock()
-	return addr
-}
-
-// SetEtherbase sets the address of fee recipient.
-func (miner *Miner) SetEtherbase(addr common.Address) {
-	miner.confMu.Lock()
-	miner.config.Etherbase = addr
-	miner.confMu.Unlock()
-}
-
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
 // For pre-1559 blocks, it sets the ceiling.
 func (miner *Miner) SetGasCeil(ceil uint64) {
