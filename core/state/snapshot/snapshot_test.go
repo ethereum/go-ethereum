@@ -19,7 +19,6 @@ package snapshot
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"github.com/pkg/errors"
 	"math/rand"

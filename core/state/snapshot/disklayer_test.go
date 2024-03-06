@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"bytes"
-	"errors"
 	"github.com/pkg/errors"
 	"testing"
 

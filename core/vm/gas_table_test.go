@@ -18,7 +18,6 @@ package vm
 
 import (
 	"bytes"
-	"errors"
 	"github.com/pkg/errors"
 	"math"
 	"math/big"

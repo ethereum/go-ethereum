@@ -19,7 +19,6 @@ package pebble
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"github.com/pkg/errors"
 	"runtime"

@@ -17,7 +17,6 @@
 package keystore
 
 import (
-	"errors"
 	"github.com/pkg/errors"
 	"math/rand"
 	"os"

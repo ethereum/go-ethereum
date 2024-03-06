@@ -19,7 +19,6 @@ package core_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/pkg/errors"
 	"math/big"
