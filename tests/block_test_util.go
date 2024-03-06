@@ -153,7 +153,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	chain, err := core.NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
 		Tracer:                  tracer,
 		EnableWitnessCollection: witness,
-	}, nil, nil)
+	}, nil)
 	if err != nil {
 		return err
 	}
