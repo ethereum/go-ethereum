@@ -769,8 +769,6 @@ func (s *Service) reportPending(conn *connWrapper) error {
 type nodeStats struct {
 	Active   bool `json:"active"`
 	Syncing  bool `json:"syncing"`
-	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
 	Peers    int  `json:"peers"`
 	GasPrice int  `json:"gasPrice"`
 	Uptime   int  `json:"uptime"`
@@ -781,8 +779,6 @@ type nodeStats struct {
 func (s *Service) reportStats(conn *connWrapper) error {
 	// Gather the syncing and mining infos from the local miner instance
 	var (
-		mining   bool
-		hashrate int
 		syncing  bool
 		gasprice int
 	)
@@ -807,8 +803,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		"id": s.node,
 		"stats": &nodeStats{
 			Active:   true,
-			Mining:   mining,
-			Hashrate: hashrate,
 			Peers:    s.server.PeerCount(),
 			GasPrice: gasprice,
 			Syncing:  syncing,
