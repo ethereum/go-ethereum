@@ -116,9 +116,6 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// KeccakPreimageHook is invoked on the KECCAK256 opcode to provide the preimage for the hash.
-	KeccakPreimageHook = func(hash common.Hash, data []byte)
-
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
@@ -166,16 +163,13 @@ type (
 
 type Hooks struct {
 	// VM events
-	OnTxStart        TxStartHook
-	OnTxEnd          TxEndHook
-	OnStart          StartHook
-	OnEnd            EndHook
-	OnEnter          EnterHook
-	OnExit           ExitHook
-	OnOpcode         OpcodeHook
-	OnFault          FaultHook
-	OnKeccakPreimage KeccakPreimageHook
-	OnGasChange      GasChangeHook
+	OnTxStart   TxStartHook
+	OnTxEnd     TxEndHook
+	OnEnter     EnterHook
+	OnExit      ExitHook
+	OnOpcode    OpcodeHook
+	OnFault     FaultHook
+	OnGasChange GasChangeHook
 	// Chain events
 	OnBlockchainInit BlockchainInitHook
 	OnBlockStart     BlockStartHook

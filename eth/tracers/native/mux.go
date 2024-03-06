@@ -59,19 +59,18 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 	t := &muxTracer{names: names, tracers: objects}
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:        t.OnTxStart,
-			OnTxEnd:          t.OnTxEnd,
-			OnEnter:          t.OnEnter,
-			OnExit:           t.OnExit,
-			OnOpcode:         t.OnOpcode,
-			OnFault:          t.OnFault,
-			OnKeccakPreimage: t.OnKeccakPreimage,
-			OnGasChange:      t.OnGasChange,
-			OnBalanceChange:  t.OnBalanceChange,
-			OnNonceChange:    t.OnNonceChange,
-			OnCodeChange:     t.OnCodeChange,
-			OnStorageChange:  t.OnStorageChange,
-			OnLog:            t.OnLog,
+			OnTxStart:       t.OnTxStart,
+			OnTxEnd:         t.OnTxEnd,
+			OnEnter:         t.OnEnter,
+			OnExit:          t.OnExit,
+			OnOpcode:        t.OnOpcode,
+			OnFault:         t.OnFault,
+			OnGasChange:     t.OnGasChange,
+			OnBalanceChange: t.OnBalanceChange,
+			OnNonceChange:   t.OnNonceChange,
+			OnCodeChange:    t.OnCodeChange,
+			OnStorageChange: t.OnStorageChange,
+			OnLog:           t.OnLog,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -90,14 +89,6 @@ func (t *muxTracer) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, scop
 	for _, t := range t.tracers {
 		if t.OnFault != nil {
 			t.OnFault(pc, op, gas, cost, scope, depth, err)
-		}
-	}
-}
-
-func (t *muxTracer) OnKeccakPreimage(hash common.Hash, data []byte) {
-	for _, t := range t.tracers {
-		if t.OnKeccakPreimage != nil {
-			t.OnKeccakPreimage(hash, data)
 		}
 	}
 }

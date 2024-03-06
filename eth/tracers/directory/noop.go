@@ -38,19 +38,18 @@ func newNoopTracer(ctx *Context, _ json.RawMessage) (*Tracer, error) {
 	t := &NoopTracer{}
 	return &Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart:        t.OnTxStart,
-			OnTxEnd:          t.OnTxEnd,
-			OnEnter:          t.OnEnter,
-			OnExit:           t.OnExit,
-			OnOpcode:         t.OnOpcode,
-			OnFault:          t.OnFault,
-			OnKeccakPreimage: t.OnKeccakPreimage,
-			OnGasChange:      t.OnGasChange,
-			OnBalanceChange:  t.OnBalanceChange,
-			OnNonceChange:    t.OnNonceChange,
-			OnCodeChange:     t.OnCodeChange,
-			OnStorageChange:  t.OnStorageChange,
-			OnLog:            t.OnLog,
+			OnTxStart:       t.OnTxStart,
+			OnTxEnd:         t.OnTxEnd,
+			OnEnter:         t.OnEnter,
+			OnExit:          t.OnExit,
+			OnOpcode:        t.OnOpcode,
+			OnFault:         t.OnFault,
+			OnGasChange:     t.OnGasChange,
+			OnBalanceChange: t.OnBalanceChange,
+			OnNonceChange:   t.OnNonceChange,
+			OnCodeChange:    t.OnCodeChange,
+			OnStorageChange: t.OnStorageChange,
+			OnLog:           t.OnLog,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -62,8 +61,6 @@ func (t *NoopTracer) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, sc
 
 func (t *NoopTracer) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
 }
-
-func (t *NoopTracer) OnKeccakPreimage(hash common.Hash, data []byte) {}
 
 func (t *NoopTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {}
 
