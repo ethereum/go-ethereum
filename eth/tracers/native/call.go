@@ -105,7 +105,6 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	directory.NoopTracer
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64

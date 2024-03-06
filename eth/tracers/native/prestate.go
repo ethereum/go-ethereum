@@ -58,7 +58,6 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	directory.NoopTracer
 	env       *tracing.VMContext
 	pre       stateMap
 	post      stateMap
