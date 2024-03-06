@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
@@ -112,6 +113,12 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	gasPrice := env.TxContext.GasPrice
 	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
 	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+
+	// Add blob fee to the sender's balance.
+	if env.Context.BlobBaseFee != nil && len(env.TxContext.BlobHashes) > 0 {
+		blobGas := uint64(params.BlobTxBlobGasPerBlob * len(env.TxContext.BlobHashes))
+		fromBal.Add(fromBal, new(big.Int).Mul(env.Context.BlobBaseFee, new(big.Int).SetUint64(blobGas)))
+	}
 	t.pre[from].Balance = fromBal
 	t.pre[from].Nonce--
 
