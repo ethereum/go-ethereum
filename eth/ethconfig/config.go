@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -153,7 +152,8 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Enables VM tracing
-	VMTracer *tracing.Hooks
+	VMTrace       string
+	VMTraceConfig string
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
