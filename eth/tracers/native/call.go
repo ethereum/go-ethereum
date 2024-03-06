@@ -130,11 +130,8 @@ func newCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trac
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.CaptureTxStart,
 			OnTxEnd:   t.CaptureTxEnd,
-			OnStart:   t.CaptureStart,
-			OnEnd:     t.CaptureEnd,
 			OnEnter:   t.CaptureEnter,
 			OnExit:    t.CaptureExit,
-			OnOpcode:  t.CaptureState,
 			OnLog:     t.OnLog,
 		},
 		GetResult: t.GetResult,
@@ -151,38 +148,13 @@ func newCallTracerObject(ctx *directory.Context, cfg json.RawMessage) (*callTrac
 	}
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &callTracer{callstack: make([]callFrame, 1), config: config}, nil
-}
-
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	toCopy := to
-	t.callstack[0] = callFrame{
-		Type:  vm.CALL,
-		From:  from,
-		To:    &toCopy,
-		Input: common.CopyBytes(input),
-		Gas:   t.gasLimit,
-		Value: value,
-	}
-	if create {
-		t.callstack[0].Type = vm.CREATE
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.callstack[0].processOutput(output, err, reverted)
-}
-
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *callTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	return &callTracer{callstack: make([]callFrame, 0, 1), config: config}, nil
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *callTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.depth++
-	if t.config.OnlyTopCall {
+func (t *callTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.depth = depth
+	if t.config.OnlyTopCall && depth > 0 {
 		return
 	}
 	// Skip if tracing was interrupted
@@ -199,28 +171,45 @@ func (t *callTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to co
 		Gas:   gas,
 		Value: value,
 	}
+	if depth == 0 {
+		call.Gas = t.gasLimit
+	}
 	t.callstack = append(t.callstack, call)
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.depth--
+func (t *callTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth == 0 {
+		t.captureEnd(output, gasUsed, err, reverted)
+		return
+	}
+
+	t.depth = depth - 1
 	if t.config.OnlyTopCall {
 		return
 	}
+
 	size := len(t.callstack)
 	if size <= 1 {
 		return
 	}
-	// pop call
+	// Pop call.
 	call := t.callstack[size-1]
 	t.callstack = t.callstack[:size-1]
 	size -= 1
 
 	call.GasUsed = gasUsed
 	call.processOutput(output, err, reverted)
+	// Nest call into parent.
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
+}
+
+func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	if len(t.callstack) != 1 {
+		return
+	}
+	t.callstack[0].processOutput(output, err, reverted)
 }
 
 func (t *callTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {

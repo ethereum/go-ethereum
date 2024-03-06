@@ -77,9 +77,9 @@ func runTrace(tracer *directory.Tracer, vmctx *vmContext, chaincfg *params.Chain
 	}
 
 	tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit}), contract.Caller())
-	tracer.OnStart(contract.Caller(), contract.Address(), false, []byte{}, startGas, value.ToBig())
+	tracer.OnEnter(0, tracing.OpCode(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value.ToBig())
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
-	tracer.OnEnd(ret, startGas-contract.Gas, err, true)
+	tracer.OnExit(0, ret, startGas-contract.Gas, err, true)
 	// Rest gas assumes no refund
 	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas}, nil)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer.Hooks})
 	tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
-	tracer.OnStart(common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
+	tracer.OnEnter(0, tracing.OpCode(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
 	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
@@ -210,8 +210,8 @@ func TestNoStepExec(t *testing.T) {
 		}
 		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer.Hooks})
 		tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
-		tracer.OnStart(common.Address{}, common.Address{}, false, []byte{}, 1000, big.NewInt(0))
-		tracer.OnEnd(nil, 0, nil, false)
+		tracer.OnEnter(0, tracing.OpCode(vm.CALL), common.Address{}, common.Address{}, []byte{}, 1000, big.NewInt(0))
+		tracer.OnExit(0, nil, 0, nil, false)
 		ret, err := tracer.GetResult()
 		if err != nil {
 			t.Fatal(err)
@@ -280,8 +280,8 @@ func TestEnterExit(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, uint256.NewInt(0), 0),
 	}
-	tracer.OnEnter(tracing.OpCode(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
-	tracer.OnExit([]byte{}, 400, nil, false)
+	tracer.OnEnter(1, tracing.OpCode(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
+	tracer.OnExit(1, []byte{}, 400, nil, false)
 
 	have, err := tracer.GetResult()
 	if err != nil {

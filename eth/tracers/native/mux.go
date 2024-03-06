@@ -61,8 +61,6 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 		Hooks: &tracing.Hooks{
 			OnTxStart:        t.CaptureTxStart,
 			OnTxEnd:          t.CaptureTxEnd,
-			OnStart:          t.CaptureStart,
-			OnEnd:            t.CaptureEnd,
 			OnEnter:          t.CaptureEnter,
 			OnExit:           t.CaptureExit,
 			OnOpcode:         t.CaptureState,
@@ -78,24 +76,6 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
 	}, nil
-}
-
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *muxTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	for _, t := range t.tracers {
-		if t.OnStart != nil {
-			t.OnStart(from, to, create, input, gas, value)
-		}
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	for _, t := range t.tracers {
-		if t.OnEnd != nil {
-			t.OnEnd(output, gasUsed, err, reverted)
-		}
-	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -135,20 +115,20 @@ func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason)
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *muxTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *muxTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		if t.OnEnter != nil {
-			t.OnEnter(typ, from, to, input, gas, value)
+			t.OnEnter(depth, typ, from, to, input, gas, value)
 		}
 	}
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *muxTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	for _, t := range t.tracers {
 		if t.OnExit != nil {
-			t.OnExit(output, gasUsed, err, reverted)
+			t.OnExit(depth, output, gasUsed, err, reverted)
 		}
 	}
 }

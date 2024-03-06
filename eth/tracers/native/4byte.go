@@ -64,7 +64,6 @@ func newFourByteTracer(ctx *directory.Context, _ json.RawMessage) (*directory.Tr
 	return &directory.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.CaptureTxStart,
-			OnStart:   t.CaptureStart,
 			OnEnter:   t.CaptureEnter,
 		},
 		GetResult: t.GetResult,
@@ -94,16 +93,8 @@ func (t *fourByteTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transa
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *fourByteTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	// Save the outer calldata
-	if len(input) >= 4 {
-		t.store(input[0:4], len(input)-4)
-	}
-}
-
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) CaptureEnter(opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) CaptureEnter(depth int, opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return

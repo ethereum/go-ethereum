@@ -40,8 +40,6 @@ func newNoopTracer(ctx *Context, _ json.RawMessage) (*Tracer, error) {
 		Hooks: &tracing.Hooks{
 			OnTxStart:        t.CaptureTxStart,
 			OnTxEnd:          t.CaptureTxEnd,
-			OnStart:          t.CaptureStart,
-			OnEnd:            t.CaptureEnd,
 			OnEnter:          t.CaptureEnter,
 			OnExit:           t.CaptureExit,
 			OnOpcode:         t.CaptureState,
@@ -82,12 +80,12 @@ func (t *NoopTracer) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 func (t *NoopTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *NoopTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *NoopTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *NoopTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *NoopTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 }
 
 func (*NoopTracer) CaptureTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {

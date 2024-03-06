@@ -144,8 +144,6 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 		Hooks: &tracing.Hooks{
 			OnTxStart: ft.CaptureTxStart,
 			OnTxEnd:   ft.CaptureTxEnd,
-			OnStart:   ft.CaptureStart,
-			OnEnd:     ft.CaptureEnd,
 			OnEnter:   ft.CaptureEnter,
 			OnExit:    ft.CaptureExit,
 			OnOpcode:  ft.CaptureState,
@@ -154,16 +152,6 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 		Stop:      ft.Stop,
 		GetResult: ft.GetResult,
 	}, nil
-}
-
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *flatCallTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.tracer.CaptureStart(from, to, create, input, gas, value)
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.tracer.CaptureEnd(output, gasUsed, err, reverted)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -177,9 +165,12 @@ func (t *flatCallTracer) CaptureFault(pc uint64, op tracing.OpCode, gas, cost ui
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *flatCallTracer) CaptureEnter(typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
+func (t *flatCallTracer) CaptureEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.tracer.CaptureEnter(depth, typ, from, to, input, gas, value)
 
+	if depth == 0 {
+		return
+	}
 	// Child calls must have a value, even if it's zero.
 	// Practically speaking, only STATICCALL has nil value. Set it to zero.
 	if t.tracer.callstack[len(t.tracer.callstack)-1].Value == nil && value == nil {
@@ -189,9 +180,12 @@ func (t *flatCallTracer) CaptureEnter(typ tracing.OpCode, from common.Address, t
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.tracer.CaptureExit(output, gasUsed, err, reverted)
+func (t *flatCallTracer) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	t.tracer.CaptureExit(depth, output, gasUsed, err, reverted)
 
+	if depth == 0 {
+		return
+	}
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
 	// By default we remove them from the callstack.
 	if t.config.IncludePrecompiles {

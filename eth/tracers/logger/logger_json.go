@@ -48,7 +48,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
 func (l *JSONLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart: l.CaptureTxStart,
-		OnEnd:     l.CaptureEnd,
+		OnExit:    l.CaptureExit,
 		OnOpcode:  l.CaptureState,
 		OnFault:   l.CaptureFault,
 	}
@@ -87,7 +87,10 @@ func (l *JSONLogger) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64
 }
 
 // CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+func (l *JSONLogger) CaptureExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth > 0 {
+		return
+	}
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`

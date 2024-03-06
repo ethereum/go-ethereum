@@ -91,15 +91,8 @@ type (
 	// TxEndHook is called after the execution of a transaction ends.
 	TxEndHook = func(receipt *types.Receipt, err error)
 
-	// StartHook is invoked when the processing of the root call starts.
-	StartHook = func(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-
-	// EndHook is invoked when the processing of the top call ends.
-	// See docs for `ExitHook` for info on the `reverted` parameter.
-	EndHook = func(output []byte, gasUsed uint64, err error, reverted bool)
-
 	// EnterHook is invoked when the processing of a message starts.
-	EnterHook = func(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	EnterHook = func(depth int, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 
 	// ExitHook is invoked when the processing of a message ends.
 	// `revert` is true when there was an error during the execution.
@@ -107,7 +100,7 @@ type (
 	// ran out of gas when attempting to persist the code to database did not
 	// count as a call failure and did not cause a revert of the call. This will
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
-	ExitHook = func(output []byte, gasUsed uint64, err error, reverted bool)
+	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
 	OpcodeHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
@@ -167,8 +160,6 @@ type Hooks struct {
 	// VM events
 	OnTxStart        TxStartHook
 	OnTxEnd          TxEndHook
-	OnStart          StartHook
-	OnEnd            EndHook
 	OnEnter          EnterHook
 	OnExit           ExitHook
 	OnOpcode         OpcodeHook
