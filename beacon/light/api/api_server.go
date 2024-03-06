@@ -31,7 +31,6 @@ type ApiServer struct {
 	api           *BeaconLightApi
 	eventCallback func(event request.Event)
 	unsubscribe   func()
-	lastId        uint64
 }
 
 // NewApiServer creates a new ApiServer.
