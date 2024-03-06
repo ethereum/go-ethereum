@@ -19,7 +19,9 @@ package pebble
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -279,7 +281,7 @@ func (d *Database) Has(key []byte) (bool, error) {
 		return false, pebble.ErrClosed
 	}
 	_, closer, err := d.db.Get(key)
-	if err == pebble.ErrNotFound {
+	if errors.Is(err, pebble.ErrNotFound) {
 		return false, nil
 	} else if err != nil {
 		return false, err
@@ -362,7 +364,7 @@ func (d *Database) NewSnapshot() (ethdb.Snapshot, error) {
 func (snap *snapshot) Has(key []byte) (bool, error) {
 	_, closer, err := snap.db.Get(key)
 	if err != nil {
-		if err != pebble.ErrNotFound {
+		if !errors.Is(err, pebble.ErrNotFound) {
 			return false, err
 		} else {
 			return false, nil

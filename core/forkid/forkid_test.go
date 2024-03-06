@@ -18,6 +18,7 @@ package forkid
 
 import (
 	"bytes"
+	"github.com/pkg/errors"
 	"hash/crc32"
 	"math"
 	"math/big"
@@ -359,7 +360,7 @@ func TestValidation(t *testing.T) {
 	genesis := core.DefaultGenesisBlock().ToBlock()
 	for i, tt := range tests {
 		filter := newFilter(tt.config, genesis, func() (uint64, uint64) { return tt.head, tt.time })
-		if err := filter(tt.id); err != tt.err {
+		if err := filter(tt.id); !errors.Is(err, tt.err) {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}
 	}

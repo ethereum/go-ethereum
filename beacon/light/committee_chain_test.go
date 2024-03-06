@@ -18,6 +18,8 @@ package light
 
 import (
 	"crypto/rand"
+	"errors"
+	"github.com/pkg/errors"
 	"testing"
 	"time"
 
@@ -259,13 +261,13 @@ func (c *committeeChainTest) setClockPeriod(period float64) {
 }
 
 func (c *committeeChainTest) addFixedCommitteeRoot(tc *testCommitteeChain, period uint64, expErr error) {
-	if err := c.chain.addFixedCommitteeRoot(period, tc.periods[period].committee.Root()); err != expErr {
+	if err := c.chain.addFixedCommitteeRoot(period, tc.periods[period].committee.Root()); !errors.Is(err, expErr) {
 		c.t.Errorf("Incorrect error output from addFixedCommitteeRoot at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
 
 func (c *committeeChainTest) addCommittee(tc *testCommitteeChain, period uint64, expErr error) {
-	if err := c.chain.addCommittee(period, tc.periods[period].committee); err != expErr {
+	if err := c.chain.addCommittee(period, tc.periods[period].committee); !errors.Is(err, expErr) {
 		c.t.Errorf("Incorrect error output from addCommittee at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }
@@ -275,7 +277,7 @@ func (c *committeeChainTest) insertUpdate(tc *testCommitteeChain, period uint64,
 	if addCommittee {
 		committee = tc.periods[period+1].committee
 	}
-	if err := c.chain.InsertUpdate(tc.periods[period].update, committee); err != expErr {
+	if err := c.chain.InsertUpdate(tc.periods[period].update, committee); !errors.Is(err, expErr) {
 		c.t.Errorf("Incorrect error output from InsertUpdate at period %d (expected %v, got %v)", period, expErr, err)
 	}
 }

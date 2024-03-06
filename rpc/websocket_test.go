@@ -159,7 +159,7 @@ func TestWebsocketLargeRead(t *testing.T) {
 		// Check over limit
 		if overLimit > 0 {
 			err = client.Call(&res, "test_repeat", "A", expLimit+1)
-			if err == nil || err != websocket.ErrReadLimit {
+			if err == nil || !errors.Is(err, websocket.ErrReadLimit) {
 				t.Fatalf("wrong error with limit %d: %v expecting %v", expLimit, err, websocket.ErrReadLimit)
 			}
 		}

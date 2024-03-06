@@ -211,7 +211,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[2:] {
-			if elem.Error != ErrMissingBatchResponse {
+			if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -239,7 +239,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[1:] {
-			if elem.Error != ErrMissingBatchResponse {
+			if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -277,7 +277,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 
 	// Check that remaining response batch elements are reported as absent.
 	for i, elem := range batch[1:] {
-		if elem.Error != ErrMissingBatchResponse {
+		if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 			t.Fatalf("batch elem %d has unexpected error: %v", i+1, elem.Error)
 		}
 	}
@@ -633,7 +633,7 @@ func TestClientNotificationStorm(t *testing.T) {
 					t.Fatalf("(%d/%d) unexpected value %d", i, count, val)
 				}
 			case err := <-sub.Err():
-				if wantError && err != ErrSubscriptionQueueOverflow {
+				if wantError && !errors.Is(err, ErrSubscriptionQueueOverflow) {
 					t.Fatalf("(%d/%d) got error %q, want %q", i, count, err, ErrSubscriptionQueueOverflow)
 				} else if !wantError {
 					t.Fatalf("(%d/%d) got unexpected error %q", i, count, err)

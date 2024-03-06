@@ -13,6 +13,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io"
 	"testing"
 )
@@ -92,7 +93,7 @@ func TestInvalidRecoveryID(t *testing.T) {
 	sig, _ := Sign(msg, seckey)
 	sig[64] = 99
 	_, err := RecoverPubkey(msg, sig)
-	if err != ErrInvalidRecoveryID {
+	if !errors.Is(err, ErrInvalidRecoveryID) {
 		t.Fatalf("got %q, want %q", err, ErrInvalidRecoveryID)
 	}
 }

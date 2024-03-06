@@ -398,7 +398,7 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 	}
 
 	// Test tx in block not found.
-	if _, err := ec.TransactionInBlock(context.Background(), block.Hash(), 20); err != ethereum.NotFound {
+	if _, err := ec.TransactionInBlock(context.Background(), block.Hash(), 20); !errors.Is(err, ethereum.NotFound) {
 		t.Fatal("error should be ethereum.NotFound")
 	}
 

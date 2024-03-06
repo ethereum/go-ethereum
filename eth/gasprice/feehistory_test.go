@@ -84,7 +84,7 @@ func TestFeeHistory(t *testing.T) {
 		if len(ratio) != c.expCount {
 			t.Fatalf("Test case %d: gasUsedRatio array length mismatch, want %d, got %d", i, c.expCount, len(ratio))
 		}
-		if err != c.expErr && !errors.Is(err, c.expErr) {
+		if !errors.Is(err, c.expErr) && !errors.Is(err, c.expErr) {
 			t.Fatalf("Test case %d: error mismatch, want %v, got %v", i, c.expErr, err)
 		}
 	}

@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -90,7 +91,7 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ks.GetKey(k1.Address, account.URL.Path, "bar"); err != ErrDecrypt {
+	if _, err = ks.GetKey(k1.Address, account.URL.Path, "bar"); !errors.Is(err, ErrDecrypt) {
 		t.Fatalf("wrong error for invalid password\ngot %q\nwant %q", err, ErrDecrypt)
 	}
 }

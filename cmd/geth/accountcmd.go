@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -237,7 +238,7 @@ func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []str
 			log.Info("Unlocked account", "address", account.Address.Hex())
 			return ambiguousAddrRecovery(ks, err, password), password
 		}
-		if err != keystore.ErrDecrypt {
+		if !errors.Is(err, keystore.ErrDecrypt) {
 			// No need to prompt again if the error is not decryption-related.
 			break
 		}

@@ -19,6 +19,7 @@ package p2p
 import (
 	"bytes"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"runtime"
 	"testing"
@@ -55,7 +56,7 @@ loop:
 		go func() {
 			if err := SendItems(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
-			} else if err != ErrPipeClosed {
+			} else if !errors.Is(err, ErrPipeClosed) {
 				t.Errorf("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
 			}
 			close(done)

@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
+	"github.com/pkg/errors"
 	"math/rand"
 	"net"
 	"reflect"
@@ -239,7 +240,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr *net.UDPAddr, _ v5wire.Nonce) {})
-	if err := <-done; err != errTimeout {
+	if err := <-done; !errors.Is(err, errTimeout) {
 		t.Fatalf("want errTimeout, got %q", err)
 	}
 

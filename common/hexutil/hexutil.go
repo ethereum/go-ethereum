@@ -33,6 +33,7 @@ package hexutil
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
 	"math/big"
 	"strconv"
 )
@@ -234,7 +235,7 @@ func mapError(err error) error {
 	if _, ok := err.(hex.InvalidByteError); ok {
 		return ErrSyntax
 	}
-	if err == hex.ErrLength {
+	if errors.Is(err, hex.ErrLength) {
 		return ErrOddLength
 	}
 	return err

@@ -105,7 +105,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 		require.NoError(t, op.AppendRaw("test", 2, make([]byte, 2048)))
 		return theError
 	})
-	if err != theError {
+	if !errors.Is(err, theError) {
 		t.Errorf("ModifyAncients returned wrong error %q", err)
 	}
 	checkAncientCount(t, f, "test", 0)
@@ -373,7 +373,7 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	}
 	if _, err := f.Ancient(kind, index); err == nil {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
-	} else if err != errOutOfBounds {
+	} else if !errors.Is(err, errOutOfBounds) {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 	}
 }

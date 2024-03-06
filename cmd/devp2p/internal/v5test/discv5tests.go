@@ -18,6 +18,7 @@ package v5test
 
 import (
 	"bytes"
+	"github.com/pkg/errors"
 	"net"
 	"sync"
 	"time"
@@ -95,7 +96,7 @@ func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
 	case *v5wire.Pong:
 		t.Errorf("PONG response with unknown request ID %x", resp.ReqID)
 	case *readError:
-		if resp.err == v5wire.ErrInvalidReqID {
+		if errors.Is(resp.err, v5wire.ErrInvalidReqID) {
 			t.Error("response with oversized request ID")
 		} else if !netutil.IsTimeout(resp.err) {
 			t.Error(resp)

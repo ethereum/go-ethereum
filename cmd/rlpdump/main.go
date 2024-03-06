@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"math"
 	"os"
@@ -149,7 +150,7 @@ func dump(in *inStream, s *rlp.Stream, depth int, out io.Writer) error {
 				if i > 0 {
 					fmt.Fprint(out, ",\n")
 				}
-				if err := dump(in, s, depth+1, out); err == rlp.EOL {
+				if err := dump(in, s, depth+1, out); errors.Is(err, rlp.EOL) {
 					break
 				} else if err != nil {
 					return err

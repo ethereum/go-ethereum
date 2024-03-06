@@ -19,7 +19,9 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -68,7 +70,7 @@ func TestFreezerBasics(t *testing.T) {
 	}
 	// Check that we cannot read too far
 	_, err = f.Retrieve(uint64(255))
-	if err != errOutOfBounds {
+	if !errors.Is(err, errOutOfBounds) {
 		t.Fatal(err)
 	}
 }
@@ -878,7 +880,7 @@ func checkRetrieveError(t *testing.T, f *freezerTable, items map[uint64]error) {
 		if err == nil {
 			t.Fatalf("unexpected value %x for item %d, want error %v", item, value, wantError)
 		}
-		if err != wantError {
+		if !errors.Is(err, wantError) {
 			t.Fatalf("wrong error for item %d: %v", item, err)
 		}
 	}

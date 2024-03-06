@@ -250,7 +250,7 @@ func TestStreamList(t *testing.T) {
 		}
 	}
 
-	if _, err := s.Uint(); err != EOL {
+	if _, err := s.Uint(); !errors.Is(err, EOL) {
 		t.Errorf("Uint error mismatch, got %v, want %v", err, EOL)
 	}
 	if err = s.ListEnd(); err != nil {
@@ -331,16 +331,16 @@ func TestStreamReadBytes(t *testing.T) {
 func TestDecodeErrors(t *testing.T) {
 	r := bytes.NewReader(nil)
 
-	if err := Decode(r, nil); err != errDecodeIntoNil {
+	if err := Decode(r, nil); !errors.Is(err, errDecodeIntoNil) {
 		t.Errorf("Decode(r, nil) error mismatch, got %q, want %q", err, errDecodeIntoNil)
 	}
 
 	var nilptr *struct{}
-	if err := Decode(r, nilptr); err != errDecodeIntoNil {
+	if err := Decode(r, nilptr); !errors.Is(err, errDecodeIntoNil) {
 		t.Errorf("Decode(r, nilptr) error mismatch, got %q, want %q", err, errDecodeIntoNil)
 	}
 
-	if err := Decode(r, struct{}{}); err != errNoPointer {
+	if err := Decode(r, struct{}{}); !errors.Is(err, errNoPointer) {
 		t.Errorf("Decode(r, struct{}{}) error mismatch, got %q, want %q", err, errNoPointer)
 	}
 

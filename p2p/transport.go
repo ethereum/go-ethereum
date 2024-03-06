@@ -114,7 +114,7 @@ func (t *rlpxTransport) close(err error) {
 	// We only bother doing this if the underlying connection supports
 	// setting a timeout tough.
 	if t.conn != nil {
-		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
+		if r, ok := err.(DiscReason); ok && !errors.Is(r, DiscNetworkError) {
 			deadline := time.Now().Add(discWriteTimeout)
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				// Connection supports write deadline.

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
 	"math"
 	"math/big"
 	"reflect"
@@ -1106,7 +1107,7 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			{Type: ty},
 		}
 		decoded, err := decodeABI.Unpack(packed)
-		if err != testCase.err {
+		if !errors.Is(err, testCase.err) {
 			t.Fatalf("Expected error %v, actual error %v. case %d", testCase.err, err, i)
 		}
 		if err != nil {

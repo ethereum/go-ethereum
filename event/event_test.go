@@ -17,6 +17,7 @@
 package event
 
 import (
+	"github.com/pkg/errors"
 	"math/rand"
 	"sync"
 	"testing"
@@ -59,7 +60,7 @@ func TestMuxErrorAfterStop(t *testing.T) {
 	if _, isopen := <-sub.Chan(); isopen {
 		t.Errorf("subscription channel was not closed")
 	}
-	if err := mux.Post(testEvent(0)); err != ErrMuxClosed {
+	if err := mux.Post(testEvent(0)); !errors.Is(err, ErrMuxClosed) {
 		t.Errorf("Post error mismatch, got: %s, expected: %s", err, ErrMuxClosed)
 	}
 }

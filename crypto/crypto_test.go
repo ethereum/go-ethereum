@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"github.com/pkg/errors"
 	"math/big"
 	"os"
 	"reflect"
@@ -66,11 +67,11 @@ func BenchmarkSha3(b *testing.B) {
 
 func TestUnmarshalPubkey(t *testing.T) {
 	key, err := UnmarshalPubkey(nil)
-	if err != errInvalidPubkey || key != nil {
+	if !errors.Is(err, errInvalidPubkey) || key != nil {
 		t.Fatalf("expected error, got %v, %v", err, key)
 	}
 	key, err = UnmarshalPubkey([]byte{1, 2, 3})
-	if err != errInvalidPubkey || key != nil {
+	if !errors.Is(err, errInvalidPubkey) || key != nil {
 		t.Fatalf("expected error, got %v, %v", err, key)
 	}
 

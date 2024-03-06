@@ -100,7 +100,7 @@ func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *
 		test.t.Errorf("%s encode error: %v", data.Name(), err)
 	}
 	test.sent = append(test.sent, enc)
-	if err = test.udp.handlePacket(addr, enc); err != wantError {
+	if err = test.udp.handlePacket(addr, enc); !errors.Is(err, wantError) {
 		test.t.Errorf("error mismatch: got %q, want %q", err, wantError)
 	}
 }
