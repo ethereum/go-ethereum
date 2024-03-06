@@ -1459,6 +1459,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			tx  *types.Transaction
 			err error
 		)
+		b.SetPoS()
 		switch i {
 		case 0:
 			// transfer 1000wei
@@ -1507,7 +1508,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
 		}
-		b.SetPoS()
 	})
 	return backend, txHashes
 }
