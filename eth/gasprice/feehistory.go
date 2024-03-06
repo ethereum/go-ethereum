@@ -51,11 +51,10 @@ const (
 // blockFees represents a single block for processing
 type blockFees struct {
 	// set by the caller
-	blockNumber  uint64
-	header       *types.Header
-	parentHeader *types.Header
-	block        *types.Block // only set if reward percentiles are requested
-	receipts     types.Receipts
+	blockNumber uint64
+	header      *types.Header
+	block       *types.Block // only set if reward percentiles are requested
+	receipts    types.Receipts
 	// filled by processBlock
 	results processedFees
 	err     error
@@ -85,34 +84,31 @@ type txGasAndReward struct {
 // the block field filled in, retrieves the block from the backend if not present yet and
 // fills in the rest of the fields.
 func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
-	chainconfig := oracle.backend.ChainConfig()
+	config := oracle.backend.ChainConfig()
+
+	// Fill in base fee and next base fee.
 	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
 		bf.results.baseFee = new(big.Int)
 	}
-	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.results.nextBaseFee = eip1559.CalcBaseFee(chainconfig, bf.header)
+	if config.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
+		bf.results.nextBaseFee = eip1559.CalcBaseFee(config, bf.header)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}
+	// Fill in blob base fee and next blob base fee.
+	if excessBlobGas := bf.header.ExcessBlobGas; excessBlobGas != nil {
+		bf.results.blobBaseFee = eip4844.CalcBlobFee(*excessBlobGas)
+		bf.results.nextBlobBaseFee = eip4844.CalcBlobFee(eip4844.CalcExcessBlobGas(*excessBlobGas, *bf.header.BlobGasUsed))
+	} else {
+		bf.results.blobBaseFee = new(big.Int)
+		bf.results.nextBlobBaseFee = new(big.Int)
+	}
+	// Compute gas used ratio for normal and blob gas.
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
-	bf.results.blobGasUsedRatio = 0.0
-	bf.results.blobBaseFee = new(big.Int)
+	if blobGasUsed := bf.header.BlobGasUsed; blobGasUsed != nil {
+		bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlock
+	}
 
-	getBlobBaseFee := func(h *types.Header) *big.Int {
-		if h != nil && chainconfig.IsCancun(h.Number, h.Time) {
-			if excessBlobGas := h.ExcessBlobGas; excessBlobGas != nil {
-				return eip4844.CalcBlobFee(*excessBlobGas)
-			}
-		}
-		return new(big.Int)
-	}
-	bf.results.blobBaseFee = getBlobBaseFee(bf.parentHeader)
-	bf.results.nextBlobBaseFee = getBlobBaseFee(bf.header)
-	if bf.header != nil && chainconfig.IsCancun(bf.header.Number, bf.header.Time) {
-		if blobGasUsed := bf.header.BlobGasUsed; blobGasUsed != nil {
-			bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlock
-		}
-	}
 	if len(percentiles) == 0 {
 		// rewards were not requested, return null
 		return
@@ -151,6 +147,15 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		}
 		bf.results.reward[i] = sorter[txIndex].reward
 	}
+}
+
+// getBlobBaseFee is a helper function which computes and returns the blob base
+// fee if excessBlobGas exists.
+func getBlobBaseFee(h *types.Header) *big.Int {
+	if excessBlobGas := h.ExcessBlobGas; excessBlobGas != nil {
+		return eip4844.CalcBlobFee(*excessBlobGas)
+	}
+	return new(big.Int)
 }
 
 // resolveBlockRange resolves the specified block range to absolute block numbers while also
@@ -290,7 +295,6 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64() {
 					fees.block, fees.receipts = pendingBlock, pendingReceipts
 					fees.header = fees.block.Header()
-					fees.parentHeader, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(pendingBlock.NumberU64()-1))
 					oracle.processBlock(fees, rewardPercentiles)
 					results <- fees
 				} else {
@@ -310,9 +314,6 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 							fees.header, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
 						}
 						if fees.header != nil && fees.err == nil {
-							if blockNumber > 0 {
-								fees.parentHeader, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber-1))
-							}
 							oracle.processBlock(fees, rewardPercentiles)
 							if fees.err == nil {
 								oracle.historyCache.Add(cacheKey, fees.results)
