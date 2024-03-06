@@ -1501,11 +1501,15 @@ func (p *PortalProtocol) InRange(contentId []byte) bool {
 }
 
 func (p *PortalProtocol) Get(contentId []byte) ([]byte, error) {
-	return p.storage.Get(contentId)
+	content, err := p.storage.Get(contentId)
+	p.log.Trace("get local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
+	return content, err
 }
 
 func (p *PortalProtocol) Put(contentId []byte, content []byte) error {
-	return p.storage.Put(contentId, content)
+	err := p.storage.Put(contentId, content)
+	p.log.Trace("put local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
+	return err
 }
 
 func (p *PortalProtocol) GetContent() <-chan *ContentElement {
