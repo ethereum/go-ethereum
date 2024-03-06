@@ -16,9 +16,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tetratelabs/wabin/leb128"
-	"go.uber.org/zap"
-
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
@@ -31,6 +28,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/optimism-java/utp-go"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/tetratelabs/wabin/leb128"
+	"go.uber.org/zap"
 )
 
 const (
@@ -327,8 +326,14 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 			return len(buf), err
 		})
 
-	// TODO: ZAP PRODUCTION LOG
-	logger, err := zap.NewProductionConfig().Build()
+	ctx := context.Background()
+	var logger *zap.Logger
+	if p.log.Enabled(ctx, log.LevelDebug) || p.log.Enabled(ctx, log.LevelTrace) {
+		logger, err = zap.NewDevelopmentConfig().Build()
+	} else {
+		logger, err = zap.NewProductionConfig().Build()
+	}
+
 	if err != nil {
 		return nil, err
 	}

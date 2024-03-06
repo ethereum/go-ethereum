@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 )
 
@@ -441,12 +440,7 @@ func (p *PortalAPI) HistoryRecursiveFindContent(contentKeyHex string) (*ContentI
 		return nil, err
 	}
 	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey)
-	if errors.Is(err, storage.ErrContentNotFound) {
-		return &ContentInfo{
-			Content:     "0x",
-			UtpTransfer: false,
-		}, nil
-	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -464,9 +458,7 @@ func (p *PortalAPI) HistoryLocalContent(contentKeyHex string) (string, error) {
 	}
 	contentId := p.portalProtocol.ToContentId(contentKey)
 	content, err := p.portalProtocol.Get(contentId)
-	if errors.Is(err, storage.ErrContentNotFound) {
-		return "0x", nil
-	}
+
 	if err != nil {
 		return "", err
 	}
