@@ -176,7 +176,7 @@ func (t *callTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *callTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.depth = depth
 	if t.config.OnlyTopCall && depth > 0 {
 		return

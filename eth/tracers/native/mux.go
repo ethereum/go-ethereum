@@ -77,7 +77,7 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 	}, nil
 }
 
-func (t *muxTracer) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnOpcode != nil {
 			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
@@ -85,7 +85,7 @@ func (t *muxTracer) OnOpcode(pc uint64, op tracing.OpCode, gas, cost uint64, sco
 	}
 }
 
-func (t *muxTracer) OnFault(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *muxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnFault != nil {
 			t.OnFault(pc, op, gas, cost, scope, depth, err)
@@ -101,7 +101,7 @@ func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason)
 	}
 }
 
-func (t *muxTracer) OnEnter(depth int, typ tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *muxTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		if t.OnEnter != nil {
 			t.OnEnter(typ, from, to, input, gas, value)

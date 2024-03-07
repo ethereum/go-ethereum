@@ -520,13 +520,8 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
 	tracer := evm.Config.Tracer
-
-	if isRoot {
-		if tracer.OnStart != nil {
-			tracer.OnStart(from, to, typ == CREATE || typ == CREATE2, input, startGas, value)
-		}
-	} else if tracer.OnEnter != nil {
-		tracer.OnEnter(tracing.OpCode(typ), from, to, input, startGas, value)
+	if tracer.OnEnter != nil {
+		tracer.OnEnter(0, byte(typ), from, to, input, startGas, value)
 	}
 
 	if tracer.OnGasChange != nil {
@@ -547,13 +542,7 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	if isRoot {
-		if tracer.OnEnd != nil {
-			tracer.OnEnd(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
-		}
-	} else if tracer.OnExit != nil {
-		tracer.OnExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
-	}
+	tracer.OnExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 }
 
 func (evm *EVM) GetVMContext() *tracing.VMContext {

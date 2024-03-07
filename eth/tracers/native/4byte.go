@@ -93,7 +93,7 @@ func (t *fourByteTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) OnEnter(depth int, opcode tracing.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) OnEnter(depth int, opcode byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return

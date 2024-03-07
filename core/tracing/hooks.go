@@ -20,26 +20,24 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // OpContext provides the context at which the opcode is being
 // executed in, including the memory, stack and various contract-level information.
 type OpContext interface {
 	MemoryData() []byte
-	StackData() []uint256.Int
+	StackData() []big.Int
 	Caller() common.Address
 	Address() common.Address
-	CallValue() *uint256.Int
+	CallValue() *big.Int
 	CallInput() []byte
 }
 
 // StateDB gives tracers access to the whole state.
 type StateDB interface {
-	GetBalance(common.Address) *uint256.Int
+	GetBalance(common.Address) *big.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
 	GetState(common.Address, common.Hash) common.Hash
@@ -75,10 +73,6 @@ type BlockEvent struct {
 	Safe      *types.Header
 }
 
-// OpCode is an EVM opcode
-// TODO: provide utils for consumers
-type OpCode byte
-
 type (
 	/*
 		- VM events -
@@ -92,15 +86,8 @@ type (
 	// TxEndHook is called after the execution of a transaction ends.
 	TxEndHook = func(receipt *types.Receipt, err error)
 
-	// StartHook is invoked when the processing of the root call starts.
-	StartHook = func(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-
-	// EndHook is invoked when the processing of the top call ends.
-	// See docs for `ExitHook` for info on the `reverted` parameter.
-	EndHook = func(output []byte, gasUsed uint64, err error, reverted bool)
-
 	// EnterHook is invoked when the processing of a message starts.
-	EnterHook = func(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	EnterHook = func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 
 	// ExitHook is invoked when the processing of a message ends.
 	// `revert` is true when there was an error during the execution.
@@ -108,13 +95,13 @@ type (
 	// ran out of gas when attempting to persist the code to database did not
 	// count as a call failure and did not cause a revert of the call. This will
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
-	ExitHook = func(output []byte, gasUsed uint64, err error, reverted bool)
+	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
-	OpcodeHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
-	FaultHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
+	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
@@ -139,7 +126,7 @@ type (
 	SkippedBlockHook = func(event BlockEvent)
 
 	// GenesisBlockHook is called when the genesis block is being processed.
-	GenesisBlockHook = func(genesis *types.Block, alloc core.GenesisAlloc)
+	GenesisBlockHook = func(genesis *types.Block, alloc types.GenesisAlloc)
 
 	/*
 		- State events -
