@@ -1270,7 +1270,7 @@ func TestBeaconSync68Full(t *testing.T) { testBeaconSync(t, eth.ETH68, FullSync)
 func TestBeaconSync68Snap(t *testing.T) { testBeaconSync(t, eth.ETH68, SnapSync) }
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	var cases = []struct {
 		name  string // The name of testing scenario
