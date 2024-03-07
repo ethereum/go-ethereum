@@ -136,6 +136,7 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 	return results, nil
 }
 
+// BlobBaseFee returns the base fee for blob gas at the current head.
 func (s *EthereumAPI) BlobBaseFee(ctx context.Context) (*hexutil.Big, error) {
 	blobBaseFee, err := s.b.BlobBaseFee(ctx)
 	return (*hexutil.Big)(blobBaseFee), err
