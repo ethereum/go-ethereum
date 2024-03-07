@@ -326,7 +326,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	switch tx.Type() {
 	case LegacyTxType:
 		return s.EIP155Signer.Sender(tx)
-	case AccessListTxType, DelegateTxType:
+	case AccessListTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
@@ -343,11 +343,11 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	switch txdata := tx.inner.(type) {
 	case *LegacyTx:
 		return s.EIP155Signer.SignatureValues(tx, sig)
-	case *AccessListTx, *DelegateTx:
+	case *AccessListTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
-		if txdata.chainID().Sign() != 0 && txdata.chainID().Cmp(s.chainId) != 0 {
-			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.chainID(), s.chainId)
+		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 		}
 		R, S, _ = decodeSignature(sig)
 		V = big.NewInt(int64(sig[64]))
