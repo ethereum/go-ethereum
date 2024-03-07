@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -48,6 +49,7 @@ type Server struct {
 
 	mutex              sync.Mutex
 	codecs             map[ServerCodec]struct{}
+	denyList           map[string]struct{}
 	run                atomic.Bool
 	batchItemLimit     int
 	batchResponseLimit int
@@ -56,8 +58,9 @@ type Server struct {
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
-		idgen:  randomIDGenerator(),
-		codecs: make(map[ServerCodec]struct{}),
+		idgen:    randomIDGenerator(),
+		codecs:   make(map[ServerCodec]struct{}),
+		denyList: make(map[string]struct{}),
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -84,6 +87,12 @@ func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
 // service collection this server provides to clients.
 func (s *Server) RegisterName(name string, receiver interface{}) error {
 	return s.services.registerName(name, receiver)
+}
+
+// RegisterDenyList add given method name to the deny list so that RPC requests that matches
+// any of the methods in deny list will got rejected directly.
+func (s *Server) RegisterDenyList(methodName string) {
+	s.denyList[methodName] = struct{}{}
 }
 
 // ServeCodec reads incoming requests from codec, calls the appropriate callback and writes
@@ -141,12 +150,22 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	defer h.close(io.EOF, nil)
 
 	reqs, batch, err := codec.readBatch()
+
 	if err != nil {
 		if err != io.EOF {
 			resp := errorMessage(&invalidMessageError{"parse error"})
 			codec.writeJSON(ctx, resp, true)
 		}
 		return
+	}
+	// check deny list
+	for _, req := range reqs {
+		method := req.Method
+		if _, found := s.denyList[method]; found {
+			resp := errorMessage(&invalidMessageError{fmt.Sprintf("method %s is in deny list", method)})
+			codec.writeJSON(ctx, resp, true)
+			return
+		}
 	}
 	if batch {
 		h.handleBatch(reqs)
