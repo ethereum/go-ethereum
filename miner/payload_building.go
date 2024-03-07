@@ -229,6 +229,8 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 				r := miner.generateWork(fullParams)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
+				} else {
+					log.Debug("Error while generating work", "id", payload.id, "error", r.err)
 				}
 				timer.Reset(miner.config.Recommit)
 			case <-payload.stop:
