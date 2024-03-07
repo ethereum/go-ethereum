@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -553,7 +554,8 @@ func (h *HistoryNetwork) validateContents(contentKeys [][]byte, contents [][]byt
 		contentKey := contentKeys[i]
 		err := h.validateContent(contentKey, content)
 		if err != nil {
-			return fmt.Errorf("content validate failed with content key %v", contentKey)
+			h.log.Error("content validate failed", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content), "err", err)
+			return fmt.Errorf("content validate failed with content key %v", hexutil.Encode(contentKey))
 		}
 		contentId := h.portalProtocol.ToContentId(contentKey)
 		_ = h.portalProtocol.Put(contentId, content)
