@@ -862,12 +862,6 @@ var (
 		Usage:    "Enable metrics collection and reporting",
 		Category: flags.MetricsCategory,
 	}
-	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
-		Name:     "metrics.expensive",
-		Usage:    "Enable expensive metrics collection and reporting",
-		Category: flags.MetricsCategory,
-	}
-
 	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
 	// Since the pprof service enables sensitive/vulnerable behavior, this allows a user
 	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
