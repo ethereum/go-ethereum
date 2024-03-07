@@ -1502,7 +1502,7 @@ func getCodeByHash(hash common.Hash) []byte {
 	return nil
 }
 
-// makeAccountTrieNoStorage spits out a trie, along with the leafs
+// makeAccountTrieNoStorage spits out a trie, along with the leaves
 func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) {
 	var (
 		db      = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
@@ -1650,7 +1650,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	return db.Scheme(), accTrie, entries, storageTries, storageEntries
 }
 
-// makeAccountTrieWithStorage spits out a trie, along with the leafs
+// makeAccountTrieWithStorage spits out a trie, along with the leaves
 func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool, uneven bool) (*trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
 	var (
 		db             = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))

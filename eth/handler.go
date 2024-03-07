@@ -497,7 +497,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		}
 		// Send the transaction (if it's small enough) directly to a subset of
 		// the peers that have not received it yet, ensuring that the flow of
-		// transactions is groupped by account to (try and) avoid nonce gaps.
+		// transactions is grouped by account to (try and) avoid nonce gaps.
 		//
 		// To do this, we hash the local enode IW with together with a peer's
 		// enode ID together with the transaction sender and broadcast if
