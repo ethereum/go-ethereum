@@ -520,7 +520,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.self.Address() {
+	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.Address() {
 		return nil, ErrEip5806Write
 	}
 	if interpreter.readOnly {
@@ -578,7 +578,7 @@ func opGas(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 }
 
 func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.self.Address() {
+	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.Address() {
 		return nil, ErrEip5806Write
 	}
 	if interpreter.readOnly {
@@ -622,7 +622,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.self.Address() {
+	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.Address() {
 		return nil, ErrEip5806Write
 	}
 	if interpreter.readOnly {
@@ -806,7 +806,7 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 }
 
 func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.self.Address() {
+	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.Address() {
 		return nil, ErrEip5806Write
 	}
 	if interpreter.readOnly {
@@ -824,7 +824,7 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 }
 
 func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.self.Address() {
+	if interpreter.evm.TxContext.Is5806 && interpreter.evm.Origin == scope.Contract.Address() {
 		return nil, ErrEip5806Write
 	}
 	if interpreter.readOnly {
