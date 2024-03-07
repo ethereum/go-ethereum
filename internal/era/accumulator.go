@@ -17,6 +17,7 @@
 package era
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -28,7 +29,7 @@ import (
 // accumulator of header records.
 func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, error) {
 	if len(hashes) != len(tds) {
-		return common.Hash{}, fmt.Errorf("must have equal number hashes as td values")
+		return common.Hash{}, errors.New("must have equal number hashes as td values")
 	}
 	if len(hashes) > MaxEra1Size {
 		return common.Hash{}, fmt.Errorf("too many records: have %d, max %d", len(hashes), MaxEra1Size)

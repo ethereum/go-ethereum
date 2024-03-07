@@ -122,7 +122,7 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 					log.Error("pool attempted to reserve already-owned address", "address", addr)
 					return nil // Ignore fault to give the pool a chance to recover while the bug gets fixed
 				}
-				return errors.New("address already reserved")
+				return ErrAlreadyReserved
 			}
 			p.reservations[addr] = subpool
 			if metrics.Enabled {

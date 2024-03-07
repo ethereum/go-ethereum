@@ -589,8 +589,8 @@ func (b *batch) Reset() {
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	reader := b.b.Reader()
 	for {
-		kind, k, v, ok := reader.Next()
-		if !ok {
+		kind, k, v, ok, err := reader.Next()
+		if !ok || err != nil {
 			break
 		}
 		// The (k,v) slices might be overwritten if the batch is reset/reused,
