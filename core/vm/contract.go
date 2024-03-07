@@ -171,6 +171,17 @@ func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasC
 	return true
 }
 
+// RefundGas refunds gas to the contract
+func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	if gas == 0 {
+		return
+	}
+	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		logger.OnGasChange(c.Gas, c.Gas+gas, reason)
+	}
+	c.Gas += gas
+}
+
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()

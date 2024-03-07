@@ -612,11 +612,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
 		interpreter.returnData = res // set REVERT data to return data buffer
@@ -657,11 +653,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 	scope.Stack.push(&stackvalue)
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
 		interpreter.returnData = res // set REVERT data to return data buffer
@@ -707,11 +699,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret
 	return ret, nil
@@ -747,11 +735,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret
 	return ret, nil
@@ -780,11 +764,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret
 	return ret, nil
@@ -813,11 +793,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
-	if interpreter.evm.Config.Tracer != nil && interpreter.evm.Config.Tracer.OnGasChange != nil && returnGas > 0 {
-		interpreter.evm.Config.Tracer.OnGasChange(scope.Contract.Gas, scope.Contract.Gas+returnGas, tracing.GasChangeCallLeftOverRefunded)
-	}
-
-	scope.Contract.Gas += returnGas
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret
 	return ret, nil
