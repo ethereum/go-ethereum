@@ -22,6 +22,8 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/XinFinOrg/XDPoSChain/core/vm/privacy"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -61,6 +63,8 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{6}):  &bn256AddByzantium{},
 	common.BytesToAddress([]byte{7}):  &bn256ScalarMulByzantium{},
 	common.BytesToAddress([]byte{8}):  &bn256PairingByzantium{},
+	common.BytesToAddress([]byte{30}): &ringSignatureVerifier{},
+	common.BytesToAddress([]byte{40}): &bulletproofVerifier{},
 	common.BytesToAddress([]byte{41}): &XDCxLastPrice{},
 	common.BytesToAddress([]byte{42}): &XDCxEpochPrice{},
 }
@@ -77,6 +81,8 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{30}): &ringSignatureVerifier{},
+	common.BytesToAddress([]byte{40}): &bulletproofVerifier{},
 	common.BytesToAddress([]byte{41}): &XDCxLastPrice{},
 	common.BytesToAddress([]byte{42}): &XDCxEpochPrice{},
 }
@@ -418,6 +424,42 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 		return true32Byte, nil
 	}
 	return false32Byte, nil
+}
+
+type ringSignatureVerifier struct{}
+type bulletproofVerifier struct{}
+
+func (c *bulletproofVerifier) RequiredGas(input []byte) uint64 {
+	//the gas should depends on the ringsize
+	return 100000
+}
+
+func (c *ringSignatureVerifier) RequiredGas(input []byte) uint64 {
+	//the gas should depends on the ringsize
+	return 100000
+}
+
+func (c *ringSignatureVerifier) Run(proof []byte) ([]byte, error) {
+	der, err := privacy.Deserialize(proof)
+	if err != nil {
+		return []byte{}, errors.New("Fail to deserialize proof")
+	}
+	if !privacy.Verify(der, false) {
+		return []byte{}, errors.New("Fail to verify ring signature")
+	}
+	return []byte{}, nil
+}
+
+func (c *bulletproofVerifier) Run(proof []byte) ([]byte, error) {
+	mrp := new(privacy.MultiRangeProof)
+	if mrp.Deserialize(proof) != nil {
+		return []byte{}, errors.New("failed to deserialize bulletproofs")
+	}
+
+	if !privacy.MRPVerify(mrp) {
+		return []byte{}, errors.New("failed to verify bulletproof")
+	}
+	return []byte{}, nil
 }
 
 // bn256PairingIstanbul implements a pairing pre-compile for the bn256 curve
