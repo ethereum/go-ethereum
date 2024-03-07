@@ -474,6 +474,23 @@ func (db *Database) Scheme() string {
 	return rawdb.PathScheme
 }
 
+// OldestState returns the oldest state available in the database, no matter
+// it's available or recoverable.
+func (db *Database) OldestState() (uint64, error) {
+	if db.freezer == nil {
+		return 0, errors.New("state rollback is non-supported")
+	}
+	tail, err := db.freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+	h, err := readHistory(db.freezer, tail+1)
+	if err != nil {
+		return 0, err
+	}
+	return h.meta.block, nil
+}
+
 // modifyAllowed returns the indicator if mutation is allowed. This function
 // assumes the db.lock is already held.
 func (db *Database) modifyAllowed() error {

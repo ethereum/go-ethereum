@@ -332,6 +332,15 @@ func (db *Database) SetBufferSize(size int) error {
 	return pdb.SetBufferSize(size)
 }
 
+// OldestState returns the oldest state maintained by database.
+func (db *Database) OldestState() (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return 0, errors.New("not supported")
+	}
+	return pdb.OldestState()
+}
+
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle

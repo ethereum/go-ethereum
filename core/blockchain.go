@@ -653,31 +653,55 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 				newHeadBlock = bc.genesisBlock
 			} else {
 				// Block exists. Keep rewinding until either we find one with state
-				// or until we exceed the optional threshold root hash
-				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
-
+				// or until we exceed the optional threshold root hash. The chain
+				// will be reset to genesis if rewinding exceeds the maximum allowed
+				// depth.
+				var (
+					limit      uint64                  // The oldest block that will be searched for this rewinding
+					beyondRoot = root == common.Hash{} // Flag whether we're beyond the requested root (no root, always true)
+				)
+				if currentBlock.Number.Uint64() > params.FullImmutabilityThreshold {
+					limit = currentBlock.Number.Uint64() - params.FullImmutabilityThreshold
+				}
+				if oldest, err := bc.triedb.OldestState(); err != nil && oldest < limit {
+					limit = oldest
+				}
 				for {
 					// If a root threshold was requested but not yet crossed, check
-					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
+					if !beyondRoot && newHeadBlock.Root() == root {
 						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 					}
+					// If the associated state of new head block is not available
+					// and impossible to be recovered, rewind further.
 					if !bc.HasState(newHeadBlock.Root()) && !bc.stateRecoverable(newHeadBlock.Root()) {
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
-						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
+
+						if pivot != nil && newHeadBlock.NumberU64() <= *pivot {
+							// Stop rewinding if the oldest state by snap sync has already
+							// been crossed.
+							log.Trace("Rewind passed pivot, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "pivot", *pivot)
+							newHeadBlock = bc.genesisBlock
+						} else {
+							// Either the state was synced via a full sync process, or the
+							// oldest state has not been reached yet, continue rewinding
+							// until an available state is found.
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
 							if parent == nil {
 								log.Error("Missing block in the middle, aiming genesis", "number", newHeadBlock.NumberU64()-1, "hash", newHeadBlock.ParentHash())
 								newHeadBlock = bc.genesisBlock
 							} else {
 								newHeadBlock = parent
-								if newHeadBlock.NumberU64() != 0 {
+								if newHeadBlock.NumberU64() != 0 && newHeadBlock.NumberU64() >= limit {
 									continue
 								}
-								log.Info("Genesis block is reached", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+								if newHeadBlock.NumberU64() == 0 {
+									log.Info("Genesis block is reached", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+								}
+								if newHeadBlock.NumberU64() < limit {
+									newHeadBlock = bc.genesisBlock
+									log.Info("Rewinding limit is reached, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+								}
 							}
-						} else {
-							log.Trace("Rewind passed pivot, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "pivot", *pivot)
-							newHeadBlock = bc.genesisBlock
 						}
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
@@ -704,12 +728,20 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			bc.currentBlock.Store(newHeadBlock.Header())
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
 
-			// The head state is missing, which is only possible in the path-based
-			// scheme. This situation occurs when the chain head is rewound below
-			// the pivot point. In this scenario, there is no possible recovery
-			// approach except for rerunning a snap sync. Do nothing here until the
-			// state syncer picks it up.
+			// The associated head state is missing, which might occur if chain head
+			// is rewound even below the oldest available state. The whole chain is
+			// reset to genesis in case.
+			//
+			// In this scenario, there is no possible recovery approach except for
+			// rerunning a snap sync. Do nothing here until the state syncer picks
+			// it up.
 			if !bc.HasState(newHeadBlock.Root()) {
+				// Disable snapshot repairing explicitly, as a new snap sync
+				// is expected and the whole snapshot needs to be rebuilt.
+				rootNumber = 0
+				if newHeadBlock.NumberU64() != 0 {
+					log.Crit("Chain is stateless at a non-genesis block")
+				}
 				log.Info("Chain is stateless, wait state sync", "number", newHeadBlock.Number(), "hash", newHeadBlock.Hash())
 			}
 		}
