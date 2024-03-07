@@ -138,7 +138,7 @@ func (a *AccessListTracer) Hooks() *tracing.Hooks {
 }
 
 // OnOpcode captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) OnOpcode(pc uint64, opcode tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stackData := scope.StackData()
 	stackLen := len(stackData)
 	op := vm.OpCode(opcode)

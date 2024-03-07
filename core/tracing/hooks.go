@@ -74,10 +74,6 @@ type BlockEvent struct {
 	Safe      *types.Header
 }
 
-// OpCode is an EVM opcode
-// TODO: provide utils for consumers
-type OpCode byte
-
 type (
 	/*
 		- VM events -
@@ -92,7 +88,7 @@ type (
 	TxEndHook = func(receipt *types.Receipt, err error)
 
 	// EnterHook is invoked when the processing of a message starts.
-	EnterHook = func(depth int, typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	EnterHook = func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 
 	// ExitHook is invoked when the processing of a message ends.
 	// `revert` is true when there was an error during the execution.
@@ -103,10 +99,10 @@ type (
 	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
-	OpcodeHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
-	FaultHook = func(pc uint64, op OpCode, gas, cost uint64, scope OpContext, depth int, err error)
+	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
