@@ -48,13 +48,13 @@ type DataError interface {
 // Error types defined below are the built-in JSON-RPC errors.
 
 var (
-	_ Error = new(methodNotFoundError)
-	_ Error = new(subscriptionNotFoundError)
-	_ Error = new(parseError)
-	_ Error = new(invalidRequestError)
-	_ Error = new(invalidMessageError)
-	_ Error = new(invalidParamsError)
-	_ Error = new(internalServerError)
+	_ Error = (*methodNotFoundError)(nil)
+	_ Error = (*subscriptionNotFoundError)(nil)
+	_ Error = (*parseError)(nil)
+	_ Error = (*invalidRequestError)(nil)
+	_ Error = (*invalidMessageError)(nil)
+	_ Error = (*invalidParamsError)(nil)
+	_ Error = (*internalServerError)(nil)
 )
 
 const (
