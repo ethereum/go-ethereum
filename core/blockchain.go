@@ -665,12 +665,16 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
-							if parent != nil {
+							if parent == nil {
+								log.Error("Missing block in the middle, aiming genesis", "number", newHeadBlock.NumberU64()-1, "hash", newHeadBlock.ParentHash())
+								newHeadBlock = bc.genesisBlock
+							} else {
 								newHeadBlock = parent
-								continue
+								if newHeadBlock.NumberU64() != 0 {
+									continue
+								}
+								log.Info("Genesis block is reached", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 							}
-							log.Error("Missing block in the middle, aiming genesis", "number", newHeadBlock.NumberU64()-1, "hash", newHeadBlock.ParentHash())
-							newHeadBlock = bc.genesisBlock
 						} else {
 							log.Trace("Rewind passed pivot, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "pivot", *pivot)
 							newHeadBlock = bc.genesisBlock
