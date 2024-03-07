@@ -35,10 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -122,6 +124,33 @@ Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing. If the file ends with .gz, the output will
 be gzipped.`,
+	}
+	importHistoryCommand = &cli.Command{
+		Action:    importHistory,
+		Name:      "import-history",
+		Usage:     "Import an Era archive",
+		ArgsUsage: "<dir>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.TxLookupLimitFlag,
+		},
+			utils.DatabaseFlags,
+			utils.NetworkFlags,
+		),
+		Description: `
+The import-history command will import blocks and their corresponding receipts
+from Era archives.
+`,
+	}
+	exportHistoryCommand = &cli.Command{
+		Action:    exportHistory,
+		Name:      "export-history",
+		Usage:     "Export blockchain history to Era archives",
+		ArgsUsage: "<dir> <first> <last>",
+		Flags:     flags.Merge(utils.DatabaseFlags),
+		Description: `
+The export-history command will export blocks and their corresponding receipts
+into Era archives. Eras are typically packaged in steps of 8192 blocks.
+`,
 	}
 	importPreimagesCommand = &cli.Command{
 		Action:    importPreimages,
@@ -364,7 +393,97 @@ func exportChain(ctx *cli.Context) error {
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
+	if err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	fmt.Printf("Export done in %v\n", time.Since(start))
+	return nil
+}
 
+func importHistory(ctx *cli.Context) error {
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, db := utils.MakeChain(ctx, stack, false)
+	defer db.Close()
+
+	var (
+		start   = time.Now()
+		dir     = ctx.Args().Get(0)
+		network string
+	)
+
+	// Determine network.
+	if utils.IsNetworkPreset(ctx) {
+		switch {
+		case ctx.Bool(utils.MainnetFlag.Name):
+			network = "mainnet"
+		case ctx.Bool(utils.SepoliaFlag.Name):
+			network = "sepolia"
+		case ctx.Bool(utils.GoerliFlag.Name):
+			network = "goerli"
+		}
+	} else {
+		// No network flag set, try to determine network based on files
+		// present in directory.
+		var networks []string
+		for _, n := range params.NetworkNames {
+			entries, err := era.ReadDir(dir, n)
+			if err != nil {
+				return fmt.Errorf("error reading %s: %w", dir, err)
+			}
+			if len(entries) > 0 {
+				networks = append(networks, n)
+			}
+		}
+		if len(networks) == 0 {
+			return fmt.Errorf("no era1 files found in %s", dir)
+		}
+		if len(networks) > 1 {
+			return errors.New("multiple networks found, use a network flag to specify desired network")
+		}
+		network = networks[0]
+	}
+
+	if err := utils.ImportHistory(chain, db, dir, network); err != nil {
+		return err
+	}
+	fmt.Printf("Import done in %v\n", time.Since(start))
+	return nil
+}
+
+// exportHistory exports chain history in Era archives at a specified
+// directory.
+func exportHistory(ctx *cli.Context) error {
+	if ctx.Args().Len() != 3 {
+		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, _ := utils.MakeChain(ctx, stack, true)
+	start := time.Now()
+
+	var (
+		dir         = ctx.Args().Get(0)
+		first, ferr = strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr  = strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+	)
+	if ferr != nil || lerr != nil {
+		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+	}
+	if first < 0 || last < 0 {
+		utils.Fatalf("Export error: block number must be greater than 0\n")
+	}
+	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
+		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
+	}
+	err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
@@ -395,13 +514,10 @@ func importPreimages(ctx *cli.Context) error {
 	return nil
 }
 
-func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
-	db := utils.MakeChainDatabase(ctx, stack, true)
-	defer db.Close()
-
+func parseDumpConfig(ctx *cli.Context, stack *node.Node, db ethdb.Database) (*state.DumpConfig, common.Hash, error) {
 	var header *types.Header
 	if ctx.NArg() > 1 {
-		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
+		return nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
 	}
 	if ctx.NArg() == 1 {
 		arg := ctx.Args().First()
@@ -410,17 +526,17 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
 				header = rawdb.ReadHeader(db, hash, *number)
 			} else {
-				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
+				return nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
 			}
 		} else {
 			number, err := strconv.ParseUint(arg, 10, 64)
 			if err != nil {
-				return nil, nil, common.Hash{}, err
+				return nil, common.Hash{}, err
 			}
 			if hash := rawdb.ReadCanonicalHash(db, number); hash != (common.Hash{}) {
 				header = rawdb.ReadHeader(db, hash, number)
 			} else {
-				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
+				return nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
 			}
 		}
 	} else {
@@ -428,7 +544,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		header = rawdb.ReadHeadHeader(db)
 	}
 	if header == nil {
-		return nil, nil, common.Hash{}, errors.New("no head block found")
+		return nil, common.Hash{}, errors.New("no head block found")
 	}
 	startArg := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
 	var start common.Hash
@@ -440,7 +556,7 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 		start = crypto.Keccak256Hash(startArg)
 		log.Info("Converting start-address to hash", "address", common.BytesToAddress(startArg), "hash", start.Hex())
 	default:
-		return nil, nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
+		return nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
 	}
 	var conf = &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
@@ -452,14 +568,17 @@ func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, eth
 	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
 		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
 		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
-	return conf, db, header.Root, nil
+	return conf, header.Root, nil
 }
 
 func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	conf, db, root, err := parseDumpConfig(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	conf, root, err := parseDumpConfig(ctx, stack, db)
 	if err != nil {
 		return err
 	}

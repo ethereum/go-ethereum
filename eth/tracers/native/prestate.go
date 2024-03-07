@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
@@ -102,6 +103,9 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	// The recipient balance includes the value transferred.
 	toBal := new(big.Int).Sub(t.pre[to].Balance, value)
 	t.pre[to].Balance = toBal
+	if env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time).IsEIP158 && create {
+		t.pre[to].Nonce--
+	}
 
 	// The sender balance is after reducing: value and gasLimit.
 	// We need to re-add them to get the pre-tx balance.
@@ -109,6 +113,12 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	gasPrice := env.TxContext.GasPrice
 	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
 	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
+
+	// Add blob fee to the sender's balance.
+	if env.Context.BlobBaseFee != nil && len(env.TxContext.BlobHashes) > 0 {
+		blobGas := uint64(params.BlobTxBlobGasPerBlob * len(env.TxContext.BlobHashes))
+		fromBal.Add(fromBal, new(big.Int).Mul(env.Context.BlobBaseFee, new(big.Int).SetUint64(blobGas)))
+	}
 	t.pre[from].Balance = fromBal
 	t.pre[from].Nonce--
 
@@ -195,7 +205,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		}
 		modified := false
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
-		newBalance := t.env.StateDB.GetBalance(addr)
+		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
@@ -279,7 +289,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	}
 
 	t.pre[addr] = &account{
-		Balance: t.env.StateDB.GetBalance(addr),
+		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
 		Storage: make(map[common.Hash]common.Hash),

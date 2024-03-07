@@ -43,7 +43,7 @@ var (
 	aggregatorMemoryLimit = uint64(4 * 1024 * 1024)
 
 	// aggregatorItemLimit is an approximate number of items that will end up
-	// in the agregator layer before it's flushed out to disk. A plain account
+	// in the aggregator layer before it's flushed out to disk. A plain account
 	// weighs around 14B (+hash), a storage slot 32B (+hash), a deleted slot
 	// 0B (+hash). Slots are mostly set/unset in lockstep, so that average at
 	// 16B (+hash). All in all, the average entry seems to be 15+32=47B. Use a
@@ -124,47 +124,20 @@ type diffLayer struct {
 	lock sync.RWMutex
 }
 
-// destructBloomHasher is a wrapper around a common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert a destruct
-// event into a 64 bit mini hash.
-type destructBloomHasher common.Hash
-
-func (h destructBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h destructBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h destructBloomHasher) Reset()                            { panic("not implemented") }
-func (h destructBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h destructBloomHasher) Size() int                         { return 8 }
-func (h destructBloomHasher) Sum64() uint64 {
+// destructBloomHash is used to convert a destruct event into a 64 bit mini hash.
+func destructBloomHash(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
 }
 
-// accountBloomHasher is a wrapper around a common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert an account
-// hash into a 64 bit mini hash.
-type accountBloomHasher common.Hash
-
-func (h accountBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h accountBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h accountBloomHasher) Reset()                            { panic("not implemented") }
-func (h accountBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h accountBloomHasher) Size() int                         { return 8 }
-func (h accountBloomHasher) Sum64() uint64 {
+// accountBloomHash is used to convert an account hash into a 64 bit mini hash.
+func accountBloomHash(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
-// storageBloomHasher is a wrapper around a [2]common.Hash to satisfy the interface
-// API requirements of the bloom library used. It's used to convert an account
-// hash into a 64 bit mini hash.
-type storageBloomHasher [2]common.Hash
-
-func (h storageBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (h storageBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
-func (h storageBloomHasher) Reset()                            { panic("not implemented") }
-func (h storageBloomHasher) BlockSize() int                    { panic("not implemented") }
-func (h storageBloomHasher) Size() int                         { return 8 }
-func (h storageBloomHasher) Sum64() uint64 {
-	return binary.BigEndian.Uint64(h[0][bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
-		binary.BigEndian.Uint64(h[1][bloomStorageHasherOffset:bloomStorageHasherOffset+8])
+// storageBloomHash is used to convert an account hash and a storage hash into a 64 bit mini hash.
+func storageBloomHash(h0, h1 common.Hash) uint64 {
+	return binary.BigEndian.Uint64(h0[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
+		binary.BigEndian.Uint64(h1[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -233,14 +206,14 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	}
 	// Iterate over all the accounts and storage slots and index them
 	for hash := range dl.destructSet {
-		dl.diffed.Add(destructBloomHasher(hash))
+		dl.diffed.AddHash(destructBloomHash(hash))
 	}
 	for hash := range dl.accountData {
-		dl.diffed.Add(accountBloomHasher(hash))
+		dl.diffed.AddHash(accountBloomHash(hash))
 	}
 	for accountHash, slots := range dl.storageData {
 		for storageHash := range slots {
-			dl.diffed.Add(storageBloomHasher{accountHash, storageHash})
+			dl.diffed.AddHash(storageBloomHash(accountHash, storageHash))
 		}
 	}
 	// Calculate the current false positive rate and update the error rate meter.
@@ -301,9 +274,9 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	hit := dl.diffed.Contains(accountBloomHasher(hash))
+	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
 	if !hit {
-		hit = dl.diffed.Contains(destructBloomHasher(hash))
+		hit = dl.diffed.ContainsHash(destructBloomHash(hash))
 	}
 	var origin *diskLayer
 	if !hit {
@@ -372,9 +345,9 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
-	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
+	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
-		hit = dl.diffed.Contains(destructBloomHasher(accountHash))
+		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
 	}
 	var origin *diskLayer
 	if !hit {

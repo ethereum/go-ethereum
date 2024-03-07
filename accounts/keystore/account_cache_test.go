@@ -86,7 +86,7 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
-	dir, ks := tmpKeyStore(t, false)
+	dir, ks := tmpKeyStore(t)
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
