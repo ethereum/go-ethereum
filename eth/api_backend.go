@@ -366,13 +366,11 @@ func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastB
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
-func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) (*big.Int, error) {
-	if excessBlobGas := b.CurrentHeader().ExcessBlobGas; excessBlobGas != nil {
-		blobBaseFee := eip4844.CalcBlobFee(*excessBlobGas)
-		return blobBaseFee, nil
-	} else {
-		return nil, nil
+func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
+	if excess := b.CurrentHeader().ExcessBlobGas; excess != nil {
+		return eip4844.CalcBlobFee(*excess)
 	}
+	return nil
 }
 
 func (b *EthAPIBackend) ChainDb() ethdb.Database {

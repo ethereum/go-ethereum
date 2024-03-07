@@ -137,9 +137,8 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 }
 
 // BlobBaseFee returns the base fee for blob gas at the current head.
-func (s *EthereumAPI) BlobBaseFee(ctx context.Context) (*hexutil.Big, error) {
-	blobBaseFee, err := s.b.BlobBaseFee(ctx)
-	return (*hexutil.Big)(blobBaseFee), err
+func (s *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
+	return (*hexutil.Big)(s.b.BlobBaseFee(ctx))
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
