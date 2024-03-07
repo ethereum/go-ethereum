@@ -93,6 +93,7 @@ const requestRetries = 4
 func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error) {
 	contentKey := newContentKey(BlockHeaderType, blockHash).encode()
 	contentId := h.portalProtocol.ToContentId(contentKey)
+	h.log.Trace("contentKey convert to contentId", "contentKey", hexutil.Encode(contentKey), "contentId", hexutil.Encode(contentId))
 	if !h.portalProtocol.InRange(contentId) {
 		return nil, ErrContentOutOfRange
 	}
