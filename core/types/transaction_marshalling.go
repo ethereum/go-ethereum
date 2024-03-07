@@ -423,7 +423,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.To == nil {
 			return errors.New("missing required field 'to' in transaction")
 		}
-		itx.To = *dec.To
+		itx.To = dec.To
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}
