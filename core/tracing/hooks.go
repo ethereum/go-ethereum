@@ -46,12 +46,6 @@ type StateDB interface {
 	GetRefund() uint64
 }
 
-// Canceler is an interface that wraps the Cancel method.
-// It allows loggers to cancel EVM processing.
-type Canceler interface {
-	Cancel()
-}
-
 // VMContext provides the context for the EVM execution.
 type VMContext struct {
 	Coinbase    common.Address
@@ -62,7 +56,6 @@ type VMContext struct {
 	GasPrice    *big.Int
 	ChainConfig *params.ChainConfig
 	StateDB     StateDB
-	VM          Canceler
 }
 
 // BlockEvent is emitted upon tracing an incoming block.

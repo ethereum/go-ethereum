@@ -249,7 +249,6 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
 	if err != nil {
 		t.err = err
-		t.env.VM.Cancel()
 		return
 	}
 	t.ctx["gasPrice"] = gasPriceBig
@@ -258,6 +257,9 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 // OnTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
 func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if t.err != nil {
+		return
+	}
 	if err != nil {
 		// Don't override vm error
 		if _, ok := t.ctx["error"]; !ok {
@@ -270,9 +272,8 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 
 // onStart implements the Tracer interface to initialize the tracing operation.
 func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	cancel := func(err error) {
-		t.err = err
-		t.env.VM.Cancel()
+	if t.err != nil {
+		return
 	}
 	if create {
 		t.ctx["type"] = t.vm.ToValue("CREATE")
@@ -281,25 +282,25 @@ func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, 
 	}
 	fromVal, err := t.toBuf(t.vm, from.Bytes())
 	if err != nil {
-		cancel(err)
+		t.err = err
 		return
 	}
 	t.ctx["from"] = fromVal
 	toVal, err := t.toBuf(t.vm, to.Bytes())
 	if err != nil {
-		cancel(err)
+		t.err = err
 		return
 	}
 	t.ctx["to"] = toVal
 	inputVal, err := t.toBuf(t.vm, input)
 	if err != nil {
-		cancel(err)
+		t.err = err
 		return
 	}
 	t.ctx["input"] = inputVal
 	valueBig, err := t.toBig(t.vm, value.String())
 	if err != nil {
-		cancel(err)
+		t.err = err
 		return
 	}
 	t.ctx["value"] = valueBig
@@ -344,6 +345,9 @@ func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 
 // onEnd is called after the call finishes to finalize the tracing.
 func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.err != nil {
+		return
+	}
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
@@ -357,14 +361,14 @@ func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if t.err != nil {
+		return
+	}
 	if depth == 0 {
 		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
 		return
 	}
 	if !t.traceFrame {
-		return
-	}
-	if t.err != nil {
 		return
 	}
 
@@ -386,6 +390,9 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.err != nil {
+		return
+	}
 	if depth == 0 {
 		t.onEnd(output, gasUsed, err, reverted)
 		return
@@ -405,6 +412,9 @@ func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (t *jsTracer) GetResult() (json.RawMessage, error) {
+	if t.err != nil {
+		return nil, t.err
+	}
 	ctx := t.vm.ToValue(t.ctx)
 	res, err := t.result(t.obj, ctx, t.dbValue)
 	if err != nil {
@@ -414,7 +424,7 @@ func (t *jsTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(encoded), t.err
+	return encoded, t.err
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -427,9 +437,6 @@ func (t *jsTracer) Stop(err error) {
 // execution.
 func (t *jsTracer) onError(context string, err error) {
 	t.err = wrapError(context, err)
-	// `env` is set on OnStart which comes before any JS execution.
-	// So it should be non-nil.
-	t.env.VM.Cancel()
 }
 
 func wrapError(context string, err error) error {
