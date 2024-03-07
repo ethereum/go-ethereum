@@ -146,6 +146,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.Logging.Debug,
 		Group:   "Logging",
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "log.enable-block-tracking",
+		Usage:   "Enables additional logging of information collected while tracking block lifecycle",
+		Value:   &c.cliConfig.Logging.EnableBlockTracking,
+		Default: c.cliConfig.Logging.EnableBlockTracking,
+		Group:   "Logging",
+	})
 
 	// heimdall
 	f.StringFlag(&flagset.StringFlag{

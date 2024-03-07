@@ -154,6 +154,9 @@ type LoggingConfig struct {
 	// Prepends log messages with call-site location (file and line number)
 	Debug bool `hcl:"debug,optional" toml:"debug,optional"`
 
+	// EnableBlockTracking allows logging of information collected while tracking block lifecycle
+	EnableBlockTracking bool `hcl:"enable-block-tracking,optional" toml:"enable-block-tracking,optional"`
+
 	// TODO - implement this
 	// // Write execution trace to the given file
 	// Trace string `hcl:"trace,optional" toml:"trace,optional"`
@@ -606,10 +609,11 @@ func DefaultConfig() *Config {
 		DBEngine:                "leveldb",
 		KeyStoreDir:             "",
 		Logging: &LoggingConfig{
-			Vmodule:   "",
-			Json:      false,
-			Backtrace: "",
-			Debug:     false,
+			Vmodule:             "",
+			Json:                false,
+			Backtrace:           "",
+			Debug:               false,
+			EnableBlockTracking: false,
 		},
 		RPCBatchLimit:      100,
 		RPCReturnDataLimit: 100000,
@@ -1185,6 +1189,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	if c.Ancient != "" {
 		n.DatabaseFreezer = c.Ancient
 	}
+
+	n.EnableBlockTracking = c.Logging.EnableBlockTracking
 
 	return &n, nil
 }

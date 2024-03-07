@@ -204,6 +204,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *big.Int `toml:",omitempty"`
+
+	// EnableBlockTracking allows logging of information collected while tracking block lifecycle
+	EnableBlockTracking bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

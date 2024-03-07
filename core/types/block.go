@@ -263,6 +263,7 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+	AnnouncedAt  *time.Time
 }
 
 // "external" block encoding. used for eth protocol, etc.
