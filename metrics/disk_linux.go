@@ -63,9 +63,9 @@ func ReadDiskStats(stats *DiskStats) error {
 			stats.ReadCount = value
 		case "syscw":
 			stats.WriteCount = value
-		case "rchar":
+		case "read_bytes":
 			stats.ReadBytes = value
-		case "wchar":
+		case "write_bytes":
 			stats.WriteBytes = value
 		}
 	}
