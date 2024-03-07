@@ -222,7 +222,7 @@ type snapshotTest struct {
 
 func (snaptest *snapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
@@ -245,7 +245,7 @@ type crashSnapshotTest struct {
 
 func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
@@ -297,7 +297,7 @@ type gappedSnapshotTest struct {
 
 func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
@@ -341,7 +341,7 @@ type setHeadSnapshotTest struct {
 
 func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
@@ -370,7 +370,7 @@ type wipeCrashSnapshotTest struct {
 
 func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 	// fmt.Println(tt.dump())
 	chain, blocks := snaptest.prepare(t)
 
