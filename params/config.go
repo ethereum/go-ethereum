@@ -498,7 +498,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v ShanghaiBlock: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -512,6 +512,7 @@ func (c *ChainConfig) String() string {
 		common.BerlinBlock,
 		common.LondonBlock,
 		common.MergeBlock,
+		common.ShanghaiBlock,
 		engine,
 	)
 }
@@ -572,6 +573,11 @@ func (c *ChainConfig) IsLondon(num *big.Int) bool {
 // Different from Geth which uses `block.difficulty != nil`
 func (c *ChainConfig) IsMerge(num *big.Int) bool {
 	return isForked(common.MergeBlock, num)
+}
+
+// IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
+func (c *ChainConfig) IsShanghai(num *big.Int) bool {
+	return isForked(common.ShanghaiBlock, num)
 }
 
 func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
@@ -742,7 +748,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge                                                 bool
+	IsMerge, IsShanghai                                     bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -763,5 +769,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          c.IsMerge(num),
+		IsShanghai:       c.IsShanghai(num),
 	}
 }

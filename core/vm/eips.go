@@ -29,6 +29,8 @@ import (
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
+	case 3855:
+		enable3855(jt)
 	case 3198:
 		enable3198(jt)
 	case 2200:
@@ -110,5 +112,22 @@ func enable3198(jt *JumpTable) {
 func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(common.MinGasPrice50x)
 	callContext.stack.push(baseFee)
+	return nil, nil
+}
+
+// enable3855 applies EIP-3855 (PUSH0 opcode)
+func enable3855(jt *JumpTable) {
+	// New opcode
+	jt[PUSH0] = &operation{
+		execute:     opPush0,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
+// opPush0 implements the PUSH0 opcode
+func opPush0(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	callContext.stack.push(new(uint256.Int))
 	return nil, nil
 }
