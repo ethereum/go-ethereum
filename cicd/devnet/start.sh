@@ -81,5 +81,5 @@ XDC --ethstats ${netstats} --gcmode archive \
 --rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
 --gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
---ws --wsaddr=0.0.0.0 --wsport $ws_port \
+--enable-0x-prefix --ws --wsaddr=0.0.0.0 --wsport $ws_port \
 --wsorigins "*" 2>&1 >>/work/xdcchain/xdc.log | tee -a /work/xdcchain/xdc.log
