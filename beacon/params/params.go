@@ -41,4 +41,6 @@ const (
 	StateIndexNextSyncCommittee = 55
 	StateIndexExecPayload       = 56
 	StateIndexExecHead          = 908
+
+	BodyIndexExecPayload = 25
 )

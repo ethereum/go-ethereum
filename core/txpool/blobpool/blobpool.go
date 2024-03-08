@@ -360,7 +360,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 		}
 	}
 	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
+	// case the head state is not available (might occur when node is not
 	// fully synced).
 	state, err := p.chain.StateAt(head.Root)
 	if err != nil {
@@ -371,7 +371,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 	}
 	p.head, p.state = head, state
 
-	// Index all transactions on disk and delete anything inprocessable
+	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
 		if p.parseTransaction(id, size, blob) != nil {
@@ -402,7 +402,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 	}
 	var (
 		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
-		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
+		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	if p.head.ExcessBlobGas != nil {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessBlobGas))
@@ -540,7 +540,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		}
 		delete(p.index, addr)
 		delete(p.spent, addr)
-		if inclusions != nil { // only during reorgs will the heap will be initialized
+		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
 		p.reserve(addr, false)
@@ -693,7 +693,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		if len(txs) == 0 {
 			delete(p.index, addr)
 			delete(p.spent, addr)
-			if inclusions != nil { // only during reorgs will the heap will be initialized
+			if inclusions != nil { // only during reorgs will the heap be initialized
 				heap.Remove(p.evict, p.evict.index[addr])
 			}
 			p.reserve(addr, false)
@@ -809,7 +809,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 				}
 			}
 			// Recheck the account's pooled transactions to drop included and
-			// invalidated one
+			// invalidated ones
 			p.recheck(addr, inclusions)
 		}
 		if len(adds) > 0 {
@@ -1226,7 +1226,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 // consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
-	// only even pulled form the network, so this method will act as the overload
+	// only even pulled from the network, so this method will act as the overload
 	// protection for fetches.
 	waitStart := time.Now()
 	p.lock.Lock()
@@ -1446,7 +1446,12 @@ func (p *BlobPool) drop() {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *uint256.Int) map[common.Address][]*txpool.LazyTransaction {
+func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	// If only plain transactions are requested, this pool is unsuitable as it
+	// contains none, don't even bother.
+	if filter.OnlyPlainTxs {
+		return nil
+	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
 	// The latter will be pretty much moot, but we've kept it to have symmetric
@@ -1456,29 +1461,30 @@ func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *u
 	pendwaitHist.Update(time.Since(pendStart).Nanoseconds())
 	defer p.lock.RUnlock()
 
-	defer func(start time.Time) {
-		pendtimeHist.Update(time.Since(start).Nanoseconds())
-	}(time.Now())
+	execStart := time.Now()
+	defer func() {
+		pendtimeHist.Update(time.Since(execStart).Nanoseconds())
+	}()
 
-	pending := make(map[common.Address][]*txpool.LazyTransaction)
+	pending := make(map[common.Address][]*txpool.LazyTransaction, len(p.index))
 	for addr, txs := range p.index {
-		var lazies []*txpool.LazyTransaction
+		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
 			// If transaction filtering was requested, discard badly priced ones
-			if minTip != nil && baseFee != nil {
-				if tx.execFeeCap.Lt(baseFee) {
+			if filter.MinTip != nil && filter.BaseFee != nil {
+				if tx.execFeeCap.Lt(filter.BaseFee) {
 					break // basefee too low, cannot be included, discard rest of txs from the account
 				}
-				tip := new(uint256.Int).Sub(tx.execFeeCap, baseFee)
+				tip := new(uint256.Int).Sub(tx.execFeeCap, filter.BaseFee)
 				if tip.Gt(tx.execTipCap) {
 					tip = tx.execTipCap
 				}
-				if tip.Lt(minTip) {
+				if tip.Lt(filter.MinTip) {
 					break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
 				}
 			}
-			if blobFee != nil {
-				if tx.blobFeeCap.Lt(blobFee) {
+			if filter.BlobFee != nil {
+				if tx.blobFeeCap.Lt(filter.BlobFee) {
 					break // blobfee too low, cannot be included, discard rest of txs from the account
 				}
 			}
@@ -1486,9 +1492,9 @@ func (p *BlobPool) Pending(minTip *uint256.Int, baseFee *uint256.Int, blobFee *u
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
 				Hash:      tx.hash,
-				Time:      time.Now(), // TODO(karalabe): Maybe save these and use that?
-				GasFeeCap: tx.execFeeCap.ToBig(),
-				GasTipCap: tx.execTipCap.ToBig(),
+				Time:      execStart, // TODO(karalabe): Maybe save these and use that?
+				GasFeeCap: tx.execFeeCap,
+				GasTipCap: tx.execTipCap,
 				Gas:       tx.execGas,
 				BlobGas:   tx.blobGas,
 			})
@@ -1548,7 +1554,7 @@ func (p *BlobPool) updateStorageMetrics() {
 }
 
 // updateLimboMetrics retrieves a bunch of stats from the limbo store and pushes
-// // them out as metrics.
+// them out as metrics.
 func (p *BlobPool) updateLimboMetrics() {
 	stats := p.limbo.store.Infos()
 
