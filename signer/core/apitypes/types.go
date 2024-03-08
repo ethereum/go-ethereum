@@ -708,7 +708,7 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 func (t Types) validate() error {
 	for typeKey, typeArr := range t {
 		if len(typeKey) == 0 {
-			return fmt.Errorf("empty type key")
+			return errors.New("empty type key")
 		}
 		for i, typeObj := range typeArr {
 			if len(typeObj.Type) == 0 {

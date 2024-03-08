@@ -1228,6 +1228,24 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Blob transactions that don't meet the min blob gas price should be rejected
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			adds: []addtx{
+				{ // New account, no previous txs, nonce 0, but blob fee cap too low
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 0),
+					err:  txpool.ErrUnderpriced,
+				},
+				{ // Same as above but blob fee cap equals minimum, should be accepted
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, params.BlobTxMinBlobGasprice),
+					err:  nil,
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend

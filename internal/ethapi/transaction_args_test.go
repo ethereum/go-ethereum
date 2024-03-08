@@ -358,7 +358,7 @@ func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.Blo
 func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
-func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) { return nil, nil }
+func (b *backendMock) Pending() (*types.Block, types.Receipts, *state.StateDB) { return nil, nil, nil }
 func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return nil, nil
 }
@@ -396,9 +396,6 @@ func (b *backendMock) SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscr
 func (b *backendMock) BloomStatus() (uint64, uint64)                                        { return 0, 0 }
 func (b *backendMock) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {}
 func (b *backendMock) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription         { return nil }
-func (b *backendMock) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	return nil
-}
 func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return nil
 }

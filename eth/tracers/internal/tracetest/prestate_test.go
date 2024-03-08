@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -106,6 +107,11 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
 			defer state.Close()
+
+			if test.Genesis.ExcessBlobGas != nil && test.Genesis.BlobGasUsed != nil {
+				excessBlobGas := eip4844.CalcExcessBlobGas(*test.Genesis.ExcessBlobGas, *test.Genesis.BlobGasUsed)
+				context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+			}
 
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {

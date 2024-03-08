@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"math/big"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -161,14 +163,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		Random:                random,
-	}, engine.PayloadV2, true)
+		BeaconRoot:            &common.Hash{},
+	}, engine.PayloadV3, true)
 	if err != nil {
 		return err
 	}
 	if fcResponse == engine.STATUS_SYNCING {
 		return errors.New("chain rewind prevented invocation of payload creation")
 	}
-
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
 		return err
@@ -186,8 +188,21 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 
+	// Independently calculate the blob hashes from sidecars.
+	blobHashes := make([]common.Hash, 0)
+	if envelope.BlobsBundle != nil {
+		hasher := sha256.New()
+		for _, commit := range envelope.BlobsBundle.Commitments {
+			var c kzg4844.Commitment
+			if len(commit) != len(c) {
+				return errors.New("invalid commitment length")
+			}
+			copy(c[:], commit)
+			blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
+		}
+	}
 	// Mark the payload as canon
-	if _, err = c.engineAPI.NewPayloadV2(*payload); err != nil {
+	if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)

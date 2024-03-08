@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -164,7 +163,6 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Database:   db,
 		Chain:      chain,
 		TxPool:     txpool,
-		Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 		Network:    1,
 		Sync:       downloader.SnapSync,
 		BloomCache: 1,

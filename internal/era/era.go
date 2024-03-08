@@ -18,6 +18,7 @@ package era
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -127,7 +128,7 @@ func (e *Era) Close() error {
 
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
-		return nil, fmt.Errorf("out-of-bounds")
+		return nil, errors.New("out-of-bounds")
 	}
 	off, err := e.readOffset(num)
 	if err != nil {
