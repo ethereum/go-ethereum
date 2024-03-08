@@ -72,10 +72,14 @@ func TestTxArgs(t *testing.T) {
 		if err := json.Unmarshal(tc.data, &txArgs); err != nil {
 			t.Fatal(err)
 		}
-		if have := txArgs.ToTransaction().Type(); have != tc.wantType {
+		tx, err := txArgs.ToTransaction()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if have := tx.Type(); have != tc.wantType {
 			t.Errorf("test %d, have type %d, want type %d", i, have, tc.wantType)
 		}
-		if have := txArgs.ToTransaction().Hash(); have != tc.want {
+		if have := tx.Hash(); have != tc.want {
 			t.Errorf("test %d: have %v, want %v", i, have, tc.want)
 		}
 		d2, err := json.Marshal(txArgs)
