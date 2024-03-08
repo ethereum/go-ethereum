@@ -1480,8 +1480,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 	}
 	for addr, txs := range p.index {
 		var (
-			tail  []*txpool.LazyTransaction
-			first = true
+			tail []*txpool.LazyTransaction
 		)
 		for i, tx := range txs {
 			var tip *uint256.Int
@@ -1513,8 +1512,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 				Gas:     tx.execGas,
 				BlobGas: tx.blobGas,
 			}
-			if first {
-				first = false
+			if len(tail) == 0 {
 				tail = make([]*txpool.LazyTransaction, 0, len(txs)-i)
 				heads = append(heads, &txpool.TxTips{
 					From: addr,

@@ -258,6 +258,25 @@ func (m *sortedMap) Flatten() types.Transactions {
 	return txs
 }
 
+// AppendHashes uses the flattened slice of transactions and appends the hashes
+// to the destination slice.
+func (m *sortedMap) AppendHashes(dst []common.Hash) []common.Hash {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	// If the sorting was not cached yet, create and cache it
+	if m.cache == nil {
+		m.cache = make(types.Transactions, 0, len(m.items))
+		for _, tx := range m.items {
+			m.cache = append(m.cache, tx)
+		}
+		sort.Sort(types.TxByNonce(m.cache))
+	}
+	for _, tx := range m.items {
+		dst = append(dst, tx.Hash())
+	}
+	return dst
+}
+
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
 func (m *sortedMap) LastElement() *types.Transaction {
@@ -451,6 +470,12 @@ func (l *list) Empty() bool {
 // it's requested again before any modifications are made to the contents.
 func (l *list) Flatten() types.Transactions {
 	return l.txs.Flatten()
+}
+
+// AppendHashes flattens a nonce-sorted slice of transcations, and appends
+// the hashes to dst. The destination slice might be reallocated, and is returned.
+func (l *list) AppendHashes(dst []common.Hash) []common.Hash {
+	return l.txs.AppendHashes(dst)
 }
 
 // LastElement returns the last element of a flattened list, thus, the

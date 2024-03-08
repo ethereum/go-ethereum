@@ -549,9 +549,8 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 			continue
 		}
 		var (
-			tail  []*txpool.LazyTransaction
-			first = true
-			txs   = list.Flatten()
+			tail []*txpool.LazyTransaction
+			txs  = list.Flatten()
 		)
 		for i, tx := range txs {
 			if tx.GasFeeCapIntCmp(baseFeeBig) < 0 {
@@ -575,8 +574,7 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 				Gas:     txs[i].Gas(),
 				BlobGas: txs[i].BlobGas(),
 			}
-			if first {
-				first = false
+			if len(tail) == 0 {
 				tail = make([]*txpool.LazyTransaction, 0, len(txs)-i)
 				heads = append(heads, &txpool.TxTips{
 					From: addr,
@@ -610,9 +608,7 @@ func (pool *LegacyPool) PendingHashes(filter txpool.PendingFilter) []common.Hash
 		if filter.OnlyLocals && !pool.locals.contains(addr) {
 			continue
 		}
-		for _, tx := range list.Flatten() {
-			hashes = append(hashes, tx.Hash())
-		}
+		hashes = list.AppendHashes(hashes)
 	}
 	return hashes
 }
