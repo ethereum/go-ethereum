@@ -94,6 +94,7 @@ type dialScheduler struct {
 	dialConfig
 	setupFunc   dialSetupFunc
 	wg          sync.WaitGroup
+	lock        sync.Mutex
 	cancel      context.CancelFunc
 	ctx         context.Context
 	nodesIn     chan *enode.Node
@@ -409,6 +410,8 @@ func (d *dialScheduler) startStaticDials(n int) (started int) {
 
 // updateStaticPool attempts to move the given static dial back into staticPool.
 func (d *dialScheduler) updateStaticPool(id enode.ID) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	task, ok := d.static[id]
 	if ok && task.staticPoolIndex < 0 && d.checkDial(task.dest) == nil {
 		d.addToStaticPool(task)
@@ -493,6 +496,8 @@ func (t *dialTask) needResolve() bool {
 // discovery network with useless queries for nodes that don't exist.
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(d *dialScheduler) bool {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	if d.resolver == nil {
 		return false
 	}
