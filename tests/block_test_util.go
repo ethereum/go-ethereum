@@ -26,6 +26,8 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/ethereum/go-ethereum/eth"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -109,7 +111,15 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(false, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) error {
+	return t.run(true, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) run(stateless bool, snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -126,6 +136,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	} else {
 		tconf.HashDB = hashdb.Defaults
 	}
+
 	// Commit genesis state
 	gspec := t.genesis(config)
 	triedb := triedb.NewDatabase(db, tconf)
@@ -181,6 +192,21 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	if snapshotter {
 		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
 			return err
+		}
+	}
+
+	if stateless {
+		for _, blk := range validBlocks {
+			proof, err := eth.BuildStatelessProof(blk.BlockHeader.Number.Uint64(), chain)
+			if err != nil {
+				return fmt.Errorf("failed to build proof: %v", err)
+			}
+			_, err = state.DecodeWitnessRLP(proof)
+			if err != nil {
+				return fmt.Errorf("failed to decode witness RLP: %v", err)
+			}
+			// TODO: decode and execute the stateless proof, verify the produced root
+			// matches the block root.
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)

@@ -602,6 +602,26 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
+// AccessList returns a map of path->blob containing all trie nodes that have
+// been accessed.
+func (t *Trie) AccessList() map[string][]byte {
+	return t.tracer.accessList
+}
+
+// CommitAndObtainAccessList does the same thing as Commit, but also returns
+// the access list of the trie.
+func (t *Trie) CommitAndObtainAccessList(collectLeaf bool) (common.Hash, *trienode.NodeSet, map[string][]byte, error) {
+	accessList := t.tracer.accessList
+	// Commit will reset the tracer accessList, so after this
+	// operation, we have full ownership of the map (hence: no need to
+	// deep-copy or even copy).
+	rootHash, nodes, err := t.Commit(collectLeaf)
+	if err != nil {
+		return rootHash, nodes, nil, err
+	}
+	return rootHash, nodes, accessList, err
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
@@ -609,8 +629,8 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
-	defer t.tracer.reset()
 	defer func() {
+		t.tracer.reset()
 		t.committed = true
 	}()
 	// Trie is empty and can be classified into two types of situations:

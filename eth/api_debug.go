@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -442,4 +445,41 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+// BuildStatelessProof executes a block, collecting the accessed pre-state into
+// a Witness.  The RLP-encoded witness is returned.
+func BuildStatelessProof(number uint64, bc *core.BlockChain) ([]byte, error) {
+	if number == 0 {
+		panic("cannot build genesis block proof")
+	}
+	parent := bc.GetBlockByNumber(number - 1)
+	db, err := bc.StateAt(parent.Header().Root)
+	if err != nil {
+		return nil, err
+	}
+	db.EnableWitnessRecording()
+	db.StartPrefetcher("debug_buildStatelessProof")
+	block := bc.GetBlockByNumber(number)
+	stateProcessor := core.NewStateProcessor(bc.Config(), bc, bc.Engine())
+	_, _, _, err = stateProcessor.Process(block, db, vm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	if _, err = db.Commit(block.NumberU64(), true); err != nil {
+		return nil, err
+	}
+	proof := db.Witness()
+	proof.Block = block
+	enc, err := proof.EncodeRLP()
+	if err != nil {
+		return nil, err
+	}
+	return enc, nil
+}
+
+// BuildStatelessProof executes a block, collecting the accessed pre-state into
+// a Witness.  The RLP-encoded witness is returned.
+func (api *DebugAPI) BuildStatelessProof(num rpc.BlockNumber) ([]byte, error) {
+	return BuildStatelessProof(uint64(num), api.eth.blockchain)
 }

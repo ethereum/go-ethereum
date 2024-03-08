@@ -329,6 +329,18 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// EncodeRLPWithZeroRoot encodes a block (with header state root set to 0x00...0) to RLP
+func (b *Block) EncodeRLPWithZeroRoot(w io.Writer) error {
+	old := b.header.Root
+	b.header.Root = common.Hash{}
+	err := b.EncodeRLP(w)
+	b.header.Root = old
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
