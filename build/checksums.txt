@@ -5,22 +5,22 @@
 # https://github.com/ethereum/execution-spec-tests/releases/download/v2.1.0/
 ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c  fixtures_develop.tar.gz
 
-# version:golang 1.22.0
+# version:golang 1.22.1
 # https://go.dev/dl/
-4d196c3d41a0d6c1dfc64d04e3cc1f608b0c436bd87b7060ce3e23234e1f4d5c  go1.22.0.src.tar.gz
-ebca81df938d2d1047cc992be6c6c759543cf309d401b86af38a6aed3d4090f4  go1.22.0.darwin-amd64.tar.gz
-bf8e388b09134164717cd52d3285a4ab3b68691b80515212da0e9f56f518fb1e  go1.22.0.darwin-arm64.tar.gz
-b8065da37783e8b9e7086365a54d74537e832c92311b61101a66989ab2458d8e  go1.22.0.freebsd-386.tar.gz
-50f421c7f217083ac94aab1e09400cb9c2fea7d337679ec11f1638a11460da30  go1.22.0.freebsd-amd64.tar.gz
-1e209c4abde069067ac9afb341c8003db6a210f8173c77777f02d3a524313da3  go1.22.0.linux-386.tar.gz
-f6c8a87aa03b92c4b0bf3d558e28ea03006eb29db78917daec5cfb6ec1046265  go1.22.0.linux-amd64.tar.gz
-6a63fef0e050146f275bf02a0896badfe77c11b6f05499bb647e7bd613a45a10  go1.22.0.linux-arm64.tar.gz
-0525f92f79df7ed5877147bce7b955f159f3962711b69faac66bc7121d36dcc4  go1.22.0.linux-armv6l.tar.gz
-0e57f421df9449066f00155ce98a5be93744b3d81b00ee4c2c9b511be2a31d93  go1.22.0.linux-ppc64le.tar.gz
-2e546a3583ba7bd3988f8f476245698f6a93dfa9fe206a8ca8f85c1ceecb2446  go1.22.0.linux-s390x.tar.gz
-553d44928509965cbda02a45b35ab01cf8b925534bc526a34e2d9dc7794b57e8  go1.22.0.windows-386.zip
-78b3158fe3aa358e0b6c9f26ecd338f9a11441e88bc434ae2e9f0ca2b0cc4dd3  go1.22.0.windows-amd64.zip
-31a61e41d06a3bb2189a303f5f3e777ca4b454eff439f0a67bc2b166330021f4  go1.22.0.windows-arm64.zip
+79c9b91d7f109515a25fc3ecdaad125d67e6bdb54f6d4d98580f46799caea321  go1.22.1.src.tar.gz
+3bc971772f4712fec0364f4bc3de06af22a00a12daab10b6f717fdcd13156cc0  go1.22.1.darwin-amd64.tar.gz
+f6a9cec6b8a002fcc9c0ee24ec04d67f430a52abc3cfd613836986bcc00d8383  go1.22.1.darwin-arm64.tar.gz
+99f81c10d5a3f8a886faf8fa86aaa2aaf929fbed54a972ae5eec3c5e0bdb961a  go1.22.1.freebsd-386.tar.gz
+51c614ddd92ee4a9913a14c39bf80508d9cfba08561f24d2f075fd00f3cfb067  go1.22.1.freebsd-amd64.tar.gz
+8484df36d3d40139eaf0fe5e647b006435d826cc12f9ae72973bf7ec265e0ae4  go1.22.1.linux-386.tar.gz
+aab8e15785c997ae20f9c88422ee35d962c4562212bb0f879d052a35c8307c7f  go1.22.1.linux-amd64.tar.gz
+e56685a245b6a0c592fc4a55f0b7803af5b3f827aaa29feab1f40e491acf35b8  go1.22.1.linux-arm64.tar.gz
+8cb7a90e48c20daed39a6ac8b8a40760030ba5e93c12274c42191d868687c281  go1.22.1.linux-armv6l.tar.gz
+ac775e19d93cc1668999b77cfe8c8964abfbc658718feccfe6e0eb87663cd668  go1.22.1.linux-ppc64le.tar.gz
+7bb7dd8e10f95c9a4cc4f6bef44c816a6e7c9e03f56ac6af6efbb082b19b379f  go1.22.1.linux-s390x.tar.gz
+0c5ebb7eb39b7884ec99f92b425d4c03a96a72443562aafbf6e7d15c42a3108a  go1.22.1.windows-386.zip
+cf9c66a208a106402a527f5b956269ca506cfe535fc388e828d249ea88ed28ba  go1.22.1.windows-amd64.zip
+85b8511b298c9f4199ecae26afafcc3d46155bac934d43f2357b9224bcaa310f  go1.22.1.windows-arm64.zip
 
 # version:golangci 1.55.2
 # https://github.com/golangci/golangci-lint/releases/
