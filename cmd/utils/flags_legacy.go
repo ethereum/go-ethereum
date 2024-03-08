@@ -47,6 +47,9 @@ var DeprecatedFlags = []cli.Flag{
 	LightNoSyncServeFlag,
 	LogBacktraceAtFlag,
 	LogDebugFlag,
+	MinerNewPayloadTimeoutFlag,
+	MinerEtherbaseFlag,
+	MiningEnabledFlag,
 }
 
 var (
@@ -131,6 +134,23 @@ var (
 		Name:     "log.debug",
 		Usage:    "Prepends log messages with call-site location (deprecated)",
 		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated February 2024
+	MinerNewPayloadTimeoutFlag = &cli.DurationFlag{
+		Name:     "miner.newpayload-timeout",
+		Usage:    "Specify the maximum time allowance for creating a new payload",
+		Value:    ethconfig.Defaults.Miner.Recommit,
+		Category: flags.MinerCategory,
+	}
+	MinerEtherbaseFlag = &cli.StringFlag{
+		Name:     "miner.etherbase",
+		Usage:    "0x prefixed public address for block mining rewards",
+		Category: flags.MinerCategory,
+	}
+	MiningEnabledFlag = &cli.BoolFlag{
+		Name:     "mine",
+		Usage:    "Enable mining",
+		Category: flags.MinerCategory,
 	}
 )
 

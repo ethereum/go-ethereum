@@ -403,9 +403,6 @@ func (db *Database) Recoverable(root common.Hash) bool {
 		if m.parent != root {
 			return errors.New("unexpected state history")
 		}
-		if len(m.incomplete) > 0 {
-			return errors.New("incomplete state history")
-		}
 		root = m.root
 		return nil
 	}) == nil
