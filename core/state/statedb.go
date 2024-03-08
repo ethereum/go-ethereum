@@ -898,10 +898,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:
 	//
-	// Take value nodes 1, 2 who share the same full node parent 3 and have no other siblings.
-	// 1 self-destructs specifying a non-existing recipient account which would be a child of 3.
-	// If the deletion of 1 happens before the account-creating balance transfer, 3 will temporarily
-	// be collapsed to a short node on 2, requiring 2 to be unecessarily resolved.
+	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
+	// During the execution of a block:
+	// - `A` self-destructs, 
+	// - `C` is created, and also shares the parent `P`. 
+	// If the self-destruct is handled first, then `P` would be left with only one child, thus collapsed
+	// into a shortnode. This requires `B` to be resolved from disk. 
+	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var deletedObjects []*stateObject
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
