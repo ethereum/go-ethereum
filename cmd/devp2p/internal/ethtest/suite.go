@@ -754,8 +754,8 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	)
 	for i := range blobs {
 		blobs[i][0] = data[i]
-		c, _ := kzg4844.BlobToCommitment(blobs[i])
-		p, _ := kzg4844.ComputeBlobProof(blobs[i], c)
+		c, _ := kzg4844.BlobToCommitment(&blobs[i])
+		p, _ := kzg4844.ComputeBlobProof(&blobs[i], c)
 		commitments = append(commitments, c)
 		proofs = append(proofs, p)
 	}
