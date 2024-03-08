@@ -125,13 +125,19 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 	// that the false-positive is low enough(~0.05%). The probability of the
 	// dangling node is the state root is super low. So the dangling nodes in
 	// theory will never ever be visited again.
+	var pruneDB ethdb.Database
+	if maindb != nil && maindb.StateStore() != nil {
+		pruneDB = maindb.StateStore()
+	} else {
+		pruneDB = maindb
+	}
 	var (
 		skipped, count int
 		size           common.StorageSize
 		pstart         = time.Now()
 		logged         = time.Now()
-		batch          = maindb.NewBatch()
-		iter           = maindb.NewIterator(nil, nil)
+		batch          = pruneDB.NewBatch()
+		iter           = pruneDB.NewIterator(nil, nil)
 	)
 	for iter.Next() {
 		key := iter.Key()
@@ -178,7 +184,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				batch.Reset()
 
 				iter.Release()
-				iter = maindb.NewIterator(nil, key)
+				iter = pruneDB.NewIterator(nil, key)
 			}
 		}
 	}
@@ -221,7 +227,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 				end = nil
 			}
 			log.Info("Compacting database", "range", fmt.Sprintf("%#x-%#x", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
-			if err := maindb.Compact(start, end); err != nil {
+			if err := pruneDB.Compact(start, end); err != nil {
 				log.Error("Database compaction failed", "error", err)
 				return err
 			}
@@ -266,10 +272,17 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// Use the bottom-most diff layer as the target
 		root = layers[len(layers)-1].Root()
 	}
+	// if the separated state db has been set, use this db to prune data
+	var trienodedb ethdb.Database
+	if p.db != nil && p.db.StateStore() != nil {
+		trienodedb = p.db.StateStore()
+	} else {
+		trienodedb = p.db
+	}
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
 	// entire trie.
-	if !rawdb.HasLegacyTrieNode(p.db, root) {
+	if !rawdb.HasLegacyTrieNode(trienodedb, root) {
 		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
@@ -283,7 +296,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		// as the pruning target.
 		var found bool
 		for i := len(layers) - 2; i >= 2; i-- {
-			if rawdb.HasLegacyTrieNode(p.db, layers[i].Root()) {
+			if rawdb.HasLegacyTrieNode(trienodedb, layers[i].Root()) {
 				root = layers[i].Root()
 				found = true
 				log.Info("Selecting middle-layer as the pruning target", "root", root, "depth", i)

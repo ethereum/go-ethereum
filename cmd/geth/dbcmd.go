@@ -428,6 +428,11 @@ func dbStats(ctx *cli.Context) error {
 	defer db.Close()
 
 	showLeveldbStats(db)
+	if db.StateStore() != nil {
+		fmt.Println("show stats of state store")
+		showLeveldbStats(db.StateStore())
+	}
+
 	return nil
 }
 
@@ -441,13 +446,31 @@ func dbCompact(ctx *cli.Context) error {
 	log.Info("Stats before compaction")
 	showLeveldbStats(db)
 
+	statediskdb := db.StateStore()
+	if statediskdb != nil {
+		fmt.Println("show stats of state store")
+		showLeveldbStats(statediskdb)
+	}
+
 	log.Info("Triggering compaction")
 	if err := db.Compact(nil, nil); err != nil {
-		log.Info("Compact err", "error", err)
+		log.Error("Compact err", "error", err)
 		return err
 	}
+
+	if statediskdb != nil {
+		if err := statediskdb.Compact(nil, nil); err != nil {
+			log.Error("Compact err", "error", err)
+			return err
+		}
+	}
+
 	log.Info("Stats after compaction")
 	showLeveldbStats(db)
+	if statediskdb != nil {
+		fmt.Println("show stats of state store after compaction")
+		showLeveldbStats(statediskdb)
+	}
 	return nil
 }
 
@@ -468,8 +491,17 @@ func dbGet(ctx *cli.Context) error {
 		return err
 	}
 
+	statediskdb := db.StateStore()
 	data, err := db.Get(key)
 	if err != nil {
+		// if separate trie db exist, try to get it from separate db
+		if statediskdb != nil {
+			statedata, dberr := statediskdb.Get(key)
+			if dberr == nil {
+				fmt.Printf("key %#x: %#x\n", key, statedata)
+				return nil
+			}
+		}
 		log.Info("Get operation failed", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}

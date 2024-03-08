@@ -90,16 +90,23 @@ type Database struct {
 // the legacy hash-based scheme is used by default.
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	// Sanitize the config and use the default one if it's not specified.
+	var triediskdb ethdb.Database
+	if diskdb != nil && diskdb.StateStore() != nil {
+		triediskdb = diskdb.StateStore()
+	} else {
+		triediskdb = diskdb
+	}
+
 	if config == nil {
 		config = HashDefaults
 	}
 	var preimages *preimageStore
 	if config.Preimages {
-		preimages = newPreimageStore(diskdb)
+		preimages = newPreimageStore(triediskdb)
 	}
 	db := &Database{
 		config:    config,
-		diskdb:    diskdb,
+		diskdb:    triediskdb,
 		preimages: preimages,
 	}
 	if config.HashDB != nil && config.PathDB != nil {

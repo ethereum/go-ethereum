@@ -195,6 +195,18 @@ func (t *table) NewBatch() ethdb.Batch {
 	return &tableBatch{t.db.NewBatch(), t.prefix}
 }
 
+func (t *table) StateStore() ethdb.Database {
+	return nil
+}
+
+func (t *table) SetStateStore(state ethdb.Database) {
+	panic("not implement")
+}
+
+func (t *table) StateStoreReader() ethdb.Reader {
+	return nil
+}
+
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
 func (t *table) NewBatchWithSize(size int) ethdb.Batch {
 	return &tableBatch{t.db.NewBatchWithSize(size), t.prefix}
