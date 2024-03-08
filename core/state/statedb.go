@@ -895,15 +895,28 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
+	// in circumstances similar to the following:s
+	//
+	// Take value nodes 1, 2 who share the same full node parent 3 and have no other siblings.
+	// 1 self-destructs specifying a non-existing recipient account which would be a child of 3.
+	// If the deletion of 1 happens before the account-creating balance transfer, 3 will temporarily
+	// be collapsed to a short node on 2, requiring 2 to be unecessarily resolved.
+	var deletedObjects []*stateObject
 	for addr := range s.stateObjectsPending {
-		if obj := s.stateObjects[addr]; obj.deleted {
-			s.deleteStateObject(obj)
-			s.AccountDeleted += 1
-		} else {
+		if obj := s.stateObjects[addr]; !obj.deleted {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+			usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+		} else {
+			deletedObjects = append(deletedObjects, obj)
 		}
-		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:]))
+	}
+	for _, deletedObj := range deletedObjects {
+		s.deleteStateObject(deletedObj)
+		s.AccountDeleted += 1
+		usedAddrs = append(usedAddrs, common.CopyBytes(deletedObj.address[:])) // Copy needed for closure
 	}
 	if prefetcher != nil {
 		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
