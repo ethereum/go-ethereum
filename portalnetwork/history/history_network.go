@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -33,6 +34,8 @@ var (
 	ErrHeaderWithProofIsInvalid = errors.New("header proof is invalid")
 	ErrInvalidBlockHash         = errors.New("invalid block hash")
 )
+
+var emptyReceiptHash = hexutil.MustDecode("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 type ContentKey struct {
 	selector ContentType
@@ -525,6 +528,12 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 		if err != nil {
 			return err
 		}
+		if bytes.Equal(header.ReceiptHash.Bytes(), emptyReceiptHash) {
+			if len(content) > 0 {
+				return fmt.Errorf("content should be empty, but received %v", content)
+			}
+			return nil
+		}
 		_, err = ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
 		return err
 	case EpochAccumulatorType:
@@ -556,7 +565,7 @@ func (h *HistoryNetwork) validateContents(contentKeys [][]byte, contents [][]byt
 		err := h.validateContent(contentKey, content)
 		if err != nil {
 			h.log.Error("content validate failed", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content), "err", err)
-			return fmt.Errorf("content validate failed with content key %v", hexutil.Encode(contentKey))
+			return fmt.Errorf("content validate failed with content key %x and content %x", contentKey, content)
 		}
 		contentId := h.portalProtocol.ToContentId(contentKey)
 		_ = h.portalProtocol.Put(contentId, content)
