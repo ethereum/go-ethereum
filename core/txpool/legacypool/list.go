@@ -472,7 +472,7 @@ func (l *list) Flatten() types.Transactions {
 	return l.txs.Flatten()
 }
 
-// AppendHashes flattens a nonce-sorted slice of transcations, and appends
+// AppendHashes flattens a nonce-sorted slice of transacstions, and appends
 // the hashes to dst. The destination slice might be reallocated, and is returned.
 func (l *list) AppendHashes(dst []common.Hash) []common.Hash {
 	return l.txs.AppendHashes(dst)
