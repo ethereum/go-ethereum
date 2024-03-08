@@ -73,6 +73,13 @@ type Receipt struct {
 	TransactionIndex uint        `json:"transactionIndex"`
 }
 
+// StoredReceiptRLP is the storage encoding of a receipt.
+type StoredReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Logs              []*Log
+}
+
 type receiptMarshaling struct {
 	Type              hexutil.Uint64
 	PostState         hexutil.Bytes
@@ -91,13 +98,6 @@ type receiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Bloom             Bloom
-	Logs              []*Log
-}
-
-// storedReceiptRLP is the storage encoding of a receipt.
-type storedReceiptRLP struct {
-	PostStateOrStatus []byte
-	CumulativeGasUsed uint64
 	Logs              []*Log
 }
 
@@ -282,7 +282,7 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	var stored storedReceiptRLP
+	var stored StoredReceiptRLP
 	if err := s.Decode(&stored); err != nil {
 		return err
 	}
