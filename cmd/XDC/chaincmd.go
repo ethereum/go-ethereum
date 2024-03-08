@@ -319,7 +319,8 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeFullNode(ctx)
-	chain, _ := utils.MakeChain(ctx, stack)
+	chain, db := utils.MakeChain(ctx, stack)
+	defer db.Close()
 	start := time.Now()
 
 	var err error
@@ -353,6 +354,7 @@ func importPreimages(ctx *cli.Context) error {
 	}
 	stack, _ := makeFullNode(ctx)
 	diskdb := utils.MakeChainDatabase(ctx, stack)
+	defer diskdb.Close()
 
 	start := time.Now()
 	if err := utils.ImportPreimages(diskdb, ctx.Args().First()); err != nil {
@@ -369,6 +371,7 @@ func exportPreimages(ctx *cli.Context) error {
 	}
 	stack, _ := makeFullNode(ctx)
 	diskdb := utils.MakeChainDatabase(ctx, stack)
+	defer diskdb.Close()
 
 	start := time.Now()
 	if err := utils.ExportPreimages(diskdb, ctx.Args().First()); err != nil {
@@ -386,6 +389,7 @@ func copyDb(ctx *cli.Context) error {
 	// Initialize a new chain for the running node to sync into
 	stack, _ := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
 
 	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
@@ -458,6 +462,8 @@ func removeDB(ctx *cli.Context) error {
 func dump(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
+	
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
@@ -477,7 +483,6 @@ func dump(ctx *cli.Context) error {
 			fmt.Printf("%s\n", state.Dump())
 		}
 	}
-	chainDb.Close()
 	return nil
 }
 
