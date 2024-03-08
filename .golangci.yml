@@ -12,18 +12,18 @@ run:
 linters:
   disable-all: true
   enable:
+    - bidichk
+    - durationcheck
+    - exportloopref
     - goimports
     - gosimple
     - govet
     - ineffassign
     - misspell
-    - unconvert
-    - typecheck
-    - unused
     - staticcheck
-    - bidichk
-    - durationcheck
-    - exportloopref
+    - typecheck
+    - unconvert
+    - unused
     - whitespace
 
     # - structcheck # lots of false positives
