@@ -499,6 +499,9 @@ func (s *PersonalAccountAPI) SignTransaction(ctx context.Context, args Transacti
 	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
 		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
+	if args.IsEIP4844() {
+		return nil, errBlobTxNotSupported
+	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
@@ -1891,6 +1894,16 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	signed, err := s.sign(args.from(), tx)
 	if err != nil {
 		return nil, err
+	}
+	// If the transaction-to-sign was a blob transaction, then the signed one
+	// no longer retains the blobs, only the blob hashes. In this step, we need
+	// to put back the blob(s).
+	if args.IsEIP4844() {
+		signed = signed.WithBlobTxSidecar(&types.BlobTxSidecar{
+			args.Blobs,
+			args.Commitments,
+			args.Proofs,
+		})
 	}
 	data, err := signed.MarshalBinary()
 	if err != nil {
