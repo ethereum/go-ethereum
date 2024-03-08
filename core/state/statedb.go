@@ -900,26 +900,24 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	//
 	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
 	// During the execution of a block:
-	// - `A` self-destructs, 
-	// - `C` is created, and also shares the parent `P`. 
+	// - `A` self-destructs,
+	// - `C` is created, and also shares the parent `P`.
 	// If the self-destruct is handled first, then `P` would be left with only one child, thus collapsed
-	// into a shortnode. This requires `B` to be resolved from disk. 
+	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var deletedObjects []*stateObject
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
-			usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 		} else {
 			deletedObjects = append(deletedObjects, obj)
 		}
-		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:]))
+		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
 	for _, deletedObj := range deletedObjects {
 		s.deleteStateObject(deletedObj)
 		s.AccountDeleted += 1
-		usedAddrs = append(usedAddrs, common.CopyBytes(deletedObj.address[:])) // Copy needed for closure
 	}
 	if prefetcher != nil {
 		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
