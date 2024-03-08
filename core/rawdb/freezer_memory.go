@@ -37,13 +37,12 @@ type memoryTable struct {
 	lock   sync.RWMutex
 }
 
-// newMemoryTable initialises the memory table.
+// newMemoryTable initializes the memory table.
 func newMemoryTable(name string) *memoryTable {
 	return &memoryTable{name: name}
 }
 
-// has returns a flag indicating the item associated with the given number is
-// present or not.
+// has returns an indicator whether the specified data exists.
 func (t *memoryTable) has(number uint64) bool {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -70,7 +69,7 @@ func (t *memoryTable) retrieve(start uint64, count, maxBytes uint64) ([][]byte, 
 	if t.items <= start || t.offset > start || count == 0 {
 		return nil, errOutOfBounds
 	}
-	// Recap the item count if the retrieval is out of bound.
+	// Cap the item count if the retrieval is out of bound.
 	if start+count > t.items {
 		count = t.items - start
 	}
@@ -207,7 +206,7 @@ func (b *memoryBatch) commit(freezer *MemoryFreezer) (items uint64, writeSize in
 }
 
 // MemoryFreezer is an ephemeral ancient store. It implements the ethdb.AncientStore
-// interface and can be used along with ephemeral key value store.
+// interface and can be used along with ephemeral key-value store.
 type MemoryFreezer struct {
 	items      uint64                  // Number of items stored
 	tail       uint64                  // Number of the first stored item in the freezer
@@ -217,7 +216,7 @@ type MemoryFreezer struct {
 	writeBatch *memoryBatch            // Pre-allocated write batch
 }
 
-// NewMemoryFreezer initialises a in-memory freezer instance.
+// NewMemoryFreezer initializes an in-memory freezer instance.
 func NewMemoryFreezer(readonly bool, tableName map[string]bool) *MemoryFreezer {
 	tables := make(map[string]*memoryTable)
 	for name := range tableName {
