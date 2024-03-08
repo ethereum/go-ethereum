@@ -1,8 +1,8 @@
-name: shisui release image
+name: shisui latest image
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [ portal ]
 
 defaults:
   run:
@@ -16,7 +16,6 @@ permissions:
   contents: write
 
 env:
-  releaseBuild: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -36,19 +35,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{raw}}
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.portal
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}:latest
