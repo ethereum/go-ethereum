@@ -896,7 +896,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
 	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
-	// in circumstances similar to the following:s
+	// in circumstances similar to the following:
 	//
 	// Take value nodes 1, 2 who share the same full node parent 3 and have no other siblings.
 	// 1 self-destructs specifying a non-existing recipient account which would be a child of 3.
