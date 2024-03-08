@@ -38,7 +38,7 @@ type DownloaderAPI struct {
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
 }
 
-// NewDownloaderAPI create a new DownloaderAPI. The API has an internal event loop that
+// NewDownloaderAPI creates a new DownloaderAPI. The API has an internal event loop that
 // listens for events from the downloader through the global event mux. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
@@ -148,8 +148,6 @@ func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error
 			case status := <-statuses:
 				notifier.Notify(rpcSub.ID, status)
 			case <-rpcSub.Err():
-				return
-			case <-notifier.Closed():
 				return
 			}
 		}

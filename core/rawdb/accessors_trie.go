@@ -315,7 +315,7 @@ func ReadStateScheme(db ethdb.Reader) string {
 // the stored state.
 //
 //   - If the provided scheme is none, use the scheme consistent with persistent
-//     state, or fallback to hash-based scheme if state is empty.
+//     state, or fallback to path-based scheme if state is empty.
 //
 //   - If the provided scheme is hash, use hash-based scheme or error out if not
 //     compatible with persistent state scheme.
@@ -329,10 +329,8 @@ func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
 	stored := ReadStateScheme(disk)
 	if provided == "" {
 		if stored == "" {
-			// use default scheme for empty database, flip it when
-			// path mode is chosen as default
-			log.Info("State schema set to default", "scheme", "hash")
-			return HashScheme, nil
+			log.Info("State schema set to default", "scheme", "path")
+			return PathScheme, nil // use default scheme for empty database
 		}
 		log.Info("State scheme set to already existing", "scheme", stored)
 		return stored, nil // reuse scheme of persistent scheme

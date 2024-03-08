@@ -245,7 +245,7 @@ func readList(filename string) ([]string, error) {
 // starting from genesis.
 func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
-		return fmt.Errorf("history import only supported when starting from genesis")
+		return errors.New("history import only supported when starting from genesis")
 	}
 	entries, err := era.ReadDir(dir, network)
 	if err != nil {

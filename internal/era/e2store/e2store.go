@@ -18,6 +18,7 @@ package e2store
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -160,7 +161,7 @@ func (r *Reader) ReadMetadataAt(off int64) (typ uint16, length uint32, err error
 
 	// Check reserved bytes of header.
 	if b[6] != 0 || b[7] != 0 {
-		return 0, 0, fmt.Errorf("reserved bytes are non-zero")
+		return 0, 0, errors.New("reserved bytes are non-zero")
 	}
 
 	return typ, length, nil

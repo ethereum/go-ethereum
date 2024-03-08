@@ -85,7 +85,7 @@ type Claim [32]byte
 var useCKZG atomic.Bool
 
 // UseCKZG can be called to switch the default Go implementation of KZG to the C
-// library if fo some reason the user wishes to do so (e.g. consensus bug in one
+// library if for some reason the user wishes to do so (e.g. consensus bug in one
 // or the other).
 func UseCKZG(use bool) error {
 	if use && !ckzgAvailable {

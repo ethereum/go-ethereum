@@ -160,7 +160,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNum
 		)
 		switch reqEnd {
 		case rpc.PendingBlockNumber:
-			if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
+			if pendingBlock, pendingReceipts, _ = oracle.backend.Pending(); pendingBlock != nil {
 				resolved = pendingBlock.Header()
 			} else {
 				// Pending block not supported by backend, process only until latest block.
