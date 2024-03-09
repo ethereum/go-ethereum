@@ -57,10 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Config contains the configuration options of the ETH protocol.
-// Deprecated: use ethconfig.Config instead.
-type Config = ethconfig.Config
-
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	config *ethconfig.Config
