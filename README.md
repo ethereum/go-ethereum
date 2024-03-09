@@ -75,7 +75,7 @@ particular use case, the user doesn't care about years-old historical data, so w
 sync quickly to the current state of the network. To do so:
 
 ```shell
-$ geth console
+geth console
 ```
 
 This command will:
@@ -98,7 +98,7 @@ network, you want to join the **test** network with your node, which is fully eq
 the main network, but with play-Ether only.
 
 ```shell
-$ geth --goerli console
+geth --goerli console
 ```
 
 The `console` subcommand has the same meaning as above and is equally
@@ -129,14 +129,14 @@ As an alternative to passing the numerous flags to the `geth` binary, you can al
 configuration file via:
 
 ```shell
-$ geth --config /path/to/your_config.toml
+geth --config /path/to/your_config.toml
 ```
 
 To get an idea of how the file should look like you can use the `dumpconfig` subcommand to
 export your existing configuration:
 
 ```shell
-$ geth --your-favourite-flags dumpconfig
+geth --your-favourite-flags dumpconfig
 ```
 
 *Note: This works only with `geth` v1.6.0 and above.*
@@ -260,7 +260,7 @@ With the genesis state defined in the above JSON file, you'll need to initialize
 set:
 
 ```shell
-$ geth init path/to/genesis.json
+geth init path/to/genesis.json
 ```
 
 #### Creating the rendezvous point
@@ -291,7 +291,7 @@ probably also be desirable to keep the data directory of your private network se
 do also specify a custom `--datadir` flag.
 
 ```shell
-$ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
+geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
 ```
 
 *Note: Since your network will be completely cut off from the main and test networks, you'll
@@ -307,7 +307,7 @@ ones either). To start a `geth` instance for mining, run it with all your usual 
 by:
 
 ```shell
-$ geth <usual-flags> --mine --miner.threads=1 --miner.etherbase=0x0000000000000000000000000000000000000000
+geth <usual-flags> --mine --miner.threads=1 --miner.etherbase=0x0000000000000000000000000000000000000000
 ```
 
 Which will start mining blocks and transactions on a single CPU thread, crediting all
