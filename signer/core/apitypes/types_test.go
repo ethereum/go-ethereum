@@ -17,10 +17,10 @@
 package apitypes
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"testing"
 
-	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -67,7 +67,6 @@ func TestTxArgs(t *testing.T) {
 			wantType: types.DynamicFeeTxType,
 		},
 	} {
-
 		var txArgs SendTxArgs
 		if err := json.Unmarshal(tc.data, &txArgs); err != nil {
 			t.Fatal(err)
@@ -110,16 +109,16 @@ func TestTxArgs(t *testing.T) {
 
 func TestBlobTxs(t *testing.T) {
 	blob := kzg4844.Blob{0x1}
-	committment, err := kzg4844.BlobToCommitment(blob)
+	commitment, err := kzg4844.BlobToCommitment(blob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := kzg4844.ComputeBlobProof(blob, committment)
+	proof, err := kzg4844.ComputeBlobProof(blob, commitment)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	hash := kzg4844.CalcBlobHashV1(sha256.New(), &committment)
+	hash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
 	b := &types.BlobTx{
 		ChainID:    uint256.NewInt(6),
 		Nonce:      8,
@@ -131,7 +130,7 @@ func TestBlobTxs(t *testing.T) {
 		Value:      uint256.NewInt(100),
 		Sidecar: &types.BlobTxSidecar{
 			Blobs:       []kzg4844.Blob{blob},
-			Commitments: []kzg4844.Commitment{committment},
+			Commitments: []kzg4844.Commitment{commitment},
 			Proofs:      []kzg4844.Proof{proof},
 		},
 	}
@@ -141,5 +140,4 @@ func TestBlobTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("tx %v", string(data))
-
 }

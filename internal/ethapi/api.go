@@ -1895,9 +1895,9 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	// to put back the blob(s).
 	if args.IsEIP4844() {
 		signed = signed.WithBlobTxSidecar(&types.BlobTxSidecar{
-			args.Blobs,
-			args.Commitments,
-			args.Proofs,
+			Blobs:       args.Blobs,
+			Commitments: args.Commitments,
+			Proofs:      args.Proofs,
 		})
 	}
 	data, err := signed.MarshalBinary()

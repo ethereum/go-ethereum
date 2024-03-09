@@ -18,6 +18,7 @@ package apitypes
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,6 @@ import (
 	"strconv"
 	"strings"
 
-	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
