@@ -306,19 +306,3 @@ func TestS256(t *testing.T) {
 		}
 	}
 }
-
-func TestExp(t *testing.T) {
-	tests := []struct{ base, exponent, result *big.Int }{
-		{base: big.NewInt(0), exponent: big.NewInt(0), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(0), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(1), result: big.NewInt(1)},
-		{base: big.NewInt(1), exponent: big.NewInt(2), result: big.NewInt(1)},
-		{base: big.NewInt(3), exponent: big.NewInt(144), result: MustParseBig256("507528786056415600719754159741696356908742250191663887263627442114881")},
-		{base: big.NewInt(2), exponent: big.NewInt(255), result: MustParseBig256("57896044618658097711785492504343953926634992332820282019728792003956564819968")},
-	}
-	for _, test := range tests {
-		if result := Exp(test.base, test.exponent); result.Cmp(test.result) != 0 {
-			t.Errorf("Exp(%d, %d) = %d, want %d", test.base, test.exponent, result, test.result)
-		}
-	}
-}

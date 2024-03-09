@@ -248,23 +248,3 @@ func S256(x *big.Int) *big.Int {
 	}
 	return new(big.Int).Sub(x, tt256)
 }
-
-// Exp implements exponentiation by squaring.
-// Exp returns a newly-allocated big integer and does not change
-// base or exponent. The result is truncated to 256 bits.
-//
-// Courtesy @karalabe and @chfast
-func Exp(base, exponent *big.Int) *big.Int {
-	result := big.NewInt(1)
-
-	for _, word := range exponent.Bits() {
-		for i := 0; i < wordBits; i++ {
-			if word&1 == 1 {
-				U256(result.Mul(result, base))
-			}
-			U256(base.Mul(base, base))
-			word >>= 1
-		}
-	}
-	return result
-}
