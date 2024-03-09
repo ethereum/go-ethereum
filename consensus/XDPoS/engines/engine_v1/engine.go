@@ -958,9 +958,9 @@ func (x *XDPoS_v1) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (x *XDPoS_v1) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	x.lock.Lock()
+	x.lock.RLock()
 	signer := x.signer
-	x.lock.Unlock()
+	x.lock.RUnlock()
 	return x.calcDifficulty(chain, parent, signer)
 }
 
