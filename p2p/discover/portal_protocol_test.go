@@ -14,6 +14,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"golang.org/x/exp/slices"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
@@ -409,4 +410,73 @@ func TestContentLookup(t *testing.T) {
 	res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
 	assert.Equal(t, ContentNotFound, err)
 	assert.Nil(t, res)
+}
+
+func TestTraceContentLookup(t *testing.T) {
+	node1, err := setupLocalPortalNode(":17787", nil)
+	assert.NoError(t, err)
+	node1.log = testlog.Logger(t, log.LvlTrace)
+	err = node1.Start()
+	assert.NoError(t, err)
+
+	node2, err := setupLocalPortalNode(":17788", []*enode.Node{node1.localNode.Node()})
+	assert.NoError(t, err)
+	node2.log = testlog.Logger(t, log.LvlTrace)
+	err = node2.Start()
+	assert.NoError(t, err)
+
+	node3, err := setupLocalPortalNode(":17789", []*enode.Node{node2.localNode.Node()})
+	assert.NoError(t, err)
+	node3.log = testlog.Logger(t, log.LvlTrace)
+	err = node3.Start()
+	assert.NoError(t, err)
+
+	contentKey := []byte{0x3, 0x4}
+	content := []byte{0x1, 0x2}
+	contentId := node1.toContentId(contentKey)
+
+	err = node1.storage.Put(contentId, content)
+	assert.NoError(t, err)
+
+	node1Id := hexutil.Encode(node1.Self().ID().Bytes())
+	node2Id := hexutil.Encode(node2.Self().ID().Bytes())
+	node3Id := hexutil.Encode(node3.Self().ID().Bytes())
+
+	res, err := node3.TraceContentLookup(contentKey)
+	assert.NoError(t, err)
+	assert.Equal(t, res.Content, hexutil.Encode(content))
+	assert.Equal(t, res.UtpTransfer, false)
+	assert.Equal(t, res.Trace.Origin, node3Id)
+	assert.Equal(t, res.Trace.TargetId, hexutil.Encode(contentId))
+	assert.Equal(t, res.Trace.ReceivedFrom, node1Id)
+
+	// check nodeMeta
+	node1Meta := res.Trace.Metadata[node1Id]
+	assert.Equal(t, node1Meta.Enr, node1.Self().String())
+	dis := node1.Distance(node1.Self().ID(), enode.ID(contentId))
+	assert.Equal(t, node1Meta.Distance, hexutil.Encode(dis[:]))
+
+	node2Meta := res.Trace.Metadata[node2Id]
+	assert.Equal(t, node2Meta.Enr, node2.Self().String())
+	dis = node2.Distance(node2.Self().ID(), enode.ID(contentId))
+	assert.Equal(t, node2Meta.Distance, hexutil.Encode(dis[:]))
+
+	node3Meta := res.Trace.Metadata[node3Id]
+	assert.Equal(t, node3Meta.Enr, node3.Self().String())
+	dis = node3.Distance(node3.Self().ID(), enode.ID(contentId))
+	assert.Equal(t, node3Meta.Distance, hexutil.Encode(dis[:]))
+
+	// check response
+	node3Response := res.Trace.Responses[node3Id]
+	assert.Equal(t, node3Response, []string{node2Id})
+
+	node2Response := res.Trace.Responses[node2Id]
+	assert.Equal(t, node2Response, []string{node1Id})
+
+	node1Response := res.Trace.Responses[node1Id]
+	assert.Equal(t, node1Response, []string{})
+
+	// res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
+	// assert.Equal(t, ContentNotFound, err)
+	// assert.Nil(t, res)
 }

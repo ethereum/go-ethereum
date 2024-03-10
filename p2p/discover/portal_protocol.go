@@ -1518,13 +1518,33 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 
 	traceContentRes := &TraceContentResult{}
 
+	selfHexId := "0x" + p.Self().ID().String()
+
 	trace := &Trace{
-		Origin:      p.Self().ID().String(),
+		Origin:      selfHexId,
 		TargetId:    hexutil.Encode(p.ToContentId(contentKey)),
 		StartedAtMs: int(time.Now().UnixMilli()),
 		Responses:   make(map[string][]string),
 		Metadata:    make(map[string]*NodeMetadata),
 		Cancelled:   make([]string, 0),
+	}
+
+	nodes := p.table.findnodeByID(enode.ID(p.ToContentId(contentKey)), bucketSize, false)
+
+	localResponse := make([]string, 0, len(nodes.entries))
+	for _, node := range nodes.entries {
+		id := "0x" + node.ID().String()
+		localResponse = append(localResponse, id)
+	}
+	trace.Responses[selfHexId] = localResponse
+
+	contentId := p.ToContentId(contentKey)
+
+	dis := p.Distance(p.Self().ID(), enode.ID(contentId))
+
+	trace.Metadata[selfHexId] = &NodeMetadata{
+		Enr:      p.Self().String(),
+		Distance: hexutil.Encode(dis[:]),
 	}
 
 	var wg sync.WaitGroup
@@ -1561,23 +1581,27 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 
 	for _, node := range requestNode {
 		id := node.ID().String()
-		trace.Metadata[id] = &NodeMetadata{
-			Enr: node.String(),
-			//Distance: node.Seq(),
+		hexId := "0x" + id
+		dis := p.Distance(node.ID(), enode.ID(contentId))
+		trace.Metadata[hexId] = &NodeMetadata{
+			Enr:      node.String(),
+			Distance: hexutil.Encode(dis[:]),
 		}
 		if res, ok := requestRes[id]; ok {
 			if res.Flag == portalwire.ContentRawSelector || res.Flag == portalwire.ContentConnIdSelector {
-				trace.ReceivedFrom = res.Node.ID().String()
+				trace.ReceivedFrom = hexId
 				content := res.Content.([]byte)
 				traceContentRes.Content = hexutil.Encode(content)
 				traceContentRes.UtpTransfer = res.UtpTransfer
+				trace.Responses[hexId] = make([]string, 0)
 			} else {
 				content := res.Content.([]*enode.Node)
 				ids := make([]string, 0)
 				for _, n := range content {
-					ids = append(ids, n.ID().String())
+					hexId := "0x" + n.ID().String()
+					ids = append(ids, hexId)
 				}
-				trace.Responses[id] = ids
+				trace.Responses[hexId] = ids
 			}
 		} else {
 			trace.Cancelled = append(trace.Cancelled, id)
@@ -1791,6 +1815,14 @@ func (p *PortalProtocol) RandomGossip(srcNodeId *enode.ID, contentKeys [][]byte,
 	}
 
 	return len(nodes), nil
+}
+
+func (p *PortalProtocol) Distance(a, b enode.ID) enode.ID {
+	res := [32]byte{}
+	for i := range a {
+		res[i] = a[i] ^ b[i]
+	}
+	return enode.ID(res)
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {
