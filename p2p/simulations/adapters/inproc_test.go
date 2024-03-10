@@ -78,7 +78,7 @@ func TestTCPPipeBidirections(t *testing.T) {
 		}
 
 		if !bytes.Equal(expected, out) {
-			t.Fatalf("expected %#v, got %#v", out, expected)
+			t.Fatalf("expected %#v, got %#v", expected, out)
 		} else {
 			msg := []byte(fmt.Sprintf("pong %02d", i))
 			if _, err := c2.Write(msg); err != nil {
@@ -94,7 +94,7 @@ func TestTCPPipeBidirections(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(expected, out) {
-			t.Fatalf("expected %#v, got %#v", out, expected)
+			t.Fatalf("expected %#v, got %#v", expected, out)
 		}
 	}
 }
