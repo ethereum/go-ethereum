@@ -760,8 +760,10 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 // block as the new head block.
 //
 // If the given root is not empty, then the rewind should attempt to pass the specified
-// state root and return the associated block number as well. If the root is deemed
-// impossible to pass, 0 is returned.
+// state root and return the associated block number as well. If the root, typically
+// representing the state corresponding to snapshot disk layer, is deemed impassable,
+// then block number zero is returned, indicating that snapshot recovery is disabled
+// and the whole snapshot should be auto-generated in case of head mismatch.
 func (bc *BlockChain) rewindHead(root common.Hash) (*types.Header, uint64) {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		return bc.rewindPathHead(root)
