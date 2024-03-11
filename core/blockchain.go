@@ -628,14 +628,14 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		start  = time.Now() // Timestamp the rewinding is restarted
 		logged = time.Now() // Timestamp last progress log was printed
 	)
-	// The oldest block to be searched is determined by the pivot block or a soft
-	// finality threshold. The rationale behind this is as follows:
+	// The oldest block to be searched is determined by the pivot block or a constant
+	// searching threshold. The rationale behind this is as follows:
 	//
 	// - Snap sync is selected if the pivot block is available. The earliest available
 	//   state is the pivot block itself, so there is no sense in going further back.
 	//
 	// - Full sync is selected if the pivot block does not exist. The hash database
-	//   periodically flushes the state to disk, and the soft finality threshold is
+	//   periodically flushes the state to disk, and the used searching threshold is
 	//   considered sufficient to find a persistent state, even for the testnet. It
 	//   might be not enough for a chain that is nearly empty. In the worst case,
 	//   the entire chain is reset to genesis, and snap sync is re-enabled on top,
