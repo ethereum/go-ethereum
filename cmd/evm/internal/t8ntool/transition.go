@@ -93,6 +93,7 @@ func Transition(ctx *cli.Context) error {
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
+			EnableCallFrame:  ctx.Bool(TraceEnableCallFramesFlag.Name),
 			Debug:            true,
 		}
 		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
