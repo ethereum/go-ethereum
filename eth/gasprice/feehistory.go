@@ -149,15 +149,6 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	}
 }
 
-// getBlobBaseFee is a helper function which computes and returns the blob base
-// fee if excessBlobGas exists.
-func getBlobBaseFee(h *types.Header) *big.Int {
-	if excessBlobGas := h.ExcessBlobGas; excessBlobGas != nil {
-		return eip4844.CalcBlobFee(*excessBlobGas)
-	}
-	return new(big.Int)
-}
-
 // resolveBlockRange resolves the specified block range to absolute block numbers while also
 // enforcing backend specific limitations. The pending block and corresponding receipts are
 // also returned if requested and available.
