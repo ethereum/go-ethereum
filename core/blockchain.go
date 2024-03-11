@@ -739,8 +739,8 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		headBlock = bc.GetHeader(headBlock.ParentHash, headBlock.Number.Uint64()-1) // Keep rewinding
 	}
 	// Recover if the target state if it's not available yet.
-	if !bc.HasState(root) {
-		if err := bc.triedb.Recover(root); err != nil {
+	if !bc.HasState(headBlock.Root) {
+		if err := bc.triedb.Recover(headBlock.Root); err != nil {
 			log.Crit("Failed to rollback state", "err", err)
 		}
 	}
