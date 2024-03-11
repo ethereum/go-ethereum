@@ -201,7 +201,12 @@ func initGenesis(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			utils.Fatalf("Failed to close the genesis file: %v", err)
+		}
+	}(file)
 
 	genesis := new(core.Genesis)
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
