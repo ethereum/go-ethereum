@@ -142,7 +142,8 @@ type Database struct {
 
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
-// matched with the base persistent layer, all the recorded diff layers are discarded.
+// matched with the base persistent layer, all the recorded diff layers are
+// discarded.
 func New(diskdb ethdb.Database, config *Config) *Database {
 	if config == nil {
 		config = Defaults
@@ -159,20 +160,9 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
-	// Open the freezer for state history. This mechanism ensures that
-	// only one database instance can be opened at a time to prevent
-	// accidental mutation.
-	ancient, err := diskdb.AncientDatadir()
-	if err != nil {
-		log.Crit("Ancient store is not enabled")
-	}
-	freezer, err := rawdb.NewStateFreezer(ancient, false)
-	if err != nil {
-		log.Crit("Failed to open state history freezer", "err", err)
-	}
-	db.freezer = freezer
-
-	if err := db.repair(); err != nil {
+	// Repair the state history, which might not be aligned with the state
+	// in the key-value store due to an unclean shutdown.
+	if err := db.repairHistory(); err != nil {
 		log.Crit("Failed to repair pathdb", "err", err)
 	}
 	// Disable database in case node is still in the initial state sync stage.
@@ -184,9 +174,22 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	return db
 }
 
-// repair truncates leftover state history objects, which may occur due to an
-// unclean shutdown or other unexpected reasons.
-func (db *Database) repair() error {
+// repairHistory truncates leftover state history objects, which may occur due
+// to an unclean shutdown or other unexpected reasons.
+func (db *Database) repairHistory() error {
+	// Open the freezer for state history. This mechanism ensures that
+	// only one database instance can be opened at a time to prevent
+	// accidental mutation.
+	ancient, err := db.diskdb.AncientDatadir()
+	if err != nil {
+		log.Crit("Ancient store is not enabled")
+	}
+	freezer, err := rawdb.NewStateFreezer(ancient, false)
+	if err != nil {
+		log.Crit("Failed to open state history freezer", "err", err)
+	}
+	db.freezer = freezer
+
 	// Reset the entire state histories if the trie database is not initialized
 	// yet. This action is necessary because these state histories are not
 	// expected to exist without an initialized trie database.
