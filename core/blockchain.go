@@ -622,7 +622,7 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		limit      uint64                             // The oldest block that will be searched for this rewinding
 		beyondRoot = root == common.Hash{}            // Flag whether we're beyond the requested root (no root, always true)
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
-		headBlock  = bc.CurrentBlock()                // Head block of the chain
+		head       = bc.CurrentBlock()                // Head block of the chain
 		rootNumber uint64                             // Associated block number of requested root
 
 		start  = time.Now() // Timestamp the rewinding is restarted
@@ -642,8 +642,8 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 	//   which is still acceptable.
 	if pivot != nil {
 		limit = *pivot
-	} else if headBlock.Number.Uint64() > params.FullImmutabilityThreshold {
-		limit = headBlock.Number.Uint64() - params.FullImmutabilityThreshold
+	} else if head.Number.Uint64() > params.FullImmutabilityThreshold {
+		limit = head.Number.Uint64() - params.FullImmutabilityThreshold
 	}
 	for {
 		logger := log.Trace
@@ -651,45 +651,45 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 			logged = time.Now()
 			logger = log.Info
 		}
-		logger("Block state missing, rewinding further", "number", headBlock.Number, "hash", headBlock.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
 
 		// If a root threshold was requested but not yet crossed, check
-		if !beyondRoot && headBlock.Root == root {
-			beyondRoot, rootNumber = true, headBlock.Number.Uint64()
+		if !beyondRoot && head.Root == root {
+			beyondRoot, rootNumber = true, head.Number.Uint64()
 		}
 		// If the associated state is not reachable, continue searching
 		// backwards until an available state is found.
-		if !bc.HasState(headBlock.Root) {
+		if !bc.HasState(head.Root) {
 			// If search limit is reached, return the genesis block as
 			// the new chain head.
-			if headBlock.Number.Uint64() < limit {
-				log.Info("Rewinding limit is reached, aiming genesis", "number", headBlock.Number, "hash", headBlock.Hash(), "limit", limit)
+			if head.Number.Uint64() < limit {
+				log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
 				return bc.genesisBlock.Header(), rootNumber
 			}
 			// If the chain is gapped in the middle, return the genesis
 			// block as the new chain head.
-			parent := bc.GetHeader(headBlock.ParentHash, headBlock.Number.Uint64()-1)
+			parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1)
 			if parent == nil {
-				log.Error("Missing block in the middle, aiming genesis", "number", headBlock.Number.Uint64()-1, "hash", headBlock.ParentHash)
+				log.Error("Missing block in the middle, resetting to genesis", "number", head.Number.Uint64()-1, "hash", head.ParentHash)
 				return bc.genesisBlock.Header(), rootNumber
 			}
-			headBlock = parent
+			head = parent
 
 			// If the genesis block is reached, stop searching.
-			if headBlock.Number.Uint64() == 0 {
-				log.Info("Genesis block is reached", "number", headBlock.Number, "hash", headBlock.Hash())
-				return headBlock, rootNumber
+			if head.Number.Uint64() == 0 {
+				log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
+				return head, rootNumber
 			}
 			continue // keep rewinding
 		}
 		// Once the available state is found, ensure that the requested root has already
 		// been crossed. If not, continue rewinding.
-		if beyondRoot || headBlock.Number.Uint64() == 0 {
-			log.Debug("Rewound to block with state", "number", headBlock.Number, "hash", headBlock.Hash())
-			return headBlock, rootNumber
+		if beyondRoot || head.Number.Uint64() == 0 {
+			log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
+			return head, rootNumber
 		}
-		log.Debug("Skipping block with threshold state", "number", headBlock.Number, "hash", headBlock.Hash(), "root", headBlock.Root)
-		headBlock = bc.GetHeader(headBlock.ParentHash, headBlock.Number.Uint64()-1) // Keep rewinding
+		log.Debug("Skipping block with threshold state", "number", head.Number, "hash", head.Hash(), "root", head.Root)
+		head = bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
 	}
 }
 
@@ -733,7 +733,7 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		// state before or at the pivot block, prevent endless rewinding
 		// towards the genesis just in case.
 		if pivot != nil && *pivot >= headBlock.Number.Uint64() {
-			log.Info("Pivot block is reached, aiming genesis", "number", headBlock.Number, "hash", headBlock.Hash())
+			log.Info("Pivot block reached, resetting to genesis", "number", headBlock.Number, "hash", headBlock.Hash())
 			return bc.genesisBlock.Header(), rootNumber
 		}
 		headBlock = bc.GetHeader(headBlock.ParentHash, headBlock.Number.Uint64()-1) // Keep rewinding
