@@ -20,7 +20,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/params"
 )
@@ -52,7 +51,8 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 
 func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
-	config.LondonBlock = big.NewInt(5)
+	config.LondonBlock = big.NewInt(3)
+	config.BanachBlock = big.NewInt(5)
 	return config
 }
 
@@ -67,13 +67,13 @@ func TestBlockGasLimits(t *testing.T) {
 		gasLimit  uint64
 		ok        bool
 	}{
-		// Transitions from non-london to london
-		{10000000, 4, 20000000, true},  // No change
-		{10000000, 4, 20019530, true},  // Upper limit
-		{10000000, 4, 20019531, false}, // Upper +1
-		{10000000, 4, 19980470, true},  // Lower limit
-		{10000000, 4, 19980469, false}, // Lower limit -1
-		// London to London
+		// Transitions from non-banach to banach
+		{10000000, 4, 10000000, true},  // No change
+		{10000000, 4, 10009764, true},  // Upper limit
+		{10000000, 4, 10009765, false}, // Upper +1
+		{10000000, 4, 9990236, true},   // Lower limit
+		{10000000, 4, 9990235, false},  // Lower limit -1
+		// Banach to Banach
 		{20000000, 5, 20000000, true},
 		{20000000, 5, 20019530, true},  // Upper limit
 		{20000000, 5, 20019531, false}, // Upper limit +1
@@ -109,23 +109,18 @@ func TestBlockGasLimits(t *testing.T) {
 // TestCalcBaseFee assumes all blocks are 1559-blocks
 func TestCalcBaseFee(t *testing.T) {
 	tests := []struct {
-		parentBaseFee   int64
-		parentGasLimit  uint64
-		parentGasUsed   uint64
-		expectedBaseFee int64
+		parentL1BaseFee   int64
+		expectedL2BaseFee int64
 	}{
-		{params.InitialBaseFee, 20000000, 10000000, params.InitialBaseFee}, // usage == target
-		{params.InitialBaseFee, 20000000, 9000000, 987500000},              // usage below target
-		{params.InitialBaseFee, 20000000, 11000000, 1012500000},            // usage above target
+		{0, 150000000},
+		{1000000000, 164000000},
+		{2000000000, 178000000},
+		{100000000000, 1550000000},
+		{111111111111, 1705555555},
+		{1000000000000, 10000000000}, // cap at max L2 base fee
 	}
 	for i, test := range tests {
-		parent := &types.Header{
-			Number:   common.Big32,
-			GasLimit: test.parentGasLimit,
-			GasUsed:  test.parentGasUsed,
-			BaseFee:  big.NewInt(test.parentBaseFee),
-		}
-		if have, want := CalcBaseFee(config(), parent), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config(), nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

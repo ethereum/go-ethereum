@@ -54,6 +54,8 @@ var (
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 
+	l2BaseFeeGauge = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -1244,6 +1246,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if bc.insertStopped() {
 		return NonStatTy, errInsertionInterrupted
+	}
+
+	// Note latest seen L2 base fee
+	if block.BaseFee() != nil {
+		l2BaseFeeGauge.Update(block.BaseFee().Int64())
+	} else {
+		l2BaseFeeGauge.Update(0)
 	}
 
 	// Calculate the total difficulty of the block

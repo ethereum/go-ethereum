@@ -187,3 +187,7 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB) (*big.Int, error) 
 	l1DataFee := calculateEncodedL1DataFee(raw, overhead, l1BaseFee, scalar)
 	return l1DataFee, nil
 }
+
+func GetL1BaseFee(state StateDB) *big.Int {
+	return state.GetState(rcfg.L1GasPriceOracleAddress, rcfg.L1BaseFeeSlot).Big()
+}

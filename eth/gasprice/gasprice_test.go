@@ -26,6 +26,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
+	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/crypto"
@@ -108,6 +109,9 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	)
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
+	config.ArchimedesBlock = londonBlock
+	config.ShanghaiBlock = londonBlock
+	config.BanachBlock = londonBlock
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
 	genesis, err := gspec.Commit(db)
@@ -158,6 +162,10 @@ func (b *testBackend) CurrentHeader() *types.Header {
 
 func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
 	return b.chain.GetBlockByNumber(number)
+}
+
+func (b *testBackend) StateAt(root common.Hash) (*state.StateDB, error) {
+	return nil, nil
 }
 
 func TestSuggestTipCap(t *testing.T) {

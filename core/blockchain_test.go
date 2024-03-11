@@ -607,7 +607,7 @@ func TestFastVsFullChains(t *testing.T) {
 		gendb   = rawdb.NewMemoryDatabase()
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(1000000000000000)
+		funds   = big.NewInt(3000000000000000)
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
 			Alloc:   GenesisAlloc{address: {Balance: funds}},
@@ -1704,6 +1704,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
 	gspec := Genesis{Config: params.AllEthashProtocolChanges}
+	gspec.BaseFee = big.NewInt(params.InitialBaseFee)
 	gspec.MustCommit(ancientDb)
 	ancientChain, _ := NewBlockChain(ancientDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer ancientChain.Stop()
@@ -3171,7 +3172,10 @@ func TestFeeVault(t *testing.T) {
 
 	// Ensure that the fee vault received all tx fees
 	actual = state.GetBalance(*params.TestChainConfig.Scroll.FeeVaultAddress)
-	expected = new(big.Int).SetUint64(block.GasUsed() * block.Transactions()[0].GasTipCap().Uint64())
+
+	effectiveGasPrice := new(big.Int).Add(block.BaseFee(), block.Transactions()[0].GasTipCap())
+	gasUsed := new(big.Int).SetUint64(block.GasUsed())
+	expected = new(big.Int).Mul(gasUsed, effectiveGasPrice)
 
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("fee vault balance incorrect: expected %d, got %d", expected, actual)

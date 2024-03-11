@@ -39,6 +39,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rollup/tracing"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
@@ -1322,20 +1323,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
 	}
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
-		if w.chainConfig.Scroll.BaseFeeEnabled() {
-			header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
-		} else {
-			// When disabling EIP-2718 or EIP-1559, we do not set baseFeePerGas in RPC response.
-			// Setting BaseFee as nil here can help outside SDK calculates l2geth's RLP encoding,
-			// otherwise the l2geth's BaseFee is not known from the outside.
-			header.BaseFee = nil
+	// Set baseFee if we are on an EIP-1559 chain
+	if w.chainConfig.IsBanach(header.Number) {
+		state, err := w.chain.StateAt(parent.Root())
+		if err != nil {
+			log.Error("Failed to create mining context", "err", err)
+			return
 		}
-		if !w.chainConfig.IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
-		}
+		parentL1BaseFee := fees.GetL1BaseFee(state)
+		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header(), parentL1BaseFee)
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
