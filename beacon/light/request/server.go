@@ -257,7 +257,7 @@ func (s *serverWithLimits) init() {
 }
 
 // subscribe subscribes to events which include parent (serverWithTimeout) events
-// plus EvCanRequstAgain.
+// plus EvCanRequestAgain.
 func (s *serverWithLimits) subscribe(eventCallback func(event Event)) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -415,7 +415,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 }
 
 // fail reports that a response from the server was found invalid by the processing
-// Module, disabling new requests for a dynamically adjused time period.
+// Module, disabling new requests for a dynamically adjusted time period.
 func (s *serverWithLimits) fail(desc string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()

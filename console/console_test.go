@@ -152,8 +152,7 @@ func (env *tester) Close(t *testing.T) {
 }
 
 // Tests that the node lists the correct welcome message, notably that it contains
-// the instance name, coinbase account, block number, data directory and supported
-// console modules.
+// the instance name, block number, data directory and supported console modules.
 func TestWelcome(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
@@ -171,7 +170,10 @@ func TestWelcome(t *testing.T) {
 		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
 	}
 	if want := fmt.Sprintf("datadir: %s", tester.workspace); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
+		t.Fatalf("console output missing datadir: have\n%s\nwant also %s", output, want)
+	}
+	if want := "modules: "; !strings.Contains(output, want) {
+		t.Fatalf("console output missing modules: have\n%s\nwant also %s", output, want)
 	}
 }
 
