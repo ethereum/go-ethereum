@@ -700,8 +700,8 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot block
 		rootNumber uint64                             // Associated block number of requested root
 
-		// BeyondRoot represents whether the requested root is already crossed.
-		// The flag value is set to true if the root is empty.
+		// BeyondRoot represents whether the requested root is already
+		// crossed. The flag value is set to true if the root is empty.
 		beyondRoot = root == common.Hash{}
 
 		start  = time.Now() // Timestamp the rewinding is restarted
@@ -721,10 +721,11 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 			beyondRoot, rootNumber = true, head.Number.Uint64()
 		}
 		// If the root threshold hasn't been crossed but the available
-		// state is found, disable root searching if it's regarded
-		// impossible to reach.
+		// state is reached, quickly determine if the target state is
+		// possible to be reached or not.
 		if !beyondRoot && bc.HasState(head.Root) {
 			beyondRoot = !bc.HasState(root) && !bc.stateRecoverable(root)
+			log.Info("Disable the search for unattainable state", "root", root)
 		}
 		// Check if the associated state is available or recoverable if
 		// the requested root has already been crossed.
