@@ -295,27 +295,15 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// Insert all the pending storage updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	// insertStorageChange updates a storage slot
-	insertStorageChange := func(key, value common.Hash) error {
+	insertStorageChange := func(key, value common.Hash, updateTr func() ([]byte, error)) error {
 		prev := s.originStorage[key]
 		s.originStorage[key] = value
 
 		var encoded []byte // rlp-encoded value to be used by the snapshot
-		if (value == common.Hash{}) {
-			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
-				s.db.setError(err)
-				return err
-			}
-			s.db.StorageDeleted += 1
-		} else {
-			// Encoding []byte cannot fail, ok to ignore the error.
-			trimmed := common.TrimLeftZeroes(value[:])
-			encoded, _ = rlp.EncodeToBytes(trimmed)
-			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
-				s.db.setError(err)
-				return err
-			}
-			s.db.StorageUpdated += 1
+		if encoded, err = updateTr(); err != nil {
+			return err
 		}
+
 		// Cache the mutated storage slots until commit
 		if storage == nil {
 			if storage = s.db.storages[s.addrHash]; storage == nil {
@@ -347,6 +335,29 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 		return nil
 	}
+	applyDeletion := func(key, value common.Hash) error {
+		return insertStorageChange(key, value, func() (encoded []byte, err error) {
+			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
+				s.db.setError(err)
+				return nil, err
+			}
+			s.db.StorageDeleted += 1
+			return nil, nil
+		})
+	}
+	applyUpdate := func(key, value common.Hash) error {
+		return insertStorageChange(key, value, func() (encoded []byte, err error) {
+			// Encoding []byte cannot fail, ok to ignore the error.
+			trimmed := common.TrimLeftZeroes(value[:])
+			encoded, _ = rlp.EncodeToBytes(trimmed)
+			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
+				s.db.setError(err)
+				return nil, err
+			}
+			s.db.StorageUpdated += 1
+			return encoded, nil
+		})
+	}
 
 	// Perform trie updates before deletions.  This prevents resolution of unnecessary trie nodes
 	//  in circumstances similar to the following:
@@ -365,7 +376,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := insertStorageChange(key, value); err != nil {
+			if err := applyUpdate(key, value); err != nil {
 				return nil, err
 			}
 		} else {
@@ -373,7 +384,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		}
 	}
 	for key, value := range deletedStorages {
-		if err := insertStorageChange(key, value); err != nil {
+		if err := applyDeletion(key, value); err != nil {
 			return nil, err
 		}
 	}
