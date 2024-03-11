@@ -704,6 +704,10 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		// crossed. The flag value is set to true if the root is empty.
 		beyondRoot = root == common.Hash{}
 
+		// noState represents if the target state requested for search
+		// is unavailable and impossible to be recovered.
+		noState = !bc.HasState(root) && !bc.stateRecoverable(root)
+
 		start  = time.Now() // Timestamp the rewinding is restarted
 		logged = time.Now() // Timestamp last progress log was printed
 	)
@@ -723,8 +727,8 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		// If the root threshold hasn't been crossed but the available
 		// state is reached, quickly determine if the target state is
 		// possible to be reached or not.
-		if !beyondRoot && bc.HasState(head.Root) {
-			beyondRoot = !bc.HasState(root) && !bc.stateRecoverable(root)
+		if !beyondRoot && noState && bc.HasState(head.Root) {
+			beyondRoot = true
 			log.Info("Disable the search for unattainable state", "root", root)
 		}
 		// Check if the associated state is available or recoverable if
