@@ -57,23 +57,24 @@ type payloadAttributesMarshaling struct {
 
 // ExecutableData is the data necessary to execute an EL payload.
 type ExecutableData struct {
-	ParentHash    common.Hash         `json:"parentHash"    gencodec:"required"`
-	FeeRecipient  common.Address      `json:"feeRecipient"  gencodec:"required"`
-	StateRoot     common.Hash         `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot  common.Hash         `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom     []byte              `json:"logsBloom"     gencodec:"required"`
-	Random        common.Hash         `json:"prevRandao"    gencodec:"required"`
-	Number        uint64              `json:"blockNumber"   gencodec:"required"`
-	GasLimit      uint64              `json:"gasLimit"      gencodec:"required"`
-	GasUsed       uint64              `json:"gasUsed"       gencodec:"required"`
-	Timestamp     uint64              `json:"timestamp"     gencodec:"required"`
-	ExtraData     []byte              `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas *big.Int            `json:"baseFeePerGas" gencodec:"required"`
-	BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
-	Transactions  [][]byte            `json:"transactions"  gencodec:"required"`
-	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
-	BlobGasUsed   *uint64             `json:"blobGasUsed"`
-	ExcessBlobGas *uint64             `json:"excessBlobGas"`
+	ParentHash           common.Hash                 `json:"parentHash"    gencodec:"required"`
+	FeeRecipient         common.Address              `json:"feeRecipient"  gencodec:"required"`
+	StateRoot            common.Hash                 `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot         common.Hash                 `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom            []byte                      `json:"logsBloom"     gencodec:"required"`
+	Random               common.Hash                 `json:"prevRandao"    gencodec:"required"`
+	Number               uint64                      `json:"blockNumber"   gencodec:"required"`
+	GasLimit             uint64                      `json:"gasLimit"      gencodec:"required"`
+	GasUsed              uint64                      `json:"gasUsed"       gencodec:"required"`
+	Timestamp            uint64                      `json:"timestamp"     gencodec:"required"`
+	ExtraData            []byte                      `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas        *big.Int                    `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash            common.Hash                 `json:"blockHash"     gencodec:"required"`
+	Transactions         [][]byte                    `json:"transactions"  gencodec:"required"`
+	Withdrawals          []*types.Withdrawal         `json:"withdrawals"`
+	BlobGasUsed          *uint64                     `json:"blobGasUsed"`
+	ExcessBlobGas        *uint64                     `json:"excessBlobGas"`
+	InclusionListSummary *types.InclusionListSummary `json:"inclusionListSummary"`
 }
 
 // JSON type overrides for executableData.
@@ -175,7 +176,7 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 	return enc
 }
 
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
 	for i, encTx := range enc {
 		var tx types.Transaction
@@ -199,7 +200,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
 func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
-	txs, err := decodeTransactions(params.Transactions)
+	txs, err := DecodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
 	}
@@ -233,28 +234,34 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
-	header := &types.Header{
-		ParentHash:       params.ParentHash,
-		UncleHash:        types.EmptyUncleHash,
-		Coinbase:         params.FeeRecipient,
-		Root:             params.StateRoot,
-		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:      params.ReceiptsRoot,
-		Bloom:            types.BytesToBloom(params.LogsBloom),
-		Difficulty:       common.Big0,
-		Number:           new(big.Int).SetUint64(params.Number),
-		GasLimit:         params.GasLimit,
-		GasUsed:          params.GasUsed,
-		Time:             params.Timestamp,
-		BaseFee:          params.BaseFeePerGas,
-		Extra:            params.ExtraData,
-		MixDigest:        params.Random,
-		WithdrawalsHash:  withdrawalsRoot,
-		ExcessBlobGas:    params.ExcessBlobGas,
-		BlobGasUsed:      params.BlobGasUsed,
-		ParentBeaconRoot: beaconRoot,
+	var inclusionRoot *common.Hash
+	if params.InclusionListSummary != nil {
+		h := types.DeriveSha(types.InclusionList{List: params.InclusionListSummary.Summary}, trie.NewStackTrie(nil))
+		inclusionRoot = &h
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
+	header := &types.Header{
+		ParentHash:               params.ParentHash,
+		UncleHash:                types.EmptyUncleHash,
+		Coinbase:                 params.FeeRecipient,
+		Root:                     params.StateRoot,
+		TxHash:                   types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:              params.ReceiptsRoot,
+		Bloom:                    types.BytesToBloom(params.LogsBloom),
+		Difficulty:               common.Big0,
+		Number:                   new(big.Int).SetUint64(params.Number),
+		GasLimit:                 params.GasLimit,
+		GasUsed:                  params.GasUsed,
+		Time:                     params.Timestamp,
+		BaseFee:                  params.BaseFeePerGas,
+		Extra:                    params.ExtraData,
+		MixDigest:                params.Random,
+		WithdrawalsHash:          withdrawalsRoot,
+		ExcessBlobGas:            params.ExcessBlobGas,
+		BlobGasUsed:              params.BlobGasUsed,
+		ParentBeaconRoot:         beaconRoot,
+		InclusionListSummaryRoot: inclusionRoot,
+	}
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals).WithInclusionList(params.InclusionListSummary.Summary)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
@@ -320,4 +327,10 @@ type ClientVersionV1 struct {
 
 func (v *ClientVersionV1) String() string {
 	return fmt.Sprintf("%s-%s-%s-%s", v.Code, v.Name, v.Version, v.Commit)
+}
+
+// InclusionListStatusV1 is returned by engine_newInclusionListV1
+type InclusionListStatusV1 struct {
+	Status          string  `json:"status"`
+	ValidationError *string `json:"validationError"`
 }

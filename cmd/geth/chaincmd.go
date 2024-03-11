@@ -216,6 +216,10 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
 		overrides.OverrideCancun = &v
 	}
+	if ctx.IsSet(utils.OverridePrague.Name) {
+		v := ctx.Uint64(utils.OverridePrague.Name)
+		overrides.OverridePrague = &v
+	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		overrides.OverrideVerkle = &v

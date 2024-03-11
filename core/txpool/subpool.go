@@ -159,6 +159,9 @@ type SubPool interface {
 	// Locals retrieves the accounts currently considered local by the pool.
 	Locals() []common.Address
 
+	// AddLocalAddr marks an account as local.
+	AddLocalAddr(common.Address)
+
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus

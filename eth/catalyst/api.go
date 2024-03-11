@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip7547"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -895,4 +896,67 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 		TransactionData: txs,
 		Withdrawals:     withdrawals,
 	}
+}
+
+func (api *ConsensusAPI) NewInclusionListV1(addresses []common.Address, transactions [][]byte, parentBlockHash common.Hash) (*engine.InclusionListStatusV1, error) {
+	if len(addresses) != len(transactions) {
+		return inclusionListError("number of transactions do not match addresses"), nil
+	}
+	txs, err := engine.DecodeTransactions(transactions)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode transactions: %v", err)
+	}
+	signer := types.LatestSignerForChainID(api.eth.BlockChain().Config().ChainID)
+	var maxGas uint64
+	for index, tx := range txs {
+		sender, err := signer.Sender(tx)
+		if err != nil {
+			return inclusionListError(fmt.Sprintf("Invalid signer at index %v, error: %v", index, err)), nil
+		}
+		if addresses[index] != sender {
+			return inclusionListError(fmt.Sprintf("Invalid sender at index %v, got %v want %v", index, sender, addresses[index])), nil
+		}
+		maxGas += tx.Gas()
+	}
+	if maxGas != params.InclusionListMaxGas {
+		return inclusionListError(fmt.Sprintf("Invalid inclusion list max gas, got %v want %v", maxGas, params.InclusionListMaxGas)), nil
+	}
+	block := api.eth.BlockChain().GetBlockByHash(parentBlockHash)
+	if block == nil {
+		return inclusionListError("Parent block not found"), nil
+	}
+	if err := eip7547.VerifyInclusionList(api.eth.BlockChain(), block, signer, txs); err != nil {
+		return inclusionListError(err.Error()), nil
+	}
+	return &engine.InclusionListStatusV1{Status: engine.VALID}, nil
+}
+
+func (api *ConsensusAPI) GetInclusionListV1() ([]common.Address, [][]byte, error) {
+	return []common.Address{}, [][]byte{}, nil
+}
+
+func inclusionListError(errorMsg string) *engine.InclusionListStatusV1 {
+	return &engine.InclusionListStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}
+}
+
+func (c *ConsensusAPI) SetLocalAccounts(locals []common.Address) error {
+	for _, addr := range locals {
+		c.eth.TxPool().MarkLocal(addr)
+	}
+	return nil
+}
+
+func (c *ConsensusAPI) GetLocalTransactions() ([][]byte, error) {
+	var res [][]byte
+	for _, addr := range c.eth.TxPool().Locals() {
+		pending, _ := c.eth.TxPool().ContentFrom(addr)
+		for _, tx := range pending {
+			m, err := tx.MarshalJSON()
+			if err != nil {
+				return [][]byte{}, nil
+			}
+			res = append(res, m)
+		}
+	}
+	return res, nil
 }
