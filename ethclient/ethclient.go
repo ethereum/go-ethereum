@@ -28,6 +28,8 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/eth"
+	"github.com/scroll-tech/go-ethereum/eth/tracers"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -340,6 +342,30 @@ func (ec *Client) GetBlockTraceByHash(ctx context.Context, blockHash common.Hash
 func (ec *Client) GetBlockTraceByNumber(ctx context.Context, number *big.Int) (*types.BlockTrace, error) {
 	blockTrace := &types.BlockTrace{}
 	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getBlockTraceByNumberOrHash", toBlockNumArg(number))
+}
+
+// GetTxBlockTraceOnTopOfBlock returns the BlockTrace given the tx and block.
+func (ec *Client) GetTxBlockTraceOnTopOfBlock(ctx context.Context, tx *types.Transaction, blockNumberOrHash rpc.BlockNumberOrHash, config *tracers.TraceConfig) (*types.BlockTrace, error) {
+	blockTrace := &types.BlockTrace{}
+	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getTxBlockTraceOnTopOfBlock", tx, blockNumberOrHash, config)
+}
+
+// GetNumSkippedTransactions returns the ...
+func (ec *Client) GetNumSkippedTransactions(ctx context.Context) (uint64, error) {
+	var num uint64
+	return num, ec.c.CallContext(ctx, &num, "scroll_getNumSkippedTransactions")
+}
+
+// GetSkippedTransactionHashes returns the BlockTrace given the tx and block.
+func (ec *Client) GetSkippedTransactionHashes(ctx context.Context, from uint64, to uint64) ([]common.Hash, error) {
+	hashes := []common.Hash{}
+	return hashes, ec.c.CallContext(ctx, &hashes, "scroll_getSkippedTransactionHashes", from, to)
+}
+
+// GetSkippedTransaction returns the BlockTrace given the tx and block.
+func (ec *Client) GetSkippedTransaction(ctx context.Context, txHash common.Hash) (*eth.RPCTransaction, error) {
+	tx := &eth.RPCTransaction{}
+	return tx, ec.c.CallContext(ctx, &tx, "scroll_getSkippedTransaction", txHash)
 }
 
 type rpcRowConsumption struct {
