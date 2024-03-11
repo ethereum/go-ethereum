@@ -61,7 +61,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 		if err != nil {
 			log.Warn("scan get FileInfo", "err", err, "path", path)
 		}
-		if skipKeyFile(fiInfo) {
+		if fiInfo == nil || skipKeyFile(fiInfo) {
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
@@ -94,7 +94,8 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 // skipKeyFile ignores editor backups, hidden files and folders/symlinks.
 func skipKeyFile(fi os.FileInfo) bool {
 	// Skip editor backups and UNIX-style hidden files.
-	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
+	name := fi.Name()
+	if strings.HasSuffix(name, "~") || strings.HasPrefix(name, ".") {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).

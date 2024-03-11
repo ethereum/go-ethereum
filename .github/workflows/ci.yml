@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '*'
+    tags:
+      - '*'
+
+env:
+  GOPROXY: https://proxy.golang.org
+  GO111MODULE: on
+  tf_version: "1.3.0"
+  tf_init_cli_options: "-input=false"
+  tf_validation_cli_options: ""
+  tf_plan_cli_options: "-lock=false -input=false"
+  tf_apply_cli_options: "-auto-approve -input=false"
+
+jobs:
+  tests:
+    env:
+      GOPATH: ${{ github.workspace }}
+      GOBIN: ${{ github.workspace }}/bin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/XDPoSChain
+    strategy:
+      matrix:
+        include:
+          - name: A-B tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[a-b].*")
+          - name: C-[a-m] tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/c[a-m].*")
+          - name: C-[n-o] tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/c[n-o].*")
+          - name: C-[p-z] tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/c[p-z].*")
+          - name: D-I tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[d-i].*")
+          - name: J-N tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[j-n].*")
+          - name: O-R tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[o-r].*")
+          - name: S tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/s.*")
+          - name: T-Z tests
+            script: go run build/ci.go test -coverage $(go list ./... | grep "github.com/XinFinOrg/XDPoSChain/[t-z].*")
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.GOPATH }}/src/XDPoSChain
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          cache: false
+          go-version: '1.21.x'
+      - name: Run tests
+        run: ${{ matrix.script }}
+        env:
+          GO111MODULE: auto
+
+  tag_build:
+    runs-on: ubuntu-latest
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to Docker Hub
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+      - name: Build Docker image
+        run: docker build -t xinfinorg/xdposchain:${GITHUB_REF#refs/tags/} -f cicd/Dockerfile .
+      - name: Push Docker image
+        run: docker push xinfinorg/xdposchain:${GITHUB_REF#refs/tags/}
+
+  devnet_build_push:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to Docker Hub
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+      - name: Build and Push Docker images
+        run: |
+          docker pull xinfinorg/devnet:latest
+          docker tag xinfinorg/devnet:latest xinfinorg/devnet:previous
+          docker rmi xinfinorg/devnet:latest
+          docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
+          docker push xinfinorg/devnet:latest
+          docker push xinfinorg/devnet:previous
+
+  devnet_terraform_apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: devnet_build_push
+    environment: devnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Terraform Apply
+        run: |
+          cd cicd/devnet/terraform
+          terraform init ${{ env.tf_init_cli_options }}
+          terraform apply ${{ env.tf_apply_cli_options }}
+          sleep 5
+          source .env
+          for ((i=$us_east_2_start;i<$us_east_2_end;i++)); do
+            echo "Force deploy xdc-$i"
+            aws ecs update-service --region us-east-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
+          done
+          for ((i=$eu_west_1_start;i<$eu_west_1_end;i++)); do
+            echo "Force deploy xdc-$i"
+            aws ecs update-service --region eu-west-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
+          done
+          for ((i=$ap_southeast_2_start;i<$ap_southeast_2_end;i++)); do
+            echo "Force deploy xdc-$i"
+            aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
+          done
+          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
+
+  rpcnode_terraform_apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: devnet_build_push
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Terraform Apply
+        run: |
+          cd cicd/terraform
+          terraform init ${{ env.tf_init_cli_options }}
+          terraform apply ${{ env.tf_apply_cli_options }}
+
+  testnet_dev-upgrade_node:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: rpcnode_terraform_apply
+    environment: testnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ECS Update
+        run: |
+          aws ecs update-service --region ap-southeast-1 --cluster testnet-xdcnode-cluster --service ecs-service-testnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
+
+  mainnet_dev-upgrade_node:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: rpcnode_terraform_apply
+    environment: mainnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ECS Update
+        run: |
+          aws ecs update-service --region ap-southeast-1 --cluster mainnet-xdcnode-cluster --service ecs-service-mainnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
+
+  devnet_send_notification:
+    runs-on: ubuntu-latest
+    needs: devnet_terraform_apply
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send deployment notification
+        run: |
+          curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"

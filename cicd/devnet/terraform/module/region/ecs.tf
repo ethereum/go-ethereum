@@ -6,7 +6,7 @@ data template_file devnet_container_definition {
     image_environment = "${lookup(each.value, "imageEnvironment", "devnet")}"
     image_tag = "${lookup(each.value, "imageTag", "latest")}"
     node_name = "${each.key}"
-    private_keys = "${each.value.pk}"
+    private_key = "${each.value.pk}"
     cloudwatch_group = "tf-${each.key}"
     cloudwatch_region = "${var.region}"
     log_level = "${lookup(each.value, "logLevel", "${var.logLevel}")}"

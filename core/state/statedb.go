@@ -83,6 +83,14 @@ type StateDB struct {
 	lock sync.Mutex
 }
 
+type AccountInfo struct {
+	CodeSize    int
+	Nonce       uint64
+	Balance     *big.Int
+	CodeHash    common.Hash
+	StorageHash common.Hash
+}
+
 func (self *StateDB) SubRefund(gas uint64) {
 	self.journal = append(self.journal, refundChange{
 		prev: self.refund})
@@ -221,6 +229,16 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	return 0
 }
 
+// GetStorageRoot retrieves the storage root from the given address or empty
+// if object not found.
+func (self *StateDB) GetStorageRoot(addr common.Address) common.Hash {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Root()
+	}
+	return common.Hash{}
+}
+
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -250,6 +268,28 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 		return common.Hash{}
 	}
 	return common.BytesToHash(stateObject.CodeHash())
+}
+
+func (self *StateDB) GetAccountInfo(addr common.Address) *AccountInfo {
+	result := AccountInfo{}
+
+	stateObject := self.getStateObject(addr)
+	if stateObject == nil {
+		result.Balance = common.Big0
+		return &result
+	}
+
+	if stateObject.code != nil {
+		result.CodeSize = len(stateObject.code)
+	} else {
+		result.CodeSize, _ = self.db.ContractCodeSize(stateObject.addrHash, common.BytesToHash(stateObject.CodeHash()))
+	}
+	result.Nonce = stateObject.Nonce()
+	result.Balance = stateObject.Balance()
+	result.CodeHash = common.BytesToHash(stateObject.CodeHash())
+	result.StorageHash = stateObject.Root()
+
+	return &result
 }
 
 func (self *StateDB) GetState(addr common.Address, bhash common.Hash) common.Hash {

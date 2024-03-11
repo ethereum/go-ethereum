@@ -19,7 +19,9 @@ package vm
 import (
 	"fmt"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/holiman/uint256"
 )
 
 // EnableEIP enables the given EIP on the config.
@@ -27,6 +29,10 @@ import (
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
+	case 3855:
+		enable3855(jt)
+	case 3198:
+		enable3198(jt)
 	case 2200:
 		enable2200(jt)
 	case 1884:
@@ -51,17 +57,16 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = operation{
+	jt[SELFBALANCE] = &operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	balance := interpreter.intPool.get().Set(interpreter.evm.StateDB.GetBalance(callContext.contract.Address()))
+	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(callContext.contract.Address()))
 	callContext.stack.push(balance)
 	return nil, nil
 }
@@ -70,18 +75,17 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = operation{
+	jt[CHAINID] = &operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
-		valid:       true,
 	}
 }
 
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	chainId := interpreter.intPool.get().Set(interpreter.evm.chainConfig.ChainId)
+	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainId)
 	callContext.stack.push(chainId)
 	return nil, nil
 }
@@ -90,4 +94,40 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
+}
+
+// enable3198 applies EIP-3198 (BASEFEE Opcode)
+// - Adds an opcode that returns the current block's base fee.
+func enable3198(jt *JumpTable) {
+	// New opcode
+	jt[BASEFEE] = &operation{
+		execute:     opBaseFee,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
+// opBaseFee implements BASEFEE opcode
+func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(common.MinGasPrice50x)
+	callContext.stack.push(baseFee)
+	return nil, nil
+}
+
+// enable3855 applies EIP-3855 (PUSH0 opcode)
+func enable3855(jt *JumpTable) {
+	// New opcode
+	jt[PUSH0] = &operation{
+		execute:     opPush0,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
+// opPush0 implements the PUSH0 opcode
+func opPush0(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	callContext.stack.push(new(uint256.Int))
+	return nil, nil
 }

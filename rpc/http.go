@@ -237,11 +237,12 @@ func NewHTTPServer(cors []string, vhosts []string, srv *Server, writeTimeout tim
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
+	handler = http.TimeoutHandler(handler, writeTimeout, `{"error":"http server timeout"}`)
 	log.Info("NewHTTPServer", "writeTimeout", writeTimeout)
 	return &http.Server{
 		Handler:      handler,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: writeTimeout,
+		WriteTimeout: writeTimeout + time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 }

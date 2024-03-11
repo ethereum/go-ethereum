@@ -18,7 +18,6 @@ package vm
 
 import (
 	"hash"
-	"sync/atomic"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
@@ -29,10 +28,9 @@ import (
 type Config struct {
 	Debug                   bool   // Enables debugging
 	Tracer                  Tracer // Opcode logger
-	NoRecursion             bool   // Disables call, callcode, delegate call and create
 	EnablePreimageRecording bool   // Enables recording of SHA3/keccak preimages
 
-	JumpTable [256]operation // EVM instruction table, automatically populated if unset
+	JumpTable *JumpTable // EVM instruction table, automatically populated if unset
 
 	EWASMInterpreter string // External EWASM interpreter options
 	EVMInterpreter   string // External EVM interpreter options
@@ -83,8 +81,6 @@ type EVMInterpreter struct {
 	evm *EVM
 	cfg Config
 
-	intPool *intPool
-
 	hasher    keccakState // Keccak256 hasher instance shared across opcodes
 	hasherBuf common.Hash // Keccak256 hasher result array shared aross opcodes
 
@@ -94,35 +90,44 @@ type EVMInterpreter struct {
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
 func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
-	// We use the STOP instruction whether to see
-	// the jump table was initialised. If it was not
-	// we'll set the default jump table.
-	if !cfg.JumpTable[STOP].valid {
-		var jt JumpTable
+	// If jump table was not initialised we set the default one.
+	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsShanghai:
+			cfg.JumpTable = &shanghaiInstructionSet
+		case evm.chainRules.IsMerge:
+			cfg.JumpTable = &mergeInstructionSet
+		case evm.chainRules.IsLondon:
+			cfg.JumpTable = &londonInstructionSet
+		case evm.chainRules.IsBerlin:
+			cfg.JumpTable = &berlinInstructionSet
 		case evm.chainRules.IsIstanbul:
-			jt = istanbulInstructionSet
+			cfg.JumpTable = &istanbulInstructionSet
 		case evm.chainRules.IsConstantinople:
-			jt = constantinopleInstructionSet
+			cfg.JumpTable = &constantinopleInstructionSet
 		case evm.chainRules.IsByzantium:
-			jt = byzantiumInstructionSet
+			cfg.JumpTable = &byzantiumInstructionSet
 		case evm.chainRules.IsEIP158:
-			jt = spuriousDragonInstructionSet
+			cfg.JumpTable = &spuriousDragonInstructionSet
 		case evm.chainRules.IsEIP150:
-			jt = tangerineWhistleInstructionSet
+			cfg.JumpTable = &tangerineWhistleInstructionSet
 		case evm.chainRules.IsHomestead:
-			jt = homesteadInstructionSet
+			cfg.JumpTable = &homesteadInstructionSet
 		default:
-			jt = frontierInstructionSet
+			cfg.JumpTable = &frontierInstructionSet
 		}
-		for i, eip := range cfg.ExtraEips {
-			if err := EnableEIP(eip, &jt); err != nil {
+		var extraEips []int
+		for _, eip := range cfg.ExtraEips {
+			copy := *cfg.JumpTable
+			if err := EnableEIP(eip, &copy); err != nil {
 				// Disable it, so caller can check if it's activated or not
-				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
 				log.Error("EIP activation failed", "eip", eip, "error", err)
+			} else {
+				extraEips = append(extraEips, eip)
 			}
+			cfg.JumpTable = &copy
 		}
-		cfg.JumpTable = jt
+		cfg.ExtraEips = extraEips
 	}
 
 	return &EVMInterpreter{
@@ -138,20 +143,13 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
-	if in.intPool == nil {
-		in.intPool = poolOfIntPools.get()
-		defer func() {
-			poolOfIntPools.put(in.intPool)
-			in.intPool = nil
-		}()
-	}
 
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
-	// This makes also sure that the readOnly flag isn't removed for child calls.
+	// This also makes sure that the readOnly flag isn't removed for child calls.
 	if readOnly && !in.readOnly {
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
@@ -188,9 +186,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	)
 	contract.Input = input
 
-	// Reclaim the stack as an int pool when the execution stops
-	defer func() { in.intPool.put(stack.data...) }()
-
 	if in.cfg.Debug {
 		defer func() {
 			if err != nil {
@@ -206,12 +201,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
-	steps := 0
 	for {
-		steps++
-		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
-			break
-		}
 		if in.cfg.Debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
@@ -221,25 +211,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := in.cfg.JumpTable[op]
-		if !operation.valid {
-			return nil, &ErrInvalidOpCode{opcode: op}
-		}
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
-		}
-		// If the operation is valid, enforce and write restrictions
-		if in.readOnly && in.evm.chainRules.IsByzantium {
-			// If the interpreter is operating in readonly mode, make sure no
-			// state-modifying operation is performed. The 3rd stack item
-			// for a call operation is the value. Transferring value from one
-			// account to the others means the state is modified and should also
-			// return with an error.
-			if operation.writes || (op == CALL && stack.Back(2).Sign() != 0) {
-				return nil, ErrWriteProtection
-			}
 		}
 		// Static portion of gas
 		cost = operation.constantGas // For tracing
@@ -285,29 +261,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
-		// verifyPool is a build flag. Pool verification makes sure the integrity
-		// of the integer pool by comparing values to a default value.
-		if verifyPool {
-			verifyIntegerPool(in.intPool)
+		if err != nil {
+			break
 		}
-		// if the operation clears the return data (e.g. it has returning data)
-		// set the last return to the result of the operation.
-		if operation.returns {
-			in.returnData = res
-		}
-		switch {
-		case err != nil:
-			return nil, err
-		case operation.reverts:
-			log.Debug("ErrExecutionReverted", "pc", pc, "reverts", operation.reverts, "err", err)
-			return res, ErrExecutionReverted
-		case operation.halts:
-			return res, nil
-		case !operation.jumps:
-			pc++
-		}
+		pc++
 	}
-	return nil, nil
+
+	if err == errStopToken {
+		err = nil // clear stop token error
+	}
+
+	return res, err
 }
 
 // CanRun tells if the contract, passed as an argument, can be

@@ -14,17 +14,17 @@ type Signature []byte
 
 // Block Info struct in XDPoS 2.0, used for vote message, etc.
 type BlockInfo struct {
-	Hash   common.Hash
-	Round  Round
-	Number *big.Int
+	Hash   common.Hash `json:"hash"`
+	Round  Round       `json:"round"`
+	Number *big.Int    `json:"number"`
 }
 
 // Vote message in XDPoS 2.0
 type Vote struct {
-	signer            common.Address
-	ProposedBlockInfo *BlockInfo
-	Signature         Signature
-	GapNumber         uint64
+	signer            common.Address	//field not exported 
+	ProposedBlockInfo *BlockInfo     `json:"proposedBlockInfo"`
+	Signature         Signature      `json:"signature"`
+	GapNumber         uint64         `json:"gapNumber"`
 }
 
 func (v *Vote) Hash() common.Hash {
@@ -81,9 +81,9 @@ func (s *SyncInfo) Hash() common.Hash {
 
 // Quorum Certificate struct in XDPoS 2.0
 type QuorumCert struct {
-	ProposedBlockInfo *BlockInfo
-	Signatures        []Signature
-	GapNumber         uint64
+	ProposedBlockInfo *BlockInfo `json:"proposedBlockInfo"`
+	Signatures        []Signature `json:"signatures"`
+	GapNumber         uint64 `json:"gapNumber"`
 }
 
 // Timeout Certificate struct in XDPoS 2.0

@@ -50,7 +50,6 @@ profile.cov
 **/yarn-error.log
 coverage.txt
 go.sum
-cicd/devnet/terraform/.terraform*
+**/.terraform*
 cicd/devnet/tmp
-.env
 cicd/devnet/terraform/node-config.json
