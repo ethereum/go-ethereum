@@ -317,8 +317,8 @@ transactions are accepted at (`--miner.gasprice`).
 
 ## Contribution
 
-Thank you for considering helping out with the source code! We welcome contributions
-from anyone on the internet, and are grateful for even the smallest of fixes!
+Thank you for considering contributing to the source code! 
+We welcome contributions from anyone on the internet and are grateful for even the smallest fixes.
 
 If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit
