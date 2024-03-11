@@ -624,6 +624,9 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
 		headBlock  = bc.CurrentBlock()                // Head block of the chain
 		rootNumber uint64                             // Associated block number of requested root
+
+		start  = time.Now() // Timestamp the rewinding is restarted
+		logged = time.Now() // Timestamp last progress log was printed
 	)
 	// The oldest block to be searched is determined by the pivot block or a soft
 	// finality threshold. The rationale behind this is as follows:
@@ -643,6 +646,13 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		limit = headBlock.Number.Uint64() - params.FullImmutabilityThreshold
 	}
 	for {
+		logger := log.Trace
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+			logger = log.Info
+		}
+		logger("Block state missing, rewinding further", "number", headBlock.Number, "hash", headBlock.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
 		// If a root threshold was requested but not yet crossed, check
 		if !beyondRoot && headBlock.Root == root {
 			beyondRoot, rootNumber = true, headBlock.Number.Uint64()
@@ -650,8 +660,6 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		// If the associated state is not reachable, continue searching
 		// backwards until an available state is found.
 		if !bc.HasState(headBlock.Root) {
-			log.Trace("Block state missing, rewinding further", "number", headBlock.Number, "hash", headBlock.Hash())
-
 			// If search limit is reached, return the genesis block as
 			// the new chain head.
 			if headBlock.Number.Uint64() < limit {
@@ -691,6 +699,9 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 		headBlock  = bc.CurrentBlock()                // Head block of the chain
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot block
 		rootNumber uint64                             // Associated block number of requested root
+
+		start  = time.Now() // Timestamp the rewinding is restarted
+		logged = time.Now() // Timestamp last progress log was printed
 	)
 	// BeyondRoot represents whether the requested root is already crossed.
 	// The flag value is set to true if the root is empty, or reaching the
@@ -701,6 +712,13 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 	}
 	// Rewind the head block tag until an available state is found.
 	for {
+		logger := log.Trace
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+			logger = log.Info
+		}
+		logger("Block state missing, rewinding further", "number", headBlock.Number, "hash", headBlock.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
 		// If a root threshold was requested but not yet crossed, check
 		if !beyondRoot && headBlock.Root == root {
 			beyondRoot, rootNumber = true, headBlock.Number.Uint64()
