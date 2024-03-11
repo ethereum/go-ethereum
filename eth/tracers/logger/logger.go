@@ -52,6 +52,7 @@ type Config struct {
 	DisableStack     bool // disable stack capture
 	DisableStorage   bool // disable storage capture
 	EnableReturnData bool // enable return data capture
+	EnableCallFrame  bool // enable call frame enter capture
 	Debug            bool // print output during capture end
 	Limit            int  // maximum length of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
@@ -99,6 +100,35 @@ func (s *StructLog) ErrorString() string {
 		return s.Err.Error()
 	}
 	return ""
+}
+
+//go:generate go run github.com/fjl/gencodec -type CallFrameLog -field-override callFrameLogMarshaling -out gen_callframelog.go
+
+// CallFrameLog is emitted every call frame entered.
+type CallFrameLog struct {
+	Op    *vm.OpCode     `json:"op,omitempty"`
+	From  common.Address `json:"from"`
+	To    common.Address `json:"to"`
+	Input []byte         `json:"input,omitempty"`
+	Gas   uint64         `json:"gas"`
+	Value *big.Int       `json:"value"`
+}
+
+// overrides for gencodec
+type callFrameLogMarshaling struct {
+	Input  hexutil.Bytes
+	Gas    math.HexOrDecimal64
+	Value  *hexutil.Big
+	OpName *string `json:"opName,omitempty"` // adds call to OpName() in MarshalJSON
+}
+
+// OpName formats the operand name in a human-readable format.
+func (c *CallFrameLog) OpName() *string {
+	if c.Op != nil {
+		op := c.Op.String()
+		return &op
+	}
+	return nil
 }
 
 // StructLogger is an EVM state logger and implements EVMLogger.
