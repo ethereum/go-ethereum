@@ -696,20 +696,17 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 // rewindPathHead implements the logic of rewindHead in the context of path scheme.
 func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 	var (
-		headBlock  = bc.CurrentBlock()                // Head block of the chain
+		head       = bc.CurrentBlock()                // Head block of the chain
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot block
 		rootNumber uint64                             // Associated block number of requested root
+
+		// BeyondRoot represents whether the requested root is already crossed.
+		// The flag value is set to true if the root is empty.
+		beyondRoot = root == common.Hash{}
 
 		start  = time.Now() // Timestamp the rewinding is restarted
 		logged = time.Now() // Timestamp last progress log was printed
 	)
-	// BeyondRoot represents whether the requested root is already crossed.
-	// The flag value is set to true if the root is empty, or reaching the
-	// root is deemed impossible.
-	beyondRoot := root == common.Hash{}
-	if !beyondRoot && !bc.HasState(root) && !bc.stateRecoverable(root) {
-		beyondRoot = true
-	}
 	// Rewind the head block tag until an available state is found.
 	for {
 		logger := log.Trace
@@ -717,34 +714,41 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 			logged = time.Now()
 			logger = log.Info
 		}
-		logger("Block state missing, rewinding further", "number", headBlock.Number, "hash", headBlock.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
 
 		// If a root threshold was requested but not yet crossed, check
-		if !beyondRoot && headBlock.Root == root {
-			beyondRoot, rootNumber = true, headBlock.Number.Uint64()
+		if !beyondRoot && head.Root == root {
+			beyondRoot, rootNumber = true, head.Number.Uint64()
+		}
+		// If the root threshold hasn't been crossed but the available
+		// state is found, disable root searching if it's regarded
+		// impossible to reach.
+		if !beyondRoot && bc.HasState(head.Root) {
+			beyondRoot = !bc.HasState(root) && !bc.stateRecoverable(root)
 		}
 		// Check if the associated state is available or recoverable if
 		// the requested root has already been crossed.
-		if beyondRoot && (bc.HasState(headBlock.Root) || bc.stateRecoverable(headBlock.Root)) {
+		if beyondRoot && (bc.HasState(head.Root) || bc.stateRecoverable(head.Root)) {
 			break
 		}
 		// If pivot block is reached, return the genesis block as the
 		// new chain head. Theoretically there must be a persistent
 		// state before or at the pivot block, prevent endless rewinding
 		// towards the genesis just in case.
-		if pivot != nil && *pivot >= headBlock.Number.Uint64() {
-			log.Info("Pivot block reached, resetting to genesis", "number", headBlock.Number, "hash", headBlock.Hash())
+		if pivot != nil && *pivot >= head.Number.Uint64() {
+			log.Info("Pivot block reached, resetting to genesis", "number", head.Number, "hash", head.Hash())
 			return bc.genesisBlock.Header(), rootNumber
 		}
-		headBlock = bc.GetHeader(headBlock.ParentHash, headBlock.Number.Uint64()-1) // Keep rewinding
+		head = bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
 	}
 	// Recover if the target state if it's not available yet.
-	if !bc.HasState(headBlock.Root) {
-		if err := bc.triedb.Recover(headBlock.Root); err != nil {
+	if !bc.HasState(head.Root) {
+		if err := bc.triedb.Recover(head.Root); err != nil {
 			log.Crit("Failed to rollback state", "err", err)
 		}
 	}
-	return headBlock, rootNumber
+	log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
+	return head, rootNumber
 }
 
 // rewindHead searches the available states in the database and returns the associated
