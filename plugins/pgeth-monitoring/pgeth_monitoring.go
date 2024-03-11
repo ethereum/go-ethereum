@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/attestantio/go-eth2-client/http"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/rs/zerolog"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -76,7 +77,6 @@ func Start(pt *toolkit.PluginToolkit, cfg map[string]interface{}, ctx context.Co
 	me := NewMonitoringEngine(pt, rdb, client, beaconEndpoint, errChan)
 
 	me.Start(ctx)
-
 }
 
 // MonitoringEngine is the main plugin struct
@@ -136,7 +136,6 @@ func (me *MonitoringEngine) Start(ctx context.Context) {
 }
 
 func (me *MonitoringEngine) update(ctx context.Context, parent *types.Block) {
-
 	state, _, err := me.backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithHash(parent.Hash(), true))
 	if err != nil {
 		me.errChan <- err
@@ -163,7 +162,6 @@ func (me *MonitoringEngine) encodeAndBroadcastCallTrace(ctx context.Context, at 
 		topic = fmt.Sprintf("/%s/tx/%s/%s/null/%s", channel, at.Transaction.Hash(), at.From, encodeActionCalls(at.Traces))
 	} else {
 		topic = fmt.Sprintf("/%s/tx/%s/%s/%s/%s", channel, at.Transaction.Hash(), at.From, at.Transaction.To(), encodeActionCalls(at.Traces))
-
 	}
 
 	jsoned, err := json.Marshal(*at)
@@ -279,7 +277,6 @@ func (me *MonitoringEngine) analyzePending(ctx context.Context, txs []*types.Tra
 }
 
 func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
-
 	headChan := make(chan core.ChainHeadEvent)
 	headSubscription := me.backend.SubscribeChainHeadEvent(headChan)
 	pendingChan := make(chan core.NewTxsEvent)
@@ -348,10 +345,12 @@ func (me *MonitoringEngine) startHeadListener(ctx context.Context) {
 				continue
 			}
 
+			block := res.Data
 			var blockHeight uint64
-			if me.chainConfig.CancunTime != nil {
+			switch block.Version {
+			case spec.DataVersionDeneb:
 				blockHeight = res.Data.Deneb.Message.Body.ExecutionPayload.BlockNumber
-			} else {
+			case spec.DataVersionCapella:
 				blockHeight = res.Data.Capella.Message.Body.ExecutionPayload.BlockNumber
 			}
 
