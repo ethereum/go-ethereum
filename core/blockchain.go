@@ -61,26 +61,26 @@ var (
 
 	chainInfoGauge = metrics.NewRegisteredGaugeInfo("chain/info", nil)
 
-	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
-	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
-	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
-	accountCommitTimer = metrics.NewRegisteredTimer("chain/account/commits", nil)
+	accountReadTimer   = metrics.NewRegisteredResettingTimer("chain/account/reads", nil)
+	accountHashTimer   = metrics.NewRegisteredResettingTimer("chain/account/hashes", nil)
+	accountUpdateTimer = metrics.NewRegisteredResettingTimer("chain/account/updates", nil)
+	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
-	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
-	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
-	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
+	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
+	storageHashTimer   = metrics.NewRegisteredResettingTimer("chain/storage/hashes", nil)
+	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
+	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
-	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
+	snapshotAccountReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/account/reads", nil)
+	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
+	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 
-	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
+	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
-	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
+	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
+	blockValidationTimer = metrics.NewRegisteredResettingTimer("chain/validation", nil)
+	blockExecutionTimer  = metrics.NewRegisteredResettingTimer("chain/execution", nil)
+	blockWriteTimer      = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
