@@ -294,11 +294,8 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	}
 	// Insert all the pending storage updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	for key, value := range s.pendingStorage {
-		// Skip noop changes, persist actual changes
-		if value == s.originStorage[key] {
-			continue
-		}
+	// insertStorageChange updates a storage slot
+	insertStorageChange := func(key, value common.Hash) error {
 		prev := s.originStorage[key]
 		s.originStorage[key] = value
 
@@ -306,7 +303,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 				s.db.setError(err)
-				return nil, err
+				return err
 			}
 			s.db.StorageDeleted += 1
 		} else {
@@ -315,7 +312,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			encoded, _ = rlp.EncodeToBytes(trimmed)
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
 				s.db.setError(err)
-				return nil, err
+				return err
 			}
 			s.db.StorageUpdated += 1
 		}
@@ -348,6 +345,37 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		}
 		// Cache the items for preloading
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
+		return nil
+	}
+
+	// Perform trie updates before deletions.  This prevents resolution of unnecessary trie nodes
+	//  in circumstances similar to the following:
+	//
+	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
+	// During the execution of a block:
+	// - `A` is deleted,
+	// - `C` is created, and also shares the parent `P`.
+	// If the deletion is handled first, then `P` would be left with only one child, thus collapsed
+	// into a shortnode. This requires `B` to be resolved from disk.
+	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
+	deletedStorages := make(map[common.Hash]common.Hash)
+	for key, value := range s.pendingStorage {
+		// Skip noop changes, persist actual changes
+		if value == s.originStorage[key] {
+			continue
+		}
+		if (value != common.Hash{}) {
+			if err := insertStorageChange(key, value); err != nil {
+				return nil, err
+			}
+		} else {
+			deletedStorages[key] = value
+		}
+	}
+	for key, value := range deletedStorages {
+		if err := insertStorageChange(key, value); err != nil {
+			return nil, err
+		}
 	}
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
