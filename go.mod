@@ -16,7 +16,7 @@ require (
 	github.com/cockroachdb/pebble v1.1.0
 	github.com/consensys/gnark-crypto v0.12.1
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
-	github.com/crate-crypto/go-kzg-4844 v0.7.1-0.20240311143225-51e065ee3a14
+	github.com/crate-crypto/go-kzg-4844 v1.0.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0
