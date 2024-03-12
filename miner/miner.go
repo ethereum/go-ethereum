@@ -207,7 +207,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
 				log.Info("Plain block detected", "reward", feeInEther)
-				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
 			}
 		}
 	} else if payload.full.Coinbase() != block.Coinbase() {
@@ -227,7 +227,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
 				log.Warn("MEV block detected, unknown reward", "reward", "unknown", "local", feeInEther)
-				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
 			}
 		}
 	} else {
