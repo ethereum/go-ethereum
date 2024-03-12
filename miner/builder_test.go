@@ -12,9 +12,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	suavextypes "github.com/ethereum/go-ethereum/suave/builder/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,6 +41,110 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.Success)
 	require.Len(t, builder.env.receipts, 1)
+}
+
+func TestBuilder_AddTxns_Simple(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTxWithNonce(1)
+
+	res, err := builder.AddTransactions([]*types.Transaction{tx1, tx2})
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	for _, r := range res {
+		require.True(t, r.Success)
+	}
+
+	tx3 := backend.newRandomTxWithNonce(2)
+	tx4 := backend.newRandomTxWithNonce(1000) // fails with nonce too high
+
+	res, err = builder.AddTransactions([]*types.Transaction{tx3, tx4})
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	require.True(t, res[0].Success)
+	require.False(t, res[1].Success)
+	require.Len(t, builder.env.txs, 2)
+}
+
+func TestBuilder_AddBundle_Simple(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTxWithNonce(1)
+
+	bundle := &suavextypes.Bundle{
+		Txs: []*types.Transaction{tx1, tx2},
+	}
+
+	res, err := builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.True(t, res.Success)
+	require.Len(t, res.SimulateTransactionResults, 2)
+}
+
+func TestBuilder_AddBundle_RevertHashes(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTxWithNonce(3) // fails with nonce too high
+
+	bundle := &suavextypes.Bundle{
+		Txs:             []*types.Transaction{tx1, tx2},
+		RevertingHashes: []common.Hash{tx2.Hash()},
+	}
+
+	res, err := builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.True(t, res.Success)
+	require.Len(t, res.SimulateTransactionResults, 2)
+	require.True(t, res.SimulateTransactionResults[0].Success)
+	require.False(t, res.SimulateTransactionResults[1].Success)
+}
+
+func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{
+		Slot: 10,
+	})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTx(false)
+
+	bundle := &suavextypes.Bundle{
+		Txs:         []*types.Transaction{tx1, tx2},
+		BlockNumber: big.NewInt(20),
+	}
+
+	backend.insertRandomBlocks(10)
+	require.Equal(t, uint64(10), backend.chain.CurrentBlock().Number.Uint64())
+
+	res, err := builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.False(t, res.Success)
+	require.Len(t, res.SimulateTransactionResults, 0)
+
+	bundle = &suavextypes.Bundle{
+		Txs:         []*types.Transaction{tx1, tx2},
+		BlockNumber: big.NewInt(5),
+		MaxBlock:    big.NewInt(6),
+	}
+
+	res, err = builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.False(t, res.Success)
+	require.Len(t, res.SimulateTransactionResults, 0)
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
@@ -118,10 +225,8 @@ func TestBuilder_Bid(t *testing.T) {
 	_, err = builder.BuildBlock()
 	require.NoError(t, err)
 
-	req, err := builder.Bid([48]byte{})
+	_, err = builder.Bid([48]byte{})
 	require.NoError(t, err)
-
-	fmt.Println("-- req --", req)
 }
 
 func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
@@ -143,6 +248,49 @@ func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 		GasCeil:     10000000,
 	}
 	return bConfig, backend
+}
+
+func (b *testWorkerBackend) newRandomTxWithNonce(nonce uint64) *types.Transaction {
+	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+	tx, _ := types.SignTx(types.NewTransaction(nonce, testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	return tx
+}
+
+func (b *testWorkerBackend) insertRandomBlocks(n int) []*types.Block {
+	extraVanity := 32
+	extraSeal := crypto.SignatureLength
+	diffInTurn := big.NewInt(2)
+	signer := new(types.HomesteadSigner)
+	_, blocks, _ := core.GenerateChainWithGenesis(b.genesis, b.chain.Engine(), n, func(i int, block *core.BlockGen) {
+		block.SetDifficulty(big.NewInt(2)) // diffInTurn
+
+		if i != 1 {
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), common.Address{0x00}, new(big.Int), params.TxGas, block.BaseFee(), nil), signer, testBankKey)
+			if err != nil {
+				panic(err)
+			}
+			block.AddTxWithChain(b.chain, tx)
+		}
+	})
+
+	for i, block := range blocks {
+		header := block.Header()
+		if i > 0 {
+			header.ParentHash = blocks[i-1].Hash()
+		}
+		header.Extra = make([]byte, extraVanity+extraSeal)
+		header.Difficulty = diffInTurn
+
+		sig, _ := crypto.Sign(clique.SealHash(header).Bytes(), testBankKey)
+		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+		blocks[i] = block.WithSeal(header)
+	}
+
+	if _, err := b.chain.InsertChain(blocks); err != nil {
+		panic(fmt.Sprintf("failed to insert initial blocks: %v", err))
+	}
+
+	return blocks
 }
 
 func (b *testWorkerBackend) newCall(to common.Address, data []byte) *types.Transaction {

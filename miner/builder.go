@@ -22,6 +22,13 @@ import (
 	"github.com/holiman/uint256"
 )
 
+var (
+	ErrInvalidInclusionRange = errors.New("invalid inclusion range")
+	ErrInvalidBlockNumber    = errors.New("invalid block number")
+	ErrExceedsMaxBlock       = errors.New("block number exceeds max block")
+	ErrEmptyTxs              = errors.New("empty transactions")
+)
+
 type BuilderConfig struct {
 	ChainConfig *params.ChainConfig
 	Engine      consensus.Engine
@@ -77,26 +84,98 @@ func NewBuilder(config *BuilderConfig, args *BuilderArgs) (*Builder, error) {
 	return b, nil
 }
 
-type SBundle struct {
-	BlockNumber     *big.Int           `json:"blockNumber,omitempty"` // if BlockNumber is set it must match DecryptionCondition!
-	MaxBlock        *big.Int           `json:"maxBlock,omitempty"`
-	Txs             types.Transactions `json:"txs"`
-	RevertingHashes []common.Hash      `json:"revertingHashes,omitempty"`
-	RefundPercent   *int               `json:"percent,omitempty"`
-}
-
-func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateTransactionResult, error) {
+func (b *Builder) addTransaction(txn *types.Transaction, env *environment) (*suavextypes.SimulateTransactionResult, error) {
 	// If the context is not set, the logs will not be recorded
 	b.env.state.SetTxContext(txn.Hash(), b.env.tcount)
 
-	logs, err := b.wrk.commitTransaction(b.env, txn)
+	logs, err := b.wrk.commitTransaction(env, txn)
 	if err != nil {
 		return &suavextypes.SimulateTransactionResult{
 			Error:   err.Error(),
 			Success: false,
-		}, nil
+		}, err
 	}
 	return receiptToSimResult(&types.Receipt{Logs: logs}), nil
+}
+
+func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateTransactionResult, error) {
+	res, _ := b.addTransaction(txn, b.env)
+	return res, nil
+}
+
+func (b *Builder) AddTransactions(txns types.Transactions) ([]*suavextypes.SimulateTransactionResult, error) {
+	var result []*suavextypes.SimulateTransactionResult
+	snap := b.env.copy()
+
+	for _, txn := range txns {
+		res, err := b.addTransaction(txn, snap)
+		result = append(result, res)
+		if err != nil {
+			return result, nil
+		}
+	}
+	b.env = snap
+	return result, nil
+}
+
+func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suavextypes.SimulateBundleResult, error) {
+	if err := checkBundleInclusion(b.env.header.Number, bundle); err != nil {
+		return nil, err
+	}
+
+	revertingHashes := bundle.RevertingHashesMap()
+
+	var results []*suavextypes.SimulateTransactionResult
+	for _, txn := range bundle.Txs {
+		result, err := b.addTransaction(txn, env)
+		results = append(results, result)
+		if err != nil {
+			if _, ok := revertingHashes[txn.Hash()]; ok {
+				// continue if the transaction is in the reverting hashes
+				continue
+			}
+			return &suavextypes.SimulateBundleResult{
+				Error:   err.Error(),
+				Success: false,
+			}, nil
+		}
+	}
+
+	return &suavextypes.SimulateBundleResult{
+		SimulateTransactionResults: results,
+		Success:                    true,
+	}, nil
+}
+
+func (b *Builder) AddBundle(bundle *suavextypes.Bundle) (*suavextypes.SimulateBundleResult, error) {
+	snap := b.env.copy()
+	result, err := b.addBundle(bundle, snap)
+
+	if err != nil {
+		return &suavextypes.SimulateBundleResult{
+			Error:   err.Error(),
+			Success: false,
+		}, nil
+	}
+
+	b.env = snap
+	return result, nil
+}
+
+func (b *Builder) AddBundles(bundles []*suavextypes.Bundle) ([]*suavextypes.SimulateBundleResult, error) {
+	var results []*suavextypes.SimulateBundleResult
+	snap := b.env.copy()
+
+	for _, bundle := range bundles {
+		result, err := b.addBundle(bundle, snap)
+		results = append(results, result)
+		if err != nil {
+			return results, nil
+		}
+	}
+
+	b.env = snap
+	return results, nil
 }
 
 func (b *Builder) FillPending() error {
@@ -222,4 +301,34 @@ func executableDataToDenebExecutionPayload(data *engine.ExecutableData) (*deneb.
 		Transactions:  transactionData,
 		Withdrawals:   withdrawalData,
 	}, nil
+}
+
+func checkBundleInclusion(currentBlockNumber *big.Int, bundle *suavextypes.Bundle) error {
+	if bundle.BlockNumber != nil && bundle.MaxBlock != nil && bundle.BlockNumber.Cmp(bundle.MaxBlock) > 0 {
+		return ErrInvalidInclusionRange
+	}
+
+	// check inclusion target if BlockNumber is set
+	if bundle.BlockNumber != nil {
+		if bundle.MaxBlock == nil && currentBlockNumber.Cmp(bundle.BlockNumber) != 0 {
+			return ErrInvalidBlockNumber
+		}
+
+		if bundle.MaxBlock != nil {
+			if currentBlockNumber.Cmp(bundle.MaxBlock) > 0 {
+				return ErrExceedsMaxBlock
+			}
+
+			if currentBlockNumber.Cmp(bundle.BlockNumber) < 0 {
+				return ErrInvalidBlockNumber
+			}
+		}
+	}
+
+	// check if the bundle has transactions
+	if bundle.Txs == nil || bundle.Txs.Len() == 0 {
+		return ErrEmptyTxs
+	}
+
+	return nil
 }

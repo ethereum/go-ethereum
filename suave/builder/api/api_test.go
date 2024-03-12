@@ -39,8 +39,16 @@ func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction
 	return &SimulateTransactionResult{Logs: []*SimulatedLog{}}, nil
 }
 
-func (nullSessionManager) AddBundle(sessionId string, bundle Bundle) error {
-	return nil
+func (nullSessionManager) AddTransactions(sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error) {
+	return nil, nil
+}
+
+func (nullSessionManager) AddBundle(sessionId string, bundle *Bundle) (*SimulateBundleResult, error) {
+	return nil, nil
+}
+
+func (nullSessionManager) AddBundles(sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error) {
+	return nil, nil
 }
 
 func (nullSessionManager) BuildBlock(sessionId string) error {
