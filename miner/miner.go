@@ -201,7 +201,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain
 				mevInEther := new(big.Float).Quo(new(big.Float).SetInt(payout.Value()), big.NewFloat(params.Ether))
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
-				log.Info("MEV block detected", "reward", mevInEther, "local", feeInEther)
+				log.Info("MEV block detected", "block", block.NumberU64(), "reward", mevInEther, "local", feeInEther, "delta", new(big.Float).Sub(mevInEther, feeInEther))
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
 				// Possibly not an MEV block, pull in the balance change and report that
@@ -215,7 +215,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain
 						diffInEther := new(big.Float).Quo(new(big.Float).SetInt(balanceDiff.ToBig()), big.NewFloat(params.Ether))
 						feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
-						log.Info("Plain block detected", "reward", diffInEther, "local", feeInEther)
+						log.Info("Plain block detected", "block", block.NumberU64(), "reward", diffInEther, "local", feeInEther, "delta", new(big.Float).Sub(diffInEther, feeInEther))
 						blockIncludedFeeGauge.Update(new(big.Int).Div(balanceDiff.ToBig(), bigGwei).Int64())
 					} else {
 						log.Error("Missing state for reward metric", "old", oerr, "new", nerr)
@@ -233,7 +233,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain
 				mevInEther := new(big.Float).Quo(new(big.Float).SetInt(payout.Value()), big.NewFloat(params.Ether))
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
-				log.Info("MEV reward received", "reward", mevInEther, "local", feeInEther)
+				log.Info("MEV reward received", "block", block.NumberU64(), "reward", mevInEther, "local", feeInEther, "delta", new(big.Float).Sub(mevInEther, feeInEther))
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
 				// Unknown MEV block, pull in the balance change and report that
@@ -247,7 +247,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain
 						diffInEther := new(big.Float).Quo(new(big.Float).SetInt(balanceDiff.ToBig()), big.NewFloat(params.Ether))
 						feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
-						log.Info("MEV hidden reward received", "reward", diffInEther, "local", feeInEther)
+						log.Info("MEV hidden reward received", "block", block.NumberU64(), "reward", diffInEther, "local", feeInEther, "delta", new(big.Float).Sub(diffInEther, feeInEther))
 						blockIncludedFeeGauge.Update(new(big.Int).Div(balanceDiff.ToBig(), bigGwei).Int64())
 					} else {
 						log.Error("Missing state for reward metric", "old", oerr, "new", nerr)
@@ -259,7 +259,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain
 		// Probably not an MEV block, report the boring mining fees
 		feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
-		log.Info("Plain reward received", "reward", feeInEther)
+		log.Info("Plain reward received", "block", block.NumberU64(), "reward", feeInEther)
 		blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
 	}
 }
