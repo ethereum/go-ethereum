@@ -523,12 +523,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 }
 
 // deleteStateObject removes the given object from the state trie.
-func (s *StateDB) deleteStateObject(obj *stateObject) {
+func (s *StateDB) deleteStateObject(addr common.Address) {
 	// Track the amount of time wasted on deleting the account from the trie
 	defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 
 	// Delete the account from the trie
-	addr := obj.Address()
 	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
@@ -905,18 +904,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If the self-destruct is handled first, then `P` would be left with only one child, thus collapsed
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
-	var deletedObjects []*stateObject
+	var deletedAddrs []common.Address
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
 		} else {
-			deletedObjects = append(deletedObjects, obj)
+			deletedAddrs = append(deletedAddrs, obj.address)
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
-	for _, deletedObj := range deletedObjects {
-		s.deleteStateObject(deletedObj)
+	for _, deletedAddr := range deletedAddrs {
+		s.deleteStateObject(deletedAddr)
 		s.AccountDeleted += 1
 	}
 	if prefetcher != nil {
