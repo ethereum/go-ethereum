@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -162,7 +161,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	for _, req := range reqs {
 		method := req.Method
 		if _, found := s.denyList[method]; found {
-			resp := errorMessage(&methodNotFoundError{fmt.Sprintf("method %s is in deny list", method)})
+			resp := errorMessage(&methodNotFoundError{method: method})
 			codec.writeJSON(ctx, resp, true)
 			return
 		}
