@@ -189,7 +189,7 @@ func ReadBits(bigint *big.Int, buf []byte) {
 	}
 }
 
-// U256 encodes as a 256 bit two's complement number. This operation is destructive.
+// U256 encodes x as a 256 bit two's complement number. This operation is destructive.
 func U256(x *big.Int) *big.Int {
 	return x.And(x, tt256m1)
 }
@@ -220,14 +220,15 @@ func S256(x *big.Int) *big.Int {
 //
 // Courtesy @karalabe and @chfast
 func Exp(base, exponent *big.Int) *big.Int {
+	copyBase := new(big.Int).Set(base)
 	result := big.NewInt(1)
 
 	for _, word := range exponent.Bits() {
 		for i := 0; i < wordBits; i++ {
 			if word&1 == 1 {
-				U256(result.Mul(result, base))
+				U256(result.Mul(result, copyBase))
 			}
-			U256(base.Mul(base, base))
+			U256(copyBase.Mul(copyBase, copyBase))
 			word >>= 1
 		}
 	}
