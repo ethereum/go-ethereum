@@ -363,7 +363,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("error reading block bodies msg: %v", err)
 	}
 	if got, want := resp.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id in respond", got, want)
+		t.Fatal("unexpected request id in respond", got, want)
 	}
 	bodies := resp.BlockBodiesResponse
 	if len(bodies) != len(req.GetBlockBodiesRequest) {
