@@ -517,8 +517,9 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 }
 
 func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) common.Hash {
+	ringIndex := number % 256
 	var pnum common.Hash
-	binary.BigEndian.PutUint64(pnum[24:], number)
+	binary.BigEndian.PutUint64(pnum[24:], ringIndex)
 	treeIndex, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(pnum.Bytes())
 	witness.TouchAddressOnReadAndComputeGas(params.HistoryStorageAddress[:], *treeIndex, suffix)
 	return statedb.GetState(params.HistoryStorageAddress, pnum)
@@ -533,11 +534,6 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 
 	evm := interpreter.evm
-	// if Prague is active, read it from the history contract (EIP 2935).
-	if evm.chainRules.IsPrague {
-		num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
-		return nil, nil
-	}
 
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
@@ -547,7 +543,12 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		lower = upper - 256
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		// if Prague is active, read it from the history contract (EIP 2935).
+		if evm.chainRules.IsPrague {
+			num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
+		} else {
+			num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		}
 	} else {
 		num.Clear()
 	}

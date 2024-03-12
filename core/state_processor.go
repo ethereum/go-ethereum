@@ -378,8 +378,9 @@ func InsertBlockHashHistoryAtEip2935Fork(statedb *state.StateDB, prevNumber uint
 }
 
 func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash) {
+	ringIndex := prevNumber % 256
 	var key common.Hash
-	binary.BigEndian.PutUint64(key[24:], prevNumber)
+	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
 	index, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(key[:])
 	statedb.Witness().TouchAddressOnWriteAndComputeGas(params.HistoryStorageAddress[:], *index, suffix)
