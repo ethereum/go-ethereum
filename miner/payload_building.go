@@ -194,6 +194,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	if empty.err != nil {
 		return nil, empty.err
 	}
+	w.chain.InsertBlockWithoutSetHead(empty.block) // ignore error, we're caching (also chain will log)
 
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, args.Id())
@@ -229,6 +230,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 				r := miner.generateWork(fullParams)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
+					w.chain.InsertBlockWithoutSetHead(r.block) // ignore error, we're caching (also chain will log)
 				}
 				timer.Reset(miner.config.Recommit)
 			case <-payload.stop:
