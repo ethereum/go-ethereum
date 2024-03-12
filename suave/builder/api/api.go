@@ -61,9 +61,10 @@ type SimulateTransactionResult struct {
 }
 
 type SimulateBundleResult struct {
-	SimulateTransactionResults []*SimulateTransactionResult
-	Success                    bool
-	Error                      string
+	Egp                        uint64                       `json:"egp"`
+	SimulateTransactionResults []*SimulateTransactionResult `json:"simulateTransactionResults"`
+	Success                    bool                         `json:"success"`
+	Error                      string                       `json:"error"`
 }
 
 // field type overrides for gencodec

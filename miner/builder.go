@@ -88,6 +88,7 @@ func (b *Builder) addTransaction(txn *types.Transaction, env *environment) (*sua
 	// If the context is not set, the logs will not be recorded
 	b.env.state.SetTxContext(txn.Hash(), b.env.tcount)
 
+	prevGas := env.header.GasUsed
 	logs, err := b.wrk.commitTransaction(env, txn)
 	if err != nil {
 		return &suavextypes.SimulateTransactionResult{
@@ -95,7 +96,8 @@ func (b *Builder) addTransaction(txn *types.Transaction, env *environment) (*sua
 			Success: false,
 		}, err
 	}
-	return receiptToSimResult(&types.Receipt{Logs: logs}), nil
+	egp := env.header.GasUsed - prevGas
+	return receiptToSimResult(&types.Receipt{Logs: logs}, egp), nil
 }
 
 func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateTransactionResult, error) {
@@ -124,6 +126,7 @@ func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suav
 	}
 
 	revertingHashes := bundle.RevertingHashesMap()
+	egp := uint64(0)
 
 	var results []*suavextypes.SimulateTransactionResult
 	for _, txn := range bundle.Txs {
@@ -139,9 +142,11 @@ func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suav
 				Success: false,
 			}, nil
 		}
+		egp += result.Egp
 	}
 
 	return &suavextypes.SimulateBundleResult{
+		Egp:                        egp,
 		SimulateTransactionResults: results,
 		Success:                    true,
 	}, nil
@@ -248,8 +253,9 @@ func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*suavextypes.SubmitBlockR
 	return &bidRequest, nil
 }
 
-func receiptToSimResult(receipt *types.Receipt) *suavextypes.SimulateTransactionResult {
+func receiptToSimResult(receipt *types.Receipt, egp uint64) *suavextypes.SimulateTransactionResult {
 	result := &suavextypes.SimulateTransactionResult{
+		Egp:     egp,
 		Success: true,
 		Logs:    []*suavextypes.SimulatedLog{},
 	}
