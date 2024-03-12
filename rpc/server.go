@@ -162,7 +162,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	for _, req := range reqs {
 		method := req.Method
 		if _, found := s.denyList[method]; found {
-			resp := errorMessage(&invalidMessageError{fmt.Sprintf("method %s is in deny list", method)})
+			resp := errorMessage(&methodNotFoundError{fmt.Sprintf("method %s is in deny list", method)})
 			codec.writeJSON(ctx, resp, true)
 			return
 		}
