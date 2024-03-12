@@ -611,6 +611,11 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 
 		return api.invalid(err, parent.Header()), nil
 	}
+	// Share the block with the miner to pull out any relevant stats to previous
+	// local block production attempt
+	if payload := api.localBlocks.find(block.NumberU64()); payload != nil {
+		api.eth.Miner().ReportFeeMetrics(payload, block)
+	}
 	hash := block.Hash()
 	return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
 }

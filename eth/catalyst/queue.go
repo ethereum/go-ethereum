@@ -107,6 +107,20 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	return false
 }
 
+// find tries to find a locally mined block with the given number. This method is
+// relatively expensive and should only be used sparsely (goal == metrics).
+func (q *payloadQueue) find(number uint64) *miner.Payload {
+	for _, item := range q.payloads {
+		if item == nil {
+			return nil
+		}
+		if item.payload.Number() == number {
+			return item.payload
+		}
+	}
+	return nil
+}
+
 // headerQueueItem represents an hash->header tuple to store until it's retrieved
 // or evicted.
 type headerQueueItem struct {

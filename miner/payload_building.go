@@ -19,7 +19,6 @@ package miner
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -73,7 +71,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id       engine.PayloadID
+	id     engine.PayloadID
+	number uint64
+
 	empty    *types.Block
 	full     *types.Block
 	sidecars []*types.BlobTxSidecar
@@ -88,9 +88,10 @@ type Payload struct {
 // newPayload initializes the payload object.
 func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 	payload := &Payload{
-		id:    id,
-		empty: empty,
-		stop:  make(chan struct{}),
+		id:     id,
+		number: empty.NumberU64(),
+		empty:  empty,
+		stop:   make(chan struct{}),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -132,6 +133,12 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		)
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
+}
+
+// Number retrieves the block number this payload belongs to. This method is used
+// in stats reporting to allow matching a block arriving later to a past payload.
+func (payload *Payload) Number() uint64 {
+	return payload.number
 }
 
 // Resolve returns the latest built payload and also terminates the background
@@ -183,13 +190,6 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
-	// Report all the recommits into individual metrics
-	for i := len(payload.recommits) - 1; i >= 0; i-- {
-		// Track the generated fees in the metrics
-		gauge := fmt.Sprintf("%s/%d", blockRecommitFeeGaugeName, len(payload.recommits)-i-1)
-		metrics.GetOrRegisterResettingGauge(gauge, nil).Update(new(big.Int).Div(payload.recommits[i], bigGwei).Int64())
-	}
-	blockFinalFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
 	return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 }
 

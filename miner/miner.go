@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -162,4 +164,77 @@ func (miner *Miner) getPending() *newPayloadResult {
 	}
 	miner.pending.update(header.Hash(), ret)
 	return ret
+}
+
+// ReportFeeMetrics injects a few miner metrics based on live blocks matched with
+// previously locally proposed blocks.
+func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
+	// Skip everything if something's screwy being sent to us
+	if payload.full == nil {
+		return
+	}
+	// Report all the local recommits into individual metrics
+	for i := len(payload.recommits) - 1; i >= 0; i-- {
+		// Track the generated fees in the metrics
+		gauge := fmt.Sprintf("%s/%d", blockRecommitFeeGaugeName, len(payload.recommits)-i-1)
+		metrics.GetOrRegisterResettingGauge(gauge, nil).Update(new(big.Int).Div(payload.recommits[i], bigGwei).Int64())
+	}
+	// Report the local proposed fees into its own metric
+	blockProposedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
+
+	// If the local fee recipient is the zero address, we're running in benchmark
+	// mode. In this case we cannot know if a block is or is not MEV. In this case,
+	// case, assume that MEV blocks will do a final tx to the actual fee recipient
+	// from the coinbase and hope it's a goon enough heuristic.
+	if payload.full.Coinbase() == (common.Address{}) {
+		if count := len(block.Transactions()); count > 0 {
+			payout := block.Transactions()[count-1]
+
+			payer, err := types.Sender(types.LatestSignerForChainID(miner.chainConfig.ChainID), payout)
+			if err != nil {
+				log.Error("Failed to retrieve potential MEV sender", "err", err)
+				return
+			}
+			if block.Coinbase() == payer {
+				// The fee recipient made the last transaction, possibly MEV block
+				mevInEther := new(big.Float).Quo(new(big.Float).SetInt(payout.Value()), big.NewFloat(params.Ether))
+				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+				log.Info("MEV block detected", "reward", mevInEther, "local", feeInEther)
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+			} else {
+				// Possibly not an MEV block, report the boring mining fees
+				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+				log.Info("Plain block detected", "reward", feeInEther)
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+			}
+		}
+	} else if payload.full.Coinbase() != block.Coinbase() {
+		// We are not in benchmarking mode and out proposed fee recipient is
+		// different from the live reward recipient. Definitely an MEV block.
+		// Try to extract the rewards.
+		if count := len(block.Transactions()); count > 0 {
+			payout := block.Transactions()[count-1]
+			if payout.To() != nil && *payout.To() == payload.full.Coinbase() {
+				mevInEther := new(big.Float).Quo(new(big.Float).SetInt(payout.Value()), big.NewFloat(params.Ether))
+				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+				log.Info("MEV reward received", "reward", mevInEther, "local", feeInEther)
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+			} else {
+				// Unknown MEV block, report the boring mining fees
+				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+				log.Warn("MEV block detected, unknown reward", "reward", "unknown", "local", feeInEther)
+				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
+			}
+		}
+	} else {
+		// Probably not an MEV block, report the boring mining fees
+		feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+		log.Info("Plain reward received", "reward", feeInEther)
+		blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
+	}
 }
