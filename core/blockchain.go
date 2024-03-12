@@ -662,7 +662,7 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		if !bc.HasState(head.Root) {
 			// If search limit is reached, return the genesis block as
 			// the new chain head.
-			if head.Number.Uint64() < limit {
+			if head.Number.Uint64() <= limit {
 				log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
 				return bc.genesisBlock.Header(), rootNumber
 			}
@@ -744,7 +744,20 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 			log.Info("Pivot block reached, resetting to genesis", "number", head.Number, "hash", head.Hash())
 			return bc.genesisBlock.Header(), rootNumber
 		}
-		head = bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
+		// If the chain is gapped in the middle, return the genesis
+		// block as the new chain head
+		parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
+		if parent == nil {
+			log.Error("Missing block in the middle, resetting to genesis", "number", head.Number.Uint64()-1, "hash", head.ParentHash)
+			return bc.genesisBlock.Header(), rootNumber
+		}
+		head = parent
+
+		// If the genesis block is reached, stop searching.
+		if head.Number.Uint64() == 0 {
+			log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
+			return head, rootNumber
+		}
 	}
 	// Recover if the target state if it's not available yet.
 	if !bc.HasState(head.Root) {
