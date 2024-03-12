@@ -218,8 +218,8 @@ func (b *Builder) Bid(builderPubKey phase0.BLSPubKey) (*suavextypes.SubmitBlockR
 
 	blockBidMsg := builderV1.BidTrace{
 		Slot:                 b.args.Slot,
-		ParentHash:           phase0.Hash32(payload.ParentHash),
-		BlockHash:            phase0.Hash32(payload.BlockHash),
+		ParentHash:           payload.ParentHash,
+		BlockHash:            payload.BlockHash,
 		BuilderPubkey:        builderPubKey,
 		ProposerPubkey:       phase0.BLSPubKey(proposerPubkey),
 		ProposerFeeRecipient: bellatrix.ExecutionAddress(b.args.FeeRecipient),
