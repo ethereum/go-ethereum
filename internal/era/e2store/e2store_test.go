@@ -18,7 +18,7 @@ package e2store
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"testing"
 
@@ -92,7 +92,7 @@ func TestDecode(t *testing.T) {
 		},
 		{ // basic invalid decoding
 			have: "ffff000000000001",
-			err:  fmt.Errorf("reserved bytes are non-zero"),
+			err:  errors.New("reserved bytes are non-zero"),
 		},
 		{ // no more entries to read, returns EOF
 			have: "",

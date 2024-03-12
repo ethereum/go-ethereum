@@ -186,7 +186,7 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 	return types.MustSignNewTx(key, types.LatestSigner(testChainConfig), blobtx)
 }
 
-// makeUnsignedTx is a utility method to construct a random blob tranasaction
+// makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
 	return &types.BlobTx{
@@ -392,7 +392,7 @@ func TestOpenDrops(t *testing.T) {
 		id, _ := store.Put(blob)
 		filled[id] = struct{}{}
 	}
-	// Insert a sequence of transactions with partially passed nonces to veirfy
+	// Insert a sequence of transactions with partially passed nonces to verify
 	// that the included part of the set will get dropped (case 4).
 	var (
 		overlapper, _ = crypto.GenerateKey()
@@ -985,9 +985,14 @@ func TestAdd(t *testing.T) {
 				},
 			},
 			adds: []addtx{
-				{ // New account, 1 tx pending: reject replacement nonce 0 (ignore price for now)
+				{ // New account, 1 tx pending: reject duplicate nonce 0
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, 1),
+					err:  txpool.ErrAlreadyKnown,
+				},
+				{ // New account, 1 tx pending: reject replacement nonce 0 (ignore price for now)
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 2),
 					err:  txpool.ErrReplaceUnderpriced,
 				},
 				{ // New account, 1 tx pending: accept nonce 1
@@ -1010,10 +1015,10 @@ func TestAdd(t *testing.T) {
 					tx:   makeUnsignedTx(3, 1, 1, 1),
 					err:  nil,
 				},
-				{ // Old account, 1 tx in chain, 1 tx pending: reject replacement nonce 1 (ignore price for now)
+				{ // Old account, 1 tx in chain, 1 tx pending: reject duplicate nonce 1
 					from: "bob",
 					tx:   makeUnsignedTx(1, 1, 1, 1),
-					err:  txpool.ErrReplaceUnderpriced,
+					err:  txpool.ErrAlreadyKnown,
 				},
 				{ // Old account, 1 tx in chain, 1 tx pending: accept nonce 2 (ignore price for now)
 					from: "bob",
@@ -1229,6 +1234,24 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Blob transactions that don't meet the min blob gas price should be rejected
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			adds: []addtx{
+				{ // New account, no previous txs, nonce 0, but blob fee cap too low
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 0),
+					err:  txpool.ErrUnderpriced,
+				},
+				{ // Same as above but blob fee cap equals minimum, should be accepted
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, params.BlobTxMinBlobGasprice),
+					err:  nil,
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
@@ -1287,5 +1310,67 @@ func TestAdd(t *testing.T) {
 		// Verify the pool internals and close down the test
 		verifyPoolInternals(t, pool)
 		pool.Close()
+	}
+}
+
+// Benchmarks the time it takes to assemble the lazy pending transaction list
+// from the pool contents.
+func BenchmarkPoolPending100Mb(b *testing.B) { benchmarkPoolPending(b, 100_000_000) }
+func BenchmarkPoolPending1GB(b *testing.B)   { benchmarkPoolPending(b, 1_000_000_000) }
+func BenchmarkPoolPending10GB(b *testing.B)  { benchmarkPoolPending(b, 10_000_000_000) }
+
+func benchmarkPoolPending(b *testing.B, datacap uint64) {
+	// Calculate the maximum number of transaction that would fit into the pool
+	// and generate a set of random accounts to seed them with.
+	capacity := datacap / params.BlobTxBlobGasPerBlob
+
+	var (
+		basefee    = uint64(1050)
+		blobfee    = uint64(105)
+		signer     = types.LatestSigner(testChainConfig)
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		chain      = &testBlockChain{
+			config:  testChainConfig,
+			basefee: uint256.NewInt(basefee),
+			blobfee: uint256.NewInt(blobfee),
+			statedb: statedb,
+		}
+		pool = New(Config{Datadir: ""}, chain)
+	)
+
+	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		b.Fatalf("failed to create blob pool: %v", err)
+	}
+	// Fill the pool up with one random transaction from each account with the
+	// same price and everything to maximize the worst case scenario
+	for i := 0; i < int(capacity); i++ {
+		blobtx := makeUnsignedTx(0, 10, basefee+10, blobfee)
+		blobtx.R = uint256.NewInt(1)
+		blobtx.S = uint256.NewInt(uint64(100 + i))
+		blobtx.V = uint256.NewInt(0)
+		tx := types.NewTx(blobtx)
+		addr, err := types.Sender(signer, tx)
+		if err != nil {
+			b.Fatal(err)
+		}
+		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		pool.add(tx)
+	}
+	statedb.Commit(0, true)
+	defer pool.Close()
+
+	// Benchmark assembling the pending
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		p := pool.Pending(txpool.PendingFilter{
+			MinTip:  uint256.NewInt(1),
+			BaseFee: chain.basefee,
+			BlobFee: chain.blobfee,
+		})
+		if len(p) != int(capacity) {
+			b.Fatalf("have %d want %d", len(p), capacity)
+		}
 	}
 }

@@ -296,7 +296,7 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 	pool.gasTip.Store(uint256.NewInt(gasTip))
 
 	// Initialize the state with head block, or fallback to empty one in
-	// case the head state is not available(might occur when node is not
+	// case the head state is not available (might occur when node is not
 	// fully synced).
 	statedb, err := pool.chain.StateAt(head.Root)
 	if err != nil {
@@ -518,24 +518,38 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
-// account and sorted by nonce. The returned transaction set is a copy and can be
-// freely modified by calling code.
+// account and sorted by nonce.
 //
-// The enforceTips parameter can be used to do an extra filtering on the pending
-// transactions and only return those whose **effective** tip is large enough in
-// the next pending execution environment.
-func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+// The transactions can also be pre-filtered by the dynamic fee components to
+// reduce allocations and load on downstream subsystems.
+func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+	// If only blob transactions are requested, this pool is unsuitable as it
+	// contains none, don't even bother.
+	if filter.OnlyBlobTxs {
+		return nil
+	}
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	// Convert the new uint256.Int types to the old big.Int ones used by the legacy pool
+	var (
+		minTipBig  *big.Int
+		baseFeeBig *big.Int
+	)
+	if filter.MinTip != nil {
+		minTipBig = filter.MinTip.ToBig()
+	}
+	if filter.BaseFee != nil {
+		baseFeeBig = filter.BaseFee.ToBig()
+	}
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
 		txs := list.Flatten()
 
 		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
+		if minTipBig != nil && !pool.locals.contains(addr) {
 			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(pool.gasTip.Load().ToBig(), pool.priced.urgent.baseFee) < 0 {
+				if tx.EffectiveGasTipIntCmp(minTipBig, baseFeeBig) < 0 {
 					txs = txs[:i]
 					break
 				}
@@ -549,8 +563,8 @@ func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.L
 					Hash:      txs[i].Hash(),
 					Tx:        txs[i],
 					Time:      txs[i].Time(),
-					GasFeeCap: txs[i].GasFeeCap(),
-					GasTipCap: txs[i].GasTipCap(),
+					GasFeeCap: uint256.MustFromBig(txs[i].GasFeeCap()),
+					GasTipCap: uint256.MustFromBig(txs[i].GasTipCap()),
 					Gas:       txs[i].Gas(),
 					BlobGas:   txs[i].BlobGas(),
 				}

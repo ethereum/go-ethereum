@@ -23,7 +23,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -97,7 +97,7 @@ func Transition(ctx *cli.Context) error {
 			Debug:            true,
 		}
 		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
@@ -116,7 +116,7 @@ func Transition(ctx *cli.Context) error {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
 		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
@@ -143,7 +143,7 @@ func Transition(ctx *cli.Context) error {
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
@@ -310,7 +310,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
-	location := path.Join(baseDir, filename)
+	location := filepath.Join(baseDir, filename)
 	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}

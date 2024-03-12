@@ -30,7 +30,6 @@ var (
 	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrExecutionReverted        = errors.New("execution reverted")
-	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
 	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
 	ErrInvalidJump              = errors.New("invalid jump destination")
 	ErrWriteProtection          = errors.New("write protection")
@@ -129,7 +128,6 @@ const (
 	VMErrorCodeInsufficientBalance
 	VMErrorCodeContractAddressCollision
 	VMErrorCodeExecutionReverted
-	VMErrorCodeMaxInitCodeSizeExceeded
 	VMErrorCodeMaxCodeSizeExceeded
 	VMErrorCodeInvalidJump
 	VMErrorCodeWriteProtection
@@ -160,8 +158,6 @@ func vmErrorCodeFromErr(err error) int {
 		return VMErrorCodeContractAddressCollision
 	case errors.Is(err, ErrExecutionReverted):
 		return VMErrorCodeExecutionReverted
-	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
-		return VMErrorCodeMaxInitCodeSizeExceeded
 	case errors.Is(err, ErrMaxCodeSizeExceeded):
 		return VMErrorCodeMaxCodeSizeExceeded
 	case errors.Is(err, ErrInvalidJump):

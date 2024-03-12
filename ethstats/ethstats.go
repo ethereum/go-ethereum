@@ -39,7 +39,6 @@ import (
 	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -78,13 +77,6 @@ type fullNodeBackend interface {
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Header
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-}
-
-// miningNodeBackend encompasses the functionality necessary for a mining node
-// reporting to ethstats
-type miningNodeBackend interface {
-	fullNodeBackend
-	Miner() *miner.Miner
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -611,6 +603,10 @@ func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 	// Gather the block details from the header or block chain
 	details := s.assembleBlockStats(block)
 
+	// Short circuit if the block detail is not available.
+	if details == nil {
+		return nil
+	}
 	// Assemble the block report and send it to the server
 	log.Trace("Sending new block to ethstats", "number", details.Number, "hash", details.Hash)
 
@@ -638,9 +634,15 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
+		// Retrieve current chain head if no block is given.
 		if block == nil {
 			head := fullBackend.CurrentBlock()
 			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
+		}
+		// Short circuit if no block is available. It might happen when
+		// the blockchain is reorging.
+		if block == nil {
+			return nil
 		}
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
@@ -767,30 +769,21 @@ func (s *Service) reportPending(conn *connWrapper) error {
 type nodeStats struct {
 	Active   bool `json:"active"`
 	Syncing  bool `json:"syncing"`
-	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
 	Peers    int  `json:"peers"`
 	GasPrice int  `json:"gasPrice"`
 	Uptime   int  `json:"uptime"`
 }
 
-// reportStats retrieves various stats about the node at the networking and
-// mining layer and reports it to the stats server.
+// reportStats retrieves various stats about the node at the networking layer
+// and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
-	// Gather the syncing and mining infos from the local miner instance
+	// Gather the syncing infos from the local miner instance
 	var (
-		mining   bool
-		hashrate int
 		syncing  bool
 		gasprice int
 	)
 	// check if backend is a full node
 	if fullBackend, ok := s.backend.(fullNodeBackend); ok {
-		if miningBackend, ok := s.backend.(miningNodeBackend); ok {
-			mining = miningBackend.Miner().Mining()
-			hashrate = int(miningBackend.Miner().Hashrate())
-		}
-
 		sync := fullBackend.SyncProgress()
 		syncing = !sync.Done()
 
@@ -810,8 +803,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		"id": s.node,
 		"stats": &nodeStats{
 			Active:   true,
-			Mining:   mining,
-			Hashrate: hashrate,
 			Peers:    s.server.PeerCount(),
 			GasPrice: gasprice,
 			Syncing:  syncing,
