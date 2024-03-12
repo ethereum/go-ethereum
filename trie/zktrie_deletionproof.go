@@ -137,7 +137,8 @@ func (t *ProofTracer) MarkDeletion(key []byte) {
 
 // Prove act the same as zktrie.Prove, while also collect the raw path
 // for collecting deletion proofs in a post-work
-func (t *ProofTracer) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *ProofTracer) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+	fromLevel := uint(0)
 	var mptPath []*zktrie.Node
 	err := t.ZkTrie.ProveWithDeletion(key, fromLevel,
 		func(n *zktrie.Node) error {
