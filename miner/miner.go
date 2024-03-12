@@ -204,6 +204,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
 				// Possibly not an MEV block, report the boring mining fees
+				// TODO(karalabe): This is wrong, should do a block trace since our pool is not the same a the block
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
 				log.Info("Plain block detected", "reward", feeInEther)
@@ -224,6 +225,7 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
 				// Unknown MEV block, report the boring mining fees
+				// TODO(karalabe): This is wrong, should do a block trace since our pool is not the same a the block
 				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
 
 				log.Warn("MEV block detected, unknown reward", "reward", "unknown", "local", feeInEther)
