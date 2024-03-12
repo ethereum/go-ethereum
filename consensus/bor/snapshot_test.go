@@ -203,7 +203,7 @@ func TestRandomAddresses(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(t *rapid.T) {
-		length := rapid.IntMax(300).Draw(t, "length").(int)
+		length := rapid.IntMax(300).AsAny().Draw(t, "length").(int)
 
 		addrs := randomAddresses(length)
 		addressSet := unique.New(addrs)

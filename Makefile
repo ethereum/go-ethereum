@@ -65,7 +65,7 @@ test-txpool-race:
 
 test-race:
 	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
-	
+
 gocovmerge-deps:
 	$(GOBUILD) -o $(GOBIN)/gocovmerge github.com/wadey/gocovmerge
 
@@ -201,7 +201,7 @@ geth-windows-amd64:
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
 
 PACKAGE_NAME          := github.com/maticnetwork/bor
-GOLANG_CROSS_VERSION  ?= v1.21.4
+GOLANG_CROSS_VERSION  ?= v1.22.1
 
 .PHONY: release-dry-run
 release-dry-run:
