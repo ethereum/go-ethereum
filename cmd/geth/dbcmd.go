@@ -72,6 +72,7 @@ Remove blockchain and state databases`,
 			dbCompactCmd,
 			dbGetCmd,
 			dbDeleteCmd,
+			dbDeleteAllCmd,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
@@ -141,6 +142,17 @@ corruption if it is aborted during execution'!`,
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command deletes the specified database key from the database.
+WARNING: This is a low-level operation which may cause database corruption!`,
+	}
+	dbDeleteAllCmd = &cli.Command{
+		Action:    dbDeleteAll,
+		Name:      "delete-all",
+		Usage:     "Delete all database keys based on a prefix (WARNING: may corrupt your database)",
+		ArgsUsage: "<prefix>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.SyncModeFlag,
+		}, utils.NetworkFlags, utils.DatabaseFlags),
+		Description: `This command deletes all keys from the database based on a prefix.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
 	dbPutCmd = &cli.Command{
@@ -469,6 +481,69 @@ func dbDelete(ctx *cli.Context) error {
 		log.Info("Delete operation returned an error", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
+	return nil
+}
+
+// dbDeleteAll deletes all keys based on a prefix key from the database
+func dbDeleteAll(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	prefixKey, err := common.ParseHexOrString(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("failed to hex-decode 'prefix': %v", err)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	it := db.NewIterator(prefixKey, nil)
+	defer it.Release()
+
+	var (
+		start  = time.Now()
+		logged = time.Now()
+		batch  = db.NewBatch()
+		count  int64
+		key    []byte
+	)
+
+	for it.Next() {
+		key = it.Key()
+		if err = batch.Delete(key); err != nil {
+			log.Error("Delete operation returned an error", "key", fmt.Sprintf("%#x", key), "error", err)
+			return err
+		}
+
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err = batch.Write(); err != nil {
+				log.Error("Write batch operation returned an error", "error", err)
+				return err
+			}
+			batch.Reset()
+		}
+
+		count++
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Deleting keys", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+	}
+
+	if batch.ValueSize() > 0 {
+		if err = batch.Write(); err != nil {
+			log.Error("Write batch operation returned an error", "error", err)
+			return err
+		}
+		batch.Reset()
+	}
+
+	log.Info(fmt.Sprintf("Deleted all keys at prefix '%v'", prefixKey), "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+
 	return nil
 }
 
