@@ -99,7 +99,11 @@ func (b *EthApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 			return nil, errors.New("PoS V1 does not support confirmed block lookup")
 		}
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)), nil
+	header := b.eth.blockchain.GetHeaderByNumber(uint64(blockNr))
+	if header == nil {
+		return nil, errors.New("header for number not found")
+	}
+	return header, nil
 }
 
 func (b *EthApiBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
