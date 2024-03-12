@@ -617,12 +617,11 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 }
 
 // rewindPathHead implements the logic of rewindHead in the context of hash scheme.
-func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
+func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
 	var (
 		limit      uint64                             // The oldest block that will be searched for this rewinding
 		beyondRoot = root == common.Hash{}            // Flag whether we're beyond the requested root (no root, always true)
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
-		head       = bc.CurrentBlock()                // Head block of the chain
 		rootNumber uint64                             // Associated block number of requested root
 
 		start  = time.Now() // Timestamp the rewinding is restarted
@@ -657,15 +656,15 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 		if !beyondRoot && head.Root == root {
 			beyondRoot, rootNumber = true, head.Number.Uint64()
 		}
+		// If search limit is reached, return the genesis block as the
+		// new chain head.
+		if head.Number.Uint64() < limit {
+			log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
+			return bc.genesisBlock.Header(), rootNumber
+		}
 		// If the associated state is not reachable, continue searching
 		// backwards until an available state is found.
 		if !bc.HasState(head.Root) {
-			// If search limit is reached, return the genesis block as
-			// the new chain head.
-			if head.Number.Uint64() <= limit {
-				log.Info("Rewinding limit reached, resetting to genesis", "number", head.Number, "hash", head.Hash(), "limit", limit)
-				return bc.genesisBlock.Header(), rootNumber
-			}
 			// If the chain is gapped in the middle, return the genesis
 			// block as the new chain head.
 			parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1)
@@ -682,8 +681,8 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 			}
 			continue // keep rewinding
 		}
-		// Once the available state is found, ensure that the requested root has already
-		// been crossed. If not, continue rewinding.
+		// Once the available state is found, ensure that the requested root
+		// has already been crossed. If not, continue rewinding.
 		if beyondRoot || head.Number.Uint64() == 0 {
 			log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
 			return head, rootNumber
@@ -694,9 +693,8 @@ func (bc *BlockChain) rewindHashHead(root common.Hash) (*types.Header, uint64) {
 }
 
 // rewindPathHead implements the logic of rewindHead in the context of path scheme.
-func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
+func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
 	var (
-		head       = bc.CurrentBlock()                // Head block of the chain
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot block
 		rootNumber uint64                             // Associated block number of requested root
 
@@ -777,11 +775,11 @@ func (bc *BlockChain) rewindPathHead(root common.Hash) (*types.Header, uint64) {
 // representing the state corresponding to snapshot disk layer, is deemed impassable,
 // then block number zero is returned, indicating that snapshot recovery is disabled
 // and the whole snapshot should be auto-generated in case of head mismatch.
-func (bc *BlockChain) rewindHead(root common.Hash) (*types.Header, uint64) {
+func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
 	if bc.triedb.Scheme() == rawdb.PathScheme {
-		return bc.rewindPathHead(root)
+		return bc.rewindPathHead(head, root)
 	}
-	return bc.rewindHashHead(root)
+	return bc.rewindHashHead(head, root)
 }
 
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
@@ -816,7 +814,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// chain reparation mechanism without deleting any data!
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			var newHeadBlock *types.Header
-			newHeadBlock, rootNumber = bc.rewindHead(root)
+			newHeadBlock, rootNumber = bc.rewindHead(header, root)
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
