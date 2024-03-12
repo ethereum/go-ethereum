@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Backend wraps all methods required for mining. Only full node is capable
@@ -168,7 +169,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 
 // ReportFeeMetrics injects a few miner metrics based on live blocks matched with
 // previously locally proposed blocks.
-func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
+func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block, chain *core.BlockChain) {
 	// Skip everything if something's screwy being sent to us
 	if payload.full == nil {
 		return
@@ -203,12 +204,23 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				log.Info("MEV block detected", "reward", mevInEther, "local", feeInEther)
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
-				// Possibly not an MEV block, report the boring mining fees
-				// TODO(karalabe): This is wrong, should do a block trace since our pool is not the same a the block
-				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+				// Possibly not an MEV block, pull in the balance change and report that
+				parent := chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+				if parent != nil {
+					oldState, oerr := chain.StateAt(parent.Root())
+					newState, nerr := chain.StateAt(block.Root())
 
-				log.Info("Plain block detected", "reward", feeInEther)
-				blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
+					if oerr == nil && nerr == nil {
+						balanceDiff := new(uint256.Int).Sub(newState.GetBalance(block.Coinbase()), oldState.GetBalance(block.Coinbase()))
+						diffInEther := new(big.Float).Quo(new(big.Float).SetInt(balanceDiff.ToBig()), big.NewFloat(params.Ether))
+						feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+						log.Info("Plain block detected", "reward", diffInEther, "local", feeInEther)
+						blockIncludedFeeGauge.Update(new(big.Int).Div(balanceDiff.ToBig(), bigGwei).Int64())
+					} else {
+						log.Error("Missing state for reward metric", "old", oerr, "new", nerr)
+					}
+				}
 			}
 		}
 	} else if payload.full.Coinbase() != block.Coinbase() {
@@ -224,12 +236,23 @@ func (miner *Miner) ReportFeeMetrics(payload *Payload, block *types.Block) {
 				log.Info("MEV reward received", "reward", mevInEther, "local", feeInEther)
 				blockIncludedFeeGauge.Update(new(big.Int).Div(payout.Value(), bigGwei).Int64())
 			} else {
-				// Unknown MEV block, report the boring mining fees
-				// TODO(karalabe): This is wrong, should do a block trace since our pool is not the same a the block
-				feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+				// Unknown MEV block, pull in the balance change and report that
+				parent := chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+				if parent != nil {
+					oldState, oerr := chain.StateAt(parent.Root())
+					newState, nerr := chain.StateAt(block.Root())
 
-				log.Warn("MEV block detected, unknown reward", "reward", "unknown", "local", feeInEther)
-				blockIncludedFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
+					if oerr == nil && nerr == nil {
+						balanceDiff := new(uint256.Int).Sub(newState.GetBalance(payload.full.Coinbase()), oldState.GetBalance(payload.full.Coinbase()))
+						diffInEther := new(big.Float).Quo(new(big.Float).SetInt(balanceDiff.ToBig()), big.NewFloat(params.Ether))
+						feeInEther := new(big.Float).Quo(new(big.Float).SetInt(payload.fullFees), big.NewFloat(params.Ether))
+
+						log.Info("MEV hidden reward received", "reward", diffInEther, "local", feeInEther)
+						blockIncludedFeeGauge.Update(new(big.Int).Div(balanceDiff.ToBig(), bigGwei).Int64())
+					} else {
+						log.Error("Missing state for reward metric", "old", oerr, "new", nerr)
+					}
+				}
 			}
 		}
 	} else {
