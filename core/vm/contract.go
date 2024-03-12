@@ -56,6 +56,8 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
+	IsDeployment bool
+
 	Gas   uint64
 	value *uint256.Int
 }

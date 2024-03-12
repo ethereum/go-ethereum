@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -395,6 +396,20 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainRules.IsVerkle {
+		if _, isPrecompile := evm.precompile(address); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.StateDB.AddAddressToAccessList(address, state.ALVersion|state.ALCodeSize, state.AccessListRead))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+			if transfersValue {
+				gas, overflow = math.SafeAdd(gas, evm.StateDB.AddAddressToAccessList(address, state.ALBalance, state.AccessListRead))
+				if overflow {
+					return 0, ErrGasUintOverflow
+				}
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -420,6 +435,17 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if evm.chainRules.IsVerkle {
+		if _, isPrecompile := evm.precompile(contract.Address()); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.StateDB.AddAddressToAccessList(contract.Address(), state.ALVersion|state.ALCodeSize, state.AccessListRead))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -436,6 +462,14 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.chainRules.IsVerkle {
+		if _, isPrecompile := evm.precompile(contract.Address()); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.StateDB.AddAddressToAccessList(contract.Address(), state.ALVersion|state.ALCodeSize, state.AccessListRead))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
 	return gas, nil
 }
 
@@ -451,6 +485,14 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
+	}
+	if evm.chainRules.IsVerkle {
+		if _, isPrecompile := evm.precompile(contract.Address()); !isPrecompile {
+			gas, overflow = math.SafeAdd(gas, evm.StateDB.AddAddressToAccessList(contract.Address(), state.ALVersion|state.ALCodeSize, state.AccessListRead))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
 	}
 	return gas, nil
 }
@@ -476,4 +518,41 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return gas, nil
+}
+
+// touchCodeChunksRangeOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
+func touchCodeChunksRangeOnReadAndChargeGas(contractAddr common.Address, startPC, size uint64, codeLen uint64, sdb StateDB) uint64 {
+	// note that in the case where the copied code is outside the range of the
+	// contract code but touches the last leaf with contract code in it,
+	// we don't include the last leaf of code in the AccessWitness.  The
+	// reason that we do not need the last leaf is the account's code size
+	// is already in the AccessWitness so a stateless verifier can see that
+	// the code from the last leaf is not needed.
+	if (codeLen == 0 && size == 0) || startPC > codeLen {
+
+		return 0
+
+	}
+	endPC := startPC + size
+	if endPC > codeLen {
+		endPC = codeLen
+
+	}
+	if endPC > 0 {
+
+		endPC -= 1 // endPC is the last bytecode that will be touched.
+
+	}
+
+	var statelessGasCharged uint64
+	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
+		gas := sdb.TouchAddressOnReadAndComputeGas(contractAddr, chunkNumber)
+		var overflow bool
+		statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, gas)
+		if overflow {
+			panic("overflow when adding gas")
+
+		}
+	}
+	return statelessGasCharged
 }

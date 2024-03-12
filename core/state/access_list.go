@@ -18,22 +18,62 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
-type accessList struct {
+type ALAccessMode bool
+
+var (
+	AccessListRead  = ALAccessMode(false)
+	AccessListWrite = ALAccessMode(true)
+)
+
+type ALAccountItem uint64
+
+const (
+	ALVersion = ALAccountItem(1 << iota)
+	ALBalance
+	ALNonce
+	ALCodeHash
+	ALCodeSize
+	ALLastHeaderItem
+)
+
+const ALAllItems = ALVersion | ALBalance | ALNonce | ALCodeSize | ALCodeHash
+
+type AccessList interface {
+	ContainsAddress(address common.Address) bool
+	Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool)
+	Copy() AccessList
+	AddAddress(address common.Address, items ALAccountItem, isWrite ALAccessMode) uint64
+	AddSlot(address common.Address, slot common.Hash, isWrite ALAccessMode) uint64
+	DeleteSlot(address common.Address, slot common.Hash)
+	DeleteAddress(address common.Address)
+
+	TouchAndChargeValueTransfer(callerAddr, targetAddr []byte) uint64
+	TouchAndChargeContractCreateInit(addr []byte, createSendsValue bool) uint64
+	TouchTxOriginAndComputeGas(originAddr []byte) uint64
+	TouchTxExistingAndComputeGas(targetAddr []byte, sendsValue bool) uint64
+	TouchAddressOnReadAndComputeGas(addr []byte, index uint256.Int, suffix byte) uint64
+	Merge(AccessList)
+	Keys() [][]byte
+}
+
+type accessList2929 struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
 }
 
 // ContainsAddress returns true if the address is in the access list.
-func (al *accessList) ContainsAddress(address common.Address) bool {
+func (al *accessList2929) ContainsAddress(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
 }
 
 // Contains checks if a slot within an account is present in the access list, returning
 // separate flags for the presence of the account and the slot respectively.
-func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+func (al *accessList2929) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	idx, ok := al.addresses[address]
 	if !ok {
 		// no such address (and hence zero slots)
@@ -48,15 +88,15 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 }
 
 // newAccessList creates a new accessList.
-func newAccessList() *accessList {
-	return &accessList{
+func newAccessList() AccessList {
+	return &accessList2929{
 		addresses: make(map[common.Address]int),
 	}
 }
 
 // Copy creates an independent copy of an accessList.
-func (a *accessList) Copy() *accessList {
-	cp := newAccessList()
+func (a *accessList2929) Copy() AccessList {
+	cp := newAccessList().(*accessList2929)
 	for k, v := range a.addresses {
 		cp.addresses[k] = v
 	}
@@ -73,12 +113,12 @@ func (a *accessList) Copy() *accessList {
 
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
-func (al *accessList) AddAddress(address common.Address) bool {
+func (al *accessList2929) AddAddress(address common.Address, _ ALAccountItem, _ ALAccessMode) uint64 {
 	if _, present := al.addresses[address]; present {
-		return false
+		return params.WarmStorageReadCostEIP2929
 	}
 	al.addresses[address] = -1
-	return true
+	return params.ColdAccountAccessCostEIP2929
 }
 
 // AddSlot adds the specified (addr, slot) combo to the access list.
@@ -86,31 +126,31 @@ func (al *accessList) AddAddress(address common.Address) bool {
 // - address added
 // - slot added
 // For any 'true' value returned, a corresponding journal entry must be made.
-func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
+func (al *accessList2929) AddSlot(address common.Address, slot common.Hash, _ ALAccessMode) (gas uint64) {
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there
 		al.addresses[address] = len(al.slots)
 		slotmap := map[common.Hash]struct{}{slot: {}}
 		al.slots = append(al.slots, slotmap)
-		return !addrPresent, true
+		return params.WarmStorageReadCostEIP2929
 	}
 	// There is already an (address,slot) mapping
 	slotmap := al.slots[idx]
 	if _, ok := slotmap[slot]; !ok {
 		slotmap[slot] = struct{}{}
 		// Journal add slot change
-		return false, true
+		return params.ColdSloadCostEIP2929
 	}
 	// No changes required
-	return false, false
+	return params.WarmStorageReadCostEIP2929
 }
 
 // DeleteSlot removes an (address, slot)-tuple from the access list.
 // This operation needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
 // operations.
-func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
+func (al *accessList2929) DeleteSlot(address common.Address, slot common.Hash) {
 	idx, addrOk := al.addresses[address]
 	// There are two ways this can fail
 	if !addrOk {
@@ -131,6 +171,29 @@ func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 // needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
 // operations.
-func (al *accessList) DeleteAddress(address common.Address) {
+func (al *accessList2929) DeleteAddress(address common.Address) {
 	delete(al.addresses, address)
 }
+
+func (al *accessList2929) TouchAndChargeValueTransfer(callerAddr []byte, targetAddr []byte) uint64 {
+	return 0
+}
+
+func (al *accessList2929) TouchAndChargeContractCreateInit(addr []byte, createSendsValue bool) uint64 {
+	return 0
+}
+
+func (al *accessList2929) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
+	return 0
+}
+
+func (al *accessList2929) TouchTxExistingAndComputeGas(targetAddr []byte, sendsValue bool) uint64 {
+	return 0
+}
+
+func (al *accessList2929) TouchAddressOnReadAndComputeGas(addr []byte, index uint256.Int, subIndex byte) uint64 {
+	return 0
+}
+
+func (al *accessList2929) Merge(other AccessList) {}
+func (al *accessList2929) Keys() [][]byte         { return nil }

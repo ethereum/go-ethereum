@@ -18,7 +18,6 @@ package utils
 
 import (
 	"encoding/binary"
-	"sync"
 
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -35,6 +34,8 @@ const (
 	NonceLeafKey      = 2
 	CodeKeccakLeafKey = 3
 	CodeSizeLeafKey   = 4
+
+	maxPointCacheByteSize = 100 << 20
 )
 
 var (
@@ -46,7 +47,7 @@ var (
 	verkleNodeWidth                     = uint256.NewInt(256)
 	codeStorageDelta                    = uint256.NewInt(0).Sub(codeOffset, headerStorageOffset)
 
-	index0Point *verkle.Point // pre-computed commitment of polynomial [2+256*64]
+	getTreePolyIndex0Point *verkle.Point // pre-computed commitment of polynomial [2+256*64]
 
 	// cacheHitGauge is the metric to track how many cache hit occurred.
 	cacheHitGauge = metrics.NewRegisteredGauge("trie/verkle/cache/hit", nil)
@@ -57,15 +58,11 @@ var (
 
 func init() {
 	// The byte array is the Marshalled output of the point computed as such:
-	//
-	// 	var (
-	//		config = verkle.GetConfig()
-	//		fr     verkle.Fr
-	//	)
-	//	verkle.FromLEBytes(&fr, []byte{2, 64})
-	//	point := config.CommitToPoly([]verkle.Fr{fr}, 1)
-	index0Point = new(verkle.Point)
-	err := index0Point.SetBytes([]byte{34, 25, 109, 242, 193, 5, 144, 224, 76, 52, 189, 92, 197, 126, 9, 145, 27, 152, 199, 130, 165, 3, 210, 27, 193, 131, 142, 28, 110, 26, 16, 191})
+	//cfg, _ := verkle.GetConfig()
+	//verkle.FromLEBytes(&getTreePolyIndex0Fr[0], []byte{2, 64})
+	//= cfg.CommitToPoly(getTreePolyIndex0Fr[:], 1)
+	getTreePolyIndex0Point = new(verkle.Point)
+	err := getTreePolyIndex0Point.SetBytes([]byte{34, 25, 109, 242, 193, 5, 144, 224, 76, 52, 189, 92, 197, 126, 9, 145, 27, 152, 199, 130, 165, 3, 210, 27, 193, 131, 142, 28, 110, 26, 16, 191})
 	if err != nil {
 		panic(err)
 	}
@@ -73,39 +70,36 @@ func init() {
 
 // PointCache is the LRU cache for storing evaluated address commitment.
 type PointCache struct {
-	lru  lru.BasicLRU[string, *verkle.Point]
-	lock sync.RWMutex
+	cache *lru.Cache[string, *verkle.Point]
 }
 
 // NewPointCache returns the cache with specified size.
-func NewPointCache(maxItems int) *PointCache {
+func NewPointCache() *PointCache {
+	// Each verkle.Point is 96 bytes.
+	verklePointSize := 96
+	capacity := maxPointCacheByteSize / verklePointSize
 	return &PointCache{
-		lru: lru.NewBasicLRU[string, *verkle.Point](maxItems),
+		cache: lru.NewCache[string, *verkle.Point](capacity),
 	}
 }
 
-// Get returns the cached commitment for the specified address, or computing
-// it on the flight.
-func (c *PointCache) Get(addr []byte) *verkle.Point {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	p, ok := c.lru.Get(string(addr))
+// GetTreeKeyHeader returns the cached commitment for the specified address,
+// or computing it on the fly.
+func (pc *PointCache) GetTreeKeyHeader(addr []byte) *verkle.Point {
+	point, ok := pc.cache.Get(string(addr))
 	if ok {
-		cacheHitGauge.Inc(1)
-		return p
+		return point
 	}
-	cacheMissGauge.Inc(1)
-	p = evaluateAddressPoint(addr)
-	c.lru.Add(string(addr), p)
-	return p
+
+	point = EvaluateAddressPoint(addr)
+	pc.cache.Add(string(addr), point)
+	return point
 }
 
-// GetStem returns the first 31 bytes of the tree key as the tree stem. It only
-// works for the account metadata whose treeIndex is 0.
-func (c *PointCache) GetStem(addr []byte) []byte {
-	p := c.Get(addr)
-	return pointToHash(p, 0)[:31]
+func (pc *PointCache) GetTreeKeyVersionCached(addr []byte) []byte {
+	p := pc.GetTreeKeyHeader(addr)
+	v := PointToHash(p, VersionLeafKey)
+	return v[:]
 }
 
 // GetTreeKey performs both the work of the spec's get_tree_key function, and that
@@ -143,9 +137,9 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	ret := cfg.CommitToPoly(poly[:], 0)
 
 	// add a constant point corresponding to poly[0]=[2+256*64].
-	ret.Add(ret, index0Point)
+	ret.Add(ret, getTreePolyIndex0Point)
 
-	return pointToHash(ret, subIndex)
+	return PointToHash(ret, subIndex)
 }
 
 // GetTreeKeyWithEvaluatedAddress is basically identical to GetTreeKey, the only
@@ -174,7 +168,7 @@ func GetTreeKeyWithEvaluatedAddress(evaluated *verkle.Point, treeIndex *uint256.
 	// add the pre-evaluated address
 	ret.Add(ret, evaluated)
 
-	return pointToHash(ret, subIndex)
+	return PointToHash(ret, subIndex)
 }
 
 // VersionKey returns the verkle tree key of the version field for the specified account.
@@ -305,7 +299,7 @@ func StorageSlotKeyWithEvaluatedAddress(evaluated *verkle.Point, storageKey []by
 	return GetTreeKeyWithEvaluatedAddress(evaluated, treeIndex, subIndex)
 }
 
-func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
+func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	// The output of Byte() is big endian for banderwagon. This
 	// introduces an imbalance in the tree, because hashes are
 	// elements of a 253-bit field. This means more than half the
@@ -319,7 +313,31 @@ func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	return bytes[:]
 }
 
-func evaluateAddressPoint(address []byte) *verkle.Point {
+func GetTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.Int, subIndex byte) []byte {
+	var poly [5]fr.Element
+
+	poly[0].SetZero()
+	poly[1].SetZero()
+	poly[2].SetZero()
+
+	// little-endian, 32-byte aligned treeIndex
+	var index [32]byte
+	for i := 0; i < len(treeIndex); i++ {
+		binary.LittleEndian.PutUint64(index[i*8:(i+1)*8], treeIndex[i])
+	}
+	verkle.FromLEBytes(&poly[3], index[:16])
+	verkle.FromLEBytes(&poly[4], index[16:])
+
+	cfg := verkle.GetConfig()
+	ret := cfg.CommitToPoly(poly[:], 0)
+
+	// add the pre-evaluated address
+	ret.Add(ret, evaluated)
+
+	return PointToHash(ret, subIndex)
+}
+
+func EvaluateAddressPoint(address []byte) *verkle.Point {
 	if len(address) < 32 {
 		var aligned [32]byte
 		address = append(aligned[:32-len(address)], address...)
@@ -337,6 +355,43 @@ func evaluateAddressPoint(address []byte) *verkle.Point {
 	ret := cfg.CommitToPoly(poly[:], 0)
 
 	// add a constant point
-	ret.Add(ret, index0Point)
+	ret.Add(ret, getTreePolyIndex0Point)
+
 	return ret
+}
+
+func GetTreeKeyStorageSlotTreeIndexes(storageKey []byte) (*uint256.Int, byte) {
+	var pos uint256.Int
+	pos.SetBytes(storageKey)
+
+	// If the storage slot is in the header, we need to add the header offset.
+	if pos.Cmp(codeStorageDelta) < 0 {
+		// This addition is always safe; it can't ever overflow since pos<codeStorageDelta.
+		pos.Add(headerStorageOffset, &pos)
+
+		// In this branch, the tree-index is zero since we're in the account header,
+		// and the sub-index is the LSB of the modified storage key.
+		return zero, byte(pos[0] & 0xFF)
+	}
+	// If the storage slot is in the main storage, we need to add the main storage offset.
+
+	// The first MAIN_STORAGE_OFFSET group will see its
+	// first 64 slots unreachable. This is either a typo in the
+	// spec or intended to conserve the 256-u256
+	// aligment. If we decide to ever access these 64
+	// slots, uncomment this.
+	// // Get the new offset since we now know that we are above 64.
+	// pos.Sub(&pos, codeStorageDelta)
+	// suffix := byte(pos[0] & 0xFF)
+	suffix := storageKey[len(storageKey)-1]
+
+	// We first divide by VerkleNodeWidth to create room to avoid an overflow next.
+	pos.Rsh(&pos, uint(verkleNodeWidthLog2))
+
+	// We add mainStorageOffset/VerkleNodeWidth which can't overflow.
+	pos.Add(&pos, mainStorageOffsetLshVerkleNodeWidth)
+
+	// The sub-index is the LSB of the original storage key, since mainStorageOffset
+	// doesn't affect this byte, so we can avoid masks or shifts.
+	return &pos, suffix
 }

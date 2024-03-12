@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -64,14 +65,18 @@ type StateDB interface {
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(common.Address) bool
 
-	AddressInAccessList(addr common.Address) bool
-	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
 	// AddAddressToAccessList adds the given address to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddAddressToAccessList(addr common.Address)
+	AddAddressToAccessList(addr common.Address, item state.ALAccountItem, isWrite state.ALAccessMode) uint64
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddSlotToAccessList(addr common.Address, slot common.Hash)
+	AddSlotToAccessList(addr common.Address, slot common.Hash, write state.ALAccessMode) uint64
+	TouchTxOriginAndComputeGas(addr common.Address) uint64
+	TouchTxExistingAndComputeGas(addr common.Address, sendsValue bool) uint64
+	TouchAndChargeContractCreateInit(addr common.Address, sendsValue bool) uint64
+	TouchAndChargeValueTransfer(from, to common.Address) uint64
+	TouchAddressOnReadAndComputeGas(from common.Address, chunk uint64) uint64
+
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
@@ -79,6 +84,8 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
+
+	Witness() state.AccessList
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

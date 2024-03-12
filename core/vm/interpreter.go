@@ -56,6 +56,11 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
 	switch {
+	case evm.chainRules.IsVerkle:
+		table = &cancunInstructionSet
+		if err := EnableEIP(4762, table); err != nil {
+			log.Error("EIP activation failed", "eip", 4762, "error", err)
+		}
 	case evm.chainRules.IsCancun:
 		table = &cancunInstructionSet
 	case evm.chainRules.IsShanghai:
@@ -173,6 +178,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
+		}
+		if in.evm.chainRules.IsVerkle && !contract.IsDeployment {
+			// if the PC ends up in a new "chunk" of verkleized code, charge the
+			// associated costs.
+			contractAddr := contract.Address()
+			contract.Gas -= touchCodeChunksRangeOnReadAndChargeGas(contractAddr, pc, 1, uint64(len(contract.Code)), in.evm.StateDB)
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.

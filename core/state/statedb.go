@@ -99,10 +99,13 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
+	accessList AccessList
 
 	// Transient storage
 	transientStorage transientStorage
+
+	// Global witness
+	witness AccessList
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -1275,26 +1278,30 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
+		if !rules.IsVerkle {
+			s.accessList = newAccessList()
+		} else {
+			s.accessList = NewAccessWitness()
+		}
 		// Clear out any leftover from previous executions
-		al := newAccessList()
-		s.accessList = al
+		al := s.accessList
 
-		al.AddAddress(sender)
+		al.AddAddress(sender, ALAllItems, AccessListRead)
 		if dst != nil {
-			al.AddAddress(*dst)
+			al.AddAddress(*dst, ALAllItems, AccessListRead)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range precompiles {
-			al.AddAddress(addr)
+			al.AddAddress(addr, ALAllItems, AccessListRead)
 		}
 		for _, el := range list {
-			al.AddAddress(el.Address)
+			al.AddAddress(el.Address, 0, AccessListRead)
 			for _, key := range el.StorageKeys {
-				al.AddSlot(el.Address, key)
+				al.AddSlot(el.Address, key, AccessListRead)
 			}
 		}
 		if rules.IsShanghai { // EIP-3651: warm coinbase
-			al.AddAddress(coinbase)
+			al.AddAddress(coinbase, ALAllItems, AccessListRead)
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
@@ -1302,38 +1309,25 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 }
 
 // AddAddressToAccessList adds the given address to the access list
-func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	if s.accessList.AddAddress(addr) {
+func (s *StateDB) AddAddressToAccessList(addr common.Address, mode ALAccountItem, isWrite ALAccessMode) uint64 {
+	gas := s.accessList.AddAddress(addr, mode, isWrite)
+	if gas > 0 {
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
+	return gas
 }
 
 // AddSlotToAccessList adds the given (address, slot)-tuple to the access list
-func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
-	if addrMod {
-		// In practice, this should not happen, since there is no way to enter the
-		// scope of 'address' without having the 'address' become already added
-		// to the access list (via call-variant, create, etc).
-		// Better safe than sorry, though
-		s.journal.append(accessListAddAccountChange{&addr})
-	}
-	if slotMod {
+func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash, isWrite ALAccessMode) uint64 {
+	gas := s.accessList.AddSlot(addr, slot, isWrite)
+
+	if gas > params.WarmStorageReadCostEIP2929 {
 		s.journal.append(accessListAddSlotChange{
 			address: &addr,
 			slot:    &slot,
 		})
 	}
-}
-
-// AddressInAccessList returns true if the given address is in the access list.
-func (s *StateDB) AddressInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddress(addr)
-}
-
-// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
-func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	return s.accessList.Contains(addr, slot)
+	return gas
 }
 
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
@@ -1369,4 +1363,46 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 		}
 	}
 	return copied
+}
+
+func (s *StateDB) TouchTxOriginAndComputeGas(addr common.Address) uint64 {
+	return s.accessList.TouchTxOriginAndComputeGas(addr.Bytes())
+}
+
+func (s *StateDB) TouchTxExistingAndComputeGas(addr common.Address, sendsValue bool) uint64 {
+	return s.accessList.TouchTxExistingAndComputeGas(addr.Bytes(), sendsValue)
+}
+
+func (s *StateDB) TouchAndChargeContractCreateInit(addr common.Address, sendsValue bool) uint64 {
+	return s.accessList.TouchAndChargeContractCreateInit(addr.Bytes(), sendsValue)
+}
+
+func (s *StateDB) TouchAndChargeValueTransfer(from, to common.Address) uint64 {
+	return s.accessList.TouchAndChargeValueTransfer(from.Bytes(), to.Bytes())
+}
+
+func (s *StateDB) TouchAddressOnReadAndComputeGas(from common.Address, index uint64) uint64 {
+	treeIndex := uint256.NewInt((index + 128) / 256)
+	subIndex := byte((index + 128) % 256)
+	return s.accessList.TouchAddressOnReadAndComputeGas(from.Bytes(), *treeIndex, subIndex)
+}
+
+func (s *StateDB) MergeTxAccessListIntoBlockWitness() {
+	if _, ok := s.accessList.(*AccessWitness); ok {
+		s.witness.Merge(s.accessList)
+	}
+}
+
+// addressInAccessList returns true if the given address is in the access list.
+func (s *StateDB) addressInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddress(addr)
+}
+
+// slotInAccessList returns true if the given (address, slot)-tuple is in the access list.
+func (s *StateDB) slotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+	return s.accessList.Contains(addr, slot)
+}
+
+func (s *StateDB) Witness() AccessList {
+	return s.witness
 }

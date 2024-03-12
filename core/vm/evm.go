@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -189,6 +190,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	p, isPrecompile := evm.precompile(addr)
 	debug := evm.Config.Tracer != nil
 
+	var creation bool
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non existing account, don't do anything, but ping the tracer
@@ -201,9 +203,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 					evm.Config.Tracer.CaptureExit(ret, 0, nil)
 				}
 			}
+
+			if evm.chainRules.IsVerkle {
+				tryConsumeGas(&gas, evm.StateDB.AddAddressToAccessList(addr, state.ALAllItems, state.AccessListRead))
+			}
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
+		creation = true
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
@@ -237,6 +244,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
+			contract.IsDeployment = creation
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -418,6 +426,20 @@ func (c *codeAndHash) Hash() common.Hash {
 	return c.hash
 }
 
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	// TODO remove this function, it should no longer be needed
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
+}
+
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
@@ -436,7 +458,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
 	if evm.chainRules.IsBerlin {
-		evm.StateDB.AddAddressToAccessList(address)
+		evm.StateDB.AddAddressToAccessList(address, state.ALVersion|state.ALNonce, state.AccessListWrite)
+		if value.Sign() != 0 {
+			evm.StateDB.AddAddressToAccessList(address, state.ALBalance, state.AccessListWrite)
+		}
 	}
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
@@ -455,6 +480,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
+	contract.IsDeployment = true
 
 	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
@@ -486,6 +512,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			evm.StateDB.SetCode(address, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
+		}
+	}
+
+	if err == nil && evm.chainRules.IsVerkle {
+		if len(ret) > 0 {
+			touchCodeChunksRangeOnReadAndChargeGas(address, 0, uint64(len(ret)), uint64(len(ret)), evm.StateDB)
+		}
+		if !contract.UseGas(evm.StateDB.AddAddressToAccessList(address, state.ALAllItems, state.AccessListWrite)) {
+			err = ErrOutOfGas
 		}
 	}
 
