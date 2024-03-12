@@ -118,6 +118,7 @@ func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
 		Slot: 10,
 	})
 	require.NoError(t, err)
+	snap := builder.env
 
 	tx1 := backend.newRandomTx(false)
 	tx2 := backend.newRandomTx(false)
@@ -145,6 +146,37 @@ func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.Success)
 	require.Len(t, res.SimulateTransactionResults, 0)
+	// should not modify state for failed bundle inclusion
+	require.Equal(t, snap, builder.env)
+}
+
+func TestBuilder_AddBundles_Simple(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{
+		Slot: 10,
+	})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTxWithNonce(1)
+
+	bundle1 := &suavextypes.Bundle{
+		Txs: []*types.Transaction{tx1, tx2},
+	}
+
+	tx3 := backend.newRandomTxWithNonce(2)
+	tx4 := backend.newRandomTxWithNonce(3)
+
+	bundle2 := &suavextypes.Bundle{
+		Txs: []*types.Transaction{tx3, tx4},
+	}
+
+	res, err := builder.AddBundles([]*suavextypes.Bundle{bundle1, bundle2})
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	require.True(t, res[0].Success)
+	require.True(t, res[1].Success)
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
