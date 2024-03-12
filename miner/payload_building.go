@@ -19,6 +19,7 @@ package miner
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -27,9 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// bigGwei is usde by the metrics to report on block fees on a scale that fits
+// into an int64.
+var bigGwei = big.NewInt(1_000_000_000)
 
 // BuildPayloadArgs contains the provided parameters for building payload.
 // Check engine-api specification for more details.
@@ -75,6 +81,8 @@ type Payload struct {
 	stop     chan struct{}
 	lock     sync.Mutex
 	cond     *sync.Cond
+
+	recommits []*big.Int
 }
 
 // newPayload initializes the payload object.
@@ -99,6 +107,9 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		return // reject stale update
 	default:
 	}
+	// Stash away all the commit fees to report in metrics
+	payload.recommits = append(payload.recommits, r.fees)
+
 	// Ensure the newly provided full block has a higher transaction fee.
 	// In post-merge stage, there is no uncle reward anymore and transaction
 	// fee(apart from the mev revenue) is the only indicator for comparison.
@@ -172,6 +183,13 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
+	// Report all the recommits into individual metrics
+	for i := len(payload.recommits) - 1; i >= 0; i-- {
+		// Track the generated fees in the metrics
+		gauge := fmt.Sprintf("%s/%d", blockRecommitFeeGaugeName, len(payload.recommits)-i-1)
+		metrics.GetOrRegisterResettingGauge(gauge, nil).Update(new(big.Int).Div(payload.recommits[i], bigGwei).Int64())
+	}
+	blockFinalFeeGauge.Update(new(big.Int).Div(payload.fullFees, bigGwei).Int64())
 	return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 }
 
@@ -221,7 +239,6 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
-
 		for {
 			select {
 			case <-timer.C:
