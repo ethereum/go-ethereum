@@ -115,11 +115,11 @@ func NewPendingSet(heads TipList, tails map[common.Address][]*LazyTransaction) *
 
 // Shift replaces the current best head with the next one from the same account.
 func (ps *pendingSet) Shift() {
-	acc := ps.Heads[0].From
-	if txs, ok := ps.Tails[acc]; ok && len(txs) > 1 {
+	addr := ps.Heads[0].From
+	if txs, ok := ps.Tails[addr]; ok && len(txs) > 1 {
 		ps.Heads[0].Tips = txs[1].Fees
 		ps.Heads[0].Time = txs[1].Time.UnixNano()
-		ps.Tails[acc] = txs[1:]
+		ps.Tails[addr] = txs[1:]
 		heap.Fix(&ps.Heads, 0)
 		return
 	}

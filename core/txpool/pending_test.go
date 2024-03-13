@@ -36,7 +36,7 @@ func initLists() (heads TipList, tails map[common.Address][]*LazyTransaction) {
 			first = true
 		)
 		for j := 0; j < 25; j++ {
-			tip := uint256.NewInt(uint64(100*i + j))
+			tip := uint256.NewInt(uint64(100*i + 50 - j))
 			lazyTx := &LazyTransaction{
 				Pool:    nil,
 				Hash:    common.Hash{byte(i), byte(j)},
@@ -90,6 +90,7 @@ func TestPendingSortAndShift(t *testing.T) {
 		if fee.Uint64() > prevFee {
 			t.Fatalf("tx %d: fee %d  > previous fee %d", haveCount, fee, prevFee)
 		}
+		prevFee = fee.Uint64()
 		txset.Shift()
 	}
 	if haveCount != expectedCount {
@@ -118,6 +119,7 @@ func TestPendingSortAndPop(t *testing.T) {
 		if fee.Uint64() > prevFee {
 			t.Fatalf("tx %d: fee %d  > previous fee %d", haveCount, fee, prevFee)
 		}
+		prevFee = fee.Uint64()
 		txset.Pop()
 	}
 	if haveCount != expectedCount {

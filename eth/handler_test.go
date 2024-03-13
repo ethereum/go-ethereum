@@ -109,20 +109,19 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 		heads   txpool.TipList
 		baseFee = new(uint256.Int)
 	)
-
 	if filter.BaseFee != nil {
 		baseFee = filter.BaseFee
 	}
-
+	baseFeeBig := baseFee.ToBig()
 	for addr, batch := range batches {
 		var tail []*txpool.LazyTransaction
 		for i, tx := range batch {
-			gasTipCap := uint256.MustFromBig(tx.GasTipCap())
-			gasFeeCap := uint256.MustFromBig(tx.GasFeeCap())
-			tip := new(uint256.Int).Sub(gasFeeCap, baseFee)
-			if tip.Gt(gasTipCap) {
-				tip = gasTipCap
+			bigTip, err := tx.EffectiveGasTip(baseFeeBig)
+			if err != nil {
+				// to low for the given basefee
+				break
 			}
+			tip := uint256.MustFromBig(bigTip)
 			ltx := &txpool.LazyTransaction{
 				Hash:    tx.Hash(),
 				Tx:      tx,

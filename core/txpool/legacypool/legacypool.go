@@ -540,6 +540,9 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 	if filter.MinTip != nil {
 		minTip = filter.MinTip
 	}
+	if filter.BaseFee != nil {
+		baseFee = filter.BaseFee
+	}
 	baseFeeBig := baseFee.ToBig()
 	for addr, list := range pool.pending {
 		if filter.NoLocals && pool.locals.contains(addr) {
@@ -553,15 +556,11 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 			txs  = list.Flatten()
 		)
 		for i, tx := range txs {
-			if tx.GasFeeCapIntCmp(baseFeeBig) < 0 {
+			bigTip, err := tx.EffectiveGasTip(baseFeeBig)
+			if err != nil {
 				break // basefee too low, cannot be included, discard rest of txs from the account
 			}
-			gasTipCap := uint256.MustFromBig(tx.GasTipCap())
-			gasFeeCap := uint256.MustFromBig(tx.GasFeeCap())
-			tip := new(uint256.Int).Sub(gasFeeCap, baseFee)
-			if tip.Gt(gasTipCap) {
-				tip = gasTipCap
-			}
+			tip := uint256.MustFromBig(bigTip)
 			if tip.Lt(minTip) {
 				break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
 			}
