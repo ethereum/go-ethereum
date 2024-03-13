@@ -31,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
 )
 
 var (
@@ -359,27 +357,30 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 	return checkpoint, nil
 }
 
-func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*capella.BeaconBlock, error) {
+func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
 	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", blockRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	var beaconBlockMessage struct {
-		Data struct {
-			Message capella.BeaconBlock `json:"message"`
+		Version string
+		Data    struct {
+			Message json.RawMessage `json:"message"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
 	}
-	beaconBlock := new(capella.BeaconBlock)
-	*beaconBlock = beaconBlockMessage.Data.Message
-	root := common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
-	if root != blockRoot {
-		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, root)
+	block, err := types.BlockFromJSON(beaconBlockMessage.Version, beaconBlockMessage.Data.Message)
+	if err != nil {
+		return nil, err
 	}
-	return beaconBlock, nil
+	computedRoot := block.Hash()
+	if computedRoot != blockRoot {
+		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
+	}
+	return block, nil
 }
 
 func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
