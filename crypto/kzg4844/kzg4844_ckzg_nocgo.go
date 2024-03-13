@@ -32,13 +32,13 @@ func ckzgInit() {
 }
 
 // ckzgBlobToCommitment creates a small commitment out of a data blob.
-func ckzgBlobToCommitment(blob Blob) (Commitment, error) {
+func ckzgBlobToCommitment(blob *Blob) (Commitment, error) {
 	panic("unsupported platform")
 }
 
 // ckzgComputeProof computes the KZG proof at the given point for the polynomial
 // represented by the blob.
-func ckzgComputeProof(blob Blob, point Point) (Proof, Claim, error) {
+func ckzgComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 	panic("unsupported platform")
 }
 
@@ -52,11 +52,11 @@ func ckzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Proo
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func ckzgComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
+func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 	panic("unsupported platform")
 }
 
 // ckzgVerifyBlobProof verifies that the blob data corresponds to the provided commitment.
-func ckzgVerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
+func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	panic("unsupported platform")
 }
