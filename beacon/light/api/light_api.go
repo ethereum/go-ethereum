@@ -241,34 +241,33 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 
 func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	var data struct {
-		Data struct {
-			Version        string                  `json:"version"`
+		Version string
+		Data    struct {
 			Attested       jsonHeaderWithExecProof `json:"attested_header"`
 			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
 			FinalityBranch merkle.Values           `json:"finality_branch"`
 			Aggregate      types.SyncAggregate     `json:"sync_aggregate"`
 			SignatureSlot  common.Decimal          `json:"signature_slot"`
-		} `json:"data"`
+		}
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.FinalityUpdate{}, err
 	}
+	// Decode the execution payload headers.
+	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
+	}
+	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Finalized.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
+	}
+	// Perform sanity checks.
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_signature length")
-	}
-
-	// Decode the execution payload headers.
-	fork := data.Data.Version
-	attestedExecHeader, err := types.ExecutionHeaderFromJSON(fork, data.Data.Attested.Execution)
-	if err != nil {
-		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
-	}
-	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(fork, data.Data.Finalized.Execution)
-	if err != nil {
-		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
 	}
 
 	return types.FinalityUpdate{
