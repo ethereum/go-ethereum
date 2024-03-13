@@ -106,23 +106,26 @@ func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateT
 }
 
 func (b *Builder) AddTransactions(txns types.Transactions) ([]*suavextypes.SimulateTransactionResult, error) {
-	var result []*suavextypes.SimulateTransactionResult
+	results := make([]*suavextypes.SimulateTransactionResult, 0)
 	snap := b.env.copy()
 
 	for _, txn := range txns {
 		res, err := b.addTransaction(txn, snap)
-		result = append(result, res)
+		results = append(results, res)
 		if err != nil {
-			return result, nil
+			return results, nil
 		}
 	}
 	b.env = snap
-	return result, nil
+	return results, nil
 }
 
 func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suavextypes.SimulateBundleResult, error) {
-	if err := checkBundleInclusion(b.env.header.Number, bundle); err != nil {
-		return nil, err
+	if err := checkBundleParams(b.env.header.Number, bundle); err != nil {
+		return &suavextypes.SimulateBundleResult{
+			Error:   err.Error(),
+			Success: false,
+		}, err
 	}
 
 	revertingHashes := bundle.RevertingHashesMap()
@@ -138,9 +141,10 @@ func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suav
 				continue
 			}
 			return &suavextypes.SimulateBundleResult{
-				Error:   err.Error(),
-				Success: false,
-			}, nil
+				Error:                      err.Error(),
+				SimulateTransactionResults: results,
+				Success:                    false,
+			}, err
 		}
 		egp += result.Egp
 	}
@@ -157,10 +161,7 @@ func (b *Builder) AddBundle(bundle *suavextypes.Bundle) (*suavextypes.SimulateBu
 	result, err := b.addBundle(bundle, snap)
 
 	if err != nil {
-		return &suavextypes.SimulateBundleResult{
-			Error:   err.Error(),
-			Success: false,
-		}, nil
+		return result, nil
 	}
 
 	b.env = snap
@@ -309,7 +310,7 @@ func executableDataToDenebExecutionPayload(data *engine.ExecutableData) (*deneb.
 	}, nil
 }
 
-func checkBundleInclusion(currentBlockNumber *big.Int, bundle *suavextypes.Bundle) error {
+func checkBundleParams(currentBlockNumber *big.Int, bundle *suavextypes.Bundle) error {
 	if bundle.BlockNumber != nil && bundle.MaxBlock != nil && bundle.BlockNumber.Cmp(bundle.MaxBlock) > 0 {
 		return ErrInvalidInclusionRange
 	}

@@ -28,12 +28,13 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 	builder, err := NewBuilder(config, &BuilderArgs{})
 	require.NoError(t, err)
 
-	tx1 := backend.newRandomTx(true)
+	tx1 := backend.newRandomTx(false)
 
 	res, err := builder.AddTransaction(tx1)
 	require.NoError(t, err)
 	require.True(t, res.Success)
 	require.Len(t, builder.env.receipts, 1)
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
 
 	// we cannot add the same transaction again. Note that by design the
 	// function does not error but returns the SimulateTransactionResult.success = false
@@ -41,6 +42,7 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.Success)
 	require.Len(t, builder.env.receipts, 1)
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_AddTxns_Simple(t *testing.T) {
@@ -58,6 +60,7 @@ func TestBuilder_AddTxns_Simple(t *testing.T) {
 	for _, r := range res {
 		require.True(t, r.Success)
 	}
+	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
 
 	tx3 := backend.newRandomTxWithNonce(2)
 	tx4 := backend.newRandomTxWithNonce(1000) // fails with nonce too high
@@ -68,6 +71,7 @@ func TestBuilder_AddTxns_Simple(t *testing.T) {
 	require.True(t, res[0].Success)
 	require.False(t, res[1].Success)
 	require.Len(t, builder.env.txs, 2)
+	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_AddBundle_Simple(t *testing.T) {
@@ -87,6 +91,7 @@ func TestBuilder_AddBundle_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, res.Success)
 	require.Len(t, res.SimulateTransactionResults, 2)
+	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_AddBundle_RevertHashes(t *testing.T) {
@@ -99,26 +104,37 @@ func TestBuilder_AddBundle_RevertHashes(t *testing.T) {
 	tx2 := backend.newRandomTxWithNonce(3) // fails with nonce too high
 
 	bundle := &suavextypes.Bundle{
-		Txs:             []*types.Transaction{tx1, tx2},
-		RevertingHashes: []common.Hash{tx2.Hash()},
+		Txs: []*types.Transaction{tx1, tx2},
 	}
 
 	res, err := builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.False(t, res.Success)
+	require.Len(t, res.SimulateTransactionResults, 2)
+	require.True(t, res.SimulateTransactionResults[0].Success)
+	require.False(t, res.SimulateTransactionResults[1].Success)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+
+	bundle.RevertingHashes = []common.Hash{tx2.Hash()}
+
+	res, err = builder.AddBundle(bundle)
 	require.NoError(t, err)
 	require.True(t, res.Success)
 	require.Len(t, res.SimulateTransactionResults, 2)
 	require.True(t, res.SimulateTransactionResults[0].Success)
 	require.False(t, res.SimulateTransactionResults[1].Success)
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
 }
 
-func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
+func TestBuilder_AddBundle_InvalidParams(t *testing.T) {
 	t.Parallel()
 	config, backend := newMockBuilderConfig(t)
-	builder, err := NewBuilder(config, &BuilderArgs{
-		Slot: 10,
-	})
+	// set builder target block number to 10
+	backend.insertRandomBlocks(9)
+
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.Equal(t, uint64(10), builder.env.header.Number.Uint64())
 	require.NoError(t, err)
-	snap := builder.env
 
 	tx1 := backend.newRandomTx(false)
 	tx2 := backend.newRandomTx(false)
@@ -128,13 +144,12 @@ func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
 		BlockNumber: big.NewInt(20),
 	}
 
-	backend.insertRandomBlocks(10)
-	require.Equal(t, uint64(10), backend.chain.CurrentBlock().Number.Uint64())
-
 	res, err := builder.AddBundle(bundle)
 	require.NoError(t, err)
 	require.False(t, res.Success)
+	require.Equal(t, ErrInvalidBlockNumber.Error(), res.Error)
 	require.Len(t, res.SimulateTransactionResults, 0)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
 
 	bundle = &suavextypes.Bundle{
 		Txs:         []*types.Transaction{tx1, tx2},
@@ -145,9 +160,20 @@ func TestBuilder_AddBundle_InvalidInclusion(t *testing.T) {
 	res, err = builder.AddBundle(bundle)
 	require.NoError(t, err)
 	require.False(t, res.Success)
+	require.Equal(t, ErrExceedsMaxBlock.Error(), res.Error)
 	require.Len(t, res.SimulateTransactionResults, 0)
-	// should not modify state for failed bundle inclusion
-	require.Equal(t, snap, builder.env)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+
+	bundle = &suavextypes.Bundle{
+		Txs: []*types.Transaction{},
+	}
+
+	res, err = builder.AddBundle(bundle)
+	require.NoError(t, err)
+	require.False(t, res.Success)
+	require.Equal(t, ErrEmptyTxs.Error(), res.Error)
+	require.Len(t, res.SimulateTransactionResults, 0)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_AddBundles_Simple(t *testing.T) {
@@ -177,6 +203,7 @@ func TestBuilder_AddBundles_Simple(t *testing.T) {
 	require.Len(t, res, 2)
 	require.True(t, res[0].Success)
 	require.True(t, res[1].Success)
+	require.Equal(t, big.NewInt(4000), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
