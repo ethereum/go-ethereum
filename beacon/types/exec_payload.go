@@ -74,6 +74,7 @@ func convertPayload[T payloadType](payload T) (*types.Block, error) {
 }
 
 func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
+	// note: h.TxHash is set in convertTransactions
 	h.ParentHash = common.Hash(payload.ParentHash)
 	h.UncleHash = types.EmptyUncleHash
 	h.Coinbase = common.Address(payload.FeeRecipient)
@@ -92,6 +93,7 @@ func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
 }
 
 func convertDenebHeader(payload *deneb.ExecutionPayload, h *types.Header) {
+	// note: h.TxHash is set in convertTransactions
 	h.ParentHash = common.Hash(payload.ParentHash)
 	h.UncleHash = types.EmptyUncleHash
 	h.Coinbase = common.Address(payload.FeeRecipient)
@@ -110,6 +112,7 @@ func convertDenebHeader(payload *deneb.ExecutionPayload, h *types.Header) {
 	// new in deneb
 	h.BlobGasUsed = (*uint64)(&payload.BlobGasUsed)
 	h.ExcessBlobGas = (*uint64)(&payload.ExcessBlobGas)
+	// TODO: h.ParentBeaconRoot
 }
 
 func convertTransactions(list zrntcommon.PayloadTransactions, execHeader *types.Header) ([]*types.Transaction, error) {
