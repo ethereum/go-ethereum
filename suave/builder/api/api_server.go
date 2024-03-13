@@ -14,7 +14,6 @@ type SessionManager interface {
 	NewSession(context.Context, *BuildBlockArgs) (string, error)
 	AddTransaction(sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	AddTransactions(sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error)
-	AddBundle(sessionId string, bundle *Bundle) (*SimulateBundleResult, error)
 	AddBundles(sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error)
 	BuildBlock(sessionId string) error
 	Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
@@ -41,10 +40,6 @@ func (s *Server) AddTransaction(ctx context.Context, sessionId string, tx *types
 
 func (s *Server) AddTransactions(ctx context.Context, sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error) {
 	return s.sessionMngr.AddTransactions(sessionId, txs)
-}
-
-func (s *Server) AddBundle(ctx context.Context, sessionId string, bundle *Bundle) (*SimulateBundleResult, error) {
-	return s.sessionMngr.AddBundle(sessionId, bundle)
 }
 
 func (s *Server) AddBundles(ctx context.Context, sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error) {

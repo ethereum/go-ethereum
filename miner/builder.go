@@ -156,18 +156,6 @@ func (b *Builder) addBundle(bundle *suavextypes.Bundle, env *environment) (*suav
 	}, nil
 }
 
-func (b *Builder) AddBundle(bundle *suavextypes.Bundle) (*suavextypes.SimulateBundleResult, error) {
-	snap := b.env.copy()
-	result, err := b.addBundle(bundle, snap)
-
-	if err != nil {
-		return result, nil
-	}
-
-	b.env = snap
-	return result, nil
-}
-
 func (b *Builder) AddBundles(bundles []*suavextypes.Bundle) ([]*suavextypes.SimulateBundleResult, error) {
 	var results []*suavextypes.SimulateBundleResult
 	snap := b.env.copy()

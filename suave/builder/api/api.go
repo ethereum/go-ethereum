@@ -93,7 +93,6 @@ type API interface {
 	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	AddTransactions(ctx context.Context, sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error)
-	AddBundle(ctx context.Context, sessionId string, bundle *Bundle) (*SimulateBundleResult, error)
 	AddBundles(ctx context.Context, sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
 	Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)

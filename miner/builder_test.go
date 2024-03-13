@@ -74,114 +74,10 @@ func TestBuilder_AddTxns_Simple(t *testing.T) {
 	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
 }
 
-func TestBuilder_AddBundle_Simple(t *testing.T) {
-	t.Parallel()
-	config, backend := newMockBuilderConfig(t)
-	builder, err := NewBuilder(config, &BuilderArgs{})
-	require.NoError(t, err)
-
-	tx1 := backend.newRandomTx(false)
-	tx2 := backend.newRandomTxWithNonce(1)
-
-	bundle := &suavextypes.Bundle{
-		Txs: []*types.Transaction{tx1, tx2},
-	}
-
-	res, err := builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.True(t, res.Success)
-	require.Len(t, res.SimulateTransactionResults, 2)
-	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
-}
-
-func TestBuilder_AddBundle_RevertHashes(t *testing.T) {
-	t.Parallel()
-	config, backend := newMockBuilderConfig(t)
-	builder, err := NewBuilder(config, &BuilderArgs{})
-	require.NoError(t, err)
-
-	tx1 := backend.newRandomTx(false)
-	tx2 := backend.newRandomTxWithNonce(3) // fails with nonce too high
-
-	bundle := &suavextypes.Bundle{
-		Txs: []*types.Transaction{tx1, tx2},
-	}
-
-	res, err := builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.False(t, res.Success)
-	require.Len(t, res.SimulateTransactionResults, 2)
-	require.True(t, res.SimulateTransactionResults[0].Success)
-	require.False(t, res.SimulateTransactionResults[1].Success)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
-
-	bundle.RevertingHashes = []common.Hash{tx2.Hash()}
-
-	res, err = builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.True(t, res.Success)
-	require.Len(t, res.SimulateTransactionResults, 2)
-	require.True(t, res.SimulateTransactionResults[0].Success)
-	require.False(t, res.SimulateTransactionResults[1].Success)
-	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
-}
-
-func TestBuilder_AddBundle_InvalidParams(t *testing.T) {
-	t.Parallel()
-	config, backend := newMockBuilderConfig(t)
-	// set builder target block number to 10
-	backend.insertRandomBlocks(9)
-
-	builder, err := NewBuilder(config, &BuilderArgs{})
-	require.Equal(t, uint64(10), builder.env.header.Number.Uint64())
-	require.NoError(t, err)
-
-	tx1 := backend.newRandomTx(false)
-	tx2 := backend.newRandomTx(false)
-
-	bundle := &suavextypes.Bundle{
-		Txs:         []*types.Transaction{tx1, tx2},
-		BlockNumber: big.NewInt(20),
-	}
-
-	res, err := builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.False(t, res.Success)
-	require.Equal(t, ErrInvalidBlockNumber.Error(), res.Error)
-	require.Len(t, res.SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
-
-	bundle = &suavextypes.Bundle{
-		Txs:         []*types.Transaction{tx1, tx2},
-		BlockNumber: big.NewInt(5),
-		MaxBlock:    big.NewInt(6),
-	}
-
-	res, err = builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.False(t, res.Success)
-	require.Equal(t, ErrExceedsMaxBlock.Error(), res.Error)
-	require.Len(t, res.SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
-
-	bundle = &suavextypes.Bundle{
-		Txs: []*types.Transaction{},
-	}
-
-	res, err = builder.AddBundle(bundle)
-	require.NoError(t, err)
-	require.False(t, res.Success)
-	require.Equal(t, ErrEmptyTxs.Error(), res.Error)
-	require.Len(t, res.SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
-}
-
 func TestBuilder_AddBundles_Simple(t *testing.T) {
 	t.Parallel()
 	config, backend := newMockBuilderConfig(t)
-	builder, err := NewBuilder(config, &BuilderArgs{
-		Slot: 10,
-	})
+	builder, err := NewBuilder(config, &BuilderArgs{})
 	require.NoError(t, err)
 
 	tx1 := backend.newRandomTx(false)
@@ -204,6 +100,92 @@ func TestBuilder_AddBundles_Simple(t *testing.T) {
 	require.True(t, res[0].Success)
 	require.True(t, res[1].Success)
 	require.Equal(t, big.NewInt(4000), builder.env.state.GetBalance(testUserAddress))
+}
+
+func TestBuilder_AddBundles_RevertHashes(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTxWithNonce(3) // fails with nonce too high
+
+	bundle := &suavextypes.Bundle{
+		Txs: []*types.Transaction{tx1, tx2},
+	}
+
+	res, err := builder.AddBundles([]*suavextypes.Bundle{bundle})
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.False(t, res[0].Success)
+	require.Len(t, res[0].SimulateTransactionResults, 2)
+	require.True(t, res[0].SimulateTransactionResults[0].Success)
+	require.False(t, res[0].SimulateTransactionResults[1].Success)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+
+	bundle.RevertingHashes = []common.Hash{tx2.Hash()}
+
+	res, err = builder.AddBundles([]*suavextypes.Bundle{bundle})
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.True(t, res[0].Success)
+	require.Len(t, res[0].SimulateTransactionResults, 2)
+	require.True(t, res[0].SimulateTransactionResults[0].Success)
+	require.False(t, res[0].SimulateTransactionResults[1].Success)
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
+}
+
+func TestBuilder_AddBundles_InvalidParams(t *testing.T) {
+	t.Parallel()
+	config, backend := newMockBuilderConfig(t)
+	// set builder target block number to 10
+	backend.insertRandomBlocks(9)
+
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.Equal(t, uint64(10), builder.env.header.Number.Uint64())
+	require.NoError(t, err)
+
+	tx1 := backend.newRandomTx(false)
+	tx2 := backend.newRandomTx(false)
+
+	bundle := &suavextypes.Bundle{
+		Txs:         []*types.Transaction{tx1, tx2},
+		BlockNumber: big.NewInt(20),
+	}
+
+	res, err := builder.AddBundles([]*suavextypes.Bundle{bundle})
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.False(t, res[0].Success)
+	require.Equal(t, ErrInvalidBlockNumber.Error(), res[0].Error)
+	require.Len(t, res[0].SimulateTransactionResults, 0)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+
+	bundle = &suavextypes.Bundle{
+		Txs:         []*types.Transaction{tx1, tx2},
+		BlockNumber: big.NewInt(5),
+		MaxBlock:    big.NewInt(6),
+	}
+
+	res, err = builder.AddBundles([]*suavextypes.Bundle{bundle})
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.False(t, res[0].Success)
+	require.Equal(t, ErrExceedsMaxBlock.Error(), res[0].Error)
+	require.Len(t, res[0].SimulateTransactionResults, 0)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+
+	bundle = &suavextypes.Bundle{
+		Txs: []*types.Transaction{},
+	}
+
+	res, err = builder.AddBundles([]*suavextypes.Bundle{bundle})
+	require.NoError(t, err)
+	require.False(t, res[0].Success)
+	require.Equal(t, ErrEmptyTxs.Error(), res[0].Error)
+	require.Len(t, res[0].SimulateTransactionResults, 0)
+	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
