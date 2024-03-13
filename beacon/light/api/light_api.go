@@ -377,7 +377,7 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 		Version string
 		Data    struct {
 			Message json.RawMessage `json:"message"`
-		} `json:"data"`
+		}
 	}
 	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
