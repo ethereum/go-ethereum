@@ -34,7 +34,7 @@ type payloadType interface {
 }
 
 // convertPayload converts a beacon chain execution payload to types.Block.
-func convertPayload[T payloadType](payload T) (*types.Block, error) {
+func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root) (*types.Block, error) {
 	var (
 		header       types.Header
 		transactions []*types.Transaction
@@ -52,7 +52,7 @@ func convertPayload[T payloadType](payload T) (*types.Block, error) {
 		withdrawals = convertWithdrawals(p.Withdrawals, &header)
 		expectedHash = p.BlockHash
 	case *deneb.ExecutionPayload:
-		convertDenebHeader(p, &header)
+		convertDenebHeader(p, common.Hash(*parentRoot), &header)
 		transactions, err = convertTransactions(p.Transactions, &header)
 		if err != nil {
 			return nil, err
@@ -92,7 +92,7 @@ func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
 	h.BaseFee = (*uint256.Int)(&payload.BaseFeePerGas).ToBig()
 }
 
-func convertDenebHeader(payload *deneb.ExecutionPayload, h *types.Header) {
+func convertDenebHeader(payload *deneb.ExecutionPayload, parentRoot common.Hash, h *types.Header) {
 	// note: h.TxHash is set in convertTransactions
 	h.ParentHash = common.Hash(payload.ParentHash)
 	h.UncleHash = types.EmptyUncleHash
@@ -112,7 +112,7 @@ func convertDenebHeader(payload *deneb.ExecutionPayload, h *types.Header) {
 	// new in deneb
 	h.BlobGasUsed = (*uint64)(&payload.BlobGasUsed)
 	h.ExcessBlobGas = (*uint64)(&payload.ExcessBlobGas)
-	// TODO: h.ParentBeaconRoot
+	h.ParentBeaconRoot = &parentRoot
 }
 
 func convertTransactions(list zrntcommon.PayloadTransactions, execHeader *types.Header) ([]*types.Transaction, error) {

@@ -84,9 +84,9 @@ func (b *BeaconBlock) Slot() uint64 {
 func (b *BeaconBlock) ExecutionPayload() (*types.Block, error) {
 	switch obj := b.blockObj.(type) {
 	case *capella.BeaconBlock:
-		return convertPayload(&obj.Body.ExecutionPayload)
+		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot)
 	case *deneb.BeaconBlock:
-		return convertPayload(&obj.Body.ExecutionPayload)
+		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
 	}
