@@ -183,9 +183,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	var stck []uint256.Int
 	if !l.cfg.DisableStack {
 		stck = make([]uint256.Int, len(stack))
-		for i, item := range stack {
-			stck[i] = item
-		}
+		copy(stck, stack)
 	}
 	contractAddr := scope.Address()
 	stackLen := len(stack)

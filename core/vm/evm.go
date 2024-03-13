@@ -545,6 +545,8 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 	tracer.OnExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 }
 
+// GetVMContext provides context about the block being executed as well as state
+// to the tracers.
 func (evm *EVM) GetVMContext() *tracing.VMContext {
 	return &tracing.VMContext{
 		Coinbase:    evm.Context.Coinbase,
