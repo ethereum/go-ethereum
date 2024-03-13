@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 )
 
 var (
@@ -66,9 +65,9 @@ type jsonBeaconHeader struct {
 }
 
 type jsonHeaderWithExecProof struct {
-	Beacon          types.Header                    `json:"beacon"`
-	Execution       *capella.ExecutionPayloadHeader `json:"execution"`
-	ExecutionBranch merkle.Values                   `json:"execution_branch"`
+	Beacon          types.Header    `json:"beacon"`
+	Execution       json.RawMessage `json:"execution"`
+	ExecutionBranch merkle.Values   `json:"execution_branch"`
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -243,6 +242,7 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	var data struct {
 		Data struct {
+			Version        string                  `json:"version"`
 			Attested       jsonHeaderWithExecProof `json:"attested_header"`
 			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
 			FinalityBranch merkle.Values           `json:"finality_branch"`
@@ -253,22 +253,33 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.FinalityUpdate{}, err
 	}
-
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_signature length")
 	}
+
+	// Decode the execution payload headers.
+	fork := data.Data.Version
+	attestedExecHeader, err := types.ExecutionHeaderFromJSON(fork, data.Data.Attested.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
+	}
+	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(fork, data.Data.Finalized.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
+	}
+
 	return types.FinalityUpdate{
 		Attested: types.HeaderWithExecProof{
 			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: data.Data.Attested.Execution,
+			PayloadHeader: attestedExecHeader,
 			PayloadBranch: data.Data.Attested.ExecutionBranch,
 		},
 		Finalized: types.HeaderWithExecProof{
 			Header:        data.Data.Finalized.Beacon,
-			PayloadHeader: data.Data.Finalized.Execution,
+			PayloadHeader: finalizedExecHeader,
 			PayloadBranch: data.Data.Finalized.ExecutionBranch,
 		},
 		FinalityBranch: data.Data.FinalityBranch,
