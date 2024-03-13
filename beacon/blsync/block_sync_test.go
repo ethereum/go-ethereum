@@ -22,38 +22,28 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
 )
 
 var (
 	testServer1 = "testServer1"
 	testServer2 = "testServer2"
 
-	testBlock1 = &beaconBlockType{
+	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 123,
 		Body: deneb.BeaconBlockBody{
 			ExecutionPayload: deneb.ExecutionPayload{BlockNumber: 456},
 		},
-	}
-	testBlock2 = &beaconBlockType{
+	})
+	testBlock2 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 124,
 		Body: deneb.BeaconBlockBody{
 			ExecutionPayload: deneb.ExecutionPayload{BlockNumber: 457},
 		},
-	}
+	})
 )
-
-func init() {
-	eb1, _ := getExecBlock(testBlock1)
-	testBlock1.Body.ExecutionPayload.BlockHash = tree.Root(eb1.Hash())
-	eb2, _ := getExecBlock(testBlock2)
-	testBlock2.Body.ExecutionPayload.BlockHash = tree.Root(eb2.Hash())
-}
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
@@ -65,10 +55,11 @@ func TestBlockSync(t *testing.T) {
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)
 
-	expHeadBlock := func(tci int, expHead *beaconBlockType) {
+	expHeadBlock := func(tci int, expHead *types.BeaconBlock) {
 		var expNumber, headNumber uint64
 		if expHead != nil {
-			expNumber = uint64(expHead.Body.ExecutionPayload.BlockNumber)
+			p, _ := expHead.ExecutionPayload()
+			expNumber = uint64(p.NumberU64())
 		}
 		select {
 		case event := <-headCh:
@@ -99,7 +90,7 @@ func TestBlockSync(t *testing.T) {
 	expHeadBlock(3, nil)
 
 	// set as validated head, expect no further requests but block 1 set as head block
-	ht.validated.Header = blockHeader(testBlock1)
+	ht.validated.Header = testBlock1.Header()
 	ts.Run(4)
 	expHeadBlock(4, testBlock1)
 
@@ -115,7 +106,7 @@ func TestBlockSync(t *testing.T) {
 	ts.Run(6)
 
 	// set as validated head before retrieving block; now it's assumed to be available from server 2 too
-	ht.validated.Header = blockHeader(testBlock2)
+	ht.validated.Header = testBlock2.Header()
 	// expect req2 retry to server 2
 	ts.Run(7, testServer2, sync.ReqBeaconBlock(head2.BlockRoot))
 	// now head block should be unavailable again
@@ -125,16 +116,6 @@ func TestBlockSync(t *testing.T) {
 	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
 	ts.Run(8)
 	expHeadBlock(5, testBlock2)
-}
-
-func blockHeader(block *beaconBlockType) types.Header {
-	return types.Header{
-		Slot:          uint64(block.Slot),
-		ProposerIndex: uint64(block.ProposerIndex),
-		ParentRoot:    common.Hash(block.ParentRoot),
-		StateRoot:     common.Hash(block.StateRoot),
-		BodyRoot:      common.Hash(block.Body.HashTreeRoot(configs.Mainnet, tree.GetHashFn())),
-	}
 }
 
 type testHeadTracker struct {
