@@ -107,7 +107,7 @@ func blockHeadInfo(block *types.BeaconBlock) types.HeadInfo {
 	if block == nil {
 		return types.HeadInfo{}
 	}
-	return types.HeadInfo{Slot: block.Slot(), BlockRoot: block.Hash()}
+	return types.HeadInfo{Slot: block.Slot(), BlockRoot: block.Root()}
 }
 
 func (s *beaconBlockSync) updateEventFeed() {

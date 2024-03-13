@@ -104,7 +104,7 @@ func (b *BeaconBlock) Header() Header {
 	}
 }
 
-// Hash computes the hash of the block.
-func (b *BeaconBlock) Hash() common.Hash {
+// Root computes the SSZ root hash of the block.
+func (b *BeaconBlock) Root() common.Hash {
 	return common.Hash(b.blockObj.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
 }
