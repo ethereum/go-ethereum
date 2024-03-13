@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
@@ -133,9 +132,10 @@ func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 
 // TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	finalized := types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))
 	return types.FinalityUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
-		Finalized:     types.HeaderWithExecProof{PayloadHeader: &capella.ExecutionPayloadHeader{}},
+		Finalized:     types.HeaderWithExecProof{PayloadHeader: finalized},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, h.validated.Header != (types.Header{})
