@@ -33,13 +33,14 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -116,7 +117,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer      vm.EVMLogger
+		tracer      *tracing.Hooks
 		debugLogger *logger.StructLogger
 		statedb     *state.StateDB
 		chainConfig *params.ChainConfig
@@ -127,10 +128,10 @@ func runCmd(ctx *cli.Context) error {
 		blobBaseFee = new(big.Int) // TODO (MariusVanDerWijden) implement blob fee in state tests
 	)
 	if ctx.Bool(MachineFlag.Name) {
-		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
+		tracer = logger.NewJSONLogger(logconfig, os.Stdout).Hooks()
 	} else if ctx.Bool(DebugFlag.Name) {
 		debugLogger = logger.NewStructLogger(logconfig)
-		tracer = debugLogger
+		tracer = debugLogger.Hooks()
 	} else {
 		debugLogger = logger.NewStructLogger(logconfig)
 	}
@@ -148,7 +149,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := trie.NewDatabase(db, &trie.Config{
+	triedb := triedb.NewDatabase(db, &triedb.Config{
 		Preimages: preimages,
 		HashDB:    hashdb.Defaults,
 	})

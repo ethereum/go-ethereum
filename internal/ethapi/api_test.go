@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/blocktest"
@@ -442,7 +444,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		}
 	)
 	accman, acc := newTestAccountManager(t)
-	gspec.Alloc[acc.Address] = core.GenesisAccount{Balance: big.NewInt(params.Ether)}
+	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -545,7 +547,7 @@ func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	}
 	panic("only implemented for number")
 }
-func (b testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) { panic("implement me") }
+func (b testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) { panic("implement me") }
 func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	header, err := b.HeaderByHash(ctx, hash)
 	if header == nil || err != nil {
@@ -613,9 +615,6 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
-func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	panic("implement me")
-}
 func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
 func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	panic("implement me")
@@ -628,7 +627,7 @@ func TestEstimateGas(t *testing.T) {
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 			},
@@ -785,7 +784,7 @@ func TestCall(t *testing.T) {
 		accounts = newAccounts(3)
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
@@ -982,7 +981,7 @@ func TestSignTransaction(t *testing.T) {
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc:  core.GenesisAlloc{},
+			Alloc:  types.GenesisAlloc{},
 		}
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
@@ -1020,7 +1019,7 @@ func TestSignBlobTransaction(t *testing.T) {
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc:  core.GenesisAlloc{},
+			Alloc:  types.GenesisAlloc{},
 		}
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
@@ -1054,7 +1053,7 @@ func TestSendBlobTransaction(t *testing.T) {
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
 			Config: params.MergedTestChainConfig,
-			Alloc:  core.GenesisAlloc{},
+			Alloc:  types.GenesisAlloc{},
 		}
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
@@ -1079,12 +1078,206 @@ func TestSendBlobTransaction(t *testing.T) {
 	}
 }
 
+func TestFillBlobTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  types.GenesisAlloc{},
+		}
+		emptyBlob                      = new(kzg4844.Blob)
+		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
+		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
+		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+	)
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	type result struct {
+		Hashes  []common.Hash
+		Sidecar *types.BlobTxSidecar
+	}
+	suite := []struct {
+		name string
+		args TransactionArgs
+		err  string
+		want *result
+	}{
+		{
+			name: "TestInvalidParamsCombination1",
+			args: TransactionArgs{
+				From:   &b.acc.Address,
+				To:     &to,
+				Value:  (*hexutil.Big)(big.NewInt(1)),
+				Blobs:  []kzg4844.Blob{{}},
+				Proofs: []kzg4844.Proof{{}},
+			},
+			err: `blob proofs provided while commitments were not`,
+		},
+		{
+			name: "TestInvalidParamsCombination2",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				Blobs:       []kzg4844.Blob{{}},
+				Commitments: []kzg4844.Commitment{{}},
+			},
+			err: `blob commitments provided while proofs were not`,
+		},
+		{
+			name: "TestInvalidParamsCount1",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				Blobs:       []kzg4844.Blob{{}},
+				Commitments: []kzg4844.Commitment{{}, {}},
+				Proofs:      []kzg4844.Proof{{}, {}},
+			},
+			err: `number of blobs and commitments mismatch (have=2, want=1)`,
+		},
+		{
+			name: "TestInvalidParamsCount2",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				Blobs:       []kzg4844.Blob{{}, {}},
+				Commitments: []kzg4844.Commitment{{}, {}},
+				Proofs:      []kzg4844.Proof{{}},
+			},
+			err: `number of blobs and proofs mismatch (have=1, want=2)`,
+		},
+		{
+			name: "TestInvalidProofVerification",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				Blobs:       []kzg4844.Blob{{}, {}},
+				Commitments: []kzg4844.Commitment{{}, {}},
+				Proofs:      []kzg4844.Proof{{}, {}},
+			},
+			err: `failed to verify blob proof: short buffer`,
+		},
+		{
+			name: "TestGenerateBlobHashes",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				Blobs:       emptyBlobs,
+				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+				Proofs:      []kzg4844.Proof{emptyBlobProof},
+			},
+			want: &result{
+				Hashes: []common.Hash{emptyBlobHash},
+				Sidecar: &types.BlobTxSidecar{
+					Blobs:       emptyBlobs,
+					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+					Proofs:      []kzg4844.Proof{emptyBlobProof},
+				},
+			},
+		},
+		{
+			name: "TestValidBlobHashes",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes:  []common.Hash{emptyBlobHash},
+				Blobs:       emptyBlobs,
+				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+				Proofs:      []kzg4844.Proof{emptyBlobProof},
+			},
+			want: &result{
+				Hashes: []common.Hash{emptyBlobHash},
+				Sidecar: &types.BlobTxSidecar{
+					Blobs:       emptyBlobs,
+					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+					Proofs:      []kzg4844.Proof{emptyBlobProof},
+				},
+			},
+		},
+		{
+			name: "TestInvalidBlobHashes",
+			args: TransactionArgs{
+				From:        &b.acc.Address,
+				To:          &to,
+				Value:       (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes:  []common.Hash{{0x01, 0x22}},
+				Blobs:       emptyBlobs,
+				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+				Proofs:      []kzg4844.Proof{emptyBlobProof},
+			},
+			err: fmt.Sprintf("blob hash verification failed (have=%s, want=%s)", common.Hash{0x01, 0x22}, emptyBlobHash),
+		},
+		{
+			name: "TestGenerateBlobProofs",
+			args: TransactionArgs{
+				From:  &b.acc.Address,
+				To:    &to,
+				Value: (*hexutil.Big)(big.NewInt(1)),
+				Blobs: emptyBlobs,
+			},
+			want: &result{
+				Hashes: []common.Hash{emptyBlobHash},
+				Sidecar: &types.BlobTxSidecar{
+					Blobs:       emptyBlobs,
+					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+					Proofs:      []kzg4844.Proof{emptyBlobProof},
+				},
+			},
+		},
+	}
+	for _, tc := range suite {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := api.FillTransaction(context.Background(), tc.args)
+			if len(tc.err) > 0 {
+				if err == nil {
+					t.Fatalf("missing error. want: %s", tc.err)
+				} else if err.Error() != tc.err {
+					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
+				}
+				return
+			}
+			if err != nil && len(tc.err) == 0 {
+				t.Fatalf("expected no error. have: %s", err)
+			}
+			if res == nil {
+				t.Fatal("result missing")
+			}
+			want, err := json.Marshal(tc.want)
+			if err != nil {
+				t.Fatalf("failed to encode expected: %v", err)
+			}
+			have, err := json.Marshal(result{Hashes: res.Tx.BlobHashes(), Sidecar: res.Tx.BlobTxSidecar()})
+			if err != nil {
+				t.Fatalf("failed to encode computed sidecar: %v", err)
+			}
+			if !bytes.Equal(have, want) {
+				t.Errorf("blob sidecar mismatch. Have: %s, want: %s", have, want)
+			}
+		})
+	}
+}
+
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
-		gas   = tx.Gas()
-		nonce = tx.Nonce()
-		input = tx.Data()
+		gas        = tx.Gas()
+		nonce      = tx.Nonce()
+		input      = tx.Data()
+		accessList *types.AccessList
 	)
+	if acl := tx.AccessList(); acl != nil {
+		accessList = &acl
+	}
 	return TransactionArgs{
 		From:                 &from,
 		To:                   tx.To(),
@@ -1095,10 +1288,9 @@ func argsFromTransaction(tx *types.Transaction, from common.Address) Transaction
 		Nonce:                (*hexutil.Uint64)(&nonce),
 		Input:                (*hexutil.Bytes)(&input),
 		ChainID:              (*hexutil.Big)(tx.ChainId()),
-		// TODO: impl accessList conversion
-		//AccessList: tx.AccessList(),
-		BlobFeeCap: (*hexutil.Big)(tx.BlobGasFeeCap()),
-		BlobHashes: tx.BlobHashes(),
+		AccessList:           accessList,
+		BlobFeeCap:           (*hexutil.Big)(tx.BlobGasFeeCap()),
+		BlobHashes:           tx.BlobHashes(),
 	}
 }
 
@@ -1347,7 +1539,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 		genesis    = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
 			},
@@ -1602,7 +1794,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			Config:        &config,
 			ExcessBlobGas: new(uint64),
 			BlobGasUsed:   new(uint64),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
 				// // SPDX-License-Identifier: GPL-3.0
@@ -1627,6 +1819,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			tx  *types.Transaction
 			err error
 		)
+		b.SetPoS()
 		switch i {
 		case 0:
 			// transfer 1000wei
@@ -1675,7 +1868,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
 		}
-		b.SetPoS()
 	})
 	return backend, txHashes
 }

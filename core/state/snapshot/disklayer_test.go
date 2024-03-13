@@ -139,7 +139,7 @@ func TestDiskMerge(t *testing.T) {
 	// Retrieve all the data through the disk layer and validate it
 	base = snaps.Snapshot(diffRoot)
 	if _, ok := base.(*diskLayer); !ok {
-		t.Fatalf("update not flattend into the disk layer")
+		t.Fatalf("update not flattened into the disk layer")
 	}
 
 	// assertAccount ensures that an account matches the given blob.
@@ -362,7 +362,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		// Retrieve all the data through the disk layer and validate it
 		base = snaps.Snapshot(diffRoot)
 		if _, ok := base.(*diskLayer); !ok {
-			t.Fatalf("test %d: update not flattend into the disk layer", i)
+			t.Fatalf("test %d: update not flattened into the disk layer", i)
 		}
 		assertAccount(accNoModNoCache, accNoModNoCache[:])
 		assertAccount(accNoModCache, accNoModCache[:])

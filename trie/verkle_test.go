@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
@@ -57,12 +56,7 @@ var (
 )
 
 func TestVerkleTreeReadWrite(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase(), &Config{
-		IsVerkle: true,
-		PathDB:   pathdb.Defaults,
-	})
-	defer db.Close()
-
+	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
 	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache(100))
 
 	for addr, acct := range accounts {

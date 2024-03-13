@@ -24,8 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -41,16 +40,15 @@ type Context struct {
 // for it to be available through the RPC interface.
 // This involves a method to retrieve results and one to
 // stop tracing.
-type Tracer interface {
-	vm.EVMLogger
-	state.StateLogger
-	GetResult() (json.RawMessage, error)
+type Tracer struct {
+	*tracing.Hooks
+	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
-	Stop(err error)
+	Stop func(err error)
 }
 
-type ctorFn func(*Context, json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
+type ctorFn func(*Context, json.RawMessage) (*Tracer, error)
+type jsCtorFn func(string, *Context, json.RawMessage) (*Tracer, error)
 
 type elem struct {
 	ctor ctorFn
@@ -83,7 +81,7 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
-func (d *directory) New(name string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
+func (d *directory) New(name string, ctx *Context, cfg json.RawMessage) (*Tracer, error) {
 	if elem, ok := d.elems[name]; ok {
 		return elem.ctor(ctx, cfg)
 	}

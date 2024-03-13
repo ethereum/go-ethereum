@@ -27,7 +27,7 @@ import (
 // If z is equal to one the point is considered as in affine form.
 type PointG2 [3]fe2
 
-// Set copies valeus of one point to another.
+// Set copies values of one point to another.
 func (p *PointG2) Set(p2 *PointG2) *PointG2 {
 	p[0].set(&p2[0])
 	p[1].set(&p2[1])

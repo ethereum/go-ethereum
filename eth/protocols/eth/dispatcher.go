@@ -136,7 +136,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	}
 }
 
-// dispatchRequest fulfils a pending request and delivers it to the requested
+// dispatchResponse fulfils a pending request and delivers it to the requested
 // sink.
 func (p *Peer) dispatchResponse(res *Response, metadata func() interface{}) error {
 	resOp := &response{

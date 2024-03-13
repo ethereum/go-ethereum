@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,8 +58,7 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	directory.NoopTracer
-	env       *vm.EVM
+	env       *tracing.VMContext
 	pre       stateMap
 	post      stateMap
 	to        common.Address
@@ -73,24 +73,33 @@ type prestateTracerConfig struct {
 	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
-func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (directory.Tracer, error) {
+func newPrestateTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	return &prestateTracer{
+	t := &prestateTracer{
 		pre:     stateMap{},
 		post:    stateMap{},
 		config:  config,
 		created: make(map[common.Address]bool),
 		deleted: make(map[common.Address]bool),
+	}
+	return &directory.Tracer{
+		Hooks: &tracing.Hooks{
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnOpcode:  t.OnOpcode,
+		},
+		GetResult: t.GetResult,
+		Stop:      t.Stop,
 	}, nil
 }
 
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+// OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
+func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -98,10 +107,10 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	if t.interrupt.Load() {
 		return
 	}
-	stack := scope.Stack
-	stackData := stack.Data()
+	op := vm.OpCode(opcode)
+	stackData := scope.StackData()
 	stackLen := len(stackData)
-	caller := scope.Contract.Address()
+	caller := scope.Address()
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
@@ -123,7 +132,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init, err := directory.GetMemoryCopyPadded(scope.Memory, int64(offset.Uint64()), int64(size.Uint64()))
+		init, err := directory.GetMemoryCopyPadded(scope.MemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
 		if err != nil {
 			log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
 			return
@@ -136,7 +145,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {
+func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
@@ -147,10 +156,10 @@ func (t *prestateTracer) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from
 
 	t.lookupAccount(from)
 	t.lookupAccount(t.to)
-	t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Coinbase)
 }
 
-func (t *prestateTracer) CaptureTxEnd(receipt *types.Receipt, err error) {
+func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}

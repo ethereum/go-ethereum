@@ -22,13 +22,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
@@ -41,16 +43,16 @@ type testAccount struct {
 }
 
 // makeTestState create a sample test state to test node-wise reconstruction.
-func makeTestState(scheme string) (ethdb.Database, Database, *trie.Database, common.Hash, []*testAccount) {
+func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, common.Hash, []*testAccount) {
 	// Create an empty state
-	config := &trie.Config{Preimages: true}
+	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	} else {
 		config.HashDB = hashdb.Defaults
 	}
 	db := rawdb.NewMemoryDatabase()
-	nodeDb := trie.NewDatabase(db, config)
+	nodeDb := triedb.NewDatabase(db, config)
 	sdb := NewDatabaseWithNodeDB(db, nodeDb)
 	state, _ := New(types.EmptyRootHash, sdb, nil)
 
@@ -60,7 +62,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *trie.Database, com
 		obj := state.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(uint256.NewInt(uint64(11*i)), BalanceChangeUnspecified)
+		obj.AddBalance(uint256.NewInt(uint64(11*i)), tracing.BalanceChangeUnspecified)
 		acc.balance = uint256.NewInt(uint64(11 * i))
 
 		obj.SetNonce(uint64(42 * i))
@@ -87,7 +89,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *trie.Database, com
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root common.Hash, accounts []*testAccount) {
-	var config trie.Config
+	var config triedb.Config
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
@@ -114,7 +116,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 
 // checkStateConsistency checks that all data of a state root is present.
 func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) error {
-	config := &trie.Config{Preimages: true}
+	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
@@ -130,8 +132,8 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 
 // Tests that an empty state is not scheduled for syncing.
 func TestEmptyStateSync(t *testing.T) {
-	dbA := trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	dbB := trie.NewDatabase(rawdb.NewMemoryDatabase(), &trie.Config{PathDB: pathdb.Defaults})
+	dbA := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+	dbB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), &triedb.Config{PathDB: pathdb.Defaults})
 
 	sync := NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, dbA.Scheme())
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
@@ -237,7 +239,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
 					stTrie, err := trie.New(id, ndb)
 					if err != nil {
-						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
+						t.Fatalf("failed to retrieve storage trie for path %x: %v", node.syncPath[1], err)
 					}
 					data, _, err := stTrie.GetNode(node.syncPath[1])
 					if err != nil {
