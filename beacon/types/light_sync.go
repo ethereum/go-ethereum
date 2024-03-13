@@ -24,8 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/ztyp/tree"
 )
 
 // HeadInfo represents an unvalidated new head announcement.
@@ -146,12 +144,12 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 
 type HeaderWithExecProof struct {
 	Header
-	PayloadHeader *capella.ExecutionPayloadHeader
+	PayloadHeader *ExecutionHeader
 	PayloadBranch merkle.Values
 }
 
 func (h *HeaderWithExecProof) Validate() error {
-	payloadRoot := merkle.Value(h.PayloadHeader.HashTreeRoot(tree.GetHashFn()))
+	payloadRoot := h.PayloadHeader.PayloadRoot()
 	return merkle.VerifyProof(h.BodyRoot, params.BodyIndexExecPayload, h.PayloadBranch, payloadRoot)
 }
 
