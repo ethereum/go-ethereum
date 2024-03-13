@@ -29,7 +29,7 @@ import (
 
 func emptyLayer() *diskLayer {
 	return &diskLayer{
-		db:     New(rawdb.NewMemoryDatabase(), nil),
+		db:     New(rawdb.NewMemoryDatabase(), nil, false),
 		buffer: newNodeBuffer(DefaultBufferSize, nil, 0),
 	}
 }
@@ -58,7 +58,6 @@ func BenchmarkSearch1Layer(b *testing.B) { benchmarkSearch(b, 127, 128) }
 func benchmarkSearch(b *testing.B, depth int, total int) {
 	var (
 		npath []byte
-		nhash common.Hash
 		nblob []byte
 	)
 	// First, we set up 128 diff layers, with 3K items each
@@ -75,7 +74,6 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 			if npath == nil && depth == index {
 				npath = common.CopyBytes(path)
 				nblob = common.CopyBytes(node.Blob)
-				nhash = node.Hash
 			}
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
@@ -92,7 +90,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		err  error
 	)
 	for i := 0; i < b.N; i++ {
-		have, err = layer.Node(common.Hash{}, npath, nhash)
+		have, _, _, err = layer.node(common.Hash{}, npath, 0)
 		if err != nil {
 			b.Fatal(err)
 		}

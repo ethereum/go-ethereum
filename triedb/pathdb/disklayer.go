@@ -94,27 +94,25 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
-// Node implements the layer interface, retrieving the trie node with the
+// node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
-func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return nil, errSnapshotStale
+		return nil, common.Hash{}, nil, errSnapshotStale
 	}
 	// Try to retrieve the trie node from the not-yet-written
 	// node buffer first. Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the
 	// layer as stale.
-	n, err := dl.buffer.node(owner, path, hash)
-	if err != nil {
-		return nil, err
-	}
-	if n != nil {
+	n, found := dl.buffer.node(owner, path)
+	if found {
 		dirtyHitMeter.Mark(1)
 		dirtyReadMeter.Mark(int64(len(n.Blob)))
-		return n.Blob, nil
+		dirtyNodeHitDepthHist.Update(int64(depth))
+		return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
 	}
 	dirtyMissMeter.Mark(1)
 
@@ -125,14 +123,9 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 			h := newHasher()
 			defer h.release()
 
-			got := h.hash(blob)
-			if got == hash {
-				cleanHitMeter.Mark(1)
-				cleanReadMeter.Mark(int64(len(blob)))
-				return blob, nil
-			}
-			cleanFalseMeter.Mark(1)
-			log.Error("Unexpected trie node in clean cache", "owner", owner, "path", path, "expect", hash, "got", got)
+			cleanHitMeter.Mark(1)
+			cleanReadMeter.Mark(int64(len(blob)))
+			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanMissMeter.Mark(1)
 	}
@@ -146,16 +139,11 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	} else {
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
-	if nHash != hash {
-		diskFalseMeter.Mark(1)
-		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
-		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path, nBlob)
-	}
 	if dl.cleans != nil && len(nBlob) > 0 {
 		dl.cleans.Set(key, nBlob)
 		cleanWriteMeter.Mark(int64(len(nBlob)))
 	}
-	return nBlob, nil
+	return nBlob, nHash, &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top

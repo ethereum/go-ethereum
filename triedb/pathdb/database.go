@@ -59,11 +59,12 @@ var (
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
 type layer interface {
-	// Node retrieves the trie node with the node info. An error will be returned
-	// if the read operation exits abnormally. For example, if the layer is already
-	// stale, or the associated state is regarded as corrupted. Notably, no error
-	// will be returned if the requested node is not found in database.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+	// node retrieves the trie node with the node info. An error will be returned
+	// if the read operation exits abnormally. Specifically, if the layer is
+	// already stale.
+	//
+	// Note, no error will be returned if the requested node is not found in database.
+	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
@@ -132,6 +133,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly   bool                     // Flag if database is opened in read only mode
 	waitSync   bool                     // Flag if database is deactivated due to initial state sync
+	isVerkle   bool                     // Flag if database is used for verkle tree
 	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
 	config     *Config                  // Configuration for database
 	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
@@ -143,7 +145,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config) *Database {
+func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -151,6 +153,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 
 	db := &Database{
 		readOnly:   config.ReadOnly,
+		isVerkle:   isVerkle,
 		bufferSize: config.DirtyCacheSize,
 		config:     config,
 		diskdb:     diskdb,
@@ -206,15 +209,6 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		}
 	}
 	return db
-}
-
-// Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (layer, error) {
-	l := db.tree.get(root)
-	if l == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
-	}
-	return l, nil
 }
 
 // Update adds a new layer into the tree, if that can be linked to an existing
