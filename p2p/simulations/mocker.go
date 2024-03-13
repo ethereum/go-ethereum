@@ -67,6 +67,10 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 	}
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-quit:
@@ -80,11 +84,12 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 				return
 			}
 
+			timer.Reset(3 * time.Second)
 			select {
 			case <-quit:
 				log.Info("Terminating simulation loop")
 				return
-			case <-time.After(3 * time.Second):
+			case <-timer.C:
 			}
 
 			log.Debug("starting node", "id", id)
