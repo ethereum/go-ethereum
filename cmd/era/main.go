@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -176,7 +176,7 @@ func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return era.Open(path.Join(dir, entries[epoch]))
+	return era.Open(filepath.Join(dir, entries[epoch]))
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
@@ -212,7 +212,7 @@ func verify(ctx *cli.Context) error {
 		// Wrap in function so defers don't stack.
 		err := func() error {
 			name := entries[i]
-			e, err := era.Open(path.Join(dir, name))
+			e, err := era.Open(filepath.Join(dir, name))
 			if err != nil {
 				return fmt.Errorf("error opening era1 file %s: %w", name, err)
 			}
