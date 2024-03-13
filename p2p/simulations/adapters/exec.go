@@ -460,7 +460,7 @@ func startExecNodeStack() (*node.Node, error) {
 	// decode the config
 	confEnv := os.Getenv(envNodeConfig)
 	if confEnv == "" {
-		return nil, fmt.Errorf("missing " + envNodeConfig)
+		return nil, errors.New("missing " + envNodeConfig)
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
