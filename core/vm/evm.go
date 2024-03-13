@@ -183,7 +183,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth == 0, CALL, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth == 0, CALL, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -255,7 +255,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(false, CALLCODE, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
-			evm.captureEnd(false, CALLCODE, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -310,7 +310,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// DELEGATECALL inherits value from parent call
 		evm.captureBegin(false, DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
 		defer func(startGas uint64) {
-			evm.captureEnd(false, DELEGATECALL, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -351,7 +351,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(false, STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
-			evm.captureEnd(false, STATICCALL, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -418,7 +418,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth == 0, typ, caller.Address(), address, codeAndHash.code, gas, value)
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth == 0, typ, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
 	// Depth check execution. Fail if we're trying to execute above the
@@ -529,7 +529,7 @@ func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to co
 	}
 }
 
-func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas uint64, ret []byte, err error) {
+func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret []byte, err error) {
 	tracer := evm.Config.Tracer
 
 	if leftOverGas != 0 && tracer.OnGasChange != nil {
@@ -542,7 +542,7 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	tracer.OnExit(ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	tracer.OnExit(depth, ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 }
 
 // GetVMContext provides context about the block being executed as well as state
