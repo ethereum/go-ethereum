@@ -163,6 +163,13 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+
+	// Firehose backward compatibility
+	// This hook exist because some current Firehose supported chains requires it
+	// but this field is going to be deprecated and newer chains will not produced
+	// those events anymore. The hook is registered conditionally based on the
+	// tracer configuration.
+	OnNewAccount func(address common.Address, previousExisted bool)
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

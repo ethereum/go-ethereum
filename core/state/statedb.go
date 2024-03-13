@@ -635,6 +635,9 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
+	if s.logger != nil && s.logger.OnNewAccount != nil {
+		s.logger.OnNewAccount(addr, prev != nil)
+	}
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {

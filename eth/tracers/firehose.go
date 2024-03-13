@@ -80,6 +80,7 @@ func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnStorageChange: tracer.OnStorageChange,
 		OnGasChange:     tracer.OnGasChange,
 		OnLog:           tracer.OnLog,
+		OnNewAccount:    tracer.OnNewAccount,
 	}, nil
 }
 
