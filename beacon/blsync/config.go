@@ -39,7 +39,8 @@ var (
 			AddFork("GENESIS", 0, []byte{0, 0, 0, 0}).
 			AddFork("ALTAIR", 74240, []byte{1, 0, 0, 0}).
 			AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
-			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}),
+			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}).
+			AddFork("DENEB", 269568, []byte{4, 0, 0, 0}),
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
 
@@ -51,7 +52,8 @@ var (
 			AddFork("GENESIS", 0, []byte{144, 0, 0, 105}).
 			AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}).
 			AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
-			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}),
+			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}).
+			AddFork("DENEB", 132608, []byte{144, 0, 0, 115}),
 		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
 	}
 
