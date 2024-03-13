@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	zcommon "github.com/protolambda/zrnt/eth2/beacon/common"
+	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
@@ -112,7 +112,7 @@ func convertDenebHeader(payload *deneb.ExecutionPayload, h *types.Header) {
 	h.ExcessBlobGas = (*uint64)(&payload.ExcessBlobGas)
 }
 
-func convertTransactions(list zcommon.PayloadTransactions, execHeader *types.Header) ([]*types.Transaction, error) {
+func convertTransactions(list zrntcommon.PayloadTransactions, execHeader *types.Header) ([]*types.Transaction, error) {
 	txs := make([]*types.Transaction, len(list))
 	for i, opaqueTx := range list {
 		var tx types.Transaction
@@ -125,7 +125,7 @@ func convertTransactions(list zcommon.PayloadTransactions, execHeader *types.Hea
 	return txs, nil
 }
 
-func convertWithdrawals(list zcommon.Withdrawals, execHeader *types.Header) []*types.Withdrawal {
+func convertWithdrawals(list zrntcommon.Withdrawals, execHeader *types.Header) []*types.Withdrawal {
 	withdrawals := make([]*types.Withdrawal, len(list))
 	for i, w := range list {
 		withdrawals[i] = &types.Withdrawal{
