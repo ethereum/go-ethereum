@@ -424,6 +424,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 
+	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
+		bc.logger.OnBlockchainInit(chainConfig)
+	}
+
 	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
@@ -470,9 +474,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
-	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
-		bc.logger.OnBlockchainInit(chainConfig)
-	}
+
 	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
