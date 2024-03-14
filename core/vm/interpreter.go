@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -63,7 +65,7 @@ func (ctx *ScopeContext) Address() common.Address {
 	return ctx.Contract.Address()
 }
 
-func (ctx *ScopeContext) CallValue() *uint256.Int {
+func (ctx *ScopeContext) CallValue() *big.Int {
 	return ctx.Contract.Value()
 }
 

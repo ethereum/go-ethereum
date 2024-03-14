@@ -77,7 +77,7 @@ func runTrace(tracer *directory.Tracer, vmctx *vmContext, chaincfg *params.Chain
 	tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit}), contract.Caller())
 	tracer.OnEnter(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{}, false)
-	tracer.OnEnd(ret, startGas-contract.Gas, err, true)
+	tracer.OnExit(0, ret, startGas-contract.Gas, err, true)
 	// Rest gas assumes no refund
 	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas}, nil)
 	if err != nil {

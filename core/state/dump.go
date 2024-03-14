@@ -104,14 +104,13 @@ type iterativeDump struct {
 // OnAccount implements DumpCollector interface
 func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 	dumpAccount := &DumpAccount{
-		Balance:   account.Balance,
-		Nonce:     account.Nonce,
-		Root:      account.Root,
-		CodeHash:  account.CodeHash,
-		Code:      account.Code,
-		Storage:   account.Storage,
-		SecureKey: account.SecureKey,
-		Address:   addr,
+		Balance:  account.Balance,
+		Nonce:    account.Nonce,
+		Root:     account.Root,
+		CodeHash: account.CodeHash,
+		Code:     account.Code,
+		Storage:  account.Storage,
+		Address:  addr,
 	}
 	d.Encode(dumpAccount)
 }
@@ -150,11 +149,10 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			panic(err)
 		}
 		account := DumpAccount{
-			Balance:   data.Balance.String(),
-			Nonce:     data.Nonce,
-			Root:      data.Root[:],
-			CodeHash:  data.CodeHash,
-			SecureKey: it.Key,
+			Balance:  data.Balance.String(),
+			Nonce:    data.Nonce,
+			Root:     data.Root[:],
+			CodeHash: data.CodeHash,
 		}
 		var (
 			addrBytes = s.trie.GetKey(it.Key)

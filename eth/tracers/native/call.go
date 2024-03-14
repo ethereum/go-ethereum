@@ -147,32 +147,7 @@ func newCallTracerObject(ctx *directory.Context, cfg json.RawMessage) (*callTrac
 	}
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &callTracer{callstack: make([]callFrame, 1), config: config}, nil
-}
-
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *callTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	toCopy := to
-	t.callstack[0] = callFrame{
-		Type:  vm.CALL,
-		From:  from,
-		To:    &toCopy,
-		Input: common.CopyBytes(input),
-		Gas:   t.gasLimit,
-		Value: value,
-	}
-	if create {
-		t.callstack[0].Type = vm.CREATE
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	t.callstack[0].processOutput(output, err, reverted)
-}
-
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *callTracer) CaptureState(pc uint64, op tracing.OpCode, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	return &callTracer{callstack: make([]callFrame, 0, 1), config: config}, nil
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -195,6 +170,9 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 		Gas:   gas,
 		Value: value,
 	}
+	if depth == 0 {
+		call.Gas = t.gasLimit
+	}
 	t.callstack = append(t.callstack, call)
 }
 
@@ -210,17 +188,19 @@ func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error,
 	if t.config.OnlyTopCall {
 		return
 	}
+
 	size := len(t.callstack)
 	if size <= 1 {
 		return
 	}
-	// pop call
+	// Pop call.
 	call := t.callstack[size-1]
 	t.callstack = t.callstack[:size-1]
 	size -= 1
 
 	call.GasUsed = gasUsed
 	call.processOutput(output, err, reverted)
+	// Nest call into parent.
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 

@@ -420,7 +420,7 @@ func (s *stateObject) AddBalance(amount *big.Int, reason tracing.BalanceChangeRe
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
 func (s *stateObject) SubBalance(amount *big.Int, reason tracing.BalanceChangeReason) {
-	if amount.IsZero() {
+	if amount.Sign() == 0 {
 		return
 	}
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount), reason)

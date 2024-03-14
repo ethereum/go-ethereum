@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -681,7 +682,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	// Set infinite balance to the fake caller account.
 	from := stateDB.GetOrNewStateObject(call.From)
-	from.SetBalance(math.MaxBig256, state.BalanceChangeUnspecified)
+	from.SetBalance(math.MaxBig256, tracing.BalanceChangeUnspecified)
 
 	// Execute the call.
 	msg := &core.Message{

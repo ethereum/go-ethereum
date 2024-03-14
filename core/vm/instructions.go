@@ -835,7 +835,7 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 			tracer.OnEnter(interpreter.evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		}
 		if tracer.OnExit != nil {
-			tracer.OnExit([]byte{}, 0, nil, false)
+			tracer.OnExit(interpreter.evm.depth, []byte{}, 0, nil, false)
 		}
 	}
 	return nil, errStopToken
@@ -855,7 +855,7 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 			tracer.OnEnter(interpreter.evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		}
 		if tracer.OnExit != nil {
-			tracer.OnExit([]byte{}, 0, nil, false)
+			tracer.OnExit(interpreter.evm.depth, []byte{}, 0, nil, false)
 		}
 	}
 	return nil, errStopToken

@@ -186,9 +186,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	prestate.Env = *inputData.Env
 
-	vmConfig := vm.Config{
-		Tracer: tracer,
-	}
+	vmConfig := vm.Config{}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {

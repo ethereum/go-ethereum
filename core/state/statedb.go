@@ -384,7 +384,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr)
+	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, reason)
 	}
@@ -392,14 +392,14 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason tracin
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr)
+	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount, reason)
 	}
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr)
+	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount, reason)
 	}
