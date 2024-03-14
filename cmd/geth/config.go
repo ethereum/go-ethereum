@@ -213,9 +213,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 		utils.RegisterFullSyncTester(stack, eth, common.BytesToHash(hex))
 	}
-	// Start the dev mode if requested, or launch the engine API for
-	// interacting with external consensus client.
+
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
+		// Start dev mode.
 		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), eth)
 		if err != nil {
 			utils.Fatalf("failed to register dev mode catalyst service: %v", err)
@@ -223,8 +223,12 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 	} else if ctx.IsSet(utils.BeaconApiFlag.Name) {
-		stack.RegisterLifecycle(catalyst.NewBlsync(blsync.NewClient(ctx), eth))
+		// Start blsync mode.
+		blsyncer := blsync.NewClient(ctx)
+		blsyncer.SetEngineRPC(stack.Attach())
+		stack.RegisterLifecycle(blsyncer)
 	} else {
+		// Launch the engine API for interacting with external consensus client.
 		err := catalyst.Register(stack, eth)
 		if err != nil {
 			utils.Fatalf("failed to register catalyst service: %v", err)
