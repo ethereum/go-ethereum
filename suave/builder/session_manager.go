@@ -167,6 +167,14 @@ func (s *SessionManager) Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*api
 	return builder.Bid(blsPubKey)
 }
 
+func (s *SessionManager) GetBalance(sessionId string, addr common.Address) (*big.Int, error) {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return nil, err
+	}
+	return builder.GetBalance(addr), nil
+}
+
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.

@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -15,6 +17,7 @@ type SessionManager interface {
 	AddTransaction(sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(sessionId string) error
 	Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
+	GetBalance(sessionId string, addr common.Address) (*big.Int, error)
 }
 
 func NewServer(s SessionManager) *Server {
@@ -44,6 +47,10 @@ func (s *Server) Bid(ctx context.Context, sessionId string, blsPubKey phase0.BLS
 	return s.sessionMngr.Bid(sessionId, blsPubKey)
 }
 
+func (s *Server) GetBalance(ctx context.Context, sessionId string, addr common.Address) (*big.Int, error) {
+	return s.sessionMngr.GetBalance(sessionId, addr)
+}
+
 // TODO: Remove
 type MockServer struct {
 }
@@ -58,4 +65,8 @@ func (s *MockServer) AddTransaction(ctx context.Context, sessionId string, tx *t
 
 func (s *MockServer) BuildBlock(ctx context.Context) error {
 	return nil
+}
+
+func (s *MockServer) GetBalance(ctx context.Context, sessionId string, addr common.Address) (*big.Int, error) {
+	return big.NewInt(0), nil
 }

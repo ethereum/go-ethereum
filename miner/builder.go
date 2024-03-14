@@ -99,6 +99,10 @@ func (b *Builder) AddTransaction(txn *types.Transaction) (*suavextypes.SimulateT
 	return receiptToSimResult(&types.Receipt{Logs: logs}), nil
 }
 
+func (b *Builder) GetBalance(addr common.Address) *big.Int {
+	return b.env.state.GetBalance(addr)
+}
+
 func (b *Builder) FillPending() error {
 	if err := b.wrk.commitPendingTxs(b.env); err != nil {
 		return err

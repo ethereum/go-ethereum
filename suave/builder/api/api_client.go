@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -50,4 +52,10 @@ func (a *APIClient) Bid(ctx context.Context, sessioId string, blsPubKey phase0.B
 	var req *SubmitBlockRequest
 	err := a.rpc.CallContext(ctx, &req, "suavex_bid", sessioId, blsPubKey)
 	return req, err
+}
+
+func (a *APIClient) GetBalance(ctx context.Context, sessionId string, addr common.Address) (*big.Int, error) {
+	var balance *big.Int
+	err := a.rpc.CallContext(ctx, &balance, "suavex_getBalance", sessionId, addr)
+	return balance, err
 }

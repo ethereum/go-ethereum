@@ -79,4 +79,5 @@ type API interface {
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
 	Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
+	GetBalance(ctx context.Context, sessionId string, addr common.Address) (*big.Int, error)
 }

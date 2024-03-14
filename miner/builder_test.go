@@ -124,6 +124,26 @@ func TestBuilder_Bid(t *testing.T) {
 	fmt.Println("-- req --", req)
 }
 
+func TestBuilder_Balance(t *testing.T) {
+	t.Parallel()
+
+	config, backend := newMockBuilderConfig(t)
+
+	builder, err := NewBuilder(config, &BuilderArgs{})
+	require.NoError(t, err)
+
+	balance := builder.GetBalance(testBankAddress)
+	require.Equal(t, balance, testBankFunds)
+
+	// make a random txn that consumes gas
+	tx1 := backend.newRandomTx(true)
+	_, err = builder.AddTransaction(tx1)
+	require.NoError(t, err)
+
+	balance2 := builder.GetBalance(testBankAddress)
+	require.NotEqual(t, balance2, testBankFunds)
+}
+
 func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
