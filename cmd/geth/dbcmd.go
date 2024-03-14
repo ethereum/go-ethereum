@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 )
@@ -79,6 +80,7 @@ Remove blockchain and state databases`,
 			dbExportCmd,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
+			dbInspectHistoryCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -202,6 +204,24 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "Shows metadata about the chain status.",
+	}
+	dbInspectHistoryCmd = &cli.Command{
+		Action:    inspectHistory,
+		Name:      "inspect-history",
+		Usage:     "Inspect the state history within block range",
+		ArgsUsage: "<address> [OPTIONAL <storage-slot>]",
+		Flags: flags.Merge([]cli.Flag{
+			utils.SyncModeFlag,
+			&cli.Uint64Flag{
+				Name:  "start",
+				Usage: "block number of the range start, zero means earliest history",
+			},
+			&cli.Uint64Flag{
+				Name:  "end",
+				Usage: "block number of the range end(included), zero means latest history",
+			},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command queries the history of the account or storage slot within the specified block range",
 	}
 )
 
@@ -757,5 +777,93 @@ func showMetaData(ctx *cli.Context) error {
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)
 	table.Render()
+	return nil
+}
+
+func inspectHistory(ctx *cli.Context) error {
+	if ctx.NArg() == 0 || ctx.NArg() > 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	var (
+		address common.Address
+		slot    common.Hash
+	)
+	if err := address.UnmarshalText([]byte(ctx.Args().Get(0))); err != nil {
+		return err
+	}
+	if ctx.NArg() > 1 {
+		if err := slot.UnmarshalText([]byte(ctx.Args().Get(1))); err != nil {
+			return err
+		}
+	}
+	// Load the databases.
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, db, false, false, false)
+	defer triedb.Close()
+
+	var (
+		err   error
+		start uint64 // the first history object to query
+		end   uint64 // the last history object to query (included)
+
+		// State histories are sorted by state ID rather than block number.
+		// To address this, load the corresponding block header and perform
+		// the conversion by this function.
+		blockToID = func(blockNumber uint64) (uint64, error) {
+			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, blockNumber), blockNumber)
+			if header == nil {
+				return 0, fmt.Errorf("block #%d is not existent", blockNumber)
+			}
+			id := rawdb.ReadStateID(db, header.Root)
+			if id == nil {
+				first, last, err := triedb.HistoryRange()
+				if err == nil {
+					return 0, fmt.Errorf("history of block #%d is not existent, available history range: [#%d-#%d]", blockNumber, first, last)
+				}
+				return 0, fmt.Errorf("history of block #%d is not existent", blockNumber)
+			}
+			return *id, nil
+		}
+	)
+	startNumber := ctx.Uint64("start")
+	if startNumber != 0 {
+		start, err = blockToID(startNumber)
+		if err != nil {
+			return err
+		}
+	}
+	endBlock := ctx.Uint64("end")
+	if endBlock != 0 {
+		end, err = blockToID(endBlock)
+		if err != nil {
+			return err
+		}
+	}
+	var stats *pathdb.HistoryStats
+	if slot == (common.Hash{}) {
+		stats, err = triedb.AccountHistory(address, start, end)
+	} else {
+		// The hash of storage slot key is utilized in the history
+		// rather than the raw slot key, make the conversion.
+		slotHash := crypto.Keccak256Hash(slot.Bytes())
+		stats, err = triedb.StorageHistory(address, slotHash, start, end)
+	}
+	if err != nil {
+		return err
+	}
+	if slot == (common.Hash{}) {
+		fmt.Printf("Account history: %s\n", address.Hex())
+	} else {
+		fmt.Printf("Storage history: %s-%s\n", address.Hex(), slot.Hex())
+	}
+	fmt.Printf("Range: [#%d-#%d]\n", stats.Start, stats.End)
+	for i := 0; i < len(stats.Blocks); i++ {
+		fmt.Printf("#%d: %x\n", stats.Blocks[i], stats.Origins[i])
+	}
 	return nil
 }
