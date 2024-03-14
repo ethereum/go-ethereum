@@ -20,6 +20,7 @@ package catalyst
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
-	"strconv"
 )
 
 // Register adds the engine API to the full node.
