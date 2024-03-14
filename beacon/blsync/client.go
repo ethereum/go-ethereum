@@ -85,6 +85,7 @@ func NewClient(ctx *cli.Context) *Client {
 		scheduler:    scheduler,
 		urls:         ctx.StringSlice(utils.BeaconApiFlag.Name),
 		customHeader: customHeader,
+		chainConfig:  &chainConfig,
 		blockSync:    beaconBlockSync,
 	}
 }
