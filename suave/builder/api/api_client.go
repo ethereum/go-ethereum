@@ -44,6 +44,18 @@ func (a *APIClient) AddTransaction(ctx context.Context, sessionId string, tx *ty
 	return receipt, err
 }
 
+func (a *APIClient) AddTransactions(ctx context.Context, sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error) {
+	var receipt []*SimulateTransactionResult
+	err := a.rpc.CallContext(ctx, &receipt, "suavex_addTransactions", sessionId, txs)
+	return receipt, err
+}
+
+func (a *APIClient) AddBundles(ctx context.Context, sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error) {
+	var receipt []*SimulateBundleResult
+	err := a.rpc.CallContext(ctx, &receipt, "suavex_addBundles", sessionId, bundles)
+	return receipt, err
+}
+
 func (a *APIClient) BuildBlock(ctx context.Context, sessionId string) error {
 	return a.rpc.CallContext(ctx, nil, "suavex_buildBlock", sessionId)
 }
