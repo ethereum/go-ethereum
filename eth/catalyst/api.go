@@ -551,7 +551,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.GasLimit", params.GasLimit,
 			"params.GasUsed", params.GasUsed,
 			"params.Timestamp", params.Timestamp,
-			"params.ExtraData", params.ExtraData,
+			"params.ExtraData", common.PrettyBytes(params.ExtraData),
 			"params.BaseFeePerGas", params.BaseFeePerGas,
 			"params.BlobGasUsed", *params.BlobGasUsed,
 			"params.ExcessBlobGas", *params.ExcessBlobGas,
