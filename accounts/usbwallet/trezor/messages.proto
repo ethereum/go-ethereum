@@ -13,6 +13,8 @@ package hw.trezor.messages;
 option java_package = "com.satoshilabs.trezor.lib.protobuf";
 option java_outer_classname = "TrezorMessage";
 
+option go_package = "hw.trezor.messages";
+
 import "google/protobuf/descriptor.proto";
 
 /**
