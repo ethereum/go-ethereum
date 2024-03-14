@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
@@ -46,10 +45,9 @@ var (
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
-	eventFeed := new(event.Feed)
-	blockSync := newBeaconBlockSync(ht, eventFeed)
+	blockSync := newBeaconBlockSync(ht)
 	headCh := make(chan types.ChainHeadEvent, 16)
-	eventFeed.Subscribe(headCh)
+	blockSync.SubscribeChainHead(headCh)
 	ts := sync.NewTestScheduler(t, blockSync)
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)

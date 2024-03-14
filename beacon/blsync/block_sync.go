@@ -35,7 +35,7 @@ type beaconBlockSync struct {
 	headTracker  headTracker
 
 	lastHeadInfo  types.HeadInfo
-	chainHeadFeed *event.Feed
+	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
 }
 
 type headTracker interface {
@@ -45,14 +45,17 @@ type headTracker interface {
 }
 
 // newBeaconBlockSync returns a new beaconBlockSync.
-func newBeaconBlockSync(headTracker headTracker, chainHeadFeed *event.Feed) *beaconBlockSync {
+func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	return &beaconBlockSync{
-		headTracker:   headTracker,
-		chainHeadFeed: chainHeadFeed,
-		recentBlocks:  lru.NewCache[common.Hash, *types.BeaconBlock](10),
-		locked:        make(map[common.Hash]request.ServerAndID),
-		serverHeads:   make(map[request.Server]common.Hash),
+		headTracker:  headTracker,
+		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](10),
+		locked:       make(map[common.Hash]request.ServerAndID),
+		serverHeads:  make(map[request.Server]common.Hash),
 	}
+}
+
+func (s *beaconBlockSync) SubscribeChainHead(ch chan<- types.ChainHeadEvent) event.Subscription {
+	return s.chainHeadFeed.Subscribe(ch)
 }
 
 // Process implements request.Module.

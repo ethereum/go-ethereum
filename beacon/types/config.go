@@ -111,13 +111,13 @@ type ChainConfig struct {
 }
 
 // ForkAtEpoch returns the latest active fork at the given epoch.
-func (c *ChainConfig) ForkAtEpoch(epoch uint64) *Fork {
+func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
 	for i := len(c.Forks) - 1; i >= 0; i-- {
 		if c.Forks[i].Epoch <= epoch {
-			return c.Forks[i]
+			return *c.Forks[i]
 		}
 	}
-	return nil
+	return Fork{}
 }
 
 // AddFork adds a new item to the list of forks.
