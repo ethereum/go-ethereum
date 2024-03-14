@@ -47,7 +47,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		gspec   = &Genesis{
 			Config: &config,
 			Alloc: types.GenesisAlloc{
-				address:                          {Balance: funds},
+				address:                   {Balance: funds},
 				params.BeaconRootsAddress: {Balance: common.Big0, Code: asm4788},
 			},
 			BaseFee:    big.NewInt(params.InitialBaseFee),
