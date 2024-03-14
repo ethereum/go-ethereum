@@ -62,7 +62,7 @@ func TestBlockSync(t *testing.T) {
 		}
 		select {
 		case event := <-headCh:
-			headNumber = event.HeadBlock.Number
+			headNumber = event.Block.NumberU64()
 		default:
 		}
 		if headNumber != expNumber {

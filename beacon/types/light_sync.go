@@ -20,10 +20,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // HeadInfo represents an unvalidated new head announcement.
@@ -185,6 +185,7 @@ func (u *FinalityUpdate) Validate() error {
 // latest accepted head of the beacon chain, along with the hash of the latest
 // finalized execution block.
 type ChainHeadEvent struct {
-	HeadBlock *engine.ExecutableData
-	Finalized common.Hash
+	BeaconHead Header
+	Block      *types.Block
+	Finalized  common.Hash
 }

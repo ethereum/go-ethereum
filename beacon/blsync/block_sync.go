@@ -17,7 +17,6 @@
 package blsync
 
 import (
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
@@ -137,7 +136,8 @@ func (s *beaconBlockSync) updateEventFeed() {
 		return
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
-		HeadBlock: engine.BlockToExecutableData(execBlock, nil, nil).ExecutionPayload,
-		Finalized: common.Hash(finality.Finalized.PayloadHeader.BlockHash()),
+		BeaconHead: head.Header,
+		Block:      execBlock,
+		Finalized:  common.Hash(finality.Finalized.PayloadHeader.BlockHash()),
 	})
 }
