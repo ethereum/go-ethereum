@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli/v2"
 )
@@ -224,8 +225,10 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		stack.RegisterLifecycle(simBeacon)
 	} else if ctx.IsSet(utils.BeaconApiFlag.Name) {
 		// Start blsync mode.
+		srv := rpc.NewServer()
+		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
 		blsyncer := blsync.NewClient(ctx)
-		blsyncer.SetEngineRPC(stack.Attach())
+		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
 		stack.RegisterLifecycle(blsyncer)
 	} else {
 		// Launch the engine API for interacting with external consensus client.
