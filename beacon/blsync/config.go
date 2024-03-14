@@ -65,7 +65,8 @@ var (
 			AddFork("GENESIS", 0, []byte{0, 0, 16, 32}).
 			AddFork("ALTAIR", 36660, []byte{1, 0, 16, 32}).
 			AddFork("BELLATRIX", 112260, []byte{2, 0, 16, 32}).
-			AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}),
+			AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}).
+			AddFork("DENEB", 231680, []byte{4, 0, 16, 32}),
 		Checkpoint: common.HexToHash("0x53a0f4f0a378e2c4ae0a9ee97407eb69d0d737d8d8cd0a5fb1093f42f7b81c49"),
 	}
 )
