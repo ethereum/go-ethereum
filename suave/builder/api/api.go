@@ -24,6 +24,14 @@ type Bundle struct {
 	RefundPercent   *int               `json:"percent,omitempty"`
 }
 
+func (bundle *Bundle) RevertingHashesMap() map[common.Hash]struct{} {
+	m := make(map[common.Hash]struct{})
+	for _, hash := range bundle.RevertingHashes {
+		m[hash] = struct{}{}
+	}
+	return m
+}
+
 type BuildBlockArgs struct {
 	Slot           uint64              `json:"slot"`
 	ProposerPubkey []byte              `json:"proposerPubkey"`
@@ -52,6 +60,13 @@ type SimulateTransactionResult struct {
 	Error   string          `json:"error"`
 }
 
+type SimulateBundleResult struct {
+	Egp                        uint64                       `json:"egp"`
+	SimulateTransactionResults []*SimulateTransactionResult `json:"simulateTransactionResults"`
+	Success                    bool                         `json:"success"`
+	Error                      string                       `json:"error"`
+}
+
 // field type overrides for gencodec
 type simulateTransactionResultMarshaling struct {
 	Egp hexutil.Uint64
@@ -77,6 +92,8 @@ type SubmitBlockRequest struct {
 type API interface {
 	NewSession(ctx context.Context, args *BuildBlockArgs) (string, error)
 	AddTransaction(ctx context.Context, sessionId string, tx *types.Transaction) (*SimulateTransactionResult, error)
+	AddTransactions(ctx context.Context, sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error)
+	AddBundles(ctx context.Context, sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
 	Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
 }

@@ -163,6 +163,22 @@ func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction)
 	return builder.AddTransaction(tx)
 }
 
+func (s *SessionManager) AddTransactions(sessionId string, txs types.Transactions) ([]*api.SimulateTransactionResult, error) {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return nil, err
+	}
+	return builder.AddTransactions(txs)
+}
+
+func (s *SessionManager) AddBundles(sessionId string, bundles []*api.Bundle) ([]*api.SimulateBundleResult, error) {
+	builder, err := s.getSession(sessionId)
+	if err != nil {
+		return nil, err
+	}
+	return builder.AddBundles(bundles)
+}
+
 func (s *SessionManager) BuildBlock(sessionId string) error {
 	builder, err := s.getSession(sessionId, false)
 	if err != nil {

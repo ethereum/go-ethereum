@@ -27,6 +27,14 @@ func TestAPI(t *testing.T) {
 	txn := types.NewTransaction(0, common.Address{}, big.NewInt(1), 1, big.NewInt(1), []byte{})
 	_, err = c.AddTransaction(context.Background(), "1", txn)
 	require.NoError(t, err)
+	_, err = c.AddTransactions(context.Background(), "1", []*types.Transaction{txn})
+	require.NoError(t, err)
+
+	bundle := &Bundle{
+		Txs: []*types.Transaction{txn},
+	}
+	_, err = c.AddBundles(context.Background(), "1", []*Bundle{bundle})
+	require.NoError(t, err)
 }
 
 type nullSessionManager struct{}
@@ -39,8 +47,12 @@ func (nullSessionManager) AddTransaction(sessionId string, tx *types.Transaction
 	return &SimulateTransactionResult{Logs: []*SimulatedLog{}}, nil
 }
 
-func (nullSessionManager) AddBundle(sessionId string, bundle Bundle) error {
-	return nil
+func (nullSessionManager) AddTransactions(sessionId string, txs types.Transactions) ([]*SimulateTransactionResult, error) {
+	return nil, nil
+}
+
+func (nullSessionManager) AddBundles(sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error) {
+	return nil, nil
 }
 
 func (nullSessionManager) BuildBlock(sessionId string) error {
