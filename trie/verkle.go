@@ -79,6 +79,7 @@ func (t *VerkleTrie) GetKey(key []byte) []byte {
 // account address. If the specified account is not in the verkle tree, nil will
 // be returned. If the tree is corrupted, an error will be returned.
 func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
+	versionkey := t.cache.GetTreeKeyVersionCached(addr[:])
 	var (
 		acc    = &types.StateAccount{}
 		values [][]byte
@@ -86,7 +87,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	)
 	switch n := t.root.(type) {
 	case *verkle.InternalNode:
-		values, err = n.GetValuesAtStem(t.cache.GetStem(addr[:]), t.nodeResolver)
+		values, err = n.GetValuesAtStem(versionkey, t.nodeResolver)
 		if err != nil {
 			return nil, fmt.Errorf("GetAccount (%x) error: %v", addr, err)
 		}
@@ -119,7 +120,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 // account address and storage key. If the specified slot is not in the verkle tree,
 // nil will be returned. If the tree is corrupted, an error will be returned.
 func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()), key)
+	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.GetTreeKeyHeader(addr.Bytes()), key)
 	val, err := t.root.Get(k, t.nodeResolver)
 	if err != nil {
 		return nil, err
@@ -153,7 +154,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 
 	switch n := t.root.(type) {
 	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr[:]), values, t.nodeResolver)
+		err = n.InsertValuesAtStem(t.cache.GetTreeKeyVersionCached(addr[:]), values, t.nodeResolver)
 		if err != nil {
 			return fmt.Errorf("UpdateAccount (%x) error: %v", addr, err)
 		}
@@ -174,7 +175,7 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	} else {
 		copy(v[32-len(value):], value[:])
 	}
-	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(address.Bytes()), key)
+	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.GetTreeKeyHeader(address.Bytes()), key)
 	return t.root.Insert(k, v[:], t.nodeResolver)
 }
 
@@ -191,7 +192,7 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 	}
 	switch n := t.root.(type) {
 	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr.Bytes()), values, t.nodeResolver)
+		err = n.InsertValuesAtStem(t.cache.GetTreeKeyVersionCached(addr.Bytes()), values, t.nodeResolver)
 		if err != nil {
 			return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
 		}
@@ -206,7 +207,7 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 // returned. If the trie is corrupted, an error will be returned.
 func (t *VerkleTrie) DeleteStorage(addr common.Address, key []byte) error {
 	var zero [32]byte
-	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()), key)
+	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.GetTreeKeyHeader(addr.Bytes()), key)
 	return t.root.Insert(k, zero[:], t.nodeResolver)
 }
 
@@ -338,7 +339,7 @@ func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		groupOffset := (chunknr + 128) % 256
 		if groupOffset == 0 /* start of new group */ || chunknr == 0 /* first chunk in header group */ {
 			values = make([][]byte, verkle.NodeWidth)
-			key = utils.CodeChunkKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()), uint256.NewInt(chunknr))
+			key = utils.CodeChunkKeyWithEvaluatedAddress(t.cache.GetTreeKeyHeader(addr.Bytes()), uint256.NewInt(chunknr))
 		}
 		values[groupOffset] = chunks[i : i+32]
 

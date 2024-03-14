@@ -57,7 +57,7 @@ var (
 
 func TestVerkleTreeReadWrite(t *testing.T) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
-	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache(100))
+	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache())
 
 	for addr, acct := range accounts {
 		if err := tr.UpdateAccount(addr, acct); err != nil {

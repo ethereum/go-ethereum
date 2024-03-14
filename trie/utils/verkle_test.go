@@ -27,7 +27,7 @@ import (
 func TestTreeKey(t *testing.T) {
 	var (
 		address      = []byte{0x01}
-		addressEval  = evaluateAddressPoint(address)
+		addressEval  = EvaluateAddressPoint(address)
 		smallIndex   = uint256.NewInt(1)
 		largeIndex   = uint256.NewInt(10000)
 		smallStorage = []byte{0x1}
@@ -91,7 +91,7 @@ func BenchmarkTreeKeyWithEvaluation(b *testing.B) {
 	verkle.GetConfig()
 
 	addr := []byte{0x01}
-	eval := evaluateAddressPoint(addr)
+	eval := EvaluateAddressPoint(addr)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -129,7 +129,7 @@ func BenchmarkStorageKeyWithEvaluation(b *testing.B) {
 	verkle.GetConfig()
 
 	addr := []byte{0x01}
-	eval := evaluateAddressPoint(addr)
+	eval := EvaluateAddressPoint(addr)
 
 	b.ReportAllocs()
 	b.ResetTimer()

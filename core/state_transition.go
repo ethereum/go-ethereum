@@ -23,8 +23,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -354,6 +356,19 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
+// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
+// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
+// otherwise, do the subtraction setting the result in gasPool and return true
+func tryConsumeGas(gasPool *uint64, gas uint64) bool {
+	if *gasPool < gas {
+		*gasPool = 0
+		return false
+	}
+
+	*gasPool -= gas
+	return true
+}
+
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -403,6 +418,28 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	st.gasRemaining -= gas
+
+	if rules.IsVerkle {
+		statelessGasOrigin := st.evm.StateDB.TouchTxOriginAndComputeGas(msg.From)
+		if !tryConsumeGas(&st.gasRemaining, statelessGasOrigin) {
+			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+		}
+		originNonce := st.evm.StateDB.GetNonce(msg.From)
+		if msg.To != nil {
+			statelessGasDest := st.evm.StateDB.TouchTxExistingAndComputeGas(*msg.To, msg.Value.Sign() != 0)
+			if !tryConsumeGas(&st.gasRemaining, statelessGasDest) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+			}
+
+			// ensure the code size ends up in the access witness
+			st.evm.StateDB.GetCodeSize(*msg.To)
+		} else {
+			contractAddr := crypto.CreateAddress(msg.From, originNonce)
+			if !tryConsumeGas(&st.gasRemaining, st.evm.StateDB.TouchAndChargeContractCreateInit(contractAddr, msg.Value.Sign() != 0)) {
+				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
+			}
+		}
+	}
 
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
@@ -457,6 +494,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+
+		if rules.IsVerkle && fee.Sign() != 0 {
+			st.evm.StateDB.AddAddressToAccessList(st.evm.Context.Coinbase, state.ALAllItems, state.AccessListWrite)
+		}
 	}
 
 	return &ExecutionResult{

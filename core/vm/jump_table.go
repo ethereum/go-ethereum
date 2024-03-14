@@ -80,6 +80,12 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
+func newVerkleInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	EnableEIP(4762, &instructionSet)
+	return validate(instructionSet)
+}
+
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)

@@ -345,14 +345,14 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "AddAddressToAccessList",
 			fn: func(a testAction, s *StateDB) {
-				s.AddAddressToAccessList(addr)
+				s.AddAddressToAccessList(addr, 0, false)
 			},
 		},
 		{
 			name: "AddSlotToAccessList",
 			fn: func(a testAction, s *StateDB) {
 				s.AddSlotToAccessList(addr,
-					common.Hash{byte(a.args[0])})
+					common.Hash{byte(a.args[0])}, false)
 			},
 			args: make([]int64, 1),
 		},
@@ -879,19 +879,19 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 		// Check that the given addresses are in the access list
 		for _, address := range addresses {
-			if !state.AddressInAccessList(address) {
+			if !state.addressInAccessList(address) {
 				t.Fatalf("expected %x to be in access list", address)
 			}
 		}
 		// Check that only the expected addresses are present in the access list
-		for address := range state.accessList.addresses {
+		for address := range state.accessList.(*accessList2929).addresses {
 			if _, exist := addressMap[address]; !exist {
 				t.Fatalf("extra address %x in access list", address)
 			}
 		}
 	}
 	verifySlots := func(addrString string, slotStrings ...string) {
-		if !state.AddressInAccessList(addr(addrString)) {
+		if !state.addressInAccessList(addr(addrString)) {
 			t.Fatalf("scope missing address/slots %v", addrString)
 		}
 		var address = addr(addrString)
@@ -905,14 +905,14 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 		// Check that the expected items are in the access list
 		for i, s := range slots {
-			if _, slotPresent := state.SlotInAccessList(address, s); !slotPresent {
+			if _, slotPresent := state.slotInAccessList(address, s); !slotPresent {
 				t.Fatalf("input %d: scope missing slot %v (address %v)", i, s, addrString)
 			}
 		}
 		// Check that no extra elements are in the access list
-		index := state.accessList.addresses[address]
+		index := state.accessList.(*accessList2929).addresses[address]
 		if index >= 0 {
-			stateSlots := state.accessList.slots[index]
+			stateSlots := state.accessList.(*accessList2929).slots[index]
 			for s := range stateSlots {
 				if _, slotPresent := slotMap[s]; !slotPresent {
 					t.Fatalf("scope has extra slot %v (address %v)", s, addrString)
@@ -921,9 +921,9 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 	}
 
-	state.AddAddressToAccessList(addr("aa"))          // 1
-	state.AddSlotToAccessList(addr("bb"), slot("01")) // 2,3
-	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
+	state.AddAddressToAccessList(addr("aa"), 0, false)       // 1
+	state.AddSlotToAccessList(addr("bb"), slot("01"), false) // 2,3
+	state.AddSlotToAccessList(addr("bb"), slot("02"), false) // 4
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
@@ -934,17 +934,17 @@ func TestStateDBAccessList(t *testing.T) {
 	}
 
 	// same again, should cause no journal entries
-	state.AddSlotToAccessList(addr("bb"), slot("01"))
-	state.AddSlotToAccessList(addr("bb"), slot("02"))
-	state.AddAddressToAccessList(addr("aa"))
+	state.AddSlotToAccessList(addr("bb"), slot("01"), false)
+	state.AddSlotToAccessList(addr("bb"), slot("02"), false)
+	state.AddAddressToAccessList(addr("aa"), 0, false)
 	if exp, got := 4, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
 	// some new ones
-	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
-	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
-	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
-	state.AddAddressToAccessList(addr("cc"))
+	state.AddSlotToAccessList(addr("bb"), slot("03"), false) // 5
+	state.AddSlotToAccessList(addr("aa"), slot("01"), false) // 6
+	state.AddSlotToAccessList(addr("cc"), slot("01"), false) // 7,8
+	state.AddAddressToAccessList(addr("cc"), 0, false)
 	if exp, got := 8, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
@@ -956,7 +956,7 @@ func TestStateDBAccessList(t *testing.T) {
 
 	// now start rolling back changes
 	state.journal.revert(state, 7)
-	if _, ok := state.SlotInAccessList(addr("cc"), slot("01")); ok {
+	if _, ok := state.slotInAccessList(addr("cc"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb", "cc")
@@ -964,7 +964,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 6)
-	if state.AddressInAccessList(addr("cc")) {
+	if state.addressInAccessList(addr("cc")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
@@ -972,46 +972,46 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 5)
-	if _, ok := state.SlotInAccessList(addr("aa"), slot("01")); ok {
+	if _, ok := state.slotInAccessList(addr("aa"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02", "03")
 
 	state.journal.revert(state, 4)
-	if _, ok := state.SlotInAccessList(addr("bb"), slot("03")); ok {
+	if _, ok := state.slotInAccessList(addr("bb"), slot("03")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
 	state.journal.revert(state, 3)
-	if _, ok := state.SlotInAccessList(addr("bb"), slot("02")); ok {
+	if _, ok := state.slotInAccessList(addr("bb"), slot("02")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01")
 
 	state.journal.revert(state, 2)
-	if _, ok := state.SlotInAccessList(addr("bb"), slot("01")); ok {
+	if _, ok := state.slotInAccessList(addr("bb"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 
 	state.journal.revert(state, 1)
-	if state.AddressInAccessList(addr("bb")) {
+	if state.addressInAccessList(addr("bb")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa")
 
 	state.journal.revert(state, 0)
-	if state.AddressInAccessList(addr("aa")) {
+	if state.addressInAccessList(addr("aa")) {
 		t.Fatalf("addr present, expected missing")
 	}
-	if got, exp := len(state.accessList.addresses), 0; got != exp {
+	if got, exp := len(state.accessList.(*accessList2929).addresses), 0; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
-	if got, exp := len(state.accessList.slots), 0; got != exp {
+	if got, exp := len(state.accessList.(*accessList2929).slots), 0; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
 	// Check the copy
@@ -1019,10 +1019,10 @@ func TestStateDBAccessList(t *testing.T) {
 	state = stateCopy1
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
-	if got, exp := len(state.accessList.addresses), 2; got != exp {
+	if got, exp := len(state.accessList.(*accessList2929).addresses), 2; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
-	if got, exp := len(state.accessList.slots), 1; got != exp {
+	if got, exp := len(state.accessList.(*accessList2929).slots), 1; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
 }
