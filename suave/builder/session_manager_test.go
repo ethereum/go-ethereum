@@ -33,7 +33,7 @@ func TestSessionManager_SessionTimeout(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	_, err = mngr.getSession(id)
+	_, err = mngr.getSession(id, false)
 	require.Error(t, err)
 }
 
@@ -89,7 +89,7 @@ func TestSessionManager_SessionRefresh(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		time.Sleep(250 * time.Millisecond)
 
-		_, err = mngr.getSession(id)
+		_, err = mngr.getSession(id, false)
 		require.NoError(t, err)
 	}
 
@@ -98,7 +98,7 @@ func TestSessionManager_SessionRefresh(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	_, err = mngr.getSession(id)
+	_, err = mngr.getSession(id, false)
 	require.Error(t, err)
 }
 
@@ -114,6 +114,11 @@ func TestSessionManager_StartSession(t *testing.T) {
 	receipt, err := mngr.AddTransaction(id, txn)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
+
+	// test that you can simulate the transaction on the fly
+	receipt2, err := mngr.AddTransaction("", txn)
+	require.NoError(t, err)
+	require.Equal(t, receipt, receipt2)
 }
 
 func newSessionManager(t *testing.T, cfg *Config) (*SessionManager, *testBackend) {
