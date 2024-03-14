@@ -180,7 +180,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	for i, encTx := range enc {
 		var tx types.Transaction
 		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
+			return nil, fmt.Errorf("invalid transaction %d: %w", i, err)
 		}
 		txs[i] = &tx
 	}
