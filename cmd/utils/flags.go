@@ -2211,11 +2211,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config string
+			var config json.RawMessage
 			if ctx.IsSet(VMTraceConfigFlag.Name) {
-				config = ctx.String(VMTraceConfigFlag.Name)
+				config = json.RawMessage(ctx.String(VMTraceConfigFlag.Name))
 			}
-			t, err := live.Directory.New(name, json.RawMessage(config))
+			t, err := live.Directory.New(name, config)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
