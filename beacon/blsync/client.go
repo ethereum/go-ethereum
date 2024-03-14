@@ -96,7 +96,7 @@ func (c *Client) SetEngineRPC(engine *rpc.Client) {
 
 func (c *Client) Start() error {
 	headCh := make(chan types.ChainHeadEvent, 16)
-	c.blockSync.SubscribeChainHead(headCh)
+	c.chainHeadSub = c.blockSync.SubscribeChainHead(headCh)
 	c.engineClient = startEngineClient(c.chainConfig, c.engineRPC, headCh)
 
 	c.scheduler.Start()
