@@ -303,3 +303,21 @@ type ExecutionPayloadBodyV1 struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
 }
+
+// Client identifiers to support ClientVersionV1.
+const (
+	ClientCode = "GE"
+	ClientName = "go-ethereum"
+)
+
+// ClientVersionV1 contains information which identifies a client implementation.
+type ClientVersionV1 struct {
+	Code    string `json:"code"`
+	Name    string `json:"clientName"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
+func (v *ClientVersionV1) String() string {
+	return fmt.Sprintf("%s-%s-%s-%s", v.Code, v.Name, v.Version, v.Commit)
+}

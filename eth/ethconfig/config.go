@@ -165,15 +165,14 @@ type Config struct {
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
-	// If proof-of-authority is requested, set it up
+	// Geth v1.14.0 dropped support for non-merged networks in any consensus
+	// mode. If such a network is requested, reject startup.
+	if !config.TerminalTotalDifficultyPassed {
+		return nil, errors.New("only PoS networks are supported, please transition old ones with Geth v1.13.x")
+	}
+	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {
 		return beacon.New(clique.New(config.Clique, db)), nil
-	}
-	// If defaulting to proof-of-work, enforce an already merged network since
-	// we cannot run PoW algorithms anymore, so we cannot even follow a chain
-	// not coordinated by a beacon node.
-	if !config.TerminalTotalDifficultyPassed {
-		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
 	}
 	return beacon.New(ethash.NewFaker()), nil
 }

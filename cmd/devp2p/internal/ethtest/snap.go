@@ -648,7 +648,7 @@ The server should reject the request.`,
 					0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8}},
 			},
 			nBytes:    5000,
-			expHashes: []common.Hash{common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")},
+			expHashes: []common.Hash{types.EmptyCodeHash},
 		},
 
 		{

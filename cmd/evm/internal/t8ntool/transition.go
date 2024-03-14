@@ -22,12 +22,11 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -74,10 +73,10 @@ var (
 )
 
 type input struct {
-	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
-	Env   *stEnv            `json:"env,omitempty"`
-	Txs   []*txWithKey      `json:"txs,omitempty"`
-	TxRlp string            `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
+	Env   *stEnv             `json:"env,omitempty"`
+	Txs   []*txWithKey       `json:"txs,omitempty"`
+	TxRlp string             `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -97,7 +96,7 @@ func Transition(ctx *cli.Context) error {
 			Debug:            true,
 		}
 		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
@@ -109,7 +108,7 @@ func Transition(ctx *cli.Context) error {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
 		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
 				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
@@ -136,7 +135,7 @@ func Transition(ctx *cli.Context) error {
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
@@ -272,7 +271,7 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	return nil
 }
 
-type Alloc map[common.Address]core.GenesisAccount
+type Alloc map[common.Address]types.Account
 
 func (g Alloc) OnRoot(common.Hash) {}
 
@@ -288,7 +287,7 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 			storage[k] = common.HexToHash(v)
 		}
 	}
-	genesisAccount := core.GenesisAccount{
+	genesisAccount := types.Account{
 		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
@@ -303,7 +302,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
-	location := path.Join(baseDir, filename)
+	location := filepath.Join(baseDir, filename)
 	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}

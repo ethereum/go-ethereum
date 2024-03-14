@@ -81,7 +81,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
 			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
 			testEmpty:    {Balance: big.NewInt(1)},
@@ -146,7 +146,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
-		// one block. The `testAcessList` fails if the miner has not yet created a
+		// one block. The `testAccessList` fails if the miner has not yet created a
 		// new pending-block after the import event.
 		// Hence: this test should be last, execute the tests serially.
 		{

@@ -71,7 +71,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	}
 	genesis := &core.Genesis{
 		Config: &config,
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			testAddr:                         {Balance: testBalance},
 			params.BeaconRootsStorageAddress: {Balance: common.Big0, Code: common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604457602036146024575f5ffd5b620180005f350680545f35146037575f5ffd5b6201800001545f5260205ff35b6201800042064281555f359062018000015500")},
 		},
@@ -262,11 +262,8 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 		{0, true},
 		{parent.Time, true},
 		{parent.Time - 1, true},
-
-		// TODO (MariusVanDerWijden) following tests are currently broken,
-		// fixed in upcoming merge-kiln-v2 pr
-		//{parent.Time() + 1, false},
-		//{uint64(time.Now().Unix()) + uint64(time.Minute), false},
+		{parent.Time + 1, false},
+		{uint64(time.Now().Unix()) + uint64(time.Minute), false},
 	}
 
 	for i, test := range tests {
@@ -450,7 +447,9 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		t.Fatal("can't create node:", err)
 	}
 
-	ethcfg := &ethconfig.Config{Genesis: genesis, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
+	mcfg := miner.DefaultConfig
+	mcfg.PendingFeeRecipient = testAddr
+	ethcfg := &ethconfig.Config{Genesis: genesis, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256, Miner: mcfg}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
@@ -463,7 +462,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		t.Fatal("can't import test blocks:", err)
 	}
 
-	ethservice.SetEtherbase(testAddr)
 	ethservice.SetSynced()
 	return n, ethservice
 }
@@ -865,7 +863,6 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 func TestInvalidBloom(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	commonAncestor := ethservice.BlockChain().CurrentBlock()
@@ -1047,7 +1044,6 @@ func TestWithdrawals(t *testing.T) {
 	genesis.Config.ShanghaiTime = &time
 
 	n, ethservice := startEthService(t, genesis, blocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
@@ -1165,7 +1161,6 @@ func TestNilWithdrawals(t *testing.T) {
 	genesis.Config.ShanghaiTime = &time
 
 	n, ethservice := startEthService(t, genesis, blocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
@@ -1592,7 +1587,6 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	genesis.Config.CancunTime = &time
 
 	n, ethservice := startEthService(t, genesis, blocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	api := NewConsensusAPI(ethservice)
@@ -1661,5 +1655,28 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	}
 	if root := db.GetState(params.BeaconRootsStorageAddress, rootIdx); root != *blockParams.BeaconRoot {
 		t.Fatalf("incorrect root stored: want %s, got %s", *blockParams.BeaconRoot, root)
+	}
+}
+
+// TestGetClientVersion verifies the expected version info is returned.
+func TestGetClientVersion(t *testing.T) {
+	genesis, preMergeBlocks := generateMergeChain(10, false)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	info := engine.ClientVersionV1{
+		Code:    "TT",
+		Name:    "test",
+		Version: "1.1.1",
+		Commit:  "0x12345678",
+	}
+	infos := api.GetClientVersionV1(info)
+	if len(infos) != 1 {
+		t.Fatalf("expected only one returned client version, got %d", len(infos))
+	}
+	info = infos[0]
+	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta {
+		t.Fatalf("client info does match expected, got %s", info.String())
 	}
 }
