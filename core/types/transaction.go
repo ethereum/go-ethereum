@@ -41,6 +41,7 @@ var (
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
 	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
+	errShortTypedTx         = errors.New("typed transaction too short")
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
@@ -94,6 +95,9 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+
+	encode(*bytes.Buffer) error
+	decode([]byte) error
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -114,7 +118,7 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 // encodeTyped writes the canonical encoding of a typed transaction to w.
 func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 	w.WriteByte(tx.Type())
-	return rlp.Encode(w, tx.inner)
+	return tx.inner.encode(w)
 }
 
 // MarshalBinary returns the canonical encoding of the transaction.
@@ -143,7 +147,9 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}
 		return err
-	case kind == rlp.String:
+	case kind == rlp.Byte:
+		return errShortTypedTx
+	default:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
@@ -154,8 +160,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(inner, len(b))
 		}
 		return err
-	default:
-		return rlp.ErrExpectedList
 	}
 }
 
@@ -183,29 +187,24 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
-	if len(b) == 0 {
-		return nil, errEmptyTypedTx
+	if len(b) <= 1 {
+		return nil, errShortTypedTx
 	}
+	var inner TxData
 	switch b[0] {
 	case AccessListTxType:
-		var inner AccessListTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
+		inner = new(AccessListTx)
 	case DynamicFeeTxType:
-		var inner DynamicFeeTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
+		inner = new(DynamicFeeTx)
 	case BlobTxType:
-		var inner BlobTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
+		inner = new(BlobTx)
 	case L1MessageTxType:
-		var inner L1MessageTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
+		inner = new(L1MessageTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
+	err := inner.decode(b[1:])
+	return inner, err
 }
 
 // setDecoded sets the inner transaction and size after decoding.

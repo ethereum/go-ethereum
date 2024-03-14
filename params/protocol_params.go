@@ -160,7 +160,11 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
-	BlobTxBlobGasPerBlob = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
+	BlobTxBlobGasPerBlob             = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
+	BlobTxMinBlobGasprice            = 1       // Minimum gas price for data blobs
+	BlobTxBlobGaspriceUpdateFraction = 3338477 // Controls the maximum rate of change for blob gas price
+
+	BlobTxTargetBlobGasPerBlock = 3 * BlobTxBlobGasPerBlob // Target consumable blob gas for data blobs per block (for 1559-like pricing)
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

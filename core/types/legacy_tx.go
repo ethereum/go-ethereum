@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -109,4 +110,12 @@ func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 
 func (tx *LegacyTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.V, tx.R, tx.S = v, r, s
+}
+
+func (tx *LegacyTx) encode(*bytes.Buffer) error {
+	panic("encode called on LegacyTx")
+}
+
+func (tx *LegacyTx) decode([]byte) error {
+	panic("decode called on LegacyTx)")
 }

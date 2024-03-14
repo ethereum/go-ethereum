@@ -17,11 +17,14 @@
 package rlp
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
 	"reflect"
 	"sync"
+
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -189,6 +192,35 @@ func (w *encbuf) encodeUint(i uint64) {
 	}
 }
 
+func (w *encbuf) writeUint64(i uint64) {
+	if i == 0 {
+		w.str = append(w.str, 0x80)
+	} else if i < 128 {
+		// fits single byte
+		w.str = append(w.str, byte(i))
+	} else {
+		s := putint(w.sizebuf[1:], i)
+		w.sizebuf[0] = 0x80 + byte(s)
+		w.str = append(w.str, w.sizebuf[:s+1]...)
+	}
+}
+
+func (w *encbuf) writeUint256(z *uint256.Int) {
+	bitlen := z.BitLen()
+	if bitlen <= 64 {
+		w.writeUint64(z.Uint64())
+		return
+	}
+	nBytes := byte((bitlen + 7) / 8)
+	var b [33]byte
+	binary.BigEndian.PutUint64(b[1:9], z[3])
+	binary.BigEndian.PutUint64(b[9:17], z[2])
+	binary.BigEndian.PutUint64(b[17:25], z[1])
+	binary.BigEndian.PutUint64(b[25:33], z[0])
+	b[32-nBytes] = 0x80 + nBytes
+	w.str = append(w.str, b[32-nBytes:]...)
+}
+
 // list adds a new list header to the header stack. It returns the index
 // of the header. The caller must call listEnd with this index after encoding
 // the content of the list.
@@ -332,6 +364,10 @@ func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 		return writeBigIntPtr, nil
 	case typ.AssignableTo(bigInt):
 		return writeBigIntNoPtr, nil
+	case typ == reflect.PtrTo(u256Int):
+		return writeU256IntPtr, nil
+	case typ == u256Int:
+		return writeU256IntNoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrWriter(typ, ts)
 	case reflect.PtrTo(typ).Implements(encoderInterface):
@@ -417,6 +453,22 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 			d >>= 8
 		}
 	}
+	return nil
+}
+
+func writeU256IntPtr(val reflect.Value, w *encbuf) error {
+	ptr := val.Interface().(*uint256.Int)
+	if ptr == nil {
+		w.str = append(w.str, 0x80)
+		return nil
+	}
+	w.writeUint256(ptr)
+	return nil
+}
+
+func writeU256IntNoPtr(val reflect.Value, w *encbuf) error {
+	i := val.Interface().(uint256.Int)
+	w.writeUint256(&i)
 	return nil
 }
 

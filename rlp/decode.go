@@ -27,6 +27,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/holiman/uint256"
 )
 
 //lint:ignore ST1012 EOL is not an error.
@@ -50,6 +52,7 @@ var (
 	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
+	errUint256Large  = errors.New("rlp: value too large for uint256")
 
 	streamPool = sync.Pool{
 		New: func() interface{} { return new(Stream) },
@@ -146,6 +149,7 @@ func addErrorContext(err error, ctx string) error {
 var (
 	decoderInterface = reflect.TypeOf(new(Decoder)).Elem()
 	bigInt           = reflect.TypeOf(big.Int{})
+	u256Int          = reflect.TypeOf(uint256.Int{})
 )
 
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
@@ -157,6 +161,10 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
 		return decodeBigIntNoPtr, nil
+	case typ == reflect.PtrTo(u256Int):
+		return decodeU256, nil
+	case typ == u256Int:
+		return decodeU256NoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrDecoder(typ, tags)
 	case reflect.PtrTo(typ).Implements(decoderInterface):
@@ -265,6 +273,24 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 		val.Set(reflect.ValueOf(i))
 	}
 	i.SetBytes(buffer)
+	return nil
+}
+
+func decodeU256NoPtr(s *Stream, val reflect.Value) error {
+	return decodeU256(s, val.Addr())
+}
+
+func decodeU256(s *Stream, val reflect.Value) error {
+	i := val.Interface().(*uint256.Int)
+	if i == nil {
+		i = new(uint256.Int)
+		val.Set(reflect.ValueOf(i))
+	}
+
+	err := s.ReadUint256(i)
+	if err != nil {
+		return wrapStreamError(err, val.Type())
+	}
 	return nil
 }
 
@@ -778,6 +804,45 @@ func (s *Stream) ListEnd() error {
 	s.stack = s.stack[:len(s.stack)-1] // pop
 	s.kind = -1
 	s.size = 0
+	return nil
+}
+
+// ReadUint256 decodes the next value as a uint256.
+func (s *Stream) ReadUint256(dst *uint256.Int) error {
+	var buffer []byte
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == List:
+		return ErrExpectedString
+	case kind == Byte:
+		buffer = s.uintbuf[:1]
+		buffer[0] = s.byteval
+		s.kind = -1 // re-arm Kind
+	case size == 0:
+		// Avoid zero-length read.
+		s.kind = -1
+	case size <= uint64(len(s.uintbuf)):
+		// All possible uint256 values fit into s.uintbuf.
+		buffer = s.uintbuf[:size]
+		if err := s.readFull(buffer); err != nil {
+			return err
+		}
+		// Reject inputs where single byte encoding should have been used.
+		if size == 1 && buffer[0] < 128 {
+			return ErrCanonSize
+		}
+	default:
+		return errUint256Large
+	}
+
+	// Reject leading zero bytes.
+	if len(buffer) > 0 && buffer[0] == 0 {
+		return ErrCanonInt
+	}
+	// Set the integer bytes.
+	dst.SetBytes(buffer)
 	return nil
 }
 
