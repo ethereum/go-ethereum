@@ -82,6 +82,7 @@ func (h *HistoryNetwork) Start() error {
 		return err
 	}
 	go h.processContentLoop(h.closeCtx)
+	h.log.Debug("history network start successfully")
 	return nil
 }
 

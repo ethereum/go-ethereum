@@ -944,6 +944,73 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	HistoryHTTPListenAddrFlag = &cli.StringFlag{
+		Name:     "history.http.addr",
+		Usage:    "HTTP-RPC server listening interface",
+		Value:    node.DefaultHTTPHost,
+		Category: flags.PortalNetworkCategory,
+	}
+
+	HistoryHTTPPortFlag = &cli.IntFlag{
+		Name:     "history.http.port",
+		Usage:    "HTTP-RPC server listening port",
+		Value:    node.DefaultHTTPPort,
+		Category: flags.PortalNetworkCategory,
+	}
+
+	HistoryDataDirFlag = &cli.StringFlag{
+		Name:     "history.data.dir",
+		Usage:    "data dir of where the data file located",
+		Value:    "./",
+		Category: flags.PortalNetworkCategory,
+	}
+
+	HistoryDataCapacityFlag = &cli.Uint64Flag{
+		Name:     "history.data.capacity",
+		Usage:    "the capacity of the data stored, the unit is byte",
+		Value:    1000 * 1000 * 1000, // 1 GB
+		Category: flags.PortalNetworkCategory,
+	}
+
+	ProtocolUDPListenAddrFlag = &cli.StringFlag{
+		Name:     "udp.addr",
+		Usage:    "protocol UDP server listening interface",
+		Value:    "",
+		Category: flags.PortalNetworkCategory,
+	}
+
+	ProtocolUDPPortFlag = &cli.IntFlag{
+		Name:     "udp.port",
+		Usage:    "protocol UDP server listening port",
+		Value:    node.DefaultUDPPort,
+		Category: flags.PortalNetworkCategory,
+	}
+
+	LogLevelFlag = &cli.IntFlag{
+		Name:     "history.loglevel",
+		Usage:    "loglevel of portal network",
+		Value:    node.DetaultLoglevel,
+		Category: flags.PortalNetworkCategory,
+	}
+
+	HiveBootNodeFlag = &cli.StringFlag{
+		Name:     "bootnode",
+		Usage:    "bootnode of p2p network with ENR format for portal hive test",
+		Category: flags.PortalNetworkHiveCategory,
+	}
+
+	HiveClientPrivateKeyFlag = &cli.StringFlag{
+		Name:     "client.private.key",
+		Usage:    "private key of current p2p node for portal hive test",
+		Category: flags.PortalNetworkHiveCategory,
+	}
+
+	HiveLogLevelFlag = &cli.IntFlag{
+		Name:     "loglevel",
+		Usage:    "loglevel for portal hive test",
+		Category: flags.PortalNetworkHiveCategory,
+	}
 )
 
 var (

@@ -2,10 +2,12 @@ package discover
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -69,6 +71,30 @@ type NodeMetadata struct {
 
 type Enrs struct {
 	Enrs []string `json:"enrs"`
+}
+
+func StartHistoryRpcServer(protocol *PortalProtocol, addr string) error {
+	disv5 := NewAPI(protocol.DiscV5)
+	portal := NewPortalAPI(protocol)
+
+	server := rpc.NewServer()
+	err := server.RegisterName("discv5", disv5)
+	if err != nil {
+		return err
+	}
+	err = server.RegisterName("portal", portal)
+
+	if err != nil {
+		return err
+	}
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: server,
+	}
+
+	httpServer.ListenAndServe()
+	return nil
 }
 
 func (d *DiscV5API) NodeInfo() *NodeInfo {

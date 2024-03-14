@@ -120,12 +120,12 @@ type OfferRequestWithNode struct {
 	Node    *enode.Node
 }
 
-type ContentInfoRes struct {
+type ContentInfoResp struct {
 	Content     []byte
 	UtpTransfer bool
 }
 
-type traceContentInfoRes struct {
+type traceContentInfoResp struct {
 	Node        *enode.Node
 	Flag        byte
 	Content     any
@@ -135,8 +135,8 @@ type traceContentInfoRes struct {
 type PortalProtocolOption func(p *PortalProtocol)
 
 type PortalProtocolConfig struct {
-	BootstrapNodes []*enode.Node
-
+	BootstrapNodes  []*enode.Node
+	NodeIP          net.IP
 	ListenAddr      string
 	NetRestrict     *netutil.Netlist
 	NodeRadius      *uint256.Int
@@ -199,21 +199,27 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 	localNode := enode.NewLocalNode(nodeDB, privateKey)
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
 	localNode.Set(tag)
-	addrs, err := net.InterfaceAddrs()
 
-	if err != nil {
-		return nil, err
-	}
+	if config.NodeIP != nil {
+		localNode.SetStaticIP(config.NodeIP)
+	} else {
+		addrs, err := net.InterfaceAddrs()
 
-	for _, address := range addrs {
-		// check ip addr is loopback addr
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				localNode.SetStaticIP(ipnet.IP)
-				break
+		if err != nil {
+			return nil, err
+		}
+
+		for _, address := range addrs {
+			// check ip addr is loopback addr
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					localNode.SetStaticIP(ipnet.IP)
+					break
+				}
 			}
 		}
 	}
+
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
 	protocol := &PortalProtocol{
@@ -1464,7 +1470,7 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, bool, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	resChan := make(chan *ContentInfoRes, 1)
+	resChan := make(chan *ContentInfoResp, 1)
 	defer close(resChan)
 	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
 		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
@@ -1477,7 +1483,7 @@ func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, bool, error) 
 	return nil, false, ContentNotFound
 }
 
-func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *ContentInfoRes) ([]*node, error) {
+func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *ContentInfoResp) ([]*node, error) {
 	wrapedNode := make([]*node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
@@ -1489,7 +1495,7 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)
 		}
-		res := &ContentInfoRes{
+		res := &ContentInfoResp{
 			Content: content,
 		}
 		if flag == portalwire.ContentConnIdSelector {
@@ -1511,10 +1517,10 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	requestNodeChan := make(chan *enode.Node, 3)
-	resChan := make(chan *traceContentInfoRes, 3)
+	resChan := make(chan *traceContentInfoResp, 3)
 
 	requestNode := make([]*enode.Node, 0)
-	requestRes := make(map[string]*traceContentInfoRes)
+	requestRes := make(map[string]*traceContentInfoResp)
 
 	traceContentRes := &TraceContentResult{}
 
@@ -1613,7 +1619,7 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 	return traceContentRes, nil
 }
 
-func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoRes) ([]*node, error) {
+func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoResp) ([]*node, error) {
 	wrapedNode := make([]*node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
@@ -1625,7 +1631,7 @@ func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []by
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)
 		}
-		res := &traceContentInfoRes{
+		res := &traceContentInfoResp{
 			Node:        n,
 			Flag:        flag,
 			Content:     content,
@@ -1641,7 +1647,7 @@ func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []by
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to enrs content, value is: %v", content)
 		}
-		resChan <- &traceContentInfoRes{Node: n,
+		resChan <- &traceContentInfoResp{Node: n,
 			Flag:        flag,
 			Content:     content,
 			UtpTransfer: false}
