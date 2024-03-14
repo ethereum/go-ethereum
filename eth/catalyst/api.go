@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rpc"
+	"strconv"
 )
 
 // Register adds the engine API to the full node.
@@ -540,6 +541,14 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
 	if err != nil {
+		bgu := "nil"
+		if params.BlobGasUsed != nil {
+			bgu = strconv.Itoa(int(*params.BlobGasUsed))
+		}
+		ebg := "nil"
+		if params.BlobGasUsed != nil {
+			ebg = strconv.Itoa(int(*params.ExcessBlobGas))
+		}
 		log.Warn("Invalid NewPayload params",
 			"params.Number", params.Number,
 			"params.ParentHash", params.ParentHash,
@@ -553,8 +562,8 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.Timestamp", params.Timestamp,
 			"params.ExtraData", common.PrettyBytes(params.ExtraData),
 			"params.BaseFeePerGas", params.BaseFeePerGas,
-			"params.BlobGasUsed", *params.BlobGasUsed,
-			"params.ExcessBlobGas", *params.ExcessBlobGas,
+			"params.BlobGasUsed", bgu,
+			"params.ExcessBlobGas", ebg,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
 			"beaconRoot", beaconRoot,
