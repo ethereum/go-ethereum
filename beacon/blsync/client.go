@@ -93,7 +93,7 @@ func (c *Client) SetEngineRPC(engine *rpc.Client) {
 	c.engineRPC = engine
 }
 
-func (c *Client) Start() {
+func (c *Client) Start() error {
 	headCh := make(chan types.ChainHeadEvent, 16)
 	c.blockSync.SubscribeChainHead(headCh)
 	c.engineClient = startEngineClient(c.chainConfig, c.engineRPC, headCh)
@@ -103,10 +103,12 @@ func (c *Client) Start() {
 		beaconApi := api.NewBeaconLightApi(url, c.customHeader)
 		c.scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
 	}
+	return nil
 }
 
-func (c *Client) Stop() {
+func (c *Client) Stop() error {
 	c.engineClient.stop()
 	c.chainHeadSub.Unsubscribe()
 	c.scheduler.Stop()
+	return nil
 }
