@@ -202,7 +202,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	)
 	if config.VMTrace != "" {
-		t, err := live.Directory.New(config.VMTrace, json.RawMessage(config.VMTraceConfig))
+		var traceConfig json.RawMessage
+		if config.VMTraceConfig != "" {
+			traceConfig = json.RawMessage(config.VMTraceConfig)
+		}
+		t, err := live.Directory.New(config.VMTrace, traceConfig)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create tracer %s: %v", config.VMTrace, err)
 		}
