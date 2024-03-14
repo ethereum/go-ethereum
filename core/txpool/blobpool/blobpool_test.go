@@ -48,7 +48,7 @@ import (
 )
 
 var (
-	emptyBlob          = kzg4844.Blob{}
+	emptyBlob          = new(kzg4844.Blob)
 	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
 	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
 	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
@@ -198,7 +198,7 @@ func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap
 		BlobHashes: []common.Hash{emptyBlobVHash},
 		Value:      uint256.NewInt(100),
 		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{emptyBlob},
+			Blobs:       []kzg4844.Blob{*emptyBlob},
 			Commitments: []kzg4844.Commitment{emptyBlobCommit},
 			Proofs:      []kzg4844.Proof{emptyBlobProof},
 		},
@@ -984,9 +984,14 @@ func TestAdd(t *testing.T) {
 				},
 			},
 			adds: []addtx{
-				{ // New account, 1 tx pending: reject replacement nonce 0 (ignore price for now)
+				{ // New account, 1 tx pending: reject duplicate nonce 0
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, 1),
+					err:  txpool.ErrAlreadyKnown,
+				},
+				{ // New account, 1 tx pending: reject replacement nonce 0 (ignore price for now)
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 2),
 					err:  txpool.ErrReplaceUnderpriced,
 				},
 				{ // New account, 1 tx pending: accept nonce 1
@@ -1009,10 +1014,10 @@ func TestAdd(t *testing.T) {
 					tx:   makeUnsignedTx(3, 1, 1, 1),
 					err:  nil,
 				},
-				{ // Old account, 1 tx in chain, 1 tx pending: reject replacement nonce 1 (ignore price for now)
+				{ // Old account, 1 tx in chain, 1 tx pending: reject duplicate nonce 1
 					from: "bob",
 					tx:   makeUnsignedTx(1, 1, 1, 1),
-					err:  txpool.ErrReplaceUnderpriced,
+					err:  txpool.ErrAlreadyKnown,
 				},
 				{ // Old account, 1 tx in chain, 1 tx pending: accept nonce 2 (ignore price for now)
 					from: "bob",
