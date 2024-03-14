@@ -424,6 +424,7 @@ type ReceiptsPackage struct {
 	Receipts []PackedReceipt
 }
 
+// a
 func (s *TransactionAPI) GetBlockReceipts(ctx context.Context, blocks_hash common.Hash) (ReceiptsPackage, error) {
 	var output ReceiptsPackage
 	receipts, err := s.b.GetReceipts(ctx, blocks_hash)
