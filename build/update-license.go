@@ -295,7 +295,7 @@ func writeAuthors(files []string) {
 	slices.SortFunc(list, func(a, b string) bool {
 		return strings.ToLower(a) < strings.ToLower(b)
 	})
-	content := new(bytes.Buffer)
+	content := new(strings.Builder)
 	content.WriteString(authorsFileHeader)
 	for _, a := range list {
 		content.WriteString(a)
@@ -386,7 +386,7 @@ func writeLicense(info *info) {
 		log.Fatalf("error reading %s: %v\n", info.file, err)
 	}
 	// Construct new file content.
-	buf := new(bytes.Buffer)
+	buf := new(strings.Builder)
 	licenseT.Execute(buf, info)
 	if m := licenseCommentRE.FindIndex(content); m != nil && m[0] == 0 {
 		buf.Write(content[:m[0]])

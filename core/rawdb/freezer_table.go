@@ -17,13 +17,13 @@
 package rawdb
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -955,7 +955,7 @@ func (t *freezerTable) dumpIndexStdout(start, stop int64) {
 }
 
 func (t *freezerTable) dumpIndexString(start, stop int64) string {
-	var out bytes.Buffer
+	var out strings.Builder
 	out.WriteString("\n")
 	t.dumpIndex(&out, start, stop)
 	return out.String()
