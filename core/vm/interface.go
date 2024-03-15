@@ -88,15 +88,12 @@ type StateDB interface {
 	Finalise(deleteEmptyObjects bool)
 	Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error)
 	SetTxContext(thash common.Hash, ti int)
-	Copy() interface{}
+	Copy() StateDB
 	IntermediateRoot(deleteEmptyObjects bool) common.Hash
 	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
 	TxIndex() int
 	Preimages() map[common.Hash][]byte
 	SetLogger(logger *tracing.Hooks)
-}
-
-type EVMAssignable interface {
 	SetEVM(evm *EVM)
 }
 
