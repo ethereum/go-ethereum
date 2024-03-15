@@ -70,20 +70,7 @@ func (s *SessionManager) TxPool() *txpool.TxPool {
 	return s.pool
 }
 
-// NewSession creates a new builder session and returns the session id
-func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArgs) (string, error) {
-	if args == nil {
-		return "", fmt.Errorf("args cannot be nil")
-	}
-	// Wait for session to become available
-	select {
-	case <-s.sem:
-		s.sessionsLock.Lock()
-		defer s.sessionsLock.Unlock()
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-
+func (s *SessionManager) newBuilder(args *api.BuildBlockArgs) (*miner.Builder, error) {
 	builderCfg := &miner.BuilderConfig{
 		ChainConfig: s.blockchain.Config(),
 		Engine:      s.blockchain.Engine(),
@@ -100,11 +87,33 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 		Slot:           args.Slot,
 	}
 
-	id := uuid.New().String()[:7]
 	session, err := miner.NewBuilder(builderCfg, builderArgs)
+	if err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+// NewSession creates a new builder session and returns the session id
+func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArgs) (string, error) {
+	if args == nil {
+		return "", fmt.Errorf("args cannot be nil")
+	}
+	// Wait for session to become available
+	select {
+	case <-s.sem:
+		s.sessionsLock.Lock()
+		defer s.sessionsLock.Unlock()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	session, err := s.newBuilder(args)
 	if err != nil {
 		return "", err
 	}
+
+	id := uuid.New().String()[:7]
 	s.sessions[id] = session
 
 	// start session timer
@@ -127,7 +136,11 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 	return id, nil
 }
 
-func (s *SessionManager) getSession(sessionId string) (*miner.Builder, error) {
+func (s *SessionManager) getSession(sessionId string, allowOnTheFlySession bool) (*miner.Builder, error) {
+	if sessionId == "" {
+		return s.newBuilder(&api.BuildBlockArgs{})
+	}
+
 	s.sessionsLock.RLock()
 	defer s.sessionsLock.RUnlock()
 
@@ -143,7 +156,7 @@ func (s *SessionManager) getSession(sessionId string) (*miner.Builder, error) {
 }
 
 func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction) (*api.SimulateTransactionResult, error) {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, true)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +164,7 @@ func (s *SessionManager) AddTransaction(sessionId string, tx *types.Transaction)
 }
 
 func (s *SessionManager) AddTransactions(sessionId string, txs types.Transactions) ([]*api.SimulateTransactionResult, error) {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, true)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +172,7 @@ func (s *SessionManager) AddTransactions(sessionId string, txs types.Transaction
 }
 
 func (s *SessionManager) AddBundles(sessionId string, bundles []*api.Bundle) ([]*api.SimulateBundleResult, error) {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, true)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +180,7 @@ func (s *SessionManager) AddBundles(sessionId string, bundles []*api.Bundle) ([]
 }
 
 func (s *SessionManager) BuildBlock(sessionId string) error {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, false)
 	if err != nil {
 		return err
 	}
@@ -176,7 +189,7 @@ func (s *SessionManager) BuildBlock(sessionId string) error {
 }
 
 func (s *SessionManager) Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*api.SubmitBlockRequest, error) {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, false)
 	if err != nil {
 		return nil, err
 	}
