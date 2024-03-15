@@ -181,7 +181,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(evm.depth == 0, CALL, caller.Address(), addr, input, gas, value)
+		evm.captureBegin(evm.depth, CALL, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
@@ -253,7 +253,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(false, CALLCODE, caller.Address(), addr, input, gas, value)
+		evm.captureBegin(evm.depth, CALLCODE, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
@@ -308,7 +308,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// that caller is something other than a Contract.
 		parent := caller.(*Contract)
 		// DELEGATECALL inherits value from parent call
-		evm.captureBegin(false, DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
+		evm.captureBegin(evm.depth, DELEGATECALL, caller.Address(), addr, input, gas, parent.value)
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
@@ -349,7 +349,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(false, STATICCALL, caller.Address(), addr, input, gas, nil)
+		evm.captureBegin(evm.depth, STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
@@ -416,7 +416,7 @@ func (c *codeAndHash) Hash() common.Hash {
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(evm.depth == 0, typ, caller.Address(), address, codeAndHash.code, gas, value)
+		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value)
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
@@ -518,12 +518,11 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
+func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
 	tracer := evm.Config.Tracer
 	if tracer.OnEnter != nil {
-		tracer.OnEnter(0, byte(typ), from, to, input, startGas, value)
+		tracer.OnEnter(depth, byte(typ), from, to, input, startGas, value)
 	}
-
 	if tracer.OnGasChange != nil {
 		tracer.OnGasChange(0, startGas, tracing.GasChangeCallInitialBalance)
 	}
@@ -531,7 +530,6 @@ func (evm *EVM) captureBegin(isRoot bool, typ OpCode, from common.Address, to co
 
 func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret []byte, err error) {
 	tracer := evm.Config.Tracer
-
 	if leftOverGas != 0 && tracer.OnGasChange != nil {
 		tracer.OnGasChange(leftOverGas, 0, tracing.GasChangeCallLeftOverReturned)
 	}
@@ -542,7 +540,9 @@ func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret [
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	tracer.OnExit(depth, ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	if tracer.OnExit != nil {
+		tracer.OnExit(depth, ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	}
 }
 
 // GetVMContext provides context about the block being executed as well as state
