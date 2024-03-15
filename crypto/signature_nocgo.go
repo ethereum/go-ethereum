@@ -73,7 +73,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	if len(hash) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
-	if prv.Curve != btcec.S256() {
+	if prv.Curve != S256() {
 		return nil, errors.New("private key curve is not secp256k1")
 	}
 	// ecdsa.PrivateKey -> btcec.PrivateKey
