@@ -27,8 +27,8 @@ import (
 
 // HistoryStats wraps the history inspection statistics.
 type HistoryStats struct {
-	Start   uint64   // Block number of first queried history
-	End     uint64   // Block number of last queried history
+	Start   uint64   // Block number of the first queried history
+	End     uint64   // Block number of the last queried history
 	Blocks  []uint64 // Blocks refers to the list of block numbers in which the state is mutated
 	Origins [][]byte // Origins refers to the original value of the state before its mutation
 }

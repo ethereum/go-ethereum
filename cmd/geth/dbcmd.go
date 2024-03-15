@@ -861,7 +861,7 @@ func inspectHistory(ctx *cli.Context) error {
 	} else {
 		fmt.Printf("Storage history: %s-%s\n", address.Hex(), slot.Hex())
 	}
-	fmt.Printf("Range: [#%d-#%d]\n", stats.Start, stats.End)
+	fmt.Printf("Range: [#%d-#%d]\n\n", stats.Start, stats.End)
 	for i := 0; i < len(stats.Blocks); i++ {
 		fmt.Printf("#%d: %x\n", stats.Blocks[i], stats.Origins[i])
 	}
