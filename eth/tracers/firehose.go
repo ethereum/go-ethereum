@@ -35,7 +35,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var firehoseTracerLogLevel = strings.ToLower(os.Getenv("GETH_FIREHOSE_TRACER_LOG_LEVEL"))
+var firehoseTracerLogLevel = strings.ToLower(os.Getenv("FIREHOSE_ETHEREUM_TRACER_LOG_LEVEL"))
 var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
 var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
 
@@ -80,7 +80,8 @@ func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnStorageChange: tracer.OnStorageChange,
 		OnGasChange:     tracer.OnGasChange,
 		OnLog:           tracer.OnLog,
-		OnNewAccount:    tracer.OnNewAccount,
+
+		OnNewAccount: tracer.OnNewAccount,
 	}, nil
 }
 
@@ -522,23 +523,41 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		}
 
 		if opCode == vm.KECCAK256 {
-			f.onOpcodeSha3(activeCall, scope.StackData(), Memory(scope.MemoryData()))
+			f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
 		}
 	}
 }
 
-type Memory []byte
-
-func (m Memory) GetPtr(offset, size int64) []byte {
-	if size == 0 {
-		return nil
+// onOpcodeKeccak256 is called during the SHA3 (a.k.a KECCAK256) opcode it's known
+// in Firehose tracer as Keccak preimages. The preimage is the input data that
+// was used to produce the given keccak hash.
+func (f *Firehose) onOpcodeKeccak256(call *pbeth.Call, stack []uint256.Int, memory Memory) {
+	if call.KeccakPreimages == nil {
+		call.KeccakPreimages = make(map[string]string)
 	}
 
-	if len(m) > int(offset) {
-		return m[offset : offset+size]
+	offset, size := stack[len(stack)-1], stack[len(stack)-2]
+	preImage := memory.GetPtrUint256(&offset, &size)
+
+	// We should have exclusive access to the hasher, we can safely reset it.
+	f.hasher.Reset()
+	f.hasher.Write(preImage)
+	f.hasher.Read(f.hasherBuf[:])
+
+	// Known Firehose issue: It appears the old Firehose instrumentation have a bug
+	// where when the keccak256 preimage is empty, it is written as "." which is
+	// completely wrong.
+	//
+	// To keep the same behavior, we will write the preimage as a "." when the encoded
+	// data is an empty string.
+	//
+	// For new chain, this code should be remove so that we just keep `hex.EncodeToString(data)`.
+	encodedData := hex.EncodeToString(preImage)
+	if encodedData == "" {
+		encodedData = "."
 	}
 
-	return nil
+	call.KeccakPreimages[hex.EncodeToString(f.hasherBuf[:])] = encodedData
 }
 
 var opCodeToGasChangeReasonMap = map[vm.OpCode]pbeth.GasChange_Reason{
@@ -560,38 +579,6 @@ var opCodeToGasChangeReasonMap = map[vm.OpCode]pbeth.GasChange_Reason{
 	vm.CODECOPY:       pbeth.GasChange_REASON_CODE_COPY,
 	vm.EXTCODECOPY:    pbeth.GasChange_REASON_EXT_CODE_COPY,
 	vm.RETURNDATACOPY: pbeth.GasChange_REASON_RETURN_DATA_COPY,
-}
-
-// onOpcodeSha3 is called during the SHA3 (a.k.a KECCAK256) opcode it's known
-// in Firehose tracer as Keccak preimages. The preimage is the input data that
-// was used to produce the given keccak hash.
-func (f *Firehose) onOpcodeSha3(call *pbeth.Call, stack []uint256.Int, memory Memory) {
-	if call.KeccakPreimages == nil {
-		call.KeccakPreimages = make(map[string]string)
-	}
-
-	offset, size := stack[0], stack[1]
-	preImage := memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
-
-	// We should have exclusive access to the hasher, we can safely reset it.
-	f.hasher.Reset()
-	f.hasher.Write(preImage)
-	f.hasher.Read(f.hasherBuf[:])
-
-	// Known Firehose issue: It appears the old Firehose instrumentation have a bug
-	// where when the keccak256 preimage is empty, it is written as "." which is
-	// completely wrong.
-	//
-	// To keep the same behavior, we will write the preimage as a "." when the encoded
-	// data is an empty string.
-	//
-	// For new chain, this code should be remove so that we just keep `hex.EncodeToString(data)`.
-	encodedData := hex.EncodeToString(preImage)
-	if encodedData == "" {
-		encodedData = "."
-	}
-
-	call.KeccakPreimages[hex.EncodeToString(f.hasherBuf[:])] = encodedData
 }
 
 // OnOpcodeFault implements the EVMLogger interface to trace an execution fault.
@@ -675,13 +662,13 @@ func (f *Firehose) getExecutedCode(evm *tracing.VMContext, call *pbeth.Call) boo
 		if !evm.StateDB.Exist(common.BytesToAddress(call.Address)) &&
 			!precompile && f.blockRules.IsEIP158 &&
 			(call.Value == nil || call.Value.Native().Sign() == 0) {
-			firehoseDebug("executed code IsSpuriousDragon callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+			firehoseDebug("executed code IsSpuriousDragon callType=%s inputLength=%d", call.CallType.String(), len(call.Input))
 			return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
 		}
 	}
 
 	if precompile {
-		firehoseDebug("executed code isprecompile callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+		firehoseDebug("executed code isprecompile callType=%s inputLength=%d", call.CallType.String(), len(call.Input))
 		return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
 	}
 
@@ -691,7 +678,7 @@ func (f *Firehose) getExecutedCode(evm *tracing.VMContext, call *pbeth.Call) boo
 		return false
 	}
 
-	firehoseDebug("executed code default callTyp=%s inputLength=%d", call.CallType.String(), len(call.Input) > 0)
+	firehoseDebug("executed code default callType=%s inputLength=%d", call.CallType.String(), len(call.Input))
 	return call.CallType != pbeth.CallType_CREATE && len(call.Input) > 0
 }
 
@@ -1972,4 +1959,22 @@ func validateField[T any](into *validationResult, field string, a, b T, equal bo
 
 func ptr[T any](t T) *T {
 	return &t
+}
+
+type Memory []byte
+
+func (m Memory) GetPtrUint256(offset, size *uint256.Int) []byte {
+	return m.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+}
+
+func (m Memory) GetPtr(offset, size int64) []byte {
+	if size == 0 {
+		return nil
+	}
+
+	if len(m) > int(offset) {
+		return m[offset : offset+size]
+	}
+
+	return nil
 }
