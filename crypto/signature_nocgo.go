@@ -58,7 +58,13 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pub.ToECDSA(), nil
+	// We need to explicitly set the curve here, because we're wrapping
+	// the original curve to add (un-)marshalling
+	return &ecdsa.PublicKey{
+		Curve: S256(),
+		X:     pub.X(),
+		Y:     pub.Y(),
+	}, nil
 }
 
 // Sign calculates an ECDSA signature.
@@ -128,7 +134,13 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return key.ToECDSA(), nil
+	// We need to explicitly set the curve here, because we're wrapping
+	// the original curve to add (un-)marshalling
+	return &ecdsa.PublicKey{
+		Curve: S256(),
+		X:     key.X(),
+		Y:     key.Y(),
+	}, nil
 }
 
 // CompressPubkey encodes a public key to the 33-byte compressed format. The
