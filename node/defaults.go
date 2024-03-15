@@ -17,6 +17,7 @@
 package node
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -28,12 +29,14 @@ import (
 )
 
 const (
-	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort = 8545        // Default TCP port for the HTTP RPC server
-	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort   = 8546        // Default TCP port for the websocket RPC server
-	DefaultAuthHost = "localhost" // Default host interface for the authenticated apis
-	DefaultAuthPort = 8551        // Default port for the authenticated apis
+	DefaultHTTPHost   = "localhost" // Default host interface for the HTTP RPC server
+	DefaultHTTPPort   = 8545        // Default TCP port for the HTTP RPC server
+	DefaultWSHost     = "localhost" // Default host interface for the websocket RPC server
+	DefaultWSPort     = 8546        // Default TCP port for the websocket RPC server
+	DefaultAuthHost   = "localhost" // Default host interface for the authenticated apis
+	DefaultAuthPort   = 8551        // Default port for the authenticated apis
+	DefaultListenPort = 30303       // Default port for the TCP listening address
+	DefaultDiscPort   = 30303       // Default port for the UDP discovery address
 )
 
 const (
@@ -68,11 +71,12 @@ var DefaultConfig = Config{
 	BatchResponseMaxSize: 25 * 1000 * 1000,
 	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
-		ListenAddr: ":30303",
+		ListenAddr: fmt.Sprintf(":%d", DefaultListenPort),
 		MaxPeers:   50,
 		NAT:        nat.Any(),
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
+	Instance: 1,
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other
