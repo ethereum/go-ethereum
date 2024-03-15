@@ -54,7 +54,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/optimism-java/utp-go v0.0.0-20240306090421-13b97e834ce8
+	github.com/optimism-java/utp-go v0.0.0-20240309041853-b6b3a0dea581
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/protolambda/bls12-381-util v0.0.0-20220416220906-d8552aa452c7
 	github.com/protolambda/zrnt v0.30.0
@@ -70,8 +70,8 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/urfave/cli/v2 v2.25.7
 	go.uber.org/automaxprocs v1.5.2
-	golang.org/x/crypto v0.21.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.21.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.18.0
