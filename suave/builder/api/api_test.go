@@ -27,6 +27,10 @@ func TestAPI(t *testing.T) {
 	txn := types.NewTransaction(0, common.Address{}, big.NewInt(1), 1, big.NewInt(1), []byte{})
 	_, err = c.AddTransaction(context.Background(), "1", txn)
 	require.NoError(t, err)
+
+	_, err = c.GetBalance(context.Background(), "1", common.Address{})
+	require.NoError(t, err)
+
 	_, err = c.AddTransactions(context.Background(), "1", []*types.Transaction{txn})
 	require.NoError(t, err)
 
@@ -61,4 +65,8 @@ func (nullSessionManager) BuildBlock(sessionId string) error {
 
 func (nullSessionManager) Bid(sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error) {
 	return nil, nil
+}
+
+func (nullSessionManager) GetBalance(sessionId string, addr common.Address) (*big.Int, error) {
+	return big.NewInt(0), nil
 }

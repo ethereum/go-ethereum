@@ -172,6 +172,10 @@ func (b *Builder) AddBundles(bundles []*suavextypes.Bundle) ([]*suavextypes.Simu
 	return results, nil
 }
 
+func (b *Builder) GetBalance(addr common.Address) *big.Int {
+	return b.env.state.GetBalance(addr)
+}
+
 func (b *Builder) FillPending() error {
 	if err := b.wrk.commitPendingTxs(b.env); err != nil {
 		return err

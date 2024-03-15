@@ -96,4 +96,5 @@ type API interface {
 	AddBundles(ctx context.Context, sessionId string, bundles []*Bundle) ([]*SimulateBundleResult, error)
 	BuildBlock(ctx context.Context, sessionId string) error
 	Bid(ctx context.Context, sessioId string, blsPubKey phase0.BLSPubKey) (*SubmitBlockRequest, error)
+	GetBalance(ctx context.Context, sessionId string, addr common.Address) (*big.Int, error)
 }
