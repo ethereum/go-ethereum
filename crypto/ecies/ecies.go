@@ -40,6 +40,8 @@ import (
 	"hash"
 	"io"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -255,11 +257,7 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 
 	d := messageTag(params.Hash, Km, em, s2)
 
-	type marshaller interface {
-		Marshal(x, y *big.Int) []byte
-	}
-
-	if curve, ok := pub.Curve.(marshaller); ok {
+	if curve, ok := pub.Curve.(crypto.BetterCurve); ok {
 		Rb := curve.Marshal(R.PublicKey.X, R.PublicKey.Y)
 		ct = make([]byte, len(Rb)+len(em)+len(d))
 		copy(ct, Rb)
@@ -305,10 +303,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	R := new(PublicKey)
 	R.Curve = prv.PublicKey.Curve
 
-	type unmarshaler interface {
-		Unmarshal([]byte) (x, y *big.Int)
-	}
-	if curve, ok := R.Curve.(unmarshaler); ok {
+	if curve, ok := R.Curve.(crypto.BetterCurve); ok {
 		R.X, R.Y = curve.Unmarshal(c[:rLen])
 		if R.X == nil {
 			return nil, ErrInvalidPublicKey

@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math/big"
 	mrand "math/rand"
 	"net"
 	"time"
@@ -664,10 +663,7 @@ func exportPubkey(pub *ecies.PublicKey) []byte {
 	if pub == nil {
 		panic("nil pubkey")
 	}
-	type marshaller interface {
-		Marshal(x, y *big.Int) []byte
-	}
-	if curve, ok := pub.Curve.(marshaller); ok {
+	if curve, ok := pub.Curve.(crypto.BetterCurve); ok {
 		return curve.Marshal(pub.X, pub.Y)[1:]
 	}
 	return []byte{}

@@ -21,8 +21,10 @@ package crypto
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -80,7 +82,15 @@ func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
 	return secp256k1.CompressPubkey(pubkey.X, pubkey.Y)
 }
 
+// BetterCurve is an interface that combines both a curve
+// and (un)-marshalling functions to and from that curve.
+type BetterCurve interface {
+	elliptic.Curve
+	Marshal(x, y *big.Int) []byte
+	Unmarshal(data []byte) (x, y *big.Int)
+}
+
 // S256 returns an instance of the secp256k1 curve.
-func S256() *secp256k1.BitCurve {
+func S256() BetterCurve {
 	return secp256k1.S256()
 }
