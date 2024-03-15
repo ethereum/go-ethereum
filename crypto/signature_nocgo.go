@@ -178,14 +178,7 @@ func (curve KoblitzCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	if data[0] != 4 { // uncompressed form
 		return nil, nil
 	}
-	p := curve.Params().P
 	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
 	y = new(big.Int).SetBytes(data[1+byteLen:])
-	if x.Cmp(p) >= 0 || y.Cmp(p) >= 0 {
-		return nil, nil
-	}
-	if !curve.IsOnCurve(x, y) {
-		return nil, nil
-	}
 	return
 }
