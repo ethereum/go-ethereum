@@ -144,19 +144,29 @@ func newJsTracer(code string, ctx *directory.Context, cfg json.RawMessage) (*dir
 		vm:  vm,
 		ctx: make(map[string]goja.Value),
 	}
+
+	t.setTypeConverters()
+	t.setBuiltinFunctions()
+
 	if ctx == nil {
 		ctx = new(directory.Context)
 	}
 	if ctx.BlockHash != (common.Hash{}) {
-		t.ctx["blockHash"] = vm.ToValue(ctx.BlockHash.Bytes())
+		blockHash, err := t.toBuf(vm, ctx.BlockHash.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		t.ctx["blockHash"] = blockHash
 		if ctx.TxHash != (common.Hash{}) {
 			t.ctx["txIndex"] = vm.ToValue(ctx.TxIndex)
-			t.ctx["txHash"] = vm.ToValue(ctx.TxHash.Bytes())
+			txHash, err := t.toBuf(vm, ctx.TxHash.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			t.ctx["txHash"] = txHash
 		}
 	}
 
-	t.setTypeConverters()
-	t.setBuiltinFunctions()
 	ret, err := vm.RunString("(" + code + ")")
 	if err != nil {
 		return nil, err
@@ -341,6 +351,12 @@ func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())
 	}
+	outputVal, err := t.toBuf(t.vm, output)
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["output"] = outputVal
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -520,13 +536,13 @@ func (t *jsTracer) setBuiltinFunctions() {
 		}
 		return false
 	})
-	vm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
+	vm.Set("slice", func(slice goja.Value, start, end int64) goja.Value {
 		b, err := t.fromBuf(vm, slice, false)
 		if err != nil {
 			vm.Interrupt(err)
 			return nil
 		}
-		if start < 0 || start > end || end > len(b) {
+		if start < 0 || start > end || end > int64(len(b)) {
 			vm.Interrupt(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", len(b), start, end-start))
 			return nil
 		}

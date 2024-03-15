@@ -43,6 +43,12 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
+// use types.GenesisAccount instead (Deprecation not ported from latest Geth for now).
+type GenesisAccount = types.Account
+
+// use types.GenesisAlloc instead (Deprecation not ported from latest Geth for now).
+type GenesisAlloc = types.GenesisAlloc
+
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
@@ -103,12 +109,6 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 
 	return &genesis, nil
 }
-
-// Deprecated: use types.GenesisAccount instead.
-type GenesisAccount = types.Account
-
-// Deprecated: use types.GenesisAlloc instead.
-type GenesisAlloc = types.GenesisAlloc
 
 // hashAlloc computes the state root according to the genesis specification.
 func hashAlloc(ga *types.GenesisAlloc) (common.Hash, error) {

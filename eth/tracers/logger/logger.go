@@ -85,6 +85,7 @@ type structLogMarshaling struct {
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
 	ReturnData  hexutil.Bytes
+	Stack       []hexutil.U256
 	OpName      string `json:"opName"`          // adds call to OpName() in MarshalJSON
 	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
 }
@@ -416,11 +417,6 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 
 func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
-}
-
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
-		output, gasUsed, err)
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM

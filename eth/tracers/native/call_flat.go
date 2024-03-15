@@ -155,6 +155,9 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	t.tracer.OnEnter(depth, typ, from, to, input, gas, value)
 
+	if depth == 0 {
+		return
+	}
 	// Child calls must have a value, even if it's zero.
 	// Practically speaking, only STATICCALL has nil value. Set it to zero.
 	if t.tracer.callstack[len(t.tracer.callstack)-1].Value == nil && value == nil {
@@ -167,6 +170,9 @@ func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to co
 func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
 
+	if depth == 0 {
+		return
+	}
 	// Parity traces don't include CALL/STATICCALLs to precompiles.
 	// By default we remove them from the callstack.
 	if t.config.IncludePrecompiles {
