@@ -19,6 +19,7 @@ package crypto
 import (
 	"bufio"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -49,6 +50,14 @@ var (
 )
 
 var errInvalidPubkey = errors.New("invalid secp256k1 public key")
+
+// BetterCurve is an interface that combines both a curve
+// and (un)-marshalling functions to and from that curve.
+type BetterCurve interface {
+	elliptic.Curve
+	Marshal(x, y *big.Int) []byte
+	Unmarshal(data []byte) (x, y *big.Int)
+}
 
 // KeccakState wraps sha3.state. In addition to the usual hash methods, it also supports
 // Read to get a variable amount of data from the hash state. Read is faster than Sum

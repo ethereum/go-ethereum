@@ -21,9 +21,9 @@ package crypto
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	btc_ecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
@@ -147,6 +147,45 @@ func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
 }
 
 // S256 returns an instance of the secp256k1 curve.
-func S256() elliptic.Curve {
-	return btcec.S256()
+func S256() BetterCurve {
+	return KoblitzCurve{btcec.S256()}
+}
+
+type KoblitzCurve struct {
+	*btcec.KoblitzCurve
+}
+
+// Marshall converts a point given as (x, y) into a byte slice.
+func (curve KoblitzCurve) Marshal(x, y *big.Int) []byte {
+	byteLen := (curve.Params().BitSize + 7) / 8
+
+	ret := make([]byte, 1+2*byteLen)
+	ret[0] = 4 // uncompressed point
+
+	x.FillBytes(ret[1 : 1+byteLen])
+	y.FillBytes(ret[1+byteLen : 1+2*byteLen])
+
+	return ret
+}
+
+// Unmarshal converts a point, serialised by Marshal, into an x, y pair. On
+// error, x = nil.
+func (curve KoblitzCurve) Unmarshal(data []byte) (x, y *big.Int) {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	if len(data) != 1+2*byteLen {
+		return nil, nil
+	}
+	if data[0] != 4 { // uncompressed form
+		return nil, nil
+	}
+	p := curve.Params().P
+	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
+	y = new(big.Int).SetBytes(data[1+byteLen:])
+	if x.Cmp(p) >= 0 || y.Cmp(p) >= 0 {
+		return nil, nil
+	}
+	if !curve.IsOnCurve(x, y) {
+		return nil, nil
+	}
+	return
 }
