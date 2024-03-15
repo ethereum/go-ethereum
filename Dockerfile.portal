@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 RUN go env -w  GOPROXY=https://goproxy.cn,direct
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build ./cmd/hive/main.go
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build ./cmd/shisui/main.go
 
 
 FROM  --platform=linux/amd64 ubuntu:22.04

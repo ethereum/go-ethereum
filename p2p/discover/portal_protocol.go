@@ -282,7 +282,7 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 		}
 		nodes = append(nodes, bucketNodes)
 	}
-	p.log.Trace("rouingTableInfo res:", "nodes", nodes)
+	p.log.Trace("routingTableInfo resp:", "nodes", nodes)
 	return nodes
 }
 

@@ -8,6 +8,17 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
+#? shisui: Build shisui
+shisui:
+	go build ./cmd/shisui/main.go
+	cp main $(GOBIN)/shisui
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/shisui\" to launch shisui."
+
+#? shisui-image: Build shisui image
+shisui-image:
+	docker build -t ghcr.io/optimism-java/shisui:latest -f Dockerfile.portal .
+
 #? geth: Build geth
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
