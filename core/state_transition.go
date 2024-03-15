@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -263,14 +263,14 @@ func (st *StateTransition) buyGas() error {
 		return err
 	}
 
-	if st.evm.Config.Tracer != nil {
-		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, vm.GasChangeTxInitialBalance)
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
+		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
 	}
 
 	st.gasRemaining += st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
-	st.state.SubBalance(st.msg.From, mgval, state.BalanceDecreaseGasBuy)
+	st.state.SubBalance(st.msg.From, mgval, tracing.BalanceDecreaseGasBuy)
 	return nil
 }
 
@@ -393,8 +393,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
-	if t := st.evm.Config.Tracer; t != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, vm.GasChangeTxIntrinsicGas)
+	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
 	}
 	st.gasRemaining -= gas
 
@@ -445,7 +445,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, state.BalanceIncreaseRewardTransactionFee)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 	}
 
 	return &ExecutionResult{
@@ -463,18 +463,18 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 		refund = st.state.GetRefund()
 	}
 
-	if st.evm.Config.Tracer != nil && refund > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, vm.GasChangeTxRefunds)
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
 	}
 
 	st.gasRemaining += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
-	st.state.AddBalance(st.msg.From, remaining, state.BalanceIncreaseGasReturn)
+	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	if st.evm.Config.Tracer != nil && st.gasRemaining > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, vm.GasChangeTxLeftOverReturned)
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
 	// Also return remaining gas to the block gas counter so it is

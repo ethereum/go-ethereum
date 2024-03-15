@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -44,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
@@ -192,7 +194,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
-			Tracer:                  config.VMTracer,
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
@@ -206,6 +207,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateScheme:         scheme,
 		}
 	)
+	if config.VMTrace != "" {
+		var traceConfig json.RawMessage
+		if config.VMTraceConfig != "" {
+			traceConfig = json.RawMessage(config.VMTraceConfig)
+		}
+		t, err := live.Directory.New(config.VMTrace, traceConfig)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create tracer %s: %v", config.VMTrace, err)
+		}
+		vmConfig.Tracer = t
+	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
 	if config.OverrideCancun != nil {

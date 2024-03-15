@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -185,23 +186,11 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	return &config
 }
 
-// BlockchainLogger is used to collect traces during chain processing.
-// Please make a copy of the referenced types if you intend to retain them.
-type BlockchainLogger interface {
-	vm.EVMLogger
-	state.StateLogger
-	OnBlockchainInit(chainConfig *params.ChainConfig)
-	// OnBlockStart is called before executing `block`.
-	// `td` is the total difficulty prior to `block`.
-	// `skip` indicates processing of this previously known block
-	// will be skipped. OnBlockStart and OnBlockEnd will be emitted to
-	// convey how chain is progressing. E.g. known blocks will be skipped
-	// when node is started after a crash.
-	OnBlockStart(block *types.Block, td *big.Int, finalized *types.Header, safe *types.Header, skip bool)
-	OnBlockEnd(err error)
-	OnGenesisBlock(genesis *types.Block, alloc GenesisAlloc)
-	OnBeaconBlockRootStart(root common.Hash)
-	OnBeaconBlockRootEnd()
+// txLookup is wrapper over transaction lookup along with the corresponding
+// transaction object.
+type txLookup struct {
+	lookup      *rawdb.LegacyTxLookupEntry
+	transaction *types.Transaction
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -277,7 +266,7 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
-	logger     BlockchainLogger
+	logger     *tracing.Hooks
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -289,15 +278,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	// Open trie database with provided config
 	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
-	var logger BlockchainLogger
-	if vmConfig.Tracer != nil {
-		l, ok := vmConfig.Tracer.(BlockchainLogger)
-		if ok {
-			logger = l
-		} else {
-			log.Warn("only extended tracers are supported for live mode")
-		}
-	}
+
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
@@ -329,7 +310,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
-		logger:        logger,
+		logger:        vmConfig.Tracer,
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -456,7 +437,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 	}
 
-	if bc.logger != nil {
+	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
+		bc.logger.OnBlockchainInit(chainConfig)
+	}
+
+	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
 			if err != nil {
@@ -507,10 +492,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
-	if bc.logger != nil {
-		bc.logger.OnBlockchainInit(chainConfig)
-	}
-	// Start tx indexer/unindexer if required.
+
+	// Start tx indexer if it's enabled.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
 
@@ -1812,9 +1795,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 				return it.index, err
 			}
 			stats.processed++
-			if bc.logger != nil {
-				bc.logger.OnBlockStart(block, bc.GetTd(block.ParentHash(), block.NumberU64()-1), bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), true)
-				bc.logger.OnBlockEnd(nil)
+			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
+				bc.logger.OnSkippedBlock(tracing.BlockEvent{
+					Block:     block,
+					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
+					Finalized: bc.CurrentFinalBlock(),
+					Safe:      bc.CurrentSafeBlock(),
+				})
 			}
 
 			// We can assume that logs are empty here, since the only way for consecutive
@@ -1940,9 +1927,16 @@ type blockProcessingResult struct {
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
-	if bc.logger != nil {
+	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(block, td, bc.CurrentFinalBlock(), bc.CurrentSafeBlock(), false)
+		bc.logger.OnBlockStart(tracing.BlockEvent{
+			Block:     block,
+			TD:        td,
+			Finalized: bc.CurrentFinalBlock(),
+			Safe:      bc.CurrentSafeBlock(),
+		})
+	}
+	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()

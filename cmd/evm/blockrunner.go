@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	estate "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
@@ -52,7 +52,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return errors.New("path-to-test argument required")
 	}
 
-	var tracer vm.EVMLogger
+	var tracer *tracing.Hooks
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(&logger.Config{
@@ -60,7 +60,7 @@ func blockTestCmd(ctx *cli.Context) error {
 			DisableStack:     ctx.Bool(DisableStackFlag.Name),
 			DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
 			EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
-		}, os.Stderr)
+		}, os.Stderr).Hooks()
 	}
 	// Load the test content from the input file
 	src, err := os.ReadFile(ctx.Args().First())

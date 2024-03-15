@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -47,20 +48,6 @@ type revision struct {
 	journalIndex int
 }
 
-// StateLogger is used to collect state update traces from  EVM transaction
-// execution.
-// The following hooks are invoked post execution. I.e. looking up state
-// after the hook should reflect the new value.
-// Note that reference types are actual VM data structures; make copies
-// if you need to retain them beyond the current call.
-type StateLogger interface {
-	OnBalanceChange(addr common.Address, prev, new *big.Int, reason BalanceChangeReason)
-	OnNonceChange(addr common.Address, prev, new uint64)
-	OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
-	OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash)
-	OnLog(log *types.Log)
-}
-
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -77,7 +64,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
-	logger     StateLogger
+	logger     *tracing.Hooks
 	snaps      *snapshot.Tree    // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
@@ -188,7 +175,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 // SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l StateLogger) {
+func (s *StateDB) SetLogger(l *tracing.Hooks) {
 	s.logger = l
 }
 
@@ -232,7 +219,7 @@ func (s *StateDB) AddLog(log *types.Log) {
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
 	log.Index = s.logSize
-	if s.logger != nil {
+	if s.logger != nil && s.logger.OnLog != nil {
 		s.logger.OnLog(log)
 	}
 	s.logs[s.thash] = append(s.logs[s.thash], log)
@@ -396,7 +383,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason BalanceChangeReason) {
+func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount, reason)
@@ -404,14 +391,14 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int, reason Balanc
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason BalanceChangeReason) {
+func (s *StateDB) SubBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount, reason)
 	}
 }
 
-func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason BalanceChangeReason) {
+func (s *StateDB) SetBalance(addr common.Address, amount *big.Int, reason tracing.BalanceChangeReason) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount, reason)
@@ -479,8 +466,8 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prev:        stateObject.selfDestructed,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
-	if s.logger != nil && prev.Sign() > 0 {
-		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
+	if s.logger != nil && s.logger.OnBalanceChange != nil && prev.Sign() > 0 {
+		s.logger.OnBalanceChange(addr, prev, n, tracing.BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()
 	stateObject.data.Balance = new(big.Int)
@@ -865,8 +852,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			obj.deleted = true
 
 			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); s.logger != nil && obj.selfDestructed && bal.Sign() != 0 {
-				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), BalanceDecreaseSelfdestructBurn)
+			if bal := obj.Balance(); s.logger != nil && s.logger.OnBalanceChange != nil && obj.selfDestructed && bal.Sign() != 0 {
+				s.logger.OnBalanceChange(obj.address, bal, new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct

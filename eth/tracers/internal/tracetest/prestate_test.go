@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -92,12 +93,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// Configure a blockchain with the given prestate
 			var (
-				signer    = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				origin, _ = signer.Sender(tx)
-				txContext = vm.TxContext{
-					Origin:   origin,
-					GasPrice: tx.GasPrice(),
-				}
+				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = vm.BlockContext{
 					CanTransfer: core.CanTransfer,
 					Transfer:    core.Transfer,
@@ -112,22 +108,28 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			)
 			defer triedb.Close()
 
+			if test.Genesis.ExcessBlobGas != nil && test.Genesis.BlobGasUsed != nil {
+				excessBlobGas := eip4844.CalcExcessBlobGas(*test.Genesis.ExcessBlobGas, *test.Genesis.BlobGasUsed)
+				context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+			}
+
 			tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			statedb.SetLogger(tracer)
-			evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
-			msg, err := core.TransactionToMessage(tx, signer, nil)
+
+			statedb.SetLogger(tracer.Hooks)
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			tracer.CaptureTxStart(evm, tx, msg.From)
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			tracer.CaptureTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected
 			res, err := tracer.GetResult()
 			if err != nil {

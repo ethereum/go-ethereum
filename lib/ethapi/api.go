@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -965,7 +966,7 @@ func (diff *StateOverride) Apply(statedb vm.StateDB) error {
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			statedb.SetBalance(addr, (*big.Int)(*account.Balance), state.BalanceChangeUnspecified)
+			statedb.SetBalance(addr, (*big.Int)(*account.Balance), tracing.BalanceChangeUnspecified)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
@@ -1543,7 +1544,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
-		config := vm.Config{Tracer: tracer, NoBaseFee: true}
+		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
 		vmenv := b.GetEVM(ctx, msg, statedb, header, &config, nil)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {

@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -587,10 +587,10 @@ func accumulateRewards(config *params.ChainConfig, stateDB vm.StateDB, header *t
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		stateDB.AddBalance(uncle.Coinbase, r, state.BalanceIncreaseRewardMineUncle)
+		stateDB.AddBalance(uncle.Coinbase, r, tracing.BalanceIncreaseRewardMineUncle)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	stateDB.AddBalance(header.Coinbase, reward, state.BalanceIncreaseRewardMineBlock)
+	stateDB.AddBalance(header.Coinbase, reward, tracing.BalanceIncreaseRewardMineBlock)
 }

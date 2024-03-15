@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -77,7 +78,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb vm.StateDB, cfg vm.
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, p.bc.logger)
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -109,11 +110,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb vm.StateDB, cfg vm.
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb vm.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
-	if evm.Config.Tracer != nil {
-		evm.Config.Tracer.CaptureTxStart(evm, tx, msg.From)
-		defer func() {
-			evm.Config.Tracer.CaptureTxEnd(receipt, err)
-		}()
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(&tracing.VMContext{
+			ChainConfig: evm.ChainConfig(),
+			StateDB:     statedb,
+			BlockNumber: evm.Context.BlockNumber,
+			Time:        evm.Context.Time,
+			Coinbase:    evm.Context.Coinbase,
+			Random:      evm.Context.Random,
+		}, tx, msg.From)
+		if evm.Config.Tracer.OnTxEnd != nil {
+			defer func() {
+				evm.Config.Tracer.OnTxEnd(receipt, err)
+			}()
+		}
 	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -182,13 +192,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb vm.StateDB, logger BlockchainLogger) {
-	if logger != nil {
-		logger.OnBeaconBlockRootStart(beaconRoot)
-		defer func() {
-			logger.OnBeaconBlockRootEnd()
-		}()
-	}
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
 	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
 	// the new root
 	msg := &Message{
