@@ -79,7 +79,7 @@ type Backend interface {
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
-	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
 	// Order Pool Transaction
 	SendOrderTx(ctx context.Context, signedTx *types.OrderTransaction) error
