@@ -19,7 +19,6 @@ package crypto
 import (
 	"bufio"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -148,7 +147,7 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 		return nil, errors.New("invalid private key, zero or negative")
 	}
 
-	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(d)
+	priv.PublicKey.X, priv.PublicKey.Y = S256().ScalarBaseMult(d)
 	if priv.PublicKey.X == nil {
 		return nil, errors.New("invalid private key")
 	}
@@ -165,7 +164,7 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 
 // UnmarshalPubkey converts bytes to a secp256k1 public key.
 func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
-	x, y := elliptic.Unmarshal(S256(), pub)
+	x, y := S256().Unmarshal(pub)
 	if x == nil {
 		return nil, errInvalidPubkey
 	}
@@ -176,7 +175,7 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
-	return elliptic.Marshal(S256(), pub.X, pub.Y)
+	return S256().Marshal(pub.X, pub.Y)
 }
 
 // HexToECDSA parses a secp256k1 private key.
