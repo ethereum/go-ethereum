@@ -1028,14 +1028,14 @@ func (net *Network) Load(snap *Snapshot) error {
 		}
 	}
 
-	snapshotLoadTimeoutTimer := time.NewTimer(snapshotLoadTimeout)
-	defer snapshotLoadTimeoutTimer.Stop()
+	timeout := time.NewTimer(snapshotLoadTimeout)
+	defer timeout.Stop()
 
 	select {
 	// Wait until all connections from the snapshot are established.
 	case <-allConnected:
 	// Make sure that we do not wait forever.
-	case <-snapshotLoadTimeoutTimer.C:
+	case <-timeout.C:
 		return errors.New("snapshot connections not established")
 	}
 	return nil

@@ -303,7 +303,6 @@ func (n *ExecNode) Stop() error {
 	go func() {
 		waitErr <- n.Cmd.Wait()
 	}()
-
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 
