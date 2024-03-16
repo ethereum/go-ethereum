@@ -13,7 +13,7 @@ import (
 )
 
 type TrieProve interface {
-	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 }
 
 type ZktrieProofTracer struct {
@@ -77,9 +77,9 @@ func (s *StateDB) GetSecureTrieProof(trieProve TrieProve, key common.Hash) ([][]
 	var err error
 	if s.IsUsingZktrie() {
 		key_s, _ := zkt.ToSecureKeyBytes(key.Bytes())
-		err = trieProve.Prove(key_s.Bytes(), 0, &proof)
+		err = trieProve.Prove(key_s.Bytes(), &proof)
 	} else {
-		err = trieProve.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+		err = trieProve.Prove(crypto.Keccak256(key.Bytes()), &proof)
 	}
 	return proof, err
 }

@@ -248,7 +248,7 @@ const (
 	// posSELFDESTRUCT = 2
 )
 
-func getAccountState(l *types.StructLogRes, pos int) *types.AccountWrapper {
+func getAccountState(l types.StructLogRes, pos int) *types.AccountWrapper {
 	if exData := l.ExtraData; exData == nil {
 		return nil
 	} else if len(exData.StateList) < pos {
@@ -590,7 +590,7 @@ func (w *zktrieProofWriter) HandleNewState(accountState *types.AccountWrapper) (
 	}
 }
 
-func handleLogs(od opOrderer, currentContract common.Address, logs []*types.StructLogRes) {
+func handleLogs(od opOrderer, currentContract common.Address, logs []types.StructLogRes) {
 	logStack := []int{0}
 	contractStack := map[int]common.Address{}
 	callEnterAddress := currentContract
@@ -693,14 +693,14 @@ func handleLogs(od opOrderer, currentContract common.Address, logs []*types.Stru
 			accountState := getAccountState(sLog, posSSTOREBefore)
 			od.absorbStorage(accountState, nil)
 		case "SSTORE":
-			log.Debug("build SSTORE", "pc", sLog.Pc, "key", sLog.Stack[len(sLog.Stack)-1])
+			log.Debug("build SSTORE", "pc", sLog.Pc, "key", (*sLog.Stack)[len(*(sLog.Stack))-1])
 			accountState := copyAccountState(getAccountState(sLog, posSSTOREBefore))
 			// notice the log only provide the value BEFORE store and it is not suitable for our protocol,
 			// here we change it into value AFTER update
 			before := accountState.Storage
 			accountState.Storage = &types.StorageWrapper{
-				Key:   sLog.Stack[len(sLog.Stack)-1],
-				Value: sLog.Stack[len(sLog.Stack)-2],
+				Key:   (*sLog.Stack)[len(*(sLog.Stack))-1],
+				Value: (*sLog.Stack)[len(*(sLog.Stack))-2],
 			}
 			od.absorbStorage(accountState, before)
 

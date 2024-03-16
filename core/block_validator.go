@@ -19,13 +19,16 @@ package core
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/circuitcapacitychecker"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -37,6 +40,12 @@ type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for validating
+
+	// circuit capacity checker related fields
+	checkCircuitCapacity   bool                                           // whether enable circuit capacity check
+	cMu                    sync.Mutex                                     // mutex for circuit capacity checker
+	tracer                 tracerWrapper                                  // scroll tracer wrapper
+	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker // circuit capacity checker instance
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
@@ -47,6 +56,17 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 		bc:     blockchain,
 	}
 	return validator
+}
+
+type tracerWrapper interface {
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+}
+
+func (v *BlockValidator) SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper) {
+	v.checkCircuitCapacity = true
+	v.tracer = tracer
+	v.circuitCapacityChecker = circuitcapacitychecker.NewCircuitCapacityChecker(true)
+	log.Info("new CircuitCapacityChecker in BlockValidator", "ID", v.circuitCapacityChecker.ID)
 }
 
 // ValidateBody validates the given block's uncles and verifies the block
@@ -129,6 +149,27 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 	if err := v.ValidateL1Messages(block); err != nil {
 		return err
+	}
+
+	if v.checkCircuitCapacity {
+		// if a block's RowConsumption has been stored, which means it has been processed before,
+		// (e.g., in miner/worker.go or in insertChain),
+		// we simply skip its calculation and validation
+		// if rawdb.ReadBlockRowConsumption(v.bc.db, block.Hash()) != nil {
+		// 	return nil
+		// }
+		rowConsumption, err := v.validateCircuitRowConsumption(block)
+		if err != nil {
+			return err
+		}
+		log.Trace(
+			"Validator write block row consumption",
+			"id", v.circuitCapacityChecker.ID,
+			"number", block.NumberU64(),
+			"hash", block.Hash().String(),
+			"rowConsumption", rowConsumption,
+		)
+		// rawdb.WriteBlockRowConsumption(v.bc.db, block.Hash(), rowConsumption)
 	}
 
 	return nil
@@ -270,4 +311,52 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		}
 	}
 	return limit
+}
+
+func (v *BlockValidator) createTraceEnvAndGetBlockTrace(block *types.Block) (*types.BlockTrace, error) {
+	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, errors.New("validateCircuitRowConsumption: no parent block found")
+	}
+
+	statedb, err := v.bc.StateAt(parent.Root())
+	if err != nil {
+		return nil, err
+	}
+
+	return v.tracer.CreateTraceEnvAndGetBlockTrace(v.config, v.bc, v.engine, v.bc.db, statedb, parent, block, true)
+}
+
+func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {
+	log.Trace(
+		"Validator apply ccc for block",
+		"id", v.circuitCapacityChecker.ID,
+		"number", block.NumberU64(),
+		"hash", block.Hash().String(),
+		"len(txs)", block.Transactions().Len(),
+	)
+
+	traces, err := v.createTraceEnvAndGetBlockTrace(block)
+	if err != nil {
+		return nil, err
+	}
+
+	v.cMu.Lock()
+	defer v.cMu.Unlock()
+
+	v.circuitCapacityChecker.Reset()
+	log.Trace("Validator reset ccc", "id", v.circuitCapacityChecker.ID)
+	rc, err := v.circuitCapacityChecker.ApplyBlock(traces)
+
+	log.Trace(
+		"Validator apply ccc for block result",
+		"id", v.circuitCapacityChecker.ID,
+		"number", block.NumberU64(),
+		"hash", block.Hash().String(),
+		"len(txs)", block.Transactions().Len(),
+		"rc", rc,
+		"err", err,
+	)
+
+	return rc, err
 }

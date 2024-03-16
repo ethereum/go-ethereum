@@ -71,6 +71,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/tracing"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
@@ -2003,7 +2004,8 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if err != nil {
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
-		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
+		scrollTracerWrapper := tracing.NewTracerWrapper()
+		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend, scrollTracerWrapper))
 		return backend.ApiBackend, nil
 	}
 
@@ -2032,7 +2034,8 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+	scrollTracerWrapper := tracing.NewTracerWrapper()
+	stack.RegisterAPIs(tracers.APIs(backend.APIBackend, scrollTracerWrapper))
 	return backend.APIBackend, backend
 }
 

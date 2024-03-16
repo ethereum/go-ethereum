@@ -83,9 +83,10 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin     common.Address // Provides information for ORIGIN
-	GasPrice   *big.Int       // Provides information for GASPRICE
-	BlobHashes []common.Hash  // Provides information for BLOBHASH
+	Origin     common.Address  // Provides information for ORIGIN
+	To         *common.Address // Provides information for TO in trace
+	GasPrice   *big.Int        // Provides information for GASPRICE
+	BlobHashes []common.Hash   // Provides information for BLOBHASH
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -530,4 +531,9 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 // FeeRecipient returns the environment's transaction fee recipient address.
 func (evm *EVM) FeeRecipient() common.Address {
 	return evm.Context.Coinbase
+}
+
+// Depth returns the environment's depth of the current call stack.
+func (evm *EVM) Depth() int {
+	return evm.depth
 }

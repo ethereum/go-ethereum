@@ -18,6 +18,7 @@ package params
 
 import (
 	"fmt"
+	"runtime/debug"
 )
 
 const (
@@ -65,3 +66,14 @@ func VersionWithCommit(gitCommit, gitDate string) string {
 	}
 	return vsn
 }
+
+var CommitHash = func() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				return setting.Value
+			}
+		}
+	}
+	return ""
+}()

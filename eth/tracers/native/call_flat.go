@@ -108,7 +108,7 @@ type flatCallResultMarshaling struct {
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
 // as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	tracer            *callTracer
+	tracer            *CallTracer
 	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
 	reason            error            // Textual reason for the interruption
@@ -135,7 +135,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 	if err != nil {
 		return nil, err
 	}
-	t, ok := tracer.(*callTracer)
+	t, ok := tracer.(*CallTracer)
 	if !ok {
 		return nil, errors.New("internal error: embedded tracer has wrong type")
 	}
@@ -159,6 +159,10 @@ func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *flatCallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	t.tracer.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
+}
+
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (t *flatCallTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -225,6 +229,10 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 		return nil, err
 	}
 	return res, t.reason
+}
+
+func (t *flatCallTracer) GetResultWithL1DataFee(l1DataFee *big.Int) (json.RawMessage, error) {
+	panic("not supported")
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.

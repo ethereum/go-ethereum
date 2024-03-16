@@ -23,6 +23,8 @@ import (
 	"sort"
 	"time"
 
+	zkt "github.com/scroll-tech/zktrie/types"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -34,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/trie/zkproof"
 )
 
 const (
@@ -356,6 +359,26 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
+}
+
+// GetProof returns the Merkle proof for a given account.
+func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
+	if s.IsUsingZktrie() {
+		addr_s, _ := zkt.ToSecureKeyBytes(addr.Bytes())
+		return s.GetProofByHash(common.BytesToHash(addr_s.Bytes()))
+	}
+	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
+}
+
+// GetProofByHash returns the Merkle proof for a given account.
+func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
+	var proof zkproof.ProofList
+	err := s.trie.Prove(addrHash[:] /*, 0*/, &proof)
+	return proof, err
+}
+
+func (s *StateDB) GetRootHash() common.Hash {
+	return s.trie.Hash()
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.

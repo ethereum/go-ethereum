@@ -78,6 +78,10 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	l.encoder.Encode(log)
 }
 
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (l *JSONLogger) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+}
+
 // CaptureEnd is triggered at end of execution.
 func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	type endLog struct {

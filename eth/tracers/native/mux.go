@@ -29,11 +29,16 @@ func init() {
 	tracers.DefaultDirectory.Register("muxTracer", newMuxTracer, false)
 }
 
-// muxTracer is a go implementation of the Tracer interface which
+// MuxTracer is a go implementation of the Tracer interface which
 // runs multiple tracers in one go.
-type muxTracer struct {
+type MuxTracer struct {
 	names   []string
 	tracers []tracers.Tracer
+}
+
+func (mt *MuxTracer) Append(name string, tracer tracers.Tracer) {
+	mt.names = append(mt.names, name)
+	mt.tracers = append(mt.tracers, tracer)
 }
 
 // newMuxTracer returns a new mux tracer.
@@ -55,39 +60,43 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, er
 		names = append(names, k)
 	}
 
-	return &muxTracer{names: names, tracers: objects}, nil
+	return &MuxTracer{names: names, tracers: objects}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *muxTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *MuxTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		t.CaptureStart(env, from, to, create, input, gas, value)
 	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *MuxTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	for _, t := range t.tracers {
 		t.CaptureEnd(output, gasUsed, err)
 	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *muxTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *MuxTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		t.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
 	}
 }
 
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (t *MuxTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+}
+
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *muxTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (t *MuxTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	for _, t := range t.tracers {
 		t.CaptureFault(pc, op, gas, cost, scope, depth, err)
 	}
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *muxTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *MuxTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		t.CaptureEnter(typ, from, to, input, gas, value)
 	}
@@ -95,26 +104,26 @@ func (t *muxTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.A
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *muxTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *MuxTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	for _, t := range t.tracers {
 		t.CaptureExit(output, gasUsed, err)
 	}
 }
 
-func (t *muxTracer) CaptureTxStart(gasLimit uint64) {
+func (t *MuxTracer) CaptureTxStart(gasLimit uint64) {
 	for _, t := range t.tracers {
 		t.CaptureTxStart(gasLimit)
 	}
 }
 
-func (t *muxTracer) CaptureTxEnd(restGas uint64) {
+func (t *MuxTracer) CaptureTxEnd(restGas uint64) {
 	for _, t := range t.tracers {
 		t.CaptureTxEnd(restGas)
 	}
 }
 
 // GetResult returns an empty json object.
-func (t *muxTracer) GetResult() (json.RawMessage, error) {
+func (t *MuxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)
 	for i, tt := range t.tracers {
 		r, err := tt.GetResult()
@@ -130,8 +139,12 @@ func (t *muxTracer) GetResult() (json.RawMessage, error) {
 	return res, nil
 }
 
+func (t *MuxTracer) GetResultWithL1DataFee(l1DataFee *big.Int) (json.RawMessage, error) {
+	panic("not supported")
+}
+
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *muxTracer) Stop(err error) {
+func (t *MuxTracer) Stop(err error) {
 	for _, t := range t.tracers {
 		t.Stop(err)
 	}

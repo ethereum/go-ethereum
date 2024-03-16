@@ -81,6 +81,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, chainConfig *p
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	return vm.TxContext{
 		Origin:     msg.From,
+		To:         msg.To,
 		GasPrice:   new(big.Int).Set(msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
 	}

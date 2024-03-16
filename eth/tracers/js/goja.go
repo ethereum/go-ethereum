@@ -279,6 +279,10 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	}
 }
 
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (jst *jsTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+}
+
 // CaptureFault implements the Tracer interface to trace an execution fault
 func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	if t.err != nil {
@@ -351,6 +355,10 @@ func (t *jsTracer) GetResult() (json.RawMessage, error) {
 		return nil, err
 	}
 	return json.RawMessage(encoded), t.err
+}
+
+func (t *jsTracer) GetResultWithL1DataFee(l1DataFee *big.Int) (json.RawMessage, error) {
+	panic("not supported")
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.

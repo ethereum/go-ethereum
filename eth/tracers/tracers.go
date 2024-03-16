@@ -41,6 +41,7 @@ type Context struct {
 type Tracer interface {
 	vm.EVMLogger
 	GetResult() (json.RawMessage, error)
+	GetResultWithL1DataFee(*big.Int) (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop(err error)
 }

@@ -46,10 +46,11 @@ type StorageTrace struct {
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
-	L1DataFee   *hexutil.Big `json:"l1DataFee,omitempty"`
-	Gas         uint64       `json:"gas"`
-	Failed      bool         `json:"failed"`
-	ReturnValue string       `json:"returnValue"`
+	Gas         uint64         `json:"gas"`
+	Failed      bool           `json:"failed"`
+	ReturnValue string         `json:"returnValue"`
+	StructLogs  []StructLogRes `json:"structLogs"`
+
 	// Sender's account state (before Tx)
 	From *AccountWrapper `json:"from,omitempty"`
 	// Receiver's account state (before Tx)
@@ -65,24 +66,29 @@ type ExecutionResult struct {
 	// `PoseidonCodeHash` only exists when tx is a contract call.
 	PoseidonCodeHash *common.Hash `json:"poseidonCodeHash,omitempty"`
 	// If it is a contract call, the contract code is returned.
-	ByteCode   string          `json:"byteCode,omitempty"`
-	StructLogs []*StructLogRes `json:"structLogs"`
+	ByteCode string `json:"byteCode,omitempty"`
+
+	L1DataFee *hexutil.Big `json:"l1DataFee,omitempty"`
+
+	CallTrace     json.RawMessage `json:"callTrace"`
+	PrestateTrace json.RawMessage `json:"prestateTrace"`
 }
 
 // StructLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type StructLogRes struct {
-	Pc            uint64            `json:"pc"`
-	Op            string            `json:"op"`
-	Gas           uint64            `json:"gas"`
-	GasCost       uint64            `json:"gasCost"`
-	Depth         int               `json:"depth"`
-	Error         string            `json:"error,omitempty"`
-	Stack         []string          `json:"stack,omitempty"`
-	Memory        []string          `json:"memory,omitempty"`
-	Storage       map[string]string `json:"storage,omitempty"`
-	RefundCounter uint64            `json:"refund,omitempty"`
-	ExtraData     *ExtraData        `json:"extraData,omitempty"`
+	Pc            uint64             `json:"pc"`
+	Op            string             `json:"op"`
+	Gas           uint64             `json:"gas"`
+	GasCost       uint64             `json:"gasCost"`
+	Depth         int                `json:"depth"`
+	Error         string             `json:"error,omitempty"`
+	Stack         *[]string          `json:"stack,omitempty"`
+	ReturnData    string             `json:"returnData,omitempty"`
+	Memory        *[]string          `json:"memory,omitempty"`
+	Storage       *map[string]string `json:"storage,omitempty"`
+	RefundCounter uint64             `json:"refund,omitempty"`
+	ExtraData     *ExtraData         `json:"extraData,omitempty"`
 }
 
 // NewStructLogResBasic Basic StructLogRes skeleton, Stack&Memory&Storage&ExtraData are separated from it for GC optimization;

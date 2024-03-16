@@ -54,7 +54,7 @@ type accountMarshaling struct {
 	Code    hexutil.Bytes
 }
 
-type prestateTracer struct {
+type PrestateTracer struct {
 	noopTracer
 	env       *vm.EVM
 	pre       state
@@ -62,25 +62,33 @@ type prestateTracer struct {
 	create    bool
 	to        common.Address
 	gasLimit  uint64 // Amount of gas bought for the whole tx
-	config    prestateTracerConfig
+	config    PrestateTracerConfig
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
 	created   map[common.Address]bool
 	deleted   map[common.Address]bool
 }
 
-type prestateTracerConfig struct {
+type PrestateTracerConfig struct {
 	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
+func NewPrestateTracerWithConfig(ctx *tracers.Context, config PrestateTracerConfig) (tracers.Tracer, error) {
+	return newPrestateTracerWithConfig(ctx, config)
+}
+
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	var config prestateTracerConfig
+	var config PrestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	return &prestateTracer{
+	return newPrestateTracerWithConfig(ctx, config)
+}
+
+func newPrestateTracerWithConfig(ctx *tracers.Context, config PrestateTracerConfig) (tracers.Tracer, error) {
+	return &PrestateTracer{
 		pre:     state{},
 		post:    state{},
 		config:  config,
@@ -90,7 +98,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *PrestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.create = create
 	t.to = to
@@ -118,7 +126,7 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (t *PrestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	if t.config.DiffMode {
 		return
 	}
@@ -133,7 +141,7 @@ func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *PrestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -179,11 +187,15 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
+// CaptureStateAfter for special needs, tracks SSTORE ops and records the storage change.
+func (t *PrestateTracer) CaptureStateAfter(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+}
+
+func (t *PrestateTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
+func (t *PrestateTracer) CaptureTxEnd(restGas uint64) {
 	if !t.config.DiffMode {
 		return
 	}
@@ -248,7 +260,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
-func (t *prestateTracer) GetResult() (json.RawMessage, error) {
+func (t *PrestateTracer) GetResult() (json.RawMessage, error) {
 	var res []byte
 	var err error
 	if t.config.DiffMode {
@@ -265,15 +277,19 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(res), t.reason
 }
 
+func (t *PrestateTracer) GetResultWithL1DataFee(l1DataFee *big.Int) (json.RawMessage, error) {
+	panic("not supported")
+}
+
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *prestateTracer) Stop(err error) {
+func (t *PrestateTracer) Stop(err error) {
 	t.reason = err
 	t.interrupt.Store(true)
 }
 
 // lookupAccount fetches details of an account and adds it to the prestate
 // if it doesn't exist there.
-func (t *prestateTracer) lookupAccount(addr common.Address) {
+func (t *PrestateTracer) lookupAccount(addr common.Address) {
 	if _, ok := t.pre[addr]; ok {
 		return
 	}
@@ -289,7 +305,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 // lookupStorage fetches the requested storage slot and adds
 // it to the prestate of the given contract. It assumes `lookupAccount`
 // has been performed on the contract before.
-func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
+func (t *PrestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 	if _, ok := t.pre[addr].Storage[key]; ok {
 		return
 	}
