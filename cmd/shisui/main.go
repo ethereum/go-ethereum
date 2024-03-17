@@ -44,20 +44,12 @@ var (
 		utils.PortalDataCapacityFlag,
 		utils.PortalLogLevelFlag,
 	}
-	hiveTestFlags = []cli.Flag{
-		utils.HiveBootNodeFlag,
-		utils.HiveClientPrivateKeyFlag,
-		utils.HiveLogLevelFlag,
-	}
 )
 
 func init() {
 	app.Action = shisui
 	app.Flags = flags.Merge(portalProtocolFlags, historyRpcFlags)
 	flags.AutoEnvVars(app.Flags, "SHISUI")
-
-	app.Flags = flags.Merge(app.Flags, hiveTestFlags)
-	flags.AutoEnvVars(hiveTestFlags, "HIVE")
 }
 
 func main() {
@@ -140,16 +132,15 @@ func getPortalHistoryConfig(ctx *cli.Context) (*PortalHistoryConfig, error) {
 		config.Protocol.NodeIP = netIp
 	}
 
-	if ctx.IsSet(utils.HiveLogLevelFlag.Name) {
-		config.LogLevel = ctx.Int(utils.HiveLogLevelFlag.Name)
-	}
-	if ctx.IsSet(utils.HiveBootNodeFlag.Name) {
-		bootNode := new(enode.Node)
-		err = bootNode.UnmarshalText([]byte(ctx.String(utils.HiveBootNodeFlag.Name)))
-		if err != nil {
-			return config, err
+	if ctx.IsSet(utils.PortalBootNodesFlag.Name) {
+		for _, node := range ctx.StringSlice(utils.PortalBootNodesFlag.Name) {
+			bootNode := new(enode.Node)
+			err = bootNode.UnmarshalText([]byte(node))
+			if err != nil {
+				return config, err
+			}
+			config.Protocol.BootstrapNodes = append(config.Protocol.BootstrapNodes, bootNode)
 		}
-		config.Protocol.BootstrapNodes = append(config.Protocol.BootstrapNodes, bootNode)
 	}
 	return config, nil
 }
@@ -157,9 +148,9 @@ func getPortalHistoryConfig(ctx *cli.Context) (*PortalHistoryConfig, error) {
 func setPrivateKey(ctx *cli.Context, config *PortalHistoryConfig) error {
 	var privateKey *ecdsa.PrivateKey
 	var err error
-	if ctx.IsSet(utils.HiveClientPrivateKeyFlag.Name) {
-		keyStr := ctx.String(utils.HiveClientPrivateKeyFlag.Name)
-		keyBytes, err := hexutil.Decode("0x" + keyStr)
+	if ctx.IsSet(utils.PortalPrivateKeyFlag.Name) {
+		keyStr := ctx.String(utils.PortalPrivateKeyFlag.Name)
+		keyBytes, err := hexutil.Decode(keyStr)
 		if err != nil {
 			return err
 		}

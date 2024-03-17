@@ -994,22 +994,16 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.PortalNetworkCategory,
 	}
 
-	HiveBootNodeFlag = &cli.StringFlag{
+	PortalPrivateKeyFlag = &cli.StringFlag{
+		Name:     "private.key",
+		Usage:    "private key of p2p node, hex format",
+		Category: flags.PortalNetworkCategory,
+	}
+
+	PortalBootNodesFlag = &cli.StringSliceFlag{
 		Name:     "bootnode",
 		Usage:    "bootnode of p2p network with ENR format for portal hive test",
-		Category: flags.PortalNetworkHiveCategory,
-	}
-
-	HiveClientPrivateKeyFlag = &cli.StringFlag{
-		Name:     "client.private.key",
-		Usage:    "private key of current p2p node for portal hive test",
-		Category: flags.PortalNetworkHiveCategory,
-	}
-
-	HiveLogLevelFlag = &cli.IntFlag{
-		Name:     "loglevel",
-		Usage:    "loglevel for portal hive test",
-		Category: flags.PortalNetworkHiveCategory,
+		Category: flags.PortalNetworkCategory,
 	}
 )
 
