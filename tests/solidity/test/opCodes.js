@@ -25,7 +25,7 @@ contract('OpCodes', (accounts) => {
    beforeEach(async () => {
       contractInstance = await TodoList.deployed()
    })
-   it('Should run without errors the majorit of opcodes', async () => {
+   it('Should run without errors the majority of opcodes', async () => {
      await contractInstance.test()
      await contractInstance.test_stop()
 
