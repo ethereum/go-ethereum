@@ -299,7 +299,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			return engine.ForkChoiceResponse{PayloadStatus: engine.INVALID_TERMINAL_BLOCK, PayloadID: nil}, nil
 		}
 		if block.NumberU64() > 0 && ptd.Cmp(ttd) >= 0 {
-			log.Error("Parent block is already post-ttd", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
+			log.Error("A block with td>=TerminalTotalDifficulty and difficulty>0 must have a parent block with td<TerminalTotalDifficulty", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
 			return engine.ForkChoiceResponse{PayloadStatus: engine.INVALID_TERMINAL_BLOCK, PayloadID: nil}, nil
 		}
 	}
@@ -608,7 +608,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return engine.INVALID_TERMINAL_BLOCK, nil
 	}
 	if parent.Difficulty().BitLen() > 0 && gptd != nil && gptd.Cmp(ttd) >= 0 {
-		log.Error("Ignoring pre-merge parent block", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
+		log.Error("A block with td>=TerminalTotalDifficulty and difficulty>0 must have a parent block with td<TerminalTotalDifficulty", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
 		return engine.INVALID_TERMINAL_BLOCK, nil
 	}
 	if block.Time() <= parent.Time() {
