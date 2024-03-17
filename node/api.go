@@ -55,54 +55,27 @@ type adminAPI struct {
 // AddPeer requests connecting to a remote node, and also maintaining the new
 // connection at all times, even reconnecting if it is lost.
 func (api *adminAPI) AddPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	// Try to add the url as a static peer and return
-	node, err := enode.Parse(enode.ValidSchemes, url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.AddPeer(node)
-	return true, nil
+	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.AddPeer(node) })
 }
 
 // RemovePeer disconnects from a remote node if the connection exists
 func (api *adminAPI) RemovePeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	// Try to remove the url as a static peer and return
-	node, err := enode.Parse(enode.ValidSchemes, url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.RemovePeer(node)
-	return true, nil
+	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.RemovePeer(node) })
 }
 
 // AddTrustedPeer allows a remote node to always connect, even if slots are full
 func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	node, err := enode.Parse(enode.ValidSchemes, url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.AddTrustedPeer(node)
-	return true, nil
+	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.AddTrustedPeer(node) })
 }
 
 // RemoveTrustedPeer removes a remote node from the trusted peer set, but it
 // does not disconnect it automatically.
 func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
+	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.RemoveTrustedPeer(node) })
+}
+
+// handlePeer trys to add or remove a peer with the given handler
+func (api *adminAPI) handlePeer(url string, handler func(*p2p.Server, *enode.Node)) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
 	if server == nil {
@@ -112,7 +85,7 @@ func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
-	server.RemoveTrustedPeer(node)
+	handler(server, node)
 	return true, nil
 }
 
