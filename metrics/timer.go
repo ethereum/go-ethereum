@@ -106,7 +106,7 @@ func (t *StandardTimer) Time(f func()) {
 	t.Update(time.Since(ts))
 }
 
-// Update record the duration of an event, in nanoseconds.
+// Update the duration of an event, in nanoseconds.
 func (t *StandardTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -114,7 +114,7 @@ func (t *StandardTimer) Update(d time.Duration) {
 	t.meter.Mark(1)
 }
 
-// UpdateSince record the duration of an event that started at a time and ends now.
+// UpdateSince update the duration of an event that started at a time and ends now.
 // The record uses nanoseconds.
 func (t *StandardTimer) UpdateSince(ts time.Time) {
 	t.Update(time.Since(ts))
