@@ -467,7 +467,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 			select {
 			case event, ok := <-stream.Events:
 				if !ok {
-					break
+					return
 				}
 				switch event.Event() {
 				case "head":
@@ -493,7 +493,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 				}
 			case err, ok := <-stream.Errors:
 				if !ok {
-					break
+					return
 				}
 				listener.OnError(err)
 			}
