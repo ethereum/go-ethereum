@@ -55,38 +55,58 @@ type adminAPI struct {
 // AddPeer requests connecting to a remote node, and also maintaining the new
 // connection at all times, even reconnecting if it is lost.
 func (api *adminAPI) AddPeer(url string) (bool, error) {
-	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.AddPeer(node) })
+	server, node, err := api.checkServerAndParseURL(url)
+	if err != nil {
+		return false, err
+	}
+	server.AddPeer(node)
+	return true, nil
 }
 
 // RemovePeer disconnects from a remote node if the connection exists
 func (api *adminAPI) RemovePeer(url string) (bool, error) {
-	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.RemovePeer(node) })
+	server, node, err := api.checkServerAndParseURL(url)
+	if err != nil {
+		return false, err
+	}
+	server.RemovePeer(node)
+	return true, nil
 }
 
 // AddTrustedPeer allows a remote node to always connect, even if slots are full
 func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
-	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.AddTrustedPeer(node) })
+	server, node, err := api.checkServerAndParseURL(url)
+	if err != nil {
+		return false, err
+	}
+	server.AddTrustedPeer(node)
+	return true, nil
 }
 
 // RemoveTrustedPeer removes a remote node from the trusted peer set, but it
 // does not disconnect it automatically.
 func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
-	return api.handlePeer(url, func(server *p2p.Server, node *enode.Node) { server.RemoveTrustedPeer(node) })
+	server, node, err := api.checkServerAndParseURL(url)
+	if err != nil {
+		return false, err
+	}
+	server.RemoveTrustedPeer(node)
+	return true, nil
 }
 
-// handlePeer trys to add or remove a peer with the given handler
-func (api *adminAPI) handlePeer(url string, handler func(*p2p.Server, *enode.Node)) (bool, error) {
+// checkServerAndParseURL checks if the server is running and parses the enode URL
+func (api *adminAPI) checkServerAndParseURL(url string) (*p2p.Server, *enode.Node, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
 	if server == nil {
-		return false, ErrNodeStopped
+		return nil, nil, ErrNodeStopped
 	}
+	// Try to parse the url as an enode node
 	node, err := enode.Parse(enode.ValidSchemes, url)
 	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
+		return nil, nil, fmt.Errorf("invalid enode: %v", err)
 	}
-	handler(server, node)
-	return true, nil
+	return server, node, nil
 }
 
 // PeerEvents creates an RPC subscription which receives peer events from the
