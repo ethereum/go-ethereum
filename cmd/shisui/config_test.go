@@ -9,15 +9,15 @@ import (
 )
 
 func TestGenConfig(t *testing.T) {
-	size := uint64(1000 * 1000)
+	size := uint64(5 * 1000 * 1000 * 1000)
 	flagSet := flag.NewFlagSet("test", 0)
-	flagSet.String("history.http.addr", "127.0.0.11", "test")
-	flagSet.String("history.http.port", "8888", "test")
-	flagSet.String("history.data.dir", "./test", "test")
-	flagSet.Uint64("history.data.capacity", size, "test")
+	flagSet.String("rpc.addr", "127.0.0.11", "test")
+	flagSet.String("rpc.port", "8888", "test")
+	flagSet.String("data.dir", "./test", "test")
+	flagSet.Uint64("data.capacity", size, "test")
 	flagSet.String("udp.addr", "172.23.50.11", "test")
 	flagSet.Int("udp.port", 9999, "test")
-	flagSet.Int("history.loglevel", 3, "test")
+	flagSet.Int("loglevel", 3, "test")
 
 	command := &cli.Command{Name: "mycommand"}
 

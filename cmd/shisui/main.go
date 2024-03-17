@@ -34,15 +34,15 @@ var app = flags.NewApp("the go-portal-network command line interface")
 
 var (
 	portalProtocolFlags = []cli.Flag{
-		utils.ProtocolUDPListenAddrFlag,
-		utils.ProtocolUDPPortFlag,
+		utils.PortalUDPListenAddrFlag,
+		utils.PortalUDPPortFlag,
 	}
 	historyRpcFlags = []cli.Flag{
-		utils.HistoryHTTPListenAddrFlag,
-		utils.HistoryHTTPPortFlag,
-		utils.HistoryDataDirFlag,
-		utils.HistoryDataCapacityFlag,
-		utils.LogLevelFlag,
+		utils.PortalRPCListenAddrFlag,
+		utils.PortalRPCPortFlag,
+		utils.PortalDataDirFlag,
+		utils.PortalDataCapacityFlag,
+		utils.PortalLogLevelFlag,
 	}
 	hiveTestFlags = []cli.Flag{
 		utils.HiveBootNodeFlag,
@@ -118,21 +118,21 @@ func getPortalHistoryConfig(ctx *cli.Context) (*PortalHistoryConfig, error) {
 		return config, err
 	}
 
-	httpAddr := ctx.String(utils.HistoryHTTPListenAddrFlag.Name)
-	httpPort := ctx.String(utils.HistoryHTTPPortFlag.Name)
+	httpAddr := ctx.String(utils.PortalRPCListenAddrFlag.Name)
+	httpPort := ctx.String(utils.PortalRPCPortFlag.Name)
 	config.RpcAddr = net.JoinHostPort(httpAddr, httpPort)
-	config.DataDir = ctx.String(utils.HistoryDataDirFlag.Name)
-	config.DataCapacity = ctx.Uint64(utils.HistoryDataCapacityFlag.Name)
-	config.LogLevel = ctx.Int(utils.LogLevelFlag.Name)
-	port := ctx.String(utils.ProtocolUDPPortFlag.Name)
+	config.DataDir = ctx.String(utils.PortalDataDirFlag.Name)
+	config.DataCapacity = ctx.Uint64(utils.PortalDataCapacityFlag.Name)
+	config.LogLevel = ctx.Int(utils.PortalLogLevelFlag.Name)
+	port := ctx.String(utils.PortalUDPPortFlag.Name)
 	if !strings.HasPrefix(port, ":") {
 		config.Protocol.ListenAddr = ":" + port
 	} else {
 		config.Protocol.ListenAddr = port
 	}
 
-	if ctx.IsSet(utils.ProtocolUDPListenAddrFlag.Name) {
-		ip := ctx.String(utils.ProtocolUDPListenAddrFlag.Name)
+	if ctx.IsSet(utils.PortalUDPListenAddrFlag.Name) {
+		ip := ctx.String(utils.PortalUDPListenAddrFlag.Name)
 		netIp := net.ParseIP(ip)
 		if netIp == nil {
 			return config, fmt.Errorf("invalid ip addr: %s", ip)
