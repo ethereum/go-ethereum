@@ -808,28 +808,29 @@ func inspectHistory(ctx *cli.Context) error {
 
 	var (
 		err   error
-		start uint64 // the first history object to query
-		end   uint64 // the last history object to query (included)
-
-		// State histories are sorted by state ID rather than block number.
-		// To address this, load the corresponding block header and perform
-		// the conversion by this function.
-		blockToID = func(blockNumber uint64) (uint64, error) {
-			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, blockNumber), blockNumber)
-			if header == nil {
-				return 0, fmt.Errorf("block #%d is not existent", blockNumber)
-			}
-			id := rawdb.ReadStateID(db, header.Root)
-			if id == nil {
-				first, last, err := triedb.HistoryRange()
-				if err == nil {
-					return 0, fmt.Errorf("history of block #%d is not existent, available history range: [#%d-#%d]", blockNumber, first, last)
-				}
-				return 0, fmt.Errorf("history of block #%d is not existent", blockNumber)
-			}
-			return *id, nil
-		}
+		start uint64               // the id of first history object to query
+		end   uint64               // the id (included) of last history object to query
+		stats *pathdb.HistoryStats // inspection result
 	)
+	// State histories are identified by state ID rather than block number.
+	// To address this, load the corresponding block header and perform the
+	// conversion by this function.
+	blockToID := func(blockNumber uint64) (uint64, error) {
+		header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, blockNumber), blockNumber)
+		if header == nil {
+			return 0, fmt.Errorf("block #%d is not existent", blockNumber)
+		}
+		id := rawdb.ReadStateID(db, header.Root)
+		if id == nil {
+			first, last, err := triedb.HistoryRange()
+			if err == nil {
+				return 0, fmt.Errorf("history of block #%d is not existent, available history range: [#%d-#%d]", blockNumber, first, last)
+			}
+			return 0, fmt.Errorf("history of block #%d is not existent", blockNumber)
+		}
+		return *id, nil
+	}
+	// Parse the starting block number for inspection.
 	startNumber := ctx.Uint64("start")
 	if startNumber != 0 {
 		start, err = blockToID(startNumber)
@@ -837,6 +838,7 @@ func inspectHistory(ctx *cli.Context) error {
 			return err
 		}
 	}
+	// Parse the ending block number for inspection.
 	endBlock := ctx.Uint64("end")
 	if endBlock != 0 {
 		end, err = blockToID(endBlock)
@@ -844,7 +846,7 @@ func inspectHistory(ctx *cli.Context) error {
 			return err
 		}
 	}
-	var stats *pathdb.HistoryStats
+	// Inspect the state history.
 	if slot == (common.Hash{}) {
 		stats, err = triedb.AccountHistory(address, start, end)
 	} else {
@@ -856,14 +858,15 @@ func inspectHistory(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	// Print out the result.
 	if slot == (common.Hash{}) {
-		fmt.Printf("Account history: %s\n", address.Hex())
+		fmt.Printf("Account history:\n\taddress: %s\n", address.Hex())
 	} else {
-		fmt.Printf("Storage history: %s-%s\n", address.Hex(), slot.Hex())
+		fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\n", address.Hex(), slot.Hex())
 	}
 	fmt.Printf("Range: [#%d-#%d]\n\n", stats.Start, stats.End)
 	for i := 0; i < len(stats.Blocks); i++ {
-		fmt.Printf("#%d: %x\n", stats.Blocks[i], stats.Origins[i])
+		fmt.Printf("#%d: %#x\n", stats.Blocks[i], stats.Origins[i])
 	}
 	return nil
 }

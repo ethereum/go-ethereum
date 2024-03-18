@@ -71,6 +71,8 @@ func inspectHistory(freezer *rawdb.ResettableFreezer, start, end uint64, onHisto
 		return nil, err
 	}
 	for id := start; id <= end; id += 1 {
+		// The entire history object is decoded, although it's unnecessary for
+		// account inspection. TODO(rjl493456442) optimization is worthwhile.
 		h, err := readHistory(freezer, id)
 		if err != nil {
 			return nil, err
