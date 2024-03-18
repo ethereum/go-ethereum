@@ -70,6 +70,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -2193,6 +2194,7 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
+// Don't forget to call db.Close afterwards to prevent memory leak.
 func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
 	config := &triedb.Config{
 		Preimages: preimage,
@@ -2206,13 +2208,20 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		// Read-only mode is not implemented in hash mode,
 		// ignore the parameter silently. TODO(rjl493456442)
 		// please config it if read mode is implemented.
-		config.HashDB = hashdb.Defaults
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: 16 * 1024 * 1024,
+			ChildResolver:  trie.MerkleResolver,
+		}
 		return triedb.NewDatabase(disk, config)
 	}
+	config.PathDB = &pathdb.Config{
+		StateHistory:   params.FullImmutabilityThreshold,
+		CleanCacheSize: pathdb.DefaultCleanSize,
+		DirtyCacheSize: pathdb.DefaultBufferSize,
+		TrieOpener:     trie.NewMerkleOpener,
+	}
 	if readOnly {
-		config.PathDB = pathdb.ReadOnly
-	} else {
-		config.PathDB = pathdb.Defaults
+		config.PathDB.ReadOnly = true
 	}
 	return triedb.NewDatabase(disk, config)
 }

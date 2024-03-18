@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 var (
@@ -171,7 +172,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		db2.Close()
 	})
 
-	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
+	genesis.MustCommit(db2, triedb.NewDatabase(db, &dbconfig.HashDefaults))
 	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 var (
@@ -354,7 +355,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	var resolver trie.NodeResolver
 	if len(result.keys) > 0 {
 		mdb := rawdb.NewMemoryDatabase()
-		tdb := triedb.NewDatabase(mdb, triedb.HashDefaults)
+		tdb := triedb.NewDatabase(mdb, &dbconfig.HashDefaults)
 		defer tdb.Close()
 		snapTrie := trie.NewEmpty(tdb)
 		for i, key := range result.keys {

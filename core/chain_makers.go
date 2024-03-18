@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"github.com/holiman/uint256"
 )
 
@@ -362,7 +363,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
-	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
+	triedb := triedb.NewDatabase(db, &dbconfig.HashDefaults)
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
@@ -407,7 +408,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
+	triedb := triedb.NewDatabase(db, &dbconfig.HashDefaults)
 	defer triedb.Close()
 	_, err := genesis.Commit(db, triedb)
 	if err != nil {

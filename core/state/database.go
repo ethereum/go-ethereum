@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 const (
@@ -145,7 +146,7 @@ type Trie interface {
 // concurrent use, but does not retain any recent trie nodes in memory. To keep some
 // historical state in memory, use the NewDatabaseWithConfig constructor.
 func NewDatabase(db ethdb.Database) Database {
-	return NewDatabaseWithConfig(db, nil)
+	return NewDatabaseWithConfig(db, &dbconfig.HashDefaults)
 }
 
 // NewDatabaseWithConfig creates a backing store for state. The returned database

@@ -40,8 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -116,19 +115,19 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	}
 	// import pre accounts & construct test genesis block & state root
 	var (
-		db    = rawdb.NewMemoryDatabase()
-		tconf = &triedb.Config{
-			Preimages: true,
-		}
+		db     = rawdb.NewMemoryDatabase()
+		dbconf triedb.Config
 	)
 	if scheme == rawdb.PathScheme {
-		tconf.PathDB = pathdb.Defaults
+		dbconf = dbconfig.PathDefaults
 	} else {
-		tconf.HashDB = hashdb.Defaults
+		dbconf = dbconfig.HashDefaults
 	}
+	dbconf.Preimages = true
+
 	// Commit genesis state
 	gspec := t.genesis(config)
-	triedb := triedb.NewDatabase(db, tconf)
+	triedb := triedb.NewDatabase(db, &dbconf)
 	gblock, err := gspec.Commit(db, triedb)
 	if err != nil {
 		return err

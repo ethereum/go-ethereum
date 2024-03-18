@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/state"
 	"golang.org/x/exp/slices"
 )
 
@@ -242,7 +242,7 @@ type history struct {
 }
 
 // newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, block uint64, states *triestate.Set) *history {
+func newHistory(root common.Hash, parent common.Hash, block uint64, states *state.Origin) *history {
 	var (
 		accountList []common.Address
 		storageList = make(map[common.Address][]common.Hash)

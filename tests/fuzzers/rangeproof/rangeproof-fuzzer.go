@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/dbconfig"
 	"golang.org/x/exp/slices"
 )
 
@@ -57,7 +58,7 @@ func (f *fuzzer) readInt() uint64 {
 }
 
 func (f *fuzzer) randomTrie(n int) (*trie.Trie, map[string]*kv) {
-	trie := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	trie := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), &dbconfig.HashDefaults))
 	vals := make(map[string]*kv)
 	size := f.readInt()
 	// Fill it with some fluff

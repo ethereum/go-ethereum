@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/state"
 	"github.com/holiman/uint256"
 )
 
@@ -130,7 +130,7 @@ type StateDB struct {
 	StorageDeleted int
 
 	// Testing hooks
-	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+	onCommit func(states *state.Origin) // Hook invoked when commit is performed
 }
 
 // New creates a new state from a given trie.
@@ -1239,7 +1239,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	if root != origin {
 		start = time.Now()
-		set := triestate.New(s.accountsOrigin, s.storagesOrigin)
+		set := state.NewOrigin(s.accountsOrigin, s.storagesOrigin)
 		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
 			return common.Hash{}, err
 		}

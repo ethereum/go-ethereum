@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie/testutil"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 )
@@ -431,12 +431,12 @@ func TestPartialStackTrie(t *testing.T) {
 		for i := 0; i < n; i++ {
 			var val []byte
 			if rand.Intn(3) == 0 {
-				val = testutil.RandBytes(3)
+				val = testrand.Bytes(3)
 			} else {
-				val = testutil.RandBytes(32)
+				val = testrand.Bytes(32)
 			}
 			entries = append(entries, &kv{
-				k: testutil.RandBytes(32),
+				k: testrand.Bytes(32),
 				v: val,
 			})
 		}
