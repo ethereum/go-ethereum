@@ -332,39 +332,24 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, errExceedMaxTopics
 	}
 
-	var (
-		fromBlock int64
-		toBlock   int64
-	)
-
+	var filter *Filter
 	if crit.BlockHash != nil {
-		// look up block number from block hash
-		header, err := api.backend.HeaderByHash(ctx, *crit.BlockHash)
-		if err != nil {
-			return nil, err
-		}
-		if header == nil {
-			return nil, errors.New("unknown block")
-		}
-		fromBlock = int64(header.Number.Int64())
-		toBlock = fromBlock
+		// Block filter requested, construct a single-shot filter
+		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
 		// Convert the RPC block numbers into internal representations
-		if crit.FromBlock == nil {
-			fromBlock = int64(rpc.LatestBlockNumber)
-		} else {
-			fromBlock = crit.FromBlock.Int64()
+		begin := rpc.LatestBlockNumber.Int64()
+		if crit.FromBlock != nil {
+			begin = crit.FromBlock.Int64()
 		}
-		if crit.ToBlock == nil {
-			toBlock = int64(rpc.LatestBlockNumber)
-		} else {
-			toBlock = crit.ToBlock.Int64()
+		end := rpc.LatestBlockNumber.Int64()
+		if crit.ToBlock != nil {
+			end = crit.ToBlock.Int64()
 		}
+		// Construct the range filter
+		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 	}
-
-	// Create and run the filter to get all the logs
-	filter := New(api.backend, fromBlock, toBlock, crit.Addresses, crit.Topics)
-
+	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
@@ -402,17 +387,24 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	begin := rpc.LatestBlockNumber.Int64()
-	if f.crit.FromBlock != nil {
-		begin = f.crit.FromBlock.Int64()
+	var filter *Filter
+	if f.crit.BlockHash != nil {
+		// Block filter requested, construct a single-shot filter
+		filter = NewBlockFilter(api.backend, *f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
+	} else {
+		// Convert the RPC block numbers into internal representations
+		begin := rpc.LatestBlockNumber.Int64()
+		if f.crit.FromBlock != nil {
+			begin = f.crit.FromBlock.Int64()
+		}
+		end := rpc.LatestBlockNumber.Int64()
+		if f.crit.ToBlock != nil {
+			end = f.crit.ToBlock.Int64()
+		}
+		// Construct the range filter
+		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 	}
-	end := rpc.LatestBlockNumber.Int64()
-	if f.crit.ToBlock != nil {
-		end = f.crit.ToBlock.Int64()
-	}
-	// Create and run the filter to get all the logs
-	filter := New(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
-
+	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
@@ -587,7 +579,7 @@ func decodeAddress(s string) (common.Address, error) {
 	}
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.AddressLength {
-		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for address", len(b), common.AddressLength)
 	}
 	return common.BytesToAddress(b), err
 }
@@ -595,7 +587,7 @@ func decodeAddress(s string) (common.Address, error) {
 func decodeTopic(s string) (common.Hash, error) {
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.HashLength {
-		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
 }
