@@ -43,6 +43,8 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
+// MemoryData returns the underlying memory slice. Callers must not modify the contents
+// of the returned data.
 func (ctx *ScopeContext) MemoryData() []byte {
 	if ctx.Memory == nil {
 		return nil
@@ -50,6 +52,8 @@ func (ctx *ScopeContext) MemoryData() []byte {
 	return ctx.Memory.Data()
 }
 
+// MemoryData returns the stack data. Callers must not modify the contents
+// of the returned data.
 func (ctx *ScopeContext) StackData() []uint256.Int {
 	if ctx.Stack == nil {
 		return nil
@@ -57,18 +61,23 @@ func (ctx *ScopeContext) StackData() []uint256.Int {
 	return ctx.Stack.Data()
 }
 
+// Caller returns the current caller.
 func (ctx *ScopeContext) Caller() common.Address {
 	return ctx.Contract.Caller()
 }
 
+// Address returns the address where this scope of execution is taking place.
 func (ctx *ScopeContext) Address() common.Address {
 	return ctx.Contract.Address()
 }
 
+// CallValue returns the value supplied with this call.
 func (ctx *ScopeContext) CallValue() *big.Int {
 	return ctx.Contract.Value()
 }
 
+// CallInput returns the input/calldata with this call. Callers must not modify
+// the contents of the returned data.
 func (ctx *ScopeContext) CallInput() []byte {
 	return ctx.Contract.Input
 }
@@ -189,15 +198,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	contract.Input = input
 
 	if debug {
-		defer func() {
-			if err != nil {
-				if !logged {
-					if in.evm.Config.Tracer.OnOpcode != nil {
-						in.evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
-					}
-				} else if in.evm.Config.Tracer.OnFault != nil {
-					in.evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
-				}
+		defer func() { // this deferred method handles exit-with-error
+			if err == nil {
+				return
+			}
+			if !logged && in.evm.Config.Tracer.OnOpcode != nil {
+				in.evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			}
+			if logged && in.evm.Config.Tracer.OnFault != nil {
+				in.evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
