@@ -2,7 +2,7 @@
 terraform {
   backend "s3" {
     bucket = "tf-xinfin-bucket"
-    key    = "tf/terraform.tfstate"
+    key    = "tf/terraform_rpc.tfstate"
     region = "us-east-1"
     encrypt = true
   }

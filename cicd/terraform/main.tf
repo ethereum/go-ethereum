@@ -19,6 +19,25 @@ provider "aws" {
   region  = "ap-southeast-1"
 }
 
+module "devnet-rpc" {
+  source = "./module/region"
+  region = "ap-southeast-1"
+  nodeKeys = local.rpcDevnetNodeKeys
+  enableFixedIp = true
+  logLevel = local.logLevel
+  xdc_ecs_tasks_execution_role_arn = aws_iam_role.xdc_ecs_tasks_execution_role.arn
+
+  cpu = 1024 
+  memory = 4096
+
+  network = "devnet"
+  vpc_cidr = "10.0.0.0/16"
+  subnet_cidr = "10.0.0.0/20"
+  providers = {
+    aws = aws.ap-southeast-1
+  }
+}
+
 module "testnet-rpc" {
   source = "./module/region"
   region = "ap-southeast-1"
