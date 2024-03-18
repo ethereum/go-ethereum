@@ -177,7 +177,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	config.Tracer = logger.NewJSONLogger(&logger.Config{}, w).Hooks()
+	config.Tracer = logger.NewJSONLogger(&logger.Config{}, w)
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)

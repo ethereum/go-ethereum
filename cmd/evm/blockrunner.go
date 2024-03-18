@@ -59,7 +59,7 @@ func blockTestCmd(ctx *cli.Context) error {
 			DisableStack:     ctx.Bool(DisableStackFlag.Name),
 			DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
 			EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
-		}, os.Stderr).Hooks()
+		}, os.Stderr)
 	}
 	// Load the test content from the input file
 	src, err := os.ReadFile(ctx.Args().First())

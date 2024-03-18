@@ -230,7 +230,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if vmConfig.Tracer != nil {
+		if tracer != nil {
 			vmConfig.Tracer = tracer.Hooks
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
@@ -242,7 +242,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		)
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
 
-		if tracer != nil {
+		if tracer != nil && tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
@@ -253,7 +253,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
 			if tracer != nil {
-				tracer.OnTxEnd(nil, err)
+				if tracer.OnTxEnd != nil {
+					tracer.OnTxEnd(nil, err)
+				}
 				if err := writeTraceResult(tracer, traceOutput); err != nil {
 					log.Warn("Error writing tracer output", "err", err)
 				}
@@ -301,7 +303,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
 			if tracer != nil {
-				tracer.Hooks.OnTxEnd(receipt, nil)
+				if tracer.Hooks.OnTxEnd != nil {
+					tracer.Hooks.OnTxEnd(receipt, nil)
+				}
 				writeTraceResult(tracer, traceOutput)
 			}
 		}
@@ -421,7 +425,7 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 func writeTraceResult(tracer *directory.Tracer, f io.WriteCloser) error {
 	defer f.Close()
 	result, err := tracer.GetResult()
-	if err != nil {
+	if err != nil || result == nil {
 		return err
 	}
 	err = json.NewEncoder(f).Encode(result)

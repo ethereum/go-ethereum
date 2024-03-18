@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-type JSONLogger struct {
+type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext
@@ -35,15 +35,11 @@ type JSONLogger struct {
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
-	l := &JSONLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
+	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return l
-}
-
-func (l *JSONLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart: l.OnTxStart,
 		OnExit:    l.OnExit,
@@ -52,12 +48,12 @@ func (l *JSONLogger) Hooks() *tracing.Hooks {
 	}
 }
 
-func (l *JSONLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
 	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
 }
 
-func (l *JSONLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	memory := scope.MemoryData()
 	stack := scope.StackData()
 
@@ -83,7 +79,7 @@ func (l *JSONLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 	l.encoder.Encode(log)
 }
 
-func (l *JSONLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth > 0 {
 		return
 	}
@@ -99,6 +95,6 @@ func (l *JSONLogger) OnExit(depth int, output []byte, gasUsed uint64, err error,
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
 }
