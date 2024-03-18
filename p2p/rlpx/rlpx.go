@@ -663,7 +663,7 @@ func exportPubkey(pub *ecies.PublicKey) []byte {
 	if pub == nil {
 		panic("nil pubkey")
 	}
-	if curve, ok := pub.Curve.(crypto.BetterCurve); ok {
+	if curve, ok := pub.Curve.(crypto.EllipticCurve); ok {
 		return curve.Marshal(pub.X, pub.Y)[1:]
 	}
 	return []byte{}

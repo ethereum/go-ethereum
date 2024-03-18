@@ -51,10 +51,11 @@ var (
 
 var errInvalidPubkey = errors.New("invalid secp256k1 public key")
 
-// BetterCurve is an interface that combines both a curve
-// and (un)-marshalling functions to and from that curve.
-type BetterCurve interface {
+// EllipticCurve contains curve operations.
+type EllipticCurve interface {
 	elliptic.Curve
+
+	// Point marshaling/unmarshaing.
 	Marshal(x, y *big.Int) []byte
 	Unmarshal(data []byte) (x, y *big.Int)
 }

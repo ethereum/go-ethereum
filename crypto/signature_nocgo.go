@@ -159,16 +159,16 @@ func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
 }
 
 // S256 returns an instance of the secp256k1 curve.
-func S256() BetterCurve {
-	return KoblitzCurve{btcec.S256()}
+func S256() EllipticCurve {
+	return btCurve{btcec.S256()}
 }
 
-type KoblitzCurve struct {
-	*btcec.KoblitzCurve
+type btCurve struct {
+	*btcec.btCurve
 }
 
 // Marshall converts a point given as (x, y) into a byte slice.
-func (curve KoblitzCurve) Marshal(x, y *big.Int) []byte {
+func (curve btCurve) Marshal(x, y *big.Int) []byte {
 	byteLen := (curve.Params().BitSize + 7) / 8
 
 	ret := make([]byte, 1+2*byteLen)
@@ -182,7 +182,7 @@ func (curve KoblitzCurve) Marshal(x, y *big.Int) []byte {
 
 // Unmarshal converts a point, serialised by Marshal, into an x, y pair. On
 // error, x = nil.
-func (curve KoblitzCurve) Unmarshal(data []byte) (x, y *big.Int) {
+func (curve btCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	byteLen := (curve.Params().BitSize + 7) / 8
 	if len(data) != 1+2*byteLen {
 		return nil, nil

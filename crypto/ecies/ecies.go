@@ -257,7 +257,7 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 
 	d := messageTag(params.Hash, Km, em, s2)
 
-	if curve, ok := pub.Curve.(crypto.BetterCurve); ok {
+	if curve, ok := pub.Curve.(crypto.EllipticCurve); ok {
 		Rb := curve.Marshal(R.PublicKey.X, R.PublicKey.Y)
 		ct = make([]byte, len(Rb)+len(em)+len(d))
 		copy(ct, Rb)
@@ -303,7 +303,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	R := new(PublicKey)
 	R.Curve = prv.PublicKey.Curve
 
-	if curve, ok := R.Curve.(crypto.BetterCurve); ok {
+	if curve, ok := R.Curve.(crypto.EllipticCurve); ok {
 		R.X, R.Y = curve.Unmarshal(c[:rLen])
 		if R.X == nil {
 			return nil, ErrInvalidPublicKey
