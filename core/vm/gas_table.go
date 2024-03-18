@@ -477,3 +477,21 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	}
 	return gas, nil
 }
+
+func gasPay(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		addr           = stack.peek().Bytes20()
+		transfersValue = !stack.Back(1).IsZero()
+	)
+	gas, err := gasEip2929AccountCheck(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	if transfersValue {
+		gas += params.CallValueTransferGas
+		if evm.StateDB.Empty(addr) {
+			gas += params.CallNewAccountGas
+		}
+	}
+	return gas, nil
+}

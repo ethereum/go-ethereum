@@ -37,6 +37,7 @@ var activators = map[int]func(*JumpTable){
 	1884: enable1884,
 	1344: enable1344,
 	1153: enable1153,
+	5920: enable5920,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -55,6 +56,7 @@ func ValidEip(eipNum int) bool {
 	_, ok := activators[eipNum]
 	return ok
 }
+
 func ActivateableEips() []string {
 	var nums []string
 	for k := range activators {
@@ -318,4 +320,28 @@ func enable6780(jt *JumpTable) {
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 	}
+}
+
+func enable5920(jt *JumpTable) {
+	jt[PAY] = &operation{
+		execute:     opPay,
+		constantGas: params.WarmStorageReadCostEIP2929,
+		dynamicGas:  gasPay,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(2, 0),
+	}
+}
+
+func opPay(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		addr   = scope.Stack.pop()
+		amount = scope.Stack.pop()
+	)
+	if interpreter.evm.Context.CanTransfer(interpreter.evm.StateDB, scope.Contract.Address(), &amount) {
+		interpreter.evm.Context.Transfer(interpreter.evm.StateDB, scope.Contract.Address(), addr.Bytes20(), &amount)
+	}
+	return nil, nil
 }

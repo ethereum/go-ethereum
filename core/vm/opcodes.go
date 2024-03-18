@@ -218,6 +218,7 @@ const (
 	DELEGATECALL OpCode = 0xf4
 	CREATE2      OpCode = 0xf5
 
+	PAY          OpCode = 0xf9
 	STATICCALL   OpCode = 0xfa
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
@@ -391,6 +392,7 @@ var opCodeToString = [256]string{
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
 	CREATE2:      "CREATE2",
+	PAY:          "PAY",
 	STATICCALL:   "STATICCALL",
 	REVERT:       "REVERT",
 	INVALID:      "INVALID",
@@ -554,6 +556,7 @@ var stringToOp = map[string]OpCode{
 	"REVERT":         REVERT,
 	"INVALID":        INVALID,
 	"SELFDESTRUCT":   SELFDESTRUCT,
+	"PAY":            PAY,
 }
 
 // StringToOp finds the opcode whose name is stored in `str`.

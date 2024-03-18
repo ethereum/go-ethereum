@@ -189,7 +189,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, ErrOutOfGas
 		}
 		if operation.dynamicGas != nil {
-			// All ops with a dynamic memory usage also has a dynamic gas cost.
+			// All ops with a dynamic memory usage also have a dynamic gas cost.
 			var memorySize uint64
 			// calculate the new memory size and expand the memory to fit
 			// the operation
