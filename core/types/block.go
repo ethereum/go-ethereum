@@ -93,6 +93,9 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	// InclusionListSummaryRoot was added by EIP-7547 and is ignored in legacy headers.
+	InclusionListSummaryRoot *common.Hash `json:"inclusionListSummaryRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -168,9 +171,10 @@ func (h *Header) EmptyReceipts() bool {
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
-	Transactions []*Transaction
-	Uncles       []*Header
-	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Transactions         []*Transaction
+	Uncles               []*Header
+	Withdrawals          []*Withdrawal `rlp:"optional"`
+	InclusionListSummary []common.Address
 }
 
 // Block represents an Ethereum block.
@@ -191,10 +195,11 @@ type Body struct {
 //   - We do not copy body data on access because it does not affect the caches, and also
 //     because it would be too expensive.
 type Block struct {
-	header       *Header
-	uncles       []*Header
-	transactions Transactions
-	withdrawals  Withdrawals
+	header               *Header
+	uncles               []*Header
+	transactions         Transactions
+	withdrawals          Withdrawals
+	inclusionListSummary []common.Address
 
 	// caches
 	hash atomic.Value
@@ -208,10 +213,11 @@ type Block struct {
 
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
-	Header      *Header
-	Txs         []*Transaction
-	Uncles      []*Header
-	Withdrawals []*Withdrawal `rlp:"optional"`
+	Header               *Header
+	Txs                  []*Transaction
+	Uncles               []*Header
+	Withdrawals          []*Withdrawal `rlp:"optional"`
+	InclusionListSummary []common.Address
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -332,15 +338,16 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.inclusionListSummary}
 }
 
 // Accessors for body data. These do not return a copy because the content
 // of the body slices does not affect the cached hash/size in block.
 
-func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Uncles() []*Header                      { return b.uncles }
+func (b *Block) Transactions() Transactions             { return b.transactions }
+func (b *Block) Withdrawals() Withdrawals               { return b.withdrawals }
+func (b *Block) InclusionListSummary() []common.Address { return b.inclusionListSummary }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -478,6 +485,20 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
 		copy(block.withdrawals, withdrawals)
+	}
+	return block
+}
+
+// WithInclusionList returns a copy of the block containing the given inclusionList.
+func (b *Block) WithInclusionList(addresses []common.Address) *Block {
+	block := &Block{
+		header:       b.header,
+		transactions: b.transactions,
+		uncles:       b.uncles,
+	}
+	if addresses != nil {
+		block.inclusionListSummary = make([]common.Address, len(addresses))
+		copy(block.inclusionListSummary, addresses)
 	}
 	return block
 }
