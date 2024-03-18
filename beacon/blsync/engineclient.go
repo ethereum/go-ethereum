@@ -117,9 +117,7 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 func collectBlobHashes(b *ctypes.Block) []common.Hash {
 	list := make([]common.Hash, 0)
 	for _, tx := range b.Transactions() {
-		for _, h := range tx.BlobHashes() {
-			list = append(list, h)
-		}
+		list = append(list, tx.BlobHashes()...)
 	}
 	return list
 }

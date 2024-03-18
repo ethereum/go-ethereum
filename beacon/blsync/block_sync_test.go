@@ -65,7 +65,7 @@ func TestBlockSync(t *testing.T) {
 		var expNumber, headNumber uint64
 		if expHead != nil {
 			p, _ := expHead.ExecutionPayload()
-			expNumber = uint64(p.NumberU64())
+			expNumber = p.NumberU64()
 		}
 		select {
 		case event := <-headCh:

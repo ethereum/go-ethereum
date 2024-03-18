@@ -141,6 +141,6 @@ func (s *beaconBlockSync) updateEventFeed() {
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
 		BeaconHead: head.Header,
 		Block:      execBlock,
-		Finalized:  common.Hash(finality.Finalized.PayloadHeader.BlockHash()),
+		Finalized:  finality.Finalized.PayloadHeader.BlockHash(),
 	})
 }
