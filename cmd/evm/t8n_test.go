@@ -350,6 +350,7 @@ func TestT8nTracing(t *testing.T) {
 		base           string
 		input          t8nInput
 		expExitCode    int
+		extraArgs      []string
 		expectedTraces []string
 	}{
 		{
@@ -357,17 +358,30 @@ func TestT8nTracing(t *testing.T) {
 			input: t8nInput{
 				"alloc.json", "txs.json", "env.json", "Cancun", "",
 			},
+			extraArgs:      []string{"--trace"},
 			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl"},
+		},
+		{
+			base: "./testdata/31",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Cancun", "",
+			},
+			extraArgs: []string{"--trace.tracer", `
+{ 
+	result: function(){ 
+		return "hello world"
+	}, 
+	fault: function(){} 
+}`},
+			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json"},
 		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.input.get(tc.base)...)
-		// Add tracing-args
-		args = append(args, "--trace")
 		// Place the output somewhere we can find it
 		outdir := t.TempDir()
-
 		args = append(args, "--output.basedir", outdir)
+		args = append(args, tc.extraArgs...)
 
 		var qArgs []string // quoted args for debugging purposes
 		for _, arg := range args {
@@ -379,7 +393,8 @@ func TestT8nTracing(t *testing.T) {
 		}
 		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
 		tt.Run("evm-test", args...)
-		tt.WaitExit()
+		t.Log(string(tt.Output()))
+
 		// Compare the expected traces
 		for _, traceFile := range tc.expectedTraces {
 			haveFn := lineIterator(filepath.Join(outdir, traceFile))
