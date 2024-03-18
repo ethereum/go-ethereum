@@ -544,7 +544,6 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 		return err
 	}
 	// Wait for the pong request to arrive back
-
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 

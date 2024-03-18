@@ -70,7 +70,6 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 		tick  = time.NewTicker(10 * time.Second)
 		timer = time.NewTimer(3 * time.Second)
 	)
-
 	defer tick.Stop()
 	defer timer.Stop()
 

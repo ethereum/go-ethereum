@@ -1284,7 +1284,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 		gotHeaders = false // Wait for batches of headers to process
 		timer      = time.NewTimer(time.Second)
 	)
-
 	defer timer.Stop()
 
 	for {
