@@ -289,7 +289,6 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		localHeaders = d.readHeaderRange(tail, int(count))
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
-
 	fsHeaderContCheckTimer := time.NewTimer(fsHeaderContCheck)
 	defer fsHeaderContCheckTimer.Stop()
 

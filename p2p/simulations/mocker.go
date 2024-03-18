@@ -65,7 +65,6 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 	if err != nil {
 		panic("Could not startup node network for mocker")
 	}
-
 	var (
 		tick  = time.NewTicker(10 * time.Second)
 		timer = time.NewTimer(3 * time.Second)
