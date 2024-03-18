@@ -164,7 +164,7 @@ func S256() EllipticCurve {
 }
 
 type btCurve struct {
-	*btcec.btCurve
+	*btcec.KoblitzCurve
 }
 
 // Marshall converts a point given as (x, y) into a byte slice.
