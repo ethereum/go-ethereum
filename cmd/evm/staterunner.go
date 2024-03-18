@@ -60,7 +60,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	var cfg vm.Config
 	switch {
 	case ctx.Bool(MachineFlag.Name):
-		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr).Hooks()
+		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
 		cfg.Tracer = logger.NewStructLogger(config).Hooks()
