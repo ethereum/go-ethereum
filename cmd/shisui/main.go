@@ -21,7 +21,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-type PortalHistoryConfig struct {
+type Config struct {
 	Protocol     *discover.PortalProtocolConfig
 	PrivateKey   *ecdsa.PrivateKey
 	RpcAddr      string
@@ -101,8 +101,8 @@ func shisui(ctx *cli.Context) error {
 	return nil
 }
 
-func getPortalHistoryConfig(ctx *cli.Context) (*PortalHistoryConfig, error) {
-	config := &PortalHistoryConfig{
+func getPortalHistoryConfig(ctx *cli.Context) (*Config, error) {
+	config := &Config{
 		Protocol: discover.DefaultPortalProtocolConfig(),
 	}
 	err := setPrivateKey(ctx, config)
@@ -145,7 +145,7 @@ func getPortalHistoryConfig(ctx *cli.Context) (*PortalHistoryConfig, error) {
 	return config, nil
 }
 
-func setPrivateKey(ctx *cli.Context, config *PortalHistoryConfig) error {
+func setPrivateKey(ctx *cli.Context, config *Config) error {
 	var privateKey *ecdsa.PrivateKey
 	var err error
 	if ctx.IsSet(utils.PortalPrivateKeyFlag.Name) {
