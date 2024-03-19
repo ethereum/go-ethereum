@@ -73,7 +73,7 @@ func TestValidatedHead(t *testing.T) {
 	ts.AddServer(testServer3, 1)
 	ts.ServerEvent(EvNewSignedHead, testServer3, testSHead4)
 	ts.Run(4)
-	// future period annonced heads should be queued
+	// future period announced heads should be queued
 	ht.ExpValidated(t, 4, nil)
 
 	chain.SetNextSyncPeriod(2)
