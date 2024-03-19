@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -28,8 +29,8 @@ import (
 type StateDB interface {
 	CreateAccount(common.Address)
 
-	SubBalance(common.Address, *big.Int)
-	AddBalance(common.Address, *big.Int)
+	SubBalance(common.Address, *big.Int, tracing.BalanceChangeReason)
+	AddBalance(common.Address, *big.Int, tracing.BalanceChangeReason)
 	GetBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
@@ -82,7 +83,7 @@ type StateDB interface {
 	// new methods
 	Error() error
 	GetStorageRoot(common.Address) common.Hash
-	SetBalance(common.Address, *big.Int)
+	SetBalance(common.Address, *big.Int, tracing.BalanceChangeReason)
 	SetStorage(common.Address, map[common.Hash]common.Hash)
 	Finalise(deleteEmptyObjects bool)
 	Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error)
@@ -92,6 +93,7 @@ type StateDB interface {
 	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
 	TxIndex() int
 	Preimages() map[common.Hash][]byte
+	SetLogger(logger *tracing.Hooks)
 	SetEVM(evm *EVM)
 }
 

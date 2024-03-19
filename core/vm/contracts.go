@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	bls12381 "github.com/ethereum/go-ethereum/crypto/bls12381"
@@ -43,7 +44,7 @@ type PrecompiledContract interface {
 }
 
 type DynamicGasPrecompiledContract interface {
-	RunAndCalculateGas(evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64, value *big.Int) (ret []byte, remainingGas uint64, err error) // Run runs the precompiled contract and calculate gas dynamically
+	RunAndCalculateGas(evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64, value *big.Int, logger *tracing.Hooks) (ret []byte, remainingGas uint64, err error) // Run runs the precompiled contract and calculate gas dynamically
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -172,13 +173,16 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64, value *big.Int) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, evm *EVM, sender common.Address, callingContract common.Address, input []byte, suppliedGas uint64, value *big.Int, logger *tracing.Hooks) (ret []byte, remainingGas uint64, err error) {
 	if dp, ok := p.(DynamicGasPrecompiledContract); ok {
-		return dp.RunAndCalculateGas(evm, sender, callingContract, input, suppliedGas, value)
+		return dp.RunAndCalculateGas(evm, sender, callingContract, input, suppliedGas, value, logger)
 	}
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
+	}
+	if logger != nil && logger.OnGasChange != nil {
+		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(evm, sender, input, value)

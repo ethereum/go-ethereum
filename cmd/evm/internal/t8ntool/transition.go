@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -87,12 +89,7 @@ func Transition(ctx *cli.Context) error {
 	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
 	log.SetDefault(log.NewLogger(glogger))
 
-	var (
-		err    error
-		tracer vm.EVMLogger
-	)
-	var getTracer func(txIndex int, txHash common.Hash) (vm.EVMLogger, error)
-
+	var getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) { return nil, nil, nil }
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
@@ -124,20 +121,35 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
-		getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) {
-			if prevFile != nil {
-				prevFile.Close()
-			}
+		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
-				return nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			prevFile = traceFile
-			return logger.NewJSONLogger(logConfig, traceFile), nil
+			logger := logger.NewJSONLogger(logConfig, traceFile)
+			tracer := &directory.Tracer{
+				Hooks: logger,
+				// jsonLogger streams out result to file.
+				GetResult: func() (json.RawMessage, error) { return nil, nil },
+				Stop:      func(err error) {},
+			}
+			return tracer, traceFile, nil
 		}
-	} else {
-		getTracer = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
-			return nil, nil
+	} else if ctx.IsSet(TraceTracerFlag.Name) {
+		var config json.RawMessage
+		if ctx.IsSet(TraceTracerConfigFlag.Name) {
+			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
+		}
+		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
+			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+			if err != nil {
+				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+			}
+			tracer, err := directory.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			if err != nil {
+				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+			}
+			return tracer, traceFile, nil
 		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
@@ -176,9 +188,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	prestate.Env = *inputData.Env
 
-	vmConfig := vm.Config{
-		Tracer: tracer,
-	}
+	vmConfig := vm.Config{}
 	// Construct the chainconfig
 	var chainConfig *params.ChainConfig
 	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {

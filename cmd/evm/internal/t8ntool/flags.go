@@ -30,6 +30,14 @@ var (
 		Name:  "trace",
 		Usage: "Output full trace logs to files <txhash>.jsonl",
 	}
+	TraceTracerFlag = &cli.StringFlag{
+		Name:  "trace.tracer",
+		Usage: "Configures the use of a custom tracer, e.g native or js tracers. Examples are callTracer and 4byteTracer. These tracers emit results into files as trace-<txIndex>-<txHash>.json",
+	}
+	TraceTracerConfigFlag = &cli.StringFlag{
+		Name:  "trace.jsonconfig",
+		Usage: "The configurations for the custom tracer specified by --trace.tracer. If provided, must be in JSON format",
+	}
 	TraceDisableMemoryFlag = &cli.BoolFlag{
 		Name:  "trace.nomemory",
 		Value: true,

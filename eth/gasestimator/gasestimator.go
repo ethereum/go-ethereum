@@ -213,6 +213,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evm        = vm.NewEVM(evmContext, msgContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
 	)
 	dirtyState.SetEVM(evm)
+
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
 	// context for the lifetime of this method call.

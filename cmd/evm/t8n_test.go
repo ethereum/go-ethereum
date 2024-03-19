@@ -17,9 +17,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -315,6 +318,107 @@ func TestT8n(t *testing.T) {
 			}
 		}
 		tt.WaitExit()
+		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
+			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
+		}
+	}
+}
+
+func lineIterator(path string) func() (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return func() (string, error) { return err.Error(), err }
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	return func() (string, error) {
+		if scanner.Scan() {
+			return scanner.Text(), nil
+		}
+		if err := scanner.Err(); err != nil {
+			return "", err
+		}
+		return "", io.EOF // scanner gobbles io.EOF, but we want it
+	}
+}
+
+// TestT8nTracing is a test that checks the tracing-output from t8n.
+func TestT8nTracing(t *testing.T) {
+	t.Parallel()
+	tt := new(testT8n)
+	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	for i, tc := range []struct {
+		base           string
+		input          t8nInput
+		expExitCode    int
+		extraArgs      []string
+		expectedTraces []string
+	}{
+		{
+			base: "./testdata/31",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Cancun", "",
+			},
+			extraArgs:      []string{"--trace"},
+			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl"},
+		},
+		{
+			base: "./testdata/31",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Cancun", "",
+			},
+			extraArgs: []string{"--trace.tracer", `
+{ 
+	result: function(){ 
+		return "hello world"
+	}, 
+	fault: function(){} 
+}`},
+			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json"},
+		},
+	} {
+		args := []string{"t8n"}
+		args = append(args, tc.input.get(tc.base)...)
+		// Place the output somewhere we can find it
+		outdir := t.TempDir()
+		args = append(args, "--output.basedir", outdir)
+		args = append(args, tc.extraArgs...)
+
+		var qArgs []string // quoted args for debugging purposes
+		for _, arg := range args {
+			if len(arg) == 0 {
+				qArgs = append(qArgs, `""`)
+			} else {
+				qArgs = append(qArgs, arg)
+			}
+		}
+		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
+		tt.Run("evm-test", args...)
+		t.Log(string(tt.Output()))
+
+		// Compare the expected traces
+		for _, traceFile := range tc.expectedTraces {
+			haveFn := lineIterator(filepath.Join(outdir, traceFile))
+			wantFn := lineIterator(filepath.Join(tc.base, traceFile))
+
+			for line := 0; ; line++ {
+				want, wErr := wantFn()
+				have, hErr := haveFn()
+				if want != have {
+					t.Fatalf("test %d, trace %v, line %d\nwant: %v\nhave: %v\n",
+						i, traceFile, line, want, have)
+				}
+				if wErr != nil && hErr != nil {
+					break
+				}
+				if wErr != nil {
+					t.Fatal(wErr)
+				}
+				if hErr != nil {
+					t.Fatal(hErr)
+				}
+				t.Logf("%v\n", want)
+			}
+		}
 		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
 			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
 		}
