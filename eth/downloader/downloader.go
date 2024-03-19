@@ -1579,6 +1579,7 @@ func (d *Downloader) processSnapSyncContent() error {
 		timer    = time.NewTimer(time.Second)
 	)
 	defer timer.Stop()
+	
 	for {
 		// Wait for the next batch of downloaded data to be available. If we have
 		// not yet reached the pivot point, wait blockingly as there's no need to
