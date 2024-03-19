@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -69,6 +70,11 @@ var (
 	logFormatFlag = &cli.StringFlag{
 		Name:     "log.format",
 		Usage:    "Log format to use (json|logfmt|terminal)",
+		Category: flags.LoggingCategory,
+	}
+	logTagsFlag = &cli.StringFlag{
+		Name:     "log.tags",
+		Usage:    "A comma-separated list of <name>:<value> pairs that will be inserted into each log line",
 		Category: flags.LoggingCategory,
 	}
 	logFileFlag = &cli.StringFlag{
@@ -152,6 +158,7 @@ var Flags = []cli.Flag{
 	vmoduleFlag,
 	logjsonFlag,
 	logFormatFlag,
+	logTagsFlag,
 	logFileFlag,
 	logRotateFlag,
 	logMaxSizeMBsFlag,
@@ -250,6 +257,18 @@ func Setup(ctx *cli.Context) error {
 	default:
 		// Unknown log format specified
 		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+	}
+
+	if tags := ctx.String(logTagsFlag.Name); tags != "" {
+		var attrs []slog.Attr
+		for i, p := range strings.Split(tags, ",") {
+			kv := strings.Split(p, ":")
+			if len(kv) != 2 {
+				return fmt.Errorf("invalid log tag %q at index %d", p, i)
+			}
+			attrs = append(attrs, slog.String(strings.ToValidUTF8(kv[0], "�"), strings.ToValidUTF8(kv[1], "�")))
+		}
+		handler = handler.WithAttrs(attrs)
 	}
 
 	glogger = log.NewGlogHandler(handler)
