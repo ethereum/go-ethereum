@@ -203,7 +203,7 @@ geth attach data2/geth.ipc --exec admin.peers
 
 ### Running A Signer (Clique) {#running-a-signer}
 
-To set up Geth for signing blocks in Clique, a signer account must be available. The account must already be available as a keyfile in the keystore. To use it for signing blocks, it must be unlocked. Once unlocked, you also need to provide specify this address as the etherbase. The following command, for address `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82` will prompt for the account password, then start signing blocks:
+To set up Geth for signing blocks in Clique, a signer account must be available. The account must already be available as a keyfile in the keystore. To use it for signing blocks, it must be unlocked. Once unlocked, this account also need to be provided as the etherbase. The following command, for address `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82` will prompt for the account password, then start signing blocks:
 
 ```sh
 geth <other-flags> --unlock 0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82 --mine --miner.etherbase 0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82
