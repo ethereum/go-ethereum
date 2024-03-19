@@ -1015,13 +1015,13 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 
 	// Start pulling the header chain skeleton until all is done
 	var (
-		skeleton = true  // Skeleton assembly phase or finishing up
-		pivoting = false // Whether the next request is pivot verification
-		ancestor = from
-		mode     = d.getMode()
+		skeleton               = true  // Skeleton assembly phase or finishing up
+		pivoting               = false // Whether the next request is pivot verification
+		ancestor               = from
+		mode                   = d.getMode()
+		fsHeaderContCheckTimer = time.NewTimer(fsHeaderContCheck)
 	)
 
-	fsHeaderContCheckTimer := time.NewTimer(fsHeaderContCheck)
 	defer fsHeaderContCheckTimer.Stop()
 
 	for {
