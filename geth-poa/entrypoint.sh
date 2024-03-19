@@ -3,7 +3,9 @@ set -exu
 
 GETH_BIN_PATH=${GETH_BIN_PATH:-geth}
 GENESIS_L1_PATH=${GENESIS_L1_PATH:-/genesis.json}
-VERBOSITY=${VERBOSITY:-3}
+GETH_VERBOSITY=${GETH_VERBOSITY:-3}
+GETH_LOG_FORMAT=${GETH_LOG_FORMAT:-terminal}
+GETH_LOG_TAGS=${GETH_LOG_TAGS:-}
 GETH_SYNC_MODE=${GETH_SYNC_MODE:-full}
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
@@ -23,9 +25,12 @@ if [ "$GETH_NODE_TYPE" = "signer" ]; then
 		if [ -n "$BLOCK_SIGNER_PRIVATE_KEY" ]; then
 			echo "$GETH_KEYSTORE_DIR missing, running account import"
 			echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
-			"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
-				--nousb \
+			"$GETH_BIN_PATH" \
 				account import \
+				--verbosity="$GETH_VERBOSITY" \
+				--log.format="$GETH_LOG_FORMAT" \
+				--log.tags="$GETH_LOG_TAGS" \
+				--nousb \
 				--datadir="$GETH_DATA_DIR" \
 				--password="$GETH_DATA_DIR"/password \
 				"$GETH_DATA_DIR"/block-signer-key
@@ -33,7 +38,7 @@ if [ "$GETH_NODE_TYPE" = "signer" ]; then
 	else
 		echo "$GETH_KEYSTORE_DIR exists."
 		if [ -z "$BLOCK_SIGNER_PRIVATE_KEY" ]; then
-			GETH_ACCOUNT_LIST=$("$GETH_BIN_PATH" --verbosity="$VERBOSITY" account list --datadir "$GETH_DATA_DIR")
+			GETH_ACCOUNT_LIST=$("$GETH_BIN_PATH" --verbosity="$GETH_VERBOSITY" account list --datadir "$GETH_DATA_DIR")
 			BLOCK_SIGNER_ADDRESS_WITHOUT_PREFIX=$(echo "$GETH_ACCOUNT_LIST" | grep -oE '[0-9a-fA-F]{40}$')
 			BLOCK_SIGNER_ADDRESS="0x$BLOCK_SIGNER_ADDRESS_WITHOUT_PREFIX"
 			echo "Block signer address with 0x prefix: $BLOCK_SIGNER_ADDRESS"
@@ -45,7 +50,10 @@ fi
 if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 	echo "$GETH_CHAINDATA_DIR missing, running init"
 	echo "Initializing genesis."
-	"$GETH_BIN_PATH" --verbosity="$VERBOSITY" \
+	"$GETH_BIN_PATH" \
+		--verbosity="$GETH_VERBOSITY" \
+		--log.format="$GETH_LOG_FORMAT" \
+		--log.tags="$GETH_LOG_TAGS" \
 		--nousb \
 		--state.scheme=path \
 		--db.engine=pebble \
@@ -78,7 +86,9 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	echo "$BOOT_KEY" > $GETH_DATA_DIR/boot.key
 
 	exec "$GETH_BIN_PATH" \
-		--verbosity="$VERBOSITY" \
+		--verbosity="$GETH_VERBOSITY" \
+		--log.format="$GETH_LOG_FORMAT" \
+		--log.tags="$GETH_LOG_TAGS" \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
 		--http \
@@ -101,9 +111,9 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--metrics \
 		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
-  		--pprof \
-    		--pprof.addr="$NODE_IP" \
-        	--pprof.port=60601 \
+		--pprof \
+		--pprof.addr="$NODE_IP" \
+		--pprof.port=60601 \
 		--nodekey $GETH_DATA_DIR/boot.key \
 		--netrestrict $NET_RESTRICT \
 		"$NAT_FLAG" \
@@ -118,7 +128,9 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
   	GETH_PORT="${GETH_PORT:-30311}"
 
 	exec "$GETH_BIN_PATH" \
-		--verbosity="$VERBOSITY" \
+		--verbosity="$GETH_VERBOSITY" \
+		--log.format="$GETH_LOG_FORMAT" \
+		--log.tags="$GETH_LOG_TAGS" \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
@@ -143,9 +155,9 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--metrics \
 		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
-    		--pprof \
-    		--pprof.addr="$NODE_IP" \
-        	--pprof.port=60601 \
+		--pprof \
+		--pprof.addr="$NODE_IP" \
+		--pprof.port=60601 \
 		--ws \
 		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
@@ -166,7 +178,9 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	GETH_PORT="${GETH_PORT:-30311}"
 
 	exec "$GETH_BIN_PATH" \
-		--verbosity="$VERBOSITY" \
+		--verbosity="$GETH_VERBOSITY" \
+		--log.format="$GETH_LOG_FORMAT" \
+		--log.tags="$GETH_LOG_TAGS" \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
@@ -185,9 +199,9 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--metrics \
 		--metrics.addr="$NODE_IP" \
 		--metrics.port=6060 \
-    		--pprof \
-    		--pprof.addr="$NODE_IP" \
-        	--pprof.port=60601 \
+		--pprof \
+		--pprof.addr="$NODE_IP" \
+		--pprof.port=60601 \
 		--ws \
 		--ws.addr="$NODE_IP" \
 		--ws.port="$WS_PORT" \
