@@ -1021,7 +1021,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 		mode                   = d.getMode()
 		fsHeaderContCheckTimer = time.NewTimer(fsHeaderContCheck)
 	)
-
 	defer fsHeaderContCheckTimer.Stop()
 
 	for {
