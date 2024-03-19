@@ -122,8 +122,20 @@ func (x *XDPoS_v2) verifyVotes(chain consensus.ChainReader, votes map[common.Has
 	for h, vote := range votes {
 		go func(hash common.Hash, v *types.Vote) {
 			defer wg.Done()
-			if v.GetSigner() != emptySigner {
-				// verify before
+			signerAddress := v.GetSigner()
+			if signerAddress != emptySigner {
+				// verify that signer belongs to the final masternodes, we have not do so in previous steps
+				if len(masternodes) == 0 {
+					log.Error("[verifyVotes] empty masternode list detected when verifying message signatures")
+				}
+				for _, mn := range masternodes {
+					if mn == signerAddress {
+						return
+					}
+				}
+				// if signer does not belong to final masternodes, we remove the signer
+				v.SetSigner(emptySigner)
+				log.Debug("[verifyVotes] find a vote does not belong to final masternodes", "signer", signerAddress)
 				return
 			}
 			signedVote := types.VoteSigHash(&types.VoteForSign{
