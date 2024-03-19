@@ -580,9 +580,6 @@ func ValidateBlockHeaderBytes(headerBytes []byte, blockHash []byte) (*types.Head
 	if err != nil {
 		return nil, err
 	}
-	if header.ExcessBlobGas != nil {
-		return nil, errors.New("EIP-4844 not yet implemented")
-	}
 	hash := header.Hash()
 	if !bytes.Equal(hash[:], blockHash) {
 		return nil, ErrInvalidBlockHash
