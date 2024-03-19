@@ -1098,10 +1098,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
-	msg, err := args.ToMessage(globalGasCap, blockCtx.BaseFee)
-	if err != nil {
+	if err := args.CallDefaults(globalGasCap, blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
+	msg := args.ToMessage(blockCtx.BaseFee)
 	evm := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, &blockCtx)
 
 	// Wait for the context to be done and cancel the evm. Even if the
@@ -1182,11 +1182,14 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		State:      state,
 		ErrorRatio: estimateGasErrorRatio,
 	}
-	// Run the gas estimation andwrap any revertals into a custom return
-	call, err := args.ToMessage(gasCap, header.BaseFee)
+	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
+		return 0, err
+	}
+	call := args.ToMessage(header.BaseFee)
 	if err != nil {
 		return 0, err
 	}
+	// Run the gas estimation andwrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
 		if len(revert) > 0 {
@@ -1515,7 +1518,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
+		msg := args.ToMessage(header.BaseFee)
 		if err != nil {
 			return nil, 0, nil, err
 		}
