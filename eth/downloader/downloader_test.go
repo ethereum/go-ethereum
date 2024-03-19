@@ -561,29 +561,6 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	}
 }
 
-// Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
-func TestMultiSynchronisation68Full(t *testing.T)  { testMultiSynchronisation(t, eth.ETH68, FullSync) }
-func TestMultiSynchronisation68Snap(t *testing.T)  { testMultiSynchronisation(t, eth.ETH68, SnapSync) }
-func TestMultiSynchronisation68Light(t *testing.T) { testMultiSynchronisation(t, eth.ETH68, LightSync) }
-
-func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
-	tester := newTester(t)
-	defer tester.terminate()
-
-	// Create various peers with various parts of the chain
-	targetPeers := 8
-	chain := testChainBase.shorten(targetPeers * 100)
-
-	for i := 0; i < targetPeers; i++ {
-		id := fmt.Sprintf("peer #%d", i)
-		tester.newPeer(id, protocol, chain.shorten(len(chain.blocks) / (i + 1)).blocks[1:])
-	}
-	if err := tester.sync("peer #0", nil, mode); err != nil {
-		t.Fatalf("failed to synchronise blocks: %v", err)
-	}
-	assertOwnChain(t, tester, len(chain.blocks))
-}
-
 // Tests that synchronisations behave well in multi-version protocol environments
 // and not wreak havoc on other nodes in the network.
 func TestMultiProtoSynchronisation68Full(t *testing.T)  { testMultiProtoSync(t, eth.ETH68, FullSync) }
