@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
@@ -38,11 +38,11 @@ func randomStateSet(n int) *triestate.Set {
 		storages = make(map[common.Address]map[common.Hash][]byte)
 	)
 	for i := 0; i < n; i++ {
-		addr := testutil.RandomAddress()
+		addr := testrand.Address()
 		storages[addr] = make(map[common.Hash][]byte)
 		for j := 0; j < 3; j++ {
-			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testutil.RandBytes(32)))
-			storages[addr][testutil.RandomHash()] = v
+			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+			storages[addr][testrand.Hash()] = v
 		}
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
@@ -51,7 +51,7 @@ func randomStateSet(n int) *triestate.Set {
 }
 
 func makeHistory() *history {
-	return newHistory(testutil.RandomHash(), types.EmptyRootHash, 0, randomStateSet(3))
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, randomStateSet(3))
 }
 
 func makeHistories(n int) []*history {
@@ -60,7 +60,7 @@ func makeHistories(n int) []*history {
 		result []*history
 	)
 	for i := 0; i < n; i++ {
-		root := testutil.RandomHash()
+		root := testrand.Hash()
 		h := newHistory(root, parent, uint64(i), randomStateSet(3))
 		parent = root
 		result = append(result, h)

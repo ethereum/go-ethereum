@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package testutil
+package testrand
 
 import (
 	crand "crypto/rand"
@@ -22,11 +22,9 @@ import (
 	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// Prng is a pseudo random number generator seeded by strong randomness.
+// prng is a pseudo random number generator seeded by strong randomness.
 // The randomness is printed on startup in order to make failures reproducible.
 var prng = initRand()
 
@@ -37,25 +35,19 @@ func initRand() *mrand.Rand {
 	return rnd
 }
 
-// RandBytes generates a random byte slice with specified length.
-func RandBytes(n int) []byte {
+// Bytes generates a random byte slice with specified length.
+func Bytes(n int) []byte {
 	r := make([]byte, n)
 	prng.Read(r)
 	return r
 }
 
-// RandomHash generates a random blob of data and returns it as a hash.
-func RandomHash() common.Hash {
-	return common.BytesToHash(RandBytes(common.HashLength))
+// Hash generates a random hash.
+func Hash() common.Hash {
+	return common.BytesToHash(Bytes(common.HashLength))
 }
 
-// RandomAddress generates a random blob of data and returns it as an address.
-func RandomAddress() common.Address {
-	return common.BytesToAddress(RandBytes(common.AddressLength))
-}
-
-// RandomNode generates a random node.
-func RandomNode() *trienode.Node {
-	val := RandBytes(100)
-	return trienode.New(crypto.Keccak256Hash(val), val)
+// Address generates a random address.
+func Address() common.Address {
+	return common.BytesToAddress(Bytes(common.AddressLength))
 }
