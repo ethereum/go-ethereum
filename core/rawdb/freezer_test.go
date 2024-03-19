@@ -276,7 +276,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	}
 	require.NoError(t, f.Close())
 
-	// Re-openening as readonly should fail when validating
+	// Re-opening as readonly should fail when validating
 	// table lengths.
 	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {

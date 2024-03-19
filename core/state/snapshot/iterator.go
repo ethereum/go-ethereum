@@ -89,7 +89,7 @@ func (dl *diffLayer) AccountIterator(seek common.Hash) AccountIterator {
 	index := sort.Search(len(hashes), func(i int) bool {
 		return bytes.Compare(seek[:], hashes[i][:]) <= 0
 	})
-	// Assemble and returned the already seeked iterator
+	// Assemble and returned the already sought iterator
 	return &diffAccountIterator{
 		layer: dl,
 		keys:  hashes[index:],
@@ -255,7 +255,7 @@ func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (Sto
 	index := sort.Search(len(hashes), func(i int) bool {
 		return bytes.Compare(seek[:], hashes[i][:]) <= 0
 	})
-	// Assemble and returned the already seeked iterator
+	// Assemble and returned the already sought iterator
 	return &diffStorageIterator{
 		layer:   dl,
 		account: account,
