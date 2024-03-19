@@ -453,4 +453,3 @@ func signalToErr(signal int32) error {
 		panic(fmt.Errorf("undefined signal %d", signal))
 	}
 }
-, b.inclusionListSummary
