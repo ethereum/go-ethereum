@@ -926,15 +926,14 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), vmctx.BaseFee)
-	if err != nil {
+	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	tx, err := argsToTransaction(api.backend, &args, msg)
-	if err != nil {
-		return nil, err
-	}
-	var traceConfig *TraceConfig
+	var (
+		msg         = args.ToMessage(vmctx.BaseFee)
+		tx          = args.ToTransaction()
+		traceConfig *TraceConfig
+	)
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
@@ -1049,55 +1048,4 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 	}
 
 	return copy, canon
-}
-
-// argsToTransaction produces a Transaction object given call arguments.
-// The `msg` field must be converted from the same arguments.
-func argsToTransaction(b Backend, args *ethapi.TransactionArgs, msg *core.Message) (*types.Transaction, error) {
-	chainID := b.ChainConfig().ChainID
-	if args.ChainID != nil {
-		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
-			return nil, fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
-		}
-	}
-	var data types.TxData
-	switch {
-	case args.MaxFeePerGas != nil:
-		al := types.AccessList{}
-		if args.AccessList != nil {
-			al = *args.AccessList
-		}
-		data = &types.DynamicFeeTx{
-			To:         args.To,
-			ChainID:    chainID,
-			Nonce:      msg.Nonce,
-			Gas:        msg.GasLimit,
-			GasFeeCap:  msg.GasFeeCap,
-			GasTipCap:  msg.GasTipCap,
-			Value:      msg.Value,
-			Data:       msg.Data,
-			AccessList: al,
-		}
-	case args.AccessList != nil:
-		data = &types.AccessListTx{
-			To:         args.To,
-			ChainID:    chainID,
-			Nonce:      msg.Nonce,
-			Gas:        msg.GasLimit,
-			GasPrice:   msg.GasPrice,
-			Value:      msg.Value,
-			Data:       msg.Data,
-			AccessList: *args.AccessList,
-		}
-	default:
-		data = &types.LegacyTx{
-			To:       args.To,
-			Nonce:    msg.Nonce,
-			Gas:      msg.GasLimit,
-			GasPrice: msg.GasPrice,
-			Value:    msg.Value,
-			Data:     msg.Data,
-		}
-	}
-	return types.NewTx(data), nil
 }
