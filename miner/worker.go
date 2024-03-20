@@ -960,6 +960,14 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 
 mainloop:
 	for {
+		// Check interruption signal and abort building if it's fired.
+		if interrupt != nil {
+			if signal := interrupt.Load(); signal != commitInterruptNone {
+				breakCause = "interrupt"
+				return signalToErr(signal)
+			}
+		}
+
 		if interruptCtx != nil {
 			if EnableMVHashMap && w.IsRunning() {
 				env.state.AddEmptyMVHashMap()
@@ -975,13 +983,6 @@ mainloop:
 			}
 		}
 
-		// Check interruption signal and abort building if it's fired.
-		if interrupt != nil {
-			if signal := interrupt.Load(); signal != commitInterruptNone {
-				breakCause = "interrupt"
-				return signalToErr(signal)
-			}
-		}
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
 			breakCause = "Not enough gas for further transactions"

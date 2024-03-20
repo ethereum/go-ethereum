@@ -24,10 +24,11 @@ devfakeauthor = false           # Run miner without validator set authorization 
   "32000000" = "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68"
 
 [log]
-  vmodule = ""       # Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
-  json = false       # Format logs with JSON
-  backtrace = ""     # Request a stack trace at a specific logging statement (e.g. "block.go:271")
-  debug = true       # Prepends log messages with call-site location (file and line number)  -  {requires some effort}
+  vmodule = ""                    # Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
+  json = false                    # Format logs with JSON
+  backtrace = ""                  # Request a stack trace at a specific logging statement (e.g. "block.go:271")
+  debug = true                    # Prepends log messages with call-site location (file and line number)
+  enable-block-tracking = false   # Enables additional logging of information collected while tracking block lifecycle
 
 [p2p]
   maxpeers = 50           # Maximum number of network peers (network disabled if set to 0)

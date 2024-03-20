@@ -25,6 +25,7 @@ syncmode = "full"
   # json = false
   # backtrace = ""
   # debug = true
+  # enable-block-tracking = false
 
 [p2p]
   # maxpeers = 1

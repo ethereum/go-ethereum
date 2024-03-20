@@ -13,7 +13,8 @@
     "muirGlacierBlock": 3395000,
     "berlinBlock": 14750000,
     "londonBlock": 23850000,
-    "shanghaiBlock":50523000,
+    "shanghaiBlock": 50523000,
+    "cancunBlock": 54876000,
     "bor": {
       "jaipurBlock": 23850000,
       "delhiBlock": 38189056,

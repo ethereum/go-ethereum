@@ -33,15 +33,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -1779,77 +1775,34 @@ func (bc *BlockChain) WriteBlockAndSetHead(ctx context.Context, block *types.Blo
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	writeBlockAndSetHeadCtx, span := tracing.StartSpan(ctx, "blockchain.writeBlockAndSetHead")
-	defer tracing.EndSpan(span)
-
-	var stateSyncLogs []*types.Log
-
-	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeBlockWithState", func(_ context.Context, span trace.Span) {
-		stateSyncLogs, err = bc.writeBlockWithState(block, receipts, logs, state)
-		tracing.SetAttributes(
-			span,
-			attribute.Int("number", int(block.Number().Uint64())),
-			attribute.Bool("error", err != nil),
-		)
-	})
-
+	stateSyncLogs, err := bc.writeBlockWithState(block, receipts, logs, state)
 	if err != nil {
 		return NonStatTy, err
 	}
 
 	currentBlock := bc.CurrentBlock()
-
-	var reorg bool
-
-	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.ReorgNeeded", func(_ context.Context, span trace.Span) {
-		reorg, err = bc.forker.ReorgNeeded(currentBlock, block.Header())
-		tracing.SetAttributes(
-			span,
-			attribute.Int("number", int(block.Number().Uint64())),
-			attribute.Int("current block", int(currentBlock.Number.Uint64())),
-			attribute.Bool("reorg needed", reorg),
-			attribute.Bool("error", err != nil),
-		)
-	})
-
+	reorg, err := bc.forker.ReorgNeeded(currentBlock, block.Header())
 	if err != nil {
 		return NonStatTy, err
 	}
 
-	tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.reorg", func(_ context.Context, span trace.Span) {
-		if reorg {
-			// Reorganise the chain if the parent is not the head block
-			if block.ParentHash() != currentBlock.Hash() {
-				if err = bc.reorg(currentBlock, block); err != nil {
-					status = NonStatTy
-				}
+	if reorg {
+		// Reorganise the chain if the parent is not the head block
+		if block.ParentHash() != currentBlock.Hash() {
+			if err = bc.reorg(currentBlock, block); err != nil {
+				return NonStatTy, err
 			}
-
-			status = CanonStatTy
-		} else {
-			status = SideStatTy
 		}
 
-		tracing.SetAttributes(
-			span,
-			attribute.Int("number", int(block.Number().Uint64())),
-			attribute.Int("current block", int(currentBlock.Number.Uint64())),
-			attribute.Bool("reorg needed", reorg),
-			attribute.Bool("error", err != nil),
-			attribute.String("status", string(status)),
-		)
-	})
-
-	if status == NonStatTy {
-		return
+		status = CanonStatTy
+	} else {
+		status = SideStatTy
 	}
+
 	// Set new head.
 	if status == CanonStatTy {
-		tracing.Exec(writeBlockAndSetHeadCtx, "", "blockchain.writeHeadBlock", func(_ context.Context, _ trace.Span) {
-			bc.writeHeadBlock(block)
-		})
+		bc.writeHeadBlock(block)
 	}
-
 	bc.futureBlocks.Remove(block.Hash())
 
 	if status == CanonStatTy {
