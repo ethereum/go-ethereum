@@ -59,7 +59,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 }
 
 type tracerWrapper interface {
-	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Header, *types.Block, bool) (*types.BlockTrace, error)
 }
 
 func (v *BlockValidator) SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper) {
@@ -324,7 +324,7 @@ func (v *BlockValidator) createTraceEnvAndGetBlockTrace(block *types.Block) (*ty
 		return nil, err
 	}
 
-	return v.tracer.CreateTraceEnvAndGetBlockTrace(v.config, v.bc, v.engine, v.bc.db, statedb, parent, block, true)
+	return v.tracer.CreateTraceEnvAndGetBlockTrace(v.config, v.bc, v.engine, v.bc.db, statedb, parent.Header(), block, true)
 }
 
 func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {

@@ -23,7 +23,7 @@ type TraceBlock interface {
 }
 
 type scrollTracerWrapper interface {
-	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, core.ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, core.ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Header, *types.Block, bool) (*types.BlockTrace, error)
 }
 
 // GetBlockTraceByNumberOrHash replays the block and returns the structured BlockTrace by hash or number.
@@ -108,5 +108,5 @@ func (api *API) createTraceEnvAndGetBlockTrace(ctx context.Context, config *Trac
 	defer release()
 
 	chaindb := api.backend.ChainDb()
-	return api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
+	return api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent.Header(), block, true)
 }
