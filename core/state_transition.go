@@ -139,8 +139,6 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
-	// Distinguishes type-2 txes
-	DynamicFee bool
 
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
@@ -163,7 +161,6 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipAccountChecks: false,
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
-		DynamicFee:        tx.Type() == 2 || tx.Type() == 3,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {

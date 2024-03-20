@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -112,14 +111,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
 	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
-		evm.Config.Tracer.OnTxStart(&tracing.VMContext{
-			ChainConfig: evm.ChainConfig(),
-			StateDB:     statedb,
-			BlockNumber: evm.Context.BlockNumber,
-			Time:        evm.Context.Time,
-			Coinbase:    evm.Context.Coinbase,
-			Random:      evm.Context.Random,
-		}, tx, msg.From)
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		if evm.Config.Tracer.OnTxEnd != nil {
 			defer func() {
 				evm.Config.Tracer.OnTxEnd(receipt, err)
