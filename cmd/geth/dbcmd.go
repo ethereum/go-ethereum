@@ -817,7 +817,7 @@ func inspectAccount(db *triedb.Database, start uint64, end uint64, address commo
 				content = fmt.Sprintf("nonce: %d, balance: %d, code: %s, root: %s", account.Nonce, account.Balance, code, root)
 			}
 		}
-		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i]-1, content)
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
 		from = stats.Blocks[i]
 	}
 	return nil
@@ -850,7 +850,7 @@ func inspectStorage(db *triedb.Database, start uint64, end uint64, address commo
 				content = fmt.Sprintf("#%x", data)
 			}
 		}
-		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i]-1, content)
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
 		from = stats.Blocks[i]
 	}
 	return nil
