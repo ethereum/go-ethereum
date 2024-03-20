@@ -93,10 +93,13 @@ func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, e
 		if bytes.Equal(val, h.cleans[hash]) {
 			continue
 		}
+		// Utilize the hash of the state key as the node path to mitigate
+		// potential collisions within the path.
+		path := crypto.Keccak256(hash.Bytes())
 		if len(val) == 0 {
-			set.AddNode(hash.Bytes(), trienode.NewDeleted())
+			set.AddNode(path, trienode.NewDeleted())
 		} else {
-			set.AddNode(hash.Bytes(), trienode.New(crypto.Keccak256Hash(val), val))
+			set.AddNode(path, trienode.New(crypto.Keccak256Hash(val), val))
 		}
 	}
 	root, blob := hash(nodes)
