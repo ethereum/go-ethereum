@@ -30,9 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
 )
 
 var (
@@ -68,9 +65,9 @@ type jsonBeaconHeader struct {
 }
 
 type jsonHeaderWithExecProof struct {
-	Beacon          types.Header                    `json:"beacon"`
-	Execution       *capella.ExecutionPayloadHeader `json:"execution"`
-	ExecutionBranch merkle.Values                   `json:"execution_branch"`
+	Beacon          types.Header    `json:"beacon"`
+	Execution       json.RawMessage `json:"execution"`
+	ExecutionBranch merkle.Values   `json:"execution_branch"`
 }
 
 // UnmarshalJSON unmarshals from JSON.
@@ -244,33 +241,44 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 
 func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	var data struct {
-		Data struct {
+		Version string
+		Data    struct {
 			Attested       jsonHeaderWithExecProof `json:"attested_header"`
 			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
 			FinalityBranch merkle.Values           `json:"finality_branch"`
 			Aggregate      types.SyncAggregate     `json:"sync_aggregate"`
 			SignatureSlot  common.Decimal          `json:"signature_slot"`
-		} `json:"data"`
+		}
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.FinalityUpdate{}, err
 	}
-
+	// Decode the execution payload headers.
+	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
+	}
+	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Finalized.Execution)
+	if err != nil {
+		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
+	}
+	// Perform sanity checks.
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
 		return types.FinalityUpdate{}, errors.New("invalid sync_committee_signature length")
 	}
+
 	return types.FinalityUpdate{
 		Attested: types.HeaderWithExecProof{
 			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: data.Data.Attested.Execution,
+			PayloadHeader: attestedExecHeader,
 			PayloadBranch: data.Data.Attested.ExecutionBranch,
 		},
 		Finalized: types.HeaderWithExecProof{
 			Header:        data.Data.Finalized.Beacon,
-			PayloadHeader: data.Data.Finalized.Execution,
+			PayloadHeader: finalizedExecHeader,
 			PayloadBranch: data.Data.Finalized.ExecutionBranch,
 		},
 		FinalityBranch: data.Data.FinalityBranch,
@@ -359,27 +367,30 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 	return checkpoint, nil
 }
 
-func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*capella.BeaconBlock, error) {
+func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
 	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", blockRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	var beaconBlockMessage struct {
-		Data struct {
-			Message capella.BeaconBlock `json:"message"`
-		} `json:"data"`
+		Version string
+		Data    struct {
+			Message json.RawMessage `json:"message"`
+		}
 	}
 	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
 	}
-	beaconBlock := new(capella.BeaconBlock)
-	*beaconBlock = beaconBlockMessage.Data.Message
-	root := common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
-	if root != blockRoot {
-		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, root)
+	block, err := types.BlockFromJSON(beaconBlockMessage.Version, beaconBlockMessage.Data.Message)
+	if err != nil {
+		return nil, err
 	}
-	return beaconBlock, nil
+	computedRoot := block.Root()
+	if computedRoot != blockRoot {
+		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
+	}
+	return block, nil
 }
 
 func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
@@ -456,7 +467,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 			select {
 			case event, ok := <-stream.Events:
 				if !ok {
-					break
+					return
 				}
 				switch event.Event() {
 				case "head":
@@ -482,7 +493,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 				}
 			case err, ok := <-stream.Errors:
 				if !ok {
-					break
+					return
 				}
 				listener.OnError(err)
 			}
