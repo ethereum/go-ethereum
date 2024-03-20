@@ -17,6 +17,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY ./rollup/circuitcapacitychecker/libzkp .
+RUN cargo clean
 RUN cargo build --release
 RUN find ./ | grep libzktrie.so | xargs -I{} cp {} /app/target/release/
 
