@@ -1015,14 +1015,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 
 	// Start pulling the header chain skeleton until all is done
 	var (
-		skeleton               = true  // Skeleton assembly phase or finishing up
-		pivoting               = false // Whether the next request is pivot verification
-		ancestor               = from
-		mode                   = d.getMode()
-		fsHeaderContCheckTimer = time.NewTimer(fsHeaderContCheck)
+		skeleton = true  // Skeleton assembly phase or finishing up
+		pivoting = false // Whether the next request is pivot verification
+		ancestor = from
+		mode     = d.getMode()
 	)
-	defer fsHeaderContCheckTimer.Stop()
-
 	for {
 		// Pull the next batch of headers, it either:
 		//   - Pivot check to see if the chain moved too far
@@ -1127,9 +1124,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 			// Don't abort header fetches while the pivot is downloading
 			if !d.committed.Load() && pivot <= from {
 				p.log.Debug("No headers, waiting for pivot commit")
-				fsHeaderContCheckTimer.Reset(fsHeaderContCheck)
 				select {
-				case <-fsHeaderContCheckTimer.C:
+				case <-time.After(fsHeaderContCheck):
 					continue
 				case <-d.cancelCh:
 					return errCanceled
@@ -1198,10 +1194,9 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 		// sleep a bit and retry. Take care with headers already consumed during
 		// skeleton filling
 		if len(headers) == 0 && !progressed {
-			fsHeaderContCheckTimer.Reset(fsHeaderContCheck)
 			p.log.Trace("All headers delayed, waiting")
 			select {
-			case <-fsHeaderContCheckTimer.C:
+			case <-time.After(fsHeaderContCheck):
 				continue
 			case <-d.cancelCh:
 				return errCanceled
