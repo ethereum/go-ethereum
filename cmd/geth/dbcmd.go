@@ -33,12 +33,14 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 )
@@ -219,6 +221,10 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			&cli.Uint64Flag{
 				Name:  "end",
 				Usage: "block number of the range end(included), zero means latest history",
+			},
+			&cli.BoolFlag{
+				Name:  "raw",
+				Usage: "display the decoded raw state value",
 			},
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command queries the history of the account or storage slot within the specified block range",
@@ -780,6 +786,76 @@ func showMetaData(ctx *cli.Context) error {
 	return nil
 }
 
+func inspectAccount(db *triedb.Database, start uint64, end uint64, address common.Address, raw bool) error {
+	stats, err := db.AccountHistory(address, start, end)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Account history:\n\taddress: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), stats.Start, stats.End)
+
+	from := stats.Start
+	for i := 0; i < len(stats.Blocks); i++ {
+		var content string
+		if len(stats.Origins[i]) == 0 {
+			content = "<empty>"
+		} else {
+			if !raw {
+				content = fmt.Sprintf("%x", stats.Origins[i])
+			} else {
+				account := new(types.SlimAccount)
+				if err := rlp.DecodeBytes(stats.Origins[i], account); err != nil {
+					panic(err)
+				}
+				code := "<nil>"
+				if len(account.CodeHash) > 0 {
+					code = fmt.Sprintf("%x", common.Bytes2Hex(account.CodeHash))
+				}
+				root := "<nil>"
+				if len(account.Root) > 0 {
+					root = fmt.Sprintf("%x", common.Bytes2Hex(account.Root))
+				}
+				content = fmt.Sprintf("nonce: %d, balance: %d, code: %s, root: %s", account.Nonce, account.Balance, code, root)
+			}
+		}
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i]-1, content)
+		from = stats.Blocks[i]
+	}
+	return nil
+}
+
+func inspectStorage(db *triedb.Database, start uint64, end uint64, address common.Address, slot common.Hash, raw bool) error {
+	// The hash of storage slot key is utilized in the history
+	// rather than the raw slot key, make the conversion.
+	slotHash := crypto.Keccak256Hash(slot.Bytes())
+	stats, err := db.StorageHistory(address, slotHash, start, end)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), slot.Hex(), stats.Start, stats.End)
+
+	from := stats.Start
+	for i := 0; i < len(stats.Blocks); i++ {
+		var content string
+		if len(stats.Origins[i]) == 0 {
+			content = "<empty>"
+		} else {
+			if !raw {
+				content = fmt.Sprintf("%x", stats.Origins[i])
+			} else {
+				_, data, _, err := rlp.Split(stats.Origins[i])
+				if err != nil {
+					fmt.Printf("Failed to decode storage slot, %v", err)
+					return err
+				}
+				content = fmt.Sprintf("#%x", data)
+			}
+		}
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i]-1, content)
+		from = stats.Blocks[i]
+	}
+	return nil
+}
+
 func inspectHistory(ctx *cli.Context) error {
 	if ctx.NArg() == 0 || ctx.NArg() > 2 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
@@ -808,9 +884,8 @@ func inspectHistory(ctx *cli.Context) error {
 
 	var (
 		err   error
-		start uint64               // the id of first history object to query
-		end   uint64               // the id (included) of last history object to query
-		stats *pathdb.HistoryStats // inspection result
+		start uint64 // the id of first history object to query
+		end   uint64 // the id (included) of last history object to query
 	)
 	// State histories are identified by state ID rather than block number.
 	// To address this, load the corresponding block header and perform the
@@ -848,25 +923,7 @@ func inspectHistory(ctx *cli.Context) error {
 	}
 	// Inspect the state history.
 	if slot == (common.Hash{}) {
-		stats, err = triedb.AccountHistory(address, start, end)
-	} else {
-		// The hash of storage slot key is utilized in the history
-		// rather than the raw slot key, make the conversion.
-		slotHash := crypto.Keccak256Hash(slot.Bytes())
-		stats, err = triedb.StorageHistory(address, slotHash, start, end)
+		return inspectAccount(triedb, start, end, address, ctx.Bool("raw"))
 	}
-	if err != nil {
-		return err
-	}
-	// Print out the result.
-	if slot == (common.Hash{}) {
-		fmt.Printf("Account history:\n\taddress: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), stats.Start, stats.End)
-	} else {
-		fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), slot.Hex(), stats.Start, stats.End)
-	}
-	fmt.Printf("\nThe output shows block number where account/slot was modified, along with the _old_ rlp-encoded value\n")
-	for i := 0; i < len(stats.Blocks); i++ {
-		fmt.Printf("#%d: %#x\n", stats.Blocks[i], stats.Origins[i])
-	}
-	return nil
+	return inspectStorage(triedb, start, end, address, slot, ctx.Bool("raw"))
 }
