@@ -67,7 +67,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
-		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(MachineFlag.Name))
+		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name))
 	}
 	// Read filenames from stdin and execute back-to-back
 	scanner := bufio.NewScanner(os.Stdin)
@@ -76,7 +76,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		if len(fname) == 0 {
 			return nil
 		}
-		if err := runStateTest(fname, cfg, ctx.Bool(MachineFlag.Name)); err != nil {
+		if err := runStateTest(fname, cfg, ctx.Bool(DumpFlag.Name)); err != nil {
 			return err
 		}
 	}
