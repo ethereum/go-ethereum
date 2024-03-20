@@ -847,7 +847,7 @@ func inspectStorage(db *triedb.Database, start uint64, end uint64, address commo
 					fmt.Printf("Failed to decode storage slot, %v", err)
 					return err
 				}
-				content = fmt.Sprintf("#%x", data)
+				content = fmt.Sprintf("%x", data)
 			}
 		}
 		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
