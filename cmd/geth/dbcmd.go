@@ -224,7 +224,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			},
 			&cli.BoolFlag{
 				Name:  "raw",
-				Usage: "display the decoded raw state value",
+				Usage: "display the decoded raw state value (otherwise shows rlp-encoded value)",
 			},
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command queries the history of the account or storage slot within the specified block range",
@@ -808,11 +808,11 @@ func inspectAccount(db *triedb.Database, start uint64, end uint64, address commo
 				}
 				code := "<nil>"
 				if len(account.CodeHash) > 0 {
-					code = fmt.Sprintf("%x", common.Bytes2Hex(account.CodeHash))
+					code = fmt.Sprintf("%x", account.CodeHash)
 				}
 				root := "<nil>"
 				if len(account.Root) > 0 {
-					root = fmt.Sprintf("%x", common.Bytes2Hex(account.Root))
+					root = fmt.Sprintf("%x", account.Root)
 				}
 				content = fmt.Sprintf("nonce: %d, balance: %d, code: %s, root: %s", account.Nonce, account.Balance, code, root)
 			}
