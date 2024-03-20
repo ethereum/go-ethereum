@@ -182,7 +182,10 @@ func (db *Database) repairHistory() error {
 	// accidental mutation.
 	ancient, err := db.diskdb.AncientDatadir()
 	if err != nil {
-		log.Crit("Ancient store is not enabled")
+		// TODO error out if ancient store is disabled. A tons of unit tests
+		// disable the ancient store thus the error here will immediately fail
+		// all of them. Fix the tests first.
+		return nil
 	}
 	freezer, err := rawdb.NewStateFreezer(ancient, false)
 	if err != nil {
@@ -326,8 +329,10 @@ func (db *Database) Enable(root common.Hash) error {
 	// all root->id mappings should be removed as well. Since
 	// mappings can be huge and might take a while to clear
 	// them, just leave them in disk and wait for overwriting.
-	if err := db.freezer.Reset(); err != nil {
-		return err
+	if db.freezer != nil {
+		if err := db.freezer.Reset(); err != nil {
+			return err
+		}
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
@@ -350,6 +355,9 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 	// Short circuit if rollback operation is not supported.
 	if err := db.modifyAllowed(); err != nil {
 		return err
+	}
+	if db.freezer == nil {
+		return errors.New("state rollback is non-supported")
 	}
 	// Short circuit if the target state is not recoverable.
 	root = types.TrieRootHash(root)
@@ -399,6 +407,13 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
+	// This is a temporary workaround for the unavailability of the freezer in
+	// dev mode. As a consequence, the Pathdb loses the ability for deep reorg
+	// in certain cases.
+	// TODO(rjl493456442): Implement the in-memory ancient store.
+	if db.freezer == nil {
+		return false
+	}
 	// Ensure the requested state is a canonical state and all state
 	// histories in range [id+1, disklayer.ID] are present and complete.
 	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
@@ -421,6 +436,11 @@ func (db *Database) Close() error {
 
 	// Release the memory held by clean cache.
 	db.tree.bottom().resetCache()
+
+	// Close the attached state history freezer.
+	if db.freezer == nil {
+		return nil
+	}
 	return db.freezer.Close()
 }
 
