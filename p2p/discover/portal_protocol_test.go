@@ -48,8 +48,60 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 		conf.BootstrapNodes = bootNodes
 	}
 
+	addr1, err := net.ResolveUDPAddr("udp", conf.ListenAddr)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.ListenUDP("udp", addr1)
+	if err != nil {
+		return nil, err
+	}
+
+	privKey := newkey()
+
+	discCfg := Config{
+		PrivateKey:  privKey,
+		NetRestrict: conf.NetRestrict,
+		Bootnodes:   conf.BootstrapNodes,
+	}
+
+	nodeDB, err := enode.OpenDB(conf.NodeDBPath)
+	if err != nil {
+		return nil, err
+	}
+
+	localNode := enode.NewLocalNode(nodeDB, privKey)
+	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	localNode.Set(Tag)
+
+	var addrs []net.Addr
+	if conf.NodeIP != nil {
+		localNode.SetStaticIP(conf.NodeIP)
+	} else {
+		addrs, err = net.InterfaceAddrs()
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, address := range addrs {
+			// check ip addr is loopback addr
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					localNode.SetStaticIP(ipnet.IP)
+					break
+				}
+			}
+		}
+	}
+
+	discV5, err := ListenV5(conn, localNode, discCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	contentQueue := make(chan *ContentElement, 50)
-	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), newkey(), &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &MockStorage{db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

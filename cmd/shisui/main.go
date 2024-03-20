@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 
 	"os"
@@ -16,8 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage/sqlite"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -60,7 +63,7 @@ func main() {
 }
 
 func shisui(ctx *cli.Context) error {
-	config, err := getPortalHistoryConfig(ctx)
+	config, err := getPortalConfig(ctx)
 	if err != nil {
 		return nil
 	}
@@ -68,7 +71,8 @@ func shisui(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
 	slogVerbosity := log.FromLegacyLevel(config.LogLevel)
 	glogger.Verbosity(slogVerbosity)
-	log.SetDefault(log.NewLogger(glogger))
+	defaultLogger := log.NewLogger(glogger)
+	log.SetDefault(defaultLogger)
 
 	nodeId := enode.PubkeyToIDV4(&config.PrivateKey.PublicKey)
 	contentStorage, err := sqlite.NewContentStorage(config.DataCapacity, nodeId, config.DataDir)
@@ -76,9 +80,60 @@ func shisui(ctx *cli.Context) error {
 		return err
 	}
 
+	addr, err := net.ResolveUDPAddr("udp", config.Protocol.ListenAddr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return err
+	}
+
+	discCfg := discover.Config{
+		PrivateKey:  config.PrivateKey,
+		NetRestrict: config.Protocol.NetRestrict,
+		Bootnodes:   config.Protocol.BootstrapNodes,
+		Log:         defaultLogger,
+	}
+
+	nodeDB, err := enode.OpenDB(config.Protocol.NodeDBPath)
+	if err != nil {
+		return err
+	}
+
+	localNode := enode.NewLocalNode(nodeDB, config.PrivateKey)
+	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	localNode.Set(discover.Tag)
+
+	var addrs []net.Addr
+	if config.Protocol.NodeIP != nil {
+		localNode.SetStaticIP(config.Protocol.NodeIP)
+	} else {
+		addrs, err = net.InterfaceAddrs()
+
+		if err != nil {
+			return err
+		}
+
+		for _, address := range addrs {
+			// check ip addr is loopback addr
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					localNode.SetStaticIP(ipnet.IP)
+					break
+				}
+			}
+		}
+	}
+
+	discV5, err := discover.ListenV5(conn, localNode, discCfg)
+	if err != nil {
+		return err
+	}
+
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, contentStorage, contentQueue)
+	historyProtocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
 
 	if err != nil {
 		return err
@@ -89,19 +144,18 @@ func shisui(ctx *cli.Context) error {
 		return err
 	}
 
-	historyNetwork := history.NewHistoryNetwork(protocol, &accumulator)
+	historyNetwork := history.NewHistoryNetwork(historyProtocol, &accumulator)
 	err = historyNetwork.Start()
 	if err != nil {
 		return err
 	}
 	defer historyNetwork.Stop()
 
-	discover.StartHistoryRpcServer(protocol, config.RpcAddr)
-
+	startPortalRpcServer(discover.NewDiscV5API(discV5), discover.NewPortalAPI(historyProtocol), nil, config.RpcAddr)
 	return nil
 }
 
-func getPortalHistoryConfig(ctx *cli.Context) (*Config, error) {
+func getPortalConfig(ctx *cli.Context) (*Config, error) {
 	config := &Config{
 		Protocol: discover.DefaultPortalProtocolConfig(),
 	}
@@ -165,5 +219,43 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 		}
 	}
 	config.PrivateKey = privateKey
+	return nil
+}
+
+func startPortalRpcServer(discV5API *discover.DiscV5API, historyAPI *discover.PortalProtocolAPI, beaconAPI *discover.PortalProtocolAPI, addr string) error {
+	disv5 := discV5API
+
+	server := rpc.NewServer()
+	err := server.RegisterName("discv5", disv5)
+	if err != nil {
+		return err
+	}
+
+	var historyNetworkAPI *history.API
+	if historyAPI != nil {
+		historyNetworkAPI = history.NewHistoryNetworkAPI(historyAPI)
+		err = server.RegisterName("portal", historyNetworkAPI)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	var beaconNetworkAPI *beacon.API
+	if beaconAPI != nil {
+		beaconNetworkAPI = beacon.NewBeaconNetworkAPI(beaconAPI)
+		err = server.RegisterName("portal", beaconNetworkAPI)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: server,
+	}
+
+	httpServer.ListenAndServe()
 	return nil
 }

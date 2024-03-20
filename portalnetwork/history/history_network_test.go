@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -390,14 +391,64 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 		conf.BootstrapNodes = bootNodes
 	}
 
-	contentQueue := make(chan *discover.ContentElement, 50)
+	addr1, err := net.ResolveUDPAddr("udp", conf.ListenAddr)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.ListenUDP("udp", addr1)
+	if err != nil {
+		return nil, err
+	}
 
-	key, err := crypto.GenerateKey()
+	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		panic("couldn't generate key: " + err.Error())
 	}
 
-	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.HistoryNetwork), key, &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	discCfg := discover.Config{
+		PrivateKey:  privKey,
+		NetRestrict: conf.NetRestrict,
+		Bootnodes:   conf.BootstrapNodes,
+	}
+
+	nodeDB, err := enode.OpenDB(conf.NodeDBPath)
+	if err != nil {
+		return nil, err
+	}
+
+	localNode := enode.NewLocalNode(nodeDB, privKey)
+	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	localNode.Set(discover.Tag)
+
+	var addrs []net.Addr
+	if conf.NodeIP != nil {
+		localNode.SetStaticIP(conf.NodeIP)
+	} else {
+		addrs, err = net.InterfaceAddrs()
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, address := range addrs {
+			// check ip addr is loopback addr
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					localNode.SetStaticIP(ipnet.IP)
+					break
+				}
+			}
+		}
+	}
+
+	discV5, err := discover.ListenV5(conn, localNode, discCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	contentQueue := make(chan *discover.ContentElement, 50)
+
+	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &MockStorage{db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

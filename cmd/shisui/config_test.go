@@ -24,7 +24,7 @@ func TestGenConfig(t *testing.T) {
 	ctx := cli.NewContext(nil, flagSet, nil)
 	ctx.Command = command
 
-	config, err := getPortalHistoryConfig(ctx)
+	config, err := getPortalConfig(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, config.DataCapacity, size)

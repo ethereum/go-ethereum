@@ -36,10 +36,6 @@ import (
 )
 
 const (
-	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
-	// wait this long for a single source of candidates before moving on and trying other
-	// sources.
-	discmixTimeout = 5 * time.Second
 
 	// TalkResp message is a response message so the session is established and a
 	// regular discv5 packet is assumed for size calculation.
@@ -81,15 +77,15 @@ const (
 	PersistOfferRequestKind   byte = 0x02
 )
 
+type ClientTag string
+
+func (c ClientTag) ENRKey() string { return "c" }
+
+const Tag ClientTag = "shisui"
+
 var ErrNilContentKey = errors.New("content key cannot be nil")
 
 var ContentNotFound = storage.ErrContentNotFound
-
-type clientTag string
-
-func (c clientTag) ENRKey() string { return "c" }
-
-const tag clientTag = "shisui"
 
 type ContentElement struct {
 	Node        enode.ID
@@ -169,10 +165,10 @@ type PortalProtocol struct {
 	ListenAddr     string
 	localNode      *enode.LocalNode
 	log            log.Logger
-	discmix        *enode.FairMix
 	PrivateKey     *ecdsa.PrivateKey
 	NetRestrict    *netutil.Netlist
 	BootstrapNodes []*enode.Node
+	conn           UDPConn
 
 	validSchemes   enr.IdentityScheme
 	radiusCache    *fastcache.Cache
@@ -190,36 +186,7 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 	return digest[:]
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
-	nodeDB, err := enode.OpenDB(config.NodeDBPath)
-	if err != nil {
-		return nil, err
-	}
-
-	localNode := enode.NewLocalNode(nodeDB, privateKey)
-	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
-	localNode.Set(tag)
-
-	if config.NodeIP != nil {
-		localNode.SetStaticIP(config.NodeIP)
-	} else {
-		addrs, err := net.InterfaceAddrs()
-
-		if err != nil {
-			return nil, err
-		}
-
-		for _, address := range addrs {
-			// check ip addr is loopback addr
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				if ipnet.IP.To4() != nil {
-					localNode.SetStaticIP(ipnet.IP)
-					break
-				}
-			}
-		}
-	}
-
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
 	protocol := &PortalProtocol{
@@ -239,6 +206,8 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		toContentId:    defaultContentIdFunc,
 		contentQueue:   contentQueue,
 		offerQueue:     make(chan *OfferRequestWithNode, concurrentOffers),
+		conn:           conn,
+		DiscV5:         discV5,
 	}
 
 	for _, opt := range opts {
@@ -292,18 +261,8 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	return nodes
 }
 
-func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
-	listenAddr := p.ListenAddr
-
-	addr, err := net.ResolveUDPAddr("udp", listenAddr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	laddr := conn.LocalAddr().(*net.UDPAddr)
+func (p *PortalProtocol) setupUDPListening() error {
+	laddr := p.conn.LocalAddr().(*net.UDPAddr)
 	p.localNode.SetFallbackUDP(laddr.Port)
 	p.log.Debug("UDP listener up", "addr", laddr)
 	// TODO: NAT
@@ -315,6 +274,7 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	//	}
 	//}
 
+	var err error
 	p.packetRouter = utp.NewPacketRouter(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
 			nodes := p.table.Nodes()
@@ -351,24 +311,22 @@ func (p *PortalProtocol) setupUDPListening() (*net.UDPConn, error) {
 	}
 
 	if err != nil {
-		return nil, err
+		return err
 	}
-	p.utpSm, err = utp.NewSocketManagerWithOptions("utp", laddr, utp.WithLogger(logger.Named(listenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithMaxPacketSize(1145))
+	p.utpSm, err = utp.NewSocketManagerWithOptions("utp", laddr, utp.WithLogger(logger.Named(p.ListenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithMaxPacketSize(1145))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithSocketManager(p.utpSm))
 
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return conn, nil
+	return nil
 }
 
 func (p *PortalProtocol) setupDiscV5AndTable() error {
-	p.discmix = enode.NewFairMix(discmixTimeout)
-
-	conn, err := p.setupUDPListening()
+	err := p.setupUDPListening()
 	if err != nil {
 		return err
 	}
@@ -378,10 +336,6 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 		NetRestrict: p.NetRestrict,
 		Bootnodes:   p.BootstrapNodes,
 		Log:         p.log,
-	}
-	p.DiscV5, err = ListenV5(conn, p.localNode, cfg)
-	if err != nil {
-		return err
 	}
 
 	p.table, err = newMeteredTable(p, p.localNode.Database(), cfg)

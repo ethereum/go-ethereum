@@ -2,12 +2,10 @@ package discover
 
 import (
 	"errors"
-	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -17,7 +15,7 @@ type DiscV5API struct {
 	DiscV5 *UDPv5
 }
 
-func NewAPI(discV5 *UDPv5) *DiscV5API {
+func NewDiscV5API(discV5 *UDPv5) *DiscV5API {
 	return &DiscV5API{discV5}
 }
 
@@ -71,30 +69,6 @@ type NodeMetadata struct {
 
 type Enrs struct {
 	Enrs []string `json:"enrs"`
-}
-
-func StartHistoryRpcServer(protocol *PortalProtocol, addr string) error {
-	disv5 := NewAPI(protocol.DiscV5)
-	portal := NewPortalAPI(protocol)
-
-	server := rpc.NewServer()
-	err := server.RegisterName("discv5", disv5)
-	if err != nil {
-		return err
-	}
-	err = server.RegisterName("portal", portal)
-
-	if err != nil {
-		return err
-	}
-
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: server,
-	}
-
-	httpServer.ListenAndServe()
-	return nil
 }
 
 func (d *DiscV5API) NodeInfo() *NodeInfo {
@@ -236,19 +210,17 @@ func (d *DiscV5API) RecursiveFindNodes(nodeId string) ([]string, error) {
 	return enrs, nil
 }
 
-type PortalAPI struct {
-	*DiscV5API
+type PortalProtocolAPI struct {
 	portalProtocol *PortalProtocol
 }
 
-func NewPortalAPI(portalProtocol *PortalProtocol) *PortalAPI {
-	return &PortalAPI{
-		DiscV5API:      &DiscV5API{portalProtocol.DiscV5},
+func NewPortalAPI(portalProtocol *PortalProtocol) *PortalProtocolAPI {
+	return &PortalProtocolAPI{
 		portalProtocol: portalProtocol,
 	}
 }
 
-func (p *PortalAPI) NodeInfo() *NodeInfo {
+func (p *PortalProtocolAPI) NodeInfo() *NodeInfo {
 	n := p.portalProtocol.localNode.Node()
 
 	return &NodeInfo{
@@ -258,7 +230,7 @@ func (p *PortalAPI) NodeInfo() *NodeInfo {
 	}
 }
 
-func (p *PortalAPI) HistoryRoutingTableInfo() *RoutingTableInfo {
+func (p *PortalProtocolAPI) RoutingTableInfo() *RoutingTableInfo {
 	n := p.portalProtocol.localNode.Node()
 
 	return &RoutingTableInfo{
@@ -267,7 +239,7 @@ func (p *PortalAPI) HistoryRoutingTableInfo() *RoutingTableInfo {
 	}
 }
 
-func (p *PortalAPI) HistoryAddEnr(enr string) (bool, error) {
+func (p *PortalProtocolAPI) AddEnr(enr string) (bool, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return false, err
@@ -279,7 +251,7 @@ func (p *PortalAPI) HistoryAddEnr(enr string) (bool, error) {
 	return true, nil
 }
 
-func (p *PortalAPI) AddEnrs(enrs []string) bool {
+func (p *PortalProtocolAPI) AddEnrs(enrs []string) bool {
 	// Note: unspecified RPC, but useful for our local testnet test
 	for _, enr := range enrs {
 		n, err := enode.Parse(enode.ValidSchemes, enr)
@@ -295,7 +267,7 @@ func (p *PortalAPI) AddEnrs(enrs []string) bool {
 	return true
 }
 
-func (p *PortalAPI) HistoryGetEnr(nodeId string) (string, error) {
+func (p *PortalProtocolAPI) GetEnr(nodeId string) (string, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return "", err
@@ -313,7 +285,7 @@ func (p *PortalAPI) HistoryGetEnr(nodeId string) (string, error) {
 	return n.String(), nil
 }
 
-func (p *PortalAPI) HistoryDeleteEnr(nodeId string) (bool, error) {
+func (p *PortalProtocolAPI) DeleteEnr(nodeId string) (bool, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return false, err
@@ -328,7 +300,7 @@ func (p *PortalAPI) HistoryDeleteEnr(nodeId string) (bool, error) {
 	return true, nil
 }
 
-func (p *PortalAPI) HistoryLookupEnr(nodeId string) (string, error) {
+func (p *PortalProtocolAPI) LookupEnr(nodeId string) (string, error) {
 	id, err := enode.ParseID(nodeId)
 	if err != nil {
 		return "", err
@@ -343,7 +315,7 @@ func (p *PortalAPI) HistoryLookupEnr(nodeId string) (string, error) {
 	return enr.String(), nil
 }
 
-func (p *PortalAPI) HistoryPing(enr string) (*PortalPongResp, error) {
+func (p *PortalProtocolAPI) Ping(enr string) (*PortalPongResp, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -372,7 +344,7 @@ func (p *PortalAPI) HistoryPing(enr string) (*PortalPongResp, error) {
 	}, nil
 }
 
-func (p *PortalAPI) HistoryFindNodes(enr string, distances []uint) ([]string, error) {
+func (p *PortalProtocolAPI) FindNodes(enr string, distances []uint) ([]string, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -390,7 +362,7 @@ func (p *PortalAPI) HistoryFindNodes(enr string, distances []uint) ([]string, er
 	return enrs, nil
 }
 
-func (p *PortalAPI) HistoryFindContent(enr string, contentKey string) (interface{}, error) {
+func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interface{}, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return nil, err
@@ -412,14 +384,14 @@ func (p *PortalAPI) HistoryFindContent(enr string, contentKey string) (interface
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: false,
 		}
-		p.portalProtocol.log.Trace("HistoryFindContent", "contentInfo", contentInfo)
+		p.portalProtocol.log.Trace("FindContent", "contentInfo", contentInfo)
 		return contentInfo, nil
 	case portalwire.ContentConnIdSelector:
 		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: true,
 		}
-		p.portalProtocol.log.Trace("HistoryFindContent", "contentInfo", contentInfo)
+		p.portalProtocol.log.Trace("FindContent", "contentInfo", contentInfo)
 		return contentInfo, nil
 	default:
 		enrs := make([]string, 0)
@@ -427,14 +399,14 @@ func (p *PortalAPI) HistoryFindContent(enr string, contentKey string) (interface
 			enrs = append(enrs, r.String())
 		}
 
-		p.portalProtocol.log.Trace("HistoryFindContent", "enrs", enrs)
+		p.portalProtocol.log.Trace("FindContent", "enrs", enrs)
 		return &Enrs{
 			Enrs: enrs,
 		}, nil
 	}
 }
 
-func (p *PortalAPI) HistoryOffer(enr string, contentKey string, contentValue string) (string, error) {
+func (p *PortalProtocolAPI) Offer(enr string, contentKey string, contentValue string) (string, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return "", err
@@ -470,7 +442,7 @@ func (p *PortalAPI) HistoryOffer(enr string, contentKey string, contentValue str
 	return hexutil.Encode(accept), nil
 }
 
-func (p *PortalAPI) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
+func (p *PortalProtocolAPI) RecursiveFindNodes(nodeId string) ([]string, error) {
 	findNodes := p.portalProtocol.Lookup(enode.HexID(nodeId))
 
 	enrs := make([]string, 0, len(findNodes))
@@ -481,7 +453,7 @@ func (p *PortalAPI) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
 	return enrs, nil
 }
 
-func (p *PortalAPI) HistoryRecursiveFindContent(contentKeyHex string) (*ContentInfo, error) {
+func (p *PortalProtocolAPI) RecursiveFindContent(contentKeyHex string) (*ContentInfo, error) {
 	contentKey, err := hexutil.Decode(contentKeyHex)
 	if err != nil {
 		return nil, err
@@ -498,7 +470,7 @@ func (p *PortalAPI) HistoryRecursiveFindContent(contentKeyHex string) (*ContentI
 	}, err
 }
 
-func (p *PortalAPI) HistoryLocalContent(contentKeyHex string) (string, error) {
+func (p *PortalProtocolAPI) LocalContent(contentKeyHex string) (string, error) {
 	contentKey, err := hexutil.Decode(contentKeyHex)
 	if err != nil {
 		return "", err
@@ -512,7 +484,7 @@ func (p *PortalAPI) HistoryLocalContent(contentKeyHex string) (string, error) {
 	return hexutil.Encode(content), nil
 }
 
-func (p *PortalAPI) HistoryStore(contentKeyHex string, contextHex string) (bool, error) {
+func (p *PortalProtocolAPI) Store(contentKeyHex string, contextHex string) (bool, error) {
 	contentKey, err := hexutil.Decode(contentKeyHex)
 	if err != nil {
 		return false, err
@@ -532,8 +504,7 @@ func (p *PortalAPI) HistoryStore(contentKeyHex string, contextHex string) (bool,
 	return true, nil
 }
 
-// TODO
-func (p *PortalAPI) HistoryGossip(contentKeyHex, contentHex string) (int, error) {
+func (p *PortalProtocolAPI) Gossip(contentKeyHex, contentHex string) (int, error) {
 	contentKey, err := hexutil.Decode(contentKeyHex)
 	if err != nil {
 		return 0, err
@@ -547,6 +518,6 @@ func (p *PortalAPI) HistoryGossip(contentKeyHex, contentHex string) (int, error)
 }
 
 // TODO
-func (p *PortalAPI) HistoryTraceRecursiveFindContent(contentKeyHex string) {
+func (p *PortalProtocolAPI) TraceRecursiveFindContent(contentKeyHex string) {
 
 }
