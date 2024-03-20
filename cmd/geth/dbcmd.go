@@ -860,11 +860,11 @@ func inspectHistory(ctx *cli.Context) error {
 	}
 	// Print out the result.
 	if slot == (common.Hash{}) {
-		fmt.Printf("Account history:\n\taddress: %s\n", address.Hex())
+		fmt.Printf("Account history:\n\taddress: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), stats.Start, stats.End)
 	} else {
-		fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\n", address.Hex(), slot.Hex())
+		fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\nblockrange: [#%d-#%d]\n", address.Hex(), slot.Hex(), stats.Start, stats.End)
 	}
-	fmt.Printf("Range: [#%d-#%d]\n\n", stats.Start, stats.End)
+	fmt.Printf("\nThe output shows block number where account/slot was modified, along with the _old_ rlp-encoded value\n")
 	for i := 0; i < len(stats.Blocks); i++ {
 		fmt.Printf("#%d: %#x\n", stats.Blocks[i], stats.Origins[i])
 	}
