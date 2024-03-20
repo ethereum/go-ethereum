@@ -197,7 +197,7 @@ func (s *SessionManager) Bid(sessionId string, blsPubKey phase0.BLSPubKey) (*api
 }
 
 func (s *SessionManager) GetBalance(sessionId string, addr common.Address) (*big.Int, error) {
-	builder, err := s.getSession(sessionId)
+	builder, err := s.getSession(sessionId, false)
 	if err != nil {
 		return nil, err
 	}
