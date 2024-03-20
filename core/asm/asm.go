@@ -68,7 +68,7 @@ func (it *instructionIterator) Next() bool {
 	if it.op.IsPush() {
 		a := uint64(it.op) - uint64(vm.PUSH0)
 		u := it.pc + 1 + a
-		if uint64(len(it.code)) <= it.pc || uint64(len(it.code)) < u {
+		if uint64(len(it.code)) < u {
 			it.error = fmt.Errorf("incomplete push instruction at %v", it.pc)
 			return false
 		}
