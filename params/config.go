@@ -310,6 +310,7 @@ var (
 		BerlinBlock:         big.NewInt(14750000),
 		LondonBlock:         big.NewInt(23850000),
 		ShanghaiBlock:       big.NewInt(50523000),
+		CancunBlock:         big.NewInt(54876000),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(23850000),
 			DelhiBlock:  big.NewInt(38189056),

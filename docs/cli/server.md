@@ -204,6 +204,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```log.debug```: Prepends log messages with call-site location (file and line number) (default: false)
 
+- ```log.enable-block-tracking```: Enables additional logging of information collected while tracking block lifecycle (default: false)
+
 - ```log.json```: Format logs with JSON (default: false)
 
 - ```vmodule```: Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)
