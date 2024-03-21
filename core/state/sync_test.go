@@ -288,7 +288,10 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 		}
 	}
 	// Copy the preimages from source db in order to traverse the state.
-	srcDb.TrieDB().WritePreimages()
+	err = srcDb.TrieDB().WritePreimages()
+	if err != nil {
+		t.Fatalf("write preimages error: %v", err)
+	}
 	copyPreimages(srcDisk, dstDb)
 
 	// Cross check that the two states are in sync
@@ -389,7 +392,10 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 		}
 	}
 	// Copy the preimages from source db in order to traverse the state.
-	srcDb.TrieDB().WritePreimages()
+	err = srcDb.TrieDB().WritePreimages()
+	if err != nil {
+		t.Fatalf("write preimages error: %v", err)
+	}
 	copyPreimages(srcDisk, dstDb)
 
 	// Cross check that the two states are in sync
@@ -487,7 +493,10 @@ func testIterativeRandomStateSync(t *testing.T, count int, scheme string) {
 		}
 	}
 	// Copy the preimages from source db in order to traverse the state.
-	srcDb.TrieDB().WritePreimages()
+	err = srcDb.TrieDB().WritePreimages()
+	if err != nil {
+		t.Fatalf("write preimages error: %v", err)
+	}
 	copyPreimages(srcDisk, dstDb)
 
 	// Cross check that the two states are in sync
@@ -591,7 +600,10 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 		}
 	}
 	// Copy the preimages from source db in order to traverse the state.
-	srcDb.TrieDB().WritePreimages()
+	err = srcDb.TrieDB().WritePreimages()
+	if err != nil {
+		t.Fatalf("write preimages error: %v", err)
+	}
 	copyPreimages(srcDisk, dstDb)
 
 	// Cross check that the two states are in sync
@@ -707,7 +719,10 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 		}
 	}
 	// Copy the preimages from source db in order to traverse the state.
-	srcDb.TrieDB().WritePreimages()
+	err = srcDb.TrieDB().WritePreimages()
+	if err != nil {
+		t.Fatalf("write preimages error: %v", err)
+	}
 	copyPreimages(db, dstDb)
 
 	// Sanity check that removing any node from the database is detected

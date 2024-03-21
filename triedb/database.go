@@ -143,7 +143,7 @@ func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
 // Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if db.preimages != nil {
-		db.preimages.commit(false)
+		return db.preimages.commit(false)
 	}
 	return db.backend.Update(root, parent, block, nodes, states)
 }
@@ -153,7 +153,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 // also written.
 func (db *Database) Commit(root common.Hash, report bool) error {
 	if db.preimages != nil {
-		db.preimages.commit(true)
+		return db.preimages.commit(true)
 	}
 	return db.backend.Commit(root, report)
 }
@@ -188,15 +188,19 @@ func (db *Database) Scheme() string {
 // It is meant to be called when closing the blockchain object, so that all
 // resources held can be released correctly.
 func (db *Database) Close() error {
-	db.WritePreimages()
+	err := db.WritePreimages()
+	if err != nil {
+		return err
+	}
 	return db.backend.Close()
 }
 
 // WritePreimages flushes all accumulated preimages to disk forcibly.
-func (db *Database) WritePreimages() {
+func (db *Database) WritePreimages() error {
 	if db.preimages != nil {
-		db.preimages.commit(true)
+		return db.preimages.commit(true)
 	}
+	return nil
 }
 
 // Preimage retrieves a cached trie node pre-image from preimage store.
@@ -226,7 +230,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		return errors.New("not supported")
 	}
 	if db.preimages != nil {
-		db.preimages.commit(false)
+		return db.preimages.commit(false)
 	}
 	return hdb.Cap(limit)
 }
