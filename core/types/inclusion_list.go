@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//go:generate go run github.com/fjl/gencodec -type InclusionList gen_inclusion_rlp.go
-//go:generate go run ../../rlp/rlpgen -type InclusionList -out gen_inculsion.go
+//go:generate go run github.com/fjl/gencodec -type InclusionList -out gen_inclusion_rlp.go
+//go:generate go run ../../rlp/rlpgen -type InclusionList -out gen_inclusion.go
 
 type InclusionListEntry struct {
 	Address common.Address

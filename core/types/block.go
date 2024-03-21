@@ -173,8 +173,8 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions         []*Transaction
 	Uncles               []*Header
-	Withdrawals          []*Withdrawal `rlp:"optional"`
-	InclusionListSummary []*InclusionListEntry
+	Withdrawals          []*Withdrawal         `rlp:"optional"`
+	InclusionListSummary []*InclusionListEntry `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -216,8 +216,8 @@ type extblock struct {
 	Header               *Header
 	Txs                  []*Transaction
 	Uncles               []*Header
-	Withdrawals          []*Withdrawal `rlp:"optional"`
-	InclusionListSummary []*InclusionListEntry
+	Withdrawals          []*Withdrawal         `rlp:"optional"`
+	InclusionListSummary []*InclusionListEntry `rlp:"optional"`
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
