@@ -154,11 +154,12 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	api := &ConsensusAPI{
-		eth:               eth,
-		remoteBlocks:      newHeaderQueue(),
-		localBlocks:       newPayloadQueue(),
-		invalidBlocksHits: make(map[common.Hash]int),
-		invalidTipsets:    make(map[common.Hash]*types.Header),
+		eth:                      eth,
+		remoteBlocks:             newHeaderQueue(),
+		localBlocks:              newPayloadQueue(),
+		invalidBlocksHits:        make(map[common.Hash]int),
+		invalidTipsets:           make(map[common.Hash]*types.Header),
+		coolMapThatIsNotAMemLeak: make(map[common.Hash][]*types.Transaction),
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
