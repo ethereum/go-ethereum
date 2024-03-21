@@ -800,7 +800,7 @@ func inspectAccount(db *triedb.Database, start uint64, end uint64, address commo
 			content = "<empty>"
 		} else {
 			if !raw {
-				content = fmt.Sprintf("%x", stats.Origins[i])
+				content = fmt.Sprintf("%#x", stats.Origins[i])
 			} else {
 				account := new(types.SlimAccount)
 				if err := rlp.DecodeBytes(stats.Origins[i], account); err != nil {
@@ -808,13 +808,13 @@ func inspectAccount(db *triedb.Database, start uint64, end uint64, address commo
 				}
 				code := "<nil>"
 				if len(account.CodeHash) > 0 {
-					code = fmt.Sprintf("%x", account.CodeHash)
+					code = fmt.Sprintf("%#x", account.CodeHash)
 				}
 				root := "<nil>"
 				if len(account.Root) > 0 {
-					root = fmt.Sprintf("%x", account.Root)
+					root = fmt.Sprintf("%#x", account.Root)
 				}
-				content = fmt.Sprintf("nonce: %d, balance: %d, code: %s, root: %s", account.Nonce, account.Balance, code, root)
+				content = fmt.Sprintf("nonce: %d, balance: %d, codeHash: %s, root: %s", account.Nonce, account.Balance, code, root)
 			}
 		}
 		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
@@ -840,14 +840,14 @@ func inspectStorage(db *triedb.Database, start uint64, end uint64, address commo
 			content = "<empty>"
 		} else {
 			if !raw {
-				content = fmt.Sprintf("%x", stats.Origins[i])
+				content = fmt.Sprintf("%#x", stats.Origins[i])
 			} else {
 				_, data, _, err := rlp.Split(stats.Origins[i])
 				if err != nil {
 					fmt.Printf("Failed to decode storage slot, %v", err)
 					return err
 				}
-				content = fmt.Sprintf("%x", data)
+				content = fmt.Sprintf("%#x", data)
 			}
 		}
 		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
