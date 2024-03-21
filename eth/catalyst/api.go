@@ -137,7 +137,8 @@ type ConsensusAPI struct {
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
 
-	coolMapThatIsNotAMemLeak map[common.Hash][]*types.Transaction
+	coolMapThatIsNotAMemLeak  map[common.Hash][]*types.Transaction
+	coolMapThatIsNotAMemLeak2 map[common.Hash]*types.InclusionListSummary
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -154,12 +155,13 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	api := &ConsensusAPI{
-		eth:                      eth,
-		remoteBlocks:             newHeaderQueue(),
-		localBlocks:              newPayloadQueue(),
-		invalidBlocksHits:        make(map[common.Hash]int),
-		invalidTipsets:           make(map[common.Hash]*types.Header),
-		coolMapThatIsNotAMemLeak: make(map[common.Hash][]*types.Transaction),
+		eth:                       eth,
+		remoteBlocks:              newHeaderQueue(),
+		localBlocks:               newPayloadQueue(),
+		invalidBlocksHits:         make(map[common.Hash]int),
+		invalidTipsets:            make(map[common.Hash]*types.Header),
+		coolMapThatIsNotAMemLeak:  make(map[common.Hash][]*types.Transaction),
+		coolMapThatIsNotAMemLeak2: make(map[common.Hash]*types.InclusionListSummary),
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
@@ -346,6 +348,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		api.eth.BlockChain().SetFinalized(finalBlock.Header())
 		// Clear the inclusionList for that block
 		delete(api.coolMapThatIsNotAMemLeak, update.FinalizedBlockHash)
+		delete(api.coolMapThatIsNotAMemLeak2, update.FinalizedBlockHash)
 	}
 	// Check if the safe block hash is in our canonical tree, if not something is wrong
 	if update.SafeBlockHash != (common.Hash{}) {
@@ -366,14 +369,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:        update.HeadBlockHash,
-			Timestamp:     payloadAttributes.Timestamp,
-			FeeRecipient:  payloadAttributes.SuggestedFeeRecipient,
-			Random:        payloadAttributes.Random,
-			Withdrawals:   payloadAttributes.Withdrawals,
-			BeaconRoot:    payloadAttributes.BeaconRoot,
-			Version:       payloadVersion,
-			InclusionList: api.coolMapThatIsNotAMemLeak[update.HeadBlockHash],
+			Parent:               update.HeadBlockHash,
+			Timestamp:            payloadAttributes.Timestamp,
+			FeeRecipient:         payloadAttributes.SuggestedFeeRecipient,
+			Random:               payloadAttributes.Random,
+			Withdrawals:          payloadAttributes.Withdrawals,
+			BeaconRoot:           payloadAttributes.BeaconRoot,
+			Version:              payloadVersion,
+			InclusionList:        api.coolMapThatIsNotAMemLeak[update.HeadBlockHash],
+			InclusionListSummary: api.coolMapThatIsNotAMemLeak2[update.HeadBlockHash],
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -904,8 +908,8 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 	}
 }
 
-func (api *ConsensusAPI) NewInclusionListV1(addresses []common.Address, transactions [][]byte, parentBlockHash common.Hash) (*engine.InclusionListStatusV1, error) {
-	if len(addresses) != len(transactions) {
+func (api *ConsensusAPI) NewInclusionListV1(inclusionListSummary *types.InclusionListSummary, transactions [][]byte, parentBlockHash common.Hash) (*engine.InclusionListStatusV1, error) {
+	if len(inclusionListSummary.Summary) != len(transactions) {
 		return inclusionListError("number of transactions do not match addresses"), nil
 	}
 	txs, err := engine.DecodeTransactions(transactions)
@@ -919,8 +923,8 @@ func (api *ConsensusAPI) NewInclusionListV1(addresses []common.Address, transact
 		if err != nil {
 			return inclusionListError(fmt.Sprintf("Invalid signer at index %v, error: %v", index, err)), nil
 		}
-		if addresses[index] != sender {
-			return inclusionListError(fmt.Sprintf("Invalid sender at index %v, got %v want %v", index, sender, addresses[index])), nil
+		if inclusionListSummary.Summary[index].Address != sender {
+			return inclusionListError(fmt.Sprintf("Invalid sender at index %v, got %v want %v", index, sender, inclusionListSummary.Summary[index].Address)), nil
 		}
 		maxGas += tx.Gas()
 	}
@@ -935,6 +939,7 @@ func (api *ConsensusAPI) NewInclusionListV1(addresses []common.Address, transact
 		return inclusionListError(err.Error()), nil
 	}
 	api.coolMapThatIsNotAMemLeak[parentBlockHash] = txs
+	api.coolMapThatIsNotAMemLeak2[parentBlockHash] = inclusionListSummary
 	return &engine.InclusionListStatusV1{Status: engine.VALID}, nil
 }
 

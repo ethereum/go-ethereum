@@ -136,7 +136,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 				return
 			}
 		case <-timer.C:
-			t.Fatal("timed out without including all withdrawals/txs")
+			t.Fatalf("timed out without including all withdrawals/txs, want %v got %v", len(withdrawals), len(includedWithdrawals))
 		}
 	}
 }

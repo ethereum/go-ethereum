@@ -261,7 +261,10 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		ParentBeaconRoot:         beaconRoot,
 		InclusionListSummaryRoot: inclusionRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals).WithInclusionList(params.InclusionListSummary.Summary)
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
+	if inclusionRoot != nil {
+		block = block.WithInclusionList(params.InclusionListSummary.Summary)
+	}
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}

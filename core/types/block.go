@@ -320,7 +320,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
+	b.header, b.uncles, b.transactions, b.withdrawals, b.inclusionListSummary = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals, eb.InclusionListSummary
 	b.size.Store(rlp.ListSize(size))
 	return nil
 }
@@ -328,10 +328,11 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 // EncodeRLP serializes a block as RLP.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &extblock{
-		Header:      b.header,
-		Txs:         b.transactions,
-		Uncles:      b.uncles,
-		Withdrawals: b.withdrawals,
+		Header:               b.header,
+		Txs:                  b.transactions,
+		Uncles:               b.uncles,
+		Withdrawals:          b.withdrawals,
+		InclusionListSummary: b.inclusionListSummary,
 	})
 }
 
@@ -495,6 +496,7 @@ func (b *Block) WithInclusionList(summary []*InclusionListEntry) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		withdrawals:  b.withdrawals,
 	}
 	if summary != nil {
 		block.inclusionListSummary = make([]*InclusionListEntry, len(summary))
