@@ -26,11 +26,11 @@ if [ "$GETH_NODE_TYPE" = "signer" ]; then
 			echo "$GETH_KEYSTORE_DIR missing, running account import"
 			echo -n "$BLOCK_SIGNER_PRIVATE_KEY" | sed 's/0x//' > "$GETH_DATA_DIR"/block-signer-key
 			"$GETH_BIN_PATH" \
-				account import \
 				--verbosity="$GETH_VERBOSITY" \
 				--log.format="$GETH_LOG_FORMAT" \
 				--log.tags="$GETH_LOG_TAGS" \
 				--nousb \
+				account import \
 				--datadir="$GETH_DATA_DIR" \
 				--password="$GETH_DATA_DIR"/password \
 				"$GETH_DATA_DIR"/block-signer-key
