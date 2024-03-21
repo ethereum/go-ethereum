@@ -948,7 +948,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	PortalRPCListenAddrFlag = &cli.StringFlag{
 		Name:     "rpc.addr",
 		Usage:    "HTTP-RPC server listening interface",
-		Value:    node.DefaultHTTPHost,
 		Category: flags.PortalNetworkCategory,
 	}
 
@@ -1001,8 +1000,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	}
 
 	PortalBootNodesFlag = &cli.StringSliceFlag{
-		Name:     "bootnode",
+		Name:     "bootnodes",
 		Usage:    "bootnode of p2p network with ENR format for portal hive test",
+		Category: flags.PortalNetworkCategory,
+	}
+
+	PortalNetworksFlag = &cli.StringSliceFlag{
+		Name:     "networks",
+		Usage:    "portal sub networks: history, beacon, state",
 		Category: flags.PortalNetworkCategory,
 	}
 )

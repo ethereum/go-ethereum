@@ -39,6 +39,9 @@ var (
 	portalProtocolFlags = []cli.Flag{
 		utils.PortalUDPListenAddrFlag,
 		utils.PortalUDPPortFlag,
+		utils.PortalBootNodesFlag,
+		utils.PortalPrivateKeyFlag,
+		utils.PortalNetworksFlag,
 	}
 	historyRpcFlags = []cli.Flag{
 		utils.PortalRPCListenAddrFlag,
