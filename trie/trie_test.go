@@ -556,7 +556,7 @@ func runRandTest(rt randTest) error {
 				checktr.MustUpdate(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
-				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
+				rt[i].err = errors.New("hash mismatch in opItercheckhash")
 			}
 		case opNodeDiff:
 			var (
@@ -594,19 +594,19 @@ func runRandTest(rt randTest) error {
 				}
 			}
 			if len(insertExp) != len(tr.tracer.inserts) {
-				rt[i].err = fmt.Errorf("insert set mismatch")
+				rt[i].err = errors.New("insert set mismatch")
 			}
 			if len(deleteExp) != len(tr.tracer.deletes) {
-				rt[i].err = fmt.Errorf("delete set mismatch")
+				rt[i].err = errors.New("delete set mismatch")
 			}
 			for insert := range tr.tracer.inserts {
 				if _, present := insertExp[insert]; !present {
-					rt[i].err = fmt.Errorf("missing inserted node")
+					rt[i].err = errors.New("missing inserted node")
 				}
 			}
 			for del := range tr.tracer.deletes {
 				if _, present := deleteExp[del]; !present {
-					rt[i].err = fmt.Errorf("missing deleted node")
+					rt[i].err = errors.New("missing deleted node")
 				}
 			}
 		}

@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -275,7 +276,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	}
 	require.NoError(t, f.Close())
 
-	// Re-openening as readonly should fail when validating
+	// Re-opening as readonly should fail when validating
 	// table lengths.
 	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
@@ -393,7 +394,7 @@ func TestRenameWindows(t *testing.T) {
 	dir2 := t.TempDir()
 
 	// Create file in dir1 and fill with data
-	f, err := os.Create(path.Join(dir1, fname))
+	f, err := os.Create(filepath.Join(dir1, fname))
 	if err != nil {
 		t.Fatal(err)
 	}

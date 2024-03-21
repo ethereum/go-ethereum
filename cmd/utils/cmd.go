@@ -27,7 +27,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -245,13 +245,13 @@ func readList(filename string) ([]string, error) {
 // starting from genesis.
 func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
-		return fmt.Errorf("history import only supported when starting from genesis")
+		return errors.New("history import only supported when starting from genesis")
 	}
 	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
-	checksums, err := readList(path.Join(dir, "checksums.txt"))
+	checksums, err := readList(filepath.Join(dir, "checksums.txt"))
 	if err != nil {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
@@ -268,7 +268,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 	)
 	for i, filename := range entries {
 		err := func() error {
-			f, err := os.Open(path.Join(dir, filename))
+			f, err := os.Open(filepath.Join(dir, filename))
 			if err != nil {
 				return fmt.Errorf("unable to open era: %w", err)
 			}
@@ -425,7 +425,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	)
 	for i := first; i <= last; i += step {
 		err := func() error {
-			filename := path.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
+			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
 			f, err := os.Create(filename)
 			if err != nil {
 				return fmt.Errorf("could not create era file: %w", err)
@@ -458,7 +458,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
 			}
 			// Set correct filename with root.
-			os.Rename(filename, path.Join(dir, era.Filename(network, int(i/step), root)))
+			os.Rename(filename, filepath.Join(dir, era.Filename(network, int(i/step), root)))
 
 			// Compute checksum of entire Era1.
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -481,7 +481,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		}
 	}
 
-	os.WriteFile(path.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
+	os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
 
 	log.Info("Exported blockchain to", "dir", dir)
 
