@@ -17,10 +17,15 @@
 package vm
 
 import (
+	"crypto/rand"
+	_ "embed"
 	"math/bits"
+	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/exp/slices"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {
@@ -59,6 +64,59 @@ func TestJumpDestAnalysis(t *testing.T) {
 	}
 }
 
+func TestBitVec(t *testing.T) {
+	tests := []struct {
+		Code []byte
+		Want bitVec
+	}{
+		{[]byte{}, bitVec{0, 0}},
+		{[]byte{byte(PUSH1), 0xff, 0x00, 0x00}, bitVec{0b00000000_00000000_00000000_00000010, 0}},
+		{[]byte{byte(PUSH2), 0xff, 0xff, 0x00}, bitVec{0b00000000_00000000_00000000_00000110, 0}},
+		{
+			[]byte{
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, byte(PUSH2), 0xff,
+				0xff,
+			},
+			bitVec{0b10000000_00000000_00000000_00000000, 0b00000000_00000000_00000000_00000001, 0},
+		},
+		{
+			[]byte{
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, byte(PUSH32),
+			},
+			bitVec{0b00000000_00000000_00000000_00000000, 0b11111111_11111111_11111111_11111111, 0},
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			got := newCodeBitVec(test.Code)
+			if !slices.Equal(test.Want, got) {
+				t.Fatalf("(-want +got)\n- %32b\n+ %32b\n", test.Want, got)
+			}
+		})
+	}
+}
+
+func FuzzBitVec(f *testing.F) {
+	f.Add([]byte{0x1})
+	f.Fuzz(func(t *testing.T, code []byte) {
+		newBitVec := newCodeBitVec(code)
+		oldBitVec := codeBitmap(code)
+
+		for i := range code {
+			if newBitVec.isCode(uint64(i)) != oldBitVec.codeSegment(uint64(i)) {
+				t.Fatalf("mismatch at %d", i)
+			}
+		}
+	})
+}
+
 const analysisCodeSize = 1200 * 1024
 
 func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
@@ -69,8 +127,60 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		codeBitmap(code)
 	}
-	bench.StopTimer()
 }
+
+func BenchmarkJumpdestAnalysis_rand(b *testing.B) {
+	b.Run("v=old", func(b *testing.B) {
+		code := make([]byte, analysisCodeSize)
+		rand.Read(code)
+
+		bv := codeBitmap(code)
+		b.SetBytes(int64(len(code)))
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			codeBitmapInternal(code, bv)
+		}
+	})
+
+	b.Run("v=new", func(b *testing.B) {
+		code := make([]byte, analysisCodeSize)
+		rand.Read(code)
+
+		bv := newCodeBitVec(code)
+		b.SetBytes(int64(len(code)))
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			bv.codeBitVec(code)
+		}
+	})
+}
+
+var (
+	//go:embed testdata/weth9.bytecode
+	hexCodeWETH9 string
+	codeWETH9    = common.FromHex(hexCodeWETH9)
+)
+
+func BenchmarkJumpdestAnalysis_weth9(b *testing.B) {
+	b.Run("v=old", func(b *testing.B) {
+		bv := codeBitmap(codeWETH9)
+		b.SetBytes(int64(len(codeWETH9)))
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			codeBitmapInternal(codeWETH9, bv)
+		}
+	})
+
+	b.Run("v=new", func(b *testing.B) {
+		bv := newCodeBitVec(codeWETH9)
+		b.SetBytes(int64(len(codeWETH9)))
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			bv.codeBitVec(codeWETH9)
+		}
+	})
+}
+
 func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, analysisCodeSize)
@@ -79,31 +189,58 @@ func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		crypto.Keccak256Hash(code)
 	}
-	bench.StopTimer()
 }
 
-func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
-	var op OpCode
-	bencher := func(b *testing.B) {
-		code := make([]byte, analysisCodeSize)
-		b.SetBytes(analysisCodeSize)
-		for i := range code {
-			code[i] = byte(op)
-		}
-		bits := make(bitvec, len(code)/8+1+4)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for j := range bits {
-				bits[j] = 0
+func BenchmarkJumpdestOpAnalysis(b *testing.B) {
+	b.Run("v=old", func(b *testing.B) {
+		var op OpCode
+		bencher := func(b *testing.B) {
+			code := make([]byte, analysisCodeSize)
+			b.SetBytes(analysisCodeSize)
+			for i := range code {
+				code[i] = byte(op)
 			}
-			codeBitmapInternal(code, bits)
+			bits := make(bitvec, len(code)/8+1+4)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j := range bits {
+					bits[j] = 0
+				}
+				codeBitmapInternal(code, bits)
+			}
 		}
-	}
-	for op = PUSH1; op <= PUSH32; op++ {
-		bench.Run(op.String(), bencher)
-	}
-	op = JUMPDEST
-	bench.Run(op.String(), bencher)
-	op = STOP
-	bench.Run(op.String(), bencher)
+		for op = PUSH1; op <= PUSH32; op++ {
+			b.Run(op.String(), bencher)
+		}
+		op = JUMPDEST
+		b.Run(op.String(), bencher)
+		op = STOP
+		b.Run(op.String(), bencher)
+	})
+
+	b.Run("v=new", func(b *testing.B) {
+		bencher := func(op OpCode) (string, func(b *testing.B)) {
+			return op.String(), func(b *testing.B) {
+				code := make([]byte, analysisCodeSize)
+				b.SetBytes(analysisCodeSize)
+
+				for i := range code {
+					code[i] = byte(op)
+				}
+				bv := newCodeBitVec(code)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					for j := range bv {
+						bv[j] = 0
+					}
+					bv.codeBitVec(code)
+				}
+			}
+		}
+		for op := PUSH1; op <= PUSH32; op++ {
+			b.Run(bencher(op))
+		}
+		b.Run(bencher(JUMPDEST))
+		b.Run(bencher(STOP))
+	})
 }
