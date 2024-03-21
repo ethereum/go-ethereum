@@ -275,6 +275,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		txsHashes        = make([]common.Hash, len(bodies))
 		uncleHashes      = make([]common.Hash, len(bodies))
 		withdrawalHashes = make([]common.Hash, len(bodies))
+		ilHashes         = make([]common.Hash, len(bodies))
 	)
 	hasher := trie.NewStackTrie(nil)
 	for i, body := range bodies {
@@ -287,7 +288,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	res := &eth.Response{
 		Req:  req,
 		Res:  (*eth.BlockBodiesResponse)(&bodies),
-		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes},
+		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes, ilHashes},
 		Time: 1,
 		Done: make(chan error, 1), // Ignore the returned status
 	}
