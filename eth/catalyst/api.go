@@ -136,6 +136,8 @@ type ConsensusAPI struct {
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
+
+	coolMapThatIsNotAMemLeak map[common.Hash][]*types.Transaction
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -341,6 +343,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		}
 		// Set the finalized block
 		api.eth.BlockChain().SetFinalized(finalBlock.Header())
+		// Clear the inclusionList for that block
+		delete(api.coolMapThatIsNotAMemLeak, update.FinalizedBlockHash)
 	}
 	// Check if the safe block hash is in our canonical tree, if not something is wrong
 	if update.SafeBlockHash != (common.Hash{}) {
@@ -361,13 +365,14 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			Version:      payloadVersion,
+			Parent:        update.HeadBlockHash,
+			Timestamp:     payloadAttributes.Timestamp,
+			FeeRecipient:  payloadAttributes.SuggestedFeeRecipient,
+			Random:        payloadAttributes.Random,
+			Withdrawals:   payloadAttributes.Withdrawals,
+			BeaconRoot:    payloadAttributes.BeaconRoot,
+			Version:       payloadVersion,
+			InclusionList: api.coolMapThatIsNotAMemLeak[update.HeadBlockHash],
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -928,6 +933,7 @@ func (api *ConsensusAPI) NewInclusionListV1(addresses []common.Address, transact
 	if err := eip7547.VerifyInclusionList(api.eth.BlockChain(), block, signer, txs); err != nil {
 		return inclusionListError(err.Error()), nil
 	}
+	api.coolMapThatIsNotAMemLeak[parentBlockHash] = txs
 	return &engine.InclusionListStatusV1{Status: engine.VALID}, nil
 }
 
