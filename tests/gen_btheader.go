@@ -12,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-var _ = (*btHeaderMarshaling)(nil)
+var _ = (*BtHeaderMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (b btHeader) MarshalJSON() ([]byte, error) {
+func (b BtHeader) MarshalJSON() ([]byte, error) {
 	type btHeader struct {
 		Bloom                 types.Bloom
 		Coinbase              common.Address
@@ -65,7 +65,7 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (b *btHeader) UnmarshalJSON(input []byte) error {
+func (b *BtHeader) UnmarshalJSON(input []byte) error {
 	type btHeader struct {
 		Bloom                 *types.Bloom
 		Coinbase              *common.Address
