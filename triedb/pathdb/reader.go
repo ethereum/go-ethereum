@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -50,6 +51,7 @@ func (loc *nodeLoc) string() string {
 type reader struct {
 	layer layer
 	state crypto.KeccakState
+	lock  sync.Mutex
 }
 
 // Node implements trie.Reader interface, retrieving the node with specified
@@ -60,7 +62,14 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	if got := crypto.HashData(r.state, blob); got != hash {
+	// The function might be called concurrently, protect the
+	// hash buffer with lock.
+	r.lock.Lock()
+	got := crypto.HashData(r.state, blob)
+	r.lock.Unlock()
+
+	// Error out if the local one is inconsistent with the target.
+	if got != hash {
 		// Location is always available even if the node
 		// is not found.
 		switch loc.loc {
