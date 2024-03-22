@@ -23,32 +23,32 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 func init() {
-	directory.DefaultDirectory.Register("muxTracer", newMuxTracer, false)
+	tracers.DefaultDirectory.Register("muxTracer", newMuxTracer, false)
 }
 
 // muxTracer is a go implementation of the Tracer interface which
 // runs multiple tracers in one go.
 type muxTracer struct {
 	names   []string
-	tracers []*directory.Tracer
+	tracers []*tracers.Tracer
 }
 
 // newMuxTracer returns a new mux tracer.
-func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
+func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
 	var config map[string]json.RawMessage
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	objects := make([]*directory.Tracer, 0, len(config))
+	objects := make([]*tracers.Tracer, 0, len(config))
 	names := make([]string, 0, len(config))
 	for k, v := range config {
-		t, err := directory.DefaultDirectory.New(k, ctx, v)
+		t, err := tracers.DefaultDirectory.New(k, ctx, v)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +57,7 @@ func newMuxTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Trace
 	}
 
 	t := &muxTracer{names: names, tracers: objects}
-	return &directory.Tracer{
+	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart:       t.OnTxStart,
 			OnTxEnd:         t.OnTxEnd,
