@@ -517,13 +517,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 // startEventStream establishes an event stream. This will keep retrying until the stream has been
 // established. It can only return nil when the context is canceled.
 func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
-	for initial := true; ; initial = false {
-		if !initial {
-			if ctxSleep(ctx, 5*time.Second) {
-				return nil
-			}
-		}
-
+	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
 		path := "/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update"
 		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
 		if err != nil {
@@ -540,15 +534,16 @@ func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadE
 		}
 		return stream
 	}
+	return nil
 }
 
-func ctxSleep(ctx context.Context, timeout time.Duration) (interrupted bool) {
+func ctxSleep(ctx context.Context, timeout time.Duration) (ok bool) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
-		return false
-	case <-ctx.Done():
 		return true
+	case <-ctx.Done():
+		return false
 	}
 }
