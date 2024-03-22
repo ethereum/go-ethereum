@@ -16,7 +16,9 @@
 
 package lru
 
-import "sync"
+import (
+	"sync"
+)
 
 // Cache is a LRU cache.
 // This type is safe for concurrent use.
@@ -40,6 +42,7 @@ func (c *Cache[K, V]) Add(key K, value V) (evicted bool) {
 
 // Contains reports whether the given key exists in the cache.
 func (c *Cache[K, V]) Contains(key K) bool {
+	return false
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -48,6 +51,7 @@ func (c *Cache[K, V]) Contains(key K) bool {
 
 // Get retrieves a value from the cache. This marks the key as recently used.
 func (c *Cache[K, V]) Get(key K) (value V, ok bool) {
+	return value, false
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
