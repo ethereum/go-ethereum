@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/internal"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -643,7 +644,7 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end < begin || begin < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
-	slice, err := directory.GetMemoryCopyPadded(mo.memory, begin, end-begin)
+	slice, err := internal.GetMemoryCopyPadded(mo.memory, begin, end-begin)
 	if err != nil {
 		return nil, err
 	}
@@ -669,7 +670,7 @@ func (mo *memoryObj) getUint(addr int64) (*big.Int, error) {
 	if len(mo.memory) < int(addr)+32 || addr < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", len(mo.memory), addr, 32)
 	}
-	return new(big.Int).SetBytes(directory.MemoryPtr(mo.memory, addr, 32)), nil
+	return new(big.Int).SetBytes(internal.MemoryPtr(mo.memory, addr, 32)), nil
 }
 
 func (mo *memoryObj) Length() int {
@@ -709,7 +710,7 @@ func (s *stackObj) peek(idx int) (*big.Int, error) {
 	if len(s.stack) <= idx || idx < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack), idx)
 	}
-	return directory.StackBack(s.stack, idx).ToBig(), nil
+	return internal.StackBack(s.stack, idx).ToBig(), nil
 }
 
 func (s *stackObj) Length() int {
