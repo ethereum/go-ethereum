@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -113,7 +113,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 			}
 
-			tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
