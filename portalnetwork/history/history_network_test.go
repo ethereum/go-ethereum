@@ -206,7 +206,7 @@ func TestGetContentByKey(t *testing.T) {
 	require.Nil(t, header)
 
 	contentId := historyNetwork1.portalProtocol.ToContentId(headerEntry.key)
-	err = historyNetwork1.portalProtocol.Put(contentId, headerEntry.value)
+	err = historyNetwork1.portalProtocol.Put(headerEntry.key, contentId, headerEntry.value)
 	require.NoError(t, err)
 	// get content from historyNetwork1
 	header, err = historyNetwork2.GetBlockHeader(headerEntry.key[1:])
@@ -225,7 +225,7 @@ func TestGetContentByKey(t *testing.T) {
 	require.Nil(t, body)
 
 	contentId = historyNetwork1.portalProtocol.ToContentId(bodyEntry.key)
-	err = historyNetwork1.portalProtocol.Put(contentId, bodyEntry.value)
+	err = historyNetwork1.portalProtocol.Put(bodyEntry.key, contentId, bodyEntry.value)
 	require.NoError(t, err)
 	// get content from historyNetwork1
 	body, err = historyNetwork2.GetBlockBody(bodyEntry.key[1:])
@@ -244,7 +244,7 @@ func TestGetContentByKey(t *testing.T) {
 	require.Nil(t, receipts)
 
 	contentId = historyNetwork1.portalProtocol.ToContentId(receiptsEntry.key)
-	err = historyNetwork1.portalProtocol.Put(contentId, receiptsEntry.value)
+	err = historyNetwork1.portalProtocol.Put(receiptsEntry.key, contentId, receiptsEntry.value)
 	require.NoError(t, err)
 	// get content from historyNetwork1
 	receipts, err = historyNetwork2.GetReceipts(receiptsEntry.key[1:])
@@ -276,7 +276,7 @@ func TestGetContentByKey(t *testing.T) {
 	require.Nil(t, epoch)
 
 	contentId = historyNetwork1.portalProtocol.ToContentId(contentKey)
-	err = historyNetwork1.portalProtocol.Put(contentId, content)
+	err = historyNetwork1.portalProtocol.Put(contentKey, contentId, content)
 	require.NoError(t, err)
 	// get content from historyNetwork1
 	epoch, err = historyNetwork2.GetEpochAccumulator(contentKey[1:])
@@ -366,14 +366,14 @@ type MockStorage struct {
 	db map[string][]byte
 }
 
-func (m *MockStorage) Get(contentId []byte) ([]byte, error) {
+func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	if content, ok := m.db[string(contentId)]; ok {
 		return content, nil
 	}
 	return nil, storage.ErrContentNotFound
 }
 
-func (m *MockStorage) Put(contentId []byte, content []byte) error {
+func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	m.db[string(contentId)] = content
 	return nil
 }

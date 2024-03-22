@@ -476,7 +476,7 @@ func (p *PortalProtocolAPI) LocalContent(contentKeyHex string) (string, error) {
 		return "", err
 	}
 	contentId := p.portalProtocol.ToContentId(contentKey)
-	content, err := p.portalProtocol.Get(contentId)
+	content, err := p.portalProtocol.Get(contentKey, contentId)
 
 	if err != nil {
 		return "", err
@@ -497,7 +497,7 @@ func (p *PortalProtocolAPI) Store(contentKeyHex string, contextHex string) (bool
 	if err != nil {
 		return false, err
 	}
-	err = p.portalProtocol.Put(contentId, content)
+	err = p.portalProtocol.Put(contentKey, contentId, content)
 	if err != nil {
 		return false, err
 	}

@@ -531,7 +531,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 						contentKey := request.Request.(*PersistOfferRequest).ContentKeys[index]
 						contentId := p.toContentId(contentKey)
 						if contentId != nil {
-							content, err = p.storage.Get(contentId)
+							content, err = p.storage.Get(contentKey, contentId)
 							if err != nil {
 								p.log.Error("failed to get content from storage", "err", err)
 								contents = append(contents, []byte{})
@@ -910,14 +910,14 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 	maxPayloadSize := maxPacketSize - talkRespOverhead - contentOverhead
 	enrOverhead := 4 //per added ENR, 4 bytes offset overhead
 	var err error
-
-	contentId := p.toContentId(request.ContentKey)
+	contentKey := request.ContentKey
+	contentId := p.toContentId(contentKey)
 	if contentId == nil {
 		return nil, ErrNilContentKey
 	}
 
 	var content []byte
-	content, err = p.storage.Get(contentId)
+	content, err = p.storage.Get(contentKey, contentId)
 	if err != nil && !errors.Is(err, ContentNotFound) {
 		return nil, err
 	}
@@ -1088,7 +1088,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		contentId := p.toContentId(contentKey)
 		if contentId != nil {
 			if inRange(p.Self().ID(), p.nodeRadius, contentId) {
-				if _, err = p.storage.Get(contentId); err != nil {
+				if _, err = p.storage.Get(contentKey, contentId); err != nil {
 					contentKeyBitlist.SetBitAt(uint64(i), true)
 					contentKeys = append(contentKeys, contentKey)
 				}
@@ -1426,7 +1426,9 @@ func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, bool, error) 
 	defer cancel()
 	resChan := make(chan *ContentInfoResp, 1)
 	defer close(resChan)
-	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
+
+	contentId := p.ToContentId(contentKey)
+	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
 		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
 	}).run()
 
@@ -1528,7 +1530,7 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 		}
 	}()
 
-	newLookup(lookupContext, p.table, p.Self().ID(), func(n *node) ([]*node, error) {
+	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
 		node := unwrapNode(n)
 		requestNodeChan <- node
 		return p.traceContentLookupWorker(node, contentKey, resChan)
@@ -1618,14 +1620,14 @@ func (p *PortalProtocol) InRange(contentId []byte) bool {
 	return inRange(p.Self().ID(), p.nodeRadius, contentId)
 }
 
-func (p *PortalProtocol) Get(contentId []byte) ([]byte, error) {
-	content, err := p.storage.Get(contentId)
+func (p *PortalProtocol) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+	content, err := p.storage.Get(contentKey, contentId)
 	p.log.Trace("get local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
 	return content, err
 }
 
-func (p *PortalProtocol) Put(contentId []byte, content []byte) error {
-	err := p.storage.Put(contentId, content)
+func (p *PortalProtocol) Put(contentKey []byte, contentId []byte, content []byte) error {
+	err := p.storage.Put(contentKey, contentId, content)
 	p.log.Trace("put local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
 	return err
 }

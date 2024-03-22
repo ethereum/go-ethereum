@@ -102,7 +102,7 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 		return nil, ErrContentOutOfRange
 	}
 
-	res, err := h.portalProtocol.Get(contentId)
+	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
 	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
@@ -119,27 +119,32 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 	}
 	// no content in local storage
 	for retries := 0; retries < requestRetries; retries++ {
-		// TODO log the err and continue
 		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
+			h.log.Error("getBlockHeader failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
 		}
 
 		headerWithProof, err := DecodeBlockHeaderWithProof(content)
 		if err != nil {
+			h.log.Error("decodeBlockHeaderWithProof failed", "content", hexutil.Encode(content), "err", err)
 			continue
 		}
 
 		header, err := ValidateBlockHeaderBytes(headerWithProof.Header, blockHash)
 		if err != nil {
+			h.log.Error("validateBlockHeaderBytes failed", "header", hexutil.Encode(headerWithProof.Header), "blockhash", hexutil.Encode(blockHash), "err", err)
 			continue
 		}
 		valid, err := h.verifyHeader(header, *headerWithProof.Proof)
 		if err != nil || !valid {
+			h.log.Error("verifyHeader failed", "err", err)
 			continue
 		}
-		// TODO handle the error
-		_ = h.portalProtocol.Put(contentId, content)
+		err = h.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			h.log.Error("failed to store content in getBlockHeader", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
+		}
 		return header, nil
 	}
 	return nil, storage.ErrContentNotFound
@@ -157,7 +162,7 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 		return nil, ErrContentOutOfRange
 	}
 
-	res, err := h.portalProtocol.Get(contentId)
+	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
 	// TODO maybe use nil res to replace the ErrContentNotFound
 	if err != nil && err != storage.ErrContentNotFound {
@@ -173,19 +178,24 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	for retries := 0; retries < requestRetries; retries++ {
 		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
+			h.log.Error("getBlockBody failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
 		}
 		body, err := DecodePortalBlockBodyBytes(content)
 		if err != nil {
+			h.log.Error("decodePortalBlockBodyBytes failed", "content", hexutil.Encode(content), "err", err)
 			continue
 		}
 
 		err = validateBlockBody(body, header)
 		if err != nil {
+			h.log.Error("validateBlockBody failed", "header", "err", err)
 			continue
 		}
-		// TODO handle the error
-		_ = h.portalProtocol.Put(contentId, content)
+		err = h.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			h.log.Error("failed to store content in getBlockBody", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
+		}
 		return body, nil
 	}
 	return nil, storage.ErrContentNotFound
@@ -203,7 +213,7 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 		return nil, ErrContentOutOfRange
 	}
 
-	res, err := h.portalProtocol.Get(contentId)
+	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
 	if err != nil && err != storage.ErrContentNotFound {
 		return nil, err
@@ -223,14 +233,18 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	for retries := 0; retries < requestRetries; retries++ {
 		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
+			h.log.Error("getReceipts failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
 		}
 		receipts, err := ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
 		if err != nil {
+			h.log.Error("getReceipts failed", "err", err)
 			continue
 		}
-		// TODO handle the error
-		_ = h.portalProtocol.Put(contentId, content)
+		err = h.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			h.log.Error("failed to store content in getReceipts", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
+		}
 		return receipts, nil
 	}
 	return nil, storage.ErrContentNotFound
@@ -240,7 +254,7 @@ func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulato
 	contentKey := newContentKey(EpochAccumulatorType, epochHash).encode()
 	contentId := h.portalProtocol.ToContentId(contentKey)
 
-	res, err := h.portalProtocol.Get(contentId)
+	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
 	if err != nil && err != storage.ErrContentNotFound {
 		return nil, err
@@ -253,22 +267,28 @@ func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulato
 	for retries := 0; retries < requestRetries; retries++ {
 		content, _, err := h.portalProtocol.ContentLookup(contentKey)
 		if err != nil {
+			h.log.Error("getEpochAccumulator failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
 		}
 		epochAccu, err := decodeEpochAccumulator(content)
 		if err != nil {
+			h.log.Error("decodeEpochAccumulator failed", "content", hexutil.Encode(content), "err", err)
 			continue
 		}
 		hash, err := epochAccu.HashTreeRoot()
 		if err != nil {
+			h.log.Error("hashTreeRoot failed", "err", err)
 			continue
 		}
 		mixHash := MixInLength(hash, epochSize)
 		if !bytes.Equal(mixHash, epochHash) {
+			h.log.Error("epochHash is not equal", "mixHash", hexutil.Encode(mixHash), "epochHash", hexutil.Encode(epochHash))
 			continue
 		}
-		// TODO handle the error
-		_ = h.portalProtocol.Put(contentId, content)
+		err = h.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			h.log.Error("failed to store content in getReceipts", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
+		}
 		return epochAccu, nil
 	}
 	return nil, storage.ErrContentNotFound
@@ -569,7 +589,7 @@ func (h *HistoryNetwork) validateContents(contentKeys [][]byte, contents [][]byt
 			return fmt.Errorf("content validate failed with content key %x and content %x", contentKey, content)
 		}
 		contentId := h.portalProtocol.ToContentId(contentKey)
-		_ = h.portalProtocol.Put(contentId, content)
+		_ = h.portalProtocol.Put(contentKey, contentId, content)
 	}
 	return nil
 }

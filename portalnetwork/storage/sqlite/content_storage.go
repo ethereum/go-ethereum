@@ -145,7 +145,7 @@ func createDir(dir string) error {
 }
 
 // Get the content according to the contentId
-func (p *ContentStorage) Get(contentId []byte) ([]byte, error) {
+func (p *ContentStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	var res []byte
 	err := p.getStmt.QueryRow(contentId).Scan(&res)
 	if err == sql.ErrNoRows {
@@ -178,7 +178,7 @@ func newPutResultWithErr(err error) PutResult {
 	}
 }
 
-func (p *ContentStorage) Put(contentId []byte, content []byte) error {
+func (p *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	res := p.put(contentId, content)
 	return res.Err()
 }

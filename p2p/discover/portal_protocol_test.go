@@ -27,14 +27,14 @@ type MockStorage struct {
 	db map[string][]byte
 }
 
-func (m *MockStorage) Get(contentId []byte) ([]byte, error) {
+func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	if content, ok := m.db[string(contentId)]; ok {
 		return content, nil
 	}
 	return nil, ContentNotFound
 }
 
-func (m *MockStorage) Put(contentId []byte, content []byte) error {
+func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	m.db[string(contentId)] = content
 	return nil
 }
@@ -304,7 +304,7 @@ func TestPortalWireProtocol(t *testing.T) {
 		return n.ID() == node2.localNode.Node().ID()
 	})
 
-	err = node1.storage.Put(node1.toContentId([]byte("test_key")), []byte("test_value"))
+	err = node1.storage.Put(nil, node1.toContentId([]byte("test_key")), []byte("test_value"))
 	assert.NoError(t, err)
 
 	flag, content, err := node2.findContent(node1.localNode.Node(), []byte("test_key"))
@@ -324,7 +324,7 @@ func TestPortalWireProtocol(t *testing.T) {
 	_, err = rand.Read(largeTestContent)
 	assert.NoError(t, err)
 
-	err = node1.storage.Put(node1.toContentId([]byte("large_test_key")), largeTestContent)
+	err = node1.storage.Put(nil, node1.toContentId([]byte("large_test_key")), largeTestContent)
 	assert.NoError(t, err)
 
 	flag, content, err = node2.findContent(node1.localNode.Node(), []byte("large_test_key"))
@@ -452,7 +452,7 @@ func TestContentLookup(t *testing.T) {
 	content := []byte{0x1, 0x2}
 	contentId := node1.toContentId(contentKey)
 
-	err = node3.storage.Put(contentId, content)
+	err = node3.storage.Put(nil, contentId, content)
 	assert.NoError(t, err)
 
 	res, _, err := node1.ContentLookup(contentKey)
@@ -487,7 +487,7 @@ func TestTraceContentLookup(t *testing.T) {
 	content := []byte{0x1, 0x2}
 	contentId := node1.toContentId(contentKey)
 
-	err = node1.storage.Put(contentId, content)
+	err = node1.storage.Put(nil, contentId, content)
 	assert.NoError(t, err)
 
 	node1Id := hexutil.Encode(node1.Self().ID().Bytes())

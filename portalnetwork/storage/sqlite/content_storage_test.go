@@ -36,13 +36,13 @@ func TestBasicStorage(t *testing.T) {
 	contentId := []byte("test")
 	content := []byte("value")
 
-	_, err = storage.Get(contentId)
+	_, err = storage.Get(nil, contentId)
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
 	pt := storage.put(contentId, content)
 	assert.NoError(t, pt.Err())
 
-	val, err := storage.Get(contentId)
+	val, err := storage.Get(nil, contentId)
 	assert.NoError(t, err)
 	assert.Equal(t, content, val)
 
@@ -177,13 +177,13 @@ func TestDBPruning(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, usedSize < storage.storageCapacityInBytes)
 
-	_, err = storage.Get(furthestElement.Bytes())
+	_, err = storage.Get(nil, furthestElement.Bytes())
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
-	_, err = storage.Get(secondFurthest.Bytes())
+	_, err = storage.Get(nil, secondFurthest.Bytes())
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
-	val, err := storage.Get(thirdFurthest.Bytes())
+	val, err := storage.Get(nil, thirdFurthest.Bytes())
 	assert.NoError(t, err)
 	assert.NotNil(t, val)
 }
@@ -203,7 +203,7 @@ func TestGetLargestDistance(t *testing.T) {
 	pt7 := storage.put(furthestElement.Bytes(), genBytes(2000))
 	assert.NoError(t, pt7.Err())
 
-	val, err := storage.Get(furthestElement.Bytes())
+	val, err := storage.Get(nil, furthestElement.Bytes())
 	assert.NoError(t, err)
 	assert.NotNil(t, val)
 	pt8 := storage.put(secondFurthest.Bytes(), genBytes(2000))
@@ -241,13 +241,13 @@ func TestSimpleForcePruning(t *testing.T) {
 	err = storage.ForcePrune(uint256.NewInt(20))
 	assert.NoError(t, err)
 
-	_, err = storage.Get(furthestElement.Bytes())
+	_, err = storage.Get(nil, furthestElement.Bytes())
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
-	_, err = storage.Get(secondFurthest.Bytes())
+	_, err = storage.Get(nil, secondFurthest.Bytes())
 	assert.Equal(t, contentStorage.ErrContentNotFound, err)
 
-	_, err = storage.Get(third.Bytes())
+	_, err = storage.Get(nil, third.Bytes())
 	assert.NoError(t, err)
 }
 
