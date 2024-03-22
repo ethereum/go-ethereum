@@ -17,10 +17,10 @@
 package prque
 
 import (
+	"cmp"
 	"container/heap"
 	"time"
 
-	"cmp"
 	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
