@@ -146,7 +146,7 @@ func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error
 	return api.httpGet(fmt.Sprintf(format, params...))
 }
 
-// GetBestUpdateAndCommittee fetches and validates LightClientUpdate for given
+// GetBestUpdatesAndCommittees fetches and validates LightClientUpdate for given
 // period and full serialized committee for the next period (committee root hash
 // equals update.NextSyncCommitteeRoot).
 // Note that the results are validated but the update signature should be verified
