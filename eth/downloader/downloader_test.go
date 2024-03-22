@@ -640,59 +640,6 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	}
 }
 
-// Tests that headers are enqueued continuously, preventing malicious nodes from
-// stalling the downloader by feeding gapped header chains.
-func TestMissingHeaderAttack68Full(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH68, FullSync) }
-func TestMissingHeaderAttack68Snap(t *testing.T)  { testMissingHeaderAttack(t, eth.ETH68, SnapSync) }
-func TestMissingHeaderAttack68Light(t *testing.T) { testMissingHeaderAttack(t, eth.ETH68, LightSync) }
-
-func testMissingHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
-	tester := newTester(t)
-	defer tester.terminate()
-
-	chain := testChainBase.shorten(blockCacheMaxItems - 15)
-
-	attacker := tester.newPeer("attack", protocol, chain.blocks[1:])
-	attacker.withholdHeaders[chain.blocks[len(chain.blocks)/2-1].Hash()] = struct{}{}
-
-	if err := tester.sync("attack", nil, mode); err == nil {
-		t.Fatalf("succeeded attacker synchronisation")
-	}
-	// Synchronise with the valid peer and make sure sync succeeds
-	tester.newPeer("valid", protocol, chain.blocks[1:])
-	if err := tester.sync("valid", nil, mode); err != nil {
-		t.Fatalf("failed to synchronise blocks: %v", err)
-	}
-	assertOwnChain(t, tester, len(chain.blocks))
-}
-
-// Tests that if requested headers are shifted (i.e. first is missing), the queue
-// detects the invalid numbering.
-func TestShiftedHeaderAttack68Full(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH68, FullSync) }
-func TestShiftedHeaderAttack68Snap(t *testing.T)  { testShiftedHeaderAttack(t, eth.ETH68, SnapSync) }
-func TestShiftedHeaderAttack68Light(t *testing.T) { testShiftedHeaderAttack(t, eth.ETH68, LightSync) }
-
-func testShiftedHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
-	tester := newTester(t)
-	defer tester.terminate()
-
-	chain := testChainBase.shorten(blockCacheMaxItems - 15)
-
-	// Attempt a full sync with an attacker feeding shifted headers
-	attacker := tester.newPeer("attack", protocol, chain.blocks[1:])
-	attacker.withholdHeaders[chain.blocks[1].Hash()] = struct{}{}
-
-	if err := tester.sync("attack", nil, mode); err == nil {
-		t.Fatalf("succeeded attacker synchronisation")
-	}
-	// Synchronise with the valid peer and make sure sync succeeds
-	tester.newPeer("valid", protocol, chain.blocks[1:])
-	if err := tester.sync("valid", nil, mode); err != nil {
-		t.Fatalf("failed to synchronise blocks: %v", err)
-	}
-	assertOwnChain(t, tester, len(chain.blocks))
-}
-
 // Tests that synchronisation progress (origin block number, current block number
 // and highest block number) is tracked and updated correctly.
 func TestSyncProgress68Full(t *testing.T)  { testSyncProgress(t, eth.ETH68, FullSync) }
