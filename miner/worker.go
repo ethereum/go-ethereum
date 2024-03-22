@@ -921,6 +921,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	chDeps := make(chan blockstm.TxDep)
 
 	var depsWg sync.WaitGroup
+	var once sync.Once
 
 	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
@@ -929,6 +930,11 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 		deps = map[int]map[int]bool{}
 
 		chDeps = make(chan blockstm.TxDep)
+
+		// Make sure we safely close the channel in case of interrupt
+		defer once.Do(func() {
+			close(chDeps)
+		})
 
 		depsWg.Add(1)
 
@@ -1109,7 +1115,9 @@ mainloop:
 
 	// nolint:nestif
 	if EnableMVHashMap && w.IsRunning() {
-		close(chDeps)
+		once.Do(func() {
+			close(chDeps)
+		})
 		depsWg.Wait()
 
 		var blockExtraData types.BlockExtraData
