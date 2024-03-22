@@ -77,7 +77,7 @@ func TestWaitDeployed(t *testing.T) {
 			ctx     = context.Background()
 		)
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend.Client(), tx)
+			address, err = bind.WaitDeployed(ctx, backend.Client(), tx, time.Second)
 			close(mined)
 		}()
 
@@ -119,7 +119,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	backend.Client().SendTransaction(ctx, tx)
 	backend.Commit()
 	notContractCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != notContractCreation.Error() {
+	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx, time.Second); err.Error() != notContractCreation.Error() {
 		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
 	}
 
@@ -129,7 +129,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != contextCanceled.Error() {
+		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx, time.Second); err.Error() != contextCanceled.Error() {
 			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()
