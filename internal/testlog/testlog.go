@@ -21,11 +21,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/exp/slog"
 )
 
 const (

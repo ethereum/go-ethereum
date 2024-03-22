@@ -20,14 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"golang.org/x/exp/slog"
 )
 
 // errVmoduleSyntax is returned when a user vmodule pattern is invalid.
