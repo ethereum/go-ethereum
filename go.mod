@@ -56,8 +56,8 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/optimism-java/utp-go v0.0.0-20240309041853-b6b3a0dea581
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
-	github.com/protolambda/bls12-381-util v0.0.0-20220416220906-d8552aa452c7
-	github.com/protolambda/zrnt v0.30.0
+	github.com/protolambda/bls12-381-util v0.1.0
+	github.com/protolambda/zrnt v0.32.2
 	github.com/protolambda/ztyp v0.2.2
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7
 	github.com/rs/cors v1.7.0

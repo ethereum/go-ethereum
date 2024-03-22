@@ -47,9 +47,12 @@ type bufHandler struct {
 	buf   []slog.Record
 	attrs []slog.Attr
 	level slog.Level
+	mu    sync.Mutex
 }
 
 func (h *bufHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.buf = append(h.buf, r)
 	return nil
 }
@@ -59,12 +62,14 @@ func (h *bufHandler) Enabled(_ context.Context, lvl slog.Level) bool {
 }
 
 func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	records := make([]slog.Record, len(h.buf))
 	copy(records[:], h.buf[:])
 	return &bufHandler{
-		records,
-		append(h.attrs, attrs...),
-		h.level,
+		buf:   records,
+		attrs: append(h.attrs, attrs...),
+		level: h.level,
 	}
 }
 
@@ -75,9 +80,9 @@ func (h *bufHandler) WithGroup(_ string) slog.Handler {
 // Logger returns a logger which logs to the unit test log of t.
 func Logger(t *testing.T, level slog.Level) log.Logger {
 	handler := bufHandler{
-		[]slog.Record{},
-		[]slog.Attr{},
-		level,
+		buf:   []slog.Record{},
+		attrs: []slog.Attr{},
+		level: level,
 	}
 	return &logger{
 		t:  t,
@@ -200,6 +205,8 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 // flush writes all buffered messages and clears the buffer.
 func (l *logger) flush() {
 	l.t.Helper()
+	l.h.mu.Lock()
+	defer l.h.mu.Unlock()
 	for _, r := range l.h.buf {
 		l.t.Logf("%s", l.h.terminalFormat(r))
 	}

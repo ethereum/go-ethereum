@@ -891,7 +891,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	// touching the header chain altogether, unless the freezer is broken
 	if repair {
 		if target, force := updateFn(bc.db, bc.CurrentBlock()); force {
-			bc.hc.SetHead(target.Number.Uint64(), updateFn, delFn)
+			bc.hc.SetHead(target.Number.Uint64(), nil, delFn)
 		}
 	} else {
 		// Rewind the chain to the requested head and keep going backwards until a

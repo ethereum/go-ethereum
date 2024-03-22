@@ -105,7 +105,8 @@ func (miner *Miner) generateWork(params *generateParams) *newPayloadResult {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
 		}
 	}
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, work.txs, nil, work.receipts, params.withdrawals)
+	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
+	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}

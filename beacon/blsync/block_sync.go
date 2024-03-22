@@ -17,35 +17,25 @@
 package blsync
 
 import (
-	"fmt"
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
 )
 
 // beaconBlockSync implements request.Module; it fetches the beacon blocks belonging
 // to the validated and prefetch heads.
 type beaconBlockSync struct {
-	recentBlocks *lru.Cache[common.Hash, *capella.BeaconBlock]
+	recentBlocks *lru.Cache[common.Hash, *types.BeaconBlock]
 	locked       map[common.Hash]request.ServerAndID
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
 
 	lastHeadInfo  types.HeadInfo
-	chainHeadFeed *event.Feed
+	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
 }
 
 type headTracker interface {
@@ -55,14 +45,17 @@ type headTracker interface {
 }
 
 // newBeaconBlockSync returns a new beaconBlockSync.
-func newBeaconBlockSync(headTracker headTracker, chainHeadFeed *event.Feed) *beaconBlockSync {
+func newBeaconBlockSync(headTracker headTracker) *beaconBlockSync {
 	return &beaconBlockSync{
-		headTracker:   headTracker,
-		chainHeadFeed: chainHeadFeed,
-		recentBlocks:  lru.NewCache[common.Hash, *capella.BeaconBlock](10),
-		locked:        make(map[common.Hash]request.ServerAndID),
-		serverHeads:   make(map[request.Server]common.Hash),
+		headTracker:  headTracker,
+		recentBlocks: lru.NewCache[common.Hash, *types.BeaconBlock](10),
+		locked:       make(map[common.Hash]request.ServerAndID),
+		serverHeads:  make(map[request.Server]common.Hash),
 	}
+}
+
+func (s *beaconBlockSync) SubscribeChainHead(ch chan<- types.ChainHeadEvent) event.Subscription {
+	return s.chainHeadFeed.Subscribe(ch)
 }
 
 // Process implements request.Module.
@@ -73,7 +66,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 			sid, req, resp := event.RequestInfo()
 			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
 			if resp != nil {
-				s.recentBlocks.Add(blockRoot, resp.(*capella.BeaconBlock))
+				s.recentBlocks.Add(blockRoot, resp.(*types.BeaconBlock))
 			}
 			if s.locked[blockRoot] == sid {
 				delete(s.locked, blockRoot)
@@ -112,63 +105,11 @@ func (s *beaconBlockSync) tryRequestBlock(requester request.Requester, blockRoot
 	}
 }
 
-func blockHeadInfo(block *capella.BeaconBlock) types.HeadInfo {
+func blockHeadInfo(block *types.BeaconBlock) types.HeadInfo {
 	if block == nil {
 		return types.HeadInfo{}
 	}
-	return types.HeadInfo{Slot: uint64(block.Slot), BlockRoot: beaconBlockHash(block)}
-}
-
-// beaconBlockHash calculates the hash of a beacon block.
-func beaconBlockHash(beaconBlock *capella.BeaconBlock) common.Hash {
-	return common.Hash(beaconBlock.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
-}
-
-// getExecBlock extracts the execution block from the beacon block's payload.
-func getExecBlock(beaconBlock *capella.BeaconBlock) (*ctypes.Block, error) {
-	payload := &beaconBlock.Body.ExecutionPayload
-	txs := make([]*ctypes.Transaction, len(payload.Transactions))
-	for i, opaqueTx := range payload.Transactions {
-		var tx ctypes.Transaction
-		if err := tx.UnmarshalBinary(opaqueTx); err != nil {
-			return nil, fmt.Errorf("failed to parse tx %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	withdrawals := make([]*ctypes.Withdrawal, len(payload.Withdrawals))
-	for i, w := range payload.Withdrawals {
-		withdrawals[i] = &ctypes.Withdrawal{
-			Index:     uint64(w.Index),
-			Validator: uint64(w.ValidatorIndex),
-			Address:   common.Address(w.Address),
-			Amount:    uint64(w.Amount),
-		}
-	}
-	wroot := ctypes.DeriveSha(ctypes.Withdrawals(withdrawals), trie.NewStackTrie(nil))
-	execHeader := &ctypes.Header{
-		ParentHash:      common.Hash(payload.ParentHash),
-		UncleHash:       ctypes.EmptyUncleHash,
-		Coinbase:        common.Address(payload.FeeRecipient),
-		Root:            common.Hash(payload.StateRoot),
-		TxHash:          ctypes.DeriveSha(ctypes.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:     common.Hash(payload.ReceiptsRoot),
-		Bloom:           ctypes.Bloom(payload.LogsBloom),
-		Difficulty:      common.Big0,
-		Number:          new(big.Int).SetUint64(uint64(payload.BlockNumber)),
-		GasLimit:        uint64(payload.GasLimit),
-		GasUsed:         uint64(payload.GasUsed),
-		Time:            uint64(payload.Timestamp),
-		Extra:           []byte(payload.ExtraData),
-		MixDigest:       common.Hash(payload.PrevRandao), // reused in merge
-		Nonce:           ctypes.BlockNonce{},             // zero
-		BaseFee:         (*uint256.Int)(&payload.BaseFeePerGas).ToBig(),
-		WithdrawalsHash: &wroot,
-	}
-	execBlock := ctypes.NewBlockWithHeader(execHeader).WithBody(txs, nil).WithWithdrawals(withdrawals)
-	if execBlockHash := execBlock.Hash(); execBlockHash != common.Hash(payload.BlockHash) {
-		return execBlock, fmt.Errorf("Sanity check failed, payload hash does not match (expected %x, got %x)", common.Hash(payload.BlockHash), execBlockHash)
-	}
-	return execBlock, nil
+	return types.HeadInfo{Slot: block.Slot(), BlockRoot: block.Root()}
 }
 
 func (s *beaconBlockSync) updateEventFeed() {
@@ -190,14 +131,16 @@ func (s *beaconBlockSync) updateEventFeed() {
 		return
 	}
 	s.lastHeadInfo = headInfo
+
 	// new head block and finality info available; extract executable data and send event to feed
-	execBlock, err := getExecBlock(headBlock)
+	execBlock, err := headBlock.ExecutionPayload()
 	if err != nil {
 		log.Error("Error extracting execution block from validated beacon block", "error", err)
 		return
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
-		HeadBlock: engine.BlockToExecutableData(execBlock, nil, nil).ExecutionPayload,
-		Finalized: common.Hash(finality.Finalized.PayloadHeader.BlockHash),
+		BeaconHead: head.Header,
+		Block:      execBlock,
+		Finalized:  finality.Finalized.PayloadHeader.BlockHash(),
 	})
 }
