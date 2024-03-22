@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/hook"
 	"reflect"
 	"strconv"
 	"strings"
@@ -509,8 +510,15 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
 
+	hook.Gr.Lock()
+	hook.Gr.Reset()
+	h.log.Error("Before runMethod", "msg.Method", msg.Method, "args", args)
+	answer := h.runMethod(cp.ctx, msg, callb, args)
+	h.log.Error("Result", "levelDb", hook.Gr.LevelDbReadCnt(), "levelDb duplicated", hook.Gr.DuplicatedReadCnt(), "levelDbSnapshot", hook.Gr.LevelDbSnapshotReadCnt(), "levelDbSnapshot duplicated", hook.Gr.DuplicatedSnapshotReadCnt(), "ancientDb", hook.Gr.AncientDbReadCnt())
+	h.log.Error("Statistics", "levelDbNewRead", hook.Gr.LevelDbReadCnt()-hook.Gr.DuplicatedReadCnt(), "levelDbSnapshotNewRead", hook.Gr.LevelDbSnapshotReadCnt()-hook.Gr.DuplicatedSnapshotReadCnt(), "ancientDbRead", hook.Gr.AncientDbReadCnt())
+	h.log.Error("After runMethod", "msg.Method", msg.Method, "args", args)
+	hook.Gr.Unlock()
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
 	if callb != h.unsubscribeCb {
