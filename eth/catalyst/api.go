@@ -226,7 +226,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 		if params.BeaconRoot == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing beacon root"))
 		}
-		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
+		if latest := api.eth.BlockChain().Config().LatestFork(params.Timestamp); latest != forks.Cancun && latest != forks.Prague {
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV3 must only be called for cancun payloads"))
 		}
 	}
