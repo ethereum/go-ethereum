@@ -93,6 +93,7 @@ var caps = []string{
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 	"engine_getClientVersionV1",
+	"engine_getInclusionListV1",
 }
 
 type ConsensusAPI struct {
@@ -943,7 +944,7 @@ func (api *ConsensusAPI) NewInclusionListV1(inclusionListSummary *types.Inclusio
 	return &engine.InclusionListStatusV1{Status: engine.VALID}, nil
 }
 
-func (api *ConsensusAPI) GetInclusionListV1() ([]common.Address, [][]byte, error) {
+func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) ([]common.Address, [][]byte, error) {
 	return []common.Address{}, [][]byte{}, nil
 }
 
