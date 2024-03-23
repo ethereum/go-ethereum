@@ -17,6 +17,7 @@
 package simulated
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -142,18 +143,16 @@ func (n *Backend) Close() error {
 		n.client.Close()
 		n.client = simClient{}
 	}
-	var rerr error // return only last error if there are multiple
+	var err error
 	if n.beacon != nil {
-		rerr = n.beacon.Stop()
+		err = n.beacon.Stop()
 		n.beacon = nil
 	}
 	if n.node != nil {
-		if err := n.node.Close(); err != nil {
-			rerr = err
-		}
+		err = errors.Join(err, n.node.Close())
 		n.node = nil
 	}
-	return rerr
+	return err
 }
 
 // Commit seals a block and moves the chain forward to a new empty block.
