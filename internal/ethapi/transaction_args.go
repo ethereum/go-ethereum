@@ -364,41 +364,71 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, b Backend) er
 	return nil
 }
 
+// CallDefaults sanitizes the transaction arguments, often filling in zero values,
+// for the purpose of eth_call class of RPC methods.
+func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
+	// Reject invalid combinations of pre- and post-1559 fee styles
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	if args.ChainID == nil {
+		args.ChainID = (*hexutil.Big)(chainID)
+	} else {
+		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
+		}
+	}
+	if args.Gas == nil {
+		gas := globalGasCap
+		if gas == 0 {
+			gas = uint64(math.MaxUint64 / 2)
+		}
+		args.Gas = (*hexutil.Uint64)(&gas)
+	} else {
+		if globalGasCap > 0 && globalGasCap < uint64(*args.Gas) {
+			log.Warn("Caller gas above allowance, capping", "requested", args.Gas, "cap", globalGasCap)
+			args.Gas = (*hexutil.Uint64)(&globalGasCap)
+		}
+	}
+	if args.Nonce == nil {
+		args.Nonce = new(hexutil.Uint64)
+	}
+	if args.Value == nil {
+		args.Value = new(hexutil.Big)
+	}
+	if baseFee == nil {
+		// If there's no basefee, then it must be a non-1559 execution
+		if args.GasPrice == nil {
+			args.GasPrice = new(hexutil.Big)
+		}
+	} else {
+		// A basefee is provided, necessitating 1559-type execution
+		if args.MaxFeePerGas == nil {
+			args.MaxFeePerGas = new(hexutil.Big)
+		}
+		if args.MaxPriorityFeePerGas == nil {
+			args.MaxPriorityFeePerGas = new(hexutil.Big)
+		}
+	}
+	if args.BlobFeeCap == nil && args.BlobHashes != nil {
+		args.BlobFeeCap = new(hexutil.Big)
+	}
+
+	return nil
+}
+
 // ToMessage converts the transaction arguments to the Message type used by the
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
-func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*core.Message, error) {
-	// Reject invalid combinations of pre- and post-1559 fee styles
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	// Set sender address or use zero address if none specified.
-	addr := args.from()
-
-	// Set default gas & gas price if none were set
-	gas := globalGasCap
-	if gas == 0 {
-		gas = uint64(math.MaxUint64 / 2)
-	}
-	if args.Gas != nil {
-		gas = uint64(*args.Gas)
-	}
-	if globalGasCap != 0 && globalGasCap < gas {
-		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
-		gas = globalGasCap
-	}
+// Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
+func (args *TransactionArgs) ToMessage(baseFee *big.Int) *core.Message {
 	var (
-		gasPrice   *big.Int
-		gasFeeCap  *big.Int
-		gasTipCap  *big.Int
-		blobFeeCap *big.Int
+		gasPrice  *big.Int
+		gasFeeCap *big.Int
+		gasTipCap *big.Int
 	)
 	if baseFee == nil {
-		// If there's no basefee, then it must be a non-1559 execution
-		gasPrice = new(big.Int)
-		if args.GasPrice != nil {
-			gasPrice = args.GasPrice.ToInt()
-		}
+		gasPrice = args.GasPrice.ToInt()
 		gasFeeCap, gasTipCap = gasPrice, gasPrice
 	} else {
 		// A basefee is provided, necessitating 1559-type execution
@@ -408,14 +438,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
 			// User specified 1559 gas fields (or none), use those
-			gasFeeCap = new(big.Int)
-			if args.MaxFeePerGas != nil {
-				gasFeeCap = args.MaxFeePerGas.ToInt()
-			}
-			gasTipCap = new(big.Int)
-			if args.MaxPriorityFeePerGas != nil {
-				gasTipCap = args.MaxPriorityFeePerGas.ToInt()
-			}
+			gasFeeCap = args.MaxFeePerGas.ToInt()
+			gasTipCap = args.MaxPriorityFeePerGas.ToInt()
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
@@ -423,40 +447,29 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 			}
 		}
 	}
-	if args.BlobFeeCap != nil {
-		blobFeeCap = args.BlobFeeCap.ToInt()
-	} else if args.BlobHashes != nil {
-		blobFeeCap = new(big.Int)
-	}
-	value := new(big.Int)
-	if args.Value != nil {
-		value = args.Value.ToInt()
-	}
-	data := args.data()
 	var accessList types.AccessList
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := &core.Message{
-		From:              addr,
+	return &core.Message{
+		From:              args.from(),
 		To:                args.To,
-		Value:             value,
-		GasLimit:          gas,
+		Value:             (*big.Int)(args.Value),
+		GasLimit:          uint64(*args.Gas),
 		GasPrice:          gasPrice,
 		GasFeeCap:         gasFeeCap,
 		GasTipCap:         gasTipCap,
-		Data:              data,
+		Data:              args.data(),
 		AccessList:        accessList,
-		BlobGasFeeCap:     blobFeeCap,
+		BlobGasFeeCap:     (*big.Int)(args.BlobFeeCap),
 		BlobHashes:        args.BlobHashes,
 		SkipAccountChecks: true,
 	}
-	return msg, nil
 }
 
-// toTransaction converts the arguments to a transaction.
+// ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) toTransaction() *types.Transaction {
+func (args *TransactionArgs) ToTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
 	case args.BlobHashes != nil:

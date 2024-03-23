@@ -63,7 +63,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
-		cfg.Tracer = logger.NewStructLogger(config)
+		cfg.Tracer = logger.NewStructLogger(config).Hooks()
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
