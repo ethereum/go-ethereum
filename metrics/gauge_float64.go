@@ -1,12 +1,18 @@
 package metrics
 
-import "sync"
+import (
+	"math"
+	"sync/atomic"
+)
 
-// GaugeFloat64s hold a float64 value that can be set arbitrarily.
-type GaugeFloat64 interface {
-	Snapshot() GaugeFloat64
-	Update(float64)
+type GaugeFloat64Snapshot interface {
 	Value() float64
+}
+
+// GaugeFloat64 hold a float64 value that can be set arbitrarily.
+type GaugeFloat64 interface {
+	Snapshot() GaugeFloat64Snapshot
+	Update(float64)
 }
 
 // GetOrRegisterGaugeFloat64 returns an existing GaugeFloat64 or constructs and registers a
@@ -23,9 +29,7 @@ func NewGaugeFloat64() GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
 	}
-	return &StandardGaugeFloat64{
-		value: 0.0,
-	}
+	return &StandardGaugeFloat64{}
 }
 
 // NewRegisteredGaugeFloat64 constructs and registers a new StandardGaugeFloat64.
@@ -38,90 +42,32 @@ func NewRegisteredGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	return c
 }
 
-// NewFunctionalGauge constructs a new FunctionalGauge.
-func NewFunctionalGaugeFloat64(f func() float64) GaugeFloat64 {
-	if !Enabled {
-		return NilGaugeFloat64{}
-	}
-	return &FunctionalGaugeFloat64{value: f}
-}
-
-// NewRegisteredFunctionalGauge constructs and registers a new StandardGauge.
-func NewRegisteredFunctionalGaugeFloat64(name string, r Registry, f func() float64) GaugeFloat64 {
-	c := NewFunctionalGaugeFloat64(f)
-	if nil == r {
-		r = DefaultRegistry
-	}
-	r.Register(name, c)
-	return c
-}
-
-// GaugeFloat64Snapshot is a read-only copy of another GaugeFloat64.
-type GaugeFloat64Snapshot float64
-
-// Snapshot returns the snapshot.
-func (g GaugeFloat64Snapshot) Snapshot() GaugeFloat64 { return g }
-
-// Update panics.
-func (GaugeFloat64Snapshot) Update(float64) {
-	panic("Update called on a GaugeFloat64Snapshot")
-}
+// gaugeFloat64Snapshot is a read-only copy of another GaugeFloat64.
+type gaugeFloat64Snapshot float64
 
 // Value returns the value at the time the snapshot was taken.
-func (g GaugeFloat64Snapshot) Value() float64 { return float64(g) }
+func (g gaugeFloat64Snapshot) Value() float64 { return float64(g) }
 
-// NilGauge is a no-op Gauge.
+// NilGaugeFloat64 is a no-op Gauge.
 type NilGaugeFloat64 struct{}
 
-// Snapshot is a no-op.
-func (NilGaugeFloat64) Snapshot() GaugeFloat64 { return NilGaugeFloat64{} }
-
-// Update is a no-op.
-func (NilGaugeFloat64) Update(v float64) {}
-
-// Value is a no-op.
-func (NilGaugeFloat64) Value() float64 { return 0.0 }
+func (NilGaugeFloat64) Snapshot() GaugeFloat64Snapshot { return NilGaugeFloat64{} }
+func (NilGaugeFloat64) Update(v float64)               {}
+func (NilGaugeFloat64) Value() float64                 { return 0.0 }
 
 // StandardGaugeFloat64 is the standard implementation of a GaugeFloat64 and uses
-// sync.Mutex to manage a single float64 value.
+// atomic to manage a single float64 value.
 type StandardGaugeFloat64 struct {
-	mutex sync.Mutex
-	value float64
+	floatBits atomic.Uint64
 }
 
 // Snapshot returns a read-only copy of the gauge.
-func (g *StandardGaugeFloat64) Snapshot() GaugeFloat64 {
-	return GaugeFloat64Snapshot(g.Value())
+func (g *StandardGaugeFloat64) Snapshot() GaugeFloat64Snapshot {
+	v := math.Float64frombits(g.floatBits.Load())
+	return gaugeFloat64Snapshot(v)
 }
 
 // Update updates the gauge's value.
 func (g *StandardGaugeFloat64) Update(v float64) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	g.value = v
-}
-
-// Value returns the gauge's current value.
-func (g *StandardGaugeFloat64) Value() float64 {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	return g.value
-}
-
-// FunctionalGaugeFloat64 returns value from given function
-type FunctionalGaugeFloat64 struct {
-	value func() float64
-}
-
-// Value returns the gauge's current value.
-func (g FunctionalGaugeFloat64) Value() float64 {
-	return g.value()
-}
-
-// Snapshot returns the snapshot.
-func (g FunctionalGaugeFloat64) Snapshot() GaugeFloat64 { return GaugeFloat64Snapshot(g.Value()) }
-
-// Update panics.
-func (FunctionalGaugeFloat64) Update(float64) {
-	panic("Update called on a FunctionalGaugeFloat64")
+	g.floatBits.Store(math.Float64bits(v))
 }

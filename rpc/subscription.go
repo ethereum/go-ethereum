@@ -32,8 +32,17 @@ import (
 )
 
 var (
-	// ErrNotificationsUnsupported is returned when the connection doesn't support notifications
-	ErrNotificationsUnsupported = errors.New("notifications not supported")
+	// ErrNotificationsUnsupported is returned by the client when the connection doesn't
+	// support notifications. You can use this error value to check for subscription
+	// support like this:
+	//
+	//	sub, err := client.EthSubscribe(ctx, channel, "newHeads", true)
+	//	if errors.Is(err, rpc.ErrNotificationsUnsupported) {
+	//		// Server does not support subscriptions, fall back to polling.
+	//	}
+	//
+	ErrNotificationsUnsupported = notificationsUnsupportedError{}
+
 	// ErrSubscriptionNotFound is returned when the notification for the given id is not found
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
@@ -96,7 +105,7 @@ type Notifier struct {
 
 	mu           sync.Mutex
 	sub          *Subscription
-	buffer       []json.RawMessage
+	buffer       []any
 	callReturned bool
 	activated    bool
 }
@@ -120,12 +129,7 @@ func (n *Notifier) CreateSubscription() *Subscription {
 
 // Notify sends a notification to the client with the given data as payload.
 // If an error occurs the RPC connection is closed and the error is returned.
-func (n *Notifier) Notify(id ID, data interface{}) error {
-	enc, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
+func (n *Notifier) Notify(id ID, data any) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -135,16 +139,10 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 		panic("Notify with wrong ID")
 	}
 	if n.activated {
-		return n.send(n.sub, enc)
+		return n.send(n.sub, data)
 	}
-	n.buffer = append(n.buffer, enc)
+	n.buffer = append(n.buffer, data)
 	return nil
-}
-
-// Closed returns a channel that is closed when the RPC connection is closed.
-// Deprecated: use subscription error channel
-func (n *Notifier) Closed() <-chan interface{} {
-	return n.h.conn.closed()
 }
 
 // takeSubscription returns the subscription (if one has been created). No subscription can
@@ -172,16 +170,16 @@ func (n *Notifier) activate() error {
 	return nil
 }
 
-func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
-	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
-	ctx := context.Background()
-
-	msg := &jsonrpcMessage{
+func (n *Notifier) send(sub *Subscription, data any) error {
+	msg := jsonrpcSubscriptionNotification{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
-		Params:  params,
+		Params: subscriptionResultEnc{
+			ID:     string(sub.ID),
+			Result: data,
+		},
 	}
-	return n.h.conn.writeJSON(ctx, msg, false)
+	return n.h.conn.writeJSON(context.Background(), &msg, false)
 }
 
 // A Subscription is created by a notifier and tied to that notifier. The client can use

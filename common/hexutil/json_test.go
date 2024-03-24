@@ -23,6 +23,8 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+
+	"github.com/holiman/uint256"
 )
 
 func checkError(t *testing.T, input string, got, want error) bool {
@@ -171,6 +173,64 @@ func TestUnmarshalBig(t *testing.T) {
 		}
 		if test.want != nil && test.want.(*big.Int).Cmp((*big.Int)(&v)) != 0 {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, (*big.Int)(&v), test.want)
+			continue
+		}
+	}
+}
+
+var unmarshalU256Tests = []unmarshalTest{
+	// invalid encoding
+	{input: "", wantErr: errJSONEOF},
+	{input: "null", wantErr: errNonString(u256T)},
+	{input: "10", wantErr: errNonString(u256T)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, u256T)},
+	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, u256T)},
+	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, u256T)},
+	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
+	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
+	{
+		input:   `"0x10000000000000000000000000000000000000000000000000000000000000000"`,
+		wantErr: wrapTypeError(ErrBig256Range, u256T),
+	},
+
+	// valid encoding
+	{input: `""`, want: big.NewInt(0)},
+	{input: `"0x0"`, want: big.NewInt(0)},
+	{input: `"0x2"`, want: big.NewInt(0x2)},
+	{input: `"0x2F2"`, want: big.NewInt(0x2f2)},
+	{input: `"0X2F2"`, want: big.NewInt(0x2f2)},
+	{input: `"0x1122aaff"`, want: big.NewInt(0x1122aaff)},
+	{input: `"0xbBb"`, want: big.NewInt(0xbbb)},
+	{input: `"0xfffffffff"`, want: big.NewInt(0xfffffffff)},
+	{
+		input: `"0x112233445566778899aabbccddeeff"`,
+		want:  referenceBig("112233445566778899aabbccddeeff"),
+	},
+	{
+		input: `"0xffffffffffffffffffffffffffffffffffff"`,
+		want:  referenceBig("ffffffffffffffffffffffffffffffffffff"),
+	},
+	{
+		input: `"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"`,
+		want:  referenceBig("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	},
+}
+
+func TestUnmarshalU256(t *testing.T) {
+	for _, test := range unmarshalU256Tests {
+		var v U256
+		err := json.Unmarshal([]byte(test.input), &v)
+		if !checkError(t, test.input, err, test.wantErr) {
+			continue
+		}
+		if test.want == nil {
+			continue
+		}
+		want := new(uint256.Int)
+		want.SetFromBig(test.want.(*big.Int))
+		have := (*uint256.Int)(&v)
+		if want.Cmp(have) != 0 {
+			t.Errorf("input %s: value mismatch: have %x, want %x", test.input, have, want)
 			continue
 		}
 	}

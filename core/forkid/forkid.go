@@ -24,13 +24,12 @@ import (
 	"math"
 	"math/big"
 	"reflect"
-	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -73,12 +72,12 @@ type ID struct {
 type Filter func(id ID) error
 
 // NewID calculates the Ethereum fork ID from the chain config, genesis hash, head and time.
-func NewID(config *params.ChainConfig, genesis common.Hash, head, time uint64) ID {
+func NewID(config *params.ChainConfig, genesis *types.Block, head, time uint64) ID {
 	// Calculate the starting checksum from the genesis hash
-	hash := crc32.ChecksumIEEE(genesis[:])
+	hash := crc32.ChecksumIEEE(genesis.Hash().Bytes())
 
 	// Calculate the current fork checksum and the next fork block
-	forksByBlock, forksByTime := gatherForks(config)
+	forksByBlock, forksByTime := gatherForks(config, genesis.Time())
 	for _, fork := range forksByBlock {
 		if fork <= head {
 			// Fork already passed, checksum the previous hash and the fork number
@@ -104,7 +103,7 @@ func NewIDWithChain(chain Blockchain) ID {
 
 	return NewID(
 		chain.Config(),
-		chain.Genesis().Hash(),
+		chain.Genesis(),
 		head.Number.Uint64(),
 		head.Time,
 	)
@@ -115,7 +114,7 @@ func NewIDWithChain(chain Blockchain) ID {
 func NewFilter(chain Blockchain) Filter {
 	return newFilter(
 		chain.Config(),
-		chain.Genesis().Hash(),
+		chain.Genesis(),
 		func() (uint64, uint64) {
 			head := chain.CurrentHeader()
 			return head.Number.Uint64(), head.Time
@@ -124,7 +123,7 @@ func NewFilter(chain Blockchain) Filter {
 }
 
 // NewStaticFilter creates a filter at block zero.
-func NewStaticFilter(config *params.ChainConfig, genesis common.Hash) Filter {
+func NewStaticFilter(config *params.ChainConfig, genesis *types.Block) Filter {
 	head := func() (uint64, uint64) { return 0, 0 }
 	return newFilter(config, genesis, head)
 }
@@ -132,14 +131,14 @@ func NewStaticFilter(config *params.ChainConfig, genesis common.Hash) Filter {
 // newFilter is the internal version of NewFilter, taking closures as its arguments
 // instead of a chain. The reason is to allow testing it without having to simulate
 // an entire blockchain.
-func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (uint64, uint64)) Filter {
+func newFilter(config *params.ChainConfig, genesis *types.Block, headfn func() (uint64, uint64)) Filter {
 	// Calculate the all the valid fork hash and fork next combos
 	var (
-		forksByBlock, forksByTime = gatherForks(config)
+		forksByBlock, forksByTime = gatherForks(config, genesis.Time())
 		forks                     = append(append([]uint64{}, forksByBlock...), forksByTime...)
 		sums                      = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
-	hash := crc32.ChecksumIEEE(genesis[:])
+	hash := crc32.ChecksumIEEE(genesis.Hash().Bytes())
 	sums[0] = checksumToBytes(hash)
 	for i, fork := range forks {
 		hash = checksumUpdate(hash, fork)
@@ -240,7 +239,7 @@ func checksumToBytes(hash uint32) [4]byte {
 
 // gatherForks gathers all the known forks and creates two sorted lists out of
 // them, one for the block number based forks and the second for the timestamps.
-func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
+func gatherForks(config *params.ChainConfig, genesis uint64) ([]uint64, []uint64) {
 	// Gather all the fork block numbers via reflection
 	kind := reflect.TypeOf(params.ChainConfig{})
 	conf := reflect.ValueOf(config).Elem()
@@ -270,8 +269,8 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 			}
 		}
 	}
-	sort.Slice(forksByBlock, func(i, j int) bool { return forksByBlock[i] < forksByBlock[j] })
-	sort.Slice(forksByTime, func(i, j int) bool { return forksByTime[i] < forksByTime[j] })
+	slices.Sort(forksByBlock)
+	slices.Sort(forksByTime)
 
 	// Deduplicate fork identifiers applying multiple forks
 	for i := 1; i < len(forksByBlock); i++ {
@@ -290,7 +289,8 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	if len(forksByBlock) > 0 && forksByBlock[0] == 0 {
 		forksByBlock = forksByBlock[1:]
 	}
-	if len(forksByTime) > 0 && forksByTime[0] == 0 {
+	// Skip any forks before genesis.
+	for len(forksByTime) > 0 && forksByTime[0] <= genesis {
 		forksByTime = forksByTime[1:]
 	}
 	return forksByBlock, forksByTime

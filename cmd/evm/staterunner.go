@@ -17,16 +17,16 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -34,7 +34,7 @@ import (
 var stateTestCommand = &cli.Command{
 	Action:    stateTestCmd,
 	Name:      "statetest",
-	Usage:     "executes the given state tests",
+	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
 }
 
@@ -50,14 +50,6 @@ type StatetestResult struct {
 }
 
 func stateTestCmd(ctx *cli.Context) error {
-	if len(ctx.Args().First()) == 0 {
-		return errors.New("path-to-test argument required")
-	}
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
-
 	// Configure the EVM logger
 	config := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
@@ -65,67 +57,67 @@ func stateTestCmd(ctx *cli.Context) error {
 		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
 		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
 	}
-	var (
-		tracer   vm.EVMLogger
-		debugger *logger.StructLogger
-	)
+	var cfg vm.Config
 	switch {
 	case ctx.Bool(MachineFlag.Name):
-		tracer = logger.NewJSONLogger(config, os.Stderr)
+		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
-		debugger = logger.NewStructLogger(config)
-		tracer = debugger
-
-	default:
-		debugger = logger.NewStructLogger(config)
+		cfg.Tracer = logger.NewStructLogger(config).Hooks()
 	}
 	// Load the test content from the input file
-	src, err := os.ReadFile(ctx.Args().First())
+	if len(ctx.Args().First()) != 0 {
+		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name))
+	}
+	// Read filenames from stdin and execute back-to-back
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fname := scanner.Text()
+		if len(fname) == 0 {
+			return nil
+		}
+		if err := runStateTest(fname, cfg, ctx.Bool(DumpFlag.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runStateTest loads the state-test given by fname, and executes the test.
+func runStateTest(fname string, cfg vm.Config, dump bool) error {
+	src, err := os.ReadFile(fname)
 	if err != nil {
 		return err
 	}
-	var tests map[string]tests.StateTest
-	if err = json.Unmarshal(src, &tests); err != nil {
+	var testsByName map[string]tests.StateTest
+	if err := json.Unmarshal(src, &testsByName); err != nil {
 		return err
 	}
+
 	// Iterate over all the tests, run them and aggregate the results
-	cfg := vm.Config{
-		Tracer: tracer,
-		Debug:  ctx.Bool(DebugFlag.Name) || ctx.Bool(MachineFlag.Name),
-	}
-	results := make([]StatetestResult, 0, len(tests))
-	for key, test := range tests {
+	results := make([]StatetestResult, 0, len(testsByName))
+	for key, test := range testsByName {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			_, s, err := test.Run(st, cfg, false)
-			// print state root for evmlab tracing
-			if s != nil {
-				root := s.IntermediateRoot(false)
-				result.Root = &root
-				if ctx.Bool(MachineFlag.Name) {
+			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
+				var root common.Hash
+				if tstate.StateDB != nil {
+					root = tstate.StateDB.IntermediateRoot(false)
+					result.Root = &root
 					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+					if dump { // Dump any state to aid debugging
+						cpy, _ := state.New(root, tstate.StateDB.Database(), nil)
+						dump := cpy.RawDump(nil)
+						result.State = &dump
+					}
 				}
-			}
-			if err != nil {
-				// Test failed, mark as so and dump any state to aid debugging
-				result.Pass, result.Error = false, err.Error()
-				if ctx.Bool(DumpFlag.Name) && s != nil {
-					dump := s.RawDump(nil)
-					result.State = &dump
+				if err != nil {
+					// Test failed, mark as so
+					result.Pass, result.Error = false, err.Error()
 				}
-			}
-
+			})
 			results = append(results, *result)
-
-			// Print any structured logs collected
-			if ctx.Bool(DebugFlag.Name) {
-				if debugger != nil {
-					fmt.Fprintln(os.Stderr, "#### TRACE ####")
-					logger.WriteTrace(os.Stderr, debugger.StructLogs())
-				}
-			}
 		}
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")

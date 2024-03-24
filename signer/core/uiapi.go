@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// SignerUIAPI implements methods Clef provides for a UI to query, in the bidirectional communication
+// UIServerAPI implements methods Clef provides for a UI to query, in the bidirectional communication
 // channel.
 // This API is considered secure, since a request can only
 // ever arrive from the UI -- and the UI is capable of approving any action, thus we can consider these
@@ -111,7 +111,11 @@ func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (account
 
 // fetchKeystore retrieves the encrypted keystore from the account manager.
 func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
-	return am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := am.Backends(keystore.KeyStoreType)
+	if len(ks) == 0 {
+		return nil
+	}
+	return ks[0].(*keystore.KeyStore)
 }
 
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
@@ -173,7 +177,7 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 		return nil, err
 	}
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
-		return nil, fmt.Errorf("account is not a keystore-account")
+		return nil, errors.New("account is not a keystore-account")
 	}
 	return os.ReadFile(wallet.URL().Path)
 }

@@ -68,6 +68,27 @@ func MustRunCommand(cmd string, args ...string) {
 	MustRun(exec.Command(cmd, args...))
 }
 
+// MustRunCommandWithOutput runs the given command, and ensures that some output will be
+// printed while it runs. This is useful for CI builds where the process will be stopped
+// when there is no output.
+func MustRunCommandWithOutput(cmd string, args ...string) {
+	interval := time.NewTicker(time.Minute)
+	done := make(chan struct{})
+	defer interval.Stop()
+	defer close(done)
+	go func() {
+		for {
+			select {
+			case <-interval.C:
+				fmt.Printf("Waiting for command %q\n", cmd)
+			case <-done:
+				return
+			}
+		}
+	}()
+	MustRun(exec.Command(cmd, args...))
+}
+
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.
@@ -127,7 +148,7 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 }
 
 // UploadSFTP uploads files to a remote host using the sftp command line tool.
-// The destination host may be specified either as [user@]host[: or as a URI in
+// The destination host may be specified either as [user@]host: or as a URI in
 // the form sftp://[user@]host[:port].
 func UploadSFTP(identityFile, host, dir string, files []string) error {
 	sftp := exec.Command("sftp")
@@ -197,6 +218,9 @@ func FindMainPackages(dir string) []string {
 	}
 	for _, cmd := range cmds {
 		pkgdir := filepath.Join(dir, cmd.Name())
+		if !cmd.IsDir() {
+			continue
+		}
 		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
 		if err != nil {
 			log.Fatal(err)

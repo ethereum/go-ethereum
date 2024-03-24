@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -28,17 +29,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/holiman/uint256"
 )
 
-func TestState(t *testing.T) {
-	t.Parallel()
-
-	st := new(testMatcher)
+func initMatcher(st *testMatcher) {
 	// Long tests:
 	st.slow(`^stAttackTest/ContractCreationSpam`)
 	st.slow(`^stBadOpcode/badOpcodes`)
@@ -48,50 +48,125 @@ func TestState(t *testing.T) {
 	st.slow(`^stStaticCall/static_Return50000`)
 	st.slow(`^stSystemOperationsTest/CallRecursiveBomb`)
 	st.slow(`^stTransactionTest/Opcodes_TransactionInit`)
-
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
 	st.skipLoad(`.*vmPerformance/loop.*`)
-
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Broken tests:
-	//
-	// The stEOF tests are generated with EOF as part of Shanghai, which
-	// is erroneous. Therefore, these tests are skipped.
-	st.skipLoad(`^EIPTests/stEOF/`)
-	// Expected failures:
+	// EOF is not part of cancun
+	st.skipLoad(`^stEOF/`)
+}
 
-	// For Istanbul, older tests were moved into LegacyTests
+func TestState(t *testing.T) {
+	t.Parallel()
+
+	st := new(testMatcher)
+	initMatcher(st)
 	for _, dir := range []string{
+		filepath.Join(baseDir, "EIPTests", "StateTests"),
 		stateTestDir,
-		legacyStateTestDir,
 		benchmarksDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
-			for _, subtest := range test.Subtests() {
-				subtest := subtest
-				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+			execStateTest(t, st, test)
+		})
+	}
+}
 
-				t.Run(key+"/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, _, err := test.Run(subtest, vmconfig, false)
-						return st.checkFailure(t, err)
-					})
-				})
-				t.Run(key+"/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
-								return err
-							}
-						}
-						return st.checkFailure(t, err)
-					})
-				})
+// TestLegacyState tests some older tests, which were moved to the folder
+// 'LegacyTests' for the Istanbul fork.
+func TestLegacyState(t *testing.T) {
+	st := new(testMatcher)
+	initMatcher(st)
+	st.walk(t, legacyStateTestDir, func(t *testing.T, name string, test *StateTest) {
+		execStateTest(t, st, test)
+	})
+}
+
+// TestExecutionSpecState runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecState(t *testing.T) {
+	if !common.FileExist(executionSpecStateTestDir) {
+		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
+	}
+	st := new(testMatcher)
+
+	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
+		execStateTest(t, st, test)
+	})
+}
+
+func execStateTest(t *testing.T, st *testMatcher, test *StateTest) {
+	for _, subtest := range test.Subtests() {
+		subtest := subtest
+		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+
+		// If -short flag is used, we don't execute all four permutations, only
+		// one.
+		executionMask := 0xf
+		if testing.Short() {
+			executionMask = (1 << (rand.Int63() & 4))
+		}
+		t.Run(key+"/hash/trie", func(t *testing.T) {
+			if executionMask&0x1 == 0 {
+				t.Skip("test (randomly) skipped due to short-tag")
 			}
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, false, rawdb.HashScheme, func(err error, state *StateTestState) {
+					result = st.checkFailure(t, err)
+				})
+				return result
+			})
+		})
+		t.Run(key+"/hash/snap", func(t *testing.T) {
+			if executionMask&0x2 == 0 {
+				t.Skip("test (randomly) skipped due to short-tag")
+			}
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, true, rawdb.HashScheme, func(err error, state *StateTestState) {
+					if state.Snapshots != nil && state.StateDB != nil {
+						if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
+							result = err
+							return
+						}
+					}
+					result = st.checkFailure(t, err)
+				})
+				return result
+			})
+		})
+		t.Run(key+"/path/trie", func(t *testing.T) {
+			if executionMask&0x4 == 0 {
+				t.Skip("test (randomly) skipped due to short-tag")
+			}
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, false, rawdb.PathScheme, func(err error, state *StateTestState) {
+					result = st.checkFailure(t, err)
+				})
+				return result
+			})
+		})
+		t.Run(key+"/path/snap", func(t *testing.T) {
+			if executionMask&0x8 == 0 {
+				t.Skip("test (randomly) skipped due to short-tag")
+			}
+			withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+				var result error
+				test.Run(subtest, vmconfig, true, rawdb.PathScheme, func(err error, state *StateTestState) {
+					if state.Snapshots != nil && state.StateDB != nil {
+						if _, err := state.Snapshots.Journal(state.StateDB.IntermediateRoot(false)); err != nil {
+							result = err
+							return
+						}
+					}
+					result = st.checkFailure(t, err)
+				})
+				return result
+			})
 		})
 	}
 }
@@ -115,8 +190,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	tracer := logger.NewJSONLogger(&logger.Config{}, w)
-	config.Debug, config.Tracer = true, tracer
+	config.Tracer = logger.NewJSONLogger(&logger.Config{}, w)
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
@@ -187,7 +261,8 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
-			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
+			state := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false, rawdb.HashScheme)
+			defer state.Close()
 
 			var baseFee *big.Int
 			if rules.IsLondon {
@@ -225,10 +300,10 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 			context.GetHash = vmTestBlockHash
 			context.BaseFee = baseFee
-			evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+			evm := vm.NewEVM(context, txContext, state.StateDB, config, vmconfig)
 
 			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
+			sender := vm.NewContract(vm.AccountRef(msg.From), vm.AccountRef(msg.From),
 				nil, 0)
 
 			var (
@@ -238,13 +313,13 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				snapshot := statedb.Snapshot()
-				statedb.Prepare(rules, msg.From(), context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+				snapshot := state.StateDB.Snapshot()
+				state.StateDB.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 				b.StartTimer()
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
+				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return
@@ -252,10 +327,10 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 				b.StopTimer()
 				elapsed += uint64(time.Since(start))
-				refund += statedb.GetRefund()
-				gasUsed += msg.Gas() - leftOverGas
+				refund += state.StateDB.GetRefund()
+				gasUsed += msg.GasLimit - leftOverGas
 
-				statedb.RevertToSnapshot(snapshot)
+				state.StateDB.RevertToSnapshot(snapshot)
 			}
 			if elapsed < 1 {
 				elapsed = 1

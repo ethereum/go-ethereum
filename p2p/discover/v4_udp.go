@@ -130,7 +130,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	cfg = cfg.withDefaults()
 	closeCtx, cancel := context.WithCancel(context.Background())
 	t := &UDPv4{
-		conn:            c,
+		conn:            newMeteredConn(c),
 		priv:            cfg.PrivateKey,
 		netrestrict:     cfg.NetRestrict,
 		localNode:       ln,
@@ -142,7 +142,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
+	tab, err := newMeteredTable(t, ln.Database(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 		return nil, err
 	}
 	if respN.ID() != n.ID() {
-		return nil, fmt.Errorf("invalid ID in response record")
+		return nil, errors.New("invalid ID in response record")
 	}
 	if respN.Seq() < n.Seq() {
 		return n, nil // response record is older
@@ -643,12 +643,12 @@ type packetHandlerV4 struct {
 func (t *UDPv4) verifyPing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.ID, fromKey v4wire.Pubkey) error {
 	req := h.Packet.(*v4wire.Ping)
 
+	if v4wire.Expired(req.Expiration) {
+		return errExpired
+	}
 	senderKey, err := v4wire.DecodePubkey(crypto.S256(), fromKey)
 	if err != nil {
 		return err
-	}
-	if v4wire.Expired(req.Expiration) {
-		return errExpired
 	}
 	h.senderKey = senderKey
 	return nil

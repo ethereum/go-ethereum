@@ -29,8 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -61,7 +63,7 @@ type fetchRequest struct {
 // fetchResult is a struct collecting partial results from data fetchers until
 // all outstanding pieces complete and the result as a whole can be processed.
 type fetchResult struct {
-	pending int32 // Flag telling what deliveries are outstanding
+	pending atomic.Int32 // Flag telling what deliveries are outstanding
 
 	Header       *types.Header
 	Uncles       []*types.Header
@@ -75,38 +77,38 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 		Header: header,
 	}
 	if !header.EmptyBody() {
-		item.pending |= (1 << bodyType)
+		item.pending.Store(item.pending.Load() | (1 << bodyType))
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
 	if fastSync && !header.EmptyReceipts() {
-		item.pending |= (1 << receiptType)
+		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
 	return item
 }
 
 // SetBodyDone flags the body as finished.
 func (f *fetchResult) SetBodyDone() {
-	if v := atomic.LoadInt32(&f.pending); (v & (1 << bodyType)) != 0 {
-		atomic.AddInt32(&f.pending, -1)
+	if v := f.pending.Load(); (v & (1 << bodyType)) != 0 {
+		f.pending.Add(-1)
 	}
 }
 
 // AllDone checks if item is done.
 func (f *fetchResult) AllDone() bool {
-	return atomic.LoadInt32(&f.pending) == 0
+	return f.pending.Load() == 0
 }
 
 // SetReceiptsDone flags the receipts as finished.
 func (f *fetchResult) SetReceiptsDone() {
-	if v := atomic.LoadInt32(&f.pending); (v & (1 << receiptType)) != 0 {
-		atomic.AddInt32(&f.pending, -2)
+	if v := f.pending.Load(); (v & (1 << receiptType)) != 0 {
+		f.pending.Add(-2)
 	}
 }
 
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
-	v := atomic.LoadInt32(&f.pending)
+	v := f.pending.Load()
 	return v&(1<<kind) == 0
 }
 
@@ -144,7 +146,7 @@ type queue struct {
 	active *sync.Cond
 	closed bool
 
-	lastStatLog time.Time
+	logTime time.Time // Time instance when status was last reported
 }
 
 // newQueue creates a new download queue for scheduling block retrieval.
@@ -390,11 +392,12 @@ func (q *queue) Results(block bool) []*fetchResult {
 		}
 	}
 	// Log some info at certain times
-	if time.Since(q.lastStatLog) > 60*time.Second {
-		q.lastStatLog = time.Now()
+	if time.Since(q.logTime) >= 60*time.Second {
+		q.logTime = time.Now()
+
 		info := q.Stats()
 		info = append(info, "throttle", throttleThreshold)
-		log.Info("Downloader queue stats", info...)
+		log.Debug("Downloader queue stats", info...)
 	}
 	return results
 }
@@ -792,6 +795,37 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 				return errInvalidBody
 			}
 			if withdrawalListHashes[index] != *header.WithdrawalsHash {
+				return errInvalidBody
+			}
+		}
+		// Blocks must have a number of blobs corresponding to the header gas usage,
+		// and zero before the Cancun hardfork.
+		var blobs int
+		for _, tx := range txLists[index] {
+			// Count the number of blobs to validate against the header's blobGasUsed
+			blobs += len(tx.BlobHashes())
+
+			// Validate the data blobs individually too
+			if tx.Type() == types.BlobTxType {
+				if len(tx.BlobHashes()) == 0 {
+					return errInvalidBody
+				}
+				for _, hash := range tx.BlobHashes() {
+					if !kzg4844.IsValidVersionedHash(hash[:]) {
+						return errInvalidBody
+					}
+				}
+				if tx.BlobTxSidecar() != nil {
+					return errInvalidBody
+				}
+			}
+		}
+		if header.BlobGasUsed != nil {
+			if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
+				return errInvalidBody
+			}
+		} else {
+			if blobs != 0 {
 				return errInvalidBody
 			}
 		}

@@ -19,58 +19,59 @@ package logger
 import (
 	"encoding/json"
 	"io"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-type JSONLogger struct {
+type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
-	env     *vm.EVM
+	env     *tracing.VMContext
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
-	l := &JSONLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
+	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return l
+	return &tracing.Hooks{
+		OnTxStart: l.OnTxStart,
+		OnExit:    l.OnExit,
+		OnOpcode:  l.OnOpcode,
+		OnFault:   l.OnFault,
+	}
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	l.env = env
-}
-
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
-	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
+	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
 }
 
-// CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.Memory
-	stack := scope.Stack
+func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	memory := scope.MemoryData()
+	stack := scope.StackData()
 
 	log := StructLog{
 		Pc:            pc,
-		Op:            op,
+		Op:            vm.OpCode(op),
 		Gas:           gas,
 		GasCost:       cost,
-		MemorySize:    memory.Len(),
+		MemorySize:    len(memory),
 		Depth:         depth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
 	}
 	if l.cfg.EnableMemory {
-		log.Memory = memory.Data()
+		log.Memory = memory
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = stack.Data()
+		log.Stack = stack
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
@@ -78,8 +79,10 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	l.encoder.Encode(log)
 }
 
-// CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth > 0 {
+		return
+	}
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
@@ -92,11 +95,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.env = env
 }
-
-func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (l *JSONLogger) CaptureTxStart(gasLimit uint64) {}
-
-func (l *JSONLogger) CaptureTxEnd(restGas uint64) {}

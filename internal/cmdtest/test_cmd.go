@@ -32,7 +32,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/docker/docker/pkg/reexec"
+	"github.com/ethereum/go-ethereum/internal/reexec"
 )
 
 func NewTestCmd(t *testing.T, data interface{}) *TestCmd {
@@ -55,13 +55,13 @@ type TestCmd struct {
 	Err error
 }
 
-var id int32
+var id atomic.Int32
 
 // Run exec's the current binary using name as argv[0] which will trigger the
 // reexec init function for that name (e.g. "geth-test" in cmd/geth/run_test.go)
 func (tt *TestCmd) Run(name string, args ...string) {
-	id := atomic.AddInt32(&id, 1)
-	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id)}
+	id.Add(1)
+	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id.Load())}
 	tt.cmd = &exec.Cmd{
 		Path:   reexec.Self(),
 		Args:   append([]string{name}, args...),
@@ -237,7 +237,7 @@ func (tt *TestCmd) Kill() {
 }
 
 func (tt *TestCmd) withKillTimeout(fn func()) {
-	timeout := time.AfterFunc(5*time.Second, func() {
+	timeout := time.AfterFunc(30*time.Second, func() {
 		tt.Log("killing the child process (timeout)")
 		tt.Kill()
 	})

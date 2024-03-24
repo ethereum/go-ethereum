@@ -78,12 +78,20 @@ func (o *MarshalErrObj) MarshalText() ([]byte, error) {
 
 func (s *testService) NoArgsRets() {}
 
+func (s *testService) Null() any {
+	return nil
+}
+
 func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
 	return echoResult{str, i, args}
 }
 
 func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *echoArgs) echoResult {
 	return echoResult{str, i, args}
+}
+
+func (s *testService) Repeat(msg string, i int) string {
+	return strings.Repeat(msg, i)
 }
 
 func (s *testService) PeerInfo(ctx context.Context) PeerInfo {
@@ -187,10 +195,7 @@ func (s *notificationTestService) SomeSubscription(ctx context.Context, n, val i
 				return
 			}
 		}
-		select {
-		case <-notifier.Closed():
-		case <-subscription.Err():
-		}
+		<-subscription.Err()
 		if s.unsubscribed != nil {
 			s.unsubscribed <- string(subscription.ID)
 		}

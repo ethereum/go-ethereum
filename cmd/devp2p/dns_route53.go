@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -81,7 +81,7 @@ func newRoute53Client(ctx *cli.Context) *route53Client {
 	akey := ctx.String(route53AccessKeyFlag.Name)
 	asec := ctx.String(route53AccessSecretFlag.Name)
 	if akey == "" || asec == "" {
-		exit(fmt.Errorf("need Route53 Access Key ID and secret to proceed"))
+		exit(errors.New("need Route53 Access Key ID and secret to proceed"))
 	}
 	creds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(akey, asec, ""))
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(creds))
@@ -221,7 +221,13 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	}
 	records = lrecords
 
-	var changes []types.Change
+	var (
+		changes []types.Change
+		inserts int
+		upserts int
+		skips   int
+	)
+
 	for path, newValue := range records {
 		prevRecords, exists := existing[path]
 		prevValue := strings.Join(prevRecords.values, "")
@@ -237,20 +243,30 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 
 		if !exists {
 			// Entry is unknown, push a new one
-			log.Info(fmt.Sprintf("Creating %s = %s", path, newValue))
+			log.Debug(fmt.Sprintf("Creating %s = %s", path, newValue))
 			changes = append(changes, newTXTChange("CREATE", path, ttl, newValue))
+			inserts++
 		} else if prevValue != newValue || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %s to %s", path, prevValue, newValue))
 			changes = append(changes, newTXTChange("UPSERT", path, ttl, newValue))
+			upserts++
 		} else {
 			log.Debug(fmt.Sprintf("Skipping %s = %s", path, newValue))
+			skips++
 		}
 	}
 
 	// Iterate over the old records and delete anything stale.
-	changes = append(changes, makeDeletionChanges(existing, records)...)
+	deletions := makeDeletionChanges(existing, records)
+	changes = append(changes, deletions...)
 
+	log.Info("Computed DNS changes",
+		"changes", len(changes),
+		"inserts", inserts,
+		"skips", skips,
+		"deleted", len(deletions),
+		"upserts", upserts)
 	// Ensure changes are in the correct order.
 	sortChanges(changes)
 	return changes
@@ -263,7 +279,7 @@ func makeDeletionChanges(records map[string]recordSet, keep map[string]string) [
 		if _, ok := keep[path]; ok {
 			continue
 		}
-		log.Info(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
+		log.Debug(fmt.Sprintf("Deleting %s = %s", path, strings.Join(set.values, "")))
 		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
 	return changes
@@ -272,11 +288,17 @@ func makeDeletionChanges(records map[string]recordSet, keep map[string]string) [
 // sortChanges ensures DNS changes are in leaf-added -> root-changed -> leaf-deleted order.
 func sortChanges(changes []types.Change) {
 	score := map[string]int{"CREATE": 1, "UPSERT": 2, "DELETE": 3}
-	sort.Slice(changes, func(i, j int) bool {
-		if changes[i].Action == changes[j].Action {
-			return *changes[i].ResourceRecordSet.Name < *changes[j].ResourceRecordSet.Name
+	slices.SortFunc(changes, func(a, b types.Change) int {
+		if a.Action == b.Action {
+			return strings.Compare(*a.ResourceRecordSet.Name, *b.ResourceRecordSet.Name)
 		}
-		return score[string(changes[i].Action)] < score[string(changes[j].Action)]
+		if score[string(a.Action)] < score[string(b.Action)] {
+			return -1
+		}
+		if score[string(a.Action)] > score[string(b.Action)] {
+			return 1
+		}
+		return 0
 	})
 }
 
@@ -329,8 +351,9 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 	var req route53.ListResourceRecordSetsInput
 	req.HostedZoneId = &c.zoneID
 	existing := make(map[string]recordSet)
+	log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID)
 	for page := 0; ; page++ {
-		log.Info("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
+		log.Debug("Loading existing TXT records", "name", name, "zone", c.zoneID, "page", page)
 		resp, err := c.api.ListResourceRecordSets(context.TODO(), &req)
 		if err != nil {
 			return existing, err
@@ -360,7 +383,7 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 		req.StartRecordName = resp.NextRecordName
 		req.StartRecordType = resp.NextRecordType
 	}
-
+	log.Info("Loaded existing TXT records", "name", name, "zone", c.zoneID, "records", len(existing))
 	return existing, nil
 }
 

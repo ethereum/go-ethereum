@@ -325,9 +325,6 @@ func (c *Console) Welcome() {
 	// Print some generic Geth metadata
 	if res, err := c.jsre.Run(`
 		var message = "instance: " + web3.version.node + "\n";
-		try {
-			message += "coinbase: " + eth.coinbase + "\n";
-		} catch (err) {}
 		message += "at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")\n";
 		try {
 			message += " datadir: " + admin.datadir + "\n";

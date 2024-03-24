@@ -19,6 +19,7 @@ package v4test
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -119,7 +120,7 @@ func (te *testenv) checkPingPong(pingHash []byte) error {
 // and a PING. The two packets do not have to be in any particular order.
 func (te *testenv) checkPong(reply v4wire.Packet, pingHash []byte) error {
 	if reply == nil {
-		return fmt.Errorf("expected PONG reply, got nil")
+		return errors.New("expected PONG reply, got nil")
 	}
 	if reply.Kind() != v4wire.PongPacket {
 		return fmt.Errorf("expected PONG reply, got %v %v", reply.Name(), reply)
@@ -496,7 +497,7 @@ func FindnodeAmplificationWrongIP(t *utesting.T) {
 	// If we receive a NEIGHBORS response, the attack worked and the test fails.
 	reply, _, _ := te.read(te.l2)
 	if reply != nil {
-		t.Error("Got NEIGHORS response for FINDNODE from wrong IP")
+		t.Error("Got NEIGHBORS response for FINDNODE from wrong IP")
 	}
 }
 

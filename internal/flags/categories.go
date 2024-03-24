@@ -20,10 +20,11 @@ import "github.com/urfave/cli/v2"
 
 const (
 	EthCategory        = "ETHEREUM"
-	LightCategory      = "LIGHT CLIENT"
+	BeaconCategory     = "BEACON CHAIN"
 	DevCategory        = "DEVELOPER CHAIN"
-	EthashCategory     = "ETHASH"
-	TxPoolCategory     = "TRANSACTION POOL"
+	StateCategory      = "STATE HISTORY MANAGEMENT"
+	TxPoolCategory     = "TRANSACTION POOL (EVM)"
+	BlobPoolCategory   = "TRANSACTION POOL (BLOB)"
 	PerfCategory       = "PERFORMANCE TUNING"
 	AccountCategory    = "ACCOUNT"
 	APICategory        = "API AND CONSOLE"
@@ -34,6 +35,7 @@ const (
 	LoggingCategory    = "LOGGING AND DEBUGGING"
 	MetricsCategory    = "METRICS AND STATS"
 	MiscCategory       = "MISC"
+	TestingCategory    = "TESTING"
 	DeprecatedCategory = "ALIASED (deprecated)"
 )
 

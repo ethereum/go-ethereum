@@ -37,7 +37,7 @@ var (
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://geth.ethereum.org/docs/interface/javascript-console.`,
+See https://geth.ethereum.org/docs/interacting-with-geth/javascript-console.`,
 	}
 
 	attachCommand = &cli.Command{
@@ -49,7 +49,7 @@ See https://geth.ethereum.org/docs/interface/javascript-console.`,
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://geth.ethereum.org/docs/interface/javascript-console.
+See https://geth.ethereum.org/docs/interacting-with-geth/javascript-console.
 This command allows to open a console on a running geth node.`,
 	}
 
@@ -61,7 +61,7 @@ This command allows to open a console on a running geth node.`,
 		Flags:     flags.Merge(nodeFlags, consoleFlags),
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://geth.ethereum.org/docs/interface/javascript-console`,
+JavaScript API. See https://geth.ethereum.org/docs/interacting-with-geth/javascript-console`,
 	}
 )
 
@@ -75,10 +75,7 @@ func localConsole(ctx *cli.Context) error {
 	defer stack.Close()
 
 	// Attach to the newly started node and create the JavaScript console.
-	client, err := stack.Attach()
-	if err != nil {
-		return fmt.Errorf("failed to attach to the inproc geth: %v", err)
-	}
+	client := stack.Attach()
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
 		DocRoot: ctx.String(utils.JSpathFlag.Name),

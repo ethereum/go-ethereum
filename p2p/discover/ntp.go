@@ -22,24 +22,16 @@ package discover
 import (
 	"fmt"
 	"net"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/exp/slices"
 )
 
 const (
 	ntpPool   = "pool.ntp.org" // ntpPool is the NTP server to query for the current time
 	ntpChecks = 3              // Number of measurements to do against the NTP server
 )
-
-// durationSlice attaches the methods of sort.Interface to []time.Duration,
-// sorting in increasing order.
-type durationSlice []time.Duration
-
-func (s durationSlice) Len() int           { return len(s) }
-func (s durationSlice) Less(i, j int) bool { return s[i] < s[j] }
-func (s durationSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // checkClockDrift queries an NTP server for clock drifts and warns the user if
 // one large enough is detected.
@@ -109,7 +101,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 		drifts = append(drifts, sent.Sub(t)+elapsed/2)
 	}
 	// Calculate average drift (drop two extremities to avoid outliers)
-	sort.Sort(durationSlice(drifts))
+	slices.Sort(drifts)
 
 	drift := time.Duration(0)
 	for i := 1; i < len(drifts)-1; i++ {

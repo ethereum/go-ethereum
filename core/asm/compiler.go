@@ -17,6 +17,8 @@
 package asm
 
 import (
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -30,7 +32,7 @@ import (
 // and holds the tokens for the program.
 type Compiler struct {
 	tokens []token
-	binary []interface{}
+	out    []byte
 
 	labels map[string]int
 
@@ -47,15 +49,13 @@ func NewCompiler(debug bool) *Compiler {
 	}
 }
 
-// Feed feeds tokens in to ch and are interpreted by
+// Feed feeds tokens into ch and are interpreted by
 // the compiler.
 //
-// feed is the first pass in the compile stage as it
-// collects the used labels in the program and keeps a
-// program counter which is used to determine the locations
-// of the jump dests. The labels can than be used in the
-// second stage to push labels and determine the right
-// position.
+// feed is the first pass in the compile stage as it collects the used labels in the
+// program and keeps a program counter which is used to determine the locations of the
+// jump dests. The labels can than be used in the second stage to push labels and
+// determine the right position.
 func (c *Compiler) Feed(ch <-chan token) {
 	var prev token
 	for i := range ch {
@@ -79,7 +79,6 @@ func (c *Compiler) Feed(ch <-chan token) {
 				c.pc++
 			}
 		}
-
 		c.tokens = append(c.tokens, i)
 		prev = i
 	}
@@ -88,12 +87,11 @@ func (c *Compiler) Feed(ch <-chan token) {
 	}
 }
 
-// Compile compiles the current tokens and returns a
-// binary string that can be interpreted by the EVM
-// and an error if it failed.
+// Compile compiles the current tokens and returns a binary string that can be interpreted
+// by the EVM and an error if it failed.
 //
-// compile is the second stage in the compile phase
-// which compiles the tokens to EVM instructions.
+// compile is the second stage in the compile phase which compiles the tokens to EVM
+// instructions.
 func (c *Compiler) Compile() (string, []error) {
 	var errors []error
 	// continue looping over the tokens until
@@ -105,16 +103,8 @@ func (c *Compiler) Compile() (string, []error) {
 	}
 
 	// turn the binary to hex
-	var bin strings.Builder
-	for _, v := range c.binary {
-		switch v := v.(type) {
-		case vm.OpCode:
-			bin.WriteString(fmt.Sprintf("%x", []byte{byte(v)}))
-		case []byte:
-			bin.WriteString(fmt.Sprintf("%x", v))
-		}
-	}
-	return bin.String(), errors
+	h := hex.EncodeToString(c.out)
+	return h, errors
 }
 
 // next returns the next token and increments the
@@ -156,88 +146,114 @@ func (c *Compiler) compileLine() error {
 	return nil
 }
 
-// compileNumber compiles the number to bytes
-func (c *Compiler) compileNumber(element token) (int, error) {
-	num := math.MustParseBig256(element.text).Bytes()
-	if len(num) == 0 {
-		num = []byte{0}
+// parseNumber compiles the number to bytes
+func parseNumber(tok token) ([]byte, error) {
+	if tok.typ != number {
+		panic("parseNumber of non-number token")
 	}
-	c.pushBin(num)
-	return len(num), nil
+	num, ok := math.ParseBig256(tok.text)
+	if !ok {
+		return nil, errors.New("invalid number")
+	}
+	bytes := num.Bytes()
+	if len(bytes) == 0 {
+		bytes = []byte{0}
+	}
+	return bytes, nil
 }
 
 // compileElement compiles the element (push & label or both)
 // to a binary representation and may error if incorrect statements
 // where fed.
 func (c *Compiler) compileElement(element token) error {
-	// check for a jump. jumps must be read and compiled
-	// from right to left.
-	if isJump(element.text) {
-		rvalue := c.next()
-		switch rvalue.typ {
-		case number:
-			// TODO figure out how to return the error properly
-			c.compileNumber(rvalue)
-		case stringValue:
-			// strings are quoted, remove them.
-			c.pushBin(rvalue.text[1 : len(rvalue.text)-2])
-		case label:
-			c.pushBin(vm.PUSH4)
-			pos := big.NewInt(int64(c.labels[rvalue.text])).Bytes()
-			pos = append(make([]byte, 4-len(pos)), pos...)
-			c.pushBin(pos)
-		case lineEnd:
-			c.pos--
-		default:
-			return compileErr(rvalue, rvalue.text, "number, string or label")
-		}
-		// push the operation
-		c.pushBin(toBinary(element.text))
+	switch {
+	case isJump(element.text):
+		return c.compileJump(element.text)
+	case isPush(element.text):
+		return c.compilePush()
+	default:
+		c.outputOpcode(toBinary(element.text))
 		return nil
-	} else if isPush(element.text) {
-		// handle pushes. pushes are read from left to right.
-		var value []byte
-
-		rvalue := c.next()
-		switch rvalue.typ {
-		case number:
-			value = math.MustParseBig256(rvalue.text).Bytes()
-			if len(value) == 0 {
-				value = []byte{0}
-			}
-		case stringValue:
-			value = []byte(rvalue.text[1 : len(rvalue.text)-1])
-		case label:
-			value = big.NewInt(int64(c.labels[rvalue.text])).Bytes()
-			value = append(make([]byte, 4-len(value)), value...)
-		default:
-			return compileErr(rvalue, rvalue.text, "number, string or label")
-		}
-
-		if len(value) > 32 {
-			return fmt.Errorf("%d type error: unsupported string or number with size > 32", rvalue.lineno)
-		}
-
-		c.pushBin(vm.OpCode(int(vm.PUSH1) - 1 + len(value)))
-		c.pushBin(value)
-	} else {
-		c.pushBin(toBinary(element.text))
 	}
+}
 
+func (c *Compiler) compileJump(jumpType string) error {
+	rvalue := c.next()
+	switch rvalue.typ {
+	case number:
+		numBytes, err := parseNumber(rvalue)
+		if err != nil {
+			return err
+		}
+		c.outputBytes(numBytes)
+
+	case stringValue:
+		// strings are quoted, remove them.
+		str := rvalue.text[1 : len(rvalue.text)-2]
+		c.outputBytes([]byte(str))
+
+	case label:
+		c.outputOpcode(vm.PUSH4)
+		pos := big.NewInt(int64(c.labels[rvalue.text])).Bytes()
+		pos = append(make([]byte, 4-len(pos)), pos...)
+		c.outputBytes(pos)
+
+	case lineEnd:
+		// push without argument is supported, it just takes the destination from the stack.
+		c.pos--
+
+	default:
+		return compileErr(rvalue, rvalue.text, "number, string or label")
+	}
+	// push the operation
+	c.outputOpcode(toBinary(jumpType))
+	return nil
+}
+
+func (c *Compiler) compilePush() error {
+	// handle pushes. pushes are read from left to right.
+	var value []byte
+	rvalue := c.next()
+	switch rvalue.typ {
+	case number:
+		value = math.MustParseBig256(rvalue.text).Bytes()
+		if len(value) == 0 {
+			value = []byte{0}
+		}
+	case stringValue:
+		value = []byte(rvalue.text[1 : len(rvalue.text)-1])
+	case label:
+		value = big.NewInt(int64(c.labels[rvalue.text])).Bytes()
+		value = append(make([]byte, 4-len(value)), value...)
+	default:
+		return compileErr(rvalue, rvalue.text, "number, string or label")
+	}
+	if len(value) > 32 {
+		return fmt.Errorf("%d: string or number size > 32 bytes", rvalue.lineno+1)
+	}
+	c.outputOpcode(vm.OpCode(int(vm.PUSH1) - 1 + len(value)))
+	c.outputBytes(value)
 	return nil
 }
 
 // compileLabel pushes a jumpdest to the binary slice.
 func (c *Compiler) compileLabel() {
-	c.pushBin(vm.JUMPDEST)
+	c.outputOpcode(vm.JUMPDEST)
 }
 
-// pushBin pushes the value v to the binary stack.
-func (c *Compiler) pushBin(v interface{}) {
+func (c *Compiler) outputOpcode(op vm.OpCode) {
 	if c.debug {
-		fmt.Printf("%d: %v\n", len(c.binary), v)
+		fmt.Printf("%d: %v\n", len(c.out), op)
 	}
-	c.binary = append(c.binary, v)
+	c.out = append(c.out, byte(op))
+}
+
+// output pushes the value v to the binary stack.
+func (c *Compiler) outputBytes(b []byte) {
+	if c.debug {
+		fmt.Printf("%d: %x\n", len(c.out), b)
+	}
+	c.out = append(c.out, b...)
 }
 
 // isPush returns whether the string op is either any of
@@ -264,13 +280,13 @@ type compileError struct {
 }
 
 func (err compileError) Error() string {
-	return fmt.Sprintf("%d syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
+	return fmt.Sprintf("%d: syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
 }
 
 func compileErr(c token, got, want string) error {
 	return compileError{
 		got:    got,
 		want:   want,
-		lineno: c.lineno,
+		lineno: c.lineno + 1,
 	}
 }

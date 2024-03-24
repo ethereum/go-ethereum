@@ -39,11 +39,13 @@ import (
 )
 
 var (
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testSlot    = common.HexToHash("0xdeadbeef")
-	testValue   = crypto.Keccak256Hash(testSlot[:])
-	testBalance = big.NewInt(2e15)
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr     = crypto.PubkeyToAddress(testKey.PublicKey)
+	testContract = common.HexToAddress("0xbeef")
+	testEmpty    = common.HexToAddress("0xeeee")
+	testSlot     = common.HexToHash("0xdeadbeef")
+	testValue    = crypto.Keccak256Hash(testSlot[:])
+	testBalance  = big.NewInt(2e15)
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
@@ -56,7 +58,6 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -79,8 +80,12 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
-		Config:    params.AllEthashProtocolChanges,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}}},
+		Config: params.AllEthashProtocolChanges,
+		Alloc: types.GenesisAlloc{
+			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
+			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
+			testEmpty:    {Balance: big.NewInt(1)},
+		},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
@@ -95,10 +100,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 
 func TestGethClient(t *testing.T) {
 	backend, _ := newTestBackend(t)
-	client, err := backend.Attach()
-	if err != nil {
-		t.Fatal(err)
-	}
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
@@ -107,8 +109,20 @@ func TestGethClient(t *testing.T) {
 		test func(t *testing.T)
 	}{
 		{
-			"TestGetProof",
-			func(t *testing.T) { testGetProof(t, client) },
+			"TestGetProof1",
+			func(t *testing.T) { testGetProof(t, client, testAddr) },
+		}, {
+			"TestGetProof2",
+			func(t *testing.T) { testGetProof(t, client, testContract) },
+		}, {
+			"TestGetProofEmpty",
+			func(t *testing.T) { testGetProof(t, client, testEmpty) },
+		}, {
+			"TestGetProofNonExistent",
+			func(t *testing.T) { testGetProofNonExistent(t, client) },
+		}, {
+			"TestGetProofCanonicalizeKeys",
+			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
 		}, {
 			"TestGCStats",
 			func(t *testing.T) { testGCStats(t, client) },
@@ -127,9 +141,12 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
+		}, {
+			"TestCallContractWithBlockOverrides",
+			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
-		// one block. The `testAcessList` fails if the miner has not yet created a
+		// one block. The `testAccessList` fails if the miner has not yet created a
 		// new pending-block after the import event.
 		// Hence: this test should be last, execute the tests serially.
 		{
@@ -152,7 +169,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       &common.Address{},
 		Gas:      21000,
-		GasPrice: big.NewInt(765625000),
+		GasPrice: big.NewInt(875000000),
 		Value:    big.NewInt(1),
 	}
 	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
@@ -199,37 +216,103 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetProof(t *testing.T, client *rpc.Client) {
+func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
-	result, err := ec.GetProof(context.Background(), testAddr, []string{testSlot.String()}, nil)
+	result, err := ec.GetProof(context.Background(), addr, []string{testSlot.String()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(result.Address[:], testAddr[:]) {
-		t.Fatalf("unexpected address, want: %v got: %v", testAddr, result.Address)
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
 	}
 	// test nonce
-	nonce, _ := ethcl.NonceAt(context.Background(), result.Address, nil)
-	if result.Nonce != nonce {
+	if nonce, _ := ethcl.NonceAt(context.Background(), addr, nil); result.Nonce != nonce {
 		t.Fatalf("invalid nonce, want: %v got: %v", nonce, result.Nonce)
 	}
 	// test balance
-	balance, _ := ethcl.BalanceAt(context.Background(), result.Address, nil)
-	if result.Balance.Cmp(balance) != 0 {
+	if balance, _ := ethcl.BalanceAt(context.Background(), addr, nil); result.Balance.Cmp(balance) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
 	}
 	// test storage
 	if len(result.StorageProof) != 1 {
 		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
 	}
-	proof := result.StorageProof[0]
-	slotValue, _ := ethcl.StorageAt(context.Background(), testAddr, testSlot, nil)
-	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
-		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
+	for _, proof := range result.StorageProof {
+		if proof.Key != testSlot.String() {
+			t.Fatalf("invalid storage proof key, want: %q, got: %q", testSlot.String(), proof.Key)
+		}
+		slotValue, _ := ethcl.StorageAt(context.Background(), addr, common.HexToHash(proof.Key), nil)
+		if have, want := common.BigToHash(proof.Value), common.BytesToHash(slotValue); have != want {
+			t.Fatalf("addr %x, invalid storage proof value: have: %v, want: %v", addr, have, want)
+		}
 	}
-	if proof.Key != testSlot.String() {
-		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
+	// test code
+	code, _ := ethcl.CodeAt(context.Background(), addr, nil)
+	if have, want := result.CodeHash, crypto.Keccak256Hash(code); have != want {
+		t.Fatalf("codehash wrong, have %v want %v ", have, want)
+	}
+}
+
+func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	// Tests with non-canon input for storage keys.
+	// Here we check that the storage key is canonicalized.
+	result, err := ec.GetProof(context.Background(), testAddr, []string{"0x0dEadbeef"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != "0xdeadbeef" {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+	if result, err = ec.GetProof(context.Background(), testAddr, []string{"0x000deadbeef"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != "0xdeadbeef" {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+
+	// If the requested storage key is 32 bytes long, it will be returned as is.
+	hashSizedKey := "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+	result, err = ec.GetProof(context.Background(), testAddr, []string{hashSizedKey}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProof[0].Key != hashSizedKey {
+		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+}
+
+func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
+	addr := common.HexToAddress("0x0001")
+	ec := New(client)
+	result, err := ec.GetProof(context.Background(), addr, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
+	}
+	// test nonce
+	if result.Nonce != 0 {
+		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
+	}
+	// test balance
+	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
+	}
+	// test storage
+	if have := len(result.StorageProof); have != 0 {
+		t.Fatalf("invalid storage proof, want 0 proof, got %v proof(s)", have)
+	}
+	// test codeHash
+	if have, want := result.CodeHash, (common.Hash{}); have != want {
+		t.Fatalf("codehash wrong, have %v want %v ", have, want)
+	}
+	// test codeHash
+	if have, want := result.StorageHash, (common.Hash{}); have != want {
+		t.Fatalf("storagehash wrong, have %v want %v ", have, want)
 	}
 }
 
@@ -366,17 +449,17 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 
 func TestOverrideAccountMarshal(t *testing.T) {
 	om := map[common.Address]OverrideAccount{
-		common.Address{0x11}: OverrideAccount{
-			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+		{0x11}: {
+			// Zero-valued nonce is not overridden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
-		common.Address{0xaa}: OverrideAccount{
+		{0xaa}: {
 			Nonce: 5,
 		},
-		common.Address{0xbb}: OverrideAccount{
+		{0xbb}: {
 			Code: []byte{1},
 		},
-		common.Address{0xcc}: OverrideAccount{
+		{0xcc}: {
 			// 'code', 'balance', 'state' should be set when input is
 			// a non-nil but empty value.
 			Code:    []byte{},
@@ -411,5 +494,77 @@ func TestOverrideAccountMarshal(t *testing.T) {
 	if string(marshalled) != expected {
 		t.Error("wrong output:", string(marshalled))
 		t.Error("want:", expected)
+	}
+}
+
+func TestBlockOverridesMarshal(t *testing.T) {
+	for i, tt := range []struct {
+		bo   BlockOverrides
+		want string
+	}{
+		{
+			bo:   BlockOverrides{},
+			want: `{}`,
+		},
+		{
+			bo: BlockOverrides{
+				Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
+			},
+			want: `{"coinbase":"0x1111111111111111111111111111111111111111"}`,
+		},
+		{
+			bo: BlockOverrides{
+				Number:     big.NewInt(1),
+				Difficulty: big.NewInt(2),
+				Time:       3,
+				GasLimit:   4,
+				BaseFee:    big.NewInt(5),
+			},
+			want: `{"number":"0x1","difficulty":"0x2","time":"0x3","gasLimit":"0x4","baseFee":"0x5"}`,
+		},
+	} {
+		marshalled, err := json.Marshal(&tt.bo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(marshalled) != tt.want {
+			t.Errorf("Testcase #%d failed. expected\n%s\ngot\n%s", i, tt.want, string(marshalled))
+		}
+	}
+}
+
+func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	msg := ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      50000,
+		GasPrice: big.NewInt(1000000000),
+		Value:    big.NewInt(1),
+	}
+	override := OverrideAccount{
+		// Returns coinbase address.
+		Code: common.FromHex("0x41806000526014600cf3"),
+	}
+	mapAcc := make(map[common.Address]OverrideAccount)
+	mapAcc[common.Address{}] = override
+	res, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(res, common.FromHex("0x0000000000000000000000000000000000000000")) {
+		t.Fatalf("unexpected result: %x", res)
+	}
+
+	// Now test with block overrides
+	bo := BlockOverrides{
+		Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
+	}
+	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, big.NewInt(0), &mapAcc, bo)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
+		t.Fatalf("unexpected result: %x", res)
 	}
 }

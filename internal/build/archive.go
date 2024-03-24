@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,7 +91,7 @@ func WriteArchive(name string, files []string) (err error) {
 	}()
 	archive, basename := NewArchive(archfd)
 	if archive == nil {
-		return fmt.Errorf("unknown archive extension")
+		return errors.New("unknown archive extension")
 	}
 	fmt.Println(name)
 	if err := archive.Directory(basename); err != nil {

@@ -73,11 +73,7 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 		return err
 	}
 	f = nil
-
-	if err := os.Rename(fname, destPath); err != nil {
-		return err
-	}
-	return nil
+	return os.Rename(fname, destPath)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -116,4 +112,20 @@ func truncateFreezerFile(file *os.File, size int64) error {
 		return err
 	}
 	return nil
+}
+
+// grow prepares the slice space for new item, and doubles the slice capacity
+// if space is not enough.
+func grow(buf []byte, n int) []byte {
+	if cap(buf)-len(buf) < n {
+		newcap := 2 * cap(buf)
+		if newcap-len(buf) < n {
+			newcap = len(buf) + n
+		}
+		nbuf := make([]byte, len(buf), newcap)
+		copy(nbuf, buf)
+		buf = nbuf
+	}
+	buf = buf[:len(buf)+n]
+	return buf
 }

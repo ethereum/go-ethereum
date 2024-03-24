@@ -16,11 +16,15 @@ func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
 			case Counter:
-				w.Info(fmt.Sprintf("counter %s: count: %d", name, metric.Count()))
+				w.Info(fmt.Sprintf("counter %s: count: %d", name, metric.Snapshot().Count()))
+			case CounterFloat64:
+				w.Info(fmt.Sprintf("counter %s: count: %f", name, metric.Snapshot().Count()))
 			case Gauge:
-				w.Info(fmt.Sprintf("gauge %s: value: %d", name, metric.Value()))
+				w.Info(fmt.Sprintf("gauge %s: value: %d", name, metric.Snapshot().Value()))
 			case GaugeFloat64:
-				w.Info(fmt.Sprintf("gauge %s: value: %f", name, metric.Value()))
+				w.Info(fmt.Sprintf("gauge %s: value: %f", name, metric.Snapshot().Value()))
+			case GaugeInfo:
+				w.Info(fmt.Sprintf("gauge %s: value: %s", name, metric.Snapshot().Value()))
 			case Healthcheck:
 				metric.Check()
 				w.Info(fmt.Sprintf("healthcheck %s: error: %v", name, metric.Error()))

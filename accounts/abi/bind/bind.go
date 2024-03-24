@@ -79,7 +79,7 @@ func isKeyWord(arg string) bool {
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
-// enforces compile time type safety and naming convention opposed to having to
+// enforces compile time type safety and naming convention as opposed to having to
 // manually maintain hard coded strings that break on runtime.
 func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
 	var (
@@ -133,11 +133,18 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
-
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
 			if !original.IsConstant() {
 				identifiers = transactIdentifiers
+			}
+			// Name shouldn't start with a digit. It will make the generated code invalid.
+			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
+				normalizedName = fmt.Sprintf("M%s", normalizedName)
+				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
+					_, ok := identifiers[name]
+					return ok
+				})
 			}
 			if identifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
@@ -182,6 +189,14 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 			// Ensure there is no duplicated identifier
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			// Name shouldn't start with a digit. It will make the generated code invalid.
+			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
+				normalizedName = fmt.Sprintf("E%s", normalizedName)
+				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
+					_, ok := eventIdentifiers[name]
+					return ok
+				})
+			}
 			if eventIdentifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
@@ -348,7 +363,7 @@ func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	// parameters that are not value types i.e. arrays and structs are not
 	// stored directly but instead a keccak256-hash of an encoding is stored.
 	//
-	// We only convert stringS and bytes to hash, still need to deal with
+	// We only convert strings and bytes to hash, still need to deal with
 	// array(both fixed-size and dynamic-size) and struct.
 	if bound == "string" || bound == "[]byte" {
 		bound = "common.Hash"

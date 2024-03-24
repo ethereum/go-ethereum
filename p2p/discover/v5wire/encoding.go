@@ -94,6 +94,8 @@ const (
 	// Should reject packets smaller than minPacketSize.
 	minPacketSize = 63
 
+	maxPacketSize = 1280
+
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
 )
@@ -122,6 +124,13 @@ var (
 	ErrInvalidReqID = errors.New("request ID larger than 8 bytes")
 )
 
+// IsInvalidHeader reports whether 'err' is related to an invalid packet header. When it
+// returns false, it is pretty certain that the packet causing the error does not belong
+// to discv5.
+func IsInvalidHeader(err error) bool {
+	return err == errTooShort || err == errInvalidHeader || err == errMsgTooShort
+}
+
 // Packet sizes.
 var (
 	sizeofStaticHeader      = binary.Size(StaticHeader{})
@@ -147,6 +156,7 @@ type Codec struct {
 	msgctbuf []byte       // message data ciphertext
 
 	// decoder buffer
+	decbuf []byte
 	reader bytes.Reader
 }
 
@@ -158,6 +168,7 @@ func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, pr
 		privkey:    key,
 		sc:         NewSessionCache(1024, clock),
 		protocolID: DefaultProtocolID,
+		decbuf:     make([]byte, maxPacketSize),
 	}
 	if protocolID != nil {
 		c.protocolID = *protocolID
@@ -356,11 +367,11 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 	// key is part of the ID nonce signature.
 	var remotePubkey = new(ecdsa.PublicKey)
 	if err := challenge.Node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
-		return nil, nil, fmt.Errorf("can't find secp256k1 key for recipient")
+		return nil, nil, errors.New("can't find secp256k1 key for recipient")
 	}
 	ephkey, err := c.sc.ephemeralKeyGen()
 	if err != nil {
-		return nil, nil, fmt.Errorf("can't generate ephemeral key")
+		return nil, nil, errors.New("can't generate ephemeral key")
 	}
 	ephpubkey := EncodePubkey(&ephkey.PublicKey)
 	auth.pubkey = ephpubkey[:]
@@ -384,7 +395,7 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 	// Create session keys.
 	sec := deriveKeys(sha256.New, ephkey, remotePubkey, c.localnode.ID(), challenge.Node.ID(), cdata)
 	if sec == nil {
-		return nil, nil, fmt.Errorf("key derivation failed")
+		return nil, nil, errors.New("key derivation failed")
 	}
 	return auth, sec, err
 }
@@ -424,10 +435,13 @@ func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []
 }
 
 // Decode decodes a discovery packet.
-func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	if len(input) < minPacketSize {
+func (c *Codec) Decode(inputData []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
+	if len(inputData) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
+	// Copy the packet to a tmp buffer to avoid modifying it.
+	c.decbuf = append(c.decbuf[:0], inputData...)
+	input := c.decbuf
 	// Unmask the static header.
 	var head Header
 	copy(head.IV[:], input[:sizeofMaskingIV])

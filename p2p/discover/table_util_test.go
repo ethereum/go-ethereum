@@ -24,13 +24,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"golang.org/x/exp/slices"
 )
 
 var nullNode *enode.Node
@@ -42,8 +41,9 @@ func init() {
 }
 
 func newTestTable(t transport) (*Table, *enode.DB) {
+	cfg := Config{}
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, nil, log.Root())
+	tab, _ := newTable(t, db, cfg)
 	go tab.loop()
 	return tab, db
 }
@@ -52,6 +52,7 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
+	r.Set(enr.UDP(30303))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
@@ -108,8 +109,11 @@ func fillBucket(tab *Table, n *node) (last *node) {
 
 // fillTable adds nodes the table to the end of their corresponding bucket
 // if the bucket is not full. The caller must not hold tab.mutex.
-func fillTable(tab *Table, nodes []*node) {
+func fillTable(tab *Table, nodes []*node, setLive bool) {
 	for _, n := range nodes {
+		if setLive {
+			n.livenessChecks = 1
+		}
 		tab.addSeenNode(n)
 	}
 }
@@ -174,7 +178,7 @@ func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 }
 
 func hasDuplicates(slice []*node) bool {
-	seen := make(map[enode.ID]bool)
+	seen := make(map[enode.ID]bool, len(slice))
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))
@@ -216,14 +220,14 @@ func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
 }
 
 func sortByID(nodes []*enode.Node) {
-	sort.Slice(nodes, func(i, j int) bool {
-		return string(nodes[i].ID().Bytes()) < string(nodes[j].ID().Bytes())
+	slices.SortFunc(nodes, func(a, b *enode.Node) int {
+		return bytes.Compare(a.ID().Bytes(), b.ID().Bytes())
 	})
 }
 
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
-	return sort.SliceIsSorted(slice, func(i, j int) bool {
-		return enode.DistCmp(distbase, slice[i].ID(), slice[j].ID()) < 0
+	return slices.IsSortedFunc(slice, func(a, b *node) int {
+		return enode.DistCmp(distbase, a.ID(), b.ID())
 	})
 }
 

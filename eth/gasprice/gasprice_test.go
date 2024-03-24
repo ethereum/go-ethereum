@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -49,10 +50,10 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 		number = 0
 	}
 	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock().Header(), nil
+		return b.chain.CurrentFinalBlock(), nil
 	}
 	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock().Header(), nil
+		return b.chain.CurrentSafeBlock(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -75,10 +76,10 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 		number = 0
 	}
 	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock(), nil
+		number = rpc.BlockNumber(b.chain.CurrentFinalBlock().Number.Uint64())
 	}
 	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock(), nil
+		number = rpc.BlockNumber(b.chain.CurrentSafeBlock().Number.Uint64())
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -97,12 +98,13 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return b.chain.GetReceiptsByHash(hash), nil
 }
 
-func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+func (b *testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	if b.pending {
 		block := b.chain.GetBlockByNumber(testHead + 1)
-		return block, b.chain.GetReceiptsByHash(block.Hash())
+		state, _ := b.chain.StateAt(block.Root())
+		return block, b.chain.GetReceiptsByHash(block.Hash()), state
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -126,7 +128,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		config = *params.TestChainConfig // needs copy because it is modified below
 		gspec  = &core.Genesis{
 			Config: &config,
-			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Alloc:  types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
@@ -169,8 +171,8 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
 	chain.InsertChain(blocks)
-	chain.SetFinalized(chain.GetBlockByNumber(25))
-	chain.SetSafe(chain.GetBlockByNumber(25))
+	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
+	chain.SetSafe(chain.GetBlockByNumber(25).Header())
 	return &testBackend{chain: chain, pending: pending}
 }
 

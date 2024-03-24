@@ -93,13 +93,13 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 
 // callback returns the callback corresponding to the given RPC method name.
 func (r *serviceRegistry) callback(method string) *callback {
-	elem := strings.SplitN(method, serviceMethodSeparator, 2)
-	if len(elem) != 2 {
+	before, after, found := strings.Cut(method, serviceMethodSeparator)
+	if !found {
 		return nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.services[elem[0]].callbacks[elem[1]]
+	return r.services[before].callbacks[after]
 }
 
 // subscription returns a subscription callback in the given service.
@@ -214,19 +214,8 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	return results[0].Interface(), nil
 }
 
-// Is t context.Context or *context.Context?
-func isContextType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t == contextType
-}
-
 // Does t satisfy the error interface?
 func isErrorType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
 	return t.Implements(errorType)
 }
 
@@ -245,7 +234,7 @@ func isPubSub(methodType reflect.Type) bool {
 	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
 		return false
 	}
-	return isContextType(methodType.In(1)) &&
+	return methodType.In(1) == contextType &&
 		isSubscriptionType(methodType.Out(0)) &&
 		isErrorType(methodType.Out(1))
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -169,7 +170,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost) {
+			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 		}
@@ -187,7 +188,12 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 		// outside of this function, as part of the dynamic gas, and that will make it
 		// also become correctly reported to tracers.
 		contract.Gas += coldCost
-		return gas + coldCost, nil
+
+		var overflow bool
+		if gas, overflow = math.SafeAdd(gas, coldCost); overflow {
+			return 0, ErrGasUintOverflow
+		}
+		return gas, nil
 	}
 }
 
@@ -197,7 +203,7 @@ var (
 	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCall)
 	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCode)
 	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
-	// gasSelfdestructEIP3529 implements the changes in EIP-2539 (no refunds)
+	// gasSelfdestructEIP3529 implements the changes in EIP-3529 (no refunds)
 	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
 
 	// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
@@ -214,12 +220,12 @@ var (
 	// see gasSStoreEIP2200(...) in core/vm/gas_table.go for more info about how EIP 2200 is specified
 	gasSStoreEIP2929 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP2200)
 
-	// gasSStoreEIP2539 implements gas cost for SSTORE according to EIP-2539
+	// gasSStoreEIP3529 implements gas cost for SSTORE according to EIP-3529
 	// Replace `SSTORE_CLEARS_SCHEDULE` with `SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST` (4,800)
 	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
 )
 
-// makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-2539
+// makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-3529
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
@@ -235,7 +241,7 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
 		}
-		if refundsEnabled && !evm.StateDB.HasSuicided(contract.Address()) {
+		if refundsEnabled && !evm.StateDB.HasSelfDestructed(contract.Address()) {
 			evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 		}
 		return gas, nil

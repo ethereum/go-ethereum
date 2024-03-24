@@ -19,9 +19,12 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
-	_ "net/http/pprof" // nolint: gosec
+	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -32,6 +35,7 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Memsize memsizeui.Handler
@@ -43,15 +47,28 @@ var (
 		Value:    3,
 		Category: flags.LoggingCategory,
 	}
+	logVmoduleFlag = &cli.StringFlag{
+		Name:     "log.vmodule",
+		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
 	vmoduleFlag = &cli.StringFlag{
 		Name:     "vmodule",
 		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
 		Value:    "",
+		Hidden:   true,
 		Category: flags.LoggingCategory,
 	}
 	logjsonFlag = &cli.BoolFlag{
 		Name:     "log.json",
 		Usage:    "Format logs with JSON",
+		Hidden:   true,
+		Category: flags.LoggingCategory,
+	}
+	logFormatFlag = &cli.StringFlag{
+		Name:     "log.format",
+		Usage:    "Log format to use (json|logfmt|terminal)",
 		Category: flags.LoggingCategory,
 	}
 	logFileFlag = &cli.StringFlag{
@@ -59,15 +76,33 @@ var (
 		Usage:    "Write logs to a file",
 		Category: flags.LoggingCategory,
 	}
-	backtraceAtFlag = &cli.StringFlag{
-		Name:     "log.backtrace",
-		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value:    "",
+	logRotateFlag = &cli.BoolFlag{
+		Name:     "log.rotate",
+		Usage:    "Enables log file rotation",
 		Category: flags.LoggingCategory,
 	}
-	debugFlag = &cli.BoolFlag{
-		Name:     "log.debug",
-		Usage:    "Prepends log messages with call-site location (file and line number)",
+	logMaxSizeMBsFlag = &cli.IntFlag{
+		Name:     "log.maxsize",
+		Usage:    "Maximum size in MBs of a single log file",
+		Value:    100,
+		Category: flags.LoggingCategory,
+	}
+	logMaxBackupsFlag = &cli.IntFlag{
+		Name:     "log.maxbackups",
+		Usage:    "Maximum number of log files to retain",
+		Value:    10,
+		Category: flags.LoggingCategory,
+	}
+	logMaxAgeFlag = &cli.IntFlag{
+		Name:     "log.maxage",
+		Usage:    "Maximum number of days to retain a log file",
+		Value:    30,
+		Category: flags.LoggingCategory,
+	}
+	logCompressFlag = &cli.BoolFlag{
+		Name:     "log.compress",
+		Usage:    "Compress the log files",
+		Value:    false,
 		Category: flags.LoggingCategory,
 	}
 	pprofFlag = &cli.BoolFlag{
@@ -113,11 +148,16 @@ var (
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
 	verbosityFlag,
+	logVmoduleFlag,
 	vmoduleFlag,
 	logjsonFlag,
+	logFormatFlag,
 	logFileFlag,
-	backtraceAtFlag,
-	debugFlag,
+	logRotateFlag,
+	logMaxSizeMBsFlag,
+	logMaxBackupsFlag,
+	logMaxAgeFlag,
+	logCompressFlag,
 	pprofFlag,
 	pprofAddrFlag,
 	pprofPortFlag,
@@ -128,60 +168,106 @@ var Flags = []cli.Flag{
 }
 
 var (
-	glogger         *log.GlogHandler
-	logOutputStream log.Handler
+	glogger       *log.GlogHandler
+	logOutputFile io.WriteCloser
 )
 
 func init() {
-	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
-	logFile := ctx.String(logFileFlag.Name)
-	useColor := logFile == "" && os.Getenv("TERM") != "dumb" && (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd()))
-
-	var logfmt log.Format
-	if ctx.Bool(logjsonFlag.Name) {
-		logfmt = log.JSONFormat()
-	} else {
-		logfmt = log.TerminalFormat(useColor)
+	var (
+		handler        slog.Handler
+		terminalOutput = io.Writer(os.Stderr)
+		output         io.Writer
+		logFmtFlag     = ctx.String(logFormatFlag.Name)
+	)
+	var (
+		logFile  = ctx.String(logFileFlag.Name)
+		rotation = ctx.Bool(logRotateFlag.Name)
+	)
+	if len(logFile) > 0 {
+		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
+			return fmt.Errorf("failed to initiatilize file logger: %v", err)
+		}
 	}
-
-	if logFile != "" {
+	context := []interface{}{"rotate", rotation}
+	if len(logFmtFlag) > 0 {
+		context = append(context, "format", logFmtFlag)
+	} else {
+		context = append(context, "format", "terminal")
+	}
+	if rotation {
+		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
+		// so typically /tmp/geth-lumberjack.log on linux
+		if len(logFile) > 0 {
+			context = append(context, "location", logFile)
+		} else {
+			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
+		}
+		logOutputFile = &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
+			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
+			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
+			Compress:   ctx.Bool(logCompressFlag.Name),
+		}
+		output = io.MultiWriter(terminalOutput, logOutputFile)
+	} else if logFile != "" {
 		var err error
-		logOutputStream, err = log.FileHandler(logFile, logfmt)
-		if err != nil {
+		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
 			return err
 		}
+		output = io.MultiWriter(logOutputFile, terminalOutput)
+		context = append(context, "location", logFile)
 	} else {
-		output := io.Writer(os.Stderr)
-		if useColor {
-			output = colorable.NewColorableStderr()
-		}
-		logOutputStream = log.StreamHandler(output, logfmt)
+		output = terminalOutput
 	}
-	glogger.SetHandler(logOutputStream)
+
+	switch {
+	case ctx.Bool(logjsonFlag.Name):
+		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
+		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "json":
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "logfmt":
+		handler = log.LogfmtHandler(output)
+	case logFmtFlag == "", logFmtFlag == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if useColor {
+			terminalOutput = colorable.NewColorableStderr()
+			if logOutputFile != nil {
+				output = io.MultiWriter(logOutputFile, terminalOutput)
+			} else {
+				output = terminalOutput
+			}
+		}
+		handler = log.NewTerminalHandler(output, useColor)
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+	}
+
+	glogger = log.NewGlogHandler(handler)
 
 	// logging
-	verbosity := ctx.Int(verbosityFlag.Name)
-	glogger.Verbosity(log.Lvl(verbosity))
-	vmodule := ctx.String(vmoduleFlag.Name)
+	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	glogger.Verbosity(verbosity)
+	vmodule := ctx.String(logVmoduleFlag.Name)
+	if vmodule == "" {
+		// Retain backwards compatibility with `--vmodule` flag if `--log.vmodule` not set
+		vmodule = ctx.String(vmoduleFlag.Name)
+		if vmodule != "" {
+			defer log.Warn("The flag '--vmodule' is deprecated, please use '--log.vmodule' instead")
+		}
+	}
 	glogger.Vmodule(vmodule)
 
-	debug := ctx.Bool(debugFlag.Name)
-	if ctx.IsSet(debugFlag.Name) {
-		debug = ctx.Bool(debugFlag.Name)
-	}
-	log.PrintOrigins(debug)
-
-	backtrace := ctx.String(backtraceAtFlag.Name)
-	glogger.BacktraceAt(backtrace)
-
-	log.Root().SetHandler(glogger)
+	log.SetDefault(log.NewLogger(glogger))
 
 	// profiling, tracing
 	runtime.MemProfileRate = memprofilerateFlag.Value
@@ -210,10 +296,13 @@ func Setup(ctx *cli.Context) error {
 
 		port := ctx.Int(pprofPortFlag.Name)
 
-		address := fmt.Sprintf("%s:%d", listenHost, port)
+		address := net.JoinHostPort(listenHost, fmt.Sprintf("%d", port))
 		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
+	}
+	if len(logFile) > 0 || rotation {
+		log.Info("Logging configured", context...)
 	}
 	return nil
 }
@@ -238,7 +327,21 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
-	if closer, ok := logOutputStream.(io.Closer); ok {
-		closer.Close()
+	if logOutputFile != nil {
+		logOutputFile.Close()
 	}
+}
+
+func validateLogLocation(path string) error {
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating the directory: %w", err)
+	}
+	// Check if the path is writable by trying to create a temporary file
+	tmp := filepath.Join(path, "tmp")
+	if f, err := os.Create(tmp); err != nil {
+		return err
+	} else {
+		f.Close()
+	}
+	return os.Remove(tmp)
 }

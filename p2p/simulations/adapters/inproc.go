@@ -147,7 +147,7 @@ func (s *SimAdapter) DialRPC(id enode.ID) (*rpc.Client, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
 	}
-	return node.node.Attach()
+	return node.node.Attach(), nil
 }
 
 // GetNode returns the node with the given ID if it exists
@@ -172,7 +172,7 @@ type SimNode struct {
 	registerOnce sync.Once
 }
 
-// Close closes the underlaying node.Node to release
+// Close closes the underlying node.Node to release
 // acquired resources.
 func (sn *SimNode) Close() error {
 	return sn.node.Close()
@@ -274,10 +274,7 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 	}
 
 	// create an in-process RPC client
-	client, err := sn.node.Attach()
-	if err != nil {
-		return err
-	}
+	client := sn.node.Attach()
 	sn.lock.Lock()
 	sn.client = client
 	sn.lock.Unlock()

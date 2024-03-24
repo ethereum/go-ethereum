@@ -23,13 +23,19 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			switch metric := i.(type) {
 			case Counter:
 				l.Printf("counter %s\n", name)
-				l.Printf("  count:       %9d\n", metric.Count())
+				l.Printf("  count:       %9d\n", metric.Snapshot().Count())
+			case CounterFloat64:
+				l.Printf("counter %s\n", name)
+				l.Printf("  count:       %f\n", metric.Snapshot().Count())
 			case Gauge:
 				l.Printf("gauge %s\n", name)
-				l.Printf("  value:       %9d\n", metric.Value())
+				l.Printf("  value:       %9d\n", metric.Snapshot().Value())
 			case GaugeFloat64:
 				l.Printf("gauge %s\n", name)
-				l.Printf("  value:       %f\n", metric.Value())
+				l.Printf("  value:       %f\n", metric.Snapshot().Value())
+			case GaugeInfo:
+				l.Printf("gauge %s\n", name)
+				l.Printf("  value:       %s\n", metric.Snapshot().Value())
 			case Healthcheck:
 				metric.Check()
 				l.Printf("healthcheck %s\n", name)

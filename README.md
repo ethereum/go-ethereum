@@ -1,12 +1,12 @@
 ## Go Ethereum
 
-Official Golang execution layer implementation of the Ethereum protocol.
+Golang execution layer implementation of the Ethereum protocol.
 
 [![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
 )](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
-[![Travis](https://travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.com/ethereum/go-ethereum)
+[![Travis](https://app.travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://app.travis-ci.com/github/ethereum/go-ethereum)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
 
 Automated builds are available for stable releases and the unstable master branch. Binary
@@ -16,7 +16,7 @@ archives are published at https://geth.ethereum.org/downloads/.
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/getting-started/installing-geth).
 
-Building `geth` requires both a Go (version 1.18 or later) and a C compiler. You can install
+Building `geth` requires both a Go (version 1.21 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
 ```shell
@@ -36,10 +36,10 @@ directory.
 
 |  Command   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | :--------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`geth`** | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI page](https://geth.ethereum.org/docs/interface/command-line-options) for command line options. |
+| **`geth`** | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI page](https://geth.ethereum.org/docs/fundamentals/command-line-options) for command line options. |
 |   `clef`   | Stand-alone signing tool, which can be used as a backend signer for `geth`.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 |  `devp2p`  | Utilities to interact with nodes on the networking layer, without running a full blockchain.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|  `abigen`  | Source code generator to convert Ethereum contract definitions into easy-to-use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://geth.ethereum.org/docs/dapp/native-bindings) page for details.                                  |
+|  `abigen`  | Source code generator to convert Ethereum contract definitions into easy-to-use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://geth.ethereum.org/docs/developers/dapp-developer/native-bindings) page for details.                                  |
 | `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                               |
 |   `evm`    | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                               |
 | `rlpdump`  | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                |
@@ -47,7 +47,7 @@ directory.
 ## Running `geth`
 
 Going through all the possible command line flags is out of scope here (please consult our
-[CLI Wiki page](https://geth.ethereum.org/docs/interface/command-line-options)),
+[CLI Wiki page](https://geth.ethereum.org/docs/fundamentals/command-line-options)),
 but we've enumerated a few common parameter combos to get you up to speed quickly
 on how you can run your own `geth` instance.
 
@@ -82,10 +82,10 @@ This command will:
  * Start `geth` in snap sync mode (default, can be changed with the `--syncmode` flag),
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
- * Start the built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
+ * Start the built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interacting-with-geth/javascript-console),
    (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md) 
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
-   as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/rpc/server).
+   as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/interacting-with-geth/rpc).
    This tool is optional and if you leave it out you can always attach it to an already running
    `geth` instance with `geth attach`.
 
@@ -122,15 +122,6 @@ crossing over between the main network and test network, you should always
 use separate accounts for play and real money. Unless you manually move
 accounts, `geth` will by default correctly separate the two networks and will not make any
 accounts available between them.*
-
-### Full node on the Rinkeby test network
-
-Go Ethereum also supports connecting to the older proof-of-authority based test network
-called [*Rinkeby*](https://www.rinkeby.io) which is operated by members of the community.
-
-```shell
-$ geth --rinkeby console
-```
 
 ### Configuration
 
@@ -175,7 +166,7 @@ accessible from the outside.
 As a developer, sooner rather than later you'll want to start interacting with `geth` and the
 Ethereum network via your own programs and not manually through the console. To aid
 this, `geth` has built-in support for a JSON-RPC based APIs ([standard APIs](https://ethereum.github.io/execution-apis/api-documentation/)
-and [`geth` specific APIs](https://geth.ethereum.org/docs/rpc/server)).
+and [`geth` specific APIs](https://geth.ethereum.org/docs/interacting-with-geth/rpc)).
 These can be exposed via HTTP, WebSockets and IPC (UNIX sockets on UNIX based
 platforms, and named pipes on Windows).
 

@@ -252,7 +252,7 @@ func (w *Wallet) release() error {
 // with the wallet.
 func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
-		return fmt.Errorf("wallet already paired")
+		return errors.New("wallet already paired")
 	}
 	pairing, err := w.session.pair(puk)
 	if err != nil {
@@ -776,16 +776,16 @@ func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationP
 		return nil, fmt.Errorf("scheme %s does not match wallet scheme %s", account.URL.Scheme, w.Hub.scheme)
 	}
 
-	parts := strings.SplitN(account.URL.Path, "/", 2)
-	if len(parts) != 2 {
+	url, path, found := strings.Cut(account.URL.Path, "/")
+	if !found {
 		return nil, fmt.Errorf("invalid URL format: %s", account.URL)
 	}
 
-	if parts[0] != fmt.Sprintf("%x", w.PublicKey[1:3]) {
+	if url != fmt.Sprintf("%x", w.PublicKey[1:3]) {
 		return nil, fmt.Errorf("URL %s is not for this wallet", account.URL)
 	}
 
-	return accounts.ParseDerivationPath(parts[1])
+	return accounts.ParseDerivationPath(path)
 }
 
 // Session represents a secured communication session with the wallet.
@@ -813,7 +813,7 @@ func (s *Session) pair(secret []byte) (smartcardPairing, error) {
 // unpair deletes an existing pairing.
 func (s *Session) unpair() error {
 	if !s.verified {
-		return fmt.Errorf("unpair requires that the PIN be verified")
+		return errors.New("unpair requires that the PIN be verified")
 	}
 	return s.Channel.Unpair()
 }
@@ -907,7 +907,7 @@ func (s *Session) initialize(seed []byte) error {
 		return err
 	}
 	if status == "Online" {
-		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
+		return errors.New("card is already initialized, cowardly refusing to proceed")
 	}
 
 	s.Wallet.lock.Lock()

@@ -17,11 +17,14 @@
 package types
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// DynamicFeeTx represents an EIP-1559 transaction.
 type DynamicFeeTx struct {
 	ChainID    *big.Int
 	Nonce      uint64
@@ -94,10 +97,29 @@ func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
 
+func (tx *DynamicFeeTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	if baseFee == nil {
+		return dst.Set(tx.GasFeeCap)
+	}
+	tip := dst.Sub(tx.GasFeeCap, baseFee)
+	if tip.Cmp(tx.GasTipCap) > 0 {
+		tip.Set(tx.GasTipCap)
+	}
+	return tip.Add(tip, baseFee)
+}
+
 func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
 }
 
 func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
+}
+
+func (tx *DynamicFeeTx) encode(b *bytes.Buffer) error {
+	return rlp.Encode(b, tx)
+}
+
+func (tx *DynamicFeeTx) decode(input []byte) error {
+	return rlp.DecodeBytes(input, tx)
 }

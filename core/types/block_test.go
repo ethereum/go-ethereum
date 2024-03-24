@@ -18,7 +18,6 @@ package types
 
 import (
 	"bytes"
-	"hash"
 	"math/big"
 	"reflect"
 	"testing"
@@ -26,9 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // from bcValidBlockTest.json, "SimpleTx"
@@ -197,7 +196,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 func TestUncleHash(t *testing.T) {
 	uncles := make([]*Header, 0)
 	h := CalcUncleHash(uncles)
-	exp := common.HexToHash("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+	exp := EmptyUncleHash
 	if h != exp {
 		t.Fatalf("empty uncle hash is wrong, got %x != %x", h, exp)
 	}
@@ -215,30 +214,6 @@ func BenchmarkEncodeBlock(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-}
-
-// testHasher is the helper tool for transaction/receipt list hashing.
-// The original hasher is trie, in order to get rid of import cycle,
-// use the testing hasher instead.
-type testHasher struct {
-	hasher hash.Hash
-}
-
-func newHasher() *testHasher {
-	return &testHasher{hasher: sha3.NewLegacyKeccak256()}
-}
-
-func (h *testHasher) Reset() {
-	h.hasher.Reset()
-}
-
-func (h *testHasher) Update(key, val []byte) {
-	h.hasher.Write(key)
-	h.hasher.Write(val)
-}
-
-func (h *testHasher) Hash() common.Hash {
-	return common.BytesToHash(h.hasher.Sum(nil))
 }
 
 func makeBenchBlock() *Block {
@@ -279,7 +254,7 @@ func makeBenchBlock() *Block {
 			Extra:      []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts, newHasher())
+	return NewBlock(header, txs, uncles, receipts, blocktest.NewHasher())
 }
 
 func TestRlpDecodeParentHash(t *testing.T) {

@@ -37,7 +37,7 @@ var (
 type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
-	fetches  map[string]Trie        // Partially or fully fetcher tries
+	fetches  map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies.
 	fetchers map[string]*subfetcher // Subfetchers for each trie
 
 	deliveryMissMeter metrics.Meter
@@ -141,7 +141,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 }
 
 // prefetch schedules a batch of trie items to prefetch.
-func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, keys [][]byte) {
+func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
 		return
@@ -150,7 +150,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, keys [][]
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, owner, root)
+		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -197,7 +197,10 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
-	return string(append(owner.Bytes(), root.Bytes()...))
+	trieID := make([]byte, common.HashLength*2)
+	copy(trieID, owner.Bytes())
+	copy(trieID[common.HashLength:], root.Bytes())
+	return string(trieID)
 }
 
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
@@ -205,11 +208,12 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db    Database    // Database to load trie nodes through
-	state common.Hash // Root hash of the state to prefetch
-	owner common.Hash // Owner of the trie, usually account hash
-	root  common.Hash // Root hash of the trie to prefetch
-	trie  Trie        // Trie being populated with nodes
+	db    Database       // Database to load trie nodes through
+	state common.Hash    // Root hash of the state to prefetch
+	owner common.Hash    // Owner of the trie, usually account hash
+	root  common.Hash    // Root hash of the trie to prefetch
+	addr  common.Address // Address of the account that the trie belongs to
+	trie  Trie           // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -226,12 +230,13 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
 		state: state,
 		owner: owner,
 		root:  root,
+		addr:  addr,
 		wake:  make(chan struct{}, 1),
 		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
@@ -300,7 +305,9 @@ func (sf *subfetcher) loop() {
 		}
 		sf.trie = trie
 	} else {
-		trie, err := sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
+		// The trie argument can be nil as verkle doesn't support prefetching
+		// yet. TODO FIX IT(rjl493456442), otherwise code will panic here.
+		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
 			return
@@ -336,7 +343,11 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						if len(task) == common.AddressLength {
+							sf.trie.GetAccount(common.BytesToAddress(task))
+						} else {
+							sf.trie.GetStorage(sf.addr, task)
+						}
 						sf.seen[string(task)] = struct{}{}
 					}
 				}

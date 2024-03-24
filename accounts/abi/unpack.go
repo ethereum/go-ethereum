@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -125,7 +126,7 @@ func readBool(word []byte) (bool, error) {
 // readFunctionType enforces that standard by always presenting it as a 24-array (address + sig = 24 bytes)
 func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	if t.T != FunctionTy {
-		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array")
+		return [24]byte{}, errors.New("abi: invalid type in call to make function type byte array")
 	}
 	if garbage := binary.BigEndian.Uint64(word[24:32]); garbage != 0 {
 		err = fmt.Errorf("abi: got improperly encoded function type, got %v", word)
@@ -138,7 +139,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 // ReadFixedBytes uses reflection to create a fixed array to be read from.
 func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
-		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
+		return nil, errors.New("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
 	array := reflect.New(t.GetType()).Elem()
@@ -159,14 +160,15 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
 
-	if t.T == SliceTy {
+	switch t.T {
+	case SliceTy:
 		// declare our slice
 		refSlice = reflect.MakeSlice(t.GetType(), size, size)
-	} else if t.T == ArrayTy {
+	case ArrayTy:
 		// declare our array
 		refSlice = reflect.New(t.GetType()).Elem()
-	} else {
-		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
+	default:
+		return nil, errors.New("abi: invalid type in array/slice unpacking stage")
 	}
 
 	// Arrays have packed elements, resulting in longer unpack steps.

@@ -16,7 +16,7 @@
 
 // This file contains the implementation for interacting with the Ledger hardware
 // wallets. The wire protocol spec can be found in the Ledger Blue GitHub repo:
-// https://raw.githubusercontent.com/LedgerHQ/blue-app-eth/master/doc/ethapp.asc
+// https://github.com/LedgerHQ/app-ethereum/blob/develop/doc/ethapp.adoc
 
 package usbwallet
 
@@ -59,6 +59,8 @@ const (
 	ledgerP1InitTransactionData     ledgerParam1 = 0x00 // First transaction data block for signing
 	ledgerP1ContTransactionData     ledgerParam1 = 0x80 // Subsequent transaction data block for signing
 	ledgerP2DiscardAddressChainCode ledgerParam2 = 0x00 // Do not return the chain code along with the address
+
+	ledgerEip155Size int = 3 // Size of the EIP-155 chain_id,r,s in unsigned transactions
 )
 
 // errLedgerReplyInvalidHeader is the error message returned by a Ledger data exchange
@@ -277,7 +279,7 @@ func (w *ledgerDriver) ledgerDerive(derivationPath []uint32) (common.Address, er
 	}
 	hexstr := reply[1 : 1+int(reply[0])]
 
-	// Decode the hex sting into an Ethereum address and return
+	// Decode the hex string into an Ethereum address and return
 	var address common.Address
 	if _, err = hex.Decode(address[:], hexstr); err != nil {
 		return common.Address{}, err
@@ -347,9 +349,15 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 		op    = ledgerP1InitTransactionData
 		reply []byte
 	)
+
+	// Chunk size selection to mitigate an underlying RLP deserialization issue on the ledger app.
+	// https://github.com/LedgerHQ/app-ethereum/issues/409
+	chunk := 255
+	for ; len(payload)%chunk <= ledgerEip155Size; chunk-- {
+	}
+
 	for len(payload) > 0 {
 		// Calculate the size of the next data chunk
-		chunk := 255
 		if chunk > len(payload) {
 			chunk = len(payload)
 		}

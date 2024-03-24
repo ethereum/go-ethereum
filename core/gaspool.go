@@ -49,6 +49,11 @@ func (gp *GasPool) Gas() uint64 {
 	return uint64(*gp)
 }
 
+// SetGas sets the amount of gas with the provided number.
+func (gp *GasPool) SetGas(gas uint64) {
+	*(*uint64)(gp) = gas
+}
+
 func (gp *GasPool) String() string {
 	return fmt.Sprintf("%d", *gp)
 }

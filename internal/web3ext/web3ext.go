@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// package web3ext contains geth specific web3.js extensions.
+// Package web3ext contains geth specific web3.js extensions.
 package web3ext
 
 var Modules = map[string]string{
@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"dev":      DevJs,
 }
 
 const CliqueJs = `
@@ -495,6 +496,11 @@ web3._extend({
 			call: 'debug_setTrieFlushInterval',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'getTrieFlushInterval',
+			call: 'debug_getTrieFlushInterval',
+			params: 0
+		}),
 	],
 	properties: []
 });
@@ -530,8 +536,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'estimateGas',
 			call: 'eth_estimateGas',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputBlockNumberFormatter],
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputBlockNumberFormatter, null],
 			outputFormatter: web3._extend.utils.toDecimal
 		}),
 		new web3._extend.Method({
@@ -608,8 +614,13 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'call',
 			call: 'eth_call',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null],
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null],
+		}),
+		new web3._extend.Method({
+			name: 'getBlockReceipts',
+			call: 'eth_getBlockReceipts',
+			params: 1,
 		}),
 	],
 	properties: [
@@ -639,22 +650,6 @@ web3._extend({
 	property: 'miner',
 	methods: [
 		new web3._extend.Method({
-			name: 'start',
-			call: 'miner_start',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'stop',
-			call: 'miner_stop'
-		}),
-		new web3._extend.Method({
-			name: 'setEtherbase',
-			call: 'miner_setEtherbase',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
-		}),
-		new web3._extend.Method({
 			name: 'setExtra',
 			call: 'miner_setExtra',
 			params: 1
@@ -670,15 +665,6 @@ web3._extend({
 			call: 'miner_setGasLimit',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
-			name: 'setRecommitInterval',
-			call: 'miner_setRecommitInterval',
-			params: 1,
-		}),
-		new web3._extend.Method({
-			name: 'getHashrate',
-			call: 'miner_getHashrate'
 		}),
 	],
 	properties: []
@@ -881,5 +867,24 @@ web3._extend({
 			getter: 'vflux_requestStats'
 		}),
 	]
+});
+`
+
+const DevJs = `
+web3._extend({
+	property: 'dev',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'addWithdrawal',
+			call: 'dev_addWithdrawal',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setFeeRecipient',
+			call: 'dev_setFeeRecipient',
+			params: 1
+		}),
+	],
 });
 `

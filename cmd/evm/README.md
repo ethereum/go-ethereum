@@ -88,7 +88,7 @@ type Env struct {
     CurrentTimestamp uint64              `json:"currentTimestamp"`
     Withdrawals      []*Withdrawal       `json:"withdrawals"`
     // optional
-    CurrentDifficulty *big.Int           `json:"currentDifficuly"`
+    CurrentDifficulty *big.Int           `json:"currentDifficulty"`
     CurrentRandom     *big.Int           `json:"currentRandom"`
     CurrentBaseFee    *big.Int           `json:"currentBaseFee"`
     ParentDifficulty  *big.Int           `json:"parentDifficulty"`
@@ -214,7 +214,7 @@ exitcode:3 OK
 
 The chain configuration to be used for a transition is specified via the
 `--state.fork` CLI flag. A list of possible values and configurations can be
-found in [`tests/init.go`](tests/init.go).
+found in [`tests/init.go`](../../tests/init.go).
 
 #### Examples
 ##### Basic usage
@@ -342,7 +342,7 @@ To make `t8n` apply these, the following inputs are required:
   - For ethash, it is `5000000000000000000` `wei`,
   - If this is not defined, mining rewards are not applied,
   - A value of `0` is valid, and causes accounts to be 'touched'.
-- For each ommer, the tool needs to be given an `addres\` and a `delta`. This
+- For each ommer, the tool needs to be given an `address\` and a `delta`. This
   is done via the `ommers` field in `env`.
 
 Note: the tool does not verify that e.g. the normal uncle rules apply,

@@ -320,6 +320,7 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { resp.Body.Close() })
 	return resp
 }
 
@@ -338,8 +339,10 @@ func TestJWT(t *testing.T) {
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
 		return ss
 	}
-	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")}, nil)
+	cfg := rpcEndpointConfig{jwtSecret: []byte("secret")}
+	httpcfg := &httpConfig{rpcEndpointConfig: cfg}
+	wscfg := &wsConfig{Origins: []string{"*"}, rpcEndpointConfig: cfg}
+	srv := createAndStartServer(t, httpcfg, true, wscfg, nil)
 	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
 	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
+	"golang.org/x/exp/slices"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database
@@ -272,8 +273,12 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		b.Put([]byte("5"), nil)
 		b.Delete([]byte("1"))
 		b.Put([]byte("6"), nil)
-		b.Delete([]byte("3"))
+
+		b.Delete([]byte("3")) // delete then put
 		b.Put([]byte("3"), nil)
+
+		b.Put([]byte("7"), nil) // put then delete
+		b.Delete([]byte("7"))
 
 		if err := b.Write(); err != nil {
 			t.Fatal(err)
@@ -374,6 +379,32 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err != nil || len(got) == 0 {
 				t.Fatal("Unexpected deletion")
 			}
+		}
+	})
+
+	t.Run("OperatonsAfterClose", func(t *testing.T) {
+		db := New()
+		db.Put([]byte("key"), []byte("value"))
+		db.Close()
+		if _, err := db.Get([]byte("key")); err == nil {
+			t.Fatalf("expected error on Get after Close")
+		}
+		if _, err := db.Has([]byte("key")); err == nil {
+			t.Fatalf("expected error on Get after Close")
+		}
+		if err := db.Put([]byte("key2"), []byte("value2")); err == nil {
+			t.Fatalf("expected error on Put after Close")
+		}
+		if err := db.Delete([]byte("key")); err == nil {
+			t.Fatalf("expected error on Delete after Close")
+		}
+
+		b := db.NewBatch()
+		if err := b.Put([]byte("batchkey"), []byte("batchval")); err != nil {
+			t.Fatalf("expected no error on batch.Put after Close, got %v", err)
+		}
+		if err := b.Write(); err == nil {
+			t.Fatalf("expected error on batch.Write after Close")
 		}
 	})
 }
@@ -500,7 +531,7 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 		vals = append(vals, randBytes(vsize))
 	}
 	if order {
-		sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+		slices.SortFunc(keys, func(a, b []byte) int { return bytes.Compare(a, b) })
 	}
 	return keys, vals
 }

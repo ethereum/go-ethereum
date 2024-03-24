@@ -207,7 +207,7 @@ func (db *Database) Len() int {
 // keyvalue is a key-value tuple tagged with a deletion field to allow creating
 // memory-database write batches.
 type keyvalue struct {
-	key    []byte
+	key    string
 	value  []byte
 	delete bool
 }
@@ -222,14 +222,14 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, keyvalue{string(key), common.CopyBytes(value), false})
 	b.size += len(key) + len(value)
 	return nil
 }
 
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
+	b.writes = append(b.writes, keyvalue{string(key), nil, true})
 	b.size += len(key)
 	return nil
 }
@@ -244,12 +244,15 @@ func (b *batch) Write() error {
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
+	if b.db.db == nil {
+		return errMemorydbClosed
+	}
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
-			delete(b.db.db, string(keyvalue.key))
+			delete(b.db.db, keyvalue.key)
 			continue
 		}
-		b.db.db[string(keyvalue.key)] = keyvalue.value
+		b.db.db[keyvalue.key] = keyvalue.value
 	}
 	return nil
 }
@@ -264,12 +267,12 @@ func (b *batch) Reset() {
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
-			if err := w.Delete(keyvalue.key); err != nil {
+			if err := w.Delete([]byte(keyvalue.key)); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
+		if err := w.Put([]byte(keyvalue.key), keyvalue.value); err != nil {
 			return err
 		}
 	}
@@ -342,7 +345,7 @@ func newSnapshot(db *Database) *snapshot {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	copied := make(map[string][]byte)
+	copied := make(map[string][]byte, len(db.db))
 	for key, val := range db.db {
 		copied[key] = common.CopyBytes(val)
 	}

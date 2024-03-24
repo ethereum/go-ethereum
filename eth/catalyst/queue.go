@@ -31,9 +31,12 @@ import (
 const maxTrackedPayloads = 10
 
 // maxTrackedHeaders is the maximum number of executed payloads the execution
-// engine tracks before evicting old ones. Ideally we should only ever track the
-// latest one; but have a slight wiggle room for non-ideal conditions.
-const maxTrackedHeaders = 10
+// engine tracks before evicting old ones. These are tracked outside the chain
+// during initial sync to allow ForkchoiceUpdate to reference past blocks via
+// hashes only. For the sync target it would be enough to track only the latest
+// header, but snap sync also needs the latest finalized height for the ancient
+// limit.
+const maxTrackedHeaders = 96
 
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
@@ -70,7 +73,7 @@ func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope {
+func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayloadEnvelope {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -79,7 +82,10 @@ func (q *payloadQueue) get(id engine.PayloadID) *engine.ExecutionPayloadEnvelope
 			return nil // no more items
 		}
 		if item.id == id {
-			return item.payload.Resolve()
+			if !full {
+				return item.payload.Resolve()
+			}
+			return item.payload.ResolveFull()
 		}
 	}
 	return nil
