@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - '*'
@@ -84,10 +86,13 @@ jobs:
         run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
       - name: Build and Push Docker images
         run: |
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
           docker pull xinfinorg/devnet:latest
           docker tag xinfinorg/devnet:latest xinfinorg/devnet:previous
           docker rmi xinfinorg/devnet:latest
           docker build -t xinfinorg/devnet:latest -f cicd/Dockerfile .
+          docker tag xinfinorg/devnet:latest xinfinorg/devnet:dev-upgrade-${git_hash}
+          docker push xinfinorg/devnet:dev-upgrade-${git_hash}
           docker push xinfinorg/devnet:latest
           docker push xinfinorg/devnet:previous
 
@@ -103,9 +108,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Terraform Apply
         run: |
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
           cd cicd/devnet/terraform
           terraform init ${{ env.tf_init_cli_options }}
-          terraform apply ${{ env.tf_apply_cli_options }}
+          terraform apply -var "docker_tag=dev-upgrade-${git_hash}" ${{ env.tf_apply_cli_options }}
           sleep 5
           source .env
           for ((i=$us_east_2_start;i<$us_east_2_end;i++)); do
@@ -120,7 +126,6 @@ jobs:
             echo "Force deploy xdc-$i"
             aws ecs update-service --region ap-southeast-2 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment --no-cli-pager | head -n 10;
           done
-          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
 
   rpcnode_terraform_apply:
     runs-on: ubuntu-latest
@@ -136,6 +141,20 @@ jobs:
           cd cicd/terraform
           terraform init ${{ env.tf_init_cli_options }}
           terraform apply ${{ env.tf_apply_cli_options }}
+
+  devnet_dev-upgrade_node:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: rpcnode_terraform_apply
+    environment: devnet
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ECS Update
+        run: |
+          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
 
   testnet_dev-upgrade_node:
     runs-on: ubuntu-latest

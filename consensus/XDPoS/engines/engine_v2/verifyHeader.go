@@ -36,7 +36,8 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	if len(header.Validator) == 0 {
-		return consensus.ErrNoValidatorSignature
+		// This should never happen, if it does, then it means the peer is sending us invalid data.
+		return consensus.ErrNoValidatorSignatureV2
 	}
 
 	if fullVerify {

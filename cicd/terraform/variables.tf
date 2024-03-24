@@ -30,6 +30,7 @@ locals {
     #     r.name => { for i in local.keyNames[r.name]: i => local.predefinedNodesConfig[i] }
     # }
     
+    rpcDevnetNodeKeys = { "devnet-rpc1": local.predefinedNodesConfig["devnet-rpc1"]} // we hardcode the rpc to a single node for now
     rpcTestnetNodeKeys = { "testnet-rpc1": local.predefinedNodesConfig["testnet-rpc1"]} // we hardcode the rpc to a single node for now
     rpcMainnetNodeKeys = { "mainnet-rpc1": local.predefinedNodesConfig["mainnet-rpc1"]} // we hardcode the rpc to a single node for now
 }

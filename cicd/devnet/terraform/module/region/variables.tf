@@ -23,3 +23,9 @@ variable "enableFixedIp" {
   type = bool
   default = false
 }
+
+variable docker_tag {
+  type        = string
+  default     = "latest"
+  description = "description"
+}

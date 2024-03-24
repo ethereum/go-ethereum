@@ -4,7 +4,7 @@ data template_file devnet_container_definition {
 
   vars = {
     image_environment = "${lookup(each.value, "imageEnvironment", "devnet")}"
-    image_tag = "${lookup(each.value, "imageTag", "latest")}"
+    image_tag = "${lookup(each.value, "imageTag", var.docker_tag)}"
     node_name = "${each.key}"
     private_key = "${each.value.pk}"
     cloudwatch_group = "tf-${each.key}"

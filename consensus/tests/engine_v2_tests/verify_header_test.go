@@ -50,7 +50,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	noValidatorBlock := blockchain.GetBlockByNumber(902).Header()
 	noValidatorBlock.Validator = []byte{}
 	err = adaptor.VerifyHeader(blockchain, noValidatorBlock, true)
-	assert.Equal(t, consensus.ErrNoValidatorSignature, err)
+	assert.Equal(t, consensus.ErrNoValidatorSignatureV2, err)
 
 	blockFromFuture := blockchain.GetBlockByNumber(902).Header()
 	blockFromFuture.Time = big.NewInt(time.Now().Unix() + 10000)
