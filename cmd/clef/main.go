@@ -590,7 +590,7 @@ func accountImport(c *cli.Context) error {
   Address %v
   Keystore file: %v
 
-The key is now encrypted; losing the password will result in permanently losing 
+The key is now encrypted; losing the password will result in permanently losing
 access to the key and all associated funds!
 
 Make sure to backup keystore and passwords in a safe location.`,
@@ -743,7 +743,7 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.HTTPListenAddrFlag.Name), port)
-		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
+		httpServer, addr, err := node.StartHTTPEndpoint(httpEndpoint, c.String(utils.HTTPListenProtocolFlag.Name), rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
