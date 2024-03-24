@@ -90,6 +90,10 @@ func New(conf *Config) (*Node, error) {
 		conf.Logger = log.New()
 	}
 
+	if conf.HTTPProto == "" {
+		conf.HTTPProto = "tcp4"
+	}
+
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
 	if strings.ContainsAny(conf.Name, `/\`) {
