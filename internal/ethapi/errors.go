@@ -49,6 +49,8 @@ func newRevertError(revert []byte) *revertError {
 	reason, errUnpack := abi.UnpackRevert(revert)
 	if errUnpack == nil {
 		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
+	} else if len(revert) >= 4 {
+		err = fmt.Errorf("execution reverted with a custom error: %x", revert)
 	}
 	return &revertError{
 		error:  err,
