@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
