@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/urfave/cli/v2"
 )
 

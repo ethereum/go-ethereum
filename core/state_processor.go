@@ -120,6 +120,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
+	txContext.Accesses = statedb.NewAccessWitness()
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
@@ -156,6 +157,10 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+	}
+
+	if statedb.Witness() != nil {
+		statedb.Witness().Merge(txContext.Accesses)
 	}
 
 	// Set the receipt logs and create the bloom filter.
