@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -29,7 +28,6 @@ import (
 type hasher struct {
 	sha      crypto.KeccakState
 	tmp      []byte
-	encbuf   rlp.EncoderBuffer
 	parallel bool // Whether to use parallel threads when hashing
 }
 
@@ -37,9 +35,8 @@ type hasher struct {
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
-			tmp:    make([]byte, 0, 550), // cap is as large as a full fullNode.
-			sha:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
-			encbuf: rlp.NewEncoderBuffer(nil),
+			tmp: make([]byte, 0, 550), // cap is as large as a full fullNode.
+			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		}
 	},
 }
@@ -143,41 +140,23 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 // into compact form for RLP encoding.
 // If the rlp data is smaller than 32 bytes, `nil` is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
-	n.encode(h.encbuf)
-	enc := h.encodedBytes()
+	h.tmp = n.encode(h.tmp[:0])
 
-	if len(enc) < 32 && !force {
+	if len(h.tmp) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
+	return h.hashData(h.tmp)
 }
 
 // fullnodeToHash is used to create a hashNode from a fullNode, (which
 // may contain nil values)
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
-	n.encode(h.encbuf)
-	enc := h.encodedBytes()
+	h.tmp = n.encode(h.tmp[:0])
 
-	if len(enc) < 32 && !force {
+	if len(h.tmp) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
-}
-
-// encodedBytes returns the result of the last encoding operation on h.encbuf.
-// This also resets the encoder buffer.
-//
-// All node encoding must be done like this:
-//
-//	node.encode(h.encbuf)
-//	enc := h.encodedBytes()
-//
-// This convention exists because node.encode can only be inlined/escape-analyzed when
-// called on a concrete receiver type.
-func (h *hasher) encodedBytes() []byte {
-	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
-	h.encbuf.Reset(nil)
-	return h.tmp
+	return h.hashData(h.tmp)
 }
 
 // hashData hashes the provided data
