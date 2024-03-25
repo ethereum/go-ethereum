@@ -151,7 +151,19 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 		},
 		{
 			body: `{"query": "{blocks {number}}"}`,
-			want: `{"errors":[{"message":"from block number must be specified","path":["blocks"]}],"data":null}`,
+			want: `{"errors":[{"message":"error [-32602]: from block number must be specified","path":["blocks"],"extensions":{"errorCode":-32602,"errorMessage":"from block number must be specified"}}],"data":null}`,
+			code: 400,
+		},
+		// invalid block range
+		{
+			body: `{"query": "{blocks(from: 5 to: 1 ){number}}"}`,
+			want: `{"errors":[{"message":"error [-32602]: invalid from and to block combination: from \u003e to","path":["blocks"],"extensions":{"errorCode":-32602,"errorMessage":"invalid from and to block combination: from \u003e to"}}],"data":null}`,
+			code: 400,
+		},
+		// both hash and number
+		{
+			body: `{"query": "{block(number: 1 hash: \"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b\"){number}}"}`,
+			want: `{"errors":[{"message":"error [-32602]: only one of number or hash must be specified","path":["block"],"extensions":{"errorCode":-32602,"errorMessage":"only one of number or hash must be specified"}}],"data":{"block":null}}`,
 			code: 400,
 		},
 	} {
