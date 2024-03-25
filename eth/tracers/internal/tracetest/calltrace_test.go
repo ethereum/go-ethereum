@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
@@ -139,7 +139,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			)
 			triedb.Close()
 
-			tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -247,7 +247,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tracer, err := directory.DefaultDirectory.New(tracerName, new(directory.Context), nil)
+		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
@@ -283,8 +283,8 @@ func TestInternals(t *testing.T) {
 			BaseFee:     new(big.Int),
 		}
 	)
-	mkTracer := func(name string, cfg json.RawMessage) *directory.Tracer {
-		tr, err := directory.DefaultDirectory.New(name, nil, cfg)
+	mkTracer := func(name string, cfg json.RawMessage) *tracers.Tracer {
+		tr, err := tracers.DefaultDirectory.New(name, nil, cfg)
 		if err != nil {
 			t.Fatalf("failed to create call tracer: %v", err)
 		}
@@ -294,7 +294,7 @@ func TestInternals(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		code   []byte
-		tracer *directory.Tracer
+		tracer *tracers.Tracer
 		want   string
 	}{
 		{

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -139,14 +138,6 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnTxEnd:   l.OnTxEnd,
 		OnExit:    l.OnExit,
 		OnOpcode:  l.OnOpcode,
-	}
-}
-
-func (l *StructLogger) Tracer() *directory.Tracer {
-	return &directory.Tracer{
-		Hooks:     l.Hooks(),
-		GetResult: l.GetResult,
-		Stop:      l.Stop,
 	}
 }
 
