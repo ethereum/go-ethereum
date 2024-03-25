@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"golang.org/x/exp/slices"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database

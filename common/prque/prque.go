@@ -18,18 +18,17 @@
 package prque
 
 import (
+	"cmp"
 	"container/heap"
-
-	"golang.org/x/exp/constraints"
 )
 
 // Priority queue data structure.
-type Prque[P constraints.Ordered, V any] struct {
+type Prque[P cmp.Ordered, V any] struct {
 	cont *sstack[P, V]
 }
 
 // New creates a new priority queue.
-func New[P constraints.Ordered, V any](setIndex SetIndexCallback[V]) *Prque[P, V] {
+func New[P cmp.Ordered, V any](setIndex SetIndexCallback[V]) *Prque[P, V] {
 	return &Prque[P, V]{newSstack[P, V](setIndex)}
 }
 

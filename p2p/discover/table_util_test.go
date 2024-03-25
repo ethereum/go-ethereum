@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"golang.org/x/exp/slices"
 )
 
 var nullNode *enode.Node

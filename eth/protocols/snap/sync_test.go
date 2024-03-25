@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 func TestHashing(t *testing.T) {
