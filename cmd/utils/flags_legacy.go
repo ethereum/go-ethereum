@@ -93,35 +93,35 @@ var (
 		Name:     "light.serve",
 		Usage:    "Maximum percentage of time allowed for serving LES requests (deprecated)",
 		Value:    ethconfig.Defaults.LightServ,
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LightIngressFlag = &cli.IntFlag{
 		Name:     "light.ingress",
 		Usage:    "Incoming bandwidth limit for serving light clients (deprecated)",
 		Value:    ethconfig.Defaults.LightIngress,
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LightEgressFlag = &cli.IntFlag{
 		Name:     "light.egress",
 		Usage:    "Outgoing bandwidth limit for serving light clients (deprecated)",
 		Value:    ethconfig.Defaults.LightEgress,
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LightMaxPeersFlag = &cli.IntFlag{
 		Name:     "light.maxpeers",
 		Usage:    "Maximum number of light clients to serve, or light servers to attach to (deprecated)",
 		Value:    ethconfig.Defaults.LightPeers,
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LightNoPruneFlag = &cli.BoolFlag{
 		Name:     "light.nopruning",
 		Usage:    "Disable ancient light chain data pruning (deprecated)",
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	LightNoSyncServeFlag = &cli.BoolFlag{
 		Name:     "light.nosyncserve",
 		Usage:    "Enables serving light clients before syncing (deprecated)",
-		Category: flags.LightCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	// Deprecated November 2023
 	LogBacktraceAtFlag = &cli.StringFlag{
@@ -138,19 +138,24 @@ var (
 	// Deprecated February 2024
 	MinerNewPayloadTimeoutFlag = &cli.DurationFlag{
 		Name:     "miner.newpayload-timeout",
-		Usage:    "Specify the maximum time allowance for creating a new payload",
+		Usage:    "Specify the maximum time allowance for creating a new payload (deprecated)",
 		Value:    ethconfig.Defaults.Miner.Recommit,
-		Category: flags.MinerCategory,
+		Category: flags.DeprecatedCategory,
 	}
 	MinerEtherbaseFlag = &cli.StringFlag{
 		Name:     "miner.etherbase",
-		Usage:    "0x prefixed public address for block mining rewards",
-		Category: flags.MinerCategory,
+		Usage:    "0x prefixed public address for block mining rewards (deprecated)",
+		Category: flags.DeprecatedCategory,
 	}
 	MiningEnabledFlag = &cli.BoolFlag{
 		Name:     "mine",
-		Usage:    "Enable mining",
-		Category: flags.MinerCategory,
+		Usage:    "Enable mining (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
+		Name:     "metrics.expensive",
+		Usage:    "Enable expensive metrics collection and reporting (deprecated)",
+		Category: flags.DeprecatedCategory,
 	}
 )
 

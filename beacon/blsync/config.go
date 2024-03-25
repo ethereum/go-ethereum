@@ -39,7 +39,8 @@ var (
 			AddFork("GENESIS", 0, []byte{0, 0, 0, 0}).
 			AddFork("ALTAIR", 74240, []byte{1, 0, 0, 0}).
 			AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
-			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}),
+			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}).
+			AddFork("DENEB", 269568, []byte{4, 0, 0, 0}),
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
 
@@ -51,7 +52,8 @@ var (
 			AddFork("GENESIS", 0, []byte{144, 0, 0, 105}).
 			AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}).
 			AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
-			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}),
+			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}).
+			AddFork("DENEB", 132608, []byte{144, 0, 0, 115}),
 		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
 	}
 
@@ -63,15 +65,16 @@ var (
 			AddFork("GENESIS", 0, []byte{0, 0, 16, 32}).
 			AddFork("ALTAIR", 36660, []byte{1, 0, 16, 32}).
 			AddFork("BELLATRIX", 112260, []byte{2, 0, 16, 32}).
-			AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}),
+			AddFork("CAPELLA", 162304, []byte{3, 0, 16, 32}).
+			AddFork("DENEB", 231680, []byte{4, 0, 16, 32}),
 		Checkpoint: common.HexToHash("0x53a0f4f0a378e2c4ae0a9ee97407eb69d0d737d8d8cd0a5fb1093f42f7b81c49"),
 	}
 )
 
 func makeChainConfig(ctx *cli.Context) lightClientConfig {
-	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag)
-	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name) || ctx.IsSet(utils.BeaconGenesisRootFlag.Name) || ctx.IsSet(utils.BeaconGenesisTimeFlag.Name)
 	var config lightClientConfig
+	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name)
+	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag, utils.BeaconConfigFlag)
 	switch {
 	case ctx.Bool(utils.MainnetFlag.Name):
 		config = MainnetConfig
@@ -84,24 +87,37 @@ func makeChainConfig(ctx *cli.Context) lightClientConfig {
 			config = MainnetConfig
 		}
 	}
-	if customConfig && config.Forks != nil {
-		utils.Fatalf("Cannot use custom beacon chain config flags in combination with pre-defined network config")
-	}
-	if ctx.IsSet(utils.BeaconGenesisRootFlag.Name) {
+	// Genesis root and time should always be specified together with custom chain config
+	if customConfig {
+		if !ctx.IsSet(utils.BeaconGenesisRootFlag.Name) {
+			utils.Fatalf("Custom beacon chain config is specified but genesis root is missing")
+		}
+		if !ctx.IsSet(utils.BeaconGenesisTimeFlag.Name) {
+			utils.Fatalf("Custom beacon chain config is specified but genesis time is missing")
+		}
+		if !ctx.IsSet(utils.BeaconCheckpointFlag.Name) {
+			utils.Fatalf("Custom beacon chain config is specified but checkpoint is missing")
+		}
+		config.ChainConfig = &types.ChainConfig{
+			GenesisTime: ctx.Uint64(utils.BeaconGenesisTimeFlag.Name),
+		}
 		if c, err := hexutil.Decode(ctx.String(utils.BeaconGenesisRootFlag.Name)); err == nil && len(c) <= 32 {
 			copy(config.GenesisValidatorsRoot[:len(c)], c)
 		} else {
 			utils.Fatalf("Invalid hex string", "beacon.genesis.gvroot", ctx.String(utils.BeaconGenesisRootFlag.Name), "error", err)
 		}
-	}
-	if ctx.IsSet(utils.BeaconGenesisTimeFlag.Name) {
-		config.GenesisTime = ctx.Uint64(utils.BeaconGenesisTimeFlag.Name)
-	}
-	if ctx.IsSet(utils.BeaconConfigFlag.Name) {
 		if err := config.ChainConfig.LoadForks(ctx.String(utils.BeaconConfigFlag.Name)); err != nil {
 			utils.Fatalf("Could not load beacon chain config file", "file name", ctx.String(utils.BeaconConfigFlag.Name), "error", err)
 		}
+	} else {
+		if ctx.IsSet(utils.BeaconGenesisRootFlag.Name) {
+			utils.Fatalf("Genesis root is specified but custom beacon chain config is missing")
+		}
+		if ctx.IsSet(utils.BeaconGenesisTimeFlag.Name) {
+			utils.Fatalf("Genesis time is specified but custom beacon chain config is missing")
+		}
 	}
+	// Checkpoint is required with custom chain config and is optional with pre-defined config
 	if ctx.IsSet(utils.BeaconCheckpointFlag.Name) {
 		if c, err := hexutil.Decode(ctx.String(utils.BeaconCheckpointFlag.Name)); err == nil && len(c) <= 32 {
 			copy(config.Checkpoint[:len(c)], c)

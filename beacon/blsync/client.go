@@ -28,14 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
 type Client struct {
-	scheduler     *request.Scheduler
-	chainHeadFeed *event.Feed
-	urls          []string
-	customHeader  map[string]string
+	urls         []string
+	customHeader map[string]string
+	chainConfig  *lightClientConfig
+	scheduler    *request.Scheduler
+	blockSync    *beaconBlockSync
+	engineRPC    *rpc.Client
+
+	chainHeadSub event.Subscription
+	engineClient *engineClient
 }
 
 func NewClient(ctx *cli.Context) *Client {
@@ -53,6 +59,7 @@ func NewClient(ctx *cli.Context) *Client {
 		}
 		customHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
 	}
+
 	// create data structures
 	var (
 		db             = memorydb.New()
@@ -63,11 +70,10 @@ func NewClient(ctx *cli.Context) *Client {
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 
 	// set up scheduler and sync modules
-	chainHeadFeed := new(event.Feed)
 	scheduler := request.NewScheduler()
 	checkpointInit := sync.NewCheckpointInit(committeeChain, chainConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	beaconBlockSync := newBeaconBlockSync(headTracker, chainHeadFeed)
+	beaconBlockSync := newBeaconBlockSync(headTracker)
 	scheduler.RegisterTarget(headTracker)
 	scheduler.RegisterTarget(committeeChain)
 	scheduler.RegisterModule(checkpointInit, "checkpointInit")
@@ -76,28 +82,34 @@ func NewClient(ctx *cli.Context) *Client {
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
 
 	return &Client{
-		scheduler:     scheduler,
-		urls:          ctx.StringSlice(utils.BeaconApiFlag.Name),
-		customHeader:  customHeader,
-		chainHeadFeed: chainHeadFeed,
+		scheduler:    scheduler,
+		urls:         ctx.StringSlice(utils.BeaconApiFlag.Name),
+		customHeader: customHeader,
+		chainConfig:  &chainConfig,
+		blockSync:    beaconBlockSync,
 	}
 }
 
-// SubscribeChainHeadEvent allows callers to subscribe a provided channel to new
-// head updates.
-func (c *Client) SubscribeChainHeadEvent(ch chan<- types.ChainHeadEvent) event.Subscription {
-	return c.chainHeadFeed.Subscribe(ch)
+func (c *Client) SetEngineRPC(engine *rpc.Client) {
+	c.engineRPC = engine
 }
 
-func (c *Client) Start() {
+func (c *Client) Start() error {
+	headCh := make(chan types.ChainHeadEvent, 16)
+	c.chainHeadSub = c.blockSync.SubscribeChainHead(headCh)
+	c.engineClient = startEngineClient(c.chainConfig, c.engineRPC, headCh)
+
 	c.scheduler.Start()
-	// register server(s)
 	for _, url := range c.urls {
 		beaconApi := api.NewBeaconLightApi(url, c.customHeader)
 		c.scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
 	}
+	return nil
 }
 
-func (c *Client) Stop() {
+func (c *Client) Stop() error {
+	c.engineClient.stop()
+	c.chainHeadSub.Unsubscribe()
 	c.scheduler.Stop()
+	return nil
 }

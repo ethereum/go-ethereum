@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
@@ -197,9 +197,8 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
-		if metrics.EnabledExpensive {
-			s.db.SnapshotStorageReads += time.Since(start)
-		}
+		s.db.SnapshotStorageReads += time.Since(start)
+
 		if len(enc) > 0 {
 			_, content, _, err := rlp.Split(enc)
 			if err != nil {
@@ -217,9 +216,8 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			return common.Hash{}
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
-		if metrics.EnabledExpensive {
-			s.db.StorageReads += time.Since(start)
-		}
+		s.db.StorageReads += time.Since(start)
+
 		if err != nil {
 			s.db.setError(err)
 			return common.Hash{}
@@ -243,6 +241,9 @@ func (s *stateObject) SetState(key, value common.Hash) {
 		key:      key,
 		prevalue: prev,
 	})
+	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
+		s.db.logger.OnStorageChange(s.address, key, prev, value)
+	}
 	s.setState(key, value)
 }
 
@@ -283,9 +284,8 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		return s.trie, nil
 	}
 	// Track the amount of time wasted on updating the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-	}
+	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
+
 	// The snapshot storage map for the object
 	var (
 		storage map[common.Hash][]byte
@@ -370,9 +370,8 @@ func (s *stateObject) updateRoot() {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
-	}
+	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
+
 	s.data.Root = tr.Hash()
 }
 
@@ -386,9 +385,8 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 		return nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
-	}
+	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
+
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
@@ -405,7 +403,7 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *uint256.Int) {
+func (s *stateObject) AddBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.IsZero() {
@@ -414,23 +412,26 @@ func (s *stateObject) AddBalance(amount *uint256.Int) {
 		}
 		return
 	}
-	s.SetBalance(new(uint256.Int).Add(s.Balance(), amount))
+	s.SetBalance(new(uint256.Int).Add(s.Balance(), amount), reason)
 }
 
 // SubBalance removes amount from s's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *uint256.Int) {
+func (s *stateObject) SubBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	if amount.IsZero() {
 		return
 	}
-	s.SetBalance(new(uint256.Int).Sub(s.Balance(), amount))
+	s.SetBalance(new(uint256.Int).Sub(s.Balance(), amount), reason)
 }
 
-func (s *stateObject) SetBalance(amount *uint256.Int) {
+func (s *stateObject) SetBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	s.db.journal.append(balanceChange{
 		account: &s.address,
 		prev:    new(uint256.Int).Set(s.data.Balance),
 	})
+	if s.db.logger != nil && s.db.logger.OnBalanceChange != nil {
+		s.db.logger.OnBalanceChange(s.address, s.Balance().ToBig(), amount.ToBig(), reason)
+	}
 	s.setBalance(amount)
 }
 
@@ -508,6 +509,9 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 		prevhash: s.CodeHash(),
 		prevcode: prevcode,
 	})
+	if s.db.logger != nil && s.db.logger.OnCodeChange != nil {
+		s.db.logger.OnCodeChange(s.address, common.BytesToHash(s.CodeHash()), prevcode, codeHash, code)
+	}
 	s.setCode(codeHash, code)
 }
 
@@ -522,6 +526,9 @@ func (s *stateObject) SetNonce(nonce uint64) {
 		account: &s.address,
 		prev:    s.data.Nonce,
 	})
+	if s.db.logger != nil && s.db.logger.OnNonceChange != nil {
+		s.db.logger.OnNonceChange(s.address, s.data.Nonce, nonce)
+	}
 	s.setNonce(nonce)
 }
 

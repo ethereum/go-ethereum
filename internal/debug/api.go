@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -37,7 +38,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/hashicorp/go-bexpr"
-	"golang.org/x/exp/slog"
 )
 
 // Handler is the global debugging handler.
