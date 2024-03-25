@@ -458,7 +458,8 @@ func (p *PortalProtocolAPI) RecursiveFindContent(contentKeyHex string) (*Content
 	if err != nil {
 		return nil, err
 	}
-	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey)
+	contentId := p.portalProtocol.toContentId(contentKey)
+	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey, contentId)
 
 	if err != nil {
 		return nil, err
@@ -517,7 +518,11 @@ func (p *PortalProtocolAPI) Gossip(contentKeyHex, contentHex string) (int, error
 	return p.portalProtocol.NeighborhoodGossip(&id, [][]byte{contentKey}, [][]byte{content})
 }
 
-// TODO
-func (p *PortalProtocolAPI) TraceRecursiveFindContent(contentKeyHex string) {
-
+func (p *PortalProtocolAPI) TraceRecursiveFindContent(contentKeyHex string) (*TraceContentResult, error) {
+	contentKey, err := hexutil.Decode(contentKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	contentId := p.portalProtocol.toContentId(contentKey)
+	return p.portalProtocol.TraceContentLookup(contentKey, contentId)
 }

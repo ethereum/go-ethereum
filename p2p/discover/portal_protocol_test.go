@@ -455,11 +455,12 @@ func TestContentLookup(t *testing.T) {
 	err = node3.storage.Put(nil, contentId, content)
 	assert.NoError(t, err)
 
-	res, _, err := node1.ContentLookup(contentKey)
+	res, _, err := node1.ContentLookup(contentKey, contentId)
 	assert.NoError(t, err)
 	assert.Equal(t, res, content)
 
-	res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
+	nonExist := []byte{0x2, 0x4}
+	res, _, err = node1.ContentLookup(nonExist, node1.toContentId(nonExist))
 	assert.Equal(t, ContentNotFound, err)
 	assert.Nil(t, res)
 }
@@ -494,7 +495,7 @@ func TestTraceContentLookup(t *testing.T) {
 	node2Id := hexutil.Encode(node2.Self().ID().Bytes())
 	node3Id := hexutil.Encode(node3.Self().ID().Bytes())
 
-	res, err := node3.TraceContentLookup(contentKey)
+	res, err := node3.TraceContentLookup(contentKey, contentId)
 	assert.NoError(t, err)
 	assert.Equal(t, res.Content, hexutil.Encode(content))
 	assert.Equal(t, res.UtpTransfer, false)

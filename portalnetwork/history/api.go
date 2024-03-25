@@ -64,8 +64,8 @@ func (p *API) HistoryGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) HistoryTraceRecursiveFindContent(contentKeyHex string) {
-	p.TraceRecursiveFindContent(contentKeyHex)
+func (p *API) HistoryTraceRecursiveFindContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
 func NewHistoryNetworkAPI(historyAPI *discover.PortalProtocolAPI) *API {

@@ -119,7 +119,7 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 	}
 	// no content in local storage
 	for retries := 0; retries < requestRetries; retries++ {
-		content, _, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
 		if err != nil {
 			h.log.Error("getBlockHeader failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
@@ -176,7 +176,7 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	// no content in local storage
 
 	for retries := 0; retries < requestRetries; retries++ {
-		content, _, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
 		if err != nil {
 			h.log.Error("getBlockBody failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
@@ -231,7 +231,7 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	// no content in local storage
 
 	for retries := 0; retries < requestRetries; retries++ {
-		content, _, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
 		if err != nil {
 			h.log.Error("getReceipts failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue
@@ -265,7 +265,7 @@ func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulato
 		return epochAccu, err
 	}
 	for retries := 0; retries < requestRetries; retries++ {
-		content, _, err := h.portalProtocol.ContentLookup(contentKey)
+		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
 		if err != nil {
 			h.log.Error("getEpochAccumulator failed", "contentKey", hexutil.Encode(contentKey), "err", err)
 			continue

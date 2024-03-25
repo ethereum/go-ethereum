@@ -1421,13 +1421,11 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 	return nodes
 }
 
-func (p *PortalProtocol) ContentLookup(contentKey []byte) ([]byte, bool, error) {
+func (p *PortalProtocol) ContentLookup(contentKey, contentId []byte) ([]byte, bool, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	resChan := make(chan *ContentInfoResp, 1)
 	defer close(resChan)
-
-	contentId := p.ToContentId(contentKey)
 	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
 		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
 	}).run()
@@ -1469,7 +1467,7 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 	return wrapedNode, nil
 }
 
-func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentResult, error) {
+func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*TraceContentResult, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	requestNodeChan := make(chan *enode.Node, 3)
@@ -1484,14 +1482,14 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 
 	trace := &Trace{
 		Origin:      selfHexId,
-		TargetId:    hexutil.Encode(p.ToContentId(contentKey)),
+		TargetId:    hexutil.Encode(contentId),
 		StartedAtMs: int(time.Now().UnixMilli()),
 		Responses:   make(map[string][]string),
 		Metadata:    make(map[string]*NodeMetadata),
 		Cancelled:   make([]string, 0),
 	}
 
-	nodes := p.table.findnodeByID(enode.ID(p.ToContentId(contentKey)), bucketSize, false)
+	nodes := p.table.findnodeByID(enode.ID(contentId), bucketSize, false)
 
 	localResponse := make([]string, 0, len(nodes.entries))
 	for _, node := range nodes.entries {
@@ -1499,8 +1497,6 @@ func (p *PortalProtocol) TraceContentLookup(contentKey []byte) (*TraceContentRes
 		localResponse = append(localResponse, id)
 	}
 	trace.Responses[selfHexId] = localResponse
-
-	contentId := p.ToContentId(contentKey)
 
 	dis := p.Distance(p.Self().ID(), enode.ID(contentId))
 
