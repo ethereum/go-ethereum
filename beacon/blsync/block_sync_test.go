@@ -23,70 +23,69 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
-	"github.com/protolambda/zrnt/eth2/configs"
-	"github.com/protolambda/ztyp/tree"
+	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
 var (
 	testServer1 = "testServer1"
 	testServer2 = "testServer2"
 
-	testBlock1 = &capella.BeaconBlock{
+	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 123,
-		Body: capella.BeaconBlockBody{
-			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 456},
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 456,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+			},
 		},
-	}
-	testBlock2 = &capella.BeaconBlock{
+	})
+	testBlock2 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 124,
-		Body: capella.BeaconBlockBody{
-			ExecutionPayload: capella.ExecutionPayload{BlockNumber: 457},
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 457,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
+			},
 		},
-	}
+	})
 )
-
-func init() {
-	eb1, _ := getExecBlock(testBlock1)
-	testBlock1.Body.ExecutionPayload.BlockHash = tree.Root(eb1.Hash())
-	eb2, _ := getExecBlock(testBlock2)
-	testBlock2.Body.ExecutionPayload.BlockHash = tree.Root(eb2.Hash())
-}
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
-	eventFeed := new(event.Feed)
-	blockSync := newBeaconBlockSync(ht, eventFeed)
+	blockSync := newBeaconBlockSync(ht)
 	headCh := make(chan types.ChainHeadEvent, 16)
-	eventFeed.Subscribe(headCh)
+	blockSync.SubscribeChainHead(headCh)
 	ts := sync.NewTestScheduler(t, blockSync)
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)
 
-	expHeadBlock := func(tci int, expHead *capella.BeaconBlock) {
+	expHeadBlock := func(expHead *types.BeaconBlock) {
+		t.Helper()
 		var expNumber, headNumber uint64
 		if expHead != nil {
-			expNumber = uint64(expHead.Body.ExecutionPayload.BlockNumber)
+			p, _ := expHead.ExecutionPayload()
+			expNumber = p.NumberU64()
 		}
 		select {
 		case event := <-headCh:
-			headNumber = event.HeadBlock.Number
+			headNumber = event.Block.NumberU64()
 		default:
 		}
 		if headNumber != expNumber {
-			t.Errorf("Wrong head block in test case #%d (expected block number %d, got %d)", tci, expNumber, headNumber)
+			t.Errorf("Wrong head block, expected block number %d, got %d)", expNumber, headNumber)
 		}
 	}
 
 	// no block requests expected until head tracker knows about a head
 	ts.Run(1)
-	expHeadBlock(1, nil)
+	expHeadBlock(nil)
 
 	// set block 1 as prefetch head, announced by server 2
 	head1 := blockHeadInfo(testBlock1)
 	ht.prefetch = head1
 	ts.ServerEvent(sync.EvNewHead, testServer2, head1)
+
 	// expect request to server 2 which has announced the head
 	ts.Run(2, testServer2, sync.ReqBeaconBlock(head1.BlockRoot))
 
@@ -95,12 +94,12 @@ func TestBlockSync(t *testing.T) {
 	ts.AddAllowance(testServer2, 1)
 	ts.Run(3)
 	// head block still not expected as the fetched block is not the validated head yet
-	expHeadBlock(3, nil)
+	expHeadBlock(nil)
 
 	// set as validated head, expect no further requests but block 1 set as head block
-	ht.validated.Header = blockHeader(testBlock1)
+	ht.validated.Header = testBlock1.Header()
 	ts.Run(4)
-	expHeadBlock(4, testBlock1)
+	expHeadBlock(testBlock1)
 
 	// set block 2 as prefetch head, announced by server 1
 	head2 := blockHeadInfo(testBlock2)
@@ -114,26 +113,16 @@ func TestBlockSync(t *testing.T) {
 	ts.Run(6)
 
 	// set as validated head before retrieving block; now it's assumed to be available from server 2 too
-	ht.validated.Header = blockHeader(testBlock2)
+	ht.validated.Header = testBlock2.Header()
 	// expect req2 retry to server 2
 	ts.Run(7, testServer2, sync.ReqBeaconBlock(head2.BlockRoot))
 	// now head block should be unavailable again
-	expHeadBlock(4, nil)
+	expHeadBlock(nil)
 
 	// valid response, now head block should be block 2 immediately as it is already validated
 	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
 	ts.Run(8)
-	expHeadBlock(5, testBlock2)
-}
-
-func blockHeader(block *capella.BeaconBlock) types.Header {
-	return types.Header{
-		Slot:          uint64(block.Slot),
-		ProposerIndex: uint64(block.ProposerIndex),
-		ParentRoot:    common.Hash(block.ParentRoot),
-		StateRoot:     common.Hash(block.StateRoot),
-		BodyRoot:      common.Hash(block.Body.HashTreeRoot(configs.Mainnet, tree.GetHashFn())),
-	}
+	expHeadBlock(testBlock2)
 }
 
 type testHeadTracker struct {
@@ -151,9 +140,10 @@ func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 
 // TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	finalized := types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))
 	return types.FinalityUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
-		Finalized:     types.HeaderWithExecProof{PayloadHeader: &capella.ExecutionPayloadHeader{}},
+		Finalized:     types.HeaderWithExecProof{PayloadHeader: finalized},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, h.validated.Header != (types.Header{})

@@ -34,9 +34,6 @@ import (
 )
 
 const (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
-
 	// defaultCleanSize is the default memory allowance of clean cache.
 	defaultCleanSize = 16 * 1024 * 1024
 
@@ -52,6 +49,11 @@ const (
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
 	DefaultBufferSize = 64 * 1024 * 1024
+)
+
+var (
+	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
+	maxDiffLayers = 128
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -484,4 +486,34 @@ func (db *Database) modifyAllowed() error {
 		return errDatabaseWaitSync
 	}
 	return nil
+}
+
+// AccountHistory inspects the account history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+func (db *Database) AccountHistory(address common.Address, start, end uint64) (*HistoryStats, error) {
+	return accountHistory(db.freezer, address, start, end)
+}
+
+// StorageHistory inspects the storage history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+//
+// Note, slot refers to the hash of the raw slot key.
+func (db *Database) StorageHistory(address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
+	return storageHistory(db.freezer, address, slot, start, end)
+}
+
+// HistoryRange returns the block numbers associated with earliest and latest
+// state history in the local store.
+func (db *Database) HistoryRange() (uint64, uint64, error) {
+	return historyRange(db.freezer)
 }

@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -45,7 +44,7 @@ var emptyCommonHash = common.Hash{}
 func init() {
 	staticFirehoseChainValidationOnInit()
 
-	live.Directory.Register("firehose", newFirehoseTracer)
+	LiveDirectory.Register("firehose", newFirehoseTracer)
 }
 
 func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {

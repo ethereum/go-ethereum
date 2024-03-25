@@ -72,8 +72,8 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config: &config,
 		Alloc: types.GenesisAlloc{
-			testAddr:                         {Balance: testBalance},
-			params.BeaconRootsStorageAddress: {Balance: common.Big0, Code: common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604457602036146024575f5ffd5b620180005f350680545f35146037575f5ffd5b6201800001545f5260205ff35b6201800042064281555f359062018000015500")},
+			testAddr:                  {Balance: testBalance},
+			params.BeaconRootsAddress: {Balance: common.Big0, Code: common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604457602036146024575f5ffd5b620180005f350680545f35146037575f5ffd5b6201800001545f5260205ff35b6201800042064281555f359062018000015500")},
 		},
 		ExtraData:  []byte("test genesis"),
 		Timestamp:  9000,
@@ -1650,10 +1650,10 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 		rootIdx = common.BigToHash(big.NewInt(int64((execData.ExecutionPayload.Timestamp % 98304) + 98304)))
 	)
 
-	if num := db.GetState(params.BeaconRootsStorageAddress, timeIdx); num != timeIdx {
+	if num := db.GetState(params.BeaconRootsAddress, timeIdx); num != timeIdx {
 		t.Fatalf("incorrect number stored: want %s, got %s", timeIdx, num)
 	}
-	if root := db.GetState(params.BeaconRootsStorageAddress, rootIdx); root != *blockParams.BeaconRoot {
+	if root := db.GetState(params.BeaconRootsAddress, rootIdx); root != *blockParams.BeaconRoot {
 		t.Fatalf("incorrect root stored: want %s, got %s", *blockParams.BeaconRoot, root)
 	}
 }

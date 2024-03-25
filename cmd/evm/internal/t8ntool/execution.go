@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -123,7 +123,7 @@ type rejectedTx struct {
 // Apply applies a set of transactions to a pre-state
 func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	txIt txIterator, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error)) (*state.StateDB, *ExecutionResult, []byte, error) {
+	getTracerFn func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error)) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -173,7 +173,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	// Calculate the BlobBaseFee
 	var excessBlobGas uint64
 	if pre.Env.ExcessBlobGas != nil {
-		excessBlobGas := *pre.Env.ExcessBlobGas
+		excessBlobGas = *pre.Env.ExcessBlobGas
 		vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 	} else {
 		// If it is not explicitly defined, but we have the parent values, we try
@@ -422,7 +422,7 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 	return ethash.CalcDifficulty(config, currentTime, parent)
 }
 
-func writeTraceResult(tracer *directory.Tracer, f io.WriteCloser) error {
+func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
 	defer f.Close()
 	result, err := tracer.GetResult()
 	if err != nil || result == nil {

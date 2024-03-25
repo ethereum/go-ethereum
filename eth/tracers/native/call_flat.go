@@ -28,14 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 //go:generate go run github.com/fjl/gencodec -type flatCallAction -field-override flatCallActionMarshaling -out gen_flatcallaction_json.go
 //go:generate go run github.com/fjl/gencodec -type flatCallResult -field-override flatCallResultMarshaling -out gen_flatcallresult_json.go
 
 func init() {
-	directory.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
+	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
 }
 
 var parityErrorMapping = map[string]string{
@@ -112,9 +112,9 @@ type flatCallResultMarshaling struct {
 type flatCallTracer struct {
 	tracer            *callTracer
 	config            flatCallTracerConfig
-	ctx               *directory.Context // Holds tracer context data
-	reason            error              // Textual reason for the interruption
-	activePrecompiles []common.Address   // Updated on tx start based on given rules
+	ctx               *tracers.Context // Holds tracer context data
+	reason            error            // Textual reason for the interruption
+	activePrecompiles []common.Address // Updated on tx start based on given rules
 }
 
 type flatCallTracerConfig struct {
@@ -123,7 +123,7 @@ type flatCallTracerConfig struct {
 }
 
 // newFlatCallTracer returns a new flatCallTracer.
-func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.Tracer, error) {
+func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
 	var config flatCallTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -139,7 +139,7 @@ func newFlatCallTracer(ctx *directory.Context, cfg json.RawMessage) (*directory.
 	}
 
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
-	return &directory.Tracer{
+	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: ft.OnTxStart,
 			OnTxEnd:   ft.OnTxEnd,
@@ -236,7 +236,7 @@ func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
 	return false
 }
 
-func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *directory.Context) (output []flatCallFrame, err error) {
+func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
 	var frame *flatCallFrame
 	switch input.Type {
 	case vm.CREATE, vm.CREATE2:
@@ -335,7 +335,7 @@ func newFlatSelfdestruct(input *callFrame) *flatCallFrame {
 	}
 }
 
-func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *directory.Context) {
+func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
 	if ctx == nil {
 		return
 	}

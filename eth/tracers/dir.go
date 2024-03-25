@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package directory provides functionality to lookup tracers by name.
-// It also includes utility functions that are imported by the other
-// tracing packages.
-package directory
+package tracers
 
 import (
 	"encoding/json"

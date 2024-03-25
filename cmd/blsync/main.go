@@ -23,7 +23,6 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/beacon/blsync"
-	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -87,16 +86,14 @@ func sync(ctx *cli.Context) error {
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
-	headCh := make(chan types.ChainHeadEvent, 16)
+	// set up blsync
 	client := blsync.NewClient(ctx)
-	sub := client.SubscribeChainHeadEvent(headCh)
-	go updateEngineApi(makeRPCClient(ctx), headCh)
+	client.SetEngineRPC(makeRPCClient(ctx))
 	client.Start()
+
 	// run until stopped
 	<-ctx.Done()
 	client.Stop()
-	sub.Unsubscribe()
-	close(headCh)
 	return nil
 }
 

@@ -10,13 +10,13 @@
 
 package prque
 
-import "golang.org/x/exp/constraints"
+import "cmp"
 
 // The size of a block of data
 const blockSize = 4096
 
 // A prioritized item in the sorted stack.
-type item[P constraints.Ordered, V any] struct {
+type item[P cmp.Ordered, V any] struct {
 	value    V
 	priority P
 }
@@ -29,7 +29,7 @@ type SetIndexCallback[V any] func(data V, index int)
 // Internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
-type sstack[P constraints.Ordered, V any] struct {
+type sstack[P cmp.Ordered, V any] struct {
 	setIndex SetIndexCallback[V]
 	size     int
 	capacity int
@@ -40,7 +40,7 @@ type sstack[P constraints.Ordered, V any] struct {
 }
 
 // Creates a new, empty stack.
-func newSstack[P constraints.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V] {
+func newSstack[P cmp.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V] {
 	result := new(sstack[P, V])
 	result.setIndex = setIndex
 	result.active = make([]*item[P, V], blockSize)
