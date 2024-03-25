@@ -150,6 +150,20 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
+// GetABI returns the contract ABI Object of the BoundContract.
+func (c *BoundContract) GetABI() abi.ABI {
+	return c.abi
+}
+
+// Method retrieves the ABI method with the given name.
+func (c *BoundContract) Method(name string) (*abi.Method, error) {
+	method, exist := c.abi.Methods[name]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", name)
+	}
+	return &method, nil
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
@@ -229,6 +243,11 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	}
 	res := *results
 	return c.abi.UnpackIntoInterface(res[0], method, output)
+}
+
+// Calldata returns the raw calldata to invoke a transact method with params.
+func (c *BoundContract) Calldata(method string, params ...interface{}) ([]byte, error) {
+	return c.abi.Pack(method, params...)
 }
 
 // Transact invokes the (paid) contract method with params as input values.
@@ -427,6 +446,15 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		return nil, err
 	}
 	return signedTx, nil
+}
+
+// Event returns the event with the given name, or error if no such event exists.
+func (c *BoundContract) Event(name string) (*abi.Event, error) {
+	abiEvent, exist := c.abi.Events[name]
+	if !exist {
+		return nil, fmt.Errorf("event '%s' not found", name)
+	}
+	return &abiEvent, nil
 }
 
 // FilterLogs filters contract logs for past blocks, returning the necessary
