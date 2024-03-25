@@ -837,12 +837,17 @@ func (s *Syncer) loadSyncStatus() {
 func (s *Syncer) saveSyncStatus() {
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
+		// Claim the right boundary as incomplete before flushing the
+		// accumulated nodes in batch, the nodes on right boundary
+		// will be discarded and cleaned up by this call.
 		task.genTrie.commit(false)
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist account slots", "err", err)
 		}
 		for _, subtasks := range task.SubTasks {
 			for _, subtask := range subtasks {
+				// Same for account trie, discard and cleanup the
+				// incomplete right boundary.
 				subtask.genTrie.commit(false)
 				if err := subtask.genBatch.Write(); err != nil {
 					log.Error("Failed to persist storage slots", "err", err)

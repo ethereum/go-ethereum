@@ -339,3 +339,77 @@ func TestFlushPartialTree(t *testing.T) {
 		}
 	}
 }
+
+// TestBoundSplit ensures two consecutive trie chunks are not overlapped with
+// each other.
+func TestBoundSplit(t *testing.T) {
+	var entries []*kv
+	for i := 0; i < 1024; i++ {
+		var val []byte
+		if rand.Intn(3) == 0 {
+			val = testrand.Bytes(3)
+		} else {
+			val = testrand.Bytes(32)
+		}
+		entries = append(entries, &kv{
+			k: testrand.Bytes(32),
+			v: val,
+		})
+	}
+	slices.SortFunc(entries, (*kv).cmp)
+
+	for j := 0; j < 100; j++ {
+		var (
+			next int
+			last int
+			db   = rawdb.NewMemoryDatabase()
+
+			lastRightRoot []byte
+		)
+		for {
+			if next == len(entries) {
+				break
+			}
+			last = rand.Intn(len(entries)-next) + next
+
+			r := buildPartial(common.Hash{}, db, db.NewBatch(), entries, next, last)
+			updates := r.updates()
+
+			// Skip if the chunk is zero-size
+			if len(updates) == 0 {
+				next = last + 1
+				continue
+			}
+
+			// Ensure the updates in two consecutive chunks are not overlapped.
+			// The only overlapping part should be deletion.
+			if lastRightRoot != nil && len(updates) > 0 {
+				// Derive the path of left-most node in this chunk
+				var leftRoot []byte
+				for path, hash := range r.updates() {
+					if hash == (common.Hash{}) {
+						t.Fatalf("Unexpected deletion %v", []byte(path))
+					}
+					if leftRoot == nil || bytes.Compare(leftRoot, []byte(path)) > 0 {
+						leftRoot = []byte(path)
+					}
+				}
+				if bytes.HasPrefix(lastRightRoot, leftRoot) || bytes.HasPrefix(leftRoot, lastRightRoot) {
+					t.Fatalf("Two chunks are not correctly separated, lastRight: %v, left: %v", lastRightRoot, leftRoot)
+				}
+			}
+
+			// Track the updates as the last chunk
+			var rightRoot []byte
+			for path := range updates {
+				if rightRoot == nil ||
+					(bytes.Compare(rightRoot, []byte(path)) < 0) ||
+					(bytes.Compare(rightRoot, []byte(path)) > 0 && bytes.HasPrefix(rightRoot, []byte(path))) {
+					rightRoot = []byte(path)
+				}
+			}
+			lastRightRoot = rightRoot
+			next = last + 1
+		}
+	}
+}
