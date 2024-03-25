@@ -552,9 +552,8 @@ func (d *Downloader) syncWithPeer(hash common.Hash, td, ttd *big.Int) (err error
 		d.syncInitHook(origin, height)
 	}
 	// In beacon mode, headers are served by the skeleton syncer
-	headerFetcher := func() error { return d.fetchBeaconHeaders(origin + 1) }
 	fetchers := []func() error{
-		headerFetcher, // Headers are always retrieved
+		func() error { return d.fetchHeaders(origin + 1) },  // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and snap sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during snap sync
 		func() error { return d.processHeaders(origin+1, td, ttd) },
