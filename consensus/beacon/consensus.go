@@ -360,6 +360,10 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount := new(uint256.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
+
+		if chain.Config().IsEIP4762(header.Number, header.Time) {
+			state.Witness().TouchFullAccount(w.Address[:], true)
+		}
 	}
 	// No block reward which is issued by consensus layer instead.
 }

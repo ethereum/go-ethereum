@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -139,6 +140,9 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
+	// Verkle witness
+	witness *AccessWitness
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -193,10 +197,28 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
+	if tr.IsVerkle() {
+		sdb.witness = sdb.NewAccessWitness()
+	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) NewAccessWitness() *AccessWitness {
+	return NewAccessWitness(utils.NewPointCache(100))
+}
+
+func (s *StateDB) Witness() *AccessWitness {
+	if s.witness == nil {
+		s.witness = s.NewAccessWitness()
+	}
+	return s.witness
+}
+
+func (s *StateDB) SetWitness(aw *AccessWitness) {
+	s.witness = aw
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -1275,7 +1297,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsBerlin {
+	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
 		s.accessList = al
