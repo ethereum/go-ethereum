@@ -232,11 +232,9 @@ func runBenchmarkFile(b *testing.B, path string) {
 	m := make(map[string]StateTest)
 	if err := readJSONFile(path, &m); err != nil {
 		b.Fatal(err)
-		return
 	}
 	if len(m) != 1 {
 		b.Fatal("expected single benchmark in a file")
-		return
 	}
 	for _, t := range m {
 		t := t

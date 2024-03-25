@@ -358,7 +358,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	// Now replace file contents
 	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
 		t.Fatal(err)
-		return
 	}
 	wantAccounts = []accounts.Account{cachetestAccounts[1]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
@@ -374,7 +373,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	// Now replace file contents again
 	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
 		t.Fatal(err)
-		return
 	}
 	wantAccounts = []accounts.Account{cachetestAccounts[2]}
 	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
@@ -390,7 +388,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	// Now replace file contents with crap
 	if err := os.WriteFile(file, []byte("foo"), 0600); err != nil {
 		t.Fatal(err)
-		return
 	}
 	if err := waitForAccounts([]accounts.Account{}, ks); err != nil {
 		t.Errorf("Emptying account file failed")
