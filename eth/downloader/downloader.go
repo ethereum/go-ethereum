@@ -698,7 +698,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 	log.Debug("Filling up skeleton", "from", from)
 	d.queue.ScheduleSkeleton(from, skeleton)
 
-	err := d.concurrentFetch((*headerQueue)(d), false)
+	err := d.concurrentFetch((*headerQueue)(d))
 	if err != nil {
 		log.Debug("Skeleton fill failed", "err", err)
 	}
@@ -714,7 +714,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 // and also periodically checking for timeouts.
 func (d *Downloader) fetchBodies(from uint64) error {
 	log.Debug("Downloading block bodies", "origin", from)
-	err := d.concurrentFetch((*bodyQueue)(d), false)
+	err := d.concurrentFetch((*bodyQueue)(d))
 
 	log.Debug("Block body download terminated", "err", err)
 	return err
@@ -725,7 +725,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 // and also periodically checking for timeouts.
 func (d *Downloader) fetchReceipts(from uint64) error {
 	log.Debug("Downloading receipts", "origin", from)
-	err := d.concurrentFetch((*receiptQueue)(d), true)
+	err := d.concurrentFetch((*receiptQueue)(d))
 
 	log.Debug("Receipt download terminated", "err", err)
 	return err
