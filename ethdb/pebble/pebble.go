@@ -19,6 +19,7 @@ package pebble
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -136,6 +137,7 @@ func (l panicLogger) Fatalf(format string, args ...interface{}) {
 // New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool) (*Database, error) {
+	return nil, errors.New("this repo doesn't support pebble DB")
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
 		cache = minCache
