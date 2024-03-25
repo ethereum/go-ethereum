@@ -72,26 +72,20 @@ var (
 )
 
 func makeChainConfig(ctx *cli.Context) lightClientConfig {
-	var (
-		config       lightClientConfig
-		predefConfig bool
-	)
+	var config lightClientConfig
 	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name)
-	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag)
+	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag, utils.BeaconConfigFlag)
 	switch {
 	case ctx.Bool(utils.MainnetFlag.Name):
-		config, predefConfig = MainnetConfig, true
+		config = MainnetConfig
 	case ctx.Bool(utils.SepoliaFlag.Name):
-		config, predefConfig = SepoliaConfig, true
+		config = SepoliaConfig
 	case ctx.Bool(utils.GoerliFlag.Name):
-		config, predefConfig = GoerliConfig, true
+		config = GoerliConfig
 	default:
 		if !customConfig {
-			config, predefConfig = MainnetConfig, true
+			config = MainnetConfig
 		}
-	}
-	if customConfig && predefConfig {
-		utils.Fatalf("Cannot use custom beacon chain config flags in combination with pre-defined network config")
 	}
 	// Genesis root and time should always be specified together with custom chain config
 	if customConfig {
