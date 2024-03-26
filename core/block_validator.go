@@ -178,6 +178,9 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		// TODO: consider verifying that skipped messages overflow
 		for index := queueIndex; index < txQueueIndex; index++ {
 			if exists := it.Next(); !exists {
+				if err := it.Error(); err != nil {
+					log.Error("Unexpected DB error in ValidateL1Messages", "err", err, "queueIndex", queueIndex)
+				}
 				// the message in this block is not available in our local db.
 				// we'll reprocess this block at a later time.
 				return consensus.ErrMissingL1MessageData
@@ -192,6 +195,9 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		queueIndex = txQueueIndex + 1
 
 		if exists := it.Next(); !exists {
+			if err := it.Error(); err != nil {
+				log.Error("Unexpected DB error in ValidateL1Messages", "err", err, "queueIndex", txQueueIndex)
+			}
 			// the message in this block is not available in our local db.
 			// we'll reprocess this block at a later time.
 			return consensus.ErrMissingL1MessageData
