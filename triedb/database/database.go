@@ -25,6 +25,9 @@ type Reader interface {
 	// Node retrieves the trie node blob with the provided trie identifier,
 	// node path and the corresponding node hash. No error will be returned
 	// if the node is not found.
+	//
+	// Don't modify the returned byte slice since it's not deep-copied and
+	// still be referenced by database.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 

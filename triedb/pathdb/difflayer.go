@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
@@ -33,19 +32,19 @@ import (
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
-	root   common.Hash                               // Root hash to which this layer diff belongs to
-	id     uint64                                    // Corresponding state id
-	block  uint64                                    // Associated block number
-	nodes  map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
-	states *triestate.Set                            // Associated state change set for building history
-	memory uint64                                    // Approximate guess as to how much memory we use
+	root   common.Hash                       // Root hash to which this layer diff belongs to
+	id     uint64                            // Corresponding state id
+	block  uint64                            // Associated block number
+	nodes  map[common.Hash]map[string][]byte // Cached trie nodes indexed by owner and path
+	states *triestate.Set                    // Associated state change set for building history
+	memory uint64                            // Approximate guess as to how much memory we use
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock   sync.RWMutex // Lock used to protect parent
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string][]byte, states *triestate.Set) *diffLayer {
 	var (
 		size  int64
 		count int
@@ -60,11 +59,11 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes
 	}
 	for _, subset := range nodes {
 		for path, n := range subset {
-			dl.memory += uint64(n.Size() + len(path))
-			size += int64(len(n.Blob) + len(path))
+			size += int64(len(n) + len(path))
 		}
 		count += len(subset)
 	}
+	dl.memory = uint64(size)
 	if states != nil {
 		dl.memory += uint64(states.Size())
 	}
@@ -95,10 +94,9 @@ func (dl *diffLayer) parentLayer() layer {
 	return dl.parent
 }
 
-// node retrieves the node with provided node information. It's the internal
-// version of Node function with additional accessed layer tracked. No error
-// will be returned if node is not found.
-func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, depth int) ([]byte, error) {
+// node implements the layer interface, retrieving the trie node blob with the
+// provided node information. No error will be returned if the node is not found.
+func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, *nodeLoc, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.
 	dl.lock.RLock()
@@ -109,36 +107,19 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 	if ok {
 		n, ok := subset[string(path)]
 		if ok {
-			// If the trie node is not hash matched, or marked as removed,
-			// bubble up an error here. It shouldn't happen at all.
-			if n.Hash != hash {
-				dirtyFalseMeter.Mark(1)
-				log.Error("Unexpected trie node in diff layer", "owner", owner, "path", path, "expect", hash, "got", n.Hash)
-				return nil, newUnexpectedNodeError("diff", hash, n.Hash, owner, path, n.Blob)
-			}
 			dirtyHitMeter.Mark(1)
 			dirtyNodeHitDepthHist.Update(int64(depth))
-			dirtyReadMeter.Mark(int64(len(n.Blob)))
-			return n.Blob, nil
+			dirtyReadMeter.Mark(int64(len(n)))
+			return n, &nodeLoc{loc: locDiffLayer, depth: depth}, nil
 		}
 	}
 	// Trie node unknown to this layer, resolve from parent
-	if diff, ok := dl.parent.(*diffLayer); ok {
-		return diff.node(owner, path, hash, depth+1)
-	}
-	// Failed to resolve through diff layers, fallback to disk layer
-	return dl.parent.Node(owner, path, hash)
-}
-
-// Node implements the layer interface, retrieving the trie node blob with the
-// provided node information. No error will be returned if the node is not found.
-func (dl *diffLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	return dl.node(owner, path, hash, 0)
+	return dl.parent.node(owner, path, depth+1)
 }
 
 // update implements the layer interface, creating a new layer on top of the
 // existing layer tree with the specified data items.
-func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string][]byte, states *triestate.Set) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 

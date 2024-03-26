@@ -718,11 +718,11 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 // cleanPath is used to remove the dangling nodes in the stackTrie.
 func (s *Syncer) cleanPath(batch ethdb.Batch, owner common.Hash, path []byte) {
-	if owner == (common.Hash{}) && rawdb.ExistsAccountTrieNode(s.db, path) {
+	if owner == (common.Hash{}) && rawdb.HasAccountTrieNode(s.db, path) {
 		rawdb.DeleteAccountTrieNode(batch, path)
 		deletionGauge.Inc(1)
 	}
-	if owner != (common.Hash{}) && rawdb.ExistsStorageTrieNode(s.db, owner, path) {
+	if owner != (common.Hash{}) && rawdb.HasStorageTrieNode(s.db, owner, path) {
 		rawdb.DeleteStorageTrieNode(batch, owner, path)
 		deletionGauge.Inc(1)
 	}
@@ -2201,11 +2201,16 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// If the chunk's root is an overflown but full delivery,
 			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
-			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
-				for i, account := range res.mainTask.res.hashes {
-					if account == accountHash {
-						res.mainTask.needHeal[i] = false
-						skipStorageHealingGauge.Inc(1)
+			if root == res.subTask.root {
+				// Ensure the root node with particular hash is present in disk
+				// before clearing.
+				blob := rawdb.ReadStorageTrieNode(s.db, accountHash, nil)
+				if len(blob) != 0 && crypto.Keccak256Hash(blob) == root {
+					for i, account := range res.mainTask.res.hashes {
+						if account == accountHash {
+							res.mainTask.needHeal[i] = false
+							skipStorageHealingGauge.Inc(1)
+						}
 					}
 				}
 			}

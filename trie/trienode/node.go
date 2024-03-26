@@ -32,11 +32,6 @@ type Node struct {
 	Blob []byte      // Encoded node blob, nil for the deleted node
 }
 
-// Size returns the total memory size used by this node.
-func (n *Node) Size() int {
-	return len(n.Blob) + common.HashLength
-}
-
 // IsDeleted returns the indicator if the node is marked as deleted.
 func (n *Node) IsDeleted() bool {
 	return len(n.Blob) == 0
@@ -130,16 +125,6 @@ func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
 }
 
-// Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
-// we get rid of it?
-func (set *NodeSet) Hashes() []common.Hash {
-	var ret []common.Hash
-	for _, node := range set.Nodes {
-		ret = append(ret, node.Hash)
-	}
-	return ret
-}
-
 // Summary returns a string-representation of the NodeSet.
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)
@@ -189,11 +174,17 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	return nil
 }
 
-// Flatten returns a two-dimensional map for internal nodes.
-func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
+// Slim returns a node map by assembling nodes from the merged set while excluding
+// any other fields in the MergedNodeSet. The node blobs are referenced directly
+// without deep-copied due to the fact that they are immutable.
+func (set *MergedNodeSet) Slim() map[common.Hash]map[string][]byte {
+	nodes := make(map[common.Hash]map[string][]byte)
 	for owner, set := range set.Sets {
-		nodes[owner] = set.Nodes
+		subset := make(map[string][]byte)
+		for path, node := range set.Nodes {
+			subset[path] = node.Blob
+		}
+		nodes[owner] = subset
 	}
 	return nodes
 }

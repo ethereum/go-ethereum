@@ -33,6 +33,7 @@ var (
 	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
 	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
 	diskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", nil)
+	diffFalseMeter  = metrics.NewRegisteredMeter("pathdb/diff/false", nil)
 
 	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
