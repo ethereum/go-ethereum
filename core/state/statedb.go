@@ -1156,6 +1156,11 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) error {
 	return nil
 }
 
+// GetTrie returns the account trie.
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
+}
+
 // Commit writes the state to the underlying in-memory trie database.
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
