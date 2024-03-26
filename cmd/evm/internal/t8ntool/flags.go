@@ -50,6 +50,10 @@ var (
 		Name:  "trace.returndata",
 		Usage: "Enable return data output in traces",
 	}
+	TraceEnableCallFramesFlag = &cli.BoolFlag{
+		Name:  "trace.callframes",
+		Usage: "Enable call frames output in traces",
+	}
 	OutputBasedir = &cli.StringFlag{
 		Name:  "output.basedir",
 		Usage: "Specifies where output files are placed. Will be created if it does not exist.",
