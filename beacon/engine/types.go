@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -153,6 +154,25 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 	if err != nil {
 		return fmt.Errorf("invalid payload id %q: %w", input, err)
 	}
+	return nil
+}
+
+// MarshalJSON marshals the PayloadIDBytes to hex.
+// It is required since we can't use struct tags for [8]byte.
+func (b PayloadID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hexutil.Bytes(b[:]))
+}
+
+// UnmarshalJSON unmarshals the PayloadID from hex.
+func (b *PayloadID) UnmarshalJSON(input []byte) error {
+	var dec hexutil.Bytes
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if len(dec) != len(b) {
+		return fmt.Errorf("invalid payload id %q", dec)
+	}
+	copy(b[:], dec)
 	return nil
 }
 
