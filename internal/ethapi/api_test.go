@@ -1737,6 +1737,7 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"blockNumber": "0x1",
 				"contractAddress": null,
 				"cumulativeGasUsed": "0x5208",
+				"effectiveGasPrice": "0x342770c0",
 				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
 				"gasUsed": "0x5208",
 				"logs": [
@@ -1773,6 +1774,7 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"blockNumber": "0x1",
 				"contractAddress": "0xae9bea628c4ce503dcfd7e305cab4e29e7476592",
 				"cumulativeGasUsed": "0x12156",
+				"effectiveGasPrice": "0x342770c0",
 				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
 				"gasUsed": "0xcf4e",
 				"logs": [],
@@ -1792,6 +1794,7 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"blockNumber": "0x1",
 				"contractAddress": null,
 				"cumulativeGasUsed": "0x17f7e",
+				"effectiveGasPrice": "0x342770c0",
 				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
 				"gasUsed": "0x5e28",
 				"logs": [
@@ -1827,6 +1830,7 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"blockNumber": "0x1",
 				"contractAddress": null,
 				"cumulativeGasUsed": "0x1d30b",
+				"effectiveGasPrice": "0x342772b4",
 				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
 				"gasUsed": "0x538d",
 				"logs": [
@@ -1863,6 +1867,7 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"blockNumber": "0x1",
 				"contractAddress": "0xfdaa97661a584d977b4d3abb5370766ff5b86a18",
 				"cumulativeGasUsed": "0x2b325",
+				"effectiveGasPrice": "0x342770c0",
 				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
 				"gasUsed": "0xe01a",
 				"logs": [],
