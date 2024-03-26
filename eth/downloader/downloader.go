@@ -406,16 +406,16 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	if beaconPing != nil {
 		close(beaconPing)
 	}
-	return d.syncWithPeer(hash, td, ttd)
+	return d.syncToHead(hash)
 }
 
 func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
 
-// syncWithPeer starts a block synchronization based on the hash chain from the
-// specified peer and head hash.
-func (d *Downloader) syncWithPeer(hash common.Hash, td, ttd *big.Int) (err error) {
+// syncToHead starts a block synchronization based on the hash chain from
+// the specified head hash.
+func (d *Downloader) syncToHead(hash common.Hash) (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -556,7 +556,7 @@ func (d *Downloader) syncWithPeer(hash common.Hash, td, ttd *big.Int) (err error
 		func() error { return d.fetchHeaders(origin + 1) },  // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and snap sync
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during snap sync
-		func() error { return d.processHeaders(origin+1, td, ttd) },
+		func() error { return d.processHeaders(origin + 1) },
 	}
 	if mode == SnapSync {
 		d.pivotLock.Lock()
@@ -733,7 +733,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int) error {
+func (d *Downloader) processHeaders(origin uint64) error {
 	var (
 		mode = d.getMode()
 	)
@@ -777,10 +777,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int) error {
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
-					var (
-						rejected []*types.Header
-						td       *big.Int
-					)
+					var rejected []*types.Header
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders); err != nil {
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
@@ -788,7 +785,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int) error {
 						}
 					}
 					if len(rejected) != 0 {
-						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash())
 						return ErrMergeTransition
 					}
 				}
