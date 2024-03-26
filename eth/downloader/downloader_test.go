@@ -730,24 +730,27 @@ func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.Sync
 }
 
 // Tests that synchronisation progress (origin block number and highest block
-// number) is tracked and updated correctly in case of a fork (or manual head
-// revertal).
+// number) is tracked and updated correctly in case of manual head reversion
 func TestForkedSyncProgress68Full(t *testing.T)  { testForkedSyncProgress(t, eth.ETH68, FullSync) }
 func TestForkedSyncProgress68Snap(t *testing.T)  { testForkedSyncProgress(t, eth.ETH68, SnapSync) }
 func TestForkedSyncProgress68Light(t *testing.T) { testForkedSyncProgress(t, eth.ETH68, LightSync) }
 
 func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
-	tester := newTester(t)
+	success := make(chan struct{})
+	tester := newTesterWithNotification(t, func() {
+		success <- struct{}{}
+	})
 	defer tester.terminate()
 
 	chainA := testChainForkLightA.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
-	chainB := testChainForkLightB.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
+	chainB := testChainForkHigher.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
 
 	// Set a sync init hook to catch progress changes
 	starting := make(chan struct{})
 	progress := make(chan struct{})
 
 	tester.downloader.syncInitHook = func(origin, latest uint64) {
+		fmt.Println("sync init")
 		starting <- struct{}{}
 		<-progress
 	}
@@ -759,37 +762,43 @@ func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	pending.Add(1)
 	go func() {
 		defer pending.Done()
-		/*
-			if err := tester.sync("fork A", nil, mode); err != nil {
-				panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
-			}
-
-		*/
+		if err := tester.downloader.BeaconSync(mode, chainA.blocks[len(chainA.blocks)-1].Header(), nil); err != nil {
+			panic(fmt.Sprintf("failed to beacon sync: %v", err))
+		}
 	}()
+
 	<-starting
-
-	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(len(chainA.blocks) - 1),
-	})
 	progress <- struct{}{}
-	pending.Wait()
+	select {
+	case <-success:
+		checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
+			HighestBlock: uint64(len(chainA.blocks) - 1),
+			CurrentBlock: uint64(len(chainA.blocks) - 1),
+		})
+	case <-time.NewTimer(time.Second * 3).C:
+		t.Fatalf("Failed to sync chain in three seconds")
+	}
 
-	// Simulate a successful sync above the fork
-	tester.downloader.syncStatsChainOrigin = tester.downloader.syncStatsChainHeight
-
-	// Synchronise with the second fork and check progress resets
+	// Set the head to a second fork (which forks after the origin of the last sync cycle
 	tester.newPeer("fork B", protocol, chainB.blocks[1:])
 	pending.Add(1)
 	go func() {
 		defer pending.Done()
-		/*
-			if err := tester.sync("fork B", nil, mode); err != nil {
-				panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
-			}
-
-		*/
+		if err := tester.downloader.BeaconSync(mode, chainB.blocks[len(chainB.blocks)-1].Header(), nil); err != nil {
+			panic(fmt.Sprintf("failed to beacon sync: %v", err))
+		}
 	}()
-	<-starting
+
+	select {
+	case <-success:
+		checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
+			HighestBlock: uint64(len(chainB.blocks) - 1),
+			CurrentBlock: uint64(len(chainB.blocks) - 1),
+			// TODO: check that origin block is at the start of the fork (not 0)
+		})
+	case <-time.NewTimer(time.Second * 3).C:
+		t.Fatalf("Failed to sync chain in three seconds")
+	}
 	checkProgress(t, tester.downloader, "forking", ethereum.SyncProgress{
 		StartingBlock: uint64(len(testChainBase.blocks)) - 1,
 		CurrentBlock:  uint64(len(chainA.blocks) - 1),
