@@ -165,8 +165,8 @@ func (f *ResettableFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (
 
 // ModifyAncients runs the given write operation.
 func (f *ResettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.ModifyAncients(fn)
 }
@@ -174,8 +174,8 @@ func (f *ResettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) 
 // TruncateHead discards any recent data above the provided threshold number.
 // It returns the previous head number.
 func (f *ResettableFreezer) TruncateHead(items uint64) (uint64, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.TruncateHead(items)
 }
@@ -183,8 +183,8 @@ func (f *ResettableFreezer) TruncateHead(items uint64) (uint64, error) {
 // TruncateTail discards any recent data below the provided threshold number.
 // It returns the previous value
 func (f *ResettableFreezer) TruncateTail(tail uint64) (uint64, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.TruncateTail(tail)
 }
@@ -200,8 +200,8 @@ func (f *ResettableFreezer) Sync() error {
 // MigrateTable processes the entries in a given table in sequence
 // converting them to a new format if they're of an old format.
 func (f *ResettableFreezer) MigrateTable(kind string, convert convertLegacyFn) error {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
 	return f.freezer.MigrateTable(kind, convert)
 }
