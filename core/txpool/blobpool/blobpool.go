@@ -1226,7 +1226,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 	return errs
 }
 
-// Add inserts a new blob transaction into the pool if it passes validation (both
+// add inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are

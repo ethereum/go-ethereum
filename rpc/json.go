@@ -266,7 +266,7 @@ func (c *jsonCodec) close() {
 	})
 }
 
-// Closed returns a channel which will be closed when Close is called
+// closed returns a channel which will be closed when Close is called
 func (c *jsonCodec) closed() <-chan interface{} {
 	return c.closeCh
 }

@@ -101,7 +101,7 @@ func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedH
 	s.headTracker.ValidateHead(signedHead)
 }
 
-// newSignedHead handles received signed head; either validates it if the chain
+// newFinalityUpdate handles received finality update; either validates it if the chain
 // is properly synced or stores it for further validation.
 func (s *HeadSync) newFinalityUpdate(server request.Server, finalityUpdate types.FinalityUpdate) {
 	if !s.chainInit || types.SyncPeriod(finalityUpdate.SignatureSlot) > s.nextSyncPeriod {
@@ -111,7 +111,7 @@ func (s *HeadSync) newFinalityUpdate(server request.Server, finalityUpdate types
 	s.headTracker.ValidateFinality(finalityUpdate)
 }
 
-// processUnvalidatedHeads iterates the list of unvalidated heads and validates
+// processUnvalidated iterates the list of unvalidated heads and validates
 // those which can be validated.
 func (s *HeadSync) processUnvalidated() {
 	if !s.chainInit {

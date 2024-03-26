@@ -94,7 +94,7 @@ func newSkeletonTestPeer(id string, headers []*types.Header) *skeletonTestPeer {
 	}
 }
 
-// newSkeletonTestPeer creates a new mock peer to test the skeleton sync with,
+// newSkeletonTestPeerWithHook creates a new mock peer to test the skeleton sync with,
 // and sets an optional serve hook that can return headers for delivery instead
 // of the predefined chain. Useful for emulating malicious behavior that would
 // otherwise require dedicated peer types.

@@ -514,7 +514,7 @@ func iterateKeys(it ethdb.Iterator) []string {
 	return keys
 }
 
-// randomHash generates a random blob of data and returns it as a hash.
+// randBytes generates a random blob of data.
 func randBytes(len int) []byte {
 	buf := make([]byte, len)
 	if n, err := rand.Read(buf); n != len || err != nil {

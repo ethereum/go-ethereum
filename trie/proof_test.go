@@ -198,7 +198,7 @@ func TestRangeProof(t *testing.T) {
 	}
 }
 
-// TestRangeProof tests normal range proof with two non-existent proofs.
+// TestRangeProofWithNonExistentProof tests normal range proof with two non-existent proofs.
 // The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
