@@ -56,7 +56,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
 			ShanghaiBlock:       big.NewInt(0),
-			BanachBlock:         big.NewInt(0),
+			BernoulliBlock:      big.NewInt(0),
+			CurieBlock:          big.NewInt(0),
 			Ethash:              new(params.EthashConfig),
 		}
 		signer  = types.LatestSigner(config)
@@ -333,7 +334,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					ArrowGlacierBlock:   big.NewInt(0),
 					ArchimedesBlock:     big.NewInt(0),
 					ShanghaiBlock:       big.NewInt(0),
-					BanachBlock:         big.NewInt(0),
+					BernoulliBlock:      big.NewInt(0),
+					CurieBlock:          big.NewInt(0),
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -398,7 +400,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		UncleHash: types.EmptyUncleHash,
 	}
 
-	if config.IsBanach(header.Number) {
+	if config.IsCurie(header.Number) {
 		parentL1BaseFee := big.NewInt(1000000000) // 1 gwei
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header(), parentL1BaseFee)
 	}

@@ -247,7 +247,7 @@ func Transition(ctx *cli.Context) error {
 		return NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
 	}
 	// Sanity check, to not `panic` in state_transition
-	if chainConfig.IsBanach(big.NewInt(int64(prestate.Env.Number))) {
+	if chainConfig.IsCurie(big.NewInt(int64(prestate.Env.Number))) {
 		if prestate.Env.BaseFee == nil {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}

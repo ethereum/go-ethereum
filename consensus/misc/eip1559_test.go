@@ -51,8 +51,8 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 
 func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
-	config.LondonBlock = big.NewInt(3)
-	config.BanachBlock = big.NewInt(5)
+	config.BernoulliBlock = big.NewInt(3)
+	config.CurieBlock = big.NewInt(5)
 	return config
 }
 
@@ -67,13 +67,13 @@ func TestBlockGasLimits(t *testing.T) {
 		gasLimit  uint64
 		ok        bool
 	}{
-		// Transitions from non-banach to banach
+		// Transitions from non-curie to curie
 		{10000000, 4, 10000000, true},  // No change
 		{10000000, 4, 10009764, true},  // Upper limit
 		{10000000, 4, 10009765, false}, // Upper +1
 		{10000000, 4, 9990236, true},   // Lower limit
 		{10000000, 4, 9990235, false},  // Lower limit -1
-		// Banach to Banach
+		// Curie to Curie
 		{20000000, 5, 20000000, true},
 		{20000000, 5, 20019530, true},  // Upper limit
 		{20000000, 5, 20019531, false}, // Upper limit +1

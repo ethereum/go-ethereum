@@ -89,7 +89,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
 		bf.results.baseFee = new(big.Int)
 	}
-	if chainconfig.IsBanach(big.NewInt(int64(bf.blockNumber + 1))) {
+	if chainconfig.IsCurie(big.NewInt(int64(bf.blockNumber + 1))) {
 		state, err := oracle.backend.StateAt(bf.header.Root)
 		if err != nil || state == nil {
 			log.Error("State not found", "number", bf.header.Number, "hash", bf.header.Hash().Hex(), "state", state, "err", err)

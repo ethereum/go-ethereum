@@ -276,7 +276,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}
-	if chain.Config().IsBanach(header.Number) {
+	if chain.Config().IsCurie(header.Number) {
 		parentL1BaseFee := fees.GetL1BaseFee(state)
 		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header(), parentL1BaseFee)
 	}

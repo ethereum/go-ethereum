@@ -111,9 +111,9 @@ var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
 }
 
-// PrecompiledContractsBanach contains the default set of pre-compiled Ethereum
-// contracts used in the Banach release. Same as Archimedes but with sha256hash enabled again
-var PrecompiledContractsBanach = map[common.Address]PrecompiledContract{
+// PrecompiledContractsBernoulli contains the default set of pre-compiled Ethereum
+// contracts used in the Bernoulli release. Same as Archimedes but with sha256hash enabled again
+var PrecompiledContractsBernoulli = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
@@ -140,7 +140,7 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 var (
-	PrecompiledAddressesBanach     []common.Address
+	PrecompiledAddressesBernoulli  []common.Address
 	PrecompiledAddressesArchimedes []common.Address
 	PrecompiledAddressesBerlin     []common.Address
 	PrecompiledAddressesIstanbul   []common.Address
@@ -164,16 +164,16 @@ func init() {
 	for k := range PrecompiledContractsArchimedes {
 		PrecompiledAddressesArchimedes = append(PrecompiledAddressesArchimedes, k)
 	}
-	for k := range PrecompiledContractsBanach {
-		PrecompiledAddressesBanach = append(PrecompiledAddressesBanach, k)
+	for k := range PrecompiledContractsBernoulli {
+		PrecompiledAddressesBernoulli = append(PrecompiledAddressesBernoulli, k)
 	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsBanach:
-		return PrecompiledAddressesBanach
+	case rules.IsBernoulli:
+		return PrecompiledAddressesBernoulli
 	case rules.IsArchimedes:
 		return PrecompiledAddressesArchimedes
 	case rules.IsBerlin:

@@ -1231,7 +1231,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsBanach(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+		if reset.newHead != nil && pool.chainconfig.IsCurie(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
 			l1BaseFee := fees.GetL1BaseFee(pool.currentState)
 			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead, l1BaseFee)
 			pool.priced.SetBaseFee(pendingBaseFee)
@@ -1357,8 +1357,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 
-	pool.eip2718 = pool.chainconfig.IsBanach(next)
-	pool.eip1559 = pool.chainconfig.IsBanach(next)
+	pool.eip2718 = pool.chainconfig.IsCurie(next)
+	pool.eip1559 = pool.chainconfig.IsCurie(next)
 	pool.shanghai = pool.chainconfig.IsShanghai(next)
 }
 

@@ -1324,7 +1324,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		Time:       uint64(timestamp),
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	if w.chainConfig.IsBanach(header.Number) {
+	if w.chainConfig.IsCurie(header.Number) {
 		state, err := w.chain.StateAt(parent.Root())
 		if err != nil {
 			log.Error("Failed to create mining context", "err", err)
