@@ -541,12 +541,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 }
 
 // deleteStateObject removes the given object from the state trie.
-func (s *StateDB) deleteStateObject(obj *stateObject) {
+func (s *StateDB) deleteStateObject(addr common.Address) {
 	// Track the amount of time wasted on deleting the account from the trie
 	defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 
 	// Delete the account from the trie
-	addr := obj.Address()
 	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
@@ -917,15 +916,29 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
+	// in circumstances similar to the following:
+	//
+	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
+	// During the execution of a block:
+	// - `A` self-destructs,
+	// - `C` is created, and also shares the parent `P`.
+	// If the self-destruct is handled first, then `P` would be left with only one child, thus collapsed
+	// into a shortnode. This requires `B` to be resolved from disk.
+	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
+	var deletedAddrs []common.Address
 	for addr := range s.stateObjectsPending {
-		if obj := s.stateObjects[addr]; obj.deleted {
-			s.deleteStateObject(obj)
-			s.AccountDeleted += 1
-		} else {
+		if obj := s.stateObjects[addr]; !obj.deleted {
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+		} else {
+			deletedAddrs = append(deletedAddrs, obj.address)
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
+	}
+	for _, deletedAddr := range deletedAddrs {
+		s.deleteStateObject(deletedAddr)
+		s.AccountDeleted += 1
 	}
 	if prefetcher != nil {
 		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
