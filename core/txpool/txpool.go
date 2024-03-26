@@ -356,14 +356,30 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (p *TxPool) Pending(filter PendingFilter) map[common.Address][]*LazyTransaction {
-	txs := make(map[common.Address][]*LazyTransaction)
-	for _, subpool := range p.subpools {
-		for addr, set := range subpool.Pending(filter) {
-			txs[addr] = set
+func (p *TxPool) Pending(filter PendingFilter) Pending {
+	var pending Pending
+	// This code is not quite correct, it assumes that the filter requests
+	// _either_ blobs or legacy.
+	if !filter.OnlyBlobTxs && !filter.OnlyPlainTxs {
+		panic("please request either only-blobs or only-plain")
+	}
+	for _, sub := range p.subpools {
+		if pending = sub.Pending(filter); !pending.Empty() {
+			return pending
 		}
 	}
-	return txs
+	return pending
+}
+
+// PendingHashes retrieves the hashes of all currently processable transactions.
+// The returned list is grouped by origin account and sorted by nonce
+func (p *TxPool) PendingHashes(filter PendingFilter) []common.Hash {
+	var hashes []common.Hash
+	for _, sub := range p.subpools {
+		h := sub.PendingHashes(filter)
+		hashes = append(hashes, h...)
+	}
+	return hashes
 }
 
 // SubscribeTransactions registers a subscription for new transaction events,
