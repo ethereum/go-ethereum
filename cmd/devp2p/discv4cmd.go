@@ -48,6 +48,7 @@ var (
 			discv4ResolveJSONCommand,
 			discv4CrawlCommand,
 			discv4TestCommand,
+			discv4ListenCommand,
 		},
 	}
 	discv4PingCommand = &cli.Command{
@@ -77,6 +78,14 @@ var (
 		Action:    discv4ResolveJSON,
 		Flags:     discoveryNodeFlags,
 		ArgsUsage: "<nodes.json file>",
+	}
+	discv4ListenCommand = &cli.Command{
+		Name:   "listen",
+		Usage:  "Runs a discovery node",
+		Action: discv4Listen,
+		Flags: flags.Merge(discoveryNodeFlags, []cli.Flag{
+			httpAddrFlag,
+		}),
 	}
 	discv4CrawlCommand = &cli.Command{
 		Name:   "crawl",
