@@ -19,12 +19,12 @@ package tests
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -192,7 +192,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	w := bufio.NewWriter(buf)
 	config.Tracer = logger.NewJSONLogger(&logger.Config{}, w)
 	err2 := test(config)
-	if !reflect.DeepEqual(err, err2) {
+	if !errors.Is(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
 	}
 	w.Flush()

@@ -17,6 +17,7 @@
 package netutil
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -56,7 +57,7 @@ func TestParseNetlist(t *testing.T) {
 
 	for _, test := range tests {
 		l, err := ParseNetlist(test.input)
-		if !reflect.DeepEqual(err, test.wantErr) {
+		if !errors.Is(err, test.wantErr) {
 			t.Errorf("%q: got error %q, want %q", test.input, err, test.wantErr)
 			continue
 		}

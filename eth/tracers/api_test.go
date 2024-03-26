@@ -380,7 +380,7 @@ func TestTraceCall(t *testing.T) {
 				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
 				continue
 			}
-			if !reflect.DeepEqual(err.Error(), testspec.expectErr.Error()) {
+			if !errors.Is(err, testspec.expectErr) {
 				t.Errorf("test %d: error mismatch, want '%v', got '%v'", i, testspec.expectErr, err)
 			}
 		} else {
@@ -531,7 +531,7 @@ func TestTraceBlock(t *testing.T) {
 				t.Errorf("test %d, want error %v", i, tc.expectErr)
 				continue
 			}
-			if !reflect.DeepEqual(err, tc.expectErr) {
+			if !errors.Is(err, tc.expectErr) {
 				t.Errorf("test %d: error mismatch, want %v, get %v", i, tc.expectErr, err)
 			}
 			continue

@@ -957,7 +957,7 @@ func TestCall(t *testing.T) {
 			}
 			if !errors.Is(err, tc.expectErr) {
 				// Second try
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if !errors.Is(err, tc.expectErr) {
 					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}

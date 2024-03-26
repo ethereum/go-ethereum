@@ -308,7 +308,7 @@ func TestCacheFind(t *testing.T) {
 	}
 	for i, test := range tests {
 		a, err := cache.find(test.Query)
-		if !reflect.DeepEqual(err, test.WantError) {
+		if !errors.Is(err, test.WantError) {
 			t.Errorf("test %d: error mismatch for query %v\ngot %q\nwant %q", i, test.Query, err, test.WantError)
 			continue
 		}
