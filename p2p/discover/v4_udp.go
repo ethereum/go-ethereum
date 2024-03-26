@@ -375,6 +375,10 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	return respN, nil
 }
 
+func (t *UDPv4) TableBuckets() [][]BucketNode {
+	return t.tab.Nodes()
+}
+
 // pending adds a reply matcher to the pending reply queue.
 // see the documentation of type replyMatcher for a detailed explanation.
 func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchFunc) *replyMatcher {

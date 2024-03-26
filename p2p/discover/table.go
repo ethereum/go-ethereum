@@ -150,18 +150,19 @@ func newMeteredTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 }
 
 // Nodes returns all nodes contained in the table.
-func (tab *Table) Nodes() []*enode.Node {
-	if !tab.isInitDone() {
-		return nil
-	}
-
+func (tab *Table) Nodes() [][]BucketNode {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
-	var nodes []*enode.Node
-	for _, b := range &tab.buckets {
-		for _, n := range b.entries {
-			nodes = append(nodes, unwrapNode(n))
+	nodes := make([][]BucketNode, len(tab.buckets))
+	for i, b := range &tab.buckets {
+		nodes[i] = make([]BucketNode, len(b.entries))
+		for j, n := range b.entries {
+			nodes[i][j] = BucketNode{
+				Node:    &n.Node,
+				Checks:  int(n.livenessChecks),
+				AddedAt: n.addedAt,
+			}
 		}
 	}
 	return nodes

@@ -29,6 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+type BucketNode struct {
+	Node    *enode.Node `json:"node"`
+	AddedAt time.Time   `json:"added"`
+	Checks  int         `json:"checks"`
+}
+
 // node represents a host on the network.
 // The fields of Node may not be modified.
 type node struct {
