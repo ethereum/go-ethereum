@@ -838,7 +838,7 @@ func TestMsgFilterPassSingle(t *testing.T) {
 	})
 }
 
-// TestMsgFilterPassSingle tests streaming message events using an invalid
+// TestMsgFilterFailBadParams tests streaming message events using an invalid
 // filter
 func TestMsgFilterFailBadParams(t *testing.T) {
 	// start the server

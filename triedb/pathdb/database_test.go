@@ -305,7 +305,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 	return root, ctx.nodes, triestate.New(ctx.accountOrigin, ctx.storageOrigin)
 }
 
-// lastRoot returns the latest root hash, or empty if nothing is cached.
+// lastHash returns the latest root hash, or empty if nothing is cached.
 func (t *tester) lastHash() common.Hash {
 	if len(t.roots) == 0 {
 		return common.Hash{}

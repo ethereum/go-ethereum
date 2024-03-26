@@ -289,7 +289,7 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	}, nil
 }
 
-// GetHead fetches and validates the beacon header with the given blockRoot.
+// GetHeader fetches and validates the beacon header with the given blockRoot.
 // If blockRoot is null hash then the latest head header is fetched.
 func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error) {
 	var blockId string

@@ -57,7 +57,7 @@ func newTester(t *testing.T) *downloadTester {
 	return newTesterWithNotification(t, nil)
 }
 
-// newTester creates a new downloader test mocker.
+// newTesterWithNotification creates a new downloader test mocker.
 func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	freezer := t.TempDir()
 	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
