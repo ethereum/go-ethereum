@@ -371,7 +371,7 @@ func TestEmptyKeySetInProveAndSerialize(t *testing.T) {
 
 func TestGetTreeKeys(t *testing.T) {
 	addr := common.Hex2Bytes("71562b71999873DB5b286dF957af199Ec94617f7")
-	target := common.Hex2Bytes("274cde18dd9dbb04caf16ad5ee969c19fe6ca764d5688b5e1d419f4ac6cd1600")
+	target := common.Hex2Bytes("1540dfad7755b40be0768c6aa0a5096fbf0215e0e8cf354dd928a17834646600")
 	key := utils.GetTreeKeyVersion(addr)
 	t.Logf("key=%x", key)
 	t.Logf("actualKey=%x", target)

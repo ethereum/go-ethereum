@@ -187,15 +187,7 @@ func GetTreeKeyCodeChunkWithEvaluatedAddress(addressPoint *verkle.Point, chunk *
 }
 
 func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
-	// The output of Byte() is big engian for banderwagon. This
-	// introduces an imbalance in the tree, because hashes are
-	// elements of a 253-bit field. This means more than half the
-	// tree would be empty. To avoid this problem, use a little
-	// endian commitment and chop the MSB.
-	retb := evaluated.Bytes()
-	for i := 0; i < 16; i++ {
-		retb[31-i], retb[i] = retb[i], retb[31-i]
-	}
+	retb := verkle.HashPointToBytes(evaluated)
 	retb[31] = suffix
 	return retb[:]
 }

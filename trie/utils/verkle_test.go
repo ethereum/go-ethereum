@@ -38,7 +38,7 @@ func TestGetTreeKey(t *testing.T) {
 	tk := GetTreeKey(addr[:], n, 1)
 
 	got := hex.EncodeToString(tk)
-	exp := "f42f932f43faf5d14b292b9009c45c28da61dbf66e20dbedc2e02dfd64ff5a01"
+	exp := "6ede905763d5856cd2d67936541e82aa78f7141bf8cd5ff6c962170f3e9dc201"
 	if got != exp {
 		t.Fatalf("Generated trie key is incorrect: %s != %s", got, exp)
 	}
