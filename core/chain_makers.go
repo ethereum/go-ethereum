@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/syscall"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -96,12 +97,14 @@ func (b *BlockGen) Difficulty() *big.Int {
 // SetParentBeaconRoot sets the parent beacon root field of the generated
 // block.
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
+	if len(b.txs) != 0 {
+		// It's possible for a tx to call the beacon roots contract *before* the
+		// root is set. This would lead to successful block generation, but be
+		// considered invalid on import. Panic here to avoid this.
+		panic("parent beacon root cannot be set after txs are already applied to block")
+	}
 	b.header.ParentBeaconRoot = &root
-	var (
-		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
-	)
-	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
+	syscall.ProcessBeaconBlockRoot(b.header, b.statedb, b.cm.config)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
