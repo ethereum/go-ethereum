@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"maps"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,11 +48,7 @@ func (s Storage) String() (str string) {
 }
 
 func (s Storage) Copy() Storage {
-	cpy := make(Storage, len(s))
-	for key, value := range s {
-		cpy[key] = value
-	}
-	return cpy
+	return maps.Clone(s)
 }
 
 // stateObject represents an Ethereum account which is being modified.
