@@ -464,6 +464,12 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 	return TxStatusUnknown
 }
 
+func (p *TxPool) MarkLocal(addr common.Address) {
+	for _, pool := range p.subpools {
+		pool.AddLocalAddr(addr)
+	}
+}
+
 // Sync is a helper method for unit tests or simulator runs where the chain events
 // are arriving in quick succession, without any time in between them to run the
 // internal background reset operations. This method will run an explicit reset

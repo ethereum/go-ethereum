@@ -1645,6 +1645,9 @@ func (p *BlobPool) Locals() []common.Address {
 	return []common.Address{}
 }
 
+// There is no notion of local accounts in the blob pool.
+func (p *BlobPool) AddLocalAddr(common.Address) {}
+
 // Status returns the known status (unknown/pending/queued) of a transaction
 // identified by their hashes.
 func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
