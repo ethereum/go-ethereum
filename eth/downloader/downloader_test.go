@@ -1367,8 +1367,7 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, false)))
-	// Set the head to a second fork (which forks after the origin of the last sync cycle
+	// Set the head to a second fork
 	tester.newPeer("fork B", protocol, chainB.blocks[1:])
 	pending.Add(1)
 	go func() {
