@@ -220,7 +220,9 @@ func (s *SyncService) fetchMessages() {
 		}
 
 		for _, msg := range msgs {
-			queueIndex++
+			if msg.QueueIndex > 0 {
+				queueIndex++
+			}
 			// check if received queue index matches expected queue index
 			if msg.QueueIndex != queueIndex {
 				log.Error("Unexpected queue index in SyncService", "expected", queueIndex, "got", msg.QueueIndex, "msg", msg)
