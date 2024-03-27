@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"path/filepath"
 
 	"golang.org/x/exp/slog"
 
@@ -34,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -89,7 +90,7 @@ func Transition(ctx *cli.Context) error {
 	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
 	log.SetDefault(log.NewLogger(glogger))
 
-	var getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) { return nil, nil, nil }
+	var getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) { return nil, nil, nil }
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
@@ -121,13 +122,13 @@ func Transition(ctx *cli.Context) error {
 				prevFile.Close()
 			}
 		}()
-		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
 			logger := logger.NewJSONLogger(logConfig, traceFile)
-			tracer := &directory.Tracer{
+			tracer := &tracers.Tracer{
 				Hooks: logger,
 				// jsonLogger streams out result to file.
 				GetResult: func() (json.RawMessage, error) { return nil, nil },
@@ -140,12 +141,12 @@ func Transition(ctx *cli.Context) error {
 		if ctx.IsSet(TraceTracerConfigFlag.Name) {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*directory.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(path.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			tracer, err := directory.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
 			if err != nil {
 				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}

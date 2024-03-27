@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
@@ -273,7 +272,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
-					txctx := &directory.Context{
+					txctx := &Context{
 						BlockHash:   task.block.Hash(),
 						BlockNumber: task.block.Number(),
 						TxIndex:     i,
@@ -590,7 +589,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// process that generates states in one thread and traces txes
 	// in separate worker threads.
 	if config != nil && config.Tracer != nil && *config.Tracer != "" {
-		if isJS := directory.DefaultDirectory.IsJS(*config.Tracer); isJS {
+		if isJS := DefaultDirectory.IsJS(*config.Tracer); isJS {
 			return api.traceBlockParallel(ctx, block, statedb, config)
 		}
 	}
@@ -605,7 +604,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txctx := &directory.Context{
+		txctx := &Context{
 			BlockHash:   blockHash,
 			BlockNumber: block.Number(),
 			TxIndex:     i,
@@ -644,7 +643,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				msg, _ := core.TransactionToMessage(txs[task.index], signer, block.BaseFee())
-				txctx := &directory.Context{
+				txctx := &Context{
 					BlockHash:   blockHash,
 					BlockNumber: block.Number(),
 					TxIndex:     task.index,
@@ -859,7 +858,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 
-	txctx := &directory.Context{
+	txctx := &Context{
 		BlockHash:   blockHash,
 		BlockNumber: block.Number(),
 		TxIndex:     int(index),
@@ -926,27 +925,26 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), vmctx.BaseFee)
-	if err != nil {
+	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	tx, err := argsToTransaction(api.backend, &args, msg)
-	if err != nil {
-		return nil, err
-	}
-	var traceConfig *TraceConfig
+	var (
+		msg         = args.ToMessage(vmctx.BaseFee)
+		tx          = args.ToTransaction()
+		traceConfig *TraceConfig
+	)
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, tx, msg, new(directory.Context), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, tx, msg, new(Context), vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *directory.Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
-		tracer  *directory.Tracer
+		tracer  *Tracer
 		err     error
 		timeout = defaultTraceTimeout
 		usedGas uint64
@@ -955,9 +953,15 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config = &TraceConfig{}
 	}
 	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(config.Config).Tracer()
-	if config.Tracer != nil {
-		tracer, err = directory.DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
+	if config.Tracer == nil {
+		logger := logger.NewStructLogger(config.Config)
+		tracer = &Tracer{
+			Hooks:     logger.Hooks(),
+			GetResult: logger.GetResult,
+			Stop:      logger.Stop,
+		}
+	} else {
+		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -1049,55 +1053,4 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 	}
 
 	return copy, canon
-}
-
-// argsToTransaction produces a Transaction object given call arguments.
-// The `msg` field must be converted from the same arguments.
-func argsToTransaction(b Backend, args *ethapi.TransactionArgs, msg *core.Message) (*types.Transaction, error) {
-	chainID := b.ChainConfig().ChainID
-	if args.ChainID != nil {
-		if have := (*big.Int)(args.ChainID); have.Cmp(chainID) != 0 {
-			return nil, fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, chainID)
-		}
-	}
-	var data types.TxData
-	switch {
-	case args.MaxFeePerGas != nil:
-		al := types.AccessList{}
-		if args.AccessList != nil {
-			al = *args.AccessList
-		}
-		data = &types.DynamicFeeTx{
-			To:         args.To,
-			ChainID:    chainID,
-			Nonce:      msg.Nonce,
-			Gas:        msg.GasLimit,
-			GasFeeCap:  msg.GasFeeCap,
-			GasTipCap:  msg.GasTipCap,
-			Value:      msg.Value,
-			Data:       msg.Data,
-			AccessList: al,
-		}
-	case args.AccessList != nil:
-		data = &types.AccessListTx{
-			To:         args.To,
-			ChainID:    chainID,
-			Nonce:      msg.Nonce,
-			Gas:        msg.GasLimit,
-			GasPrice:   msg.GasPrice,
-			Value:      msg.Value,
-			Data:       msg.Data,
-			AccessList: *args.AccessList,
-		}
-	default:
-		data = &types.LegacyTx{
-			To:       args.To,
-			Nonce:    msg.Nonce,
-			Gas:      msg.GasLimit,
-			GasPrice: msg.GasPrice,
-			Value:    msg.Value,
-			Data:     msg.Data,
-		}
-	}
-	return types.NewTx(data), nil
 }

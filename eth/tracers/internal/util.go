@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package directory
+package internal
 
 import (
 	"errors"
@@ -62,6 +62,7 @@ func memoryCopy(m []byte, offset, size int64) (cpy []byte) {
 	return
 }
 
+// MemoryPtr returns a pointer to a slice of memory.
 func MemoryPtr(m []byte, offset, size int64) []byte {
 	if size == 0 {
 		return nil
