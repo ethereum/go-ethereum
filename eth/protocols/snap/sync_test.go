@@ -64,7 +64,7 @@ func TestHashing(t *testing.T) {
 		}
 	}
 	var new = func() {
-		hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher := crypto.NewKeccakState()
 		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
@@ -96,7 +96,7 @@ func BenchmarkHashing(b *testing.B) {
 		}
 	}
 	var new = func() {
-		hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher := crypto.NewKeccakState()
 		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
