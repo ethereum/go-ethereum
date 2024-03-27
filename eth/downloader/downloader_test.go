@@ -1355,6 +1355,7 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		}
 	}()
 
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, false)))
 	<-starting
 	progress <- struct{}{}
 	select {
@@ -1367,6 +1368,7 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
 
+	fmt.Println("syncing to fork B")
 	// Set the head to a second fork
 	tester.newPeer("fork B", protocol, chainB.blocks[1:])
 	pending.Add(1)
