@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -74,7 +73,7 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		ParentHash:  common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 
-	out, _, err := testSupplyTracer(gspec, emptyBlockGenerationFunc)
+	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -105,7 +104,7 @@ func TestSupplyRewards(t *testing.T) {
 		ParentHash:  common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 	}
 
-	out, _, err := testSupplyTracer(gspec, emptyBlockGenerationFunc)
+	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -154,7 +153,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	out, chain, err := testSupplyTracer(gspec, eip1559BlockGenerationFunc)
+	out, chain, err := testSupplyTracer(t, gspec, eip1559BlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -197,7 +196,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		})
 	}
 
-	out, chain, err := testSupplyTracer(gspec, withdrawalsBlockGenerationFunc)
+	out, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -280,7 +279,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	}
 
 	// 1. Test pre Cancun
-	preCancunOutput, preCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	preCancunOutput, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
 	}
@@ -323,7 +322,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	gspec.Config.ShanghaiTime = &cancunTime
 	gspec.Config.CancunTime = &cancunTime
 
-	postCancunOutput, postCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	postCancunOutput, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
 	}
@@ -466,7 +465,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	output, chain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	output, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -512,14 +511,13 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	}
 }
 
-func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.SupplyInfo, *core.BlockChain, error) {
+func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.SupplyInfo, *core.BlockChain, error) {
 	var (
 		engine = beacon.New(ethash.NewFaker())
 	)
 
-	traceOutputPath := filepath.ToSlash(os.TempDir())
+	traceOutputPath := t.TempDir()
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
-	defer os.Remove(traceOutputFilename)
 
 	// Load supply tracer
 	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
