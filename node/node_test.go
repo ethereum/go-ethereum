@@ -516,6 +516,7 @@ func TestNodeRPCPrefix(t *testing.T) {
 		name := fmt.Sprintf("http=%s ws=%s", test.httpPrefix, test.wsPrefix)
 		t.Run(name, func(t *testing.T) {
 			cfg := &Config{
+				HTTPProto:      "tcp",
 				HTTPHost:       "127.0.0.1",
 				HTTPPathPrefix: test.httpPrefix,
 				WSHost:         "127.0.0.1",
