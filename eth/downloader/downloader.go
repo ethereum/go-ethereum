@@ -498,6 +498,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 				if number < oldest.Number.Uint64() {
 					count := int(oldest.Number.Uint64() - number) // it's capped by fsMinFullBlocks
 					headers := d.readHeaderRange(oldest, count)
+					fmt.Printf("readHeaderRange, oldest=%x, oldest num=%d, count=%d\n", oldest.Hash(), oldest.Number, count)
 					if len(headers) == count {
 						pivot = headers[len(headers)-1]
 						log.Warn("Retrieved pivot header from local", "number", pivot.Number, "hash", pivot.Hash(), "latest", latest.Number, "oldest", oldest.Number)
