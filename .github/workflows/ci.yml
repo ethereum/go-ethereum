@@ -157,7 +157,7 @@ jobs:
           key: ${{secrets.SSH_PRIVATE_KEY_DEVNET}}
           options: |
             --inventory inventory.yaml
-            --extra-vars network=ec2-rpcs
+            --extra-vars network=ec2_rpcs
             --extra-vars rpc_image=${{ needs.devnet_build_push.outputs.image_name }}
 
   devnet_dev-upgrade_node:
