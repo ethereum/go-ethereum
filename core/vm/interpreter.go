@@ -50,7 +50,7 @@ func (ctx *ScopeContext) MemoryData() []byte {
 	return ctx.Memory.Data()
 }
 
-// MemoryData returns the stack data. Callers must not modify the contents
+// StackData returns the stack data. Callers must not modify the contents
 // of the returned data.
 func (ctx *ScopeContext) StackData() []uint256.Int {
 	if ctx.Stack == nil {

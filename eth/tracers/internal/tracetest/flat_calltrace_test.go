@@ -171,7 +171,7 @@ func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
 	}
 }
 
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
+// jsonEqualFlat is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
 // comparison
 func jsonEqualFlat(x, y interface{}) bool {
 	xTrace := new([]flatCallTrace)

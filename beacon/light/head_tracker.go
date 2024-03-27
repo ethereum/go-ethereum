@@ -56,7 +56,7 @@ func (h *HeadTracker) ValidatedHead() (types.SignedHeader, bool) {
 	return h.signedHead, h.hasSignedHead
 }
 
-// ValidatedHead returns the latest validated head.
+// ValidatedFinality returns the latest validated finality.
 func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -64,7 +64,7 @@ func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	return h.finalityUpdate, h.hasFinalityUpdate
 }
 
-// Validate validates the given signed head. If the head is successfully validated
+// ValidateHead validates the given signed head. If the head is successfully validated
 // and it is better than the old validated head (higher slot or same slot and more
 // signers) then ValidatedHead is updated. The boolean return flag signals if
 // ValidatedHead has been changed.

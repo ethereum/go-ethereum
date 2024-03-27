@@ -97,7 +97,7 @@ func testExport(t *testing.T, f string) {
 	}
 }
 
-// testDeletion tests if the deletion markers can be exported/imported correctly
+// TestDeletionExport tests if the deletion markers can be exported/imported correctly
 func TestDeletionExport(t *testing.T) {
 	f := fmt.Sprintf("%v/tempdump", os.TempDir())
 	defer func() {

@@ -108,7 +108,7 @@ type testFailure struct {
 	reason string
 }
 
-// skipShortMode skips tests matching when the -short flag is used.
+// slow adds expected slow tests matching the pattern.
 func (tm *testMatcher) slow(pattern string) {
 	tm.slowpat = append(tm.slowpat, regexp.MustCompile(pattern))
 }

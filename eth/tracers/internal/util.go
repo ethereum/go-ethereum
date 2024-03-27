@@ -75,7 +75,7 @@ func MemoryPtr(m []byte, offset, size int64) []byte {
 	return nil
 }
 
-// Back returns the n'th item in stack
+// StackBack returns the n'th item in stack
 func StackBack(st []uint256.Int, n int) *uint256.Int {
 	return &st[len(st)-n-1]
 }
