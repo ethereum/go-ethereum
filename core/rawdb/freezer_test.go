@@ -374,7 +374,7 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	}
 	if _, err := f.Ancient(kind, index); err == nil {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
-	} else if err != errOutOfBounds {
+	} else if !errors.Is(err, errOutOfBounds) {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
 	}
 }

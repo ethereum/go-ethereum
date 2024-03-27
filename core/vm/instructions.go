@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -599,7 +600,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// ignore this error and pretend the operation was successful.
 	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
-	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+	} else if suberr != nil && !errors.Is(suberr, ErrCodeStoreOutOfGas) {
 		stackvalue.Clear()
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
