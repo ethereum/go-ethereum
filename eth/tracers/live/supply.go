@@ -50,8 +50,9 @@ type Supply struct {
 }
 
 type supplyTracerConfig struct {
-	Path    string `json:"path"`    // Path to the directory where the tracer logs will be stored
-	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
+	Path     string `json:"path"`     // Path to the directory where the tracer logs will be stored
+	Filename string `json:"filename"` // Filename of the tracer log file. Defaults to "supply.jsonl".
+	MaxSize  int    `json:"maxsize"`  // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
 func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
@@ -66,9 +67,13 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 		return nil, errors.New("supply tracer output path is required")
 	}
 
+	if config.Filename == "" {
+		config.Filename = "supply.jsonl"
+	}
+
 	// Store traces in a rotating file
 	loggerOutput := &lumberjack.Logger{
-		Filename: filepath.Join(config.Path, "supply.jsonl"),
+		Filename: filepath.Join(config.Path, config.Filename),
 	}
 
 	if config.MaxSize > 0 {

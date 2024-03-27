@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -518,11 +517,15 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 	)
 
 	traceOutputPath := filepath.ToSlash(os.TempDir())
-	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
-	defer os.Remove(traceOutputFilename)
+	traceOutputFile, err := os.CreateTemp(traceOutputPath, "supply-*.jsonl")
+	traceOutputFilename := filepath.Base(traceOutputFile.Name())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create temp file for supply logs: %v", err)
+	}
+	defer os.Remove(traceOutputFile.Name())
 
 	// Load supply tracer
-	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
+	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s","filename":"%s"}`, traceOutputPath, traceOutputFilename)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}
@@ -544,7 +547,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 
 	// Check and compare the results
 	// TODO: replace file to pass results
-	file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
+	file, err := os.OpenFile(traceOutputFile.Name(), os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, chain, fmt.Errorf("failed to open output file: %v", err)
 	}
