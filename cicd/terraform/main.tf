@@ -76,3 +76,48 @@ module "mainnet-rpc" {
   }
 }
 
+
+module "devnet_rpc" {
+  source = "./module/ec2_rpc"
+  network = "devnet"
+  vpc_id = local.vpc_id
+  aws_subnet_id = local.aws_subnet_id
+  ami_id = local.ami_id
+  instance_type = "t3.large"
+  ssh_key_name = local.ssh_key_name
+  rpc_image = local.rpc_image 
+
+  providers = {
+    aws = aws.ap-southeast-1
+  }
+}
+
+module "testnet_rpc" {
+  source = "./module/ec2_rpc"
+  network = "testnet"
+  vpc_id = local.vpc_id
+  aws_subnet_id = local.aws_subnet_id
+  ami_id = local.ami_id
+  instance_type = "t3.large"
+  ssh_key_name = local.ssh_key_name
+  rpc_image = local.rpc_image 
+
+  providers = {
+    aws = aws.ap-southeast-1
+  }
+}
+
+module "mainnet_rpc" {
+  source = "./module/ec2_rpc"
+  network = "mainnet"
+  vpc_id = local.vpc_id
+  aws_subnet_id = local.aws_subnet_id
+  ami_id = local.ami_id
+  instance_type = "t3.large"
+  ssh_key_name = local.ssh_key_name
+  rpc_image = local.rpc_image 
+
+  providers = {
+    aws = aws.ap-southeast-1
+  }
+}

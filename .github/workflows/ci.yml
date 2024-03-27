@@ -96,6 +96,16 @@ jobs:
           docker push xinfinorg/devnet:latest
           docker push xinfinorg/devnet:previous
 
+      - name: Update RPC nodes image
+        uses: dawidd6/action-ansible-playbook@v2
+        with:
+          playbook: playbooks/update-image.yaml
+          directory: ./cicd/ansible
+          key: ${{secrets.SSH_PRIVATE_KEY_DEVNET}}
+          options: |
+            --inventory inventory.yaml
+            --extra-vars rpc_image=xinfinorg/devnet:dev-upgrade-${git_hash}
+
   devnet_terraform_apply:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
