@@ -53,9 +53,6 @@ var testChainBase *testChain
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
-// Fork from base chain, fork occurs 10 blocks later than other forks
-var testChainForkHigher *testChain
-
 var pregenerated bool
 
 func init() {
@@ -72,11 +69,10 @@ func init() {
 	var wg sync.WaitGroup
 
 	// Generate the test chains to seed the peers with
-	wg.Add(4)
+	wg.Add(3)
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
 	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
 	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
-	go func() { testChainForkHigher = testChainBase.makeFork(forkLen-10, false, 3); wg.Done() }()
 	wg.Wait()
 
 	// Generate the test peers used by the tests to avoid overloading during testing.
@@ -107,7 +103,6 @@ func init() {
 		testChainForkLightA.shorten(len(testChainBase.blocks) + MaxHeaderFetch),
 		testChainForkLightB.shorten(len(testChainBase.blocks) + MaxHeaderFetch),
 		testChainForkHeavy.shorten(len(testChainBase.blocks) + 79),
-		testChainForkHigher.shorten(len(testChainBase.blocks) + MaxHeaderFetch),
 	}
 	wg.Add(len(chains))
 	for _, chain := range chains {
