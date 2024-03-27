@@ -1332,14 +1332,13 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	defer tester.terminate()
 
 	chainA := testChainForkLightA.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
-	chainB := testChainForkHigher.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
+	chainB := testChainForkLightB.shorten(len(testChainBase.blocks) + MaxHeaderFetch)
 
 	// Set a sync init hook to catch progress changes
 	starting := make(chan struct{})
 	progress := make(chan struct{})
 
 	tester.downloader.syncInitHook = func(origin, latest uint64) {
-		fmt.Println("sync init")
 		starting <- struct{}{}
 		<-progress
 	}
@@ -1368,7 +1367,6 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
 
-	fmt.Println("jump in")
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, false)))
 	// Set the head to a second fork (which forks after the origin of the last sync cycle
 	tester.newPeer("fork B", protocol, chainB.blocks[1:])
