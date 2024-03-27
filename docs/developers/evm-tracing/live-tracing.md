@@ -11,9 +11,9 @@ Geth v1.14.0 introduces a new optional feature, allowing users to stream (a subs
 - EVM:
   - Call frame level events
   - Opcode level events
+  - Logs
   - Gas changes
     - For more transparency into gas changes we have assigned a reason to each gas change.
-  - Logs
 - State modifications: receives any changes to the accounts.
   - Balance changes come with a reason for more transparency into the change.
 
