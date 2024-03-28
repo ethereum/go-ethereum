@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -299,8 +300,7 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]byte, len(dat))
-	copy(ret, dat)
+	ret := slices.Clone(dat)
 	closer.Close()
 	return ret, nil
 }
@@ -379,8 +379,7 @@ func (snap *snapshot) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]byte, len(dat))
-	copy(ret, dat)
+	ret := slices.Clone(dat)
 	closer.Close()
 	return ret, nil
 }
