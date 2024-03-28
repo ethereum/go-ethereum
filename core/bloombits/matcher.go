@@ -596,6 +596,9 @@ func (s *MatcherSession) deliverSections(bit uint, sections []uint64, bitsets []
 // of the session, any request in-flight need to be responded to! Empty responses
 // are fine though in that case.
 func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan *Retrieval) {
+	waitTimer := time.NewTimer(wait)
+	defer waitTimer.Stop()
+
 	for {
 		// Allocate a new bloom bit index to retrieve data for, stopping when done
 		bit, ok := s.allocateRetrieval()
@@ -604,6 +607,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 		}
 		// Bit allocated, throttle a bit if we're below our batch limit
 		if s.pendingSections(bit) < batch {
+			waitTimer.Reset(wait)
 			select {
 			case <-s.quit:
 				// Session terminating, we can't meaningfully service, abort
@@ -611,7 +615,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 				s.deliverSections(bit, []uint64{}, [][]byte{})
 				return
 
-			case <-time.After(wait):
+			case <-waitTimer.C:
 				// Throttling up, fetch whatever is available
 			}
 		}

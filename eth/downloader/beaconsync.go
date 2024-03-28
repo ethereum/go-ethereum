@@ -289,6 +289,9 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		localHeaders = d.readHeaderRange(tail, int(count))
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
+	fsHeaderContCheckTimer := time.NewTimer(fsHeaderContCheck)
+	defer fsHeaderContCheckTimer.Stop()
+
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
 		// sure we're always syncing to all available ones
@@ -381,8 +384,9 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		}
 		// State sync still going, wait a bit for new headers and retry
 		log.Trace("Pivot not yet committed, waiting...")
+		fsHeaderContCheckTimer.Reset(fsHeaderContCheck)
 		select {
-		case <-time.After(fsHeaderContCheck):
+		case <-fsHeaderContCheckTimer.C:
 		case <-d.cancelCh:
 			return errCanceled
 		}

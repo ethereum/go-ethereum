@@ -65,8 +65,13 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 	if err != nil {
 		panic("Could not startup node network for mocker")
 	}
-	tick := time.NewTicker(10 * time.Second)
+	var (
+		tick  = time.NewTicker(10 * time.Second)
+		timer = time.NewTimer(3 * time.Second)
+	)
 	defer tick.Stop()
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-quit:
@@ -80,11 +85,12 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 				return
 			}
 
+			timer.Reset(3 * time.Second)
 			select {
 			case <-quit:
 				log.Info("Terminating simulation loop")
 				return
-			case <-time.After(3 * time.Second):
+			case <-timer.C:
 			}
 
 			log.Debug("starting node", "id", id)
