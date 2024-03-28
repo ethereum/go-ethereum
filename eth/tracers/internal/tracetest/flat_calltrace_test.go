@@ -61,8 +61,8 @@ type flatCallTraceResult struct {
 
 // flatCallTracerTest defines a single test to check the call tracer against.
 type flatCallTracerTest struct {
-	Genesis      core.Genesis    `json:"genesis"`
-	Context      callContext     `json:"context"`
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *callContext    `json:"context"`
 	Input        string          `json:"input"`
 	TracerConfig json.RawMessage `json:"tracerConfig"`
 	Result       []flatCallTrace `json:"result"`
@@ -84,15 +84,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to parse testcase input: %v", err)
 	}
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    test.Context.Miner,
-		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        uint64(test.Context.Time),
-		Difficulty:  (*big.Int)(test.Context.Difficulty),
-		GasLimit:    uint64(test.Context.GasLimit),
-	}
+	context := test.Context.toBlockContext(test.Genesis)
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
