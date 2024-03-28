@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -1986,12 +1987,7 @@ func containsHashInAnnounces(slice []announce, hash common.Hash) bool {
 
 // containsHash returns whether a hash is contained within a hash slice.
 func containsHash(slice []common.Hash, hash common.Hash) bool {
-	for _, have := range slice {
-		if have == hash {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, hash)
 }
 
 // Tests that a transaction is forgotten after the timeout.
