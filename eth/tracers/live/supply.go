@@ -181,8 +181,8 @@ func (s *supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from co
 	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
-// interalTxsHandler handles internal transactions burned amount
-func (s *supply) interalTxsHandler(call *supplyTxCallstack) {
+// internalTxsHandler handles internal transactions burned amount
+func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
 		s.delta.burn(call.burn)
@@ -192,7 +192,7 @@ func (s *supply) interalTxsHandler(call *supplyTxCallstack) {
 		// Recursivelly handle internal calls
 		for _, call := range call.calls {
 			callCopy := call
-			s.interalTxsHandler(&callCopy)
+			s.internalTxsHandler(&callCopy)
 		}
 	}
 }
@@ -216,7 +216,7 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 	if depth == 0 {
 		// No need to handle Burned amount if transaction is reverted
 		if !reverted {
-			s.interalTxsHandler(&s.txCallstack[0])
+			s.internalTxsHandler(&s.txCallstack[0])
 		}
 		return
 	}
