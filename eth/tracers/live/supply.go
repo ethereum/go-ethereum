@@ -43,8 +43,8 @@ type supplyTxCallstack struct {
 	burn  *big.Int
 }
 
-type Supply struct {
 	delta       SupplyInfo
+type supply struct {
 	txCallstack []supplyTxCallstack // Callstack for current transaction
 	logger      *log.Logger
 }
@@ -79,7 +79,7 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 
 	supplyInfo := newSupplyInfo()
 
-	t := &Supply{
+	t := &supply{
 		delta:  supplyInfo,
 		logger: logger,
 	}
@@ -107,11 +107,11 @@ func newSupplyInfo() SupplyInfo {
 	}
 }
 
-func (s *Supply) resetDelta() {
+func (s *supply) resetDelta() {
 	s.delta = newSupplyInfo()
 }
 
-func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
+func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 	s.resetDelta()
 
 	s.delta.Number = ev.Block.NumberU64()
@@ -134,12 +134,12 @@ func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
 	}
 }
 
-func (s *Supply) OnBlockEnd(err error) {
+func (s *supply) OnBlockEnd(err error) {
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))
 }
 
-func (s *Supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
+func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.resetDelta()
 
 	s.delta.Number = b.NumberU64()
@@ -155,7 +155,7 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.logger.Println(string(out))
 }
 
-func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
+func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
 	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
@@ -177,12 +177,12 @@ func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	s.delta.Delta.Add(s.delta.Delta, diff)
 }
 
-func (s *Supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (s *supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
 // interalTxsHandler handles internal transactions burned amount
-func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
+func (s *supply) interalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
 		s.delta.burn(call.burn)
@@ -197,7 +197,7 @@ func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
 	}
 }
 
-func (s *Supply) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (s *supply) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	call := supplyTxCallstack{
 		calls: make([]supplyTxCallstack, 0),
 	}
@@ -212,7 +212,7 @@ func (s *Supply) OnEnter(depth int, typ byte, from common.Address, to common.Add
 	s.txCallstack = append(s.txCallstack, call)
 }
 
-func (s *Supply) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
 		// No need to handle Burned amount if transaction is reverted
 		if !reverted {
