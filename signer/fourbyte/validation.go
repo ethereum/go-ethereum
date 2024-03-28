@@ -36,6 +36,11 @@ func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArg
 	if tx.Data != nil && tx.Input != nil && !bytes.Equal(*tx.Data, *tx.Input) {
 		return nil, errors.New(`ambiguous request: both "data" and "input" are set and are not identical`)
 	}
+	// ToTransaction validates, among other things, that blob hashes match with blobs, and also
+	// populates the hashes if they were previously unset.
+	if _, err := tx.ToTransaction(); err != nil {
+		return nil, err
+	}
 	// Place data on 'data', and nil 'input'
 	var data []byte
 	if tx.Input != nil {

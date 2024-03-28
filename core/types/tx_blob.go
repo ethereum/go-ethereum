@@ -191,6 +191,12 @@ func (tx *BlobTx) withoutSidecar() *BlobTx {
 	return &cpy
 }
 
+func (tx *BlobTx) withSidecar(sideCar *BlobTxSidecar) *BlobTx {
+	cpy := *tx
+	cpy.Sidecar = sideCar
+	return &cpy
+}
+
 func (tx *BlobTx) encode(b *bytes.Buffer) error {
 	if tx.Sidecar == nil {
 		return rlp.Encode(b, tx)
