@@ -28,6 +28,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var errTraceLimitReached = errors.New("the number of logs reached the specified limit")
@@ -52,6 +53,9 @@ type LogConfig struct {
 	DisableStorage bool // disable storage capture
 	Debug          bool // print output during capture end
 	Limit          int  // maximum length of output, but zero means unlimited
+
+	// Chain overrides, can be used to execute a trace using future fork rules
+	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go

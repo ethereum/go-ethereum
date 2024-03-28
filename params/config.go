@@ -498,7 +498,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v ShanghaiBlock: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v ShanghaiBlock: %v Eip1559Block: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -513,6 +513,7 @@ func (c *ChainConfig) String() string {
 		common.LondonBlock,
 		common.MergeBlock,
 		common.ShanghaiBlock,
+		common.Eip1559Block,
 		engine,
 	)
 }
@@ -578,6 +579,10 @@ func (c *ChainConfig) IsMerge(num *big.Int) bool {
 // IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
 func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(common.ShanghaiBlock, num)
+}
+
+func (c *ChainConfig) IsEIP1559(num *big.Int) bool {
+	return isForked(common.Eip1559Block, num)
 }
 
 func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
@@ -754,6 +759,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai                                     bool
 	IsXDCxDisable                                           bool
+	IsEIP1559                                               bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -776,5 +782,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsMerge:          c.IsMerge(num),
 		IsShanghai:       c.IsShanghai(num),
 		IsXDCxDisable:    c.IsTIPXDCXReceiver(num),
+		IsEIP1559:        c.IsEIP1559(num),
 	}
 }
