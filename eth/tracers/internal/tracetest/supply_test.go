@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -516,7 +517,7 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		engine = beacon.New(ethash.NewFaker())
 	)
 
-	traceOutputPath := t.TempDir()
+	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
 
 	// Load supply tracer
