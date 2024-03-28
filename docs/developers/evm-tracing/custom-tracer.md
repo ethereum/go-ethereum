@@ -15,87 +15,65 @@ In this section a simple native tracer that counts the number of opcodes will be
 package native
 
 import (
-    "encoding/json"
-    "math/big"
-    "sync/atomic"
-    "time"
+	"encoding/json"
+	"sync/atomic"
 
-    "github.com/ethereum/go-ethereum/common"
-    "github.com/ethereum/go-ethereum/core/vm"
-    "github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 func init() {
-    // This is how Geth will become aware of the tracer and register it under a given name
-    register("opcounter", newOpcounter)
+	tracers.DefaultDirectory.Register("opcounter", newOpcounter, false)
 }
 
 type opcounter struct {
-    env       *vm.EVM
-    counts    map[string]int // Store opcode counts
-    interrupt uint32         // Atomic flag to signal execution interruption
-    reason    error          // Textual reason for the interruption
+	counts    map[string]int
+	interrupt uint32
+	reason    error
 }
 
-func newOpcounter(ctx *tracers.Context, cfg json.RawMessage) tracers.Tracer {
-    return &opcounter{counts: make(map[string]int)}
+// newOpcounter returns a new opcode counting tracer.
+func newOpcounter(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
+	t := &opcounter{counts: make(map[string]int)}
+	return &tracers.Tracer{
+		Hooks: &tracing.Hooks{
+			OnOpcode: t.onOpcode,
+		},
+		GetResult: t.getResult,
+		Stop:      t.stop,
+	}, nil
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *opcounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-        t.env = env
+func (t *opcounter) onOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	// Skip if tracing was interrupted
+	if atomic.LoadUint32(&t.interrupt) > 0 {
+		return
+	}
+	name := vm.OpCode(op).String()
+	if _, ok := t.counts[name]; !ok {
+		t.counts[name] = 0
+	}
+	t.counts[name]++
 }
 
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *opcounter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-    // Skip if tracing was interrupted
-    if atomic.LoadUint32(&t.interrupt) > 0 {
-        t.env.Cancel()
-        return
-    }
-
-    name := op.String()
-    if _, ok := t.counts[name]; !ok {
-        t.counts[name] = 0
-    }
-    t.counts[name]++
+func (t *opcounter) getResult() (json.RawMessage, error) {
+	res, err := json.Marshal(t.counts)
+	if err != nil {
+		return nil, err
+	}
+	return res, t.reason
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *opcounter) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {}
-
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *opcounter) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *opcounter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *opcounter) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {}
-
-func (*opcounter) CaptureTxStart(gasLimit uint64) {}
-
-func (*opcounter) CaptureTxEnd(restGas uint64) {}
-
-// GetResult returns the json-encoded nested list of call traces, and any
-// error arising from the encoding or forceful termination (via `Stop`).
-func (t *opcounter) GetResult() (json.RawMessage, error) {
-    res, err := json.Marshal(t.counts)
-    if err != nil {
-        return nil, err
-    }
-    return res, t.reason
-}
-
-// Stop terminates execution of the tracer at the first opportune moment.
-func (t *opcounter) Stop(err error) {
-    t.reason = err
-    atomic.StoreUint32(&t.interrupt, 1)
+func (t *opcounter) stop(err error) {
+	t.reason = err
+	atomic.StoreUint32(&t.interrupt, 1)
 }
 ```
 
-Every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) needs to be implemented (even if empty). Key parts to notice are the `init()` function which registers the tracer in Geth, the `CaptureState` hook where the opcode counts are incremented and `GetResult` where the result is serialized and delivered. Note that the constructor takes in a `cfg json.RawMessage`. This will be filled with a JSON object that user provides to the tracer to pass in optional config fields.
+Now let's walk through the different parts. First and foremost, the tracer will have to be registered with Geth as part of module initialization (`init()` function). This will give the tracer a name which can be used to invoke it later on through the API. What the API also needs is a way to fetch the final result from the tracer. This is done through the `GetResult` hook. The result should be JSON encoded. The `Stop` hook is used to signal the tracer to stop tracing. This will be done e.g. on a timeout. And finally, `OnOpcode` will be called for every opcode executed. This hook is used to do the tracing logic by tallying the count of each instruction.
+
+The full set of hooks available to tracers are documented [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/tracing#Hooks). Additionally, note that the tracer constructor takes in a `cfg json.RawMessage`. This will be filled with a JSON object that user provides to the tracer to pass in optional config fields.
 
 To test out this tracer the source is first compiled with `make geth`. Then in the console it can be invoked through the usual API methods by passing in the name it was registered under:
 

@@ -102,6 +102,8 @@
           to: /docs/developers/evm-tracing/built-in-tracers
         - id: Custom EVM tracer
           to: /docs/developers/evm-tracing/custom-tracer
+        - id: Live tracing
+          to: /docs/developers/evm-tracing/live-tracing
         - id: Tutorial for Javascript tracing
           to: /docs/developers/evm-tracing/javascript-tutorial
     - id: Geth developer
