@@ -128,7 +128,7 @@ const MDComponents = {
   ul: ({ children }: any) => {
     return (
       <Stack>
-        <UnorderedList mb={7} px={4}>
+        <UnorderedList mb={7} px={4} sx={{ 'ul, ol': { mb: 0 } }}>
           {children}
         </UnorderedList>
       </Stack>
@@ -137,7 +137,7 @@ const MDComponents = {
   ol: ({ children }: any) => {
     return (
       <Stack>
-        <OrderedList mb={7} px={4}>
+        <OrderedList mb={7} px={4} sx={{ 'ul, ol': { mb: 0 } }}>
           {children}
         </OrderedList>
       </Stack>
