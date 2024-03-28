@@ -93,9 +93,7 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 		bits := make(bitvec, len(code)/8+1+4)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for j := range bits {
-				bits[j] = 0
-			}
+			clear(bits)
 			codeBitmapInternal(code, bits)
 		}
 	}

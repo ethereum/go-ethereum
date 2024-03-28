@@ -174,7 +174,7 @@ func (l *list[T]) init() {
 	l.root.prev = &l.root
 }
 
-// push adds an element to the front of the list.
+// pushElem adds an element to the front of the list.
 func (l *list[T]) pushElem(e *listElem[T]) {
 	e.prev = &l.root
 	e.next = l.root.next

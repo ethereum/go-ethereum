@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
@@ -168,17 +169,20 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 // - the returned bytes,
 // - the _remaining_ gas,
 // - any error that occurred
-func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64, logger *tracing.Hooks) (ret []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
+	}
+	if logger != nil && logger.OnGasChange != nil {
+		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
 	}
 	suppliedGas -= gasCost
 	output, err := p.Run(input)
 	return output, suppliedGas, err
 }
 
-// ECRECOVER implemented as a native contract.
+// ecrecover implemented as a native contract.
 type ecrecover struct{}
 
 func (c *ecrecover) RequiredGas(input []byte) uint64 {
@@ -267,7 +271,6 @@ type bigModExp struct {
 }
 
 var (
-	big0      = big.NewInt(0)
 	big1      = big.NewInt(1)
 	big3      = big.NewInt(3)
 	big4      = big.NewInt(4)
@@ -454,7 +457,7 @@ func runBn256Add(input []byte) ([]byte, error) {
 	return res.Marshal(), nil
 }
 
-// bn256Add implements a native elliptic curve point addition conforming to
+// bn256AddIstanbul implements a native elliptic curve point addition conforming to
 // Istanbul consensus rules.
 type bn256AddIstanbul struct{}
 

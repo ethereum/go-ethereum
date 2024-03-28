@@ -17,11 +17,11 @@
 package prque
 
 import (
+	"cmp"
 	"container/heap"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"golang.org/x/exp/constraints"
 )
 
 // LazyQueue is a priority queue data structure where priorities can change over
@@ -33,7 +33,7 @@ import (
 //
 // If the upper estimate is exceeded then Update should be called for that item.
 // A global Refresh function should also be called periodically.
-type LazyQueue[P constraints.Ordered, V any] struct {
+type LazyQueue[P cmp.Ordered, V any] struct {
 	clock mclock.Clock
 	// Items are stored in one of two internal queues ordered by estimated max
 	// priority until the next and the next-after-next refresh. Update and Refresh
@@ -50,12 +50,12 @@ type LazyQueue[P constraints.Ordered, V any] struct {
 }
 
 type (
-	PriorityCallback[P constraints.Ordered, V any]    func(data V) P                       // actual priority callback
-	MaxPriorityCallback[P constraints.Ordered, V any] func(data V, until mclock.AbsTime) P // estimated maximum priority callback
+	PriorityCallback[P cmp.Ordered, V any]    func(data V) P                       // actual priority callback
+	MaxPriorityCallback[P cmp.Ordered, V any] func(data V, until mclock.AbsTime) P // estimated maximum priority callback
 )
 
 // NewLazyQueue creates a new lazy queue
-func NewLazyQueue[P constraints.Ordered, V any](setIndex SetIndexCallback[V], priority PriorityCallback[P, V], maxPriority MaxPriorityCallback[P, V], clock mclock.Clock, refreshPeriod time.Duration) *LazyQueue[P, V] {
+func NewLazyQueue[P cmp.Ordered, V any](setIndex SetIndexCallback[V], priority PriorityCallback[P, V], maxPriority MaxPriorityCallback[P, V], clock mclock.Clock, refreshPeriod time.Duration) *LazyQueue[P, V] {
 	q := &LazyQueue[P, V]{
 		popQueue:     newSstack[P, V](nil),
 		setIndex:     setIndex,

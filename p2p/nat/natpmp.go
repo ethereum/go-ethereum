@@ -17,6 +17,7 @@
 package nat
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -46,7 +47,7 @@ func (n *pmp) ExternalIP() (net.IP, error) {
 
 func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
 	if lifetime <= 0 {
-		return 0, fmt.Errorf("lifetime must not be <= 0")
+		return 0, errors.New("lifetime must not be <= 0")
 	}
 	// Note order of port arguments is switched between our
 	// AddMapping and the client's AddPortMapping.

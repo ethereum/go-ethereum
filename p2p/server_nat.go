@@ -127,7 +127,7 @@ func (srv *Server) portMappingLoop() {
 			} else if !ip.Equal(lastExtIP) {
 				log.Debug("External IP changed", "ip", extip, "interface", srv.NAT)
 			} else {
-				return
+				continue
 			}
 			// Here, we either failed to get the external IP, or it has changed.
 			lastExtIP = ip

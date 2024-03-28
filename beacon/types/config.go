@@ -37,7 +37,7 @@ const syncCommitteeDomain = 7
 // Fork describes a single beacon chain fork and also stores the calculated
 // signature domain used after this fork.
 type Fork struct {
-	// Name of the fork in the chain config (config.yaml) file{
+	// Name of the fork in the chain config (config.yaml) file
 	Name string
 
 	// Epoch when given fork version is activated
@@ -108,6 +108,16 @@ type ChainConfig struct {
 	GenesisTime           uint64      // Unix timestamp of slot 0
 	GenesisValidatorsRoot common.Hash // Root hash of the genesis validator set, used for signature domain calculation
 	Forks                 Forks
+}
+
+// ForkAtEpoch returns the latest active fork at the given epoch.
+func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
+	for i := len(c.Forks) - 1; i >= 0; i-- {
+		if c.Forks[i].Epoch <= epoch {
+			return *c.Forks[i]
+		}
+	}
+	return Fork{}
 }
 
 // AddFork adds a new item to the list of forks.

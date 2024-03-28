@@ -20,17 +20,19 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	CreateAccount(common.Address)
 
-	SubBalance(common.Address, *big.Int)
-	AddBalance(common.Address, *big.Int)
-	GetBalance(common.Address) *big.Int
+	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	GetBalance(common.Address) *uint256.Int
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)

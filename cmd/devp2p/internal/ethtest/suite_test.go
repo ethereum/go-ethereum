@@ -20,7 +20,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -39,7 +39,7 @@ func makeJWTSecret() (string, [32]byte, error) {
 	if _, err := crand.Read(secret[:]); err != nil {
 		return "", secret, fmt.Errorf("failed to create jwt secret: %v", err)
 	}
-	jwtPath := path.Join(os.TempDir(), "jwt_secret")
+	jwtPath := filepath.Join(os.TempDir(), "jwt_secret")
 	if err := os.WriteFile(jwtPath, []byte(hexutil.Encode(secret[:])), 0600); err != nil {
 		return "", secret, fmt.Errorf("failed to prepare jwt secret file: %v", err)
 	}

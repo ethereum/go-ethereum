@@ -21,8 +21,10 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
@@ -51,6 +53,21 @@ func TestStrictListAdd(t *testing.T) {
 	}
 }
 
+// TestListAddVeryExpensive tests adding txs which exceed 256 bits in cost. It is
+// expected that the list does not panic.
+func TestListAddVeryExpensive(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	list := newList(true)
+	for i := 0; i < 3; i++ {
+		value := big.NewInt(100)
+		gasprice, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
+		gaslimit := uint64(i)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, value, gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
+		t.Logf("cost: %x bitlen: %d\n", tx.Cost(), tx.Cost().BitLen())
+		list.Add(tx, DefaultConfig.PriceBump)
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
@@ -60,7 +77,7 @@ func BenchmarkListAdd(b *testing.B) {
 		txs[i] = transaction(uint64(i), 0, key)
 	}
 	// Insert the transactions in a random order
-	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
+	priceLimit := uint256.NewInt(DefaultConfig.PriceLimit)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
@@ -68,5 +85,27 @@ func BenchmarkListAdd(b *testing.B) {
 			list.Add(txs[v], DefaultConfig.PriceBump)
 			list.Filter(priceLimit, DefaultConfig.PriceBump)
 		}
+	}
+}
+
+func BenchmarkListCapOneTx(b *testing.B) {
+	// Generate a list of transactions to insert
+	key, _ := crypto.GenerateKey()
+
+	txs := make(types.Transactions, 32)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = transaction(uint64(i), 0, key)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		list := newList(true)
+		// Insert the transactions in a random order
+		for _, v := range rand.Perm(len(txs)) {
+			list.Add(txs[v], DefaultConfig.PriceBump)
+		}
+		b.StartTimer()
+		list.Cap(list.Len() - 1)
+		b.StopTimer()
 	}
 }

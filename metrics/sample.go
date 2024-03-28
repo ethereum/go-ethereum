@@ -3,10 +3,9 @@ package metrics
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 const rescaleThreshold = time.Hour
@@ -148,7 +147,7 @@ func (NilSample) Clear()                   {}
 func (NilSample) Snapshot() SampleSnapshot { return (*emptySnapshot)(nil) }
 func (NilSample) Update(v int64)           {}
 
-// SamplePercentiles returns an arbitrary percentile of the slice of int64.
+// SamplePercentile returns an arbitrary percentile of the slice of int64.
 func SamplePercentile(values []int64, p float64) float64 {
 	return CalculatePercentiles(values, []float64{p})[0]
 }

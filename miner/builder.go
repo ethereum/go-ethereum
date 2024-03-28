@@ -47,7 +47,7 @@ type BuilderArgs struct {
 
 type Builder struct {
 	env   *environment
-	wrk   *worker
+	wrk   *Miner
 	args  *BuilderArgs
 	block *types.Block
 }
@@ -57,11 +57,10 @@ func NewBuilder(config *BuilderConfig, args *BuilderArgs) (*Builder, error) {
 		args: args,
 	}
 
-	b.wrk = &worker{
+	b.wrk = &Miner{
 		config: &Config{
 			GasCeil: config.GasCeil,
 		},
-		eth:         config.EthBackend,
 		chainConfig: config.ChainConfig,
 		engine:      config.Engine,
 		chain:       config.Chain,
@@ -89,7 +88,7 @@ func (b *Builder) addTransaction(txn *types.Transaction, env *environment) (*sua
 	b.env.state.SetTxContext(txn.Hash(), b.env.tcount)
 
 	prevGas := env.header.GasUsed
-	logs, err := b.wrk.commitTransaction(env, txn)
+	logs, err := b.wrk.commitTransactionWithLogs(env, txn)
 	if err != nil {
 		return &suavextypes.SimulateTransactionResult{
 			Error:   err.Error(),
@@ -173,7 +172,7 @@ func (b *Builder) AddBundles(bundles []*suavextypes.Bundle) ([]*suavextypes.Simu
 }
 
 func (b *Builder) GetBalance(addr common.Address) *big.Int {
-	return b.env.state.GetBalance(addr)
+	return b.env.state.GetBalance(addr).ToBig()
 }
 
 func (b *Builder) FillPending() error {
@@ -186,7 +185,8 @@ func (b *Builder) FillPending() error {
 func (b *Builder) BuildBlock() (*types.Block, error) {
 	work := b.env
 
-	block, err := b.wrk.engine.FinalizeAndAssemble(b.wrk.chain, work.header, work.state, work.txs, nil, work.receipts, nil)
+	body := types.Body{Transactions: work.txs, Withdrawals: nil}
+	block, err := b.wrk.engine.FinalizeAndAssemble(b.wrk.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -330,4 +330,45 @@ func checkBundleParams(currentBlockNumber *big.Int, bundle *suavextypes.Bundle) 
 	}
 
 	return nil
+}
+
+func (miner *Miner) commitTransactionWithLogs(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+	err := miner.commitTransaction(env, tx)
+	if err != nil {
+		return nil, err
+	}
+	return env.receipts[len(env.receipts)-1].Logs, nil
+}
+
+// copy creates a deep copy of environment.
+func (env *environment) copy() *environment {
+	cpy := &environment{
+		signer:   env.signer,
+		state:    env.state.Copy(),
+		tcount:   env.tcount,
+		coinbase: env.coinbase,
+		header:   types.CopyHeader(env.header),
+		receipts: copyReceipts(env.receipts),
+	}
+	if env.gasPool != nil {
+		gasPool := *env.gasPool
+		cpy.gasPool = &gasPool
+	}
+	cpy.txs = make([]*types.Transaction, len(env.txs))
+	copy(cpy.txs, env.txs)
+
+	cpy.sidecars = make([]*types.BlobTxSidecar, len(env.sidecars))
+	copy(cpy.sidecars, env.sidecars)
+
+	return cpy
+}
+
+// copyReceipts makes a deep copy of the given receipts.
+func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
+	result := make([]*types.Receipt, len(receipts))
+	for i, l := range receipts {
+		cpy := *l
+		result[i] = &cpy
+	}
+	return result
 }

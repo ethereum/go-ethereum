@@ -66,9 +66,15 @@ func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
 	for _, name := range names {
 		set[name] = struct{}{}
 	}
-	for _, fn := range ctx.FlagNames() {
-		if _, ok := set[fn]; ok {
-			return true
+	for _, ctx := range ctx.Lineage() {
+		if ctx.Command != nil {
+			for _, f := range ctx.Command.Flags {
+				for _, name := range f.Names() {
+					if _, ok := set[name]; ok {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false

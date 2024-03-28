@@ -535,7 +535,7 @@ func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
 	return net.getRandomUpNode(excludeIDs...)
 }
 
-// GetRandomUpNode returns a random node on the network, which is running.
+// getRandomUpNode returns a random node on the network, which is running.
 func (net *Network) getRandomUpNode(excludeIDs ...enode.ID) *Node {
 	return net.getRandomNode(net.getUpNodeIDs(), excludeIDs)
 }

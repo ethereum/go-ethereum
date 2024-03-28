@@ -324,7 +324,7 @@ func (h *handler) addRequestOp(op *requestOp) {
 	}
 }
 
-// removeRequestOps stops waiting for the given request IDs.
+// removeRequestOp stops waiting for the given request IDs.
 func (h *handler) removeRequestOp(op *requestOp) {
 	for _, id := range op.ids {
 		delete(h.respWait, string(id))
@@ -388,7 +388,7 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 	}()
 }
 
-// handleResponse processes method call responses.
+// handleResponses processes method call responses.
 func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*jsonrpcMessage)) {
 	var resolvedops []*requestOp
 	handleResp := func(msg *jsonrpcMessage) {

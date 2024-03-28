@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -51,7 +51,7 @@ var (
 	}
 )
 
-// waitWatcherStarts waits up to 1s for the keystore watcher to start.
+// waitWatcherStart waits up to 1s for the keystore watcher to start.
 func waitWatcherStart(ks *KeyStore) bool {
 	// On systems where file watch is not supported, just return "ok".
 	if !ks.cache.watcher.enabled() {
@@ -86,7 +86,7 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
-	dir, ks := tmpKeyStore(t, false)
+	dir, ks := tmpKeyStore(t)
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
