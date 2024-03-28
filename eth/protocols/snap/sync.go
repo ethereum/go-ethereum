@@ -295,10 +295,18 @@ type bytecodeHealResponse struct {
 
 // accountTask represents the sync task for a chunk of the account snapshot.
 type accountTask struct {
-	// These fields get serialized to leveldb on shutdown
+	// These fields get serialized to key-value store on shutdown
 	Next     common.Hash                    // Next account to sync in this interval
 	Last     common.Hash                    // Last account to sync in this interval
 	SubTasks map[common.Hash][]*storageTask // Storage intervals needing fetching for large contracts
+
+	// This is a list of account hashes for which storage completion has occurred
+	// in this cycle. This field is newly introduced and will be empty if the task
+	// is resolved from legacy progress data. Furthermore, this additional field
+	// will be ignored by Geth if it's downgraded to a legacy version. The only
+	// side effect is that these contracts might be resynced in the new cycle,
+	// retaining the original behavior.
+	StorageCompleted []common.Hash `json:",omitempty"`
 
 	// These fields are internals used during runtime
 	req  *accountRequest  // Pending request to fill this task
@@ -309,13 +317,28 @@ type accountTask struct {
 	needState []bool // Flags whether the filling accounts need storage retrieval
 	needHeal  []bool // Flags whether the filling accounts's state was chunked and need healing
 
-	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
-	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
+	codeTasks      map[common.Hash]struct{}    // Code hashes that need retrieval
+	stateTasks     map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
+	stateCompleted map[common.Hash]struct{}    // Account hashes whose storage have been completed
 
 	genBatch ethdb.Batch     // Batch used by the node generator
 	genTrie  *trie.StackTrie // Node generator from storage slots
 
 	done bool // Flag whether the task can be removed
+}
+
+func (task *accountTask) effectiveSubTasks() map[common.Hash][]*storageTask {
+	if len(task.res.hashes) == 0 {
+		return nil
+	}
+	tasks := make(map[common.Hash][]*storageTask)
+	last := task.res.hashes[len(task.res.hashes)-1]
+	for hash, subTasks := range task.SubTasks {
+		if hash.Cmp(last) <= 0 {
+			tasks[hash] = subTasks
+		}
+	}
+	return tasks
 }
 
 // storageTask represents the sync task for a chunk of the storage snapshot.
@@ -745,6 +768,12 @@ func (s *Syncer) loadSyncStatus() {
 			for _, task := range s.tasks {
 				task := task // closure for task.genBatch in the stacktrie writer callback
 
+				// Restore the completed storages
+				task.stateCompleted = make(map[common.Hash]struct{})
+				for _, hash := range task.StorageCompleted {
+					task.stateCompleted[hash] = struct{}{}
+				}
+				// Allocate batch for account trie generation
 				task.genBatch = ethdb.HookedBatch{
 					Batch: s.db.NewBatch(),
 					OnPut: func(key []byte, value []byte) {
@@ -767,6 +796,8 @@ func (s *Syncer) loadSyncStatus() {
 					options = options.WithSkipBoundary(task.Next != (common.Hash{}), task.Last != common.MaxHash, boundaryAccountNodesGauge)
 				}
 				task.genTrie = trie.NewStackTrie(options)
+
+				// Restore leftover storage tasks
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
 						subtask := subtask // closure for subtask.genBatch in the stacktrie writer callback
@@ -861,11 +892,12 @@ func (s *Syncer) loadSyncStatus() {
 			options = options.WithSkipBoundary(next != common.Hash{}, last != common.MaxHash, boundaryAccountNodesGauge)
 		}
 		s.tasks = append(s.tasks, &accountTask{
-			Next:     next,
-			Last:     last,
-			SubTasks: make(map[common.Hash][]*storageTask),
-			genBatch: batch,
-			genTrie:  trie.NewStackTrie(options),
+			Next:           next,
+			Last:           last,
+			SubTasks:       make(map[common.Hash][]*storageTask),
+			genBatch:       batch,
+			stateCompleted: make(map[common.Hash]struct{}),
+			genTrie:        trie.NewStackTrie(options),
 		})
 		log.Debug("Created account sync task", "from", next, "last", last)
 		next = common.BigToHash(new(big.Int).Add(last.Big(), common.Big1))
@@ -885,6 +917,16 @@ func (s *Syncer) saveSyncStatus() {
 					log.Error("Failed to persist storage slots", "err", err)
 				}
 			}
+		}
+		// Save the account hashes of completed storage.
+		task.StorageCompleted = make([]common.Hash, 0, len(task.stateCompleted))
+		for hash := range task.stateCompleted {
+			task.StorageCompleted = append(task.StorageCompleted, hash)
+		}
+		if len(task.StorageCompleted) > 0 {
+			// TODO(rjl493456442) degrade the log level before merging.
+			log.Info("Leftover completed storages", "number", len(task.StorageCompleted), "next", task.Next, "last", task.Last)
+			fmt.Println("Leftover completed storages", "number", len(task.StorageCompleted), "next", task.Next.Hex(), "last", task.Last.Hex())
 		}
 	}
 	// Store the actual progress markers
@@ -969,6 +1011,10 @@ func (s *Syncer) cleanStorageTasks() {
 			}
 			delete(task.SubTasks, account)
 			task.pend--
+
+			// Mark the state as complete to prevent resyncing it, regardless
+			// if state healing is necessary.
+			task.stateCompleted[account] = struct{}{}
 
 			// If this was the last pending task, forward the account task
 			if task.pend == 0 {
@@ -1209,7 +1255,8 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			continue
 		}
 		// Skip tasks that are already retrieving (or done with) all small states
-		if len(task.SubTasks) == 0 && len(task.stateTasks) == 0 {
+		storageTasks := task.effectiveSubTasks()
+		if len(storageTasks) == 0 && len(task.stateTasks) == 0 {
 			continue
 		}
 		// Task pending retrieval, try to find an idle peer. If no such peer
@@ -1253,7 +1300,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			roots    = make([]common.Hash, 0, storageSets)
 			subtask  *storageTask
 		)
-		for account, subtasks := range task.SubTasks {
+		for account, subtasks := range storageTasks {
 			for _, st := range subtasks {
 				// Skip any subtasks already filling
 				if st.req != nil {
@@ -1850,11 +1897,11 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	res.task.res = res
 
 	// Ensure that the response doesn't overflow into the subsequent task
-	last := res.task.Last.Big()
+	lastBig := res.task.Last.Big()
 	for i, hash := range res.hashes {
 		// Mark the range complete if the last is already included.
 		// Keep iteration to delete the extra states if exists.
-		cmp := hash.Big().Cmp(last)
+		cmp := hash.Big().Cmp(lastBig)
 		if cmp == 0 {
 			res.cont = false
 			continue
@@ -1890,7 +1937,21 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != types.EmptyRootHash {
-			if !rawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
+			// If the storage was already retrieved in the last cycle, there's no need
+			// to resync it again, regardless of whether the storage root is consistent
+			// or not.
+			if _, exist := res.task.stateCompleted[res.hashes[i]]; exist {
+				// The leftover storage tasks are not expected, unless system is
+				// very wrong.
+				if _, ok := res.task.SubTasks[res.hashes[i]]; ok {
+					log.Crit("Unexpected leftover storage tasks", "owner", res.hashes[i])
+				}
+				// Mark the healing tag if storage root node is inconsistent or
+				// it's non-existent due to storage chunking.
+				if !rawdb.HasTrieNode(s.db, res.hashes[i], nil, account.Root, s.scheme) {
+					res.task.needHeal[i] = true
+				}
+			} else {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle
 				// is interrupted and resumed later. However, *do* update the
@@ -1902,7 +1963,11 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 					}
 					res.task.needHeal[i] = true
 					resumed[res.hashes[i]] = struct{}{}
+					// pending counter doesn't need to be increased as the
+					// leftover subtasks are already included.
 				} else {
+					// The storage is seen for the first time, schedule a state
+					// task for it.
 					res.task.stateTasks[res.hashes[i]] = account.Root
 				}
 				res.task.needState[i] = true
@@ -1910,13 +1975,26 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 			}
 		}
 	}
-	// Delete any subtasks that have been aborted but not resumed. This may undo
-	// some progress if a new peer gives us less accounts than an old one, but for
-	// now we have to live with that.
-	for hash := range res.task.SubTasks {
-		if _, ok := resumed[hash]; !ok {
-			log.Debug("Aborting suspended storage retrieval", "account", hash)
-			delete(res.task.SubTasks, hash)
+	// Delete any subtasks that have been aborted but not resumed. It's essential
+	// as the corresponding contract might be self-destructed in this cycle(it's
+	// no longer possible in ethereum as self-destruction is disabled in Cancun
+	// Fork, but the condition is still necessary for other networks).
+	//
+	// Keep the leftover storage tasks if they are not covered by the responded
+	// account range which should be picked up in next account wave.
+	if len(res.hashes) > 0 {
+		// The hash of last delivered account in the response
+		last := res.hashes[len(res.hashes)-1]
+		for hash := range res.task.SubTasks {
+			if hash.Cmp(last) <= 0 {
+				if _, ok := resumed[hash]; !ok {
+					// TODO(rjl493456442) degrade the log level before merging.
+					// It should never happen in ethereum.
+					log.Error("Aborting suspended storage retrieval", "account", hash)
+					delete(res.task.SubTasks, hash)
+					largeStorageDiscardGauge.Inc(1)
+				}
+			}
 		}
 	}
 	// If the account range contained no contracts, or all have been fully filled
@@ -2014,6 +2092,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			if res.subTask == nil && res.mainTask.needState[j] && (i < len(res.hashes)-1 || !res.cont) {
 				res.mainTask.needState[j] = false
 				res.mainTask.pend--
+				res.mainTask.stateCompleted[account] = struct{}{} // mark it as completed
 				smallStorageGauge.Inc(1)
 			}
 			// If the last contract was chunked, mark it as needing healing
@@ -2409,6 +2488,14 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			return
 		}
 		task.Next = incHash(hash)
+
+		// Remove the completion flag once the account range is pushed
+		// forward. The leftover accounts will be skipped in the next
+		// cycle.
+		delete(task.stateCompleted, hash)
+	}
+	if len(task.stateCompleted) != 0 {
+		log.Crit("Storage completion flags should be emptied", "number", len(task.stateCompleted))
 	}
 	// All accounts marked as complete, track if the entire task is done
 	task.done = !res.cont
