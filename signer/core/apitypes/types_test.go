@@ -20,7 +20,6 @@ import "testing"
 
 func TestIsPrimitive(t *testing.T) {
 	t.Parallel()
-
 	// Expected positives
 	for i, tc := range []string{
 		"int24", "int24[]", "uint88", "uint88[]", "uint", "uint[]", "int256", "int256[]",

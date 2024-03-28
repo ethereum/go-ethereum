@@ -524,8 +524,8 @@ func initialize(c *cli.Context) error {
 	if usecolor {
 		output = colorable.NewColorable(logOutput)
 	}
-
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
+	verbosity := log.FromLegacyLevel(c.Int(logLevelFlag.Name))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
 	return nil
 }
@@ -640,6 +640,7 @@ func accountImport(c *cli.Context) error {
 	}
 
 	if first != second {
+		//lint:ignore ST1005 This is a message for the user
 		return errors.New("Passwords do not match")
 	}
 

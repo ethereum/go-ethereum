@@ -32,8 +32,11 @@ import (
 
 // TestPack tests the general pack/unpack tests in packing_test.go
 func TestPack(t *testing.T) {
+	t.Parallel()
 	for i, test := range packUnpackTests {
+		i, test := i, test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
 			encb, err := hex.DecodeString(test.packed)
 			if err != nil {
 				t.Fatalf("invalid hex %s: %v", test.packed, err)
@@ -61,6 +64,7 @@ func TestPack(t *testing.T) {
 }
 
 func TestMethodPack(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
@@ -191,6 +195,7 @@ func TestMethodPack(t *testing.T) {
 }
 
 func TestPackNumber(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		value  reflect.Value
 		packed []byte

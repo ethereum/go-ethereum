@@ -102,7 +102,10 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
-	origin := acct
+	var (
+		origin  = acct
+		created = acct == nil // true if the account was not existent
+	)
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
@@ -116,6 +119,7 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
+		created:        created,
 	}
 }
 
@@ -152,7 +156,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 		}
 
 		if s.trie == nil {
-			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root)
+			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root, s.db.trie)
 			if err != nil {
 				return nil, err
 			}

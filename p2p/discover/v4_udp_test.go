@@ -294,7 +294,7 @@ func TestUDPv4_findnode(t *testing.T) {
 
 		nodes.push(n, numCandidates)
 	}
-	fillTable(test.table, nodes.entries)
+	fillTable(test.table, nodes.entries, false)
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
@@ -604,12 +604,7 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 
 	// Prefix logs with node ID.
 	lprefix := fmt.Sprintf("(%s)", ln.ID().TerminalString())
-	lfmt := log.TerminalFormat(false)
-	cfg.Log = testlog.Logger(t, log.LvlTrace)
-	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
-		t.Logf("%s %s", lprefix, lfmt.Format(r))
-		return nil
-	}, log.LvlTrace))
+	cfg.Log = testlog.Logger(t, log.LevelTrace).With("node-id", lprefix)
 
 	// Listen.
 	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})

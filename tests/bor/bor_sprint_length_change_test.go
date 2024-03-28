@@ -50,7 +50,7 @@ const (
 func TestValidatorsBlockProduction(t *testing.T) {
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -377,7 +377,7 @@ func TestSprintLengthReorg2Nodes(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -493,7 +493,7 @@ func SprintLengthReorgIndividual2NodesHelper(t *testing.T, index int, tt map[str
 func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64) {
 	t.Helper()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -629,7 +629,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint64, uint64) {
 	t.Helper()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
