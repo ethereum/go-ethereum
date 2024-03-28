@@ -141,6 +141,7 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext core.ChainCont
 	env := CreateTraceEnvHelper(
 		chainConfig,
 		&vm.LogConfig{
+			DisableStorage:   true,
 			EnableMemory:     false,
 			EnableReturnData: true,
 		},
