@@ -93,7 +93,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return core.ErrTipAboveFeeCap
 	}
 	// Make sure the transaction is signed properly
-	if _, err := types.Sender(signer, tx); err != nil || !opts.AllowUnprotectedTxs {
+	if _, err := types.Sender(signer, tx); err != nil && !opts.AllowUnprotectedTxs {
 		return ErrInvalidSender
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
