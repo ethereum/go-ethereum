@@ -169,6 +169,8 @@ type Hooks struct {
 // for tracing and reporting.
 type BalanceChangeReason byte
 
+//go:generate stringer -type=BalanceChangeReason -output gen_balance_change_reason_stringer.go
+
 const (
 	BalanceChangeUnspecified BalanceChangeReason = 0
 
@@ -213,44 +215,6 @@ const (
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )
-
-// String returns a string representation of the reason.
-func (r BalanceChangeReason) String() string {
-	switch r {
-	case BalanceChangeUnspecified:
-		return "BalanceChangeUnspecified"
-	case BalanceIncreaseRewardMineUncle:
-		return "BalanceIncreaseRewardMineUncle"
-	case BalanceIncreaseRewardMineBlock:
-		return "BalanceIncreaseRewardMineBlock"
-	case BalanceIncreaseWithdrawal:
-		return "BalanceIncreaseWithdrawal"
-	case BalanceIncreaseGenesisBalance:
-		return "BalanceIncreaseGenesisBalance"
-	case BalanceIncreaseRewardTransactionFee:
-		return "BalanceIncreaseRewardTransactionFee"
-	case BalanceDecreaseGasBuy:
-		return "BalanceDecreaseGasBuy"
-	case BalanceIncreaseGasReturn:
-		return "BalanceIncreaseGasReturn"
-	case BalanceIncreaseDaoContract:
-		return "BalanceIncreaseDaoContract"
-	case BalanceDecreaseDaoAccount:
-		return "BalanceDecreaseDaoAccount"
-	case BalanceChangeTransfer:
-		return "BalanceChangeTransfer"
-	case BalanceChangeTouchAccount:
-		return "BalanceChangeTouchAccount"
-	case BalanceIncreaseSelfdestruct:
-		return "BalanceIncreaseSelfdestruct"
-	case BalanceDecreaseSelfdestruct:
-		return "BalanceDecreaseSelfdestruct"
-	case BalanceDecreaseSelfdestructBurn:
-		return "BalanceDecreaseSelfdestructBurn"
-	default:
-		return "unknown"
-	}
-}
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.
