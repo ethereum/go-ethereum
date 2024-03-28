@@ -19,7 +19,6 @@ package dbtest
 import (
 	"bytes"
 	"crypto/rand"
-	"reflect"
 	"slices"
 	"sort"
 	"testing"
@@ -149,7 +148,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("Iterator: got: %s; want: %s", got, want)
 			}
 		}
@@ -160,7 +159,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(1,nil): got: %s; want: %s", got, want)
 			}
 		}
@@ -171,7 +170,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(5,nil): got: %s; want: %s", got, want)
 			}
 		}
@@ -182,7 +181,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(nil,2): got: %s; want: %s", got, want)
 			}
 		}
@@ -193,7 +192,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(nil,5): got: %s; want: %s", got, want)
 			}
 		}
@@ -262,7 +261,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		{
 			it := db.NewIterator(nil, nil)
-			if got, want := iterateKeys(it), []string{"1", "2", "3", "4"}; !reflect.DeepEqual(got, want) {
+			if got, want := iterateKeys(it), []string{"1", "2", "3", "4"}; !slices.Equal(got, want) {
 				t.Errorf("got: %s; want: %s", got, want)
 			}
 		}
@@ -286,7 +285,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		{
 			it := db.NewIterator(nil, nil)
-			if got, want := iterateKeys(it), []string{"2", "3", "4", "5", "6"}; !reflect.DeepEqual(got, want) {
+			if got, want := iterateKeys(it), []string{"2", "3", "4", "5", "6"}; !slices.Equal(got, want) {
 				t.Errorf("got: %s; want: %s", got, want)
 			}
 		}
@@ -314,7 +313,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 
 		it := db.NewIterator(nil, nil)
-		if got := iterateKeys(it); !reflect.DeepEqual(got, want) {
+		if got := iterateKeys(it); !slices.Equal(got, want) {
 			t.Errorf("got: %s; want: %s", got, want)
 		}
 	})
