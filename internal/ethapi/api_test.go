@@ -32,6 +32,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -53,8 +56,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
@@ -468,17 +469,18 @@ func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.Sync
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
-func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, nil
+func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
+	return nil, nil, nil, nil, nil, nil, nil
 }
-func (b testBackend) ChainDb() ethdb.Database           { return b.db }
-func (b testBackend) AccountManager() *accounts.Manager { return b.accman }
-func (b testBackend) ExtRPCEnabled() bool               { return false }
-func (b testBackend) RPCGasCap() uint64                 { return 10000000 }
-func (b testBackend) RPCEVMTimeout() time.Duration      { return time.Second }
-func (b testBackend) RPCTxFeeCap() float64              { return 0 }
-func (b testBackend) UnprotectedAllowed() bool          { return false }
-func (b testBackend) SetHead(number uint64)             {}
+func (b testBackend) BlobBaseFee(ctx context.Context) *big.Int { return new(big.Int) }
+func (b testBackend) ChainDb() ethdb.Database                  { return b.db }
+func (b testBackend) AccountManager() *accounts.Manager        { return b.accman }
+func (b testBackend) ExtRPCEnabled() bool                      { return false }
+func (b testBackend) RPCGasCap() uint64                        { return 10000000 }
+func (b testBackend) RPCEVMTimeout() time.Duration             { return time.Second }
+func (b testBackend) RPCTxFeeCap() float64                     { return 0 }
+func (b testBackend) UnprotectedAllowed() bool                 { return false }
+func (b testBackend) SetHead(number uint64)                    {}
 func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber {
 		return b.chain.CurrentBlock(), nil

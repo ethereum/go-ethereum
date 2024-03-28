@@ -314,13 +314,15 @@ func (b *backendMock) setFork(fork string) error {
 func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(42), nil
 }
+func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int { return big.NewInt(42) }
+
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
-func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, nil
+func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
+	return nil, nil, nil, nil, nil, nil, nil
 }
 func (b *backendMock) ChainDb() ethdb.Database           { return nil }
 func (b *backendMock) AccountManager() *accounts.Manager { return nil }
