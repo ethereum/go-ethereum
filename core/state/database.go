@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -39,12 +38,6 @@ const (
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
-
-	// commitmentSize is the size of commitment stored in cache.
-	commitmentSize = banderwagon.UncompressedSize
-
-	// Cache item granted for caching commitment results.
-	commitmentCacheItems = 64 * 1024 * 1024 / (commitmentSize + common.AddressLength)
 )
 
 // Database wraps access to tries and contract code.
@@ -139,6 +132,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
+
+	// IsVerkle returns true if the trie is verkle-tree based
+	IsVerkle() bool
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -180,7 +176,7 @@ type cachingDB struct {
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(100))
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {

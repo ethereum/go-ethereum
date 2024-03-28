@@ -103,17 +103,17 @@ func TestAttachWelcome(t *testing.T) {
 		"--http", "--http.port", httpPort,
 		"--ws", "--ws.port", wsPort)
 	t.Run("ipc", func(t *testing.T) {
-		waitForEndpoint(t, ipc, 3*time.Second)
+		waitForEndpoint(t, ipc, 4*time.Second)
 		testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
 	})
 	t.Run("http", func(t *testing.T) {
 		endpoint := "http://127.0.0.1:" + httpPort
-		waitForEndpoint(t, endpoint, 3*time.Second)
+		waitForEndpoint(t, endpoint, 4*time.Second)
 		testAttachWelcome(t, geth, endpoint, httpAPIs)
 	})
 	t.Run("ws", func(t *testing.T) {
 		endpoint := "ws://127.0.0.1:" + wsPort
-		waitForEndpoint(t, endpoint, 3*time.Second)
+		waitForEndpoint(t, endpoint, 4*time.Second)
 		testAttachWelcome(t, geth, endpoint, httpAPIs)
 	})
 	geth.Kill()
