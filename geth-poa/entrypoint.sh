@@ -16,6 +16,12 @@ RPC_PORT="${RPC_PORT:-8545}"
 WS_PORT="${WS_PORT:-8546}"
 BLOCK_SIGNER_PRIVATE_KEY=${BLOCK_SIGNER_PRIVATE_KEY:-""}
 
+if [ -n "$GETH_LOG_TAGS" ]; then
+    LOG_TAGS_OPTION="--log.tags=$GETH_LOG_TAGS"
+else
+    LOG_TAGS_OPTION=""
+fi
+
 # Generate signer key if needed
 if [ "$GETH_NODE_TYPE" = "signer" ]; then
 	if [ ! -f "$GETH_DATA_DIR/password" ]; then
@@ -28,7 +34,7 @@ if [ "$GETH_NODE_TYPE" = "signer" ]; then
 			"$GETH_BIN_PATH" \
 				--verbosity="$GETH_VERBOSITY" \
 				--log.format="$GETH_LOG_FORMAT" \
-				--log.tags="$GETH_LOG_TAGS" \
+				$LOG_TAGS_OPTION \
 				--nousb \
 				account import \
 				--datadir="$GETH_DATA_DIR" \
@@ -53,7 +59,7 @@ if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 	"$GETH_BIN_PATH" \
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
-		--log.tags="$GETH_LOG_TAGS" \
+		$LOG_TAGS_OPTION \
 		--nousb \
 		--state.scheme=path \
 		--db.engine=pebble \
@@ -88,7 +94,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
-		--log.tags="$GETH_LOG_TAGS" \
+		$LOG_TAGS_OPTION \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
 		--http \
@@ -130,7 +136,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
-		--log.tags="$GETH_LOG_TAGS" \
+		$LOG_TAGS_OPTION \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
@@ -180,7 +186,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 	exec "$GETH_BIN_PATH" \
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
-		--log.tags="$GETH_LOG_TAGS" \
+		$LOG_TAGS_OPTION \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
