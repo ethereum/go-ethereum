@@ -21,7 +21,7 @@ func init() {
 	tracers.LiveDirectory.Register("supply", newSupply)
 }
 
-type SupplyInfo struct {
+type supplyInfo struct {
 	Delta       *big.Int `json:"delta"`
 	Reward      *big.Int `json:"reward"`
 	Withdrawals *big.Int `json:"withdrawals"`
@@ -33,7 +33,7 @@ type SupplyInfo struct {
 	ParentHash common.Hash `json:"parentHash"`
 }
 
-func (s *SupplyInfo) burn(amount *big.Int) {
+func (s *supplyInfo) burn(amount *big.Int) {
 	s.Burn.Add(s.Burn, amount)
 	s.Delta.Sub(s.Delta, amount)
 }
@@ -43,8 +43,8 @@ type supplyTxCallstack struct {
 	burn  *big.Int
 }
 
-	delta       SupplyInfo
 type supply struct {
+	delta       supplyInfo
 	txCallstack []supplyTxCallstack // Callstack for current transaction
 	logger      *log.Logger
 }
@@ -94,8 +94,8 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-func newSupplyInfo() SupplyInfo {
-	return SupplyInfo{
+func newSupplyInfo() supplyInfo {
+	return supplyInfo{
 		Delta:       big.NewInt(0),
 		Reward:      big.NewInt(0),
 		Withdrawals: big.NewInt(0),

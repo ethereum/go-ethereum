@@ -36,12 +36,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/live"
 	"github.com/ethereum/go-ethereum/params"
 
 	// Force-load live packages, to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 )
+
+type supplyInfo struct {
+	Delta       *big.Int `json:"delta"`
+	Reward      *big.Int `json:"reward"`
+	Withdrawals *big.Int `json:"withdrawals"`
+	Burn        *big.Int `json:"burn"`
+
+	// Block info
+	Number     uint64      `json:"blockNumber"`
+	Hash       common.Hash `json:"hash"`
+	ParentHash common.Hash `json:"parentHash"`
+}
 
 func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
@@ -64,7 +75,7 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		}
 	)
 
-	expected := live.SupplyInfo{
+	expected := supplyInfo{
 		Delta:       new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
 		Reward:      common.Big0,
 		Withdrawals: common.Big0,
@@ -95,7 +106,7 @@ func TestSupplyRewards(t *testing.T) {
 		}
 	)
 
-	expected := live.SupplyInfo{
+	expected := supplyInfo{
 		Delta:       new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
 		Reward:      new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
 		Withdrawals: common.Big0,
@@ -162,7 +173,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		head     = chain.CurrentBlock()
 		reward   = new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))
 		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
-		expected = live.SupplyInfo{
+		expected = supplyInfo{
 			Delta:       new(big.Int).Sub(reward, burn),
 			Reward:      reward,
 			Withdrawals: common.Big0,
@@ -204,7 +215,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 
 	var (
 		head     = chain.CurrentBlock()
-		expected = live.SupplyInfo{
+		expected = supplyInfo{
 			Delta:       big.NewInt(1337000000000),
 			Reward:      common.Big0,
 			Withdrawals: big.NewInt(1337000000000),
@@ -302,7 +313,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	head := preCancunChain.CurrentBlock()
 	// Check live trace output
-	expected := live.SupplyInfo{
+	expected := supplyInfo{
 		Delta:       big.NewInt(-55294500000000),
 		Reward:      common.Big0,
 		Withdrawals: common.Big0,
@@ -345,7 +356,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	// Check live trace output
 	head = postCancunChain.CurrentBlock()
-	expected = live.SupplyInfo{
+	expected = supplyInfo{
 		Delta:       big.NewInt(-55289500000000),
 		Reward:      common.Big0,
 		Withdrawals: common.Big0,
@@ -495,7 +506,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	blockBurn := new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))
 	totalBurn := new(big.Int).Add(blockBurn, eth5) // 5ETH burned from contract B
 
-	expected := live.SupplyInfo{
+	expected := supplyInfo{
 		Delta:       new(big.Int).Neg(totalBurn),
 		Reward:      common.Big0,
 		Withdrawals: common.Big0,
@@ -512,7 +523,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	}
 }
 
-func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.SupplyInfo, *core.BlockChain, error) {
+func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
 	var (
 		engine = beacon.New(ethash.NewFaker())
 	)
@@ -549,13 +560,13 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 	}
 	defer file.Close()
 
-	var output []live.SupplyInfo
+	var output []supplyInfo
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
 		blockBytes := scanner.Bytes()
 
-		var info live.SupplyInfo
+		var info supplyInfo
 		if err := json.Unmarshal(blockBytes, &info); err != nil {
 			return nil, chain, fmt.Errorf("failed to unmarshal result: %v", err)
 		}
