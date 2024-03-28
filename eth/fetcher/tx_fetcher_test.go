@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -1823,12 +1824,12 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					continue
 				}
 				for _, hash := range hashes {
-					if !containsHash(request.hashes, hash) {
+					if !slices.Contains(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
 				for _, hash := range request.hashes {
-					if !containsHash(hashes, hash) {
+					if !slices.Contains(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
 					}
 				}
@@ -1850,7 +1851,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			for hash := range fetcher.fetching {
 				var found bool
 				for _, req := range fetcher.requests {
-					if containsHash(req.hashes, hash) {
+					if slices.Contains(req.hashes, hash) {
 						found = true
 						break
 					}
@@ -1891,12 +1892,12 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					continue
 				}
 				for _, hash := range hashes {
-					if !containsHash(request.hashes, hash) {
+					if !slices.Contains(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
 				for _, hash := range request.hashes {
-					if !containsHash(hashes, hash) {
+					if !slices.Contains(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
 					}
 				}
@@ -1909,7 +1910,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 				for _, ann := range announces {
 					var found bool
 					for _, hs := range step.fetching {
-						if containsHash(hs, ann.hash) {
+						if slices.Contains(hs, ann.hash) {
 							found = true
 							break
 						}
@@ -1925,7 +1926,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 				}
 			}
 			for hash := range fetcher.announced {
-				if !containsHash(queued, hash) {
+				if !slices.Contains(queued, hash) {
 					t.Errorf("step %d: hash %x extra in announced", i, hash)
 				}
 			}
@@ -1978,16 +1979,6 @@ func containsAnnounce(slice []announce, ann announce) bool {
 func containsHashInAnnounces(slice []announce, hash common.Hash) bool {
 	for _, have := range slice {
 		if have.hash == hash {
-			return true
-		}
-	}
-	return false
-}
-
-// containsHash returns whether a hash is contained within a hash slice.
-func containsHash(slice []common.Hash, hash common.Hash) bool {
-	for _, have := range slice {
-		if have == hash {
 			return true
 		}
 	}
