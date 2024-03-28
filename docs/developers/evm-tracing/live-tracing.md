@@ -55,12 +55,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
-	live.Directory.Register("supply", newSupply)
+	tracers.LiveDirectory.Register("supply", newSupply)
 }
 
 type SupplyInfo struct {
@@ -222,8 +222,8 @@ func (s *Supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from co
 	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
-// interalTxsHandler handles internal transactions burned amount
-func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
+// internalTxsHandler handles internal transactions burned amount
+func (s *Supply) internalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
 		s.delta.burn(call.burn)
@@ -249,7 +249,7 @@ func (s *Supply) OnEnter(depth int, typ byte, from common.Address, to common.Add
 		call.burn = value
 	}
 
-	// Append call to the callstack, so we can fill the details in CaptureExit
+	// Append call to the callstack, so we can fill the details in OnExit
 	s.txCallstack = append(s.txCallstack, call)
 }
 
