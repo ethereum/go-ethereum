@@ -20,6 +20,11 @@ var makeTest = function(tx, traceConfig) {
     genesis.number    = genesis.number.toString();
     genesis.timestamp = genesis.timestamp.toString();
 
+    // Use current header's fields instead
+    genesis.baseFeePerGas = block.baseFeePerGas;
+    genesis.excessBlobGas = block.excessBlobGas;
+    genesis.blobGasUsed   = block.blobGasUsed;
+
     genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer"});
     for (var key in genesis.alloc) {
         var nonce = genesis.alloc[key].nonce;
