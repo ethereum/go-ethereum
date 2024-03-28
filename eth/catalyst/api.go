@@ -86,9 +86,11 @@ var caps = []string{
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
 	"engine_getPayloadV3",
+	"engine_getPayloadV4",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
+	"engine_newPayloadV4",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 	"engine_getClientVersionV1",
@@ -220,7 +222,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 		if params.BeaconRoot == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing beacon root"))
 		}
-		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
+		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun && api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV3 must only be called for cancun payloads"))
 		}
 	}
@@ -508,6 +510,34 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	return api.newPayload(params, versionedHashes, beaconRoot)
 }
 
+// NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
+	if params.Withdrawals == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+	}
+	if params.ExcessBlobGas == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil excessBlobGas post-cancun"))
+	}
+	if params.BlobGasUsed == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
+	}
+	if params.Deposits == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil deposits post-prague"))
+	}
+
+	if versionedHashes == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
+	}
+	if beaconRoot == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
+	}
+
+	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV3 must only be called for cancun payloads"))
+	}
+	return api.newPayload(params, versionedHashes, beaconRoot)
+}
+
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
@@ -553,6 +583,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.ExcessBlobGas", ebg,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
+			"len(params.Deposits)", len(params.Deposits),
 			"beaconRoot", beaconRoot,
 			"error", err)
 		return api.invalid(err, nil), nil

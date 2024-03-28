@@ -102,6 +102,9 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	// DepositsHash was added by EIP-6110 and is ignored in legacy headers.
+	DepositsHash *common.Hash `json:"depositsRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -180,6 +183,7 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Deposits     []*Deposit    `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -204,6 +208,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
+	deposits     Deposits
 
 	// witness is not an encoded part of the block body.
 	// It is held in Block in order for easy relaying to the places
@@ -226,6 +231,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
+	Deposits    []*Deposit    `rlp:"optional"`
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -315,6 +321,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	if h.DepositsHash != nil {
+		cpy.DepositsHash = new(common.Hash)
+		*cpy.DepositsHash = *h.DepositsHash
+	}
 	return &cpy
 }
 
@@ -343,7 +353,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.deposits}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -352,6 +362,7 @@ func (b *Block) Body() *Body {
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Deposits() Deposits         { return b.deposits }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {

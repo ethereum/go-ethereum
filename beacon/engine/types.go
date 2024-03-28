@@ -36,6 +36,7 @@ var (
 	PayloadV1 PayloadVersion = 0x1
 	PayloadV2 PayloadVersion = 0x2
 	PayloadV3 PayloadVersion = 0x3
+	PayloadV4 PayloadVersion = 0x4
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -76,6 +77,7 @@ type ExecutableData struct {
 	Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
+	Deposits         []*types.Deposit        `json:"depositReceipts"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 }
 
@@ -231,6 +233,11 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+	var depositsRoot *common.Hash
+	if data.Deposits != nil {
+		h := types.DeriveSha(types.Deposits(data.Deposits), trie.NewStackTrie(nil))
+		depositsRoot = &h
+	}
 	header := &types.Header{
 		ParentHash:       data.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
@@ -251,9 +258,10 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 		ExcessBlobGas:    data.ExcessBlobGas,
 		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
+		DepositsHash:     depositsRoot,
 	}
 	block := types.NewBlockWithHeader(header)
-	block = block.WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals})
+	block = block.WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals, Deposits: data.Deposits})
 	block = block.WithWitness(data.ExecutionWitness)
 	if block.Hash() != data.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
@@ -282,6 +290,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:      block.Withdrawals(),
 		BlobGasUsed:      block.BlobGasUsed(),
 		ExcessBlobGas:    block.ExcessBlobGas(),
+		Deposits:         block.Deposits(),
 		ExecutionWitness: block.ExecutionWitness(),
 	}
 	bundle := BlobsBundleV1{
