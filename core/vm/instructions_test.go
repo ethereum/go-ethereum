@@ -719,32 +719,40 @@ func TestCreate2Addreses(t *testing.T) {
 func TestRandom(t *testing.T) {
 	type testcase struct {
 		name   string
-		random common.Hash
+		random *common.Hash
+		err    error
 	}
-
+	keccak256Hash := crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})
 	for _, tt := range []testcase{
-		{name: "empty hash", random: common.Hash{}},
-		{name: "1", random: common.Hash{0}},
-		{name: "emptyCodeHash", random: types.EmptyCodeHash},
-		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
+		{name: "nil random", random: nil, err: ErrUnsupportedRandom},
+		{name: "empty hash", random: &common.Hash{}},
+		{name: "1", random: &common.Hash{0}},
+		{name: "emptyCodeHash", random: &types.EmptyCodeHash},
+		{name: "hash(0x010203)", random: &keccak256Hash},
 	} {
 		var (
-			env            = NewEVM(BlockContext{Random: &tt.random}, TxContext{}, nil, params.TestChainConfig, Config{})
+			env            = NewEVM(BlockContext{Random: tt.random}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack          = newstack()
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
 		)
-		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
-		}
-		actual := stack.pop()
-		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.random.Bytes()))
-		if overflow {
-			t.Errorf("Testcase %v: invalid overflow", tt.name)
-		}
-		if actual.Cmp(expected) != 0 {
-			t.Errorf("Testcase %v: expected  %x, got %x", tt.name, expected, actual)
+		_, err := opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		if tt.err != nil {
+			if err != tt.err {
+				t.Errorf("Testcase %v: expected %v, got %v", tt.name, tt.err, err)
+			}
+		} else {
+			if len(stack.data) != 1 {
+				t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
+			}
+			actual := stack.pop()
+			expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.random.Bytes()))
+			if overflow {
+				t.Errorf("Testcase %v: invalid overflow", tt.name)
+			}
+			if actual.Cmp(expected) != 0 {
+				t.Errorf("Testcase %v: expected  %x, got %x", tt.name, expected, actual)
+			}
 		}
 	}
 }
