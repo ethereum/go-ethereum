@@ -677,7 +677,7 @@ func (mo *memoryObj) Length() int {
 	return len(mo.memory)
 }
 
-func (m *memoryObj) setupObject() *goja.Object {
+func (mo *memoryObj) setupObject() *goja.Object {
 	o := m.vm.NewObject()
 	o.Set("slice", m.vm.ToValue(m.Slice))
 	o.Set("getUint", m.vm.ToValue(m.GetUint))
@@ -863,7 +863,7 @@ func (co *contractObj) GetInput() goja.Value {
 	return res
 }
 
-func (c *contractObj) setupObject() *goja.Object {
+func (co *contractObj) setupObject() *goja.Object {
 	o := c.vm.NewObject()
 	o.Set("getCaller", c.vm.ToValue(c.GetCaller))
 	o.Set("getAddress", c.vm.ToValue(c.GetAddress))
