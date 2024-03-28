@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"maps"
 )
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM
@@ -71,16 +72,8 @@ func (al accessList) equal(other accessList) bool {
 	// Accounts match, cross reference the storage slots too
 	for addr, slots := range al {
 		otherslots := other[addr]
-
-		if len(slots) != len(otherslots) {
+		if !maps.Equal(slots, otherslots) {
 			return false
-		}
-		// Given that len(slots) == len(otherslots), we only need to check that
-		// all the items from slots are in otherslots.
-		for hash := range slots {
-			if _, ok := otherslots[hash]; !ok {
-				return false
-			}
 		}
 	}
 	return true
