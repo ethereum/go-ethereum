@@ -528,10 +528,8 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		engine = beacon.New(ethash.NewFaker())
 	)
 
-	tmpDir := t.TempDir()
-	traceOutputPath := filepath.ToSlash(tmpDir)
+	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
 	// Load supply tracer
 	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
@@ -555,7 +553,6 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 	}
 
 	// Check and compare the results
-	// TODO: replace file to pass results
 	file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, chain, fmt.Errorf("failed to open output file: %v", err)

@@ -67,15 +67,16 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 	}
 
 	// Store traces in a rotating file
-	loggerOutput := &lumberjack.Logger{
+	loggerOutputFile := &lumberjack.Logger{
 		Filename: filepath.Join(config.Path, "supply.jsonl"),
 	}
+	defer loggerOutputFile.Close()
 
 	if config.MaxSize > 0 {
-		loggerOutput.MaxSize = config.MaxSize
+		loggerOutputFile.MaxSize = config.MaxSize
 	}
 
-	logger := log.New(loggerOutput, "", 0)
+	logger := log.New(loggerOutputFile, "", 0)
 
 	supplyInfo := newSupplyInfo()
 
