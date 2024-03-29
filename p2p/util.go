@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"container/heap"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 )
@@ -43,12 +44,9 @@ func (h *expHeap) add(item string, exp mclock.AbsTime) {
 
 // contains checks whether an item is present.
 func (h expHeap) contains(item string) bool {
-	for _, v := range h {
-		if v.item == item {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(h, func(e expItem) bool {
+		return e.item == item
+	})
 }
 
 // expire removes items with expiry time before 'now'.
