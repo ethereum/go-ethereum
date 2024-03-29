@@ -31,6 +31,7 @@ type callContext struct {
 	Time       math.HexOrDecimal64   `json:"timestamp"`
 	GasLimit   math.HexOrDecimal64   `json:"gasLimit"`
 	Miner      common.Address        `json:"miner"`
+	BaseFee    *math.HexOrDecimal256 `json:"baseFeePerGas"`
 }
 
 func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
@@ -42,12 +43,13 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 		Time:        uint64(c.Time),
 		Difficulty:  (*big.Int)(c.Difficulty),
 		GasLimit:    uint64(c.GasLimit),
-		BaseFee:     genesis.BaseFee,
+	}
+	if genesis.Config.IsLondon(context.BlockNumber) {
+		context.BaseFee = (*big.Int)(c.BaseFee)
 	}
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
 		excessBlobGas := eip4844.CalcExcessBlobGas(*genesis.ExcessBlobGas, *genesis.BlobGasUsed)
 		context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 	}
-
 	return context
 }
