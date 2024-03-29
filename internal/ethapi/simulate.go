@@ -190,10 +190,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		vmConfig    = &vm.Config{
 			NoBaseFee: !sim.validate,
 			// Block hash will be repaired after execution.
-			Tracer: tracer,
+			Tracer: tracer.Hooks(),
 		}
 		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, config, *vmConfig)
 	)
+	sim.state.SetLogger(tracer.Hooks())
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
@@ -205,13 +206,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		if err := sim.sanitizeCall(&call, sim.state, &gasUsed, blockContext); err != nil {
 			return nil, err
 		}
-		tx := call.ToTransaction()
+		tx := call.ToTransaction(call.GasPrice == nil)
 		txes[i] = tx
 
-		msg, err := call.ToMessage(gp.Gas(), header.BaseFee, !sim.validate)
-		if err != nil {
+		if err := call.CallDefaults(gp.Gas(), header.BaseFee, config.ChainID); err != nil {
 			return nil, err
 		}
+		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		tracer.reset(tx.Hash(), uint(i))
 		evm.Reset(core.NewEVMTxContext(msg), sim.state)
 		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, gp)

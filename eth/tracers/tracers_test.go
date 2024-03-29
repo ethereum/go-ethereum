@@ -89,7 +89,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(context, txContext, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer.Hooks()})
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -109,43 +109,5 @@ func BenchmarkTransactionTrace(b *testing.B) {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}
 		tracer.Reset()
-	}
-}
-
-func TestMemCopying(t *testing.T) {
-	for i, tc := range []struct {
-		memsize  int64
-		offset   int64
-		size     int64
-		wantErr  string
-		wantSize int
-	}{
-		{0, 0, 100, "", 100},    // Should pad up to 100
-		{0, 100, 0, "", 0},      // No need to pad (0 size)
-		{100, 50, 100, "", 100}, // Should pad 100-150
-		{100, 50, 5, "", 5},     // Wanted range fully within memory
-		{100, -50, 0, "offset or size must not be negative", 0},                        // Error
-		{0, 1, 1024*1024 + 1, "reached limit for padding memory slice: 1048578", 0},    // Error
-		{10, 0, 1024*1024 + 100, "reached limit for padding memory slice: 1048666", 0}, // Error
-
-	} {
-		mem := vm.NewMemory()
-		mem.Resize(uint64(tc.memsize))
-		cpy, err := GetMemoryCopyPadded(mem, tc.offset, tc.size)
-		if want := tc.wantErr; want != "" {
-			if err == nil {
-				t.Fatalf("test %d: want '%v' have no error", i, want)
-			}
-			if have := err.Error(); want != have {
-				t.Fatalf("test %d: want '%v' have '%v'", i, want, have)
-			}
-			continue
-		}
-		if err != nil {
-			t.Fatalf("test %d: unexpected error: %v", i, err)
-		}
-		if want, have := tc.wantSize, len(cpy); have != want {
-			t.Fatalf("test %d: want %v have %v", i, want, have)
-		}
 	}
 }

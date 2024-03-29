@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
@@ -549,7 +549,7 @@ func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	}
 	panic("only implemented for number")
 }
-func (b testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) { panic("implement me") }
+func (b testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) { panic("implement me") }
 func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	header, err := b.HeaderByHash(ctx, hash)
 	if header == nil || err != nil {
@@ -615,9 +615,6 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 	panic("implement me")
 }
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
-	panic("implement me")
-}
-func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
 func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
@@ -2004,7 +2001,8 @@ func TestFillBlobTransaction(t *testing.T) {
 			Config: params.MergedTestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
-		emptyBlob                      = kzg4844.Blob{}
+		emptyBlob                      = new(kzg4844.Blob)
+		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
 		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
 		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
 		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
@@ -2087,14 +2085,14 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -2107,14 +2105,14 @@ func TestFillBlobTransaction(t *testing.T) {
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				BlobHashes:  []common.Hash{emptyBlobHash},
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -2127,7 +2125,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				BlobHashes:  []common.Hash{{0x01, 0x22}},
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
@@ -2139,12 +2137,12 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:  &b.acc.Address,
 				To:    &to,
 				Value: (*hexutil.Big)(big.NewInt(1)),
-				Blobs: []kzg4844.Blob{emptyBlob},
+				Blobs: emptyBlobs,
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -2157,7 +2155,7 @@ func TestFillBlobTransaction(t *testing.T) {
 			if len(tc.err) > 0 {
 				if err == nil {
 					t.Fatalf("missing error. want: %s", tc.err)
-				} else if err != nil && err.Error() != tc.err {
+				} else if err.Error() != tc.err {
 					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
 				}
 				return
@@ -2185,10 +2183,14 @@ func TestFillBlobTransaction(t *testing.T) {
 
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
-		gas   = tx.Gas()
-		nonce = tx.Nonce()
-		input = tx.Data()
+		gas        = tx.Gas()
+		nonce      = tx.Nonce()
+		input      = tx.Data()
+		accessList *types.AccessList
 	)
+	if acl := tx.AccessList(); acl != nil {
+		accessList = &acl
+	}
 	return TransactionArgs{
 		From:                 &from,
 		To:                   tx.To(),
@@ -2199,10 +2201,9 @@ func argsFromTransaction(tx *types.Transaction, from common.Address) Transaction
 		Nonce:                (*hexutil.Uint64)(&nonce),
 		Input:                (*hexutil.Bytes)(&input),
 		ChainID:              (*hexutil.Big)(tx.ChainId()),
-		// TODO: impl accessList conversion
-		//AccessList: tx.AccessList(),
-		BlobFeeCap: (*hexutil.Big)(tx.BlobGasFeeCap()),
-		BlobHashes: tx.BlobHashes(),
+		AccessList:           accessList,
+		BlobFeeCap:           (*hexutil.Big)(tx.BlobGasFeeCap()),
+		BlobHashes:           tx.BlobHashes(),
 	}
 }
 

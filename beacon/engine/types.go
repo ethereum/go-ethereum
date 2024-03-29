@@ -313,7 +313,7 @@ const (
 // ClientVersionV1 contains information which identifies a client implementation.
 type ClientVersionV1 struct {
 	Code    string `json:"code"`
-	Name    string `json:"clientName"`
+	Name    string `json:"name"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
 }

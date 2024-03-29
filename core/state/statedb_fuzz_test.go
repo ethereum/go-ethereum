@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -61,7 +62,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])))
+				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])), tracing.BalanceChangeUnspecified)
 			},
 			args: make([]int64, 1),
 		},

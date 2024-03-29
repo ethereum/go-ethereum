@@ -602,17 +602,22 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 
 	// send a transaction for some interesting pending status
+	// and wait for the transaction to be included in the pending block
 	sendTransaction(ec)
-	time.Sleep(100 * time.Millisecond)
 
-	// Check pending transaction count
-	pending, err := ec.PendingTransactionCount(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// wait for the transaction to be included in the pending block
+	for {
+		// Check pending transaction count
+		pending, err := ec.PendingTransactionCount(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if pending == 1 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	if pending != 1 {
-		t.Fatalf("unexpected pending, wanted 1 got: %v", pending)
-	}
+
 	// Query balance
 	balance, err := ec.BalanceAt(context.Background(), testAddr, nil)
 	if err != nil {
@@ -737,7 +742,7 @@ func sendTransaction(ec *Client) error {
 	if err != nil {
 		return err
 	}
-	nonce, err := ec.PendingNonceAt(context.Background(), testAddr)
+	nonce, err := ec.NonceAt(context.Background(), testAddr, nil)
 	if err != nil {
 		return err
 	}

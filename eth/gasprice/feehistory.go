@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -160,7 +160,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNum
 		)
 		switch reqEnd {
 		case rpc.PendingBlockNumber:
-			if pendingBlock, pendingReceipts = oracle.backend.PendingBlockAndReceipts(); pendingBlock != nil {
+			if pendingBlock, pendingReceipts, _ = oracle.backend.Pending(); pendingBlock != nil {
 				resolved = pendingBlock.Header()
 			} else {
 				// Pending block not supported by backend, process only until latest block.

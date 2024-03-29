@@ -183,6 +183,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		ShanghaiTime:                  newUint64(0),
+		CancunTime:                    newUint64(0),
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 	}
@@ -360,6 +361,8 @@ type ChainConfig struct {
 	// TerminalTotalDifficultyPassed is a flag specifying that the network already
 	// passed the terminal total difficulty. Its purpose is to disable legacy sync
 	// even without having seen the TTD locally (safer long term).
+	//
+	// TODO(karalabe): Drop this field eventually (always assuming PoS mode)
 	TerminalTotalDifficultyPassed bool `json:"terminalTotalDifficultyPassed,omitempty"`
 
 	// Various consensus engines

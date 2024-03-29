@@ -34,9 +34,6 @@ import (
 )
 
 const (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
-
 	// defaultCleanSize is the default memory allowance of clean cache.
 	defaultCleanSize = 16 * 1024 * 1024
 
@@ -54,14 +51,20 @@ const (
 	DefaultBufferSize = 64 * 1024 * 1024
 )
 
+var (
+	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
+	maxDiffLayers = 128
+)
+
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
 type layer interface {
-	// Node retrieves the trie node with the node info. An error will be returned
-	// if the read operation exits abnormally. For example, if the layer is already
-	// stale, or the associated state is regarded as corrupted. Notably, no error
-	// will be returned if the requested node is not found in database.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+	// node retrieves the trie node with the node info. An error will be returned
+	// if the read operation exits abnormally. Specifically, if the layer is
+	// already stale.
+	//
+	// Note, no error will be returned if the requested node is not found in database.
+	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
@@ -130,6 +133,7 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly   bool                     // Flag if database is opened in read only mode
 	waitSync   bool                     // Flag if database is deactivated due to initial state sync
+	isVerkle   bool                     // Flag if database is used for verkle tree
 	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
 	config     *Config                  // Configuration for database
 	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
@@ -141,7 +145,7 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config) *Database {
+func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -149,6 +153,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 
 	db := &Database{
 		readOnly:   config.ReadOnly,
+		isVerkle:   isVerkle,
 		bufferSize: config.DirtyCacheSize,
 		config:     config,
 		diskdb:     diskdb,
@@ -203,17 +208,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
 	}
-	log.Warn("Path-based state scheme is an experimental feature")
 	return db
-}
-
-// Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (layer, error) {
-	l := db.tree.get(root)
-	if l == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
-	}
-	return l, nil
 }
 
 // Update adds a new layer into the tree, if that can be linked to an existing
@@ -391,17 +386,20 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
+	// This is a temporary workaround for the unavailability of the freezer in
+	// dev mode. As a consequence, the Pathdb loses the ability for deep reorg
+	// in certain cases.
+	// TODO(rjl493456442): Implement the in-memory ancient store.
+	if db.freezer == nil {
+		return false
+	}
 	// Ensure the requested state is a canonical state and all state
 	// histories in range [id+1, disklayer.ID] are present and complete.
-	parent := root
 	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != parent {
+		if m.parent != root {
 			return errors.New("unexpected state history")
 		}
-		if len(m.incomplete) > 0 {
-			return errors.New("incomplete state history")
-		}
-		parent = m.root
+		root = m.root
 		return nil
 	}) == nil
 }
@@ -482,4 +480,34 @@ func (db *Database) modifyAllowed() error {
 		return errDatabaseWaitSync
 	}
 	return nil
+}
+
+// AccountHistory inspects the account history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+func (db *Database) AccountHistory(address common.Address, start, end uint64) (*HistoryStats, error) {
+	return accountHistory(db.freezer, address, start, end)
+}
+
+// StorageHistory inspects the storage history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+//
+// Note, slot refers to the hash of the raw slot key.
+func (db *Database) StorageHistory(address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
+	return storageHistory(db.freezer, address, slot, start, end)
+}
+
+// HistoryRange returns the block numbers associated with earliest and latest
+// state history in the local store.
+func (db *Database) HistoryRange() (uint64, uint64, error) {
+	return historyRange(db.freezer)
 }

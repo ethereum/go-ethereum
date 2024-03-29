@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -453,11 +454,11 @@ func (s *PersonalAccountAPI) signTransaction(ctx context.Context, args *Transact
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.toTransaction(false)
+	tx := args.ToTransaction(false)
 
 	return wallet.SignTxWithPassphrase(account, passwd, tx, s.b.ChainConfig().ChainID)
 }
@@ -506,7 +507,7 @@ func (s *PersonalAccountAPI) SignTransaction(ctx context.Context, args Transacti
 		return nil, errors.New("nonce not specified")
 	}
 	// Before actually signing the transaction, ensure the transaction fee is reasonable.
-	tx := args.toTransaction(false)
+	tx := args.ToTransaction(false)
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
@@ -963,7 +964,7 @@ type OverrideAccount struct {
 type StateOverride map[common.Address]OverrideAccount
 
 // Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(state *state.StateDB, precompiles vm.PrecompiledContracts) error {
+func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts) error {
 	if diff == nil {
 		return nil
 	}
@@ -984,35 +985,35 @@ func (diff *StateOverride) Apply(state *state.StateDB, precompiles vm.Precompile
 		}
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(addr, uint64(*account.Nonce))
+			statedb.SetNonce(addr, uint64(*account.Nonce))
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(addr, *account.Code)
+			statedb.SetCode(addr, *account.Code)
 		}
 		// Override account balance.
 		if account.Balance != nil {
 			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
-			state.SetBalance(addr, u256Balance)
+			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
 		}
 		if account.State != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			state.SetStorage(addr, *account.State)
+			statedb.SetStorage(addr, *account.State)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(addr, key, value)
+				statedb.SetState(addr, key, value)
 			}
 		}
 	}
 	// Now finalize the changes. Finalize is normally performed between transactions.
 	// By using finalize, the overrides are semantically behaving as
 	// if they were created in a transaction just before the tracing occur.
-	state.Finalise(false)
+	statedb.Finalise(false)
 	return nil
 }
 
@@ -1151,10 +1152,10 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 
 func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(gp.Gas(), header.BaseFee, skipChecks)
-	if err != nil {
+	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
+	msg := args.ToMessage(header.BaseFee, skipChecks)
 	evm := b.GetEVM(ctx, msg, state, header, vmConfig, blockContext)
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
@@ -1265,11 +1266,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		State:      state,
 		ErrorRatio: estimateGasErrorRatio,
 	}
-	// Run the gas estimation andwrap any revertals into a custom return
-	call, err := args.ToMessage(gasCap, header.BaseFee, true)
-	if err != nil {
+
+	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
+	call := args.ToMessage(header.BaseFee, true)
+	// Run the gas estimation andwrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
 		if len(revert) > 0 {
@@ -1569,14 +1571,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
-	// If the gas amount is not set, default to RPC gas cap.
-	if args.Gas == nil {
-		tmp := hexutil.Uint64(b.RPCGasCap())
-		args.Gas = &tmp
-	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, true); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1603,18 +1600,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee, true)
-		if err != nil {
-			return nil, 0, nil, err
-		}
+		msg := args.ToMessage(header.BaseFee, true)
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
-		config := vm.Config{Tracer: tracer, NoBaseFee: true}
+		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
 		vmenv := b.GetEVM(ctx, msg, statedb, header, &config, nil)
 		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
-			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction(false).Hash(), err)
+			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(false).Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil
@@ -1879,11 +1873,11 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.toTransaction(false)
+	tx := args.ToTransaction(false)
 
 	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
 	if err != nil {
@@ -1899,11 +1893,11 @@ func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionAr
 	args.blobSidecarAllowed = true
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
-	tx := args.toTransaction(false)
+	tx := args.ToTransaction(false)
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -1968,11 +1962,11 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	tx := args.toTransaction(false)
+	tx := args.ToTransaction(false)
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
@@ -2017,10 +2011,10 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b, false); err != nil {
 		return common.Hash{}, err
 	}
-	matchTx := sendArgs.toTransaction(false)
+	matchTx := sendArgs.ToTransaction(false)
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
 	var price = matchTx.GasPrice()
@@ -2050,7 +2044,7 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err := s.sign(sendArgs.from(), sendArgs.toTransaction(false))
+			signedTx, err := s.sign(sendArgs.from(), sendArgs.ToTransaction(false))
 			if err != nil {
 				return common.Hash{}, err
 			}

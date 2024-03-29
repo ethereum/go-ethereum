@@ -59,21 +59,16 @@ func newNodeBuffer(limit int, nodes map[common.Hash]map[string]*trienode.Node, l
 }
 
 // node retrieves the trie node with given node info.
-func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error) {
+func (b *nodebuffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	subset, ok := b.nodes[owner]
 	if !ok {
-		return nil, nil
+		return nil, false
 	}
 	n, ok := subset[string(path)]
 	if !ok {
-		return nil, nil
+		return nil, false
 	}
-	if n.Hash != hash {
-		dirtyFalseMeter.Mark(1)
-		log.Error("Unexpected trie node in node buffer", "owner", owner, "path", path, "expect", hash, "got", n.Hash)
-		return nil, newUnexpectedNodeError("dirty", hash, n.Hash, owner, path, n.Blob)
-	}
-	return n, nil
+	return n, true
 }
 
 // commit merges the dirty nodes into the nodebuffer. This operation won't take
@@ -204,6 +199,19 @@ func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.
 	return b.flush(db, clean, id, false)
 }
 
+// allocBatch returns a database batch with pre-allocated buffer.
+func (b *nodebuffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
+	var metasize int
+	for owner, nodes := range b.nodes {
+		if owner == (common.Hash{}) {
+			metasize += len(nodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
+		} else {
+			metasize += len(nodes) * (len(rawdb.TrieNodeStoragePrefix) + common.HashLength) // database key prefix + owner
+		}
+	}
+	return db.NewBatchWithSize((metasize + int(b.size)) * 11 / 10) // extra 10% for potential pebble internal stuff
+}
+
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
 func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
@@ -217,7 +225,7 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	}
 	var (
 		start = time.Now()
-		batch = db.NewBatchWithSize(int(b.size))
+		batch = b.allocBatch(db)
 	)
 	nodes := writeNodes(batch, b.nodes, clean)
 	rawdb.WritePersistentStateID(batch, id)

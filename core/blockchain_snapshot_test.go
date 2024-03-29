@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +63,7 @@ type snapshotTestBasic struct {
 func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Block) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
-	ancient := path.Join(datadir, "ancient")
+	ancient := filepath.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,

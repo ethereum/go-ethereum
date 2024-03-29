@@ -22,13 +22,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	mrand "math/rand"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"golang.org/x/exp/slices"
 )
 
 // Prng is a pseudo random number generator seeded by strong randomness.
@@ -198,7 +198,7 @@ func TestRangeProof(t *testing.T) {
 	}
 }
 
-// TestRangeProof tests normal range proof with two non-existent proofs.
+// TestRangeProofWithNonExistentProof tests normal range proof with two non-existent proofs.
 // The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)

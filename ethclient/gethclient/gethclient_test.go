@@ -146,7 +146,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
-		// one block. The `testAcessList` fails if the miner has not yet created a
+		// one block. The `testAccessList` fails if the miner has not yet created a
 		// new pending-block after the import event.
 		// Hence: this test should be last, execute the tests serially.
 		{

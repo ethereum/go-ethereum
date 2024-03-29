@@ -442,7 +442,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 		}
 	}
 	if _, ok := seen[node.ID()]; ok {
-		return nil, fmt.Errorf("duplicate record")
+		return nil, errors.New("duplicate record")
 	}
 	seen[node.ID()] = struct{}{}
 	return node, nil

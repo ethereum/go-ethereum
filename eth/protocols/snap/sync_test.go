@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -32,16 +33,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 func TestHashing(t *testing.T) {
@@ -839,7 +839,7 @@ func testMultiSyncManyUseless(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
+// TestMultiSyncManyUselessWithLowTimeout contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -1378,7 +1378,7 @@ func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestSyncWithStorage tests  basic sync using accounts + storage + code, against
+// TestSyncWithStorageMisbehavingProve tests  basic sync using accounts + storage + code, against
 // a peer who insists on delivering full storage sets _and_ proofs. This triggered
 // an error, where the recipient erroneously clipped the boundary nodes, but
 // did not mark the account for healing.
@@ -1502,7 +1502,7 @@ func getCodeByHash(hash common.Hash) []byte {
 	return nil
 }
 
-// makeAccountTrieNoStorage spits out a trie, along with the leafs
+// makeAccountTrieNoStorage spits out a trie, along with the leaves
 func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) {
 	var (
 		db      = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
@@ -1650,7 +1650,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	return db.Scheme(), accTrie, entries, storageTries, storageEntries
 }
 
-// makeAccountTrieWithStorage spits out a trie, along with the leafs
+// makeAccountTrieWithStorage spits out a trie, along with the leaves
 func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool, uneven bool) (*trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
 	var (
 		db             = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
@@ -1816,8 +1816,8 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 			break
 		}
 		for j := 0; j < slots/3; j++ {
-			key := append([]byte{byte(n)}, testutil.RandBytes(31)...)
-			val, _ := rlp.EncodeToBytes(testutil.RandBytes(32))
+			key := append([]byte{byte(n)}, testrand.Bytes(31)...)
+			val, _ := rlp.EncodeToBytes(testrand.Bytes(32))
 
 			elem := &kv{key, val}
 			tr.MustUpdate(elem.k, elem.v)
@@ -1873,8 +1873,9 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 // TestSyncAccountPerformance tests how efficient the snap algo is at minimizing
 // state healing
 func TestSyncAccountPerformance(t *testing.T) {
-	t.Parallel()
-
+	// These tests must not run in parallel: they modify the
+	// global var accountConcurrency
+	// t.Parallel()
 	testSyncAccountPerformance(t, rawdb.HashScheme)
 	testSyncAccountPerformance(t, rawdb.PathScheme)
 }

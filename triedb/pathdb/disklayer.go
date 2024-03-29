@@ -17,7 +17,6 @@
 package pathdb
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -59,7 +58,7 @@ func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.C
 	}
 }
 
-// root implements the layer interface, returning root hash of corresponding state.
+// rootHash implements the layer interface, returning root hash of corresponding state.
 func (dl *diskLayer) rootHash() common.Hash {
 	return dl.root
 }
@@ -69,7 +68,7 @@ func (dl *diskLayer) stateID() uint64 {
 	return dl.id
 }
 
-// parent implements the layer interface, returning nil as there's no layer
+// parentLayer implements the layer interface, returning nil as there's no layer
 // below the disk.
 func (dl *diskLayer) parentLayer() layer {
 	return nil
@@ -95,27 +94,25 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
-// Node implements the layer interface, retrieving the trie node with the
+// node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
-func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return nil, errSnapshotStale
+		return nil, common.Hash{}, nil, errSnapshotStale
 	}
 	// Try to retrieve the trie node from the not-yet-written
 	// node buffer first. Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the
 	// layer as stale.
-	n, err := dl.buffer.node(owner, path, hash)
-	if err != nil {
-		return nil, err
-	}
-	if n != nil {
+	n, found := dl.buffer.node(owner, path)
+	if found {
 		dirtyHitMeter.Mark(1)
 		dirtyReadMeter.Mark(int64(len(n.Blob)))
-		return n.Blob, nil
+		dirtyNodeHitDepthHist.Update(int64(depth))
+		return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
 	}
 	dirtyMissMeter.Mark(1)
 
@@ -126,14 +123,9 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 			h := newHasher()
 			defer h.release()
 
-			got := h.hash(blob)
-			if got == hash {
-				cleanHitMeter.Mark(1)
-				cleanReadMeter.Mark(int64(len(blob)))
-				return blob, nil
-			}
-			cleanFalseMeter.Mark(1)
-			log.Error("Unexpected trie node in clean cache", "owner", owner, "path", path, "expect", hash, "got", got)
+			cleanHitMeter.Mark(1)
+			cleanReadMeter.Mark(int64(len(blob)))
+			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanMissMeter.Mark(1)
 	}
@@ -147,16 +139,11 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	} else {
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
-	if nHash != hash {
-		diskFalseMeter.Mark(1)
-		log.Error("Unexpected trie node in disk", "owner", owner, "path", path, "expect", hash, "got", nHash)
-		return nil, newUnexpectedNodeError("disk", hash, nHash, owner, path, nBlob)
-	}
 	if dl.cleans != nil && len(nBlob) > 0 {
 		dl.cleans.Set(key, nBlob)
 		cleanWriteMeter.Mark(int64(len(nBlob)))
 	}
-	return nBlob, nil
+	return nBlob, nHash, &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top
@@ -238,12 +225,6 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer, error) {
 	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
-	}
-	// Reject if the provided state history is incomplete. It's due to
-	// a large construct SELF-DESTRUCT which can't be handled because
-	// of memory limitation.
-	if len(h.meta.incomplete) > 0 {
-		return nil, errors.New("incomplete state history")
 	}
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)

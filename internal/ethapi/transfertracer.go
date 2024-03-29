@@ -17,10 +17,10 @@
 package ethapi
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -46,8 +46,6 @@ var (
 //   - Transfer(address,address,uint256)
 //   - Sender address
 //   - Recipient address
-//
-// TODO: embed noopTracer
 type tracer struct {
 	// logs keeps logs for all open call frames.
 	// This lets us clear logs for failed logs.
@@ -63,7 +61,6 @@ type tracer struct {
 
 func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common.Hash, txIdx uint) *tracer {
 	return &tracer{
-		logs:           make([][]*types.Log, 1),
 		traceTransfers: traceTransfers,
 		blockNumber:    blockNumber,
 		blockHash:      blockHash,
@@ -72,63 +69,26 @@ func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common
 	}
 }
 
-func (t *tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	if value.Cmp(common.Big0) > 0 {
+func (t *tracer) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
+		OnEnter: t.onEnter,
+		OnExit:  t.onExit,
+		OnLog:   t.onLog,
+	}
+}
+
+func (t *tracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.logs = append(t.logs, make([]*types.Log, 0))
+	if vm.OpCode(typ) != vm.DELEGATECALL && value != nil && value.Cmp(common.Big0) > 0 {
 		t.captureTransfer(from, to, value)
 	}
 }
 
-func (t *tracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	if err != nil {
-		t.logs[0] = nil
-	}
-}
-
-func (t *tracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// skip if the previous op caused an error
-	if err != nil {
+func (t *tracer) onExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth == 0 {
+		t.onEnd(reverted)
 		return
 	}
-	// TODO: Use OnLog instead of CaptureState once extended tracer PR is merged.
-	switch op {
-	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
-		size := int(op - vm.LOG0)
-
-		stack := scope.Stack
-		stackData := stack.Data()
-
-		// Don't modify the stack
-		mStart := stackData[len(stackData)-1]
-		mSize := stackData[len(stackData)-2]
-		topics := make([]common.Hash, size)
-		for i := 0; i < size; i++ {
-			topic := stackData[len(stackData)-2-(i+1)]
-			topics[i] = common.Hash(topic.Bytes32())
-		}
-
-		data, err := getMemoryCopyPadded(scope.Memory, int64(mStart.Uint64()), int64(mSize.Uint64()))
-		if err != nil {
-			// mSize was unrealistically large
-			return
-		}
-		t.captureLog(scope.Contract.Address(), topics, data)
-	}
-}
-
-func (t *tracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-}
-
-func (t *tracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.logs = append(t.logs, make([]*types.Log, 0))
-	toCopy := to
-	if typ != vm.DELEGATECALL && value != nil && value.Cmp(common.Big0) > 0 {
-		t.captureTransfer(from, toCopy, value)
-	}
-}
-
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size := len(t.logs)
 	if size <= 1 {
 		return
@@ -139,14 +99,19 @@ func (t *tracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size--
 
 	// Clear logs if call failed.
-	if err == nil {
+	if !reverted {
 		t.logs[size-1] = append(t.logs[size-1], call...)
 	}
 }
 
-func (t *tracer) CaptureTxStart(gasLimit uint64) {}
+func (t *tracer) onEnd(reverted bool) {
+	if reverted {
+		t.logs[0] = nil
+	}
+}
 
-func (t *tracer) CaptureTxEnd(restGas uint64) {
+func (t *tracer) onLog(log *types.Log) {
+	t.captureLog(log.Address, log.Topics, log.Data)
 }
 
 func (t *tracer) captureLog(address common.Address, topics []common.Hash, data []byte) {
@@ -177,30 +142,11 @@ func (t *tracer) captureTransfer(from, to common.Address, value *big.Int) {
 
 // reset prepares the tracer for the next transaction.
 func (t *tracer) reset(txHash common.Hash, txIdx uint) {
-	t.logs = make([][]*types.Log, 1)
+	t.logs = nil
 	t.txHash = txHash
 	t.txIdx = txIdx
 }
 
 func (t *tracer) Logs() []*types.Log {
 	return t.logs[0]
-}
-
-// TODO: remove once extended tracer PR is merged.
-func getMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
-	if offset < 0 || size < 0 {
-		return nil, fmt.Errorf("offset or size must not be negative")
-	}
-	if int(offset+size) < m.Len() { // slice fully inside memory
-		return m.GetCopy(offset, size), nil
-	}
-	paddingNeeded := int(offset+size) - m.Len()
-	if paddingNeeded > 1024*1024 {
-		return nil, fmt.Errorf("reached limit for padding memory slice: %d", paddingNeeded)
-	}
-	cpy := make([]byte, size)
-	if overlap := int64(m.Len()) - offset; overlap > 0 {
-		copy(cpy, m.GetPtr(offset, overlap))
-	}
-	return cpy, nil
 }

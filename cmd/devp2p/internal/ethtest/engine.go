@@ -22,7 +22,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +38,7 @@ type EngineClient struct {
 
 // NewEngineClient creates a new engine client.
 func NewEngineClient(dir, url, jwt string) (*EngineClient, error) {
-	headfcu, err := os.ReadFile(path.Join(dir, "headfcu.json"))
+	headfcu, err := os.ReadFile(filepath.Join(dir, "headfcu.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read headfcu: %w", err)
 	}

@@ -10,7 +10,7 @@ type TimerSnapshot interface {
 	MeterSnapshot
 }
 
-// Timers capture the duration and rate of events.
+// Timer capture the duration and rate of events.
 type Timer interface {
 	Snapshot() TimerSnapshot
 	Stop()
@@ -99,14 +99,14 @@ func (t *StandardTimer) Stop() {
 	t.meter.Stop()
 }
 
-// Record the duration of the execution of the given function.
+// Time record the duration of the execution of the given function.
 func (t *StandardTimer) Time(f func()) {
 	ts := time.Now()
 	f()
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event, in nanoseconds.
+// Update the duration of an event, in nanoseconds.
 func (t *StandardTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -114,7 +114,7 @@ func (t *StandardTimer) Update(d time.Duration) {
 	t.meter.Mark(1)
 }
 
-// Record the duration of an event that started at a time and ends now.
+// UpdateSince update the duration of an event that started at a time and ends now.
 // The record uses nanoseconds.
 func (t *StandardTimer) UpdateSince(ts time.Time) {
 	t.Update(time.Since(ts))
