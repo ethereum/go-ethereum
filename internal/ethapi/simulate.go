@@ -53,15 +53,16 @@ type simBlock struct {
 }
 
 type simBlockResult struct {
-	Number       hexutil.Uint64  `json:"number"`
-	Hash         common.Hash     `json:"hash"`
-	Time         hexutil.Uint64  `json:"timestamp"`
-	GasLimit     hexutil.Uint64  `json:"gasLimit"`
-	GasUsed      hexutil.Uint64  `json:"gasUsed"`
-	FeeRecipient common.Address  `json:"feeRecipient"`
-	BaseFee      *hexutil.Big    `json:"baseFeePerGas"`
-	PrevRandao   common.Hash     `json:"prevRandao"`
-	Calls        []simCallResult `json:"calls"`
+	Number       hexutil.Uint64    `json:"number"`
+	Hash         common.Hash       `json:"hash"`
+	Time         hexutil.Uint64    `json:"timestamp"`
+	GasLimit     hexutil.Uint64    `json:"gasLimit"`
+	GasUsed      hexutil.Uint64    `json:"gasUsed"`
+	FeeRecipient common.Address    `json:"feeRecipient"`
+	BaseFee      *hexutil.Big      `json:"baseFeePerGas"`
+	PrevRandao   common.Hash       `json:"prevRandao"`
+	Withdrawals  types.Withdrawals `json:"withdrawals"`
+	Calls        []simCallResult   `json:"calls"`
 }
 
 func simBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
@@ -74,7 +75,9 @@ func simBlockResultFromHeader(header *types.Header, callResults []simCallResult)
 		FeeRecipient: header.Coinbase,
 		BaseFee:      (*hexutil.Big)(header.BaseFee),
 		PrevRandao:   header.MixDigest,
-		Calls:        callResults,
+		// Withdrawals will be always empty in the context of a simulated block.
+		Withdrawals: make(types.Withdrawals, 0),
+		Calls:       callResults,
 	}
 }
 
