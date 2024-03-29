@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	mrand "math/rand"
+	"slices"
 	"sort"
 	"time"
 
@@ -973,8 +974,7 @@ func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadata, do fu
 // rotateStrings rotates the contents of a slice by n steps. This method is only
 // used in tests to simulate random map iteration but keep it deterministic.
 func rotateStrings(slice []string, n int) {
-	orig := make([]string, len(slice))
-	copy(orig, slice)
+	orig := slices.Clone(slice)
 
 	for i := 0; i < len(orig); i++ {
 		slice[i] = orig[(i+n)%len(orig)]
@@ -996,8 +996,7 @@ func sortHashes(slice []common.Hash) {
 // rotateHashes rotates the contents of a slice by n steps. This method is only
 // used in tests to simulate random map iteration but keep it deterministic.
 func rotateHashes(slice []common.Hash, n int) {
-	orig := make([]common.Hash, len(slice))
-	copy(orig, slice)
+	orig := slices.Clone(slice)
 
 	for i := 0; i < len(orig); i++ {
 		slice[i] = orig[(i+n)%len(orig)]
