@@ -1,6 +1,6 @@
 {
   "genesis": {
-    "baseFeePerGas": "51088069741",
+    "baseFeePerGas": "4573728117",
     "difficulty": "14315558652874667",
     "extraData": "0xd883010a10846765746888676f312e31362e35856c696e7578",
     "gasLimit": "30058590",
@@ -83,7 +83,7 @@
     },
     "post": {
       "0x808b4da0be6c9512e948521452227efc619bea52": {
-        "balance": "0x2cd987071ba2346b6",
+        "balance": "0x2cdb59d19bd31a0ae",
         "nonce": 1223933
       },
       "0x8f03f1a3f10c05e7cccf75c1fd10168e06659be7": {
