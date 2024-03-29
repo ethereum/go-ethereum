@@ -528,16 +528,16 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		engine = beacon.New(ethash.NewFaker())
 	)
 
-	traceOutputPath := filepath.ToSlash(t.TempDir())
+	tmpDir := t.TempDir()
+	traceOutputPath := filepath.ToSlash(tmpDir)
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
 	// Load supply tracer
 	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}
-	// hack so as the supply log file handler closes, for tests to work on windows
-	defer func() { tracer = nil }()
 
 	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, engine, vm.Config{Tracer: tracer}, nil, nil)
 	if err != nil {
