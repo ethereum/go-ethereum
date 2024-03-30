@@ -173,7 +173,6 @@ func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 		// at the end of the transaction.
 		s.delta.Burn.Sub(s.delta.Burn, diff)
 	default:
-		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
 		return
 	}
 
