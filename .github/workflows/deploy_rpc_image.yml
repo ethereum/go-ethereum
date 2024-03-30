@@ -29,3 +29,13 @@ jobs:
             --inventory inventory.yaml
             --extra-vars network=${{inputs.network}}
             --extra-vars rpc_image=${{inputs.rpc_image}}
+
+  devnet_send_notification:
+    runs-on: ubuntu-latest
+    needs: ansible
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send deployment notification
+        run: |
+          curl --location --request POST "66.94.98.186:8080/deploy?environment=${{inputs.network}}&service=xdc_rpc&version=${{inputs.rpc_image}}"
+  

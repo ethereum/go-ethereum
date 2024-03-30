@@ -76,7 +76,7 @@ resource "aws_instance" "rpc_instance" {
   key_name                = var.ssh_key_name
   vpc_security_group_ids  = [aws_security_group.rpc_sg.id]
   ebs_block_device {
-    device_name = "/dev/sda1"
+    device_name = "/dev/xvda"
     volume_size = 500
   }
 
