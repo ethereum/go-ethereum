@@ -41,7 +41,7 @@ const (
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 
-	respTimeoutV5 = 5000 * time.Millisecond
+	respTimeoutV5 = 700 * time.Millisecond
 )
 
 // codecV5 is implemented by v5wire.Codec (and testCodec).
