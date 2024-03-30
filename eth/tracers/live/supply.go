@@ -44,9 +44,10 @@ type supplyTxCallstack struct {
 }
 
 type supply struct {
-	delta       supplyInfo
-	txCallstack []supplyTxCallstack // Callstack for current transaction
-	logger      *log.Logger
+	delta            supplyInfo
+	txCallstack      []supplyTxCallstack // Callstack for current transaction
+	loggerOutputFile *lumberjack.Logger
+	logger           *log.Logger
 }
 
 type supplyTracerConfig struct {
@@ -70,7 +71,6 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 	loggerOutputFile := &lumberjack.Logger{
 		Filename: filepath.Join(config.Path, "supply.jsonl"),
 	}
-	defer loggerOutputFile.Close()
 
 	if config.MaxSize > 0 {
 		loggerOutputFile.MaxSize = config.MaxSize
@@ -81,8 +81,9 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 	supplyInfo := newSupplyInfo()
 
 	t := &supply{
-		delta:  supplyInfo,
-		logger: logger,
+		delta:            supplyInfo,
+		loggerOutputFile: loggerOutputFile,
+		logger:           logger,
 	}
 	return &tracing.Hooks{
 		OnBlockStart:    t.OnBlockStart,
@@ -92,6 +93,7 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnBalanceChange: t.OnBalanceChange,
 		OnEnter:         t.OnEnter,
 		OnExit:          t.OnExit,
+		OnTerminate:     t.OnTerminate,
 	}, nil
 }
 
@@ -237,4 +239,8 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 		return
 	}
 	s.txCallstack[size-1].calls = append(s.txCallstack[size-1].calls, call)
+}
+
+func (s *supply) OnTerminate() {
+	s.loggerOutputFile.Close()
 }

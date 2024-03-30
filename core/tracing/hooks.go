@@ -140,6 +140,9 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
+
+	// TerminateHook is called when the tracer is terminated.
+	TerminateHook = func()
 )
 
 type Hooks struct {
@@ -163,6 +166,7 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	OnTerminate     TerminateHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
