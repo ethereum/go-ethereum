@@ -453,7 +453,6 @@ func (db *DB) QuerySeeds(n int, maxAge time.Duration) []*Node {
 	)
 	defer it.Release()
 
-seek:
 	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
 		// Seek to a random entry. The first byte is incremented by a
 		// random amount each time in order to increase the likelihood
@@ -466,14 +465,14 @@ seek:
 		n := nextNode(it)
 		if n == nil {
 			id[0] = 0
-			continue seek // iterator exhausted
+			continue // iterator exhausted
 		}
 		if now.Sub(db.LastPongReceived(n.ID(), n.IP())) > maxAge {
-			continue seek
+			continue
 		}
 		for i := range nodes {
 			if nodes[i].ID() == n.ID() {
-				continue seek // duplicate
+				continue // duplicate
 			}
 		}
 		nodes = append(nodes, n)
