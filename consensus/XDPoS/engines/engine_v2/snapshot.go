@@ -10,22 +10,22 @@ import (
 )
 
 // Snapshot is the state of the smart contract validator list
-// The validator list is used on next epoch master nodes
+// The validator list is used on next epoch candidates nodes
 // If we don't have the snapshot, then we have to trace back the gap block smart contract state which is very costly
 type SnapshotV2 struct {
 	Number uint64      `json:"number"` // Block number where the snapshot was created
 	Hash   common.Hash `json:"hash"`   // Block hash where the snapshot was created
 
-	// MasterNodes will get assigned on updateM1
-	NextEpochMasterNodes []common.Address `json:"masterNodes"` // Set of authorized master nodes at this moment for next epoch
+	// candidates will get assigned on updateM1
+	NextEpochCandidates []common.Address `json:"candidates"` // Set of authorized candidates nodes at this moment for next epoch
 }
 
 // create new snapshot for next epoch to use
-func newSnapshot(number uint64, hash common.Hash, masternodes []common.Address) *SnapshotV2 {
+func newSnapshot(number uint64, hash common.Hash, candidates []common.Address) *SnapshotV2 {
 	snap := &SnapshotV2{
-		Number:               number,
-		Hash:                 hash,
-		NextEpochMasterNodes: masternodes,
+		Number:              number,
+		Hash:                hash,
+		NextEpochCandidates: candidates,
 	}
 	return snap
 }
@@ -53,17 +53,17 @@ func storeSnapshot(s *SnapshotV2, db ethdb.Database) error {
 	return db.Put(append([]byte("XDPoS-V2-"), s.Hash[:]...), blob)
 }
 
-// retrieves master nodes list in map type
-func (s *SnapshotV2) GetMappedMasterNodes() map[common.Address]struct{} {
+// retrieves candidates nodes list in map type
+func (s *SnapshotV2) GetMappedCandidates() map[common.Address]struct{} {
 	ms := make(map[common.Address]struct{})
-	for _, n := range s.NextEpochMasterNodes {
+	for _, n := range s.NextEpochCandidates {
 		ms[n] = struct{}{}
 	}
 	return ms
 }
 
-func (s *SnapshotV2) IsMasterNodes(address common.Address) bool {
-	for _, n := range s.NextEpochMasterNodes {
+func (s *SnapshotV2) IsCandidates(address common.Address) bool {
+	for _, n := range s.NextEpochCandidates {
 		if n.String() == address.String() {
 			return true
 		}

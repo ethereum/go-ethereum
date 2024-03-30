@@ -457,7 +457,7 @@ func (x *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (
 		return &utils.PublicApiSnapshot{
 			Number:  sp.Number,
 			Hash:    sp.Hash,
-			Signers: sp.GetMappedMasterNodes(),
+			Signers: sp.GetMappedCandidates(),
 		}, err
 	default: // Default "v1"
 		sp, err := x.EngineV1.GetSnapshot(chain, header)

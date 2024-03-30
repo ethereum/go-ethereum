@@ -164,7 +164,7 @@ func (x *XDPoS_v2) GetSignersFromSnapshot(chain consensus.ChainReader, header *t
 	if err != nil {
 		return nil, err
 	}
-	return snap.NextEpochMasterNodes, err
+	return snap.NextEpochCandidates, err
 }
 
 func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *types.Header) (*utils.PublicApiMissedRoundsMetadata, error) {

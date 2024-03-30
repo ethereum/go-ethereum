@@ -97,7 +97,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		log.Error("[verifyTC] Fail to get snapshot when verifying TC!", "TCGapNumber", timeoutCert.GapNumber)
 		return fmt.Errorf("[verifyTC] Unable to get snapshot, %s", err)
 	}
-	if snap == nil || len(snap.NextEpochMasterNodes) == 0 {
+	if snap == nil || len(snap.NextEpochCandidates) == 0 {
 		log.Error("[verifyTC] Something wrong with the snapshot from gapNumber", "messageGapNumber", timeoutCert.GapNumber, "snapshot", snap)
 		return fmt.Errorf("empty master node lists from snapshot")
 	}
@@ -135,7 +135,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 	for _, signature := range signatures {
 		go func(sig types.Signature) {
 			defer wg.Done()
-			verified, _, err := x.verifyMsgSignature(signedTimeoutObj, sig, snap.NextEpochMasterNodes)
+			verified, _, err := x.verifyMsgSignature(signedTimeoutObj, sig, snap.NextEpochCandidates)
 			if err != nil || !verified {
 				log.Error("[verifyTC] Error or verification failure", "Signature", sig, "Error", err)
 				mutex.Lock() // Lock before accessing haveError

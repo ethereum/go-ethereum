@@ -56,7 +56,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 	assert.NotNil(t, snap)
 	masterNodes := adaptor.EngineV1.GetMasternodesFromCheckpointHeader(block900.Header())
 	for i := 0; i < len(masterNodes); i++ {
-		assert.Equal(t, masterNodes[i].Hex(), snap.NextEpochMasterNodes[i].Hex())
+		assert.Equal(t, masterNodes[i].Hex(), snap.NextEpochCandidates[i].Hex())
 	}
 }
 
@@ -136,7 +136,7 @@ func TestUpdateMasterNodes(t *testing.T) {
 	snap, err = x.GetSnapshot(blockchain, parentBlock.Header())
 
 	assert.Nil(t, err)
-	assert.True(t, snap.IsMasterNodes(voterAddr))
+	assert.True(t, snap.IsCandidates(voterAddr))
 	assert.Equal(t, int(snap.Number), 1350)
 }
 
@@ -211,7 +211,7 @@ func TestPrepareHappyPath(t *testing.T) {
 	}
 
 	validators := []byte{}
-	for _, v := range snap.NextEpochMasterNodes {
+	for _, v := range snap.NextEpochCandidates {
 		validators = append(validators, v[:]...)
 	}
 	assert.Equal(t, validators, header901.Validators)
@@ -267,7 +267,7 @@ func TestUpdateMultipleMasterNodes(t *testing.T) {
 
 			assert.Nil(t, err)
 			assert.Equal(t, 1350, int(snap.Number))
-			assert.Equal(t, 128, len(snap.NextEpochMasterNodes)) // 128 is all masternode candidates, not limited by MaxMasternodes
+			assert.Equal(t, 128, len(snap.NextEpochCandidates)) // 128 is all masternode candidates, not limited by MaxMasternodes
 		}
 	}
 

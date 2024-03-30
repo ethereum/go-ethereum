@@ -286,10 +286,10 @@ func TestConfigSwitchOnDifferentMasternodeCount(t *testing.T) {
 
 	snap, err := x.GetSnapshot(blockchain, currentBlock.Header())
 	assert.Nil(t, err)
-	assert.Equal(t, len(snap.NextEpochMasterNodes), 20)
+	assert.Equal(t, len(snap.NextEpochCandidates), 20)
 	header1800.Validators = []byte{}
 	for i := 0; i < 20; i++ {
-		header1800.Validators = append(header1800.Validators, snap.NextEpochMasterNodes[i].Bytes()...)
+		header1800.Validators = append(header1800.Validators, snap.NextEpochCandidates[i].Bytes()...)
 	}
 
 	round, err := x.GetRoundNumber(header1800)
