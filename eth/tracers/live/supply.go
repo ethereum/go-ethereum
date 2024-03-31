@@ -241,5 +241,7 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 }
 
 func (s *supply) OnTerminate() {
-	s.loggerOutputFile.Close()
+	if err := s.loggerOutputFile.Close(); err != nil {
+		log.Printf("failed to close supply tracer log file: %v", err)
+	}
 }
