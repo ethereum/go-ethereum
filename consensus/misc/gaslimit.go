@@ -24,8 +24,10 @@ import (
 
 // VerifyGaslimit verifies the header gas limit according increase/decrease
 // in relation to the parent gas limit.
+// VerifyGaslimit은 header gas limit관 parentgas limit의 증가/감소관계를 확인한다.
 func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
 	// Verify that the gas limit remains within allowed bounds
+	// gas limit이 허용된 범위안에 있는지 확인한다
 	diff := int64(parentGasLimit) - int64(headerGasLimit)
 	if diff < 0 {
 		diff *= -1

@@ -319,12 +319,16 @@ var NetworkNames = map[string]string{
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
+// ChainConfig는 블록체인 설정을 결정하는 핵심 config이다.
 //
 // ChainConfig is stored in the database on a per block basis. This means
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
+// ChainConfig는 블록 단위로 데이터베이스에 저장된다.
+// 이는 제네시스 블록에 의해 구별되는 모든 네트워크는 고유의 configuration option set를 가질 수 있음을 의미한다.
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
+	// chainId는 현재 체인을 식별하고 replay attack의 protection에 사용된다
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -539,6 +543,7 @@ func (c *ChainConfig) IsBerlin(num *big.Int) bool {
 }
 
 // IsLondon returns whether num is either equal to the London fork block or greater.
+// IsLondon는 num이 London fork block보다 크거나 같은지 여부를 반환한다.
 func (c *ChainConfig) IsLondon(num *big.Int) bool {
 	return isBlockForked(c.LondonBlock, num)
 }
@@ -746,11 +751,13 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 }
 
 // BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
+// BaseFeeChangeDenominator는 블록간 base fee가 변할 수 있는 양을 제한한다.
 func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
 	return DefaultBaseFeeChangeDenominator
 }
 
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
+// ElasticityMultiplier는 EIP-1559 블록이 가지는 최대 gas limit을 제한한다
 func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
 }

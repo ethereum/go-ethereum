@@ -31,8 +31,10 @@ import (
 // VerifyEIP1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
+// VerifyEIP1559Header 함수는 EIP-1559이후 변경된 헤더 속성을 검증한다
 func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	// Verify that the gas limit remains within allowed bounds
+	// gas limit이 허용된 범위 안에 있는지 검증한다
 	parentGasLimit := parent.GasLimit
 	if !config.IsLondon(parent.Number) {
 		parentGasLimit = parent.GasLimit * config.ElasticityMultiplier()
@@ -41,10 +43,12 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 		return err
 	}
 	// Verify the header is not malformed
+	// 헤더가 잘못된 형식이 아닌지 확인한다(baseFee)
 	if header.BaseFee == nil {
 		return errors.New("header is missing baseFee")
 	}
 	// Verify the baseFee is correct based on the parent header.
+	// baseFee가 parent header에 근거해 올바른지 확인한다.
 	expectedBaseFee := CalcBaseFee(config, parent)
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
@@ -54,14 +58,18 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 }
 
 // CalcBaseFee calculates the basefee of the header.
+// CalcBaseFee는 header의 basefee를 계산한다.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
+	// 현재 블록이 EIP-1559의 첫번째 블록이면, InitialBaseFee를 반환한다.
+	// -----런던인지 검사하는데 첫번째 블록과 어떤 관련성 있는지?
 	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
 	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
+	// 부모블록의 gasUsed가 target과 같으면, baseFee는 변경되지 않음.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)
 	}
@@ -74,6 +82,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	if parent.GasUsed > parentGasTarget {
 		// If the parent block used more gas than its target, the baseFee should increase.
 		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		// 만약 부모 블록이 타겟보다 많은 gas를 사용했으면, baseFee는 증가한다.
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
@@ -84,12 +93,13 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
 		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		// 만약 부모 블록이 타겟보다 적은 gas를 사용했으면, baseFee는 감소한다.
 		num.SetUint64(parentGasTarget - parent.GasUsed)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
 		baseFee := num.Sub(parent.BaseFee, num)
-
+		// 코드가 위 로직이랑 일관되지 않은데 개선사항?
 		return math.BigMax(baseFee, common.Big0)
 	}
 }
