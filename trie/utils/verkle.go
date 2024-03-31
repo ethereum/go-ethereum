@@ -206,7 +206,7 @@ func CodeSizeKey(address []byte) []byte {
 
 func codeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
 	var (
-		chunkOffset = new(uint256.Int).Add(codeOffset, chunk)
+		chunkOffset            = new(uint256.Int).Add(codeOffset, chunk)
 		treeIndex, subIndexMod = new(uint256.Int).DivMod(chunkOffset, verkleNodeWidth, new(uint256.Int))
 	)
 	var subIndex byte
