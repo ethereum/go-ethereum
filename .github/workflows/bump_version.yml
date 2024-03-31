@@ -1,0 +1,63 @@
+name: Bump version
+
+on:
+  pull_request:
+    branches: [ develop ]
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - labeled
+
+jobs:
+  try-to-bump:
+    if: contains(github.event.pull_request.labels.*.name, 'bump-version')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: check diff
+        id: check_diff
+        run: |
+          set -euo pipefail
+
+          # fetch develop branch so that we can diff against later
+          git fetch origin develop
+
+          echo 'checking verion changes in diff...'
+
+          # check if version changed in version.go
+          # note: the grep will fail if use \d instead of [0-9]
+          git diff HEAD..origin/develop --text --no-ext-diff --unified=0 --no-prefix params/version.go | grep -E '^\+VersionPatch = "v[0-9]+"$' && true
+
+          exit_code=$?
+
+          # auto bump if version is not bumped manually
+          echo '> require auto version bump?'
+
+          if [ $exit_code -eq 0 ]; then
+            echo '> no, already bumped'
+            echo "result=no-bump" >> "$GITHUB_OUTPUT"
+          else
+            echo '> yes'
+            echo "result=bump" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Node.js 16
+        if: steps.check_diff.outputs.result == 'bump'
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: bump version in params/version.go
+        if: steps.check_diff.outputs.result == 'bump'
+        run: node .github/scripts/bump_version_dot_go.mjs
+
+        # Commits made by this Action do not trigger new Workflow runs
+      - uses: stefanzweifel/git-auto-commit-action@3ea6ae190baf489ba007f7c92608f33ce20ef04a
+        if: steps.check_diff.outputs.result == 'bump'
+        with:
+          skip_fetch: true # already did fetch in check diff
+          file_pattern: "params/version.go"
+          commit_message: "chore: auto version bump [bot]"
