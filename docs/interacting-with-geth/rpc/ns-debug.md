@@ -579,13 +579,13 @@ References:
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceConfig](#traceconfig). The method returns the same output as `debug_traceTransaction`.
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceCallConfig](#tracecallconfig). The method returns the same output as `debug_traceTransaction`.
 
-| Client  | Method invocation                                                                                                           |
-| :-----: | --------------------------------------------------------------------------------------------------------------------------- |
-|   Go    | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
-| Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                         |
-|   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                      |
+| Client  | Method invocation                                                                                                               |
+| :-----: | ------------------------------------------------------------------------------------------------------------------------------- |
+|   Go    | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                             |
+|   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                          |
 
 **Example:**
 
@@ -629,7 +629,7 @@ It is possible to supply 'overrides' for both state-data (accounts/storage) and 
   },
   "latest",
   {
-    "blockoverrides": {"number": "0x50"}
+    "blockOverrides": {"number": "0x50"}
   })
 {
   failed: false,
@@ -690,7 +690,7 @@ In addition to the hash of the transaction you may give it a secondary _optional
 - `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
 - `timeout`: `STRING`. Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 - `reexec`: `UINT64`. The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128).
-- `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/developers/evm-tracing/built-in-tracers#config).
+- `tracerConfig`: Config for the specified `tracer`. For example see [callTracer's config](/docs/developers/evm-tracing/built-in-tracers#call-tracer-config).
 
 Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
 
@@ -729,6 +729,14 @@ Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/buil
       }
   }]
 ```
+
+#### TraceCallConfig
+
+TraceCallConfig is a superset of [TraceConfig](#traceconfig), providing additional arguments in addition to those provided by [TraceConfig](#traceconfig):
+
+- `stateOverrides`: `StateOverride`. Overrides for the state data (accounts/storage) for the call, see [StateOverride](/docs/developers/evm-tracing/built-in-tracers#state-overrides) for more details.
+- `blockOverrides`: `BlockOverrides`. Overrides for the block data (number, timestamp etc) for the call, see [BlockOverrides](/docs/developers/evm-tracing/built-in-tracers#block-overrides) for more details.
+- `txIndex`: `NUMBER`. If set, the state at the the given transaction index will be used to tracing (default = the last transaction index in the block).
 
 ### debug_verbosity
 
