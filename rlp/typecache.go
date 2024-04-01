@@ -159,16 +159,6 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
-// firstOptionalField returns the index of the first field with "optional" tag.
-func firstOptionalField(fields []field) int {
-	for i, f := range fields {
-		if f.optional {
-			return i
-		}
-	}
-	return len(fields)
-}
-
 type structFieldError struct {
 	typ   reflect.Type
 	field int

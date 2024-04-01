@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 	"github.com/holiman/uint256"
@@ -351,7 +352,10 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 	}
 
 	var writer writer
-	firstOptionalField := firstOptionalField(fields)
+	firstOptionalField := slices.IndexFunc(fields, func(f field) bool { return f.optional })
+	if firstOptionalField == -1 {
+		firstOptionalField = len(fields)
+	}
 	if firstOptionalField == len(fields) {
 		// This is the writer function for structs without any optional fields.
 		writer = func(val reflect.Value, w *encBuffer) error {
