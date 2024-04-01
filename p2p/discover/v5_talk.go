@@ -37,7 +37,7 @@ const talkHandlerLaunchTimeout = 400 * time.Millisecond
 //
 // Note that talk handlers are expected to come up with a response very quickly, within at
 // most 200ms or so. If the handler takes longer than that, the remote end may time out
-// and wont receive the response.
+// and won't receive the response.
 type TalkRequestHandler func(enode.ID, *net.UDPAddr, []byte) []byte
 
 type talkSystem struct {
