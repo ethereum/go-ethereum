@@ -688,11 +688,8 @@ hash.
 In addition to the hash of the transaction you may give it a secondary _optional_ argument, which specifies the options for this specific call. The possible options are:
 
 - `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
-
-If set, the previous four arguments will be ignored.
-
-- `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls.
-  Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
+- `timeout`: `STRING`. Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
+- `reexec`: `UINT64`. The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128).
 - `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/developers/evm-tracing/built-in-tracers#config).
 
 Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
