@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
@@ -837,13 +838,6 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 			tr.Update(key, val)
 			states[string(key)] = common.CopyBytes(val)
 		}
-		copyStates = func(states map[string][]byte) map[string][]byte {
-			cpy := make(map[string][]byte)
-			for k, v := range states {
-				cpy[k] = v
-			}
-			return cpy
-		}
 	)
 	stateA := make(map[string][]byte)
 	writeFn([]byte{0x01, 0x23}, nil, srcTrie, stateA)
@@ -866,7 +860,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	checkTrieContents(t, destDisk, scheme, srcTrie.Hash().Bytes(), stateA, true)
 
 	// Delete element to collapse trie
-	stateB := copyStates(stateA)
+	stateB := maps.Clone(stateA)
 	srcTrie, _ = New(TrieID(rootA), srcTrieDB)
 	deleteFn([]byte{0x02, 0x34}, srcTrie, stateB)
 	deleteFn([]byte{0x13, 0x44}, srcTrie, stateB)
@@ -883,7 +877,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	checkTrieContents(t, destDisk, scheme, srcTrie.Hash().Bytes(), stateB, true)
 
 	// Add elements to expand trie
-	stateC := copyStates(stateB)
+	stateC := maps.Clone(stateB)
 	srcTrie, _ = New(TrieID(rootB), srcTrieDB)
 
 	writeFn([]byte{0x01, 0x24}, stateA[string([]byte{0x01, 0x24})], srcTrie, stateC)
@@ -941,13 +935,6 @@ func testSyncAbort(t *testing.T, scheme string) {
 			tr.Update(key, val)
 			states[string(key)] = common.CopyBytes(val)
 		}
-		copyStates = func(states map[string][]byte) map[string][]byte {
-			cpy := make(map[string][]byte)
-			for k, v := range states {
-				cpy[k] = v
-			}
-			return cpy
-		}
 	)
 	var (
 		stateA = make(map[string][]byte)
@@ -972,7 +959,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	checkTrieContents(t, destDisk, scheme, srcTrie.Hash().Bytes(), stateA, true)
 
 	// Delete the element from the trie
-	stateB := copyStates(stateA)
+	stateB := maps.Clone(stateA)
 	srcTrie, _ = New(TrieID(rootA), srcTrieDB)
 	deleteFn(key, srcTrie, stateB)
 
@@ -999,7 +986,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	}})
 
 	// Add elements to expand trie
-	stateC := copyStates(stateB)
+	stateC := maps.Clone(stateB)
 	srcTrie, _ = New(TrieID(rootB), srcTrieDB)
 
 	writeFn(key, val, srcTrie, stateC)
