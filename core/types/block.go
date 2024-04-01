@@ -86,9 +86,11 @@ type Header struct {
 	WithdrawalsHash *common.Hash `json:"withdrawalsRoot" rlp:"optional"`
 
 	// BlobGasUsed was added by EIP-4844 and is ignored in legacy headers.
+	// BlobGasUsed는 EIP-4844에 추가되고, legacy headers에서는 무시된다.
 	BlobGasUsed *uint64 `json:"blobGasUsed" rlp:"optional"`
 
 	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
+	// ExcessBlobGas는 EIP-4844에 추가되고, legacy headers에서는 무시된다.
 	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
