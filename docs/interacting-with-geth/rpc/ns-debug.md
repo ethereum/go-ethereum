@@ -362,9 +362,9 @@ For example the value `0s` will essentially turn on archive mode. If set to `1h`
 
 Returns a printed representation of the stacks of all goroutines. Note that the web3 wrapper for this method takes care of the printing and does not return the string.
 
-| Client  | Method invocation                          |
-| :------ | ------------------------------------------ |
-| Console | `debug.stacks(filter *string)`                           |
+| Client  | Method invocation                                |
+| :------ | ------------------------------------------------ |
+| Console | `debug.stacks(filter *string)`                   |
 | RPC     | `{"method": "debug_stacks", "params": [filter]}` |
 
 ### debug_standardTraceBlockToFile
@@ -455,7 +455,7 @@ Stops writing the Go runtime trace.
 
 | Client  | Method invocation                               |
 | :------ | ----------------------------------------------- |
-| Console | `debug.stopGoTrace()`                      |
+| Console | `debug.stopGoTrace()`                           |
 | RPC     | `{"method": "debug_stopGoTrace", "params": []}` |
 
 ### debug_storageRangeAt
@@ -741,9 +741,9 @@ Sets the logging verbosity ceiling. Log messages with level up to and including 
 
 The verbosity of individual packages and source files can be raised using `debug_vmodule`.
 
-| Client  | Method invocation                                 |
-| :------ | ------------------------------------------------- |
-| Console | `debug.verbosity(level)`                          |
+| Client  | Method invocation                                   |
+| :------ | --------------------------------------------------- |
+| Console | `debug.verbosity(level)`                            |
 | RPC     | `{"method": "debug_verbosity", "params": [number]}` |
 
 ### debug_vmodule
