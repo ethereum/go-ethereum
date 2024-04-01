@@ -27,7 +27,9 @@ var (
 	mainnetChainConfig = params.ChainConfig{
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(1150000),
-		DAOForkBlock:   big.NewInt(1920000),
+		// EIP-779, mainnet에서 TheDAO hard fork가 블록 1,920,000에서 발생했음을 보여줌
+		DAOForkBlock: big.NewInt(1920000),
+		// EIP-779, TheDAO hard fork 적용 여부를 나타냄
 		DAOForkSupport: true,
 		EIP150Block:    big.NewInt(2463000),
 		EIP155Block:    big.NewInt(2675000),

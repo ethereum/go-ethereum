@@ -39,8 +39,9 @@ var (
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                big.NewInt(1_150_000),
+		ChainID:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(1_150_000),
+		// EIP-779, TheDAO hard-fork 가 적용되는 블록이 1,920,000 임을 명시합니다.
 		DAOForkBlock:                  big.NewInt(1_920_000),
 		DAOForkSupport:                true,
 		EIP150Block:                   big.NewInt(2_463_000),
@@ -63,8 +64,9 @@ var (
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(17000),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(17000),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, Holesky test network 상에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                true,
 		EIP150Block:                   big.NewInt(0),
@@ -88,8 +90,9 @@ var (
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
 	SepoliaChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(11155111),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(11155111),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, Sepolia test network 상에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                true,
 		EIP150Block:                   big.NewInt(0),
@@ -113,8 +116,9 @@ var (
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
 	GoerliChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(5),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(5),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, Goerli test network 상에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                true,
 		EIP150Block:                   big.NewInt(0),
@@ -140,8 +144,9 @@ var (
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	AllEthashProtocolChanges = &ChainConfig{
-		ChainID:                       big.NewInt(1337),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(1337),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
@@ -191,8 +196,9 @@ var (
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	AllCliqueProtocolChanges = &ChainConfig{
-		ChainID:                       big.NewInt(1337),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(1337),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, AllCliqueProtocolChanges 에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
@@ -221,8 +227,9 @@ var (
 	// TestChainConfig contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers for testing purposes.
 	TestChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, TestChainConfig 에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
@@ -251,8 +258,9 @@ var (
 	// MergedTestChainConfig contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers for testing purposes.
 	MergedTestChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                big.NewInt(0),
+		ChainID:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
+		// EIP-779, MergedTestChainConfig 에서는 TheDAO hard-fork 가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   big.NewInt(0),
@@ -281,8 +289,9 @@ var (
 	// NonActivatedConfig defines the chain configuration without activating
 	// any protocol change (EIPs).
 	NonActivatedConfig = &ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                nil,
+		ChainID:        big.NewInt(1),
+		HomesteadBlock: nil,
+		// EIP-779, NonActivatedConfig 에서는 TheDAO hard-fork가 적용되지 않습니다.
 		DAOForkBlock:                  nil,
 		DAOForkSupport:                false,
 		EIP150Block:                   nil,
@@ -332,8 +341,10 @@ type ChainConfig struct {
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
-	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
-	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
+	// EIP-779 에 따라, TheDAO hard-fork 가 적용되는 블록 넘버를 명시합니다.
+	DAOForkBlock *big.Int `json:"daoForkBlock,omitempty"` // TheDAO hard-fork switch block (nil = no fork)
+	// EIP-779 에 따라, 현재 노드가 TheDAO hard-fork 를 지원하는지 여부를 명시합니다.
+	DAOForkSupport bool `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
 	EIP150Block *big.Int `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
@@ -393,6 +404,7 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
+// Chain 설정에 대해 사람이 읽을 수 있는 형태의 Description 을 반환하는 함수
 // Description returns a human-readable description of ChainConfig.
 func (c *ChainConfig) Description() string {
 	var banner string
@@ -428,8 +440,11 @@ func (c *ChainConfig) Description() string {
 	// Create a list of forks with a short description of them. Forks that only
 	// makes sense for mainnet should be optional at printing to avoid bloating
 	// the output for testnets and private networks.
+	// FORK 들에 대한 짧은 기술을 담은 리스트를 생성합니다.
+	// mainnet 에만 해당하는 FORK 들은 '선택'으로 두어서 testnet 과 private networks 에 대한 결과물이 부풀어 오르지 않도록 해야합니다.
 	banner += "Pre-Merge hard forks (block based):\n"
 	banner += fmt.Sprintf(" - Homestead:                   #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)\n", c.HomesteadBlock)
+	// DAOForkBlock 이 설정되어 있으면, TheDAO hard-fork 에 대한 FORK 정보를 추가합니다.
 	if c.DAOForkBlock != nil {
 		banner += fmt.Sprintf(" - DAO Fork:                    #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md)\n", c.DAOForkBlock)
 	}
@@ -491,6 +506,8 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 }
 
 // IsDAOFork returns whether num is either equal to the DAO fork block or greater.
+//
+// 인자로 받은 수 `num` 이 TheDAO fork 를 위한 블록 넘버보다 크거나 같은지 함수입니다.
 func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
 	return isBlockForked(c.DAOForkBlock, num)
 }
@@ -613,6 +630,8 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
 // to guarantee that forks can be implemented in a different order than on official networks
+// CheckConfigForkOrder는 포크를 "건너뛰지" 않았는지 확인합니다.
+// geth는 공식 네트워크와 다른 순서로 포크를 구현할 수 있도록 보장할 수 있을 만큼 충분히 플러그 가능하지 않습니다.
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {
 		name      string
@@ -623,6 +642,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	var lastFork fork
 	for _, cur := range []fork{
 		{name: "homesteadBlock", block: c.HomesteadBlock},
+		// 현재 ChainConfig 에 명시된 TheDAO hard-fork 블록 넘버를 활용합니다.
+		// optional 값이 설정되어있기 때문에, 해당 fork 를 적용하지 않을 수도 있습니다.
 		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
@@ -683,9 +704,12 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, headNumber) {
 		return newBlockCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
+	// 현재의 Chain 설정 `c` 와 새로운 설정 `newcfg` 가 호환되는지 검사합니다.
+	// `headNumber`는 현재 블록 넘버를 의미합니다.
 	if isForkBlockIncompatible(c.DAOForkBlock, newcfg.DAOForkBlock, headNumber) {
 		return newBlockCompatError("DAO fork block", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
+	// EIP-779 를 지원하는지 검사합니다.
 	if c.IsDAOFork(headNumber) && c.DAOForkSupport != newcfg.DAOForkSupport {
 		return newBlockCompatError("DAO fork support flag", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}

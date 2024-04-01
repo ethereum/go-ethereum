@@ -338,6 +338,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				}
 			}
 		}
+		// EIP-779, DAO fork 를 지원하고 Chain Config에 DAO fork 블록 넘버가 현재 블록 넘버와 동일하다면
+		// TheDAO hard-fork 를 적용합니다.
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}

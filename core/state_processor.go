@@ -69,6 +69,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 
 	// Mutate the block and state according to any hard-fork specs
+	// EIP-779, DAO fork 를 지원하고 Chain Config에 DAO fork 블록 넘버가 현재 블록 넘버와 동일하다면
+	// TheDAO hard-fork 를 적용합니다.
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}

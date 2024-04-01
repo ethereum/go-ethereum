@@ -187,6 +187,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
 	// done in StateProcessor.Process(block, ...), right before transactions are applied.
+	// EIP-779, DAO fork 가 지원되고 ChainConfig에 명시된 블록 넘버가 현재 블록 넘버와 동일하다면
+	// DAO fork 를 DB 에 적용합니다.
 	if chainConfig.DAOForkSupport &&
 		chainConfig.DAOForkBlock != nil &&
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {

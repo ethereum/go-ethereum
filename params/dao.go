@@ -25,17 +25,24 @@ import (
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork
 // point and a number of consecutive blocks to allow fast/light syncers to correctly
 // pick the side they want  ("dao-hard-fork").
+// EIP-779, DAO hard-fork 지점 이후 및 추가로 연속되는 블록들의 `extra-data` 필드에
+// "dao-hard-fork" 를 16진수 형태로 변환하여 기록합니다.
+// 이를 통해, 빠른 동기화나 경량 클라이언트 같은 동기화 메커니즘들이 올바른 체인을 선택하도록 돕습니다.
 var DAOForkBlockExtra = common.FromHex("0x64616f2d686172642d666f726b")
 
 // DAOForkExtraRange is the number of consecutive blocks from the DAO fork point
 // to override the extra-data in to prevent no-fork attacks.
+// EIP-779, `no-fork attack` 으로부터 체인을 보호하기 위해 얼마나 많은
+// DAO fork 지점 이후 연속되는 블록의 `extra-data`에 덮어쓰기를 할 것인지 명시합니다.
 var DAOForkExtraRange = big.NewInt(10)
 
 // DAORefundContract is the address of the refund contract to send DAO balances to.
+// EIP-779, 환불(refund)을 위해 사용할 refund contract 의 주소를 명시합니다.
 var DAORefundContract = common.HexToAddress("0xbf4ed7b27f1d666546e30d74d50d173d20bca754")
 
 // DAODrainList is the list of accounts whose full balances will be moved into a
 // refund contract at the beginning of the dao-fork block.
+// EIP-779, 돈을 회수할 계정을 명시합니다.
 func DAODrainList() []common.Address {
 	return []common.Address{
 		common.HexToAddress("0xd4fe7bc31cedb7bfb8a345f31e668033056b2728"),

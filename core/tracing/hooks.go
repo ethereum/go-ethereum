@@ -193,8 +193,10 @@ const (
 
 	// DAO fork
 	// BalanceIncreaseDaoContract is ether sent to the DAO refund contract.
+	// EIP-779, DAO fork 를 위해 DAO refund contract에 전송되는 `ether` 를 의미합니다.
 	BalanceIncreaseDaoContract BalanceChangeReason = 8
 	// BalanceDecreaseDaoAccount is ether taken from a DAO account to be moved to the refund contract.
+	// EIP-779, DAO fork 를 위해 DAO Drain List의 account 들로부터 가져온 `ether`를 의미합니다.
 	BalanceDecreaseDaoAccount BalanceChangeReason = 9
 
 	// BalanceChangeTransfer is ether transferred via a call.
