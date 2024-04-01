@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"path/filepath"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -44,10 +44,9 @@ type supplyTxCallstack struct {
 }
 
 type supply struct {
-	delta            supplyInfo
-	txCallstack      []supplyTxCallstack // Callstack for current transaction
-	loggerOutputFile *lumberjack.Logger
-	logger           *log.Logger
+	delta       supplyInfo
+	txCallstack []supplyTxCallstack // Callstack for current transaction
+	logger      *lumberjack.Logger
 }
 
 type supplyTracerConfig struct {
@@ -62,28 +61,21 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 			return nil, fmt.Errorf("failed to parse config: %v", err)
 		}
 	}
-
 	if config.Path == "" {
 		return nil, errors.New("supply tracer output path is required")
 	}
 
 	// Store traces in a rotating file
-	loggerOutputFile := &lumberjack.Logger{
+	logger := &lumberjack.Logger{
 		Filename: filepath.Join(config.Path, "supply.jsonl"),
 	}
-
 	if config.MaxSize > 0 {
-		loggerOutputFile.MaxSize = config.MaxSize
+		logger.MaxSize = config.MaxSize
 	}
 
-	logger := log.New(loggerOutputFile, "", 0)
-
-	supplyInfo := newSupplyInfo()
-
 	t := &supply{
-		delta:            supplyInfo,
-		loggerOutputFile: loggerOutputFile,
-		logger:           logger,
+		delta:  newSupplyInfo(),
+		logger: logger,
 	}
 	return &tracing.Hooks{
 		OnBlockStart:    t.OnBlockStart,
@@ -138,8 +130,7 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 }
 
 func (s *supply) OnBlockEnd(err error) {
-	out, _ := json.Marshal(s.delta)
-	s.logger.Println(string(out))
+	s.write(s.delta)
 }
 
 func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
@@ -154,8 +145,7 @@ func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 		s.delta.Delta.Add(s.delta.Delta, account.Balance)
 	}
 
-	out, _ := json.Marshal(s.delta)
-	s.logger.Println(string(out))
+	s.write(s.delta)
 }
 
 func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
@@ -241,7 +231,17 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 }
 
 func (s *supply) OnTerminate() {
-	if err := s.loggerOutputFile.Close(); err != nil {
-		log.Printf("failed to close supply tracer log file: %v", err)
+	if err := s.logger.Close(); err != nil {
+		log.Warn("failed to close supply tracer log file", "error", err)
+	}
+}
+
+func (s *supply) write(data any) {
+	out, _ := json.Marshal(data)
+	if _, err := s.logger.Write(out); err != nil {
+		log.Warn("failed to write to supply tracer log file", "error", err)
+	}
+	if _, err := s.logger.Write([]byte{'\n'}); err != nil {
+		log.Warn("failed to write to supply tracer log file", "error", err)
 	}
 }
