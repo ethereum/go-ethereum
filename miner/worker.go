@@ -51,7 +51,7 @@ const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
 
-	// txChanSize is the size of channel listening to TxPreEvent.
+	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
@@ -109,8 +109,8 @@ type worker struct {
 
 	// update loop
 	mux          *event.TypeMux
-	txCh         chan core.TxPreEvent
-	txSub        event.Subscription
+	txsCh        chan core.NewTxsEvent
+	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
@@ -149,7 +149,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
-		txCh:           make(chan core.TxPreEvent, txChanSize),
+		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
 		chainDb:        eth.ChainDb(),
@@ -163,8 +163,8 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		announceTxs:    announceTxs,
 	}
 	if worker.announceTxs {
-		// Subscribe TxPreEvent for tx pool
-		worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
+		// Subscribe NewTxsEvent for tx pool
+		worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	}
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
@@ -261,7 +261,7 @@ func (self *worker) unregister(agent Agent) {
 
 func (self *worker) update() {
 	if self.announceTxs {
-		defer self.txSub.Unsubscribe()
+		defer self.txsSub.Unsubscribe()
 	}
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
@@ -314,13 +314,20 @@ func (self *worker) update() {
 				self.uncleMu.Unlock()
 			}
 
-		// Handle TxPreEvent
-		case ev := <-self.txCh:
-			// Apply transaction to the pending state if we're not mining
+		// Handle NewTxsEvent
+		case ev := <-self.txsCh:
+			// Apply transactions to the pending state if we're not mining.
+			//
+			// Note all transactions received may not be continuous with transactions
+			// already included in the current mining block. These transactions will
+			// be automatically eliminated.
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
-				acc, _ := types.Sender(self.current.signer, ev.Tx)
-				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
+				txs := make(map[common.Address]types.Transactions)
+				for _, tx := range ev.Txs {
+					acc, _ := types.Sender(self.current.signer, tx)
+					txs[acc] = append(txs[acc], tx)
+				}
 				feeCapacity := state.GetTRC21FeeCapacityFromState(self.current.state)
 				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, nil, feeCapacity)
 				self.current.commitTransactions(self.mux, feeCapacity, txset, specialTxs, self.chain, self.coinbase)

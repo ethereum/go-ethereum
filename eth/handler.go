@@ -49,7 +49,7 @@ const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
 	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
 
-	// txChanSize is the size of channel listening to TxPreEvent.
+	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 )
@@ -87,10 +87,10 @@ type ProtocolManager struct {
 	SubProtocols []p2p.Protocol
 
 	eventMux      *event.TypeMux
-	txCh          chan core.TxPreEvent
+	txsCh         chan core.NewTxsEvent
 	orderTxCh     chan core.OrderTxPreEvent
 	lendingTxCh   chan core.LendingTxPreEvent
-	txSub         event.Subscription
+	txsSub        event.Subscription
 	orderTxSub    event.Subscription
 	lendingTxSub  event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
@@ -292,8 +292,8 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 
 	// broadcast transactions
-	pm.txCh = make(chan core.TxPreEvent, txChanSize)
-	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
+	pm.txsCh = make(chan core.NewTxsEvent, txChanSize)
+	pm.txsSub = pm.txpool.SubscribeNewTxsEvent(pm.txsCh)
 	pm.orderTxCh = make(chan core.OrderTxPreEvent, txChanSize)
 	if pm.orderpool != nil {
 		pm.orderTxSub = pm.orderpool.SubscribeTxPreEvent(pm.orderTxCh)
@@ -317,7 +317,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 func (pm *ProtocolManager) Stop() {
 	log.Info("Stopping Ethereum protocol")
 
-	pm.txSub.Unsubscribe() // quits txBroadcastLoop
+	pm.txsSub.Unsubscribe() // quits txBroadcastLoop
 	if pm.orderTxSub != nil {
 		pm.orderTxSub.Unsubscribe()
 	}
@@ -941,16 +941,23 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-// BroadcastTx will propagate a transaction to all peers which are not known to
+// BroadcastTxs will propagate a batch of transactions to all peers which are not known to
 // already have the given transaction.
-func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
-	// Broadcast transaction to a batch of peers not knowing about it
-	peers := pm.peers.PeersWithoutTx(hash)
-	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
-	for _, peer := range peers {
-		peer.SendTransactions(types.Transactions{tx})
+func (pm *ProtocolManager) BroadcastTxs(txs types.Transactions) {
+	var txset = make(map[*peer]types.Transactions)
+
+	// Broadcast transactions to a batch of peers not knowing about it
+	for _, tx := range txs {
+		peers := pm.peers.PeersWithoutTx(tx.Hash())
+		for _, peer := range peers {
+			txset[peer] = append(txset[peer], tx)
+		}
+		log.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peers))
 	}
-	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+	// FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	for peer, txs := range txset {
+		peer.SendTransactions(txs)
+	}
 }
 
 // BroadcastVote will propagate a Vote to all peers which are not known to
@@ -1041,14 +1048,14 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 	}
 }
 
-func (self *ProtocolManager) txBroadcastLoop() {
+func (pm *ProtocolManager) txBroadcastLoop() {
 	for {
 		select {
-		case event := <-self.txCh:
-			self.BroadcastTx(event.Tx.Hash(), event.Tx)
+		case event := <-pm.txsCh:
+			pm.BroadcastTxs(event.Txs)
 
-			// Err() channel will be closed when unsubscribing.
-		case <-self.txSub.Err():
+		// Err() channel will be closed when unsubscribing.
+		case <-pm.txsSub.Err():
 			return
 		}
 	}

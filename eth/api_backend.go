@@ -322,8 +322,8 @@ func (b *EthApiBackend) OrderStats() (pending int, queued int) {
 	return b.eth.txPool.Stats()
 }
 
-func (b *EthApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
-	return b.eth.TxPool().SubscribeTxPreEvent(ch)
+func (b *EthApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
 }
 
 func (b *EthApiBackend) Downloader() *downloader.Downloader {
