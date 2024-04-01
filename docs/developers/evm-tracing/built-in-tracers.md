@@ -26,6 +26,15 @@ The struct logger (aka opcode logger) is a native Go tracer which executes a tra
 
 Note that the fields `memory`, `stack`, `returnData`, and `storage` have dynamic size and depending on the exact transaction they could grow large in size. This is specially true for `memory` which could blow up the trace size. It is recommended to keep them disabled unless they are explicitly required for a given use case.
 
+### opcode config{#struct-opcode-config}
+
+- `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
+- `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
+- `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
+- `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
+- `debug`: `BOOL`. Setting this to true will print output during capture end (default = false).
+- `limit`: `INTEGER`. Setting this to a positive integer will limit the number of steps captured (default = 0, no limit).
+
 It is also possible to configure the trace by passing Boolean (true/false) values for four parameters that tweak the verbosity of the trace. By default, the _EVM memory_ and _Return data_ are not reported but the _EVM stack_ and _EVM storage_ are. To report the maximum amount of data:
 
 ```sh
@@ -180,7 +189,7 @@ Things to note about the call tracer:
 
 - In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
 
-#### Config
+#### callTracer config{#call-tracer-config}
 
 `callTracer` accepts two options:
 
@@ -203,6 +212,10 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 | nonce   | uint64            | nonce                         |
 | code    | string            | hex-encoded bytecode          |
 | storage | map[string]string | storage slots of the contract |
+
+#### prestateTracer config {#prestate-tracer-config}
+
+- `diffMode`: `BOOL`. Setting this to true will enable diff mode (default = false).
 
 In `diff` mode the result object will contain a `pre` and a `post` object:
 

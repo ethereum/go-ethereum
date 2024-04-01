@@ -687,10 +687,6 @@ hash.
 
 In addition to the hash of the transaction you may give it a secondary _optional_ argument, which specifies the options for this specific call. The possible options are:
 
-- `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
-- `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
-- `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
-- `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
 - `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
 
 If set, the previous four arguments will be ignored.
