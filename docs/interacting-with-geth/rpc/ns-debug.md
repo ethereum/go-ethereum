@@ -604,14 +604,14 @@ No specific call options:
 Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
 
 ```js
-debug.traceCall(
+> debug.traceCall(
   {
-    from: '0xdeadbeef29292929192939494959594933929292',
-    to: '0xde929f939d939d393f939393f93939f393929023',
-    gas: '0x7a120',
-    data: '0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810'
+    from: "0xdeadbeef29292929192939494959594933929292",
+    to: "0xde929f939d939d393f939393f93939f393929023",
+    gas: "0x7a120",
+    data: "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
   },
-  'latest',
+  "latest",
   { disableStorage: true, disableMemory: true }
 );
 ```
@@ -619,16 +619,18 @@ debug.traceCall(
 It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack:
 
 ```js
-> debug.traceCall({
+> debug.traceCall(
+  {
     from: eth.accounts[0],
-    value:"0x1",
+    value: "0x1",
     gasPrice: "0xffffffff",
     gas: "0xffff",
-    input: "0x43"},
-    "latest",
-    {"blockoverrides":
-        {"number": "0x50"}
-    })
+    input: "0x43"
+  },
+  "latest",
+  {
+    "blockoverrides": {"number": "0x50"}
+  })
 {
   failed: false,
   gas: 53018,
