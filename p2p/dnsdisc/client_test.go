@@ -448,9 +448,7 @@ func newMapResolver(maps ...map[string]string) mapResolver {
 }
 
 func (mr mapResolver) clear() {
-	for k := range mr {
-		delete(mr, k)
-	}
+	clear(mr)
 }
 
 func (mr mapResolver) add(m map[string]string) {
