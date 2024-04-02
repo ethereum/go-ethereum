@@ -115,9 +115,7 @@ func (c *BasicLRU[K, V]) Peek(key K) (value V, ok bool) {
 // Purge empties the cache.
 func (c *BasicLRU[K, V]) Purge() {
 	c.list.init()
-	for k := range c.items {
-		delete(c.items, k)
-	}
+	clear(c.items)
 }
 
 // Remove drops an item from the cache. Returns true if the key was present in cache.
