@@ -521,7 +521,7 @@ debug.traceCall({from: , to: , input: }, 'latest', {stateOverrides: {'0x...': {c
 
 ## Block overrides {#block-overrides}
 
-Similar to [State overrides](#state-overrides), it is also possible to override some of the block header's fields to simulate the effects of `eth_call` or `debug_traceCall`, we support the following block header fields to override:
+Similar to [State overrides](#state-overrides), it is also possible to override some of the execution's block context to simulate the effects of `eth_call` or `debug_traceCall`, we support the following override options:
 
 - `number`: `hexdecimal`. The block number.
 - `difficulty`: `hexdecimal`. The block difficulty.
