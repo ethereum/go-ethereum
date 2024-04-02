@@ -505,7 +505,7 @@ Available state overrides are:
 - `nonce`: `hexdecimal`. The nonce of the account.
 - `code`: `string`. The bytecode of the account.
 - `balance`: `hexdecimal`. The balance of the account in Wei.
-- `state`: `map[common.Hash]common.Hash`. The state of the account.
+- `state`: `map[common.Hash]common.Hash`. Clear all storage slots of the account and insert the ones given in the dictionary.
 - `stateDiff`: `map[common.Hash]common.Hash`. The diff of the account.
 
 Note, `state` and `stateDiff` can't be specified at the same time. If `state` is
