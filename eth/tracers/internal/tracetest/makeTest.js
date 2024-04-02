@@ -33,15 +33,20 @@ var makeTest = function(tx, traceConfig) {
     var result = debug.traceTransaction(tx, traceConfig);
     delete result.time;
 
+    var context = {
+        number:     block.number.toString(),
+        difficulty: block.difficulty,
+        timestamp:  block.timestamp.toString(),
+        gasLimit:   block.gasLimit.toString(),
+        miner:      block.miner,
+    };
+    if (block.baseFeePerGas) {
+        context.baseFeePerGas = block.baseFeePerGas.toString();
+    }
+
     console.log(JSON.stringify({
         genesis: genesis,
-        context: {
-            number:     block.number.toString(),
-            difficulty: block.difficulty,
-            timestamp:  block.timestamp.toString(),
-            gasLimit:   block.gasLimit.toString(),
-            miner:      block.miner,
-        },
+        context: context,
         input:  eth.getRawTransaction(tx),
         result: result,
     }, null, 2));
