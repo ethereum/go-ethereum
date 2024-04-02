@@ -628,7 +628,9 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		gas          = scope.Contract.Gas
 	)
 	// Apply EIP150
-	gas -= gas / 64
+	if interpreter.evm.chainRules.IsEIP150 {
+		gas -= gas / 64
+	}
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// reuse size int for stackvalue
 	stackvalue := size
