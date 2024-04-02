@@ -1,9 +1,5 @@
 version: 1
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - env:
       - CGO_ENABLED=0
@@ -19,23 +15,26 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
+    dir: ./external/geth
     main: ./cmd/geth
-    binary: geth
+    binary: mev-commit-geth
 
 archives:
   - format: tar.gz
-    # This name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
-      {{ .ProjectName }}_
+      {{- .Binary }}_
+      {{- .Version }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # Use zip for windows archives.
     format_overrides:
       - goos: windows
         format: zip
+
+checksum:
+  name_template: mev-commit-geth_{{ .Version }}_checksums.txt
 
 changelog:
   sort: asc
