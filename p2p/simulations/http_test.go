@@ -21,10 +21,10 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -459,7 +459,7 @@ loop:
 			if actual[filter] > expected[filter] {
 				t.Fatalf("received too many msgs for filter: %v", filter)
 			}
-			if reflect.DeepEqual(actual, expected) {
+			if maps.Equal(actual, expected) {
 				return
 			}
 
