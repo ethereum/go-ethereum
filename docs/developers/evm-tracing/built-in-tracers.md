@@ -524,7 +524,7 @@ debug.traceCall({from: , to: , input: }, 'latest', {stateOverrides: {'0x...': {c
 Similar to [State overrides](#state-overrides), it is also possible to override some of the block header's fields to simulate the effects of `eth_call` or `debug_traceCall`, we support the following block header fields to override:
 
 - `number`: `hexdecimal`. The block number.
-- `difficulty`: `hexdecimal`. The block hash.
+- `difficulty`: `hexdecimal`. The block difficulty.
 - `time`: `hexdecimal`. The block timestamp.
 - `gasLimit`: `hexdecimal`. The block gas limit.
 - `coinbase`: `common.Address`. The block coinbase.
