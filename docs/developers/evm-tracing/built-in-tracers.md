@@ -506,7 +506,7 @@ Available state overrides are:
 - `code`: `string`. The bytecode of the account.
 - `balance`: `hexdecimal`. The balance of the account in Wei.
 - `state`: `map[common.Hash]common.Hash`. Clear all storage slots of the account and insert the ones given in the dictionary.
-- `stateDiff`: `map[common.Hash]common.Hash`. The diff of the account.
+- `stateDiff`: `map[common.Hash]common.Hash`. Update the given storage slots with new values.
 
 Note, `state` and `stateDiff` can't be specified at the same time. If `state` is
 set, message execution will only use the data in the given state. Otherwise if `statDiff` is set, all diff will be applied first and then execute the call.
