@@ -21,12 +21,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/cryptoecc/ETH-ECC/common"
+	"github.com/cryptoecc/ETH-ECC/core/beacon"
+	"github.com/cryptoecc/ETH-ECC/les"
+	"github.com/cryptoecc/ETH-ECC/log"
+	"github.com/cryptoecc/ETH-ECC/node"
+	"github.com/cryptoecc/ETH-ECC/rpc"
 )
 
 // Register adds catalyst APIs to the light client.
@@ -57,14 +57,21 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-// 		we return success, which can be used to check if the catalyst mode is enabled
+//
+//	we return success, which can be used to check if the catalyst mode is enabled
+//
 // If the total difficulty was not reached:
-// 		we return INVALID
+//
+//	we return INVALID
+//
 // If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
+//	we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
 // We try to set our blockchain to the headBlock
 // If there are payloadAttributes:
-//      we return an error since block creation is not supported in les mode
+//
+//	we return an error since block creation is not supported in les mode
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")

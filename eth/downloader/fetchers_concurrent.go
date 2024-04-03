@@ -21,10 +21,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/cryptoecc/ETH-ECC/common"
+	"github.com/cryptoecc/ETH-ECC/common/prque"
+	"github.com/cryptoecc/ETH-ECC/eth/protocols/eth"
+	"github.com/cryptoecc/ETH-ECC/log"
 )
 
 // timeoutGracePeriod is the amount of time to allow for a peer to deliver a

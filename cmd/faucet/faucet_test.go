@@ -19,7 +19,7 @@ package main
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/cryptoecc/ETH-ECC/common"
 )
 
 func TestFacebook(t *testing.T) {

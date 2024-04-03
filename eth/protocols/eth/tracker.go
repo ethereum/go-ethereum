@@ -19,7 +19,7 @@ package eth
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/tracker"
+	"github.com/cryptoecc/ETH-ECC/p2p/tracker"
 )
 
 // requestTracker is a singleton tracker for eth/66 and newer request times.

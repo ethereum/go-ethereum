@@ -6,7 +6,7 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 [![Go Report Card](https://goreportcard.com/badge/github.com/cryptoecc/ETH-ECC)](https://goreportcard.com/report/github.com/cryptoecc/ETH-ECC).
 
 > Development client of the WorldLand blockchain.
-> It is a fork of [ethereum/go-ethereum](https://github.com/ethereum/go-ethereum)
+> It is a fork of [ethereum/go-ethereum](https://github.com/cryptoecc/ETH-ECC)
 
 ## What is Worldland?
 

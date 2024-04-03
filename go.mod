@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/cryptoecc/ETH-ECC
 
 go 1.17
 

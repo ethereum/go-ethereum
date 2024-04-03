@@ -21,7 +21,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/cryptoecc/ETH-ECC/p2p/enode"
 )
 
 // lookup performs a network search for nodes close to the given target. It approaches the

@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/cryptoecc/ETH-ECC/common/hexutil"
+	"github.com/cryptoecc/ETH-ECC/common/mclock"
+	vfs "github.com/cryptoecc/ETH-ECC/les/vflux/server"
+	"github.com/cryptoecc/ETH-ECC/p2p/enode"
 )
 
 var (
@@ -366,10 +366,11 @@ func NewLightAPI(backend *lesCommons) *LightAPI {
 // LatestCheckpoint returns the latest local checkpoint package.
 //
 // The checkpoint package consists of 4 strings:
-//   result[0], hex encoded latest section index
-//   result[1], 32 bytes hex encoded latest section head hash
-//   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
-//   result[3], 32 bytes hex encoded latest section bloom trie root hash
+//
+//	result[0], hex encoded latest section index
+//	result[1], 32 bytes hex encoded latest section head hash
+//	result[2], 32 bytes hex encoded latest section canonical hash trie root hash
+//	result[3], 32 bytes hex encoded latest section bloom trie root hash
 func (api *LightAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
 	cp := api.backend.latestLocalCheckpoint()
@@ -384,9 +385,10 @@ func (api *LightAPI) LatestCheckpoint() ([4]string, error) {
 // GetLocalCheckpoint returns the specific local checkpoint package.
 //
 // The checkpoint package consists of 3 strings:
-//   result[0], 32 bytes hex encoded latest section head hash
-//   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
-//   result[2], 32 bytes hex encoded latest section bloom trie root hash
+//
+//	result[0], 32 bytes hex encoded latest section head hash
+//	result[1], 32 bytes hex encoded latest section canonical hash trie root hash
+//	result[2], 32 bytes hex encoded latest section bloom trie root hash
 func (api *LightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
 	cp := api.backend.localCheckpoint(index)

@@ -20,15 +20,16 @@ import (
 	"container/heap"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/cryptoecc/ETH-ECC/common/mclock"
 )
 
 // LazyQueue is a priority queue data structure where priorities can change over
 // time and are only evaluated on demand.
 // Two callbacks are required:
-// - priority evaluates the actual priority of an item
-// - maxPriority gives an upper estimate for the priority in any moment between
-//   now and the given absolute time
+//   - priority evaluates the actual priority of an item
+//   - maxPriority gives an upper estimate for the priority in any moment between
+//     now and the given absolute time
+//
 // If the upper estimate is exceeded then Update should be called for that item.
 // A global Refresh function should also be called periodically.
 type LazyQueue struct {

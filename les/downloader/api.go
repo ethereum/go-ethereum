@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
+	"github.com/cryptoecc/ETH-ECC/event"
+	"github.com/cryptoecc/ETH-ECC/rpc"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // DownloaderAPI provides an API which gives information about the current synchronisation status.

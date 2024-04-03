@@ -29,7 +29,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/cryptoecc/ETH-ECC/params"
 )
 
 var (
@@ -116,6 +116,7 @@ func (tm *testMatcher) skipLoad(pattern string) {
 }
 
 // fails adds an expected failure for tests matching the pattern.
+//
 //nolint:unused
 func (tm *testMatcher) fails(pattern string, reason string) {
 	if reason == "" {

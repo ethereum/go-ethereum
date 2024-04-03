@@ -19,7 +19,7 @@
 // stored in key/value pairs. To store and retrieve key/values in a record, use the Entry
 // interface.
 //
-// Signature Handling
+// # Signature Handling
 //
 // Records must be signed before transmitting them to another node.
 //
@@ -40,7 +40,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/cryptoecc/ETH-ECC/rlp"
 )
 
 const SizeLimit = 300 // maximum encoded size of a node record in bytes

@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC/log"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.

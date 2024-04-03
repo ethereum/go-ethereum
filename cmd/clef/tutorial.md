@@ -100,9 +100,9 @@ or
 {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Request denied"}}
 ```
 
-Apart from listing accounts, you can also *request* creating a new account; signing transactions and data; and recovering signatures. You can find the available methods in the Clef [External API Spec](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef#external-api-1) and the [External API Changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md).
+Apart from listing accounts, you can also *request* creating a new account; signing transactions and data; and recovering signatures. You can find the available methods in the Clef [External API Spec](https://github.com/cryptoecc/ETH-ECC/tree/master/cmd/clef#external-api-1) and the [External API Changelog](https://github.com/cryptoecc/ETH-ECC/blob/master/cmd/clef/extapi_changelog.md).
 
-*Note, the number of things you can do from the External API is deliberately small, since we want to limit the power of remote calls by as much as possible! Clef has an [Internal API](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef#ui-api-1) too for the UI (User Interface) which is much richer and can support custom interfaces on top. But that's out of scope here.*
+*Note, the number of things you can do from the External API is deliberately small, since we want to limit the power of remote calls by as much as possible! Clef has an [Internal API](https://github.com/cryptoecc/ETH-ECC/tree/master/cmd/clef#ui-api-1) too for the UI (User Interface) which is much richer and can support custom interfaces on top. But that's out of scope here.*
 
 ## Automatic rules
 
@@ -288,7 +288,7 @@ t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=request  meta
 t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=response data=                                     error="Request denied"
 ```
 
-For more details on writing automatic rules, please see the [rules spec](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md).
+For more details on writing automatic rules, please see the [rules spec](https://github.com/cryptoecc/ETH-ECC/blob/master/cmd/clef/rules.md).
 
 ## Geth integration
 

@@ -5,8 +5,8 @@ Maintainer: {{.Author}}
 Build-Depends: debhelper (>= 8.0.0), {{.GoBootPackage}}
 Standards-Version: 3.9.5
 Homepage: https://ethereum.org
-Vcs-Git: https://github.com/ethereum/go-ethereum.git
-Vcs-Browser: https://github.com/ethereum/go-ethereum
+Vcs-Git: https://github.com/cryptoecc/ETH-ECC.git
+Vcs-Browser: https://github.com/cryptoecc/ETH-ECC
 
 Package: {{.Name}}
 Architecture: any

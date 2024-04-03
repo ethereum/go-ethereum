@@ -19,9 +19,9 @@ package ethash
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/cryptoecc/ETH-ECC/common"
+	"github.com/cryptoecc/ETH-ECC/common/hexutil"
+	"github.com/cryptoecc/ETH-ECC/core/types"
 )
 
 var errEthashStopped = errors.New("ethash stopped")
@@ -34,10 +34,11 @@ type API struct {
 // GetWork returns a work package for external miner.
 //
 // The work package consists of 3 strings:
-//   result[0] - 32 bytes hex encoded current block header pow-hash
-//   result[1] - 32 bytes hex encoded seed hash used for DAG
-//   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//   result[3] - hex encoded block number
+//
+//	result[0] - 32 bytes hex encoded current block header pow-hash
+//	result[1] - 32 bytes hex encoded seed hash used for DAG
+//	result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//	result[3] - hex encoded block number
 func (api *API) GetWork() ([4]string, error) {
 	if api.ethash.remote == nil {
 		return [4]string{}, errors.New("not supported")

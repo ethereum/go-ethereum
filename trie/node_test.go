@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/cryptoecc/ETH-ECC/crypto"
+	"github.com/cryptoecc/ETH-ECC/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {
@@ -96,7 +96,7 @@ func TestDecodeFullNode(t *testing.T) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkEncodeShortNode
 // BenchmarkEncodeShortNode-8   	16878850	        70.81 ns/op	      48 B/op	       1 allocs/op
 func BenchmarkEncodeShortNode(b *testing.B) {
@@ -114,7 +114,7 @@ func BenchmarkEncodeShortNode(b *testing.B) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkEncodeFullNode
 // BenchmarkEncodeFullNode-8   	 4323273	       284.4 ns/op	     576 B/op	       1 allocs/op
 func BenchmarkEncodeFullNode(b *testing.B) {
@@ -132,7 +132,7 @@ func BenchmarkEncodeFullNode(b *testing.B) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkDecodeShortNode
 // BenchmarkDecodeShortNode-8   	 7925638	       151.0 ns/op	     157 B/op	       4 allocs/op
 func BenchmarkDecodeShortNode(b *testing.B) {
@@ -153,7 +153,7 @@ func BenchmarkDecodeShortNode(b *testing.B) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkDecodeShortNodeUnsafe
 // BenchmarkDecodeShortNodeUnsafe-8   	 9027476	       128.6 ns/op	     109 B/op	       3 allocs/op
 func BenchmarkDecodeShortNodeUnsafe(b *testing.B) {
@@ -174,7 +174,7 @@ func BenchmarkDecodeShortNodeUnsafe(b *testing.B) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkDecodeFullNode
 // BenchmarkDecodeFullNode-8   	 1597462	       761.9 ns/op	    1280 B/op	      18 allocs/op
 func BenchmarkDecodeFullNode(b *testing.B) {
@@ -195,7 +195,7 @@ func BenchmarkDecodeFullNode(b *testing.B) {
 
 // goos: darwin
 // goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
+// pkg: github.com/cryptoecc/ETH-ECC/trie
 // BenchmarkDecodeFullNodeUnsafe
 // BenchmarkDecodeFullNodeUnsafe-8   	 1789070	       687.1 ns/op	     704 B/op	      17 allocs/op
 func BenchmarkDecodeFullNodeUnsafe(b *testing.B) {

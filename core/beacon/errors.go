@@ -17,8 +17,8 @@
 package beacon
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/cryptoecc/ETH-ECC/common"
+	"github.com/cryptoecc/ETH-ECC/rpc"
 )
 
 // EngineAPIError is a standardized error message between consensus and execution

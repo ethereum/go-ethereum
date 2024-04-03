@@ -27,7 +27,7 @@
 # $LIB_FUZZING_ENGINE   C++ compiler argument to link fuzz target against the prebuilt engine library (e.g. libFuzzer).
 
 # This sets the -coverpgk for the coverage report when the corpus is executed through go test
-coverpkg="github.com/ethereum/go-ethereum/..."
+coverpkg="github.com/cryptoecc/ETH-ECC/..."
 
 function coverbuild {
   path=$1
@@ -65,7 +65,7 @@ function compile_fuzzer {
   # $2: The name of the fuzzing function
   # $3: The name to give to the final fuzzing-binary
 
-  path=$GOPATH/src/github.com/ethereum/go-ethereum/$1
+  path=$GOPATH/src/github.com/cryptoecc/ETH-ECC/$1
   func=$2
   fuzzer=$3
 

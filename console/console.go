@@ -29,12 +29,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/cryptoecc/ETH-ECC/console/prompt"
+	"github.com/cryptoecc/ETH-ECC/internal/jsre"
+	"github.com/cryptoecc/ETH-ECC/internal/jsre/deps"
+	"github.com/cryptoecc/ETH-ECC/internal/web3ext"
+	"github.com/cryptoecc/ETH-ECC/rpc"
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 )

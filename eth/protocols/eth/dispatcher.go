@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/cryptoecc/ETH-ECC/p2p"
 )
 
 var (

@@ -16,7 +16,7 @@
 
 package snapshot
 
-import "github.com/ethereum/go-ethereum/metrics"
+import "github.com/cryptoecc/ETH-ECC/metrics"
 
 // Metrics in generation
 var (

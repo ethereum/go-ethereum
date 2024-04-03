@@ -19,9 +19,9 @@ package main
 import (
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/cryptoecc/ETH-ECC/cmd/devp2p/internal/v4test"
+	"github.com/cryptoecc/ETH-ECC/internal/utesting"
+	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/urfave/cli/v2"
 )
 

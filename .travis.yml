@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/cryptoecc/ETH-ECC
 sudo: false
 jobs:
   allow_failures:
@@ -155,7 +155,7 @@ jobs:
       script:
         # Build the Android archive and upload it to Maven Central and Azure
         - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
+        - ln -s `pwd` $GOPATH/src/github.com/cryptoecc/ETH-ECC
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -signify SIGNIFY_KEY  -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
