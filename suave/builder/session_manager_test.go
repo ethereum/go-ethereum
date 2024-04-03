@@ -142,7 +142,8 @@ type testBackend struct {
 
 func (tb *testBackend) newTransfer(t *testing.T, to common.Address, amount *big.Int) *types.Transaction {
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
-	tx, _ := types.SignTx(types.NewTransaction(tb.pool.Nonce(testBankAddress), to, amount, params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	tx, err := types.SignTx(types.NewTransaction(tb.pool.Nonce(testBankAddress), to, amount, params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	require.NoError(t, err)
 	return tx
 }
 

@@ -34,7 +34,7 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, res.Success)
 	require.Len(t, builder.env.receipts, 1)
-	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress).ToBig())
 
 	// we cannot add the same transaction again. Note that by design the
 	// function does not error but returns the SimulateTransactionResult.success = false
@@ -42,7 +42,7 @@ func TestBuilder_AddTxn_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.Success)
 	require.Len(t, builder.env.receipts, 1)
-	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress).ToBig())
 }
 
 func TestBuilder_AddTxns_Simple(t *testing.T) {
@@ -60,7 +60,7 @@ func TestBuilder_AddTxns_Simple(t *testing.T) {
 	for _, r := range res {
 		require.True(t, r.Success)
 	}
-	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress).ToBig())
 
 	tx3 := backend.newRandomTxWithNonce(2)
 	tx4 := backend.newRandomTxWithNonce(1000) // fails with nonce too high
@@ -71,7 +71,7 @@ func TestBuilder_AddTxns_Simple(t *testing.T) {
 	require.True(t, res[0].Success)
 	require.False(t, res[1].Success)
 	require.Len(t, builder.env.txs, 2)
-	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(2000), builder.env.state.GetBalance(testUserAddress).ToBig())
 }
 
 func TestBuilder_AddBundles_Simple(t *testing.T) {
@@ -99,7 +99,7 @@ func TestBuilder_AddBundles_Simple(t *testing.T) {
 	require.Len(t, res, 2)
 	require.True(t, res[0].Success)
 	require.True(t, res[1].Success)
-	require.Equal(t, big.NewInt(4000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(4000), builder.env.state.GetBalance(testUserAddress).ToBig())
 }
 
 func TestBuilder_AddBundles_RevertHashes(t *testing.T) {
@@ -122,7 +122,7 @@ func TestBuilder_AddBundles_RevertHashes(t *testing.T) {
 	require.Len(t, res[0].SimulateTransactionResults, 2)
 	require.True(t, res[0].SimulateTransactionResults[0].Success)
 	require.False(t, res[0].SimulateTransactionResults[1].Success)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+	require.True(t, builder.env.state.GetBalance(testUserAddress).IsZero())
 
 	bundle.RevertingHashes = []common.Hash{tx2.Hash()}
 
@@ -133,7 +133,7 @@ func TestBuilder_AddBundles_RevertHashes(t *testing.T) {
 	require.Len(t, res[0].SimulateTransactionResults, 2)
 	require.True(t, res[0].SimulateTransactionResults[0].Success)
 	require.False(t, res[0].SimulateTransactionResults[1].Success)
-	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress))
+	require.Equal(t, big.NewInt(1000), builder.env.state.GetBalance(testUserAddress).ToBig())
 }
 
 func TestBuilder_AddBundles_InvalidParams(t *testing.T) {
@@ -160,7 +160,7 @@ func TestBuilder_AddBundles_InvalidParams(t *testing.T) {
 	require.False(t, res[0].Success)
 	require.Equal(t, ErrInvalidBlockNumber.Error(), res[0].Error)
 	require.Len(t, res[0].SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+	require.True(t, builder.env.state.GetBalance(testUserAddress).IsZero())
 
 	bundle = &suavextypes.Bundle{
 		Txs:         []*types.Transaction{tx1, tx2},
@@ -174,7 +174,7 @@ func TestBuilder_AddBundles_InvalidParams(t *testing.T) {
 	require.False(t, res[0].Success)
 	require.Equal(t, ErrExceedsMaxBlock.Error(), res[0].Error)
 	require.Len(t, res[0].SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+	require.True(t, builder.env.state.GetBalance(testUserAddress).IsZero())
 
 	bundle = &suavextypes.Bundle{
 		Txs: []*types.Transaction{},
@@ -185,7 +185,7 @@ func TestBuilder_AddBundles_InvalidParams(t *testing.T) {
 	require.False(t, res[0].Success)
 	require.Equal(t, ErrEmptyTxs.Error(), res[0].Error)
 	require.Len(t, res[0].SimulateTransactionResults, 0)
-	require.Equal(t, big.NewInt(0), builder.env.state.GetBalance(testUserAddress))
+	require.True(t, builder.env.state.GetBalance(testUserAddress).IsZero())
 }
 
 func TestBuilder_FillTransactions(t *testing.T) {
@@ -299,12 +299,11 @@ func newMockBuilderConfig(t *testing.T) (*BuilderConfig, *testWorkerBackend) {
 	engine := clique.New(config.Clique, db)
 
 	w, backend := newTestWorker(t, &config, engine, db, 0)
-	w.close()
 
 	bConfig := &BuilderConfig{
 		ChainConfig: w.chainConfig,
 		Engine:      w.engine,
-		EthBackend:  w.eth,
+		EthBackend:  backend,
 		Chain:       w.chain,
 		GasCeil:     10000000,
 	}

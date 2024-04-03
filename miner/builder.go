@@ -64,6 +64,7 @@ func NewBuilder(config *BuilderConfig, args *BuilderArgs) (*Builder, error) {
 		chainConfig: config.ChainConfig,
 		engine:      config.Engine,
 		chain:       config.Chain,
+		txpool:      config.EthBackend.TxPool(),
 	}
 
 	workerParams := &generateParams{
