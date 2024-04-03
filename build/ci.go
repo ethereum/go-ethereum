@@ -67,7 +67,7 @@ var (
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
-		executablePath("geth"),
+		executablePath("worldland"),
 	}
 
 	// Files that end up in the geth-alltools*.zip archive.
@@ -76,7 +76,7 @@ var (
 		executablePath("abigen"),
 		executablePath("bootnode"),
 		executablePath("evm"),
-		executablePath("geth"),
+		executablePath("worldland"),
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
@@ -97,8 +97,8 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			BinaryName:  "geth",
-			Description: "Ethereum CLI client.",
+			BinaryName:  "worldland",
+			Description: "Worldland CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",
@@ -949,7 +949,7 @@ func doWindowsInstaller(cmdline []string) {
 			continue
 		}
 		allTools = append(allTools, filepath.Base(file))
-		if filepath.Base(file) == "geth.exe" {
+		if filepath.Base(file) == "worldland.exe" {
 			gethTool = file
 		} else {
 			devTools = append(devTools, file)
@@ -957,13 +957,13 @@ func doWindowsInstaller(cmdline []string) {
 	}
 
 	// Render NSIS scripts: Installer NSIS contains two installer sections,
-	// first section contains the geth binary, second section holds the dev tools.
+	// first section contains the worldland binary, second section holds the dev tools.
 	templateData := map[string]interface{}{
-		"License":  "COPYING",
-		"Geth":     gethTool,
-		"DevTools": devTools,
+		"License":   "COPYING",
+		"Worldland": gethTool,
+		"DevTools":  devTools,
 	}
-	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
+	build.Render("build/nsis.worldland.nsi", filepath.Join(*workdir, "worldland.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
@@ -981,7 +981,7 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
-	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("worldland-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
 	if err != nil {
 		log.Fatalf("Failed to convert installer file path: %v", err)
 	}
@@ -991,7 +991,7 @@ func doWindowsInstaller(cmdline []string) {
 		"/DMINORVERSION="+version[1],
 		"/DBUILDVERSION="+version[2],
 		"/DARCH="+*arch,
-		filepath.Join(*workdir, "geth.nsi"),
+		filepath.Join(*workdir, "worldland.nsi"),
 	)
 	// Sign and publish installer.
 	if err := archiveUpload(installer, *upload, *signer, *signify); err != nil {

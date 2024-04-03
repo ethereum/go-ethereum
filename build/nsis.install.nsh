@@ -1,4 +1,4 @@
-Name "geth ${MAJORVERSION}.${MINORVERSION}.${BUILDVERSION}" # VERSION variables set through command line arguments
+Name "worldland ${MAJORVERSION}.${MINORVERSION}.${BUILDVERSION}" # VERSION variables set through command line arguments
 InstallDir "$InstDir"
 OutFile "${OUTPUTFILE}" # set through command line arguments
 
@@ -12,30 +12,30 @@ PageEx license
   LicenseData {{.License}}
 PageExEnd
 
-# Install geth binary
-Section "Geth" GETH_IDX
+# Install worldland binary
+Section "Worldland" WORLDLAND_IDX
   SetOutPath $INSTDIR
-  file {{.Geth}}
+  file {{.Worldland}}
 
   # Create start menu launcher
   createDirectory "$SMPROGRAMS\${APPNAME}"
-  createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\geth.exe"
-  createShortCut "$SMPROGRAMS\${APPNAME}\Attach.lnk" "$INSTDIR\geth.exe" "attach"
+  createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\worldland.exe"
+  createShortCut "$SMPROGRAMS\${APPNAME}\Attach.lnk" "$INSTDIR\worldland.exe" "attach"
   createShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
   # Firewall - remove rules (if exists)
-  SimpleFC::AdvRemoveRule "Geth incoming peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth outgoing peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth UDP discovery (UDP:30303)"
+  SimpleFC::AdvRemoveRule "WorldLand incoming peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "WorldLand outgoing peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "WorldLand UDP discovery (UDP:30303)"
 
   # Firewall - add rules
-  SimpleFC::AdvAddRule "Geth incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" 30303 "" "" ""
-  SimpleFC::AdvAddRule "Geth outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 30303 "" ""
-  SimpleFC::AdvAddRule "Geth UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 30303 "" ""
+  SimpleFC::AdvAddRule "WorldLand incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\worldland.exe" "" "" "WorldLand" 30303 "" "" ""
+  SimpleFC::AdvAddRule "WorldLand outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\worldland.exe" "" "" "WorldLand" "" 30303 "" ""
+  SimpleFC::AdvAddRule "WorldLand UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\worldland.exe" "" "" "WorldLand" "" 30303 "" ""
 
   # Set default IPC endpoint (https://github.com/ethereum/EIPs/issues/147)
-  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
-  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\geth.ipc"
+  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\worldland.ipc"
+  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\worldland.ipc"
 
   # Add instdir to PATH
   Push "$INSTDIR"
@@ -54,8 +54,8 @@ Var GetInstalledSize.total
 Function GetInstalledSize
   StrCpy $GetInstalledSize.total 0
 
-  ${if} ${SectionIsSelected} ${GETH_IDX}
-    SectionGetSize ${GETH_IDX} $0
+  ${if} ${SectionIsSelected} ${WORLDLAND_IDX}
+    SectionGetSize ${WORLDLAND_IDX} $0
     IntOp $GetInstalledSize.total $GetInstalledSize.total + $0
   ${endif}
 
