@@ -78,14 +78,14 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 		logger: logger,
 	}
 	return &tracing.Hooks{
-		OnBlockStart:    t.OnBlockStart,
-		OnBlockEnd:      t.OnBlockEnd,
-		OnGenesisBlock:  t.OnGenesisBlock,
-		OnTxStart:       t.OnTxStart,
-		OnBalanceChange: t.OnBalanceChange,
-		OnEnter:         t.OnEnter,
-		OnExit:          t.OnExit,
-		OnTerminate:     t.OnTerminate,
+		OnBlockStart:          t.OnBlockStart,
+		OnBlockEnd:            t.OnBlockEnd,
+		OnGenesisBlock:        t.OnGenesisBlock,
+		OnTxStart:             t.OnTxStart,
+		OnBalanceChange:       t.OnBalanceChange,
+		OnEnter:               t.OnEnter,
+		OnExit:                t.OnExit,
+		OnBlockchainTerminate: t.OnBlockchainTerminate,
 	}, nil
 }
 
@@ -230,7 +230,7 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 	s.txCallstack[size-1].calls = append(s.txCallstack[size-1].calls, call)
 }
 
-func (s *supply) OnTerminate() {
+func (s *supply) OnBlockchainTerminate() {
 	if err := s.logger.Close(); err != nil {
 		log.Warn("failed to close supply tracer log file", "error", err)
 	}

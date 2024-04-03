@@ -107,6 +107,9 @@ type (
 	// BlockchainInitHook is called when the blockchain is initialized.
 	BlockchainInitHook = func(chainConfig *params.ChainConfig)
 
+	// BlockchainTerminateHook is called when the tracer is terminated.
+	BlockchainTerminateHook = func()
+
 	// BlockStartHook is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
 	BlockStartHook = func(event BlockEvent)
@@ -140,9 +143,6 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
-
-	// TerminateHook is called when the tracer is terminated.
-	TerminateHook = func()
 )
 
 type Hooks struct {
@@ -155,18 +155,18 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit BlockchainInitHook
-	OnBlockStart     BlockStartHook
-	OnBlockEnd       BlockEndHook
-	OnSkippedBlock   SkippedBlockHook
-	OnGenesisBlock   GenesisBlockHook
+	OnBlockchainInit      BlockchainInitHook
+	OnBlockchainTerminate BlockchainTerminateHook
+	OnBlockStart          BlockStartHook
+	OnBlockEnd            BlockEndHook
+	OnSkippedBlock        SkippedBlockHook
+	OnGenesisBlock        GenesisBlockHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
-	OnTerminate     TerminateHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

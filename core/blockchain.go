@@ -1172,8 +1172,8 @@ func (bc *BlockChain) Stop() {
 		log.Error("Failed to close trie database", "err", err)
 	}
 	// Allow tracers to clean-up and release resources.
-	if bc.vmConfig.Tracer != nil && bc.vmConfig.Tracer.OnTerminate != nil {
-		bc.vmConfig.Tracer.OnTerminate()
+	if bc.vmConfig.Tracer != nil && bc.vmConfig.Tracer.OnBlockchainTerminate != nil {
+		bc.vmConfig.Tracer.OnBlockchainTerminate()
 	}
 	log.Info("Blockchain stopped")
 }
