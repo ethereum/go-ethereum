@@ -72,6 +72,7 @@ require (
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.21.0
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.18.0
 	golang.org/x/text v0.14.0
@@ -145,10 +146,11 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/protolambda/zrnt v0.32.2 => github.com/optimism-java/zrnt v0.32.4-0.20240402113914-188558bfad88
