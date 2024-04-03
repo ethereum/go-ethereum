@@ -1,9 +1,6 @@
 name: Integration examples
 
-on:
-  push:
-    branches: [main]
-  pull_request:
+on: workflow_dispatch
 
 jobs:
   suapp-examples:
@@ -30,7 +27,7 @@ jobs:
         with:
           repository: flashbots/suapp-examples
           path: suapp-examples
-      
+
       - name: Build suapp-examples
         run: |
           cd suapp-examples
