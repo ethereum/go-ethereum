@@ -19,6 +19,7 @@ package state
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"sort"
@@ -750,9 +751,8 @@ func (s *StateDB) Copy() *StateDB {
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	// Deep copy the destruction markers.
-	for addr, value := range s.stateObjectsDestruct {
-		state.stateObjectsDestruct[addr] = value
-	}
+	state.stateObjectsDestruct = maps.Clone(s.stateObjectsDestruct)
+
 	// Deep copy the state changes made in the scope of block
 	// along with their original values.
 	state.accounts = copySet(s.accounts)
@@ -770,9 +770,7 @@ func (s *StateDB) Copy() *StateDB {
 		state.logs[hash] = cpy
 	}
 	// Deep copy the preimages occurred in the scope of block
-	for hash, preimage := range s.preimages {
-		state.preimages[hash] = preimage
-	}
+	state.preimages = maps.Clone(s.preimages)
 	// Do we need to copy the access list and transient storage?
 	// In practice: No. At the start of a transaction, these two lists are empty.
 	// In practice, we only ever copy state _between_ transactions/blocks, never
