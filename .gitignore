@@ -21,6 +21,10 @@ build/_vendor/pkg
 *~
 .project
 .settings
+.git
+
+# hardhat private keys
+hardhat.config.js
 
 # used by the Makefile
 /build/_workspace/
