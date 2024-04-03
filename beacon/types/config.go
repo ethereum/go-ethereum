@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -109,10 +110,10 @@ func (f Forks) SigningRoot(header Header) (common.Hash, error) {
 func (f Forks) Len() int      { return len(f) }
 func (f Forks) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
 func (f Forks) Less(i, j int) bool {
-	if f[i].knownIndex != f[j].knownIndex {
-		return f[i].knownIndex < f[j].knownIndex
+	if f[i].Epoch != f[j].Epoch {
+		return f[i].Epoch < f[j].Epoch
 	}
-	return f[i].Epoch < f[j].Epoch
+	return f[i].knownIndex < f[j].knownIndex
 }
 
 // ChainConfig contains the beacon chain configuration.
@@ -134,12 +135,9 @@ func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
 
 // AddFork adds a new item to the list of forks.
 func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
-	knownIndex := math.MaxInt
-	for i, fname := range knownForks {
-		if name == fname {
-			knownIndex = i
-			break
-		}
+	knownIndex := slices.Index(knownForks, name)
+	if knownIndex == -1 {
+		knownIndex = math.MaxInt // assume that the unknown fork happens after the known ones
 	}
 	if knownIndex == math.MaxInt && epoch != math.MaxUint64 {
 		log.Warn("Unknown fork in config.yaml", "fork name", name, "known forks", knownForks)
