@@ -66,7 +66,7 @@ type callTrace struct {
 // callTracerTest defines a single test to check the call tracer against.
 type callTracerTest struct {
 	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
+	Context      *traceContext   `json:"context"`
 	Input        string          `json:"input"`
 	TracerConfig json.RawMessage `json:"tracerConfig"`
 	Result       *callTrace      `json:"result"`

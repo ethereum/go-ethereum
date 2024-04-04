@@ -78,7 +78,7 @@ type flatCallTraceResult struct {
 // flatCallTracerTest defines a single test to check the call tracer against.
 type flatCallTracerTest struct {
 	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
+	Context      *traceContext   `json:"context"`
 	Input        string          `json:"input"`
 	TracerConfig json.RawMessage `json:"tracerConfig"`
 	Result       []flatCallTrace `json:"result"`
