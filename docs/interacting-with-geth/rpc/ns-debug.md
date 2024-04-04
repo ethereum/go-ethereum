@@ -690,7 +690,21 @@ In addition to the hash of the transaction you may give it a secondary _optional
 - `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
 - `timeout`: `STRING`. Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 - `reexec`: `UINT64`. The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128).
-- `tracerConfig`: Config for the specified `tracer`. For example see [callTracer's config](/docs/developers/evm-tracing/built-in-tracers#call-tracer-config).
+- `tracerConfig`: Config for the specified `tracer`, see in below:
+
+| field              | type      | description                                                                                                | tracer     |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------- | ---------- |
+| `enableMemory`     | `BOOL`    | Enable memory capture (default = false)                                                                    | `opcode`   |
+| `disableStack`     | `BOOL`    | Disable stack capture (default = false)                                                                    | `opcode`   |
+| `disableStorage`   | `BOOL`    | Disable storage capture (default = false)                                                                  | `opcode`   |
+| `enableReturnData` | `BOOL`    | Enable return data capture (default = false)                                                               | `opcode`   |
+| `debug`            | `BOOL`    | Print output during capture end (default = false)                                                          | `opcode`   |
+| `limit`            | `INTEGER` | Limit the number of steps captured (default = 0, no limit)                                                 | `opcode`   |
+| --                 | --        | --                                                                                                         | --         |
+| `diffMode`         | `BOOL`    | Enable diff mode, capture pre and post state (default = false, only capture the pre state)                 | `prestate` |
+| --                 | --        | --                                                                                                         | --         |
+| `onlyTopCall`      | `BOOL`    | Instructs the tracer to only process the main (top-level) call and none of the sub-calls (default = false) | `call`     |
+| `withLog`          | `BOOL`    | Instructs the tracer to also collect the logs emitted during each call (default = false)                   | `call`     |
 
 Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
 
