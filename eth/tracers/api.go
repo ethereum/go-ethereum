@@ -622,6 +622,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 		res, err := api.traceTx(ctx, msg, txctx, blockCtx, statedb, config)
 		if err != nil {
+			fmt.Printf("DEBUG - traceBlock traceTx err - tx %+v err %+v\n", tx.Hash(), err)
 			return nil, err
 		}
 		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
