@@ -19,6 +19,7 @@ package blsync
 import (
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -117,15 +118,32 @@ func (s *beaconBlockSync) updateEventFeed() {
 	if !ok {
 		return
 	}
-	finality, ok := s.headTracker.ValidatedFinality() //TODO fetch directly if subscription does not deliver
-	if !ok || head.Header.Epoch() != finality.Attested.Header.Epoch() {
-		return
-	}
+
 	validatedHead := head.Header.Hash()
 	headBlock, ok := s.recentBlocks.Get(validatedHead)
 	if !ok {
 		return
 	}
+
+	var finalizedHash common.Hash
+	if finality, ok := s.headTracker.ValidatedFinality(); ok {
+		if he, fe := head.Header.Epoch(), finality.Attested.Header.Epoch(); he == fe {
+			finalizedHash = finality.Finalized.PayloadHeader.BlockHash()
+		} else {
+			if he < fe {
+				return // finality proof arrived earlier, wait for head update
+			}
+			if he == fe+1 {
+				if parent, ok := s.recentBlocks.Get(head.Header.ParentRoot); !ok ||
+					parent.Slot()/params.EpochLength == fe {
+					return // head is at first slot of next epoch, wait for finality update
+					//TODO trt to fetch finality update directly if subscription does not deliver
+				}
+
+			}
+		}
+	}
+
 	headInfo := blockHeadInfo(headBlock)
 	if headInfo == s.lastHeadInfo {
 		return
@@ -141,6 +159,6 @@ func (s *beaconBlockSync) updateEventFeed() {
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
 		BeaconHead: head.Header,
 		Block:      execBlock,
-		Finalized:  finality.Finalized.PayloadHeader.BlockHash(),
+		Finalized:  finalizedHash,
 	})
 }
