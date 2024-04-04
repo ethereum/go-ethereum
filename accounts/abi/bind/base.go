@@ -54,16 +54,20 @@ type CallOpts struct {
 
 // TransactOpts is the collection of authorization data required to create a
 // valid Ethereum transaction.
+// TransactOpts는 유효한 이더리움 트랜잭션을 생성하기 위해 필요한 authorization data의 집합이다.
 type TransactOpts struct {
 	From   common.Address // Ethereum account to send the transaction from
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
+	// 트랜잭션 사인에 사용하는 메소드
 
 	Value     *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
 	GasPrice  *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
 	GasFeeCap *big.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
+	// 1559 transaction을 실행하기 위해 필요한 최대 가스 한도
 	GasTipCap *big.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
-	GasLimit  uint64   // Gas limit to set for the transaction execution (0 = estimate)
+	// 1559 transaction을 실행하기 위해 필요한 최대 가스 팁 한도
+	GasLimit uint64 // Gas limit to set for the transaction execution (0 = estimate)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -112,6 +116,9 @@ func (m *MetaData) GetAbi() (*abi.ABI, error) {
 // BoundContract is the base wrapper object that reflects a contract on the
 // Ethereum network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
+// BoundContract는 이더리움 네트워크에 컨트랙트를 반영시키는 wrapper 객체입니다.
+// 이는 상위레벨의 컨트랙트가 실행될 수 있도록 연결하는데 사용되는 메소드의 집합을 포함합니다.
+// 쉽게 생각하면 smart contract <=> 이더리움 간의 호환을 위한 객체
 type BoundContract struct {
 	address    common.Address     // Deployment address of the contract on the Ethereum blockchain
 	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
@@ -385,8 +392,10 @@ func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {
 
 // transact executes an actual transaction invocation, first deriving any missing
 // authorization fields, and then scheduling the transaction for execution.
+// transact는 실제 트랜잭션 호출을 실행하고, 먼저 누락된 authorization 필드를 도출한 다음 트랜잭션을 실행하도록 스케줄링합니다.
 func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
 	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
+		// 트랜잭션은 GasPrice 혹은 (GasFeeCap or GasTipCap) 중 하나는 지정되어 있어야 합니다.
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Create the transaction
@@ -395,11 +404,15 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		err   error
 	)
 	if opts.GasPrice != nil {
+		// GasPrice가 설정되어 있으면 legacy transaction 실행을 실행합니다.
 		rawTx, err = c.createLegacyTx(opts, contract, input)
 	} else if opts.GasFeeCap != nil && opts.GasTipCap != nil {
+		// GasFeeCap, GasTipCap 모두 설정되어 있으면 EIP-1559 transaction을 실행합니다.
 		rawTx, err = c.createDynamicTx(opts, contract, input, nil)
 	} else {
 		// Only query for basefee if gasPrice not specified
+		// gasPrice가 지정되지 않으면 baseFee만 쿼리하고, baseFee 존재시 EIP-1559 transaction, 없으면 legacy transaction을 실행합니다.
+		// 사용자가 명시적으로 가스 관련한 field를 지정하지 않았을때 네트워크 config에 맞게 자동으로 트랜잭션 유형을 결정하기 위한 조건입니다.
 		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); errHead != nil {
 			return nil, errHead
 		} else if head.BaseFee != nil {

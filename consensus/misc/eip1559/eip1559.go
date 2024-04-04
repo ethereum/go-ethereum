@@ -62,7 +62,8 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
 	// 현재 블록이 EIP-1559의 첫번째 블록이면, InitialBaseFee를 반환한다.
-	// -----런던인지 검사하는데 첫번째 블록과 어떤 관련성 있는지?
+	// -----Config가 런던인지 검사하는데 첫번째 블록과 어떤 관련성 있는지?
+	// ----->EIP-1559는 런던 하드포크에서 시행됨, 즉 런던 하드포크의 첫번째 블록부터 BaseFee시행
 	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}

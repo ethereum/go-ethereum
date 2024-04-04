@@ -52,9 +52,11 @@ const (
 )
 
 // Transaction is an Ethereum transaction.
+// 이더리움의 트랜잭션 구조체
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
+	//로컬 시간 사용
 
 	// caches
 	hash atomic.Value
