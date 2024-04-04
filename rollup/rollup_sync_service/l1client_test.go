@@ -26,11 +26,11 @@ func TestL1Client(t *testing.T) {
 	l1Client, err := newL1Client(ctx, mockClient, 11155111, scrollChainAddress, scrollChainABI)
 	require.NoError(t, err, "Failed to initialize L1Client")
 
-	blockNumber, err := l1Client.getLatestFinalizedBlockNumber(ctx)
+	blockNumber, err := l1Client.getLatestFinalizedBlockNumber()
 	assert.NoError(t, err, "Error getting latest confirmed block number")
 	assert.Equal(t, uint64(36), blockNumber, "Unexpected block number")
 
-	logs, err := l1Client.fetchRollupEventsInRange(ctx, 0, blockNumber)
+	logs, err := l1Client.fetchRollupEventsInRange(0, blockNumber)
 	assert.NoError(t, err, "Error fetching rollup events in range")
 	assert.Empty(t, logs, "Expected no logs from fetchRollupEventsInRange")
 }
