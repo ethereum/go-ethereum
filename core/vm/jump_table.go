@@ -87,6 +87,11 @@ func newVerkleInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
+func newPraugeInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	return validate(instructionSet)
+}
+
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)

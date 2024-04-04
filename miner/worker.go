@@ -200,6 +200,9 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
+	if miner.chainConfig.IsPrague(header.Number, header.Time) {
+		core.ProcessBlockHashHistory(env.state, header, miner.chainConfig, miner.chain)
+	}
 	return env, nil
 }
 

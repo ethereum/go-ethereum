@@ -196,6 +196,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
+	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+		// insert all parent hashes in the contract
+		for i, h := range pre.Env.BlockHashes {
+			n := uint64(i)
+			if n >= pre.Env.Number || pre.Env.Number > (n+params.HistoryServeWindow) {
+				continue
+			}
+			core.ProcessParentBlockHash(statedb, n, h)
+		}
+	}
 
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()

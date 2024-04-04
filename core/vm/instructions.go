@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -434,16 +435,27 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
-
+	historySize := uint64(256)
+	isPrague := interpreter.evm.ChainConfig().IsPrague(interpreter.evm.Context.BlockNumber, interpreter.evm.Context.Time)
+	// EIP-2935 extends the observable history window.
+	if isPrague {
+		historySize = params.HistoryServeWindow
+	}
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
-	if upper < 257 {
+	if upper < historySize+1 {
 		lower = 0
 	} else {
-		lower = upper - 256
+		lower = upper - historySize
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		if isPrague {
+			var key common.Hash
+			binary.BigEndian.PutUint64(key[24:], num64 % params.HistoryServeWindow)
+			num.SetBytes(interpreter.evm.StateDB.GetState(params.HistoryStorageAddress, key).Bytes())
+		} else {
+			num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		}
 	} else {
 		num.Clear()
 	}
