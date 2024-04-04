@@ -43,13 +43,10 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage"`
 }
 
-// testcase defines a single test to check the stateDiff tracer against.
-type testcase struct {
-	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *traceContext   `json:"context"`
-	Input        string          `json:"input"`
-	TracerConfig json.RawMessage `json:"tracerConfig"`
-	Result       interface{}     `json:"result"`
+// prestateTracerTest defines a single test to check the stateDiff tracer against.
+type prestateTracerTest struct {
+	tracerTestEnv
+	Result interface{} `json:"result"`
 }
 
 func TestPrestateTracerLegacy(t *testing.T) {
@@ -77,7 +74,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			t.Parallel()
 
 			var (
-				test = new(testcase)
+				test = new(prestateTracerTest)
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk

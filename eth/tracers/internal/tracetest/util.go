@@ -17,6 +17,7 @@
 package tracetest
 
 import (
+	"encoding/json"
 	"math/big"
 	"strings"
 	"unicode"
@@ -77,4 +78,12 @@ func (c *traceContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 		context.BlobBaseFee = eip4844.CalcBlobFee(genesis.Config, header)
 	}
 	return context
+}
+
+// tracerTestEnv defines a tracer test required fields
+type tracerTestEnv struct {
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *traceContext   `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
 }
