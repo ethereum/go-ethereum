@@ -96,6 +96,9 @@ nfpms:
       - src: builder/files/genesis-testnet-v4.json
         dst: /etc/bor/genesis-testnet-v4.json
         type: config
+      - src: builder/files/genesis-amoy.json
+        dst: /etc/bor/genesis-amoy.json
+        type: config
       - src: builder/files/config.toml
         dst: /var/lib/bor/config.toml
         type: config
@@ -119,6 +122,7 @@ dockers:
     extra_files:
       - builder/files/genesis-mainnet-v1.json
       - builder/files/genesis-testnet-v4.json
+      - builder/files/genesis-amoy.json
 
   - image_templates:
       - 0xpolygon/{{ .ProjectName }}:{{ .Version }}-arm64
@@ -132,6 +136,7 @@ dockers:
     extra_files:
       - builder/files/genesis-mainnet-v1.json
       - builder/files/genesis-testnet-v4.json
+      - builder/files/genesis-amoy.json
 
 docker_manifests:
   - name_template: 0xpolygon/{{ .ProjectName }}:{{ .Version }}
