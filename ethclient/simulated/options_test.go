@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -31,7 +32,7 @@ import (
 // and that it keeps the same target value.
 func TestWithBlockGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
-	sim := NewBackend(core.GenesisAlloc{}, WithBlockGasLimit(12_345_678))
+	sim := NewBackend(types.GenesisAlloc{}, WithBlockGasLimit(12_345_678))
 	defer sim.Close()
 
 	client := sim.Client()
@@ -56,7 +57,7 @@ func TestWithBlockGasLimitOption(t *testing.T) {
 // Tests that the simulator honors the RPC call caps set by the options.
 func TestWithCallGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
-	sim := NewBackend(core.GenesisAlloc{
+	sim := NewBackend(types.GenesisAlloc{
 		testAddr: {Balance: big.NewInt(10000000000000000)},
 	}, WithCallGasLimit(params.TxGas-1))
 	defer sim.Close()

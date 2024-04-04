@@ -35,14 +35,14 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
-	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
-	MaxHeaderFetch  = 192 // Amount of block headers to be fetched per retrieval request
-	MaxSkeletonSize = 128 // Number of header fetches to need for a skeleton assembly
-	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
+	MaxBlockFetch   = 128 // Number of blocks to be fetched per retrieval request
+	MaxHeaderFetch  = 192 // Number of block headers to be fetched per retrieval request
+	MaxSkeletonSize = 128 // Number of header fetches needed for a skeleton assembly
+	MaxReceiptFetch = 256 // Number of transaction receipts to allow fetching per request
 
 	maxQueuedHeaders            = 32 * 1024                         // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess           = 2048                              // Number of header download results to import at once into the chain
@@ -212,7 +212,7 @@ type BlockChain interface {
 
 	// TrieDB retrieves the low level trie database used for interacting
 	// with trie nodes.
-	TrieDB() *trie.Database
+	TrieDB() *triedb.Database
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
@@ -611,6 +611,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			if err := d.lightchain.SetHead(origin); err != nil {
 				return err
 			}
+			log.Info("Truncated excess ancient chain segment", "oldhead", frozen-1, "newhead", origin)
 		}
 	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm

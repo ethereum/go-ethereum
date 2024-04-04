@@ -137,7 +137,7 @@ func (s *SessionManager) NewSession(ctx context.Context, args *api.BuildBlockArg
 }
 
 func (s *SessionManager) getSession(sessionId string, allowOnTheFlySession bool) (*miner.Builder, error) {
-	if sessionId == "" {
+	if sessionId == "" && allowOnTheFlySession {
 		return s.newBuilder(&api.BuildBlockArgs{})
 	}
 

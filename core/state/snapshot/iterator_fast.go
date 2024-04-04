@@ -19,10 +19,10 @@ package snapshot
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise

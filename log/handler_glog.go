@@ -20,14 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"golang.org/x/exp/slog"
 )
 
 // errVmoduleSyntax is returned when a user vmodule pattern is invalid.
@@ -192,7 +191,7 @@ func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 		frame, _ := fs.Next()
 
 		for _, rule := range h.patterns {
-			if rule.pattern.MatchString(fmt.Sprintf("%+s", frame.File)) {
+			if rule.pattern.MatchString(fmt.Sprintf("+%s", frame.File)) {
 				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
 			}
 		}

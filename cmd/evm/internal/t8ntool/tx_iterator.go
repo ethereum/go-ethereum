@@ -127,7 +127,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 			return newRlpTxIterator(body), nil
 		}
 		if err := json.Unmarshal(data, &txsWithKeys); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshalling txs-file: %v", err))
 		}
 	} else {
 		if len(inputData.TxRlp) > 0 {

@@ -142,7 +142,8 @@ type testBackend struct {
 
 func (tb *testBackend) newTransfer(t *testing.T, to common.Address, amount *big.Int) *types.Transaction {
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
-	tx, _ := types.SignTx(types.NewTransaction(tb.pool.Nonce(testBankAddress), to, amount, params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	tx, err := types.SignTx(types.NewTransaction(tb.pool.Nonce(testBankAddress), to, amount, params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
+	require.NoError(t, err)
 	return tx
 }
 
@@ -174,7 +175,7 @@ func newTestBackend(t *testing.T) *testBackend {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}
 	pool := legacypool.New(testTxPoolConfig, chain)
-	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), chain, []txpool.SubPool{pool})
+	txpool, _ := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{pool})
 
 	return &testBackend{chain: chain, pool: txpool}
 }

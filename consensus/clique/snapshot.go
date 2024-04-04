@@ -19,6 +19,7 @@ package clique
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the

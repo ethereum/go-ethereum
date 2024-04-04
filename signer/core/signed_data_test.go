@@ -671,7 +671,7 @@ func TestGnosisTypedDataWithChainId(t *testing.T) {
 	}
 }
 
-// TestGnosisCustomData tests the scenario where a user submits only the gnosis-safe
+// TestGnosisCustomDataWithChainId tests the scenario where a user submits only the gnosis-safe
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomDataWithChainId(t *testing.T) {
 	t.Parallel()

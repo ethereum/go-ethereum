@@ -2201,7 +2201,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// If the chunk's root is an overflown but full delivery,
 			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
-			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
+			if root == res.subTask.root && rawdb.HasTrieNode(s.db, accountHash, nil, root, s.scheme) {
 				for i, account := range res.mainTask.res.hashes {
 					if account == accountHash {
 						res.mainTask.needHeal[i] = false

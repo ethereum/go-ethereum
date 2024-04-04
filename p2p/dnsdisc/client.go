@@ -191,7 +191,7 @@ func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, 
 func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry, error) {
 	wantHash, err := b32format.DecodeString(hash)
 	if err != nil {
-		return nil, fmt.Errorf("invalid base32 hash")
+		return nil, errors.New("invalid base32 hash")
 	}
 	name := hash + "." + domain
 	txts, err := c.cfg.Resolver.LookupTXT(ctx, hash+"."+domain)

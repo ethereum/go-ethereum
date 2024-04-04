@@ -242,7 +242,7 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 	if headerStr == stdinSelector || ommersStr == stdinSelector || txsStr == stdinSelector || cliqueStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if cliqueStr != stdinSelector && cliqueStr != "" {

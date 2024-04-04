@@ -24,9 +24,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/internal"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -36,13 +39,14 @@ func init() {
 	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
-type state = map[common.Address]*account
+type stateMap = map[common.Address]*account
 
 type account struct {
 	Balance *big.Int                    `json:"balance,omitempty"`
 	Code    []byte                      `json:"code,omitempty"`
 	Nonce   uint64                      `json:"nonce,omitempty"`
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	empty   bool
 }
 
 func (a *account) exists() bool {
@@ -55,13 +59,10 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	noopTracer
-	env       *vm.EVM
-	pre       state
-	post      state
-	create    bool
+	env       *tracing.VMContext
+	pre       stateMap
+	post      stateMap
 	to        common.Address
-	gasLimit  uint64 // Amount of gas bought for the whole tx
 	config    prestateTracerConfig
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -73,67 +74,33 @@ type prestateTracerConfig struct {
 	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
-func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	return &prestateTracer{
-		pre:     state{},
-		post:    state{},
+	t := &prestateTracer{
+		pre:     stateMap{},
+		post:    stateMap{},
 		config:  config,
 		created: make(map[common.Address]bool),
 		deleted: make(map[common.Address]bool),
+	}
+	return &tracers.Tracer{
+		Hooks: &tracing.Hooks{
+			OnTxStart: t.OnTxStart,
+			OnTxEnd:   t.OnTxEnd,
+			OnOpcode:  t.OnOpcode,
+		},
+		GetResult: t.GetResult,
+		Stop:      t.Stop,
 	}, nil
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
-	t.create = create
-	t.to = to
-
-	t.lookupAccount(from)
-	t.lookupAccount(to)
-	t.lookupAccount(env.Context.Coinbase)
-
-	// The recipient balance includes the value transferred.
-	toBal := new(big.Int).Sub(t.pre[to].Balance, value)
-	t.pre[to].Balance = toBal
-
-	// The sender balance is after reducing: value and gasLimit.
-	// We need to re-add them to get the pre-tx balance.
-	fromBal := new(big.Int).Set(t.pre[from].Balance)
-	gasPrice := env.TxContext.GasPrice
-	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
-	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
-	t.pre[from].Balance = fromBal
-	t.pre[from].Nonce--
-
-	if create && t.config.DiffMode {
-		t.created[to] = true
-	}
-}
-
-// CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	if t.config.DiffMode {
-		return
-	}
-
-	if t.create {
-		// Keep existing account prior to contract creation at that address
-		if s := t.pre[t.to]; s != nil && !s.exists() {
-			// Exclude newly created contract.
-			delete(t.pre, t.to)
-		}
-	}
-}
-
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+// OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
+func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -141,10 +108,10 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	if t.interrupt.Load() {
 		return
 	}
-	stack := scope.Stack
-	stackData := stack.Data()
+	op := vm.OpCode(opcode)
+	stackData := scope.StackData()
 	stackLen := len(stackData)
-	caller := scope.Contract.Address()
+	caller := scope.Address()
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
@@ -166,7 +133,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init, err := tracers.GetMemoryCopyPadded(scope.Memory, int64(offset.Uint64()), int64(size.Uint64()))
+		init, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(offset.Uint64()), int64(size.Uint64()))
 		if err != nil {
 			log.Warn("failed to copy CREATE2 input", "err", err, "tracer", "prestateTracer", "offset", offset, "size", size)
 			return
@@ -179,15 +146,62 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	}
 }
 
-func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
-	t.gasLimit = gasLimit
-}
-
-func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
-	if !t.config.DiffMode {
-		return
+func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.env = env
+	if tx.To() == nil {
+		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
+		t.created[t.to] = true
+	} else {
+		t.to = *tx.To()
 	}
 
+	t.lookupAccount(from)
+	t.lookupAccount(t.to)
+	t.lookupAccount(env.Coinbase)
+}
+
+func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if err != nil {
+		return
+	}
+	if t.config.DiffMode {
+		t.processDiffState()
+	}
+	// the new created contracts' prestate were empty, so delete them
+	for a := range t.created {
+		// the created contract maybe exists in statedb before the creating tx
+		if s := t.pre[a]; s != nil && s.empty {
+			delete(t.pre, a)
+		}
+	}
+}
+
+// GetResult returns the json-encoded nested list of call traces, and any
+// error arising from the encoding or forceful termination (via `Stop`).
+func (t *prestateTracer) GetResult() (json.RawMessage, error) {
+	var res []byte
+	var err error
+	if t.config.DiffMode {
+		res, err = json.Marshal(struct {
+			Post stateMap `json:"post"`
+			Pre  stateMap `json:"pre"`
+		}{t.post, t.pre})
+	} else {
+		res, err = json.Marshal(t.pre)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(res), t.reason
+}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (t *prestateTracer) Stop(err error) {
+	t.reason = err
+	t.interrupt.Store(true)
+}
+
+func (t *prestateTracer) processDiffState() {
 	for addr, state := range t.pre {
 		// The deleted account's state is pruned from `post` but kept in `pre`
 		if _, ok := t.deleted[addr]; ok {
@@ -195,7 +209,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		}
 		modified := false
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
-		newBalance := t.env.StateDB.GetBalance(addr)
+		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
@@ -237,38 +251,6 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 			delete(t.pre, addr)
 		}
 	}
-	// the new created contracts' prestate were empty, so delete them
-	for a := range t.created {
-		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil && !s.exists() {
-			delete(t.pre, a)
-		}
-	}
-}
-
-// GetResult returns the json-encoded nested list of call traces, and any
-// error arising from the encoding or forceful termination (via `Stop`).
-func (t *prestateTracer) GetResult() (json.RawMessage, error) {
-	var res []byte
-	var err error
-	if t.config.DiffMode {
-		res, err = json.Marshal(struct {
-			Post state `json:"post"`
-			Pre  state `json:"pre"`
-		}{t.post, t.pre})
-	} else {
-		res, err = json.Marshal(t.pre)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(res), t.reason
-}
-
-// Stop terminates execution of the tracer at the first opportune moment.
-func (t *prestateTracer) Stop(err error) {
-	t.reason = err
-	t.interrupt.Store(true)
 }
 
 // lookupAccount fetches details of an account and adds it to the prestate
@@ -278,12 +260,16 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	t.pre[addr] = &account{
-		Balance: t.env.StateDB.GetBalance(addr),
+	acc := &account{
+		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
 		Storage: make(map[common.Hash]common.Hash),
 	}
+	if !acc.exists() {
+		acc.empty = true
+	}
+	t.pre[addr] = acc
 }
 
 // lookupStorage fetches the requested storage slot and adds
