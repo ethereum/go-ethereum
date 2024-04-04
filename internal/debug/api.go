@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -57,7 +56,7 @@ type HandlerT struct {
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	glogger.Verbosity(slog.Level(level))
+	glogger.Verbosity(log.FromLegacyLevel(level))
 }
 
 // Vmodule sets the log verbosity pattern. See package log for details on the
