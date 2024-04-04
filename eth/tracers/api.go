@@ -608,9 +608,9 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	fmt.Printf("DEBUG - traceBlock - block %+v\n", block)
 	fmt.Printf("DEBUG - traceBlock - txs %+v\n", txs)
 	for i, tx := range txs {
-		fmt.Printf("DEBUG - traceBlock inner - tx %+v\n", tx.Hash())
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		fmt.Printf("DEBUG - traceBlock inner - From %+v   tx %+v\n", msg.From, tx.Hash())
 		txctx := &Context{
 			BlockHash:   blockHash,
 			BlockNumber: block.Number(),
