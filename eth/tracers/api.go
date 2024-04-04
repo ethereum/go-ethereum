@@ -568,6 +568,7 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
+	fmt.Printf("DEBUG - traceBlock\n")
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
@@ -591,6 +592,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// in separate worker threads.
 	if config != nil && config.Tracer != nil && *config.Tracer != "" {
 		if isJS := DefaultDirectory.IsJS(*config.Tracer); isJS {
+			fmt.Printf("DEBUG - traceBlock - traceBlockParallel\n")
 			return api.traceBlockParallel(ctx, block, statedb, config)
 		}
 	}
@@ -603,7 +605,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 	)
+	fmt.Printf("DEBUG - traceBlock - block %+v\n", block)
+	fmt.Printf("DEBUG - traceBlock - txs %+v\n", txs)
 	for i, tx := range txs {
+		fmt.Printf("DEBUG - traceBlock inner - tx %+v\n", tx.Hash())
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txctx := &Context{
