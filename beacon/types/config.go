@@ -138,9 +138,9 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 	knownIndex := slices.Index(knownForks, name)
 	if knownIndex == -1 {
 		knownIndex = math.MaxInt // assume that the unknown fork happens after the known ones
-	}
-	if knownIndex == math.MaxInt && epoch != math.MaxUint64 {
-		log.Warn("Unknown fork in config.yaml", "fork name", name, "known forks", knownForks)
+		if epoch != math.MaxUint64 {
+			log.Warn("Unknown fork in config.yaml", "fork name", name, "known forks", knownForks)
+		}
 	}
 	fork := &Fork{
 		Name:       name,
@@ -149,7 +149,6 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 		knownIndex: knownIndex,
 	}
 	fork.computeDomain(c.GenesisValidatorsRoot)
-
 	c.Forks = append(c.Forks, fork)
 	sort.Sort(c.Forks)
 	return c
