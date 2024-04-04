@@ -98,7 +98,7 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 	// present), while the whole chain are requested for indexing.
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
-			// It can happen when chain is rewound to a historical point which
+			// It can happen when chain is rewound to an historical point which
 			// is even lower than the indexes tail, recap the indexing target
 			// to new head to avoid reading non-existent block bodies.
 			end := *tail

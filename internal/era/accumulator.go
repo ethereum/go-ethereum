@@ -47,7 +47,7 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 	return hh.HashRoot()
 }
 
-// headerRecord is an individual record for a historical header.
+// headerRecord is an individual record for an historical header.
 //
 // See https://github.com/ethereum/portal-network-specs/blob/master/history-network.md#the-header-accumulator
 // for more information.
