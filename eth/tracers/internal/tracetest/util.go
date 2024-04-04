@@ -25,7 +25,8 @@ func camel(str string) string {
 	return strings.Join(pieces, "")
 }
 
-type callContext struct {
+// traceContext defines a context used to construct the block context
+type traceContext struct {
 	Number     math.HexOrDecimal64   `json:"number"`
 	Difficulty *math.HexOrDecimal256 `json:"difficulty"`
 	Time       math.HexOrDecimal64   `json:"timestamp"`
@@ -34,7 +35,7 @@ type callContext struct {
 	BaseFee    *math.HexOrDecimal256 `json:"baseFeePerGas"`
 }
 
-func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
+func (c *traceContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
