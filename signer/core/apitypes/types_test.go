@@ -109,11 +109,11 @@ func TestTxArgs(t *testing.T) {
 
 func TestBlobTxs(t *testing.T) {
 	blob := kzg4844.Blob{0x1}
-	commitment, err := kzg4844.BlobToCommitment(blob)
+	commitment, err := kzg4844.BlobToCommitment(&blob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := kzg4844.ComputeBlobProof(blob, commitment)
+	proof, err := kzg4844.ComputeBlobProof(&blob, commitment)
 	if err != nil {
 		t.Fatal(err)
 	}
