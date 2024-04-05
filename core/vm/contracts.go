@@ -989,8 +989,8 @@ func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
 		return nil, err
 	}
 	elem := bls12381.G1Affine{X: x, Y: y}
-	if !elem.IsInSubGroup() {
-		return nil, errors.New("invalid point: subgroup check failed")
+	if !elem.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
 	}
 
 	return &elem, nil
