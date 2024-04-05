@@ -99,6 +99,8 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	return sig, nil
 }
 
+
+//eip2: 서명 크기 확인
 // VerifySignature checks that the given public key created signature over hash.
 // The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
 // The signature should have the 64 byte [R || S] format.
