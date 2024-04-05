@@ -15,7 +15,7 @@
 
 트랜잭션을 보내고 받는 사람 주소가 빈 문자열인 경우 차감되는 초기 가스는 현재의 경우인 21,000이 아니라 53,000에 tx 데이터의 가스 비용을 더한 금액입니다. CREATE opcode를 사용한 계약 생성은 영향을 받지 않습니다.
 
-스마트 계약을 생성하는 방식은 두개가 존재한다. 
+스마트 계약을 생성하는 방식은 두개가 존재합니다. 
 
 1. 트랜잭션 To 를 빈 주소(0x0)로 전송하는 방법: 21,000 gas
 
@@ -106,11 +106,11 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 
 최종 가스 수수료를 지불할 가스가 충분하지 않은 경우 계약 생성에 실패하면, 다음과 같은 이점이 있습니다.
 
-(i) 현재의 "성공, 실패 또는 빈 계약"의 삼분법보다는 계약 생성 프로세스의 결과에 보다 직관적인 "성공 또는 실패" 구분을 생성합니다.
+(i) 현재의 "성공, 실패 또는 빈 계약"의 결과 계약 생성 프로세스의 결과에 보다 직관적인 "성공 또는 실패" 결과만을  생성합니다.
 
-(ii) 계약 생성이 완전히 성공하지 않으면 계약 계정이 전혀 생성되지 않으므로 실패를 더 쉽게 감지할 수 있습니다. 그리고
+(ii) 계약 생성이 완전히 성공하지 않으면 계약 계정이 전혀 생성되지 않으므로 생성 실패를 더 쉽게 감지할 수 있습니다. 그리고
 
-(iii) 전체 개시 프로세스가 발생하거나 거래가 실패하고 기부금이 환불된다는 보장이 있으므로 기부금이 있는 경우 계약 생성을 더 안전하게 만듭니다.
+(iii) 거래가 실패하더라도, 가스가 환불된다는 보장이 있으므로 계약 생성을 더 안전하게 만듭니다.
 
 <b>code</b>
 ```go
@@ -132,21 +132,22 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 
 #### 4. 현재 공식에서 난이도 조정 알고리즘을 변경합니다: 
 
-$
+$$
 \text{block\_diff} = \text{parent\_diff} + \frac{\text{parent\_diff}}{2048} \times \begin{cases} 
 1, & \text{if block\_timestamp} - \text{parent\_timestamp} < 13 \\
 -1, & \text{otherwise}
 \end{cases} + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
-$
+$$
 
 를 
 
-$\text{block\_diff} = \text{parent\_diff} + \frac{\text{parent\_diff}}{2048} \times \max\left(1 - \frac{\text{block\_timestamp} - \text{parent\_timestamp}}{10}, -99\right) + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
-$
+$$
+\text{block\_diff} = \text{parent\_diff} + \frac{\text{parent\_diff}}{2048} \times \max\left(1 - \frac{\text{block\_timestamp} - \text{parent\_timestamp}}{10}, -99\right) + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
+$$
 
 로 변경합니다. 최소 난이도는 그대로 유지되며 최소 난이도 아래로는 변경되지 않습니다. 
 
-기존의 난이도 알고리즘은 네트워크의 해시레이크가 급격하게 변하는 경우, 빠르게 이에 적응하는 것이 어렵습니다. 때문에 2015년 9월 이더리움 프로토콜에서 과도한 수의 채굴자가 $parent_{timestamp} + 1$ 의 타임스탬프 값(1초의 블록 생성 시간을)을 가지는 블록들을 채굴하던 문제가 있었고, 이는 블록 시간 분포를 왜곡 시켰습니다.
+기존의 난이도 알고리즘은 네트워크의 해시레이크가 급격하게 변하는 경우, 빠르게 이에 적응하는 것이 어렵습니다. 때문에 2015년 9월 이더리움 프로토콜에서 과도한 수의 채굴자가 $\text{parent\_timestamp} + 1$ 의 타임스탬프 값(1초의 블록 생성 시간을)을 가지는 블록들을 채굴하던 문제가 있었고, 이는 블록 시간 분포를 왜곡 시켰습니다.
 
 
 
