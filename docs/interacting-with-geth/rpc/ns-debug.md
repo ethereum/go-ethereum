@@ -362,9 +362,9 @@ For example the value `0s` will essentially turn on archive mode. If set to `1h`
 
 Returns a printed representation of the stacks of all goroutines. Note that the web3 wrapper for this method takes care of the printing and does not return the string.
 
-| Client  | Method invocation                          |
-| :------ | ------------------------------------------ |
-| Console | `debug.stacks(filter *string)`                           |
+| Client  | Method invocation                                |
+| :------ | ------------------------------------------------ |
+| Console | `debug.stacks(filter *string)`                   |
 | RPC     | `{"method": "debug_stacks", "params": [filter]}` |
 
 ### debug_standardTraceBlockToFile
@@ -455,7 +455,7 @@ Stops writing the Go runtime trace.
 
 | Client  | Method invocation                               |
 | :------ | ----------------------------------------------- |
-| Console | `debug.stopGoTrace()`                      |
+| Console | `debug.stopGoTrace()`                           |
 | RPC     | `{"method": "debug_stopGoTrace", "params": []}` |
 
 ### debug_storageRangeAt
@@ -579,13 +579,21 @@ References:
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceConfig](#traceconfig). The method returns the same output as `debug_traceTransaction`.
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceCallConfig](#tracecallconfig). The method returns the same output as `debug_traceTransaction`.
 
-| Client  | Method invocation                                                                                                           |
-| :-----: | --------------------------------------------------------------------------------------------------------------------------- |
-|   Go    | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
-| Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                         |
-|   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                      |
+| Client  | Method invocation                                                                                                               |
+| :-----: | ------------------------------------------------------------------------------------------------------------------------------- |
+|   Go    | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                             |
+|   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                          |
+
+#### TraceCallConfig
+
+TraceCallConfig is a superset of [TraceConfig](#traceconfig), providing additional arguments in addition to those provided by [TraceConfig](#traceconfig):
+
+- `stateOverrides`: `StateOverride`. Overrides for the state data (accounts/storage) for the call, see [StateOverride](/docs/developers/evm-tracing/built-in-tracers#state-overrides) for more details.
+- `blockOverrides`: `BlockOverrides`. Overrides for the block data (number, timestamp etc) for the call, see [BlockOverrides](/docs/developers/evm-tracing/built-in-tracers#block-overrides) for more details.
+- `txIndex`: `NUMBER`. If set, the state at the the given transaction index will be used to tracing (default = the last transaction index in the block).
 
 **Example:**
 
@@ -604,14 +612,14 @@ No specific call options:
 Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
 
 ```js
-debug.traceCall(
+> debug.traceCall(
   {
-    from: '0xdeadbeef29292929192939494959594933929292',
-    to: '0xde929f939d939d393f939393f93939f393929023',
-    gas: '0x7a120',
-    data: '0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810'
+    from: "0xdeadbeef29292929192939494959594933929292",
+    to: "0xde929f939d939d393f939393f93939f393929023",
+    gas: "0x7a120",
+    data: "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
   },
-  'latest',
+  "latest",
   { disableStorage: true, disableMemory: true }
 );
 ```
@@ -619,16 +627,18 @@ debug.traceCall(
 It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack:
 
 ```js
-> debug.traceCall({
+> debug.traceCall(
+  {
     from: eth.accounts[0],
-    value:"0x1",
+    value: "0x1",
     gasPrice: "0xffffffff",
     gas: "0xffff",
-    input: "0x43"},
-    "latest",
-    {"blockoverrides":
-        {"number": "0x50"}
-    })
+    input: "0x43"
+  },
+  "latest",
+  {
+    "blockOverrides": {"number": "0x50"}
+  })
 {
   failed: false,
   gas: 53018,
@@ -685,19 +695,25 @@ hash.
 
 In addition to the hash of the transaction you may give it a secondary _optional_ argument, which specifies the options for this specific call. The possible options are:
 
-- `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
-- `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
-- `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
-- `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
-- `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
+| Field          | Type   | Description                                                                                                                                                   |
+|----------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tracer`       | String | Name for built-in tracer or Javascript expression. See below for more details.                                                                                |
+| `tracerConfig` | String | Config for the specified tracer formatted as a JSON object (see below)                                                                                        |
+| `timeout`      | String | Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described  [here] ( https://golang.org/pkg/time/#ParseDuration).    |
+| `reexec`       | uint64 | The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128). |
 
-If set, the previous four arguments will be ignored.
+Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. The `tracer` field can be set to either a [JS expression](/docs/developers/evm-tracing/custom-tracer#custom-javascript-tracing) or the name of a built-in or [custom native tracer](/docs/developers/evm-tracing/custom-tracer#custom-go-tracing). If `tracer` is left empty the [opcode logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger) will be chosen as default.
 
-- `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls.
-  Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
-- `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/developers/evm-tracing/built-in-tracers#config).
+`TraceConfig` object has more fields that are specific to the [opcode logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger) and which will be ignored when `tracer` field is set to any value. For configuration of built-in tracers refer to their respective documentation. The fields are:
 
-Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
+| field              | type      | description                                                                                                |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------- |
+| `enableMemory`     | `BOOL`    | Enable memory capture (default = false)                                                                    |
+| `disableStack`     | `BOOL`    | Disable stack capture (default = false)                                                                    |
+| `disableStorage`   | `BOOL`    | Disable storage capture (default = false)                                                                  |
+| `enableReturnData` | `BOOL`    | Enable return data capture (default = false)                                                               |
+| `debug`            | `BOOL`    | Print output during capture end (default = false)                                                          |
+| `limit`            | `INTEGER` | Limit the number of steps captured (default = 0, no limit)                                                 |
 
 **Example:**
 
@@ -735,15 +751,16 @@ Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/buil
   }]
 ```
 
+
 ### debug_verbosity
 
 Sets the logging verbosity ceiling. Log messages with level up to and including the given level will be printed.
 
 The verbosity of individual packages and source files can be raised using `debug_vmodule`.
 
-| Client  | Method invocation                                 |
-| :------ | ------------------------------------------------- |
-| Console | `debug.verbosity(level)`                          |
+| Client  | Method invocation                                   |
+| :------ | --------------------------------------------------- |
+| Console | `debug.verbosity(level)`                            |
 | RPC     | `{"method": "debug_verbosity", "params": [number]}` |
 
 ### debug_vmodule
