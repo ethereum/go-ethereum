@@ -127,19 +127,18 @@ func (s *beaconBlockSync) updateEventFeed() {
 
 	var finalizedHash common.Hash
 	if finality, ok := s.headTracker.ValidatedFinality(); ok {
-		if he, fe := head.Header.Epoch(), finality.Attested.Header.Epoch(); he == fe {
+		he := head.Header.Epoch()
+		fe := finality.Attested.Header.Epoch()
+		switch {
+		case he == fe:
 			finalizedHash = finality.Finalized.PayloadHeader.BlockHash()
-		} else {
-			if he < fe {
-				return // finality proof arrived earlier, wait for head update
-			}
-			if he == fe+1 {
-				if parent, ok := s.recentBlocks.Get(head.Header.ParentRoot); !ok ||
-					parent.Slot()/params.EpochLength == fe {
-					return // head is at first slot of next epoch, wait for finality update
-					//TODO trt to fetch finality update directly if subscription does not deliver
-				}
-
+		case he < fe:
+			return
+		case he == fe+1:
+			parent, ok := s.recentBlocks.Get(head.Header.ParentRoot)	
+			if !ok || parent.Slot()/params.EpochLength == fe {
+				return // head is at first slot of next epoch, wait for finality update
+				//TODO trt to fetch finality update directly if subscription does not deliver
 			}
 		}
 	}
