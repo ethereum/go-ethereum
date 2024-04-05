@@ -19,6 +19,7 @@ package engine
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -132,12 +133,7 @@ func (b PayloadID) Version() PayloadVersion {
 
 // Is returns whether the identifier matches any of provided payload versions.
 func (b PayloadID) Is(versions ...PayloadVersion) bool {
-	for _, v := range versions {
-		if v == b.Version() {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(versions, b.Version())
 }
 
 func (b PayloadID) String() string {

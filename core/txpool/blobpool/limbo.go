@@ -60,7 +60,7 @@ func newLimbo(datadir string) (*limbo, error) {
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: datadir}, newSlotter(), index)
+	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, newSlotter(), index)
 	if err != nil {
 		return nil, err
 	}
