@@ -107,6 +107,7 @@ func (d iterativeDump) OnAccount(addr common.Address, account DumpAccount) {
 		Root:             account.Root,
 		KeccakCodeHash:   account.KeccakCodeHash,
 		PoseidonCodeHash: account.PoseidonCodeHash,
+		CodeSize:         account.CodeSize,
 		Code:             account.Code,
 		Storage:          account.Storage,
 		SecureKey:        account.SecureKey,
