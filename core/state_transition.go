@@ -71,6 +71,7 @@ func (result *ExecutionResult) Revert() []byte {
 func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
+	//eip2: 계약 생성 트랜잭션의 경우 가스비를 추가함.
 	if isContractCreation && isHomestead {
 		gas = params.TxGasContractCreation
 	} else {
