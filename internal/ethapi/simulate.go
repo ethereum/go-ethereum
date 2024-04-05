@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -53,20 +54,22 @@ type simBlock struct {
 }
 
 type simBlockResult struct {
-	Number       hexutil.Uint64    `json:"number"`
-	Hash         common.Hash       `json:"hash"`
-	Time         hexutil.Uint64    `json:"timestamp"`
-	GasLimit     hexutil.Uint64    `json:"gasLimit"`
-	GasUsed      hexutil.Uint64    `json:"gasUsed"`
-	FeeRecipient common.Address    `json:"feeRecipient"`
-	BaseFee      *hexutil.Big      `json:"baseFeePerGas"`
-	PrevRandao   common.Hash       `json:"prevRandao"`
-	Withdrawals  types.Withdrawals `json:"withdrawals"`
-	Calls        []simCallResult   `json:"calls"`
+	Number        hexutil.Uint64    `json:"number"`
+	Hash          common.Hash       `json:"hash"`
+	Time          hexutil.Uint64    `json:"timestamp"`
+	GasLimit      hexutil.Uint64    `json:"gasLimit"`
+	GasUsed       hexutil.Uint64    `json:"gasUsed"`
+	FeeRecipient  common.Address    `json:"feeRecipient"`
+	BaseFee       *hexutil.Big      `json:"baseFeePerGas"`
+	PrevRandao    common.Hash       `json:"prevRandao"`
+	Withdrawals   types.Withdrawals `json:"withdrawals"`
+	BlobGasUsed   hexutil.Uint64    `json:"blobGasUsed"`
+	ExcessBlobGas hexutil.Uint64    `json:"excessBlobGas"`
+	Calls         []simCallResult   `json:"calls"`
 }
 
 func simBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
-	return simBlockResult{
+	r := simBlockResult{
 		Number:       hexutil.Uint64(header.Number.Uint64()),
 		Hash:         header.Hash(),
 		Time:         hexutil.Uint64(header.Time),
@@ -79,6 +82,11 @@ func simBlockResultFromHeader(header *types.Header, callResults []simCallResult)
 		Withdrawals: make(types.Withdrawals, 0),
 		Calls:       callResults,
 	}
+	if header.BlobGasUsed != nil && header.ExcessBlobGas != nil {
+		r.BlobGasUsed = hexutil.Uint64(*header.BlobGasUsed)
+		r.ExcessBlobGas = hexutil.Uint64(*header.ExcessBlobGas)
+	}
+	return r
 }
 
 // repairLogs updates the block hash in the logs present in the result of
@@ -153,7 +161,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 	// Cache for the block hashes.
 	sim.hashes = make([]common.Hash, numHashes)
 	for bi, block := range blocks {
-		result, err := sim.processBlock(ctx, &block, headers[bi], headers, gp, precompiles, timeout)
+		result, err := sim.processBlock(ctx, &block, headers[bi], headers, bi, gp, precompiles, timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +170,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 	return results, nil
 }
 
-func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header *types.Header, headers []*types.Header, blockIndex int, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
 	blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
 	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
@@ -181,19 +189,23 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		return nil, err
 	}
 	var (
-		gasUsed     uint64
-		txes        = make([]*types.Transaction, len(block.Calls))
-		callResults = make([]simCallResult, len(block.Calls))
-		receipts    = make([]*types.Receipt, len(block.Calls))
-		tracer      = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
-		config      = sim.b.ChainConfig()
-		vmConfig    = &vm.Config{
+		gasUsed, blobGasUsed uint64
+		txes                 = make([]*types.Transaction, len(block.Calls))
+		callResults          = make([]simCallResult, len(block.Calls))
+		receipts             = make([]*types.Receipt, len(block.Calls))
+		tracer               = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
+		config               = sim.b.ChainConfig()
+		parent               = sim.base
+		vmConfig             = &vm.Config{
 			NoBaseFee: !sim.validate,
 			// Block hash will be repaired after execution.
 			Tracer: tracer.Hooks(),
 		}
 		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, config, *vmConfig)
 	)
+	if blockIndex > 0 {
+		parent = headers[blockIndex-1]
+	}
 	sim.state.SetLogger(tracer.Hooks())
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
@@ -229,6 +241,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		}
 		gasUsed += result.UsedGas
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
+		blobGasUsed += receipts[i].BlobGasUsed
 		// If the result contains a revert reason, try to unpack it.
 		if len(result.Revert()) > 0 {
 			result.Err = newRevertError(result.Revert())
@@ -264,6 +277,21 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 	if len(receipts) > 0 {
 		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
 		header.Bloom = types.CreateBloom(types.Receipts(receipts))
+	}
+	if config.IsLondon(header.Number) {
+		// BaseFee depends on parent's gasUsed, hence can't be pre-computed.
+		// Phantom blocks are ignored.
+		header.BaseFee = eip1559.CalcBaseFee(config, parent)
+	}
+	if config.IsCancun(header.Number, header.Time) {
+		header.BlobGasUsed = &blobGasUsed
+		var excess uint64
+		if config.IsCancun(parent.Number, parent.Time) {
+			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
+		} else {
+			excess = eip4844.CalcExcessBlobGas(0, 0)
+		}
+		header.ExcessBlobGas = &excess
 	}
 	result := simBlockResultFromHeader(header, callResults)
 	result.repairLogs()
