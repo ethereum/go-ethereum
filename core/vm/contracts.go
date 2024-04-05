@@ -1019,8 +1019,8 @@ func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
 	}
 
 	p := bls12381.G2Affine{X: bls12381.E2{A0: x0, A1: x1}, Y: bls12381.E2{A0: y0, A1: y1}}
-	if !p.IsInSubGroup() {
-		return nil, errors.New("invalid point: subgroup check failed")
+	if !p.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
 	}
 	return &p, err
 }
