@@ -133,8 +133,8 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 #### 4. 현재 공식에서 난이도 조정 알고리즘을 변경합니다: 
 
 $$
-\text{block\_diff} = \text{parent\_diff} + \frac{\text{parent\_diff}}{2048} \times \begin{cases} 
-1, & \text{if block\_timestamp} - \text{parent\_timestamp} < 13 \\
+\text{block\\_diff} = \text{parent\\_diff} + \frac{\text{parent\\_diff}}{2048} \times \begin{cases} 
+1, & \text{if block\\_timestamp} - \text{parent\\_timestamp} < 13 \\
 -1, & \text{otherwise}
 \end{cases} + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
 $$
@@ -142,7 +142,7 @@ $$
 를 
 
 $$
-\text{block\_diff} = \text{parent\_diff} + \frac{\text{parent\_diff}}{2048} \times \max\left(1 - \frac{\text{block\_timestamp} - \text{parent\_timestamp}}{10}, -99\right) + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
+\text{block\\_diff} = \text{parent\\_diff} + \frac{\text{parent\\_diff}}{2048} \times \max\left(1 - \frac{\text{block\\_timestamp} - \text{parent\\_timestamp}}{10}, -99\right) + \text{int}\left(2^{\left(\frac{\text{block.number}}{100000} - 2\right)}\right)
 $$
 
 로 변경합니다. 최소 난이도는 그대로 유지되며 최소 난이도 아래로는 변경되지 않습니다. 
@@ -153,7 +153,7 @@ $$
 
 따라서 새로운 난이도 알고리즘은 이러한 문제를 해결하도록 제안되었습니다. 제안된 새로운 공식은 대략적으로 평균값을 목표로 하고 있으며, 이 공식은  24초보다 긴 평균 블록 시간이 수학적으로 불가능하다는 것을 증명할 수 있습니다.
 
-시간 차이가 아닌 $\frac{block\_timestamp - parent\_timestamp}{10}$을 주요 입력 변수로 사용하는 것은 알고리즘의 대략적인 특성을 직접적으로 유지하는 역할을 합니다. 
+시간 차이가 아닌 $\frac{\text{block\\_timestamp} - \text{parent\\_timestamp}}{10}$을 주요 입력 변수로 사용하는 것은 알고리즘의 대략적인 특성을 직접적으로 유지하는 역할을 합니다. 
 
 이는 채굴자들이 약간 높은 난이도를 가진 블록을 생성하여 가능한 모든 포크를 확실히 이길 수 있도록 타임스탬프 차이를 정확히 $1$로 설정하는 과도한 유인을 방지합니다.
 
