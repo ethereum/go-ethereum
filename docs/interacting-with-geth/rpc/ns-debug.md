@@ -587,6 +587,14 @@ The `debug_traceCall` method lets you run an `eth_call` within the context of th
 | Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                             |
 |   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                          |
 
+#### TraceCallConfig
+
+TraceCallConfig is a superset of [TraceConfig](#traceconfig), providing additional arguments in addition to those provided by [TraceConfig](#traceconfig):
+
+- `stateOverrides`: `StateOverride`. Overrides for the state data (accounts/storage) for the call, see [StateOverride](/docs/developers/evm-tracing/built-in-tracers#state-overrides) for more details.
+- `blockOverrides`: `BlockOverrides`. Overrides for the block data (number, timestamp etc) for the call, see [BlockOverrides](/docs/developers/evm-tracing/built-in-tracers#block-overrides) for more details.
+- `txIndex`: `NUMBER`. If set, the state at the the given transaction index will be used to tracing (default = the last transaction index in the block).
+
 **Example:**
 
 No specific call options:
@@ -687,26 +695,25 @@ hash.
 
 In addition to the hash of the transaction you may give it a secondary _optional_ argument, which specifies the options for this specific call. The possible options are:
 
-- `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
-- `timeout`: `STRING`. Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
-- `reexec`: `UINT64`. The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128).
-- `tracerConfig`: Config for the specified `tracer`, see in below:
+| Field          | Type   | Description                                                                                                                                                   |
+|----------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tracer`       | String | Name for built-in tracer or Javascript expression. See below for more details.                                                                                |
+| `tracerConfig` | String | Config for the specified tracer formatted as a JSON object (see below)                                                                                        |
+| `timeout`      | String | Overrides the default timeout of 5 seconds for each transaction tracing, valid values are described  [here] ( https://golang.org/pkg/time/#ParseDuration).    |
+| `reexec`       | uint64 | The number of blocks the tracer is willing to go back and re-execute to produce missing historical state necessary to run a specific trace. (default is 128). |
 
-| field              | type      | description                                                                                                | tracer     |
-| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------- | ---------- |
-| `enableMemory`     | `BOOL`    | Enable memory capture (default = false)                                                                    | `opcode`   |
-| `disableStack`     | `BOOL`    | Disable stack capture (default = false)                                                                    | `opcode`   |
-| `disableStorage`   | `BOOL`    | Disable storage capture (default = false)                                                                  | `opcode`   |
-| `enableReturnData` | `BOOL`    | Enable return data capture (default = false)                                                               | `opcode`   |
-| `debug`            | `BOOL`    | Print output during capture end (default = false)                                                          | `opcode`   |
-| `limit`            | `INTEGER` | Limit the number of steps captured (default = 0, no limit)                                                 | `opcode`   |
-| --                 | --        | --                                                                                                         | --         |
-| `diffMode`         | `BOOL`    | Enable diff mode, capture pre and post state (default = false, only capture the pre state)                 | `prestate` |
-| --                 | --        | --                                                                                                         | --         |
-| `onlyTopCall`      | `BOOL`    | Instructs the tracer to only process the main (top-level) call and none of the sub-calls (default = false) | `call`     |
-| `withLog`          | `BOOL`    | Instructs the tracer to also collect the logs emitted during each call (default = false)                   | `call`     |
+Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. The `tracer` field can be set to either a [JS expression](/docs/developers/evm-tracing/custom-tracer#custom-javascript-tracing) or the name of a built-in or [custom native tracer](/docs/developers/evm-tracing/custom-tracer#custom-go-tracing). If `tracer` is left empty the [opcode logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger) will be chosen as default.
 
-Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
+`TraceConfig` object has more fields that are specific to the [opcode logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger) and which will be ignored when `tracer` field is set to any value. For configuration of built-in tracers refer to their respective documentation. The fields are:
+
+| field              | type      | description                                                                                                |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------- |
+| `enableMemory`     | `BOOL`    | Enable memory capture (default = false)                                                                    |
+| `disableStack`     | `BOOL`    | Disable stack capture (default = false)                                                                    |
+| `disableStorage`   | `BOOL`    | Disable storage capture (default = false)                                                                  |
+| `enableReturnData` | `BOOL`    | Enable return data capture (default = false)                                                               |
+| `debug`            | `BOOL`    | Print output during capture end (default = false)                                                          |
+| `limit`            | `INTEGER` | Limit the number of steps captured (default = 0, no limit)                                                 |
 
 **Example:**
 
@@ -744,13 +751,6 @@ Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/buil
   }]
 ```
 
-#### TraceCallConfig
-
-TraceCallConfig is a superset of [TraceConfig](#traceconfig), providing additional arguments in addition to those provided by [TraceConfig](#traceconfig):
-
-- `stateOverrides`: `StateOverride`. Overrides for the state data (accounts/storage) for the call, see [StateOverride](/docs/developers/evm-tracing/built-in-tracers#state-overrides) for more details.
-- `blockOverrides`: `BlockOverrides`. Overrides for the block data (number, timestamp etc) for the call, see [BlockOverrides](/docs/developers/evm-tracing/built-in-tracers#block-overrides) for more details.
-- `txIndex`: `NUMBER`. If set, the state at the the given transaction index will be used to tracing (default = the last transaction index in the block).
 
 ### debug_verbosity
 
