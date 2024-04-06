@@ -22,7 +22,7 @@ import (
 	"container/heap"
 )
 
-// Prque priority queue data structure.
+// Prque is a priority queue data structure.
 type Prque[P cmp.Ordered, V any] struct {
 	cont *sstack[P, V]
 }
