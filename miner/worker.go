@@ -131,7 +131,7 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 	if genParams.parentHash != (common.Hash{}) {
 		block := miner.chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
-			return nil, fmt.Errorf("missing parent")
+			return nil, errors.New("missing parent")
 		}
 		parent = block.Header()
 	}

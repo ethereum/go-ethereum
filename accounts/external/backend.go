@@ -239,7 +239,7 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 		args.BlobHashes = tx.BlobHashes()
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
-			return nil, fmt.Errorf("blobs must be present for signing")
+			return nil, errors.New("blobs must be present for signing")
 		}
 		args.Blobs = sidecar.Blobs
 		args.Commitments = sidecar.Commitments
