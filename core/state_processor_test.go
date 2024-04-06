@@ -643,19 +643,19 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	for _, stemStateDiff := range statediff[0] {
 		// Check that the value 0x85, which is overflowing the account header,
 		// is present.
-		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("a10042195481d30478251625e1ccef0e2174dc4e083e81d2566d880373f791")) {
+		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("917f78f74226b0e3755134ce3e3433cac8df5a657f6c9b9a3d0122a3e4beb0")) {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 133 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
-		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("b24fa84f214459af17d6e3f604811f252cac93146f02d67d7811bbcdfa448b")) {
+		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("26f8a45c665b9ca0bf769b213ba9bb14e86d4028a41274ae2a509e71a89d86")) {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 105 && suffixDiff.Suffix != 0 && suffixDiff.Suffix != 2 && suffixDiff.Suffix != 3 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
-		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
 			// BLOCKHASH contract stem
 			if len(stemStateDiff.SuffixDiffs) > 1 {
 				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
@@ -683,7 +683,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	// code should make it to the witness.
 	for _, stemStateDiff := range statediff[1] {
 		for _, suffixDiff := range stemStateDiff.SuffixDiffs {
-			if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+			if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
 				// BLOCKHASH contract stem
 				if len(stemStateDiff.SuffixDiffs) > 1 {
 					t.Fatalf("invalid suffix diff count found for BLOCKHASH contract at block #2: %d != 1", len(stemStateDiff.SuffixDiffs))
@@ -694,8 +694,8 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 					t.Fatalf("missing post state value for BLOCKHASH contract at block #2")
 				}
-				if *stemStateDiff.SuffixDiffs[0].NewValue != common.HexToHash("53abcdfb284720ea59efe923d3dc774bbb7e787d829599f8ec7a81d344dd3d17") {
-					t.Fatalf("invalid post state value for BLOCKHASH contract at block #2: %x != ", (*stemStateDiff.SuffixDiffs[0].NewValue)[:])
+				if *stemStateDiff.SuffixDiffs[0].NewValue != common.HexToHash("0a130e6478e47593861d8c3feb65045497327d89619dd12ae12d70e73a0191dd") {
+					t.Fatalf("invalid post state value for BLOCKHASH contract at block #2: 0a130e6478e47593861d8c3feb65045497327d89619dd12ae12d70e73a0191dd != %x", (*stemStateDiff.SuffixDiffs[0].NewValue)[:])
 				}
 			} else if suffixDiff.Suffix > 4 {
 				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
@@ -769,7 +769,7 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	})
 
 	for _, stemStateDiff := range statediff[0] {
-		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("97f2911f5efe08b74c28727d004e36d260225e73525fe2a300c8f58c7ffd76")) {
+		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
 			// BLOCKHASH contract stem
 			if len(stemStateDiff.SuffixDiffs) > 1 {
 				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
