@@ -53,8 +53,8 @@ var makeTest = function(tx, traceConfig) {
         input:   eth.getRawTransaction(tx),
         result:  result,
     };
-    if (traceConfig) {
-        data.tracerConfig = traceConfig;
+    if (traceConfig && traceConfig.tracerConfig) {
+        data.tracerConfig = traceConfig.tracerConfig;
     }
 
     console.log(JSON.stringify(data, null, 2));
