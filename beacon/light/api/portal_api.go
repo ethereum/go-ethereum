@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type PortalLightApi struct {
@@ -49,4 +50,8 @@ func (api *PortalLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 	//return updates, committees, nil
 
 	return nil, nil, errors.New("not implemented")
+}
+
+func (api *PortalLightApi) GetCheckpointData(checkpointHash common.Hash) (*types.BootstrapData, error) {
+	return nil, errors.New("not implemented")
 }

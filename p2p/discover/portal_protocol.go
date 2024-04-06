@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -1223,7 +1224,7 @@ func (p *PortalProtocol) verifyResponseNode(sender *enode.Node, r *enr.Record, d
 	}
 	if distances != nil {
 		nd := enode.LogDist(sender.ID(), n.ID())
-		if !containsUint(uint(nd), distances) {
+		if !slices.Contains(distances, uint(nd)) {
 			return nil, errors.New("does not match any requested distance")
 		}
 	}

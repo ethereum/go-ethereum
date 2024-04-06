@@ -29,5 +29,35 @@ func TestForkedLightClientBootstrap(t *testing.T) {
 		err := f.Deserialize(dec)
 		assert.NoError(t, err)
 		assert.Equal(t, k, f.Bootstrap.(*capella.LightClientBootstrap).Header.Beacon.Slot.String())
+
+		var buf bytes.Buffer
+		err = f.Serialize(codec.NewEncodingWriter(&buf))
+		assert.NoError(t, err)
+		assert.Equal(t, b, buf.Bytes())
+	}
+}
+
+func TestLightClientUpdateRange(t *testing.T) {
+	filePath := "testdata/light_client_updates_by_range.json"
+
+	f, _ := os.Open(filePath)
+	jsonStr, _ := io.ReadAll(f)
+
+	var result map[string]interface{}
+	_ = json.Unmarshal(jsonStr, &result)
+
+	for k, v := range result {
+		b, _ := hexutil.Decode(v.(map[string]interface{})["content_value"].(string))
+		dec := codec.NewDecodingReader(bytes.NewReader(b), uint64(len(b)))
+		var f LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
+		err := f.Deserialize(dec)
+		assert.NoError(t, err)
+		assert.Equal(t, k, f[0].LightClientUpdate.(*capella.LightClientUpdate).AttestedHeader.Beacon.Slot.String())
+		assert.Equal(t, 4, len(f))
+
+		var buf bytes.Buffer
+		err = f.Serialize(codec.NewEncodingWriter(&buf))
+		assert.NoError(t, err)
+		assert.Equal(t, b, buf.Bytes())
 	}
 }
