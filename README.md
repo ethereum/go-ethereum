@@ -35,11 +35,24 @@ git push -u origin [branch_name]
 
 // go to upstream repo(https://github.com/orakle-opensource/EIP_opensource.git) and create pull request
 ```
-3. After merge pull request
+3. After merging pull request
 ```
 // checkout master and pull upstream commits
 git checkout master
 git pull upstream master
+```
+
+### If branch
+
+the case for working by creating branch on our repository
+
+```
+// create branch -> commit -> push
+git checkout -b [branch_name]
+git add . | git commit -m "message"
+git push -u origin [branch_name]
+
+// go to repo and create pull request
 ```
 
 ## License
