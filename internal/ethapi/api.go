@@ -1113,17 +1113,17 @@ type CallArgs struct {
 	Data     hexutil.Bytes   `json:"data"`
 }
 
-func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, vmCfg vm.Config, timeout time.Duration) ([]byte, uint64, bool, error, error) {
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, vmCfg vm.Config, timeout time.Duration) ([]byte, uint64, bool, error, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	statedb, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	statedb, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if statedb == nil || err != nil {
 		return nil, 0, false, err, nil
 	}
 	// Set sender address or use a default if none specified
 	addr := args.From
 	if addr == (common.Address{}) {
-		if wallets := s.b.AccountManager().Wallets(); len(wallets) > 0 {
+		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
 			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 				addr = accounts[0].Address
 			}
@@ -1154,20 +1154,20 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
-	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := b.GetEngine().Author(block.Header())
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
-	XDCxState, err := s.b.XDCxService().GetTradingState(block, author)
+	XDCxState, err := b.XDCxService().GetTradingState(block, author)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
 	// Get a new instance of the EVM.
-	evm, vmError, err := s.b.GetEVM(ctx, msg, statedb, XDCxState, header, vmCfg)
+	evm, vmError, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, vmCfg)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
@@ -1234,7 +1234,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
 	}
-	result, _, failed, err, vmErr := s.doCall(ctx, args, *blockNrOrHash, vm.Config{}, 5*time.Second)
+	result, _, failed, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, vm.Config{}, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -1246,9 +1246,9 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	return (hexutil.Bytes)(result), vmErr
 }
 
-func (s *PublicBlockChainAPI) doEstimateGas(ctx context.Context, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
 	// Retrieve the base state and mutate it with any overrides
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return 0, err
 	}
@@ -1263,7 +1263,7 @@ func (s *PublicBlockChainAPI) doEstimateGas(ctx context.Context, args CallArgs, 
 		hi = uint64(args.Gas)
 	} else {
 		// Retrieve the current pending block to act as the gas ceiling
-		block, err := s.b.BlockByNumber(ctx, rpc.LatestBlockNumber)
+		block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
 		}
@@ -1275,7 +1275,7 @@ func (s *PublicBlockChainAPI) doEstimateGas(ctx context.Context, args CallArgs, 
 	executable := func(gas uint64) (bool, []byte, error, error) {
 		args.Gas = hexutil.Uint64(gas)
 
-		res, _, failed, err, vmErr := s.doCall(ctx, args, blockNrOrHash, vm.Config{}, 0)
+		res, _, failed, err, vmErr := DoCall(ctx, b, args, blockNrOrHash, vm.Config{}, 0)
 		if err != nil {
 			if errors.Is(err, vm.ErrOutOfGas) || errors.Is(err, core.ErrIntrinsicGas) {
 				return false, nil, nil, nil // Special case, raise gas limit
@@ -1294,12 +1294,7 @@ func (s *PublicBlockChainAPI) doEstimateGas(ctx context.Context, args CallArgs, 
 	// some tx field combos might bump the price up even for plain transfers (e.g.
 	// unused access list items). Ever so slightly wasteful, but safer overall.
 	if len(args.Data) == 0 && args.To != nil {
-		statedb, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-		if statedb == nil || err != nil {
-			return 0, err
-		}
-
-		if statedb.GetCodeSize(*args.To) == 0 {
+		if state.GetCodeSize(*args.To) == 0 {
 			ok, _, err, _ := executable(params.TxGas)
 			if ok && err == nil {
 				return hexutil.Uint64(params.TxGas), nil
@@ -1355,7 +1350,7 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs, bl
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return s.doEstimateGas(ctx, args, bNrOrHash)
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash)
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
