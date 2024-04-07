@@ -46,13 +46,13 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 			log.Debug("New head received", "slot", slot, "blockRoot", blockRoot)
 			eventCallback(request.Event{Type: sync.EvNewHead, Data: types.HeadInfo{Slot: slot, BlockRoot: blockRoot}})
 		},
-		OnSignedHead: func(head types.SignedHeader) {
-			log.Debug("New signed head received", "slot", head.Header.Slot, "blockRoot", head.Header.Hash(), "signerCount", head.Signature.SignerCount())
-			eventCallback(request.Event{Type: sync.EvNewSignedHead, Data: head})
+		OnOptimistic: func(update types.OptimisticUpdate) {
+			log.Debug("New optimistic update received", "slot", update.Attested.Slot, "blockRoot", update.Attested.Hash(), "signerCount", update.Signature.SignerCount())
+			eventCallback(request.Event{Type: sync.EvNewOptimisticUpdate, Data: update})
 		},
-		OnFinality: func(head types.FinalityUpdate) {
-			log.Debug("New finality update received", "slot", head.Attested.Slot, "blockRoot", head.Attested.Hash(), "signerCount", head.Signature.SignerCount())
-			eventCallback(request.Event{Type: sync.EvNewFinalityUpdate, Data: head})
+		OnFinality: func(update types.FinalityUpdate) {
+			log.Debug("New finality update received", "slot", update.Attested.Slot, "blockRoot", update.Attested.Hash(), "signerCount", update.Signature.SignerCount())
+			eventCallback(request.Event{Type: sync.EvNewFinalityUpdate, Data: update})
 		},
 		OnError: func(err error) {
 			log.Warn("Head event stream error", "err", err)

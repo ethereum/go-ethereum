@@ -316,9 +316,9 @@ func (s *ForwardUpdateSync) Process(requester request.Requester, events []reques
 			if !queued {
 				s.unlockRange(sid, req)
 			}
-		case EvNewSignedHead:
-			signedHead := event.Data.(types.SignedHeader)
-			s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
+		case EvNewOptimisticUpdate:
+			update := event.Data.(types.OptimisticUpdate)
+			s.nextSyncPeriod[event.Server] = types.SyncPeriod(update.SignatureSlot + 256)
 		case request.EvUnregistered:
 			delete(s.nextSyncPeriod, event.Server)
 		}
