@@ -62,3 +62,51 @@ func TestLightClientUpdateRange(t *testing.T) {
 		assert.Equal(t, b, buf.Bytes())
 	}
 }
+
+func TestForkedLightClientOptimisticUpdate(t *testing.T) {
+	filePath := "testdata/light_client_optimistic_update.json"
+
+	f, _ := os.Open(filePath)
+	jsonStr, _ := io.ReadAll(f)
+
+	var result map[string]interface{}
+	_ = json.Unmarshal(jsonStr, &result)
+
+	for k, v := range result {
+		b, _ := hexutil.Decode(v.(map[string]interface{})["content_value"].(string))
+		dec := codec.NewDecodingReader(bytes.NewReader(b), uint64(len(b)))
+		var f ForkedLightClientOptimisticUpdate
+		err := f.Deserialize(configs.Mainnet, dec)
+		assert.NoError(t, err)
+		assert.Equal(t, k, f.LightClientOptimisticUpdate.(*capella.LightClientOptimisticUpdate).AttestedHeader.Beacon.Slot.String())
+
+		var buf bytes.Buffer
+		err = f.Serialize(configs.Mainnet, codec.NewEncodingWriter(&buf))
+		assert.NoError(t, err)
+		assert.Equal(t, b, buf.Bytes())
+	}
+}
+
+func TestForkedLightClientFinalityUpdate(t *testing.T) {
+	filePath := "testdata/light_client_finality_update.json"
+
+	f, _ := os.Open(filePath)
+	jsonStr, _ := io.ReadAll(f)
+
+	var result map[string]interface{}
+	_ = json.Unmarshal(jsonStr, &result)
+
+	for k, v := range result {
+		b, _ := hexutil.Decode(v.(map[string]interface{})["content_value"].(string))
+		dec := codec.NewDecodingReader(bytes.NewReader(b), uint64(len(b)))
+		var f ForkedLightClientFinalityUpdate
+		err := f.Deserialize(configs.Mainnet, dec)
+		assert.NoError(t, err)
+		assert.Equal(t, k, f.LightClientFinalityUpdate.(*capella.LightClientFinalityUpdate).AttestedHeader.Beacon.Slot.String())
+
+		var buf bytes.Buffer
+		err = f.Serialize(configs.Mainnet, codec.NewEncodingWriter(&buf))
+		assert.NoError(t, err)
+		assert.Equal(t, b, buf.Bytes())
+	}
+}

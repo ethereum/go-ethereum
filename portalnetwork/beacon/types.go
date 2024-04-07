@@ -156,3 +156,147 @@ func (r LightClientUpdateRange) HashTreeRoot(spec *common.Spec, hFn tree.HashFn)
 		return nil
 	}, length, 128)
 }
+
+type ForkedLightClientOptimisticUpdate struct {
+	ForkDigest                  common.ForkDigest
+	LightClientOptimisticUpdate common.SpecObj
+}
+
+func (flcou *ForkedLightClientOptimisticUpdate) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+	_, err := dr.Read(flcou.ForkDigest[:])
+	if err != nil {
+		return err
+	}
+
+	if flcou.ForkDigest == Bellatrix {
+		flcou.LightClientOptimisticUpdate = &altair.LightClientOptimisticUpdate{}
+	} else if flcou.ForkDigest == Capella {
+		flcou.LightClientOptimisticUpdate = &capella.LightClientOptimisticUpdate{}
+	} else {
+		return errors.New("unknown fork digest")
+	}
+
+	err = flcou.LightClientOptimisticUpdate.Deserialize(spec, dr)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (flcou *ForkedLightClientOptimisticUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+	return w.Container(flcou.ForkDigest, spec.Wrap(flcou.LightClientOptimisticUpdate))
+}
+
+func (flcou *ForkedLightClientOptimisticUpdate) FixedLength(_ *common.Spec) uint64 {
+	return 0
+}
+
+func (flcou *ForkedLightClientOptimisticUpdate) ByteLength(spec *common.Spec) uint64 {
+	return 4 + flcou.LightClientOptimisticUpdate.ByteLength(spec)
+}
+
+func (flcou *ForkedLightClientOptimisticUpdate) HashTreeRoot(spec *common.Spec, h tree.HashFn) common.Root {
+	return h.HashTreeRoot(flcou.ForkDigest, spec.Wrap(flcou.LightClientOptimisticUpdate))
+}
+
+type ForkedLightClientFinalityUpdate struct {
+	ForkDigest                common.ForkDigest
+	LightClientFinalityUpdate common.SpecObj
+}
+
+func (flcfu *ForkedLightClientFinalityUpdate) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+	_, err := dr.Read(flcfu.ForkDigest[:])
+	if err != nil {
+		return err
+	}
+
+	if flcfu.ForkDigest == Bellatrix {
+		flcfu.LightClientFinalityUpdate = &altair.LightClientFinalityUpdate{}
+	} else if flcfu.ForkDigest == Capella {
+		flcfu.LightClientFinalityUpdate = &capella.LightClientFinalityUpdate{}
+	} else {
+		return errors.New("unknown fork digest")
+	}
+
+	err = flcfu.LightClientFinalityUpdate.Deserialize(spec, dr)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (flcfu *ForkedLightClientFinalityUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+	return w.Container(flcfu.ForkDigest, spec.Wrap(flcfu.LightClientFinalityUpdate))
+}
+
+func (flcfu *ForkedLightClientFinalityUpdate) FixedLength(_ *common.Spec) uint64 {
+	return 0
+}
+
+func (flcfu *ForkedLightClientFinalityUpdate) ByteLength(spec *common.Spec) uint64 {
+	return 4 + flcfu.LightClientFinalityUpdate.ByteLength(spec)
+}
+
+func (flcfu *ForkedLightClientFinalityUpdate) HashTreeRoot(spec *common.Spec, h tree.HashFn) common.Root {
+	return h.HashTreeRoot(flcfu.ForkDigest, spec.Wrap(flcfu.LightClientFinalityUpdate))
+}
+
+type HistoricalSummariesProof struct {
+	Proof [5]common.Bytes32
+}
+
+func (hsp *HistoricalSummariesProof) Deserialize(dr *codec.DecodingReader) error {
+	roots := hsp.Proof[:]
+	return tree.ReadRoots(dr, &roots, 5)
+}
+
+func (hsp *HistoricalSummariesProof) Serialize(w *codec.EncodingWriter) error {
+	return tree.WriteRoots(w, hsp.Proof[:])
+}
+
+func (hsp *HistoricalSummariesProof) ByteLength() uint64 {
+	return 32 * 5
+}
+
+func (hsp *HistoricalSummariesProof) FixedLength() uint64 {
+	return 32 * 5
+}
+
+func (hsp *HistoricalSummariesProof) HashTreeRoot(hFn tree.HashFn) common.Root {
+	return hFn.ComplexVectorHTR(func(i uint64) tree.HTR {
+		if i < 5 {
+			return &hsp.Proof[i]
+		}
+		return nil
+	}, 5)
+}
+
+// TODO: Add tests for HistoricalSummariesWithProof
+
+type HistoricalSummariesWithProof struct {
+	EPOCH               common.Epoch
+	HistoricalSummaries capella.HistoricalSummaries
+	Proof               *HistoricalSummariesProof
+}
+
+func (hswp *HistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+	return dr.Container(&hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+}
+
+func (hswp *HistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+	return w.Container(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+}
+
+func (hswp *HistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
+	return codec.ContainerLength(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+}
+
+func (hswp *HistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
+	return 0
+}
+
+func (hswp *HistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+	return hFn.HashTreeRoot(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+}
