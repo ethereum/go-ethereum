@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/stretchr/testify/assert"
 )
@@ -26,12 +27,12 @@ func TestForkedLightClientBootstrap(t *testing.T) {
 		b, _ := hexutil.Decode(v.(map[string]interface{})["content_value"].(string))
 		dec := codec.NewDecodingReader(bytes.NewReader(b), uint64(len(b)))
 		var f ForkedLightClientBootstrap
-		err := f.Deserialize(dec)
+		err := f.Deserialize(configs.Mainnet, dec)
 		assert.NoError(t, err)
 		assert.Equal(t, k, f.Bootstrap.(*capella.LightClientBootstrap).Header.Beacon.Slot.String())
 
 		var buf bytes.Buffer
-		err = f.Serialize(codec.NewEncodingWriter(&buf))
+		err = f.Serialize(configs.Mainnet, codec.NewEncodingWriter(&buf))
 		assert.NoError(t, err)
 		assert.Equal(t, b, buf.Bytes())
 	}
@@ -50,13 +51,13 @@ func TestLightClientUpdateRange(t *testing.T) {
 		b, _ := hexutil.Decode(v.(map[string]interface{})["content_value"].(string))
 		dec := codec.NewDecodingReader(bytes.NewReader(b), uint64(len(b)))
 		var f LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-		err := f.Deserialize(dec)
+		err := f.Deserialize(configs.Mainnet, dec)
 		assert.NoError(t, err)
 		assert.Equal(t, k, f[0].LightClientUpdate.(*capella.LightClientUpdate).AttestedHeader.Beacon.Slot.String())
 		assert.Equal(t, 4, len(f))
 
 		var buf bytes.Buffer
-		err = f.Serialize(codec.NewEncodingWriter(&buf))
+		err = f.Serialize(configs.Mainnet, codec.NewEncodingWriter(&buf))
 		assert.NoError(t, err)
 		assert.Equal(t, b, buf.Bytes())
 	}

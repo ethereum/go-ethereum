@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -22,6 +23,7 @@ const (
 
 type BeaconNetwork struct {
 	portalProtocol *discover.PortalProtocol
+	spec           *common.Spec
 }
 
 func (bn *BeaconNetwork) GetBestUpdatesAndCommittees(firstPeriod, count uint64) (LightClientUpdateRange, error) {
@@ -36,7 +38,7 @@ func (bn *BeaconNetwork) GetBestUpdatesAndCommittees(firstPeriod, count uint64) 
 	}
 
 	var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-	err = lightClientUpdateRange.Deserialize(codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
+	err = lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.L
 	}
 
 	var forkedLightClientBootstrap ForkedLightClientBootstrap
-	err = forkedLightClientBootstrap.Deserialize(codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
+	err = forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
 	if err != nil {
 		return nil, err
 	}
