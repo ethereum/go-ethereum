@@ -19,11 +19,12 @@ package sync
 import (
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type headTracker interface {
-	ValidateHead(head types.SignedHeader) (bool, error)
-	ValidateFinality(head types.FinalityUpdate) (bool, error)
+	ValidateOptimistic(update types.OptimisticUpdate) (bool, error)
+	ValidateFinality(update types.FinalityUpdate) (bool, error)
 	SetPrefetchHead(head types.HeadInfo)
 }
 
@@ -33,16 +34,16 @@ type headTracker interface {
 // It can also postpone the validation of the latest announced signed head
 // until the committee chain is synced up to at least the required period.
 type HeadSync struct {
-	headTracker         headTracker
-	chain               committeeChain
-	nextSyncPeriod      uint64
-	chainInit           bool
-	unvalidatedHeads    map[request.Server]types.SignedHeader
-	unvalidatedFinality map[request.Server]types.FinalityUpdate
-	serverHeads         map[request.Server]types.HeadInfo
-	headServerCount     map[types.HeadInfo]headServerCount
-	headCounter         uint64
-	prefetchHead        types.HeadInfo
+	headTracker           headTracker
+	chain                 committeeChain
+	nextSyncPeriod        uint64
+	chainInit             bool
+	unvalidatedOptimistic map[request.Server]types.OptimisticUpdate
+	unvalidatedFinality   map[request.Server]types.FinalityUpdate
+	serverHeads           map[request.Server]types.HeadInfo
+	headServerCount       map[types.HeadInfo]headServerCount
+	headCounter           uint64
+	prefetchHead          types.HeadInfo
 }
 
 // headServerCount is associated with most recently seen head infos; it counts
@@ -57,12 +58,12 @@ type headServerCount struct {
 // NewHeadSync creates a new HeadSync.
 func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 	s := &HeadSync{
-		headTracker:         headTracker,
-		chain:               chain,
-		unvalidatedHeads:    make(map[request.Server]types.SignedHeader),
-		unvalidatedFinality: make(map[request.Server]types.FinalityUpdate),
-		serverHeads:         make(map[request.Server]types.HeadInfo),
-		headServerCount:     make(map[types.HeadInfo]headServerCount),
+		headTracker:           headTracker,
+		chain:                 chain,
+		unvalidatedOptimistic: make(map[request.Server]types.OptimisticUpdate),
+		unvalidatedFinality:   make(map[request.Server]types.FinalityUpdate),
+		serverHeads:           make(map[request.Server]types.HeadInfo),
+		headServerCount:       make(map[types.HeadInfo]headServerCount),
 	}
 	return s
 }
@@ -73,59 +74,68 @@ func (s *HeadSync) Process(requester request.Requester, events []request.Event) 
 		switch event.Type {
 		case EvNewHead:
 			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
-		case EvNewSignedHead:
-			s.newSignedHead(event.Server, event.Data.(types.SignedHeader))
+		case EvNewOptimisticUpdate:
+			s.newOptimisticUpdate(event.Server, event.Data.(types.OptimisticUpdate))
 		case EvNewFinalityUpdate:
 			s.newFinalityUpdate(event.Server, event.Data.(types.FinalityUpdate))
 		case request.EvUnregistered:
 			s.setServerHead(event.Server, types.HeadInfo{})
 			delete(s.serverHeads, event.Server)
-			delete(s.unvalidatedHeads, event.Server)
+			delete(s.unvalidatedOptimistic, event.Server)
+			delete(s.unvalidatedFinality, event.Server)
 		}
 	}
 
 	nextPeriod, chainInit := s.chain.NextSyncPeriod()
 	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
 		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		s.processUnvalidated()
+		s.processUnvalidatedUpdates()
 	}
 }
 
-// newSignedHead handles received signed head; either validates it if the chain
-// is properly synced or stores it for further validation.
-func (s *HeadSync) newSignedHead(server request.Server, signedHead types.SignedHeader) {
-	if !s.chainInit || types.SyncPeriod(signedHead.SignatureSlot) > s.nextSyncPeriod {
-		s.unvalidatedHeads[server] = signedHead
+// newOptimisticUpdate handles received optimistic update; either validates it if
+// the chain is properly synced or stores it for further validation.
+func (s *HeadSync) newOptimisticUpdate(server request.Server, optimisticUpdate types.OptimisticUpdate) {
+	if !s.chainInit || types.SyncPeriod(optimisticUpdate.SignatureSlot) > s.nextSyncPeriod {
+		s.unvalidatedOptimistic[server] = optimisticUpdate
 		return
 	}
-	s.headTracker.ValidateHead(signedHead)
+	if _, err := s.headTracker.ValidateOptimistic(optimisticUpdate); err != nil {
+		log.Debug("Error validating optimistic update", "error", err)
+	}
 }
 
-// newFinalityUpdate handles received finality update; either validates it if the chain
-// is properly synced or stores it for further validation.
+// newFinalityUpdate handles received finality update; either validates it if
+// the chain is properly synced or stores it for further validation.
 func (s *HeadSync) newFinalityUpdate(server request.Server, finalityUpdate types.FinalityUpdate) {
 	if !s.chainInit || types.SyncPeriod(finalityUpdate.SignatureSlot) > s.nextSyncPeriod {
 		s.unvalidatedFinality[server] = finalityUpdate
 		return
 	}
-	s.headTracker.ValidateFinality(finalityUpdate)
+	if _, err := s.headTracker.ValidateFinality(finalityUpdate); err != nil {
+		log.Debug("Error validating finality update", "error", err)
+	}
 }
 
-// processUnvalidated iterates the list of unvalidated heads and validates
+// processUnvalidatedUpdates iterates the list of unvalidated updates and validates
 // those which can be validated.
-func (s *HeadSync) processUnvalidated() {
+func (s *HeadSync) processUnvalidatedUpdates() {
 	if !s.chainInit {
 		return
 	}
-	for server, signedHead := range s.unvalidatedHeads {
-		if types.SyncPeriod(signedHead.SignatureSlot) <= s.nextSyncPeriod {
-			s.headTracker.ValidateHead(signedHead)
-			delete(s.unvalidatedHeads, server)
+	for server, optimisticUpdate := range s.unvalidatedOptimistic {
+		if types.SyncPeriod(optimisticUpdate.SignatureSlot) <= s.nextSyncPeriod {
+			if _, err := s.headTracker.ValidateOptimistic(optimisticUpdate); err != nil {
+				log.Debug("Error validating deferred optimistic update", "error", err)
+			}
+			delete(s.unvalidatedOptimistic, server)
 		}
 	}
 	for server, finalityUpdate := range s.unvalidatedFinality {
 		if types.SyncPeriod(finalityUpdate.SignatureSlot) <= s.nextSyncPeriod {
-			s.headTracker.ValidateFinality(finalityUpdate)
+			if _, err := s.headTracker.ValidateFinality(finalityUpdate); err != nil {
+				log.Debug("Error validating deferred finality update", "error", err)
+			}
 			delete(s.unvalidatedFinality, server)
 		}
 	}

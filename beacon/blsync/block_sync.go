@@ -41,7 +41,7 @@ type beaconBlockSync struct {
 
 type headTracker interface {
 	PrefetchHead() types.HeadInfo
-	ValidatedHead() (types.SignedHeader, bool)
+	ValidatedOptimistic() (types.OptimisticUpdate, bool)
 	ValidatedFinality() (types.FinalityUpdate, bool)
 }
 
@@ -80,8 +80,8 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 	}
 	s.updateEventFeed()
 	// request validated head block if unavailable and not yet requested
-	if vh, ok := s.headTracker.ValidatedHead(); ok {
-		s.tryRequestBlock(requester, vh.Header.Hash(), false)
+	if vh, ok := s.headTracker.ValidatedOptimistic(); ok {
+		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
 	}
 	// request prefetch head if the given server has announced it
 	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
@@ -114,12 +114,12 @@ func blockHeadInfo(block *types.BeaconBlock) types.HeadInfo {
 }
 
 func (s *beaconBlockSync) updateEventFeed() {
-	head, ok := s.headTracker.ValidatedHead()
+	optimistic, ok := s.headTracker.ValidatedOptimistic()
 	if !ok {
 		return
 	}
 
-	validatedHead := head.Header.Hash()
+	validatedHead := optimistic.Attested.Hash()
 	headBlock, ok := s.recentBlocks.Get(validatedHead)
 	if !ok {
 		return
@@ -127,7 +127,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 
 	var finalizedHash common.Hash
 	if finality, ok := s.headTracker.ValidatedFinality(); ok {
-		he := head.Header.Epoch()
+		he := optimistic.Attested.Epoch()
 		fe := finality.Attested.Header.Epoch()
 		switch {
 		case he == fe:
@@ -135,7 +135,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 		case he < fe:
 			return
 		case he == fe+1:
-			parent, ok := s.recentBlocks.Get(head.Header.ParentRoot)
+			parent, ok := s.recentBlocks.Get(optimistic.Attested.ParentRoot)
 			if !ok || parent.Slot()/params.EpochLength == fe {
 				return // head is at first slot of next epoch, wait for finality update
 				//TODO: try to fetch finality update directly if subscription does not deliver
@@ -156,7 +156,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 		return
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
-		BeaconHead: head.Header,
+		BeaconHead: optimistic.Attested.Header,
 		Block:      execBlock,
 		Finalized:  finalizedHash,
 	})
