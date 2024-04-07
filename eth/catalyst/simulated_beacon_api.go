@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,8 +33,9 @@ type api struct {
 
 func (a *api) loop() {
 	var (
-		newTxs = make(chan core.NewTxsEvent)
-		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		committing atomic.Bool
+		newTxs     = make(chan core.NewTxsEvent)
+		sub        = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
 	)
 	defer sub.Unsubscribe()
 
@@ -42,12 +44,24 @@ func (a *api) loop() {
 		case <-a.sim.shutdownCh:
 			return
 		case w := <-a.sim.withdrawals.pending:
+			// FIXME: `sealBlock` will block the loop and `newTxs` won't be
+			// read. If new TX will be submitted to the pool while we're
+			// sealing the block, deadlock will occur.
 			withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
 			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			}
 		case <-newTxs:
-			a.sim.Commit()
+			go func() {
+				if committing.Swap(true) {
+					return
+				}
+				a.sim.Commit()
+				// FIXME: This is race-y, if `newTxs` arrive after we
+				// `Commit`ted but before we unset `committing`, `newTxs` will
+				// be skipped. Needs redesign.
+				committing.Store(false)
+			}()
 		}
 	}
 }
