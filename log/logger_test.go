@@ -50,6 +50,25 @@ func TestTerminalHandlerWithAttrs(t *testing.T) {
 	}
 }
 
+// Make sure the default json handler outputs debug log lines
+func TestJSONHandler(t *testing.T) {
+	out := new(bytes.Buffer)
+	handler := JSONHandler(out)
+	logger := slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) == 0 {
+		t.Error("expected non-empty debug log output from default JSON Handler")
+	}
+
+	out.Reset()
+	handler = JSONHandlerWithLevel(out, slog.LevelInfo)
+	logger = slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) != 0 {
+		t.Errorf("expected empty debug log output, but got: %v", out.String())
+	}
+}
+
 func BenchmarkTraceLogging(b *testing.B) {
 	SetDefault(NewLogger(NewTerminalHandler(os.Stderr, true)))
 	b.ResetTimer()

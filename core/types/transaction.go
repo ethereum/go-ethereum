@@ -446,6 +446,26 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	return cpy
 }
 
+// WithBlobTxSidecar returns a copy of tx with the blob sidecar added.
+func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
+	blobtx, ok := tx.inner.(*BlobTx)
+	if !ok {
+		return tx
+	}
+	cpy := &Transaction{
+		inner: blobtx.withSidecar(sideCar),
+		time:  tx.time,
+	}
+	// Note: tx.size cache not carried over because the sidecar is included in size!
+	if h := tx.hash.Load(); h != nil {
+		cpy.hash.Store(h)
+	}
+	if f := tx.from.Load(); f != nil {
+		cpy.from.Store(f)
+	}
+	return cpy
+}
+
 // SetTime sets the decoding time of a transaction. This is used by tests to set
 // arbitrary times and by persistent transaction pools when loading old txs from
 // disk.

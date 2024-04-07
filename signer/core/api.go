@@ -590,7 +590,10 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		return nil, err
 	}
 	// Convert fields into a real transaction
-	var unsignedTx = result.Transaction.ToTransaction()
+	unsignedTx, err := result.Transaction.ToTransaction()
+	if err != nil {
+		return nil, err
+	}
 	// Get the password for the transaction
 	pw, err := api.lookupOrQueryPassword(acc.Address, "Account password",
 		fmt.Sprintf("Please enter the password for account %s", acc.Address.String()))
