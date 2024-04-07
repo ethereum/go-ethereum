@@ -368,7 +368,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 		// Create a skeleton sync and run a cycle
 		wait := make(chan struct{})
 
-		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
+		skeleton := newSkeleton(nil, db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
 		skeleton.Sync(tt.head, nil, true)
 
@@ -482,7 +482,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		// Create a skeleton sync and run a cycle
 		wait := make(chan struct{})
 
-		skeleton := newSkeleton(db, newPeerSet(), nil, newHookedBackfiller())
+		skeleton := newSkeleton(nil, db, newPeerSet(), nil, newHookedBackfiller())
 		skeleton.syncStarting = func() { close(wait) }
 		skeleton.Sync(tt.head, nil, true)
 
@@ -858,7 +858,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			}
 		}
 		// Create a skeleton sync and run a cycle
-		skeleton := newSkeleton(db, peerset, drop, filler)
+		skeleton := newSkeleton(nil, db, peerset, drop, filler)
 		skeleton.Sync(tt.head, nil, true)
 
 		var progress skeletonProgress
