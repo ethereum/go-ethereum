@@ -317,7 +317,7 @@ var (
 		ArrowGlacierBlock:   nil,
 		ArchimedesBlock:     big.NewInt(0),
 		ShanghaiBlock:       big.NewInt(0),
-		BernoulliBlock:      nil,
+		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
