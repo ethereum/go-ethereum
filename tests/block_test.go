@@ -49,11 +49,6 @@ func TestBlockchain(t *testing.T) {
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
-	// The tests under Pyspecs are the ones that are published as execution-spect tests.
-	// We run these tests separately, no need to _also_ run them as part of the
-	// reference tests.
-	bt.skipLoad(`^Pyspecs/`)
-
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
