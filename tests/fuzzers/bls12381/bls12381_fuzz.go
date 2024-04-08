@@ -31,7 +31,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
+	bls12381 "github.com/ethereum/go-ethereum/crypto/bls12381"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -51,7 +51,7 @@ func fuzzCrossPairing(data []byte) int {
 	}
 
 	// compute pairing using geth
-	engine := bls12381.NewPairingEngine()
+	engine := bls12381.NewEngine()
 	engine.AddPair(kpG1, kpG2)
 	kResult := engine.Result()
 
@@ -180,7 +180,7 @@ func fuzzCrossG2Add(data []byte) int {
 func fuzzCrossG1MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
-		gethScalars  []*big.Int
+		gethScalars  []*bls12381.Fr
 		gnarkScalars []fr.Element
 		gethPoints   []*bls12381.PointG1
 		gnarkPoints  []gnark.G1Affine
@@ -197,7 +197,7 @@ func fuzzCrossG1MultiExp(data []byte) int {
 		if err != nil {
 			break
 		}
-		gethScalars = append(gethScalars, s)
+		gethScalars = append(gethScalars, bls12381.NewFr().FromBytes(s.Bytes()))
 		var gnarkScalar = &fr.Element{}
 		gnarkScalar = gnarkScalar.SetBigInt(s)
 		gnarkScalars = append(gnarkScalars, *gnarkScalar)
