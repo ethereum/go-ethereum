@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -175,7 +176,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil, context.Background())
+				w.commitTransactions(w.current, txset, nil, new(big.Int), context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -587,7 +588,7 @@ mainloop:
 			break
 		}
 		// Retrieve the next transaction and abort if all done.
-		ltx := txs.Peek()
+		ltx, _ := txs.Peek()
 		if ltx == nil {
 			breakCause = "all transactions has been included"
 			break
