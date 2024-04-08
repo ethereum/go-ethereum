@@ -24,10 +24,7 @@ import (
 	"testing"
 	"time"
 
-	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
-
 	"github.com/ethereum/go-ethereum/common"
-	cryptobls12381 "github.com/ethereum/go-ethereum/crypto/bls12381"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -304,27 +301,6 @@ func benchJson(name, addr string, b *testing.B) {
 	}
 	for _, test := range tests {
 		benchmarkPrecompiled(addr, test, b)
-	}
-}
-
-func BenchmarkG1(b *testing.B) {
-	g1 := new(bls12381.G1Affine)
-	for i := 0; i < b.N; i++ {
-		g1.IsInSubGroup()
-	}
-}
-
-func BenchmarkG2(b *testing.B) {
-	g2 := new(bls12381.G2Affine)
-	for i := 0; i < b.N; i++ {
-		g2.IsInSubGroup()
-	}
-}
-
-func BenchmarkKilic(b *testing.B) {
-	g1 := new(cryptobls12381.PointG1)
-	for i := 0; i < b.N; i++ {
-		new(cryptobls12381.G1).InCorrectSubgroup(g1)
 	}
 }
 
