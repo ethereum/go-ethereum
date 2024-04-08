@@ -517,7 +517,7 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 }
 
 func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) common.Hash {
-	ringIndex := number % 256
+	ringIndex := number % params.Eip2935BlockHashHistorySize
 	var pnum common.Hash
 	binary.BigEndian.PutUint64(pnum[24:], ringIndex)
 	treeIndex, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(pnum.Bytes())

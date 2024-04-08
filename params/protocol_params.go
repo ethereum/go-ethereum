@@ -173,6 +173,9 @@ const (
 	BlobTxMinBlobGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxBlobGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for blob gas price
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
+
+	// Block hash history parameters
+	Eip2935BlockHashHistorySize = 8192
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

@@ -371,14 +371,14 @@ func (kvm *keyValueMigrator) migrateCollectedKeyValues(tree *trie.VerkleTrie) er
 
 func InsertBlockHashHistoryAtEip2935Fork(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash, chain consensus.ChainHeaderReader) {
 	ancestor := chain.GetHeader(prevHash, prevNumber)
-	for i := prevNumber; i > 0 && i >= prevNumber-256; i-- {
+	for i := prevNumber; i > 0 && i >= prevNumber-params.Eip2935BlockHashHistorySize; i-- {
 		ProcessParentBlockHash(statedb, i, ancestor.Hash())
 		ancestor = chain.GetHeader(ancestor.ParentHash, ancestor.Number.Uint64()-1)
 	}
 }
 
 func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash) {
-	ringIndex := prevNumber % 256
+	ringIndex := prevNumber % params.Eip2935BlockHashHistorySize
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
