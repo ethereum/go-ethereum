@@ -35,6 +35,42 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
+func fuzzG1SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	kpG1, cpG1, blG1, err := getG1Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupKilic := bls12381.NewG1().InCorrectSubgroup(kpG1)
+	inSubGroupGnark := cpG1.IsInSubGroup()
+	inSubGroupBLST := blG1.InG1()
+	if inSubGroupKilic != inSubGroupGnark {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, gnark %v", inSubGroupKilic, inSubGroupGnark))
+	}
+	if inSubGroupKilic != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, blst %v", inSubGroupKilic, inSubGroupBLST))
+	}
+	return 1
+}
+
+func fuzzG2SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	kpG2, cpG2, blG2, err := getG2Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupKilic := bls12381.NewG2().InCorrectSubgroup(kpG2)
+	inSubGroupGnark := cpG2.IsInSubGroup()
+	inSubGroupBLST := blG2.InG2()
+	if inSubGroupKilic != inSubGroupGnark {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, gnark %v", inSubGroupKilic, inSubGroupGnark))
+	}
+	if inSubGroupKilic != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, blst %v", inSubGroupKilic, inSubGroupBLST))
+	}
+	return 1
+}
+
 func fuzzCrossPairing(data []byte) int {
 	input := bytes.NewReader(data)
 
