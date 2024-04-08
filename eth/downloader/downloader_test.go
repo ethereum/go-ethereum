@@ -1355,7 +1355,6 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		}
 	}()
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, false)))
 	<-starting
 	progress <- struct{}{}
 	select {
@@ -1368,7 +1367,6 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
 
-	fmt.Println("syncing to fork B")
 	// Set the head to a second fork
 	tester.newPeer("fork B", protocol, chainB.blocks[1:])
 	pending.Add(1)
@@ -1393,20 +1391,4 @@ func testBeaconForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	case <-time.NewTimer(time.Second * 3).C:
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
-	/*
-		checkProgress(t, tester.downloader, "forking", ethereum.SyncProgress{
-			StartingBlock: uint64(len(testChainBase.blocks)) - 1,
-			CurrentBlock:  uint64(len(chainA.blocks) - 1),
-			HighestBlock:  uint64(len(chainB.blocks) - 1),
-		})
-
-		// Check final progress after successful sync
-		progress <- struct{}{}
-		pending.Wait()
-		checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-			StartingBlock: uint64(len(testChainBase.blocks)) - 1,
-			CurrentBlock:  uint64(len(chainB.blocks) - 1),
-			HighestBlock:  uint64(len(chainB.blocks) - 1),
-		})
-	*/
 }
