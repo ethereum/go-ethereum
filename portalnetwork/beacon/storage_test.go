@@ -33,33 +33,25 @@ func TestGetAndPut(t *testing.T) {
 	beaconStorage, err := genStorage(testDir)
 	require.NoError(t, err)
 	defer clearNodeData(testDir)
-	key, value, err := getClientBootstrap()
+
+	testData, err := getTestData()
 	require.NoError(t, err)
 
-	contentId := defaultContentIdFunc(key)
-	_, err = beaconStorage.Get(key, contentId)
-	require.Equal(t, storage.ErrContentNotFound, err)
+	for _, entry := range testData {
+		key := entry.key
+		value := entry.value
 
-	err = beaconStorage.Put(key, contentId, value)
-	require.NoError(t, err)
+		contentId := defaultContentIdFunc(key)
+		_, err = beaconStorage.Get(key, contentId)
+		require.Equal(t, storage.ErrContentNotFound, err)
 
-	res, err := beaconStorage.Get(key, contentId)
-	require.NoError(t, err)
-	require.Equal(t, value, res)
+		err = beaconStorage.Put(key, contentId, value)
+		require.NoError(t, err)
 
-	key, value, err = getClientUpdatesByRange()
-	require.NoError(t, err)
-
-	contentId = defaultContentIdFunc(key)
-	_, err = beaconStorage.Get(key, contentId)
-	require.Equal(t, storage.ErrContentNotFound, err)
-
-	err = beaconStorage.Put(key, contentId, value)
-	require.NoError(t, err)
-
-	res, err = beaconStorage.Get(key, contentId)
-	require.NoError(t, err)
-	require.Equal(t, value, res)
+		res, err := beaconStorage.Get(key, contentId)
+		require.NoError(t, err)
+		require.Equal(t, value, res)
+	}
 }
 
 func genStorage(testDir string) (storage.ContentStorage, error) {
@@ -77,38 +69,40 @@ func genStorage(testDir string) (storage.ContentStorage, error) {
 	return NewBeaconStorage(*config)
 }
 
-func getClientBootstrap() ([]byte, []byte, error) {
-	filePath := "testdata/light_client_bootstrap.json"
-
-	f, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	var result map[string]map[string]string
-	err = json.Unmarshal(f, &result)
-	if err != nil {
-		return nil, nil, err
-	}
-	contentKey := hexutil.MustDecode(result["6718368"]["content_key"])
-	contentValue := hexutil.MustDecode(result["6718368"]["content_value"])
-	return contentKey, contentValue, nil
+type entry struct {
+	key   []byte
+	value []byte
 }
 
-func getClientUpdatesByRange() ([]byte, []byte, error) {
-	filePath := "testdata/light_client_updates_by_range.json"
+func getTestData() ([]entry, error) {
+	baseDir := "./testdata"
+	items, err := os.ReadDir(baseDir)
+	if err != nil {
+		return nil, err
+	}
 
-	f, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, nil, err
+	entries := make([]entry, 0)
+
+	for _, item := range items {
+		if !item.IsDir() {
+			f, err := os.ReadFile(fmt.Sprintf("%s/%s", baseDir, item.Name()))
+			if err != nil {
+				return nil, err
+			}
+			var result map[string]map[string]string
+			err = json.Unmarshal(f, &result)
+			if err != nil {
+				return nil, err
+			}
+			for _, v := range result {
+				entries = append(entries, entry{
+					key:   hexutil.MustDecode(v["content_key"]),
+					value: hexutil.MustDecode(v["content_value"]),
+				})
+			}
+		}
 	}
-	var result map[string]map[string]string
-	err = json.Unmarshal(f, &result)
-	if err != nil {
-		return nil, nil, err
-	}
-	contentKey := hexutil.MustDecode(result["6684738"]["content_key"])
-	contentValue := hexutil.MustDecode(result["6684738"]["content_value"])
-	return contentKey, contentValue, nil
+	return entries, nil
 }
 
 func clearNodeData(nodeDataDir string) {

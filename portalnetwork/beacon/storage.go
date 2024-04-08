@@ -19,6 +19,12 @@ type BeaconStorage struct {
 	db                     *sql.DB
 	log                    log.Logger
 	spec                   *common.Spec
+	cache                  *beaconStorageCache
+}
+
+type beaconStorageCache struct {
+	OptimisticUpdate []byte
+	FinalityUpdate   []byte
 }
 
 var _ storage.ContentStorage = &BeaconStorage{}
@@ -29,6 +35,7 @@ func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorag
 		db:                     config.DB,
 		log:                    log.New("beacon_storage"),
 		spec:                   config.Spec,
+		cache:                  &beaconStorageCache{},
 	}
 	if err := bs.setup(); err != nil {
 		return nil, err
@@ -58,7 +65,15 @@ func (bs *BeaconStorage) Get(contentKey []byte, contentId []byte) ([]byte, error
 		}
 		return bs.getLcUpdateValueByRange(lightClientUpdateKey.StartPeriod, lightClientUpdateKey.StartPeriod+lightClientUpdateKey.Count)
 	case LightClientFinalityUpdate:
+		if bs.cache.FinalityUpdate == nil {
+			return nil, storage.ErrContentNotFound
+		}
+		return bs.cache.FinalityUpdate, nil
 	case LightClientOptimisticUpdate:
+		if bs.cache.OptimisticUpdate == nil {
+			return nil, storage.ErrContentNotFound
+		}
+		return bs.cache.OptimisticUpdate, nil
 	}
 	return nil, nil
 }
@@ -94,7 +109,11 @@ func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte
 		}
 		return nil
 	case LightClientFinalityUpdate:
+		bs.cache.FinalityUpdate = content
+		return nil
 	case LightClientOptimisticUpdate:
+		bs.cache.OptimisticUpdate = content
+		return nil
 	}
 	return nil
 }
