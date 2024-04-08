@@ -138,7 +138,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 			parent, ok := s.recentBlocks.Get(head.Header.ParentRoot)
 			if !ok || parent.Slot()/params.EpochLength == fe {
 				return // head is at first slot of next epoch, wait for finality update
-				//TODO trt to fetch finality update directly if subscription does not deliver
+				//TODO: try to fetch finality update directly if subscription does not deliver
 			}
 		}
 	}
