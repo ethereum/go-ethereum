@@ -61,10 +61,6 @@ func initMatcher(st *testMatcher) {
 	st.skipLoad(`^stExtCodeHash/dynamicAccountOverwriteEmpty\.json`)
 	st.skipLoad(`^stCreate2/create2collisionStorage\.json`)
 	st.skipLoad(`^stCreate2/RevertInCreateInInitCreate2\.json`)
-	st.skipLoad(`^stRevertTest/RevertInCreateInInit\.json`)
-	st.skipLoad(`^stExtCodeHash/dynamicAccountOverwriteEmpty\.json`)
-	st.skipLoad(`^stCreate2/create2collisionStorage\.json`)
-	st.skipLoad(`^stCreate2/RevertInCreateInInitCreate2\.json`)
 
 	// Broken tests:
 	// EOF is not part of cancun
