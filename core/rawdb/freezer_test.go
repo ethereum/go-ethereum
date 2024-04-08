@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -398,11 +397,11 @@ func TestRenameWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f2, err := os.Create(path.Join(dir1, fname2))
+	f2, err := os.Create(filepath.Join(dir1, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f3, err := os.Create(path.Join(dir2, fname2))
+	f3, err := os.Create(filepath.Join(dir2, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,15 +423,15 @@ func TestRenameWindows(t *testing.T) {
 	if err := f3.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f.Name(), path.Join(dir2, fname)); err != nil {
+	if err := os.Rename(f.Name(), filepath.Join(dir2, fname)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f2.Name(), path.Join(dir2, fname2)); err != nil {
+	if err := os.Rename(f2.Name(), filepath.Join(dir2, fname2)); err != nil {
 		t.Fatal(err)
 	}
 
 	// Check file contents
-	f, err = os.Open(path.Join(dir2, fname))
+	f, err = os.Open(filepath.Join(dir2, fname))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +445,7 @@ func TestRenameWindows(t *testing.T) {
 		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
 
-	f, err = os.Open(path.Join(dir2, fname2))
+	f, err = os.Open(filepath.Join(dir2, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
