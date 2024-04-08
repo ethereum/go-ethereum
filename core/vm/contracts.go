@@ -688,13 +688,7 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 	}
 
 	// Compute r = p_0 + p_1
-	//r := new(bls12381.G1Affine)
-	//r.Add(p0, p1)
-
-	r := new(bls12381.G1Jac)
-	r.FromAffine(p0)
-	r.AddMixed(p1)
-	p0.FromJacobian(r)
+	p0.Add(p0, p1)
 
 	// Encode the G1 point result into 128 bytes
 	return encodePointG1(p0), nil
