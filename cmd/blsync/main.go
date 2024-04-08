@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/beacon/blsync"
+	"github.com/ethereum/go-ethereum/beacon/config"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -87,7 +88,7 @@ func sync(ctx *cli.Context) error {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
 	// set up blsync
-	client := blsync.NewClient(ctx)
+	client := blsync.NewClient(config.MakeLightClientConfig(ctx))
 	client.SetEngineRPC(makeRPCClient(ctx))
 	client.Start()
 

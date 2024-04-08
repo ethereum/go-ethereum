@@ -31,14 +31,14 @@ import (
 )
 
 type engineClient struct {
-	config     *lightClientConfig
+	config     *types.ChainConfig
 	rpc        *rpc.Client
 	rootCtx    context.Context
 	cancelRoot context.CancelFunc
 	wg         sync.WaitGroup
 }
 
-func startEngineClient(config *lightClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
+func startEngineClient(config *types.ChainConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	ec := &engineClient{
 		config:     config,

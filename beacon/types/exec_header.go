@@ -68,12 +68,45 @@ func (eh *ExecutionHeader) PayloadRoot() merkle.Value {
 	return merkle.Value(eh.obj.HashTreeRoot(tree.GetHashFn()))
 }
 
+func (eh *ExecutionHeader) BlockNumber() uint64 {
+	switch obj := eh.obj.(type) {
+	case *capella.ExecutionPayloadHeader:
+		return uint64(obj.BlockNumber)
+	case *deneb.ExecutionPayloadHeader:
+		return uint64(obj.BlockNumber)
+	default:
+		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
+	}
+}
+
 func (eh *ExecutionHeader) BlockHash() common.Hash {
 	switch obj := eh.obj.(type) {
 	case *capella.ExecutionPayloadHeader:
 		return common.Hash(obj.BlockHash)
 	case *deneb.ExecutionPayloadHeader:
 		return common.Hash(obj.BlockHash)
+	default:
+		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
+	}
+}
+
+func (eh *ExecutionHeader) ParentHash() common.Hash {
+	switch obj := eh.obj.(type) {
+	case *capella.ExecutionPayloadHeader:
+		return common.Hash(obj.ParentHash)
+	case *deneb.ExecutionPayloadHeader:
+		return common.Hash(obj.ParentHash)
+	default:
+		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
+	}
+}
+
+func (eh *ExecutionHeader) StateRoot() common.Hash {
+	switch obj := eh.obj.(type) {
+	case *capella.ExecutionPayloadHeader:
+		return common.Hash(obj.StateRoot)
+	case *deneb.ExecutionPayloadHeader:
+		return common.Hash(obj.StateRoot)
 	default:
 		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
 	}

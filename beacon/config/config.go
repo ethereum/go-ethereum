@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package blsync
+package config
 
 import (
+	"strings"
+
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,14 +26,23 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// lightClientConfig contains beacon light client configuration
-type lightClientConfig struct {
+// LightChainConfig contains beacon light chain configuration
+type LightChainConfig struct {
 	*types.ChainConfig
 	Checkpoint common.Hash
 }
 
+// LightClientConfig contains beacon light client configuration
+type LightClientConfig struct {
+	LightChainConfig
+	ApiUrls         []string
+	CustomHeader    map[string]string
+	SignerThreshold int
+	EnforceTime     bool
+}
+
 var (
-	MainnetConfig = lightClientConfig{
+	MainnetConfig = LightChainConfig{
 		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"),
 			GenesisTime:           1606824023,
@@ -44,7 +55,7 @@ var (
 		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
 	}
 
-	SepoliaConfig = lightClientConfig{
+	SepoliaConfig = LightChainConfig{
 		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
 			GenesisTime:           1655733600,
@@ -57,7 +68,7 @@ var (
 		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
 	}
 
-	GoerliConfig = lightClientConfig{
+	GoerliConfig = LightChainConfig{
 		ChainConfig: (&types.ChainConfig{
 			GenesisValidatorsRoot: common.HexToHash("0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"),
 			GenesisTime:           1614588812,
@@ -71,8 +82,8 @@ var (
 	}
 )
 
-func makeChainConfig(ctx *cli.Context) lightClientConfig {
-	var config lightClientConfig
+func MakeLightChainConfig(ctx *cli.Context) LightChainConfig {
+	var config LightChainConfig
 	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name)
 	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.GoerliFlag, utils.SepoliaFlag, utils.BeaconConfigFlag)
 	switch {
@@ -126,4 +137,26 @@ func makeChainConfig(ctx *cli.Context) lightClientConfig {
 		}
 	}
 	return config
+}
+
+func MakeLightClientConfig(ctx *cli.Context) LightClientConfig {
+	if !ctx.IsSet(utils.BeaconApiFlag.Name) {
+		utils.Fatalf("Beacon node light client API URL not specified")
+	}
+	customHeader := make(map[string]string)
+	for _, s := range ctx.StringSlice(utils.BeaconApiHeaderFlag.Name) {
+		kv := strings.Split(s, ":")
+		if len(kv) != 2 {
+			utils.Fatalf("Invalid custom API header entry: %s", s)
+		}
+		customHeader[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+	}
+
+	return LightClientConfig{
+		LightChainConfig: MakeLightChainConfig(ctx),
+		ApiUrls:          ctx.StringSlice(utils.BeaconApiFlag.Name),
+		CustomHeader:     customHeader,
+		SignerThreshold:  ctx.Int(utils.BeaconThresholdFlag.Name),
+		EnforceTime:      !ctx.Bool(utils.BeaconNoFilterFlag.Name),
+	}
 }
