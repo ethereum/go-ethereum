@@ -273,7 +273,7 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 // onStart implements the Tracer interface to initialize the tracing operation.
-func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, _ /*gas*/ uint64, value *big.Int) {
 	if t.err != nil {
 		return
 	}
@@ -346,7 +346,7 @@ func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 }
 
 // onEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *jsTracer) onEnd(output []byte, _ /*gasUsed*/ uint64, err error, _ /*reverted*/ bool) {
 	if t.err != nil {
 		return
 	}

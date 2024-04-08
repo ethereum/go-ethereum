@@ -190,7 +190,7 @@ func (b *testBackend) notifyPending(logs []*types.Log) {
 	b.chainFeed.Send(core.ChainEvent{Block: blocks[0]})
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+func newTestFilterSystem(_ testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
