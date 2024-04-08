@@ -209,7 +209,7 @@ func codeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
 		chunkOffset            = new(uint256.Int).Add(codeOffset, chunk)
 		treeIndex, subIndexMod = new(uint256.Int).DivMod(chunkOffset, verkleNodeWidth, new(uint256.Int))
 	)
-	return treeIndex, byte(subIndexMod[0])
+	return treeIndex, byte(subIndexMod.Uint64())
 }
 
 // CodeChunkKey returns the verkle tree key of the code chunk for the
