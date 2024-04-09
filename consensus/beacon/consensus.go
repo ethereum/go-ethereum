@@ -361,8 +361,10 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
 
+		// Add the balance of each withdrawal to the witness, no gas will
+		// be charged.
 		if chain.Config().IsEIP4762(header.Number, header.Time) {
-			state.Witness().TouchFullAccount(w.Address[:], true)
+			state.Witness().TouchBalance(w.Address[:], true)
 		}
 	}
 	// No block reward which is issued by consensus layer instead.

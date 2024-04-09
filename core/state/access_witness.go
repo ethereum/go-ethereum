@@ -89,6 +89,8 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 	return naw
 }
 
+// TouchFullAccount returns the gas to be charged for each of the currently cold
+// member fields of an account.
 func (aw *AccessWitness) TouchFullAccount(addr []byte, isWrite bool) uint64 {
 	var gas uint64
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
@@ -97,6 +99,9 @@ func (aw *AccessWitness) TouchFullAccount(addr []byte, isWrite bool) uint64 {
 	return gas
 }
 
+// TouchAndChargeMessageCall returns the gas to be charged for each of the currently
+// cold member fields of an account, that need to be touched when making a message
+// call to that account.
 func (aw *AccessWitness) TouchAndChargeMessageCall(destination []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, false)
@@ -104,6 +109,8 @@ func (aw *AccessWitness) TouchAndChargeMessageCall(destination []byte) uint64 {
 	return gas
 }
 
+// TouchAndChargeValueTransfer returns the gas to be charged for each of the currently
+// cold balance member fields of the caller and the callee accounts.
 func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
@@ -111,8 +118,8 @@ func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []by
 	return gas
 }
 
-// TouchAndChargeContractCreateInit charges access costs to initiate
-// a contract creation
+// TouchAndChargeContractCreateInit returns the access gas costs for the initialization of
+// a contract creation.
 func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSendsValue bool) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, true)
@@ -123,41 +130,30 @@ func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSen
 	return gas
 }
 
-func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
+// TouchTxOrigin adds the member fields of the sender account to the witness,
+// so that cold accesses are not charged, since they are covered by the 21000 gas.
+func (aw *AccessWitness) TouchTxOrigin(originAddr []byte) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		aw.touchAddressAndChargeGas(originAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey || i == utils.NonceLeafKey)
 	}
-
-	// Kaustinen note: we're currently experimenting with stop chargin gas for the origin address
-	// so simple transfer still take 21000 gas. This is to potentially avoid breaking existing tooling.
-	// This is the reason why we return 0 instead of `gas`.
-	// Note that we still have to touch the addresses to make sure the witness is correct.
-	return 0
 }
 
-func (aw *AccessWitness) TouchTxExistingAndComputeGas(targetAddr []byte, sendsValue bool) uint64 {
-	aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.VersionLeafKey, false)
-	aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.CodeSizeLeafKey, false)
-	aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.CodeKeccakLeafKey, false)
-	aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.NonceLeafKey, false)
-	if sendsValue {
-		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
-	} else {
-		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, false)
+// TouchTxDestination adds the member fields of the sender account to the witness,
+// so that cold accesses are not charged, since they are covered by the 21000 gas.
+func (aw *AccessWitness) TouchTxDestination(targetAddr []byte, sendsValue bool) {
+	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
+		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
 	}
-
-	// Kaustinen note: we're currently experimenting with stop chargin gas for the origin address
-	// so simple transfer still take 21000 gas. This is to potentially avoid breaking existing tooling.
-	// This is the reason why we return 0 instead of `gas`.
-	// Note that we still have to touch the addresses to make sure the witness is correct.
-	return 0
 }
 
+// TouchSlotAndChargeGas returns the amount of gas to be charged for a cold storage access.
 func (aw *AccessWitness) TouchSlotAndChargeGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
 	return aw.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
 }
 
+// touchAddressAndChargeGas adds any missing access event to the witness, and returns the cold
+// access cost to be charged, if need be.
 func (aw *AccessWitness) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
 	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := aw.touchAddress(addr, treeIndex, subIndex, isWrite)
 

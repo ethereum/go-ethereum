@@ -108,6 +108,26 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return statelessGas, nil
 }
 
+func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := gasCodeCopy(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var (
+		codeOffset = stack.Back(1)
+		length     = stack.Back(2)
+	)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = math.MaxUint64
+	}
+	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
+	if !contract.IsDeployment {
+		gas += evm.Accesses.TouchCodeChunksRangeAndChargeGas(contract.Address().Bytes(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
+	}
+	return gas, nil
+}
+
 func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	// memory expansion first (dynamic part of pre-2929 implementation)
 	gas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)

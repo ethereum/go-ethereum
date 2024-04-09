@@ -510,7 +510,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateInit(address.Bytes(), value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeUnspecified) {
+		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateInit(address.Bytes(), value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
 			err = ErrOutOfGas
 		}
 	}
@@ -541,11 +541,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			}
 		} else {
 			// Contract creation completed, touch the missing fields in the contract
-			if !contract.UseGas(evm.Accesses.TouchFullAccount(address.Bytes()[:], true), evm.Config.Tracer, tracing.GasChangeUnspecified) {
+			if !contract.UseGas(evm.Accesses.TouchFullAccount(address.Bytes()[:], true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
 				err = ErrOutOfGas
 			}
 
-			if err != nil && len(ret) > 0 && !contract.UseGas(evm.Accesses.TouchCodeChunksRangeAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeUnspecified) {
+			if err != nil && len(ret) > 0 && !contract.UseGas(evm.Accesses.TouchCodeChunksRangeAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
 				err = ErrOutOfGas
 			}
 		}

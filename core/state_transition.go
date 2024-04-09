@@ -423,17 +423,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		targetAddr := msg.To
 		originAddr := msg.From
 
-		statelessGasOrigin := st.evm.Accesses.TouchTxOriginAndComputeGas(originAddr.Bytes())
-		if !tryConsumeGas(&st.gasRemaining, statelessGasOrigin) {
-			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
-		}
+		st.evm.Accesses.TouchTxOrigin(originAddr.Bytes())
 		originNonce := st.evm.StateDB.GetNonce(originAddr)
 
 		if msg.To != nil {
-			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value.Sign() != 0)
-			if !tryConsumeGas(&st.gasRemaining, statelessGasDest) {
-				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
-			}
+			st.evm.Accesses.TouchTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
 
 			// ensure the code size ends up in the access witness
 			st.evm.StateDB.GetCodeSize(*targetAddr)
@@ -501,7 +495,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.Accesses.TouchFullAccount(st.evm.Context.Coinbase[:], true)
+			st.evm.Accesses.TouchBalance(st.evm.Context.Coinbase[:], true)
 		}
 	}
 
