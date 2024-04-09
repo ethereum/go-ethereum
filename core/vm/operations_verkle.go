@@ -49,17 +49,22 @@ func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 
 func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
+	if _, isPrecompile := evm.precompile(address); isPrecompile {
+		return 0, nil
+	}
 	wgas := evm.Accesses.TouchVersion(address[:], false)
 	wgas += evm.Accesses.TouchCodeSize(address[:], false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}
-
 	return wgas, nil
 }
 
 func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
+	if _, isPrecompile := evm.precompile(address); isPrecompile {
+		return 0, nil
+	}
 	codehashgas := evm.Accesses.TouchCodeHash(address[:], false)
 	if codehashgas == 0 {
 		codehashgas = params.WarmStorageReadCostEIP2929
@@ -73,8 +78,10 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		if err != nil {
 			return 0, err
 		}
-		wgas := evm.Accesses.TouchCodeSize(contract.Address().Bytes(), false)
-		wgas += evm.Accesses.TouchCodeHash(contract.Address().Bytes(), false)
+		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
+			return gas, nil
+		}
+		wgas := evm.Accesses.TouchAndChargeMessageCall(contract.Address().Bytes())
 		if wgas == 0 {
 			wgas = params.WarmStorageReadCostEIP2929
 		}
@@ -91,6 +98,9 @@ var (
 
 func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	beneficiaryAddr := common.Address(stack.peek().Bytes20())
+	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
+		return 0, nil
+	}
 	contractAddr := contract.Address()
 	statelessGas := evm.Accesses.TouchVersion(contractAddr[:], false)
 	statelessGas += evm.Accesses.TouchCodeSize(contractAddr[:], false)

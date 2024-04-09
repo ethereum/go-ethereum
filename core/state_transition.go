@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -424,18 +423,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		originAddr := msg.From
 
 		st.evm.Accesses.TouchTxOrigin(originAddr.Bytes())
-		originNonce := st.evm.StateDB.GetNonce(originAddr)
 
 		if msg.To != nil {
 			st.evm.Accesses.TouchTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
 
 			// ensure the code size ends up in the access witness
 			st.evm.StateDB.GetCodeSize(*targetAddr)
-		} else {
-			contractAddr := crypto.CreateAddress(originAddr, originNonce)
-			if !tryConsumeGas(&st.gasRemaining, st.evm.Accesses.TouchAndChargeContractCreateInit(contractAddr.Bytes(), msg.Value.Sign() != 0)) {
-				return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gasRemaining, gas)
-			}
 		}
 	}
 
