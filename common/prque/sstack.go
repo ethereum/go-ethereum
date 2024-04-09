@@ -15,7 +15,7 @@ import "cmp"
 // The size of a block of data
 const blockSize = 4096
 
-// A prioritized item in the sorted stack.
+// item a prioritized item in the sorted stack.
 type item[P cmp.Ordered, V any] struct {
 	value    V
 	priority P
@@ -26,7 +26,7 @@ type item[P cmp.Ordered, V any] struct {
 // to delete elements other than the top one.
 type SetIndexCallback[V any] func(data V, index int)
 
-// Internal sortable stack data structure. Implements the Push and Pop ops for
+// sstack internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
 type sstack[P cmp.Ordered, V any] struct {
@@ -39,7 +39,7 @@ type sstack[P cmp.Ordered, V any] struct {
 	active []*item[P, V]
 }
 
-// Creates a new, empty stack.
+// newSstack creates a new, empty stack.
 func newSstack[P cmp.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V] {
 	result := new(sstack[P, V])
 	result.setIndex = setIndex
