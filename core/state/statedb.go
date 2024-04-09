@@ -1365,6 +1365,9 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 	return copied
 }
 
+// markDelete is invoked when an account is deleted but the deletion is
+// not yet committed. The pending mutation is cached and will be applied
+// all together
 func (s *StateDB) markDelete(addr common.Address) {
 	if _, ok := s.mutations[addr]; !ok {
 		s.mutations[addr] = &mutation{}
@@ -1373,6 +1376,9 @@ func (s *StateDB) markDelete(addr common.Address) {
 	s.mutations[addr].typ = deletion
 }
 
+// markUpdate is invoked when an account is modified but the mutation is
+// not yet committed. The pending mutation is cached and will be applied
+// all together.
 func (s *StateDB) markUpdate(addr common.Address) {
 	if _, ok := s.mutations[addr]; !ok {
 		s.mutations[addr] = &mutation{}
