@@ -19,14 +19,15 @@ const (
 	LightClientFinalityUpdate   storage.ContentType = 0x12
 	LightClientOptimisticUpdate storage.ContentType = 0x13
 	HistoricalSummaries         storage.ContentType = 0x14
+	BeaconGenesisTime           uint64              = 1606824023
 )
 
 type BeaconNetwork struct {
-	portalProtocol *discover.PortalProtocol
-	spec           *common.Spec
+	PortalProtocol *discover.PortalProtocol
+	Spec           *common.Spec
 }
 
-func (bn *BeaconNetwork) GetBestUpdatesAndCommittees(firstPeriod, count uint64) (LightClientUpdateRange, error) {
+func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) (LightClientUpdateRange, error) {
 	lightClientUpdateKey := &LightClientUpdateKey{
 		StartPeriod: firstPeriod,
 		Count:       count,
@@ -38,7 +39,7 @@ func (bn *BeaconNetwork) GetBestUpdatesAndCommittees(firstPeriod, count uint64) 
 	}
 
 	var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-	err = lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
+	err = lightClientUpdateRange.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.L
 	}
 
 	var forkedLightClientBootstrap ForkedLightClientBootstrap
-	err = forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
+	err = forkedLightClientBootstrap.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +70,52 @@ func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.L
 	return forkedLightClientBootstrap.Bootstrap.(*capella.LightClientBootstrap), nil
 }
 
+func (bn *BeaconNetwork) GetFinalityUpdate(finalizedSlot uint64) (*capella.LightClientFinalityUpdate, error) {
+	finalityUpdateKey := &LightClientFinalityUpdateKey{
+		FinalizedSlot: finalizedSlot,
+	}
+
+	finalityUpdateValue, err := bn.getContent(LightClientFinalityUpdate, finalityUpdateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var forkedLightClientFinalityUpdate ForkedLightClientFinalityUpdate
+	err = forkedLightClientFinalityUpdate.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(finalityUpdateValue), uint64(len(finalityUpdateValue))))
+	if err != nil {
+		return nil, err
+	}
+
+	if forkedLightClientFinalityUpdate.ForkDigest != Capella {
+		return nil, errors.New("unknown fork digest")
+	}
+
+	return forkedLightClientFinalityUpdate.LightClientFinalityUpdate.(*capella.LightClientFinalityUpdate), nil
+}
+
+func (bn *BeaconNetwork) GetOptimisticUpdate(optimisticSlot uint64) (*capella.LightClientOptimisticUpdate, error) {
+	optimisticUpdateKey := &LightClientOptimisticUpdateKey{
+		OptimisticSlot: optimisticSlot,
+	}
+
+	optimisticUpdateValue, err := bn.getContent(LightClientOptimisticUpdate, optimisticUpdateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var forkedLightClientOptimisticUpdate ForkedLightClientOptimisticUpdate
+	err = forkedLightClientOptimisticUpdate.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(optimisticUpdateValue), uint64(len(optimisticUpdateValue))))
+	if err != nil {
+		return nil, err
+	}
+
+	if forkedLightClientOptimisticUpdate.ForkDigest != Capella {
+		return nil, errors.New("unknown fork digest")
+	}
+
+	return forkedLightClientOptimisticUpdate.LightClientOptimisticUpdate.(*capella.LightClientOptimisticUpdate), nil
+}
+
 func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconContentKey ssz.Marshaler) ([]byte, error) {
 	contentKeyBytes, err := beaconContentKey.MarshalSSZ()
 	if err != nil {
@@ -76,9 +123,9 @@ func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconConte
 	}
 
 	contentKey := storage.NewContentKey(contentType, contentKeyBytes).Encode()
-	contentId := bn.portalProtocol.ToContentId(contentKey)
+	contentId := bn.PortalProtocol.ToContentId(contentKey)
 
-	res, err := bn.portalProtocol.Get(contentKey, contentId)
+	res, err := bn.PortalProtocol.Get(contentKey, contentId)
 	// other error
 	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
@@ -88,7 +135,7 @@ func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconConte
 		return res, nil
 	}
 
-	content, _, err := bn.portalProtocol.ContentLookup(contentKey, contentId)
+	content, _, err := bn.PortalProtocol.ContentLookup(contentKey, contentId)
 	if err != nil {
 		return nil, err
 	}
