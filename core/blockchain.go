@@ -244,6 +244,8 @@ type BlockChain struct {
 	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
 	blockCache    *lru.Cache[common.Hash, *types.Block]
+
+	txLookupLock  sync.RWMutex
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 
 	wg            sync.WaitGroup
@@ -2290,14 +2292,14 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		// rewind the canonical chain to a lower point.
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
-	// Reset the tx lookup cache in case to clear stale txlookups.
-	// This is done before writing any new chain data to avoid the
-	// weird scenario that canonical chain is changed while the
-	// stale lookups are still cached.
-	bc.txLookupCache.Purge()
+	// Acquire the tx-lookup lock before mutation. This step is essential
+	// as the txlookups should be changed atomically, and all subsequent
+	// reads should be blocked until the mutation is complete.
+	bc.txLookupLock.Lock()
 
-	// Insert the new chain(except the head block(reverse order)),
-	// taking care of the proper incremental order.
+	// Insert the new chain segment in incremental order, from the old
+	// to the new. The new chain head (newChain[0]) is not inserted here,
+	// as it will be handled separately outside of this function
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
 		bc.writeHeadBlock(newChain[i])
@@ -2334,6 +2336,11 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	if err := indexesBatch.Write(); err != nil {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
+	// Reset the tx lookup cache to clear stale txlookup cache.
+	bc.txLookupCache.Purge()
+
+	// Release the tx-lookup lock after mutation.
+	bc.txLookupLock.Unlock()
 
 	// Send out events for logs from the old canon chain, and 'reborn'
 	// logs from the new canon chain. The number of logs can be very
