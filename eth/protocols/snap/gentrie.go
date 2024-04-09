@@ -138,7 +138,9 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	// break the state healing.
 	//
 	// The target node is detected if its path is the prefix of last written
-	// one and path gap is non-zero.
+	// one and path gap is larger than one. The current node could be a full
+	// node, or a shortNode with single byte key if the path gap is one,
+	// unnecessary to sweep the internal path in this case.
 	//
 	// Nodes must be cleaned from top to bottom, including the node with the
 	// path of the committed extension node itself.
