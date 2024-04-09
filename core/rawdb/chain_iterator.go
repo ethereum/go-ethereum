@@ -21,12 +21,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/common/prque"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/ethdb"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/rlp"
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch

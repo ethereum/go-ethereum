@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/tenderly/binance-geth/common"
 )
 
 // MarshalJSON marshals as JSON.

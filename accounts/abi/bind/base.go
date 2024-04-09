@@ -24,12 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/tenderly/binance-geth"
+	"github.com/tenderly/binance-geth/accounts/abi"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/crypto"
+	"github.com/tenderly/binance-geth/event"
 )
 
 const basefeeWiggleMultiplier = 2

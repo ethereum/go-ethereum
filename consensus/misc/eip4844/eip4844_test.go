@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/tenderly/binance-geth/params"
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {

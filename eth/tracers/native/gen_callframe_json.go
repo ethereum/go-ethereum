@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/common/hexutil"
+	"github.com/tenderly/binance-geth/core/vm"
 )
 
 var _ = (*callFrameMarshaling)(nil)

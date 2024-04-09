@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/binance-geth/crypto"
+	"github.com/tenderly/binance-geth/eth/protocols/eth"
+	"github.com/tenderly/binance-geth/eth/protocols/snap"
+	"github.com/tenderly/binance-geth/p2p"
+	"github.com/tenderly/binance-geth/p2p/rlpx"
+	"github.com/tenderly/binance-geth/rlp"
 )
 
 var (

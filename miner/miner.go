@@ -23,17 +23,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/common/hexutil"
+	"github.com/tenderly/binance-geth/consensus"
+	"github.com/tenderly/binance-geth/core"
+	"github.com/tenderly/binance-geth/core/state"
+	"github.com/tenderly/binance-geth/core/txpool"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/eth/downloader"
+	"github.com/tenderly/binance-geth/event"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/params"
 )
 
 // Backend wraps all methods required for mining. Only full node is capable

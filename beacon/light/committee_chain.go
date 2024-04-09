@@ -23,14 +23,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/params"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/tenderly/binance-geth/beacon/params"
+	"github.com/tenderly/binance-geth/beacon/types"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/common/lru"
+	"github.com/tenderly/binance-geth/common/mclock"
+	"github.com/tenderly/binance-geth/core/rawdb"
+	"github.com/tenderly/binance-geth/ethdb"
+	"github.com/tenderly/binance-geth/log"
 )
 
 var (

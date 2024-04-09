@@ -19,19 +19,19 @@ package simulated
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/tenderly/binance-geth"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/core"
+	"github.com/tenderly/binance-geth/eth"
+	"github.com/tenderly/binance-geth/eth/catalyst"
+	"github.com/tenderly/binance-geth/eth/downloader"
+	"github.com/tenderly/binance-geth/eth/ethconfig"
+	"github.com/tenderly/binance-geth/eth/filters"
+	"github.com/tenderly/binance-geth/ethclient"
+	"github.com/tenderly/binance-geth/node"
+	"github.com/tenderly/binance-geth/p2p"
+	"github.com/tenderly/binance-geth/params"
+	"github.com/tenderly/binance-geth/rpc"
 )
 
 // Backend is a simulated blockchain. You can use it to test your contracts or

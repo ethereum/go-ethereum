@@ -249,7 +249,7 @@ Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could 
 `)
 }
 
-// https://github.com/ethereum/go-ethereum/issues/1785
+// https://github.com/tenderly/binance-geth/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
 	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),

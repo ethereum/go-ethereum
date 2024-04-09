@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/testlog"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/binance-geth/internal/testlog"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/p2p/discover/v5wire"
+	"github.com/tenderly/binance-geth/p2p/enode"
+	"github.com/tenderly/binance-geth/p2p/enr"
+	"github.com/tenderly/binance-geth/rlp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )

@@ -25,13 +25,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/common/lru"
+	"github.com/tenderly/binance-geth/common/mclock"
+	"github.com/tenderly/binance-geth/core/txpool"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/metrics"
 )
 
 const (

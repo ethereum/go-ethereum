@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/console/prompt"
+	"github.com/tenderly/binance-geth/core"
+	"github.com/tenderly/binance-geth/eth"
+	"github.com/tenderly/binance-geth/eth/ethconfig"
+	"github.com/tenderly/binance-geth/internal/jsre"
+	"github.com/tenderly/binance-geth/miner"
+	"github.com/tenderly/binance-geth/node"
 )
 
 const (

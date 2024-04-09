@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/ethdb"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/params"
+	"github.com/tenderly/binance-geth/rlp"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.

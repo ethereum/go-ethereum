@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/tenderly/binance-geth/cmd/utils"
+	"github.com/tenderly/binance-geth/console"
+	"github.com/tenderly/binance-geth/internal/flags"
 	"github.com/urfave/cli/v2"
 )
 

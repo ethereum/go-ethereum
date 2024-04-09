@@ -20,7 +20,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/tenderly/binance-geth/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

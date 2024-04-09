@@ -30,13 +30,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/tenderly/binance-geth/core"
+	"github.com/tenderly/binance-geth/core/rawdb"
+	"github.com/tenderly/binance-geth/core/state"
+	"github.com/tenderly/binance-geth/core/state/snapshot"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/core/vm"
+	"github.com/tenderly/binance-geth/eth/tracers/logger"
 )
 
 func TestState(t *testing.T) {

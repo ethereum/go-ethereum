@@ -19,8 +19,8 @@ package utils
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/tenderly/binance-geth/eth/ethconfig"
+	"github.com/tenderly/binance-geth/internal/flags"
 	"github.com/urfave/cli/v2"
 )
 

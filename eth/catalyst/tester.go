@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/eth"
+	"github.com/tenderly/binance-geth/eth/downloader"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/node"
 )
 
 // FullSyncTester is an auxiliary service that allows Geth to perform full sync

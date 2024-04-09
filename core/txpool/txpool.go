@@ -22,12 +22,12 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/core"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/event"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/metrics"
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.

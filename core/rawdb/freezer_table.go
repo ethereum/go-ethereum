@@ -27,9 +27,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/metrics"
 	"github.com/golang/snappy"
 )
 

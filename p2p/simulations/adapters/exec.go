@@ -34,12 +34,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/reexec"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/tenderly/binance-geth/internal/reexec"
+	"github.com/tenderly/binance-geth/log"
+	"github.com/tenderly/binance-geth/node"
+	"github.com/tenderly/binance-geth/p2p"
+	"github.com/tenderly/binance-geth/p2p/enode"
+	"github.com/tenderly/binance-geth/rpc"
 	"github.com/gorilla/websocket"
 	"golang.org/x/exp/slog"
 )

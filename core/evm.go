@@ -19,11 +19,11 @@ package core
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/tenderly/binance-geth/common"
+	"github.com/tenderly/binance-geth/consensus"
+	"github.com/tenderly/binance-geth/consensus/misc/eip4844"
+	"github.com/tenderly/binance-geth/core/types"
+	"github.com/tenderly/binance-geth/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
