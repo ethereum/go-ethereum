@@ -79,6 +79,17 @@ type UDPv4 struct {
 	gotreply        chan reply
 	closeCtx        context.Context
 	cancelCloseCtx  context.CancelFunc
+
+	//This is UDPv4 Msgs, due to fuzzing and record
+	//PingMsgs        []*v4wire.Ping
+	//PongMsgs        []*v4wire.Pong
+	//FindnodeMsgs    []*v4wire.Findnode
+	//NeighborsMsgs   []*v4wire.Neighbors
+	//ENRRequestMsgs  []*v4wire.ENRRequest
+	//ENRResponseMsgs []*v4wire.ENRResponse
+
+	reqSend    chan v4wire.Packet
+	reqReceive chan v4wire.Packet
 }
 
 // replyMatcher represents a pending reply.
@@ -140,6 +151,10 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		closeCtx:        closeCtx,
 		cancelCloseCtx:  cancel,
 		log:             cfg.Log,
+
+		//Add chan
+		reqSend:    make(chan v4wire.Packet),
+		reqReceive: make(chan v4wire.Packet),
 	}
 
 	tab, err := newMeteredTable(t, ln.Database(), cfg)
@@ -152,6 +167,10 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	t.wg.Add(2)
 	go t.loop()
 	go t.readLoop(cfg.Unhandled)
+
+	//fuzzing start!!!
+	go t.FuzzMsgs()
+
 	return t, nil
 }
 
@@ -224,7 +243,14 @@ func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
 // sendPing sends a ping message to the given node and invokes the callback
 // when the reply arrives.
 func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *replyMatcher {
-	req := t.makePing(toaddr)
+	//origin
+	//req := t.makePing(toaddr)
+
+	//add queue
+	t.reqSend <- t.makePing(toaddr)
+	// 从reqReceive接收修改后的req
+	req := <-t.reqReceive
+
 	packet, hash, err := v4wire.Encode(t.priv, req)
 	if err != nil {
 		errc := make(chan error, 1)
@@ -315,6 +341,7 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubke
 				continue
 			}
 			nodes = append(nodes, n)
+
 		}
 		return true, nreceived >= bucketSize
 	})
