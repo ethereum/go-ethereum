@@ -128,6 +128,9 @@ type (
 		account            *common.Address
 		prevcode, prevhash []byte
 	}
+	destructibleChange struct {
+		account common.Address
+	}
 
 	// Changes to other state values.
 	refundChange struct {
@@ -251,6 +254,20 @@ func (ch codeChange) copy() journalEntry {
 		account:  ch.account,
 		prevhash: common.CopyBytes(ch.prevhash),
 		prevcode: common.CopyBytes(ch.prevcode),
+	}
+}
+
+func (ch destructibleChange) revert(s *StateDB) {
+	s.getStateObject(ch.account).destructible = false
+}
+
+func (ch destructibleChange) dirtied() *common.Address {
+	return nil // destruct-eligible flag is not considered as dirty
+}
+
+func (ch destructibleChange) copy() journalEntry {
+	return destructibleChange{
+		account: ch.account,
 	}
 }
 

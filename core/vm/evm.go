@@ -461,6 +461,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
+	} else {
+		// The account with the designated address previously existed but is
+		// still eligible for deployment. Explicitly set it as destructible
+		// to adhere to EIP-6780.
+		evm.StateDB.SetDestructible(address)
 	}
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)

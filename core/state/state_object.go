@@ -55,7 +55,7 @@ type stateObject struct {
 	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
 
-	originStorage  Storage // Storage cache of original entries to dedup rewrites
+	originStorage  Storage // Storage cache of original entries to de-duplicate rewrites
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution, reset for every transaction
 
@@ -66,8 +66,11 @@ type stateObject struct {
 	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
 
-	// Flag whether the object was created in the current transaction
-	created bool
+	// This is an EIP-6780 flag indicating if the object is eligible for
+	// self-destruct. Potential scenarios as follows:
+	// - object is created in the current transaction
+	// - object was previously existent and is being deployed in current transaction
+	destructible bool
 }
 
 // empty returns whether the account is considered empty.
@@ -77,10 +80,6 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
-	var (
-		origin  = acct
-		created = acct == nil // true if the account was not existent
-	)
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
@@ -88,12 +87,11 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
-		origin:         origin,
+		origin:         acct,
 		data:           *acct,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
-		created:        created,
 	}
 }
 
@@ -246,6 +244,7 @@ func (s *stateObject) finalise(prefetch bool) {
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
+	s.destructible = false // unset the flag at the end of transaction
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -450,7 +449,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.dirtyCode = s.dirtyCode
 	obj.selfDestructed = s.selfDestructed
-	obj.created = s.created
+	obj.destructible = s.destructible
 	return obj
 }
 
@@ -528,6 +527,16 @@ func (s *stateObject) SetNonce(nonce uint64) {
 
 func (s *stateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
+}
+
+func (s *stateObject) SetDestructible() {
+	if s.destructible {
+		return // might be possible in fuzzing
+	}
+	s.db.journal.append(destructibleChange{
+		account: s.address,
+	})
+	s.destructible = true
 }
 
 func (s *stateObject) CodeHash() []byte {

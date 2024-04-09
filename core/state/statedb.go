@@ -497,7 +497,7 @@ func (s *StateDB) Selfdestruct6780(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-	if stateObject.created {
+	if stateObject.destructible {
 		s.SelfDestruct(addr)
 	}
 }
@@ -659,7 +659,17 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 // exists, this function will silently overwrite it which might lead to a
 // consensus bug eventually.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	s.createObject(addr)
+	obj := s.createObject(addr)
+	obj.SetDestructible()
+}
+
+// SetDestructible marks the object with specific address as destructible.
+func (s *StateDB) SetDestructible(addr common.Address) {
+	obj := s.getStateObject(addr)
+	if obj == nil {
+		return // might be possible in fuzzing
+	}
+	obj.SetDestructible()
 }
 
 // Copy creates a deep, independent copy of the state.
@@ -808,7 +818,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
 			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
 		} else {
-			obj.created = false
 			obj.finalise(true) // Prefetch slots in the background
 			s.markUpdate(addr)
 		}

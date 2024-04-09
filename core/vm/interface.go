@@ -56,6 +56,7 @@ type StateDB interface {
 
 	SelfDestruct(common.Address)
 	HasSelfDestructed(common.Address) bool
+	SetDestructible(addr common.Address)
 
 	Selfdestruct6780(common.Address)
 

@@ -392,6 +392,18 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 		},
 		{
+			name: "SelfDestruct6780",
+			fn: func(a testAction, s *StateDB) {
+				s.Selfdestruct6780(addr)
+			},
+		},
+		{
+			name: "SetDestructible",
+			fn: func(a testAction, s *StateDB) {
+				s.SetDestructible(addr)
+			},
+		},
+		{
 			name: "AddRefund",
 			fn: func(a testAction, s *StateDB) {
 				s.AddRefund(uint64(a.args[0]))
