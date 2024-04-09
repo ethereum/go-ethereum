@@ -1319,11 +1319,14 @@ func hex2Bytes(str string) *hexutil.Bytes {
 func TestRPCMarshalBlock(t *testing.T) {
 	t.Parallel()
 	var (
-		txs []*types.Transaction
-		to  = common.BytesToAddress([]byte{0x11})
+		txs      []*types.Transaction
+		receipts []*types.Receipt
+		to       = common.BytesToAddress([]byte{0x11})
 	)
 	for i := uint64(1); i <= 4; i++ {
 		var tx *types.Transaction
+		var receipt *types.Receipt
+
 		if i%2 == 0 {
 			tx = types.NewTx(&types.LegacyTx{
 				Nonce:    i,
@@ -1333,6 +1336,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{}
 		} else {
 			tx = types.NewTx(&types.AccessListTx{
 				ChainID:  big.NewInt(1337),
@@ -1343,10 +1347,12 @@ func TestRPCMarshalBlock(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{Type: types.AccessListTxType}
 		}
 		txs = append(txs, tx)
+		receipts = append(receipts, receipt)
 	}
-	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, blocktest.NewHasher())
+	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, receipts, blocktest.NewHasher())
 
 	var testSuite = []struct {
 		inclTx bool
@@ -1362,14 +1368,14 @@ func TestRPCMarshalBlock(t *testing.T) {
 				"extraData": "0x",
 				"gasLimit": "0x0",
 				"gasUsed": "0x0",
-				"hash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+				"hash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 				"miner": "0x0000000000000000000000000000000000000000",
 				"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 				"nonce": "0x0000000000000000",
 				"number": "0x64",
 				"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-				"receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+				"receiptsRoot": "0xf64e8de40892653b3efce13a5c98babbc9e8f5fe773bd7a4236ce8527e8a7448",
 				"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
 				"size": "0x296",
 				"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -1387,14 +1393,14 @@ func TestRPCMarshalBlock(t *testing.T) {
 				"extraData": "0x",
 				"gasLimit": "0x0",
 				"gasUsed": "0x0",
-				"hash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+				"hash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 				"miner": "0x0000000000000000000000000000000000000000",
 				"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 				"nonce": "0x0000000000000000",
 				"number": "0x64",
 				"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-				"receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+				"receiptsRoot": "0xf64e8de40892653b3efce13a5c98babbc9e8f5fe773bd7a4236ce8527e8a7448",
 				"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
 				"size": "0x296",
 				"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -1418,21 +1424,21 @@ func TestRPCMarshalBlock(t *testing.T) {
 				"extraData": "0x",
 				"gasLimit": "0x0",
 				"gasUsed": "0x0",
-				"hash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+				"hash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 				"miner": "0x0000000000000000000000000000000000000000",
 				"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 				"nonce": "0x0000000000000000",
 				"number": "0x64",
 				"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-				"receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+				"receiptsRoot": "0xf64e8de40892653b3efce13a5c98babbc9e8f5fe773bd7a4236ce8527e8a7448",
 				"sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
 				"size": "0x296",
 				"stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
 				"timestamp": "0x0",
 				"transactions": [
 					{
-						"blockHash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+						"blockHash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 						"blockNumber": "0x64",
 						"from": "0x0000000000000000000000000000000000000000",
 						"gas": "0x457",
@@ -1452,7 +1458,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 						"yParity": "0x0"
 					},
 					{
-						"blockHash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+						"blockHash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 						"blockNumber": "0x64",
 						"from": "0x0000000000000000000000000000000000000000",
 						"gas": "0x457",
@@ -1470,7 +1476,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 						"s": "0x0"
 					},
 					{
-						"blockHash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+						"blockHash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 						"blockNumber": "0x64",
 						"from": "0x0000000000000000000000000000000000000000",
 						"gas": "0x457",
@@ -1490,7 +1496,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 						"yParity": "0x0"
 					},
 					{
-						"blockHash": "0x9b73c83b25d0faf7eab854e3684c7e394336d6e135625aafa5c183f27baa8fee",
+						"blockHash": "0xa183006a06975781325079fe27341461ea0afc81a45cff88265666b418ec6555",
 						"blockNumber": "0x64",
 						"from": "0x0000000000000000000000000000000000000000",
 						"gas": "0x457",
@@ -1525,6 +1531,9 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 }
 
+// TestRPCGetBlockOrHeader tests many different scenarios for GetBlockBy* and GetHeaderBy*.
+//
+// note: to regenerate the tests, set the env var WRITE_TEST_FILES.
 func TestRPCGetBlockOrHeader(t *testing.T) {
 	t.Parallel()
 
@@ -1551,13 +1560,14 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			Value:    big.NewInt(111),
 			Data:     []byte{0x11, 0x11, 0x11},
 		})
+		receipt    = &types.Receipt{}
 		withdrawal = &types.Withdrawal{
 			Index:     0,
 			Validator: 1,
 			Address:   common.Address{0x12, 0x34},
 			Amount:    10,
 		}
-		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, []*types.Withdrawal{withdrawal}, blocktest.NewHasher())
+		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, types.Transactions{tx}, nil, types.Receipts{receipt}, types.Withdrawals{withdrawal}, blocktest.NewHasher())
 	)
 	backend := newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
@@ -1869,6 +1879,9 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 	return backend, txHashes
 }
 
+// TestRPCGetTransactionReceipt tests retrieval of transaction receipts.
+//
+// note: to regenerate the tests, set the env var WRITE_TEST_FILES.
 func TestRPCGetTransactionReceipt(t *testing.T) {
 	t.Parallel()
 
@@ -1937,6 +1950,9 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	}
 }
 
+// TestRPCGetBlockReceipts tests retrieval of all tx receipts in a block.
+//
+// note: to regenerate the tests, set the env var WRITE_TEST_FILES.
 func TestRPCGetBlockReceipts(t *testing.T) {
 	t.Parallel()
 

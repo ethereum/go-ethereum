@@ -221,9 +221,12 @@ type extblock struct {
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
+	if len(txs) != len(receipts) {
+		panic("cannot make new block with mismatched number of txs and receipts")
+	}
+
 	b := &Block{header: CopyHeader(header)}
 
-	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyTxsHash
 	} else {

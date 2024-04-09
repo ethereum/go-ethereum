@@ -38,7 +38,10 @@ func TestChainIterator(t *testing.T) {
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	for i := uint64(1); i <= 10; i++ {
-		var tx *types.Transaction
+		var (
+			tx      *types.Transaction
+			receipt *types.Receipt
+		)
 		if i%2 == 0 {
 			tx = types.NewTx(&types.LegacyTx{
 				Nonce:    i,
@@ -48,6 +51,7 @@ func TestChainIterator(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{}
 		} else {
 			tx = types.NewTx(&types.AccessListTx{
 				ChainID:  big.NewInt(1337),
@@ -58,9 +62,10 @@ func TestChainIterator(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{Type: types.AccessListTxType}
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, types.Receipts{receipt}, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -116,7 +121,10 @@ func TestIndexTransactions(t *testing.T) {
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 
 	for i := uint64(1); i <= 10; i++ {
-		var tx *types.Transaction
+		var (
+			tx      *types.Transaction
+			receipt *types.Receipt
+		)
 		if i%2 == 0 {
 			tx = types.NewTx(&types.LegacyTx{
 				Nonce:    i,
@@ -126,6 +134,7 @@ func TestIndexTransactions(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{}
 		} else {
 			tx = types.NewTx(&types.AccessListTx{
 				ChainID:  big.NewInt(1337),
@@ -136,9 +145,10 @@ func TestIndexTransactions(t *testing.T) {
 				Value:    big.NewInt(111),
 				Data:     []byte{0x11, 0x11, 0x11},
 			})
+			receipt = &types.Receipt{Type: types.AccessListTxType}
 		}
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, types.Receipts{receipt}, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}

@@ -780,6 +780,8 @@ func TestPendingLogsSubscription(t *testing.T) {
 	}
 }
 
+// TestLightFilterLogs ensures that filters against FilterAPI in light mode work
+// correctly.
 func TestLightFilterLogs(t *testing.T) {
 	t.Parallel()
 
@@ -849,10 +851,10 @@ func TestLightFilterLogs(t *testing.T) {
 		if i == 0 {
 			return
 		}
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i - 1), To: &common.Address{}, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, key)
+		b.AddUncheckedTx(tx)
 		receipts[i-1].Bloom = types.CreateBloom(types.Receipts{receipts[i-1]})
 		b.AddUncheckedReceipt(receipts[i-1])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i - 1), To: &common.Address{}, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, key)
-		b.AddTx(tx)
 	})
 	for i, block := range blocks {
 		rawdb.WriteBlock(db, block)

@@ -1538,28 +1538,25 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {
-	header := types.Header{}
-	var txs []*types.Transaction
+	var (
+		header = types.Header{}
+		tx     = types.NewTx(&types.BlobTx{
+			BlobHashes: make([]common.Hash, 1),
+		})
+		receipt  = &types.Receipt{Type: types.BlobTxType}
+		sidecars = []*types.BlobTxSidecar{
+			{
+				Blobs:       make([]kzg4844.Blob, 1),
+				Commitments: make([]kzg4844.Commitment, 1),
+				Proofs:      make([]kzg4844.Proof, 1),
+			},
+		}
+		block = types.NewBlock(&header, types.Transactions{tx}, nil, types.Receipts{receipt}, trie.NewStackTrie(nil))
 
-	inner := types.BlobTx{
-		BlobHashes: make([]common.Hash, 1),
-	}
+		want     = len(tx.BlobHashes())
+		envelope = engine.BlockToExecutableData(block, nil, sidecars)
+	)
 
-	txs = append(txs, types.NewTx(&inner))
-	sidecars := []*types.BlobTxSidecar{
-		{
-			Blobs:       make([]kzg4844.Blob, 1),
-			Commitments: make([]kzg4844.Commitment, 1),
-			Proofs:      make([]kzg4844.Proof, 1),
-		},
-	}
-
-	block := types.NewBlock(&header, txs, nil, nil, trie.NewStackTrie(nil))
-	envelope := engine.BlockToExecutableData(block, nil, sidecars)
-	var want int
-	for _, tx := range txs {
-		want += len(tx.BlobHashes())
-	}
 	if got := len(envelope.BlobsBundle.Commitments); got != want {
 		t.Fatalf("invalid number of commitments: got %v, want %v", got, want)
 	}
