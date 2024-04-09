@@ -34,8 +34,9 @@ var (
 // by the stack trie.
 //
 // The caller should not modify the contents of the returned path and blob
-// slice, and their contents may change after the call. Please deep-copy
-// the slices if necessary.
+// slice, and their contents may change after the call. It is up to the
+// `onTrieNode` receiver function to deep-copy the data if it wants to
+// retain it after the call ends.
 type OnTrieNode func(path []byte, hash common.Hash, blob []byte)
 
 // StackTrie is a trie implementation that expects keys to be inserted

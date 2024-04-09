@@ -53,18 +53,18 @@ type pathTrie struct {
 	// Flag whether the nodes on the left boundary are skipped for committing.
 	// If it's set, then nodes on the left boundary are regarded as incomplete
 	// due to potentially missing left children.
-	noLeftBound bool
-	db          ethdb.KeyValueReader
-	batch       ethdb.Batch
+	skipLeftBoundary bool
+	db               ethdb.KeyValueReader
+	batch            ethdb.Batch
 }
 
 // newPathTrie initializes the path trie.
-func newPathTrie(owner common.Hash, noLeftBound bool, db ethdb.KeyValueReader, batch ethdb.Batch) *pathTrie {
+func newPathTrie(owner common.Hash, skipLeftBoundary bool, db ethdb.KeyValueReader, batch ethdb.Batch) *pathTrie {
 	tr := &pathTrie{
-		owner:       owner,
-		noLeftBound: noLeftBound,
-		db:          db,
-		batch:       batch,
+		owner:            owner,
+		skipLeftBoundary: skipLeftBoundary,
+		db:               db,
+		batch:            batch,
 	}
 	tr.tr = trie.NewStackTrie(tr.onTrieNode)
 	return tr
@@ -87,30 +87,34 @@ func newPathTrie(owner common.Hash, noLeftBound bool, db ethdb.KeyValueReader, b
 // to the root node should be removed as well; otherwise, they might potentially
 // disrupt the state healing process, leaving behind an inconsistent state.
 func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
-	// Filter out the nodes on the left boundary if noLeftBound is configured.
+	// Filter out the nodes on the left boundary if skipLeftBoundary is configured.
 	// Nodes are considered to be on the left boundary if it's the first one
 	// produced, or on the path of the first produced one.
-	if t.noLeftBound && (t.first == nil || bytes.HasPrefix(t.first, path)) {
+	if t.skipLeftBoundary && (t.first == nil || bytes.HasPrefix(t.first, path)) {
 		if t.first == nil {
 			// Memorize the path of first produced node, which is regarded
 			// as left boundary. Deep-copy is necessary as the path given
 			// is volatile.
 			t.first = append([]byte{}, path...)
 
-			// The position of first complete sub trie (e.g. N_3) can be determined
+			// The position of first complete sub trie (e.g. N_4) can be determined
 			// by the first produced node(e.g. N_1) correctly, with a branch node
-			// (e.g. N_2) as the common parent for shared path prefix. Therefore,
+			// (e.g. N_5) as the common parent for shared path prefix. Therefore,
 			// the nodes along the path from root to N_1 can be regarded as left
-			// boundary. The leftover dangling nodes on left boundary should be
-			// cleaned out first before committing any node.
+			// boundary and the parent of the first complete sub trie. The leftover
+			// dangling nodes on left boundary should be cleaned out first before
+			// committing any node.
 			//
-			//                           +-----+
-			//                           | N_2 |  parent for shared path prefix
-			//                           +-----+
-			//                           /-  -\
+			//                           +-------------+
+			//                           |     N_5     |  parent for shared path prefix
+			//                           +-------------+
+			//                           /-     |     -\
+			//                          /       |      [ others ]
 			//                     +-----+   +-----+
-			// First produced one  | N_1 |   | N_3 | First completed sub trie
+			// First produced one  | N_1 |   | N_4 | First completed sub trie
 			//                     +-----+   +-----+
+			//                                /-  -\
+			//                              N-2 ... N-3
 			//
 			// Nodes must be cleaned from top to bottom as it's possible the procedure
 			// is interrupted in the middle.
@@ -212,6 +216,10 @@ func (t *pathTrie) commit(complete bool) common.Hash {
 	// The nodes on both left and right boundary will still be filtered
 	// out if left boundary filtering is configured.
 	if complete {
+		// The produced hash is meaningless if left side is incomplete
+		if t.skipLeftBoundary {
+			return common.Hash{}
+		}
 		return t.tr.Hash()
 	}
 	// If the right boundary is claimed as incomplete, the uncommitted
@@ -221,18 +229,20 @@ func (t *pathTrie) commit(complete bool) common.Hash {
 	// the nodes of the right boundary must be cleaned out!
 	//
 	// The position of the last complete sub-trie (e.g., N_1) can be correctly
-	// determined by the last produced node (e.g., N_3), with a branch node
-	// (e.g., N_2) as the common parent for the shared path prefix. Therefore,
-	// the nodes along the path from the root to N_3 can be regarded as the
-	// right boundary.
+	// determined by the last produced node (e.g., N_4), with a branch node
+	// (e.g., N_5) as the common parent for the shared path prefix. Therefore,
+	// the nodes along the path from the root to N_4 can be regarded as the
+	// right boundary and the parent of the last complete subtrie.
 	//
 	//                             +-----+
-	//                             | N_2 |  parent for shared path prefix
+	//                             | N_5 |  parent for shared path prefix
 	//                             +-----+
 	//                             /-  -\
 	//                        +-----+   +-----+
-	// Last complete subtrie  | N_1 |   | N_3 | Last produced node
+	// Last complete subtrie  | N_1 |   | N_4 | Last produced node
 	//                        +-----+   +-----+
+	//                        /-  -\
+	//                      N-2 .. N-3
 	//
 	// Another interesting scenario occurs when the trie is committed due to
 	// too many items being accumulated in the batch. To flush them out to
