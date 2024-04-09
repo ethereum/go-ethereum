@@ -97,7 +97,7 @@ func (aw *AccessWitness) TouchFullAccount(addr []byte, isWrite bool) uint64 {
 	return gas
 }
 
-func (aw *AccessWitness) TouchAndChargeMessageCall(addr []byte) uint64 {
+func (aw *AccessWitness) TouchAndChargeMessageCall(destination []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, false)
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeSizeLeafKey, false)
