@@ -889,6 +889,47 @@ func TestDeleteCreateRevert(t *testing.T) {
 	}
 }
 
+// TestSelfDestructAccountAfterDeploy tests a special scenario that the account
+// is deleted by self-destruct-6780. The account was previously existent and
+// eligible for deployment.
+func TestSelfDestructAccountAfterDeploy(t *testing.T) {
+	// Create an initial state with a single contract
+	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+
+	addr := common.BytesToAddress([]byte("so"))
+	state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+
+	root, _ := state.Commit(0, false)
+	state, _ = New(root, state.db, state.snaps)
+
+	// Revert the group of self-destruct operations. None of them should be applied.
+	id := state.Snapshot()
+	state.SetDestructible(addr)
+	state.SetCode(addr, []byte{0x1})
+	state.Selfdestruct6780(addr)
+	state.RevertToSnapshot(id)
+
+	state.Finalise(true)
+	root, _ = state.Commit(0, true)
+	state, _ = New(root, state.db, state.snaps)
+
+	if state.getStateObject(addr) == nil {
+		t.Fatalf("self-destructed should not be applied")
+	}
+
+	// Self-destruct the account with destructible flag setting
+	state.SetDestructible(addr)
+	state.SetCode(addr, []byte{0x1})
+	state.Selfdestruct6780(addr)
+
+	state.Finalise(true)
+	root, _ = state.Commit(0, true)
+	state, _ = New(root, state.db, state.snaps)
+	if state.getStateObject(addr) != nil {
+		t.Fatalf("self-destructed contract came alive")
+	}
+}
+
 // TestMissingTrieNodes tests that if the StateDB fails to load parts of the trie,
 // the Commit operation fails with an error
 // If we are missing trie nodes, we should not continue writing to the trie
